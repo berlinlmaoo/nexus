@@ -418,8 +418,12 @@ private fun Metrics(s: AttendanceUiState, forcePending: Boolean) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // Straight from the server, which already caps used at the quota (REQ-ATT-23).
+            // The quota already includes extra days granted by the BoD for this period (§5).
+            val bonus = s.today?.dayOffAllowance?.bonus ?: 0
             Metric(Icons.Filled.AutoAwesome, stringResource(R.string.metric_dayoff),
-                quota(s.today?.dayOffUsedThisMonth, s.today?.dayOffQuota), stringResource(R.string.metric_dayoff_help), c.warning, Modifier.weight(1f))
+                quota(s.today?.dayOffUsedThisMonth, s.today?.dayOffQuota),
+                if (bonus > 0) stringResource(R.string.metric_dayoff_help_bonus, s.today?.dayOffAllowance?.base ?: 4, bonus)
+                else stringResource(R.string.metric_dayoff_help), c.warning, Modifier.weight(1f))
             Metric(Icons.Filled.CalendarMonth, stringResource(R.string.metric_holidays),
                 quota(s.today?.redDateUsedThisMonth, s.today?.redDateQuota), stringResource(R.string.metric_holidays_help), Color(0xFFFB7185), Modifier.weight(1f))
         }

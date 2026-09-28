@@ -137,6 +137,8 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
     fun onLocationPermissionResult() {
         _state.update { it.copy(locationOff = !c.location.hasFine()) }
         refreshNearest()
+        // A permission change re-derives the trail setup at once, as iOS reconcile() does (B5).
+        c.reconcileTrail()
     }
 
     /** PRESENCE IN / OUT. Location permission is checked first, so no face check is wasted. */

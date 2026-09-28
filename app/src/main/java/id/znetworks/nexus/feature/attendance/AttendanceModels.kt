@@ -52,6 +52,18 @@ data class AnnualLeave(
     val remaining: Int? = null,
 )
 
+/** Extra day off (UPDATES §5, server e910294): `dayOffQuota` already includes [bonus]. */
+@Serializable
+data class DayOffAllowance(
+    val period: String? = null,
+    val base: Int? = null,
+    val bonus: Int? = null,
+    val grants: List<DayOffGrant> = emptyList(),
+)
+
+@Serializable
+data class DayOffGrant(val days: Int? = null, val reason: String? = null)
+
 @Serializable
 data class TodayRequest(
     val id: String? = null,
@@ -68,6 +80,7 @@ data class AttendanceToday(
     val todayRequest: TodayRequest? = null,
     val dayOffQuota: Int? = null,
     val dayOffUsedThisMonth: Int? = null,
+    val dayOffAllowance: DayOffAllowance? = null,
     val restDays: List<Int>? = null,
     val isRestDayToday: Boolean? = null,
     val redDateQuota: Int? = null,

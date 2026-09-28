@@ -406,4 +406,5 @@
     <string name="updater_not_newer">The published file is not newer than the version you have.</string>
     <string name="updater_install_failed">The update was not installed.</string>
     <string name="updater_signed_out">Sign in first, or download the update from the NEXUS website.</string>
+    <string name="metric_dayoff_help_bonus">This period: %1$d + %2$d extra</string>
 </resources>

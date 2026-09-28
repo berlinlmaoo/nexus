@@ -82,6 +82,14 @@ class AttendanceApiTest {
         try { api.checkIn(byteArrayOf(1), fix, "x"); fail() } catch (e: ApiError.Http) { assertEquals(422, e.status) }
     }
 
+    @Test fun todayCarriesTheExtraDayOffAllowance() = runTest {
+        reply(200, """{"dayOffQuota":7,"dayOffUsedThisMonth":1,"dayOffAllowance":{"period":"2026-10","base":4,"bonus":3,"grants":[{"days":3,"reason":"Lembur event"}]}}""")
+        val t = api.today()
+        assertEquals(7, t.dayOffQuota) // already the raised figure
+        assertEquals(3, t.dayOffAllowance?.bonus)
+        assertEquals(4, t.dayOffAllowance?.base)
+    }
+
     @Test fun todayToleratesUnknownAndMissingFields() = runTest {
         reply(200, """{"attendanceDateKey":"2026-09-24","today":null,"myShift":{"startTime":"09:00","endTime":"18:00","flexi":false,"new":1},"dayOffQuota":4,"somethingNew":[1,2]}""")
         val t = api.today()

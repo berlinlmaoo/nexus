@@ -400,4 +400,5 @@
     <string name="updater_not_newer">File yang dirilis tidak lebih baru dari versi yang kamu punya.</string>
     <string name="updater_install_failed">Update tidak terpasang.</string>
     <string name="updater_signed_out">Login dulu, atau unduh update dari website NEXUS.</string>
+    <string name="metric_dayoff_help_bonus">Periode ini: %1$d + %2$d ekstra</string>
 </resources>
