@@ -616,13 +616,17 @@ struct WorkTrailMachine {
     }
 
     /// Inside, outside, or nil when the fix is too vague to say. A margin of the fix's own accuracy
-    /// on the way OUT keeps GPS jitter at the edge of the circle from inventing exits.
+    /// on the way OUT keeps GPS jitter at the edge of the circle from inventing exits. The margin is
+    /// the SERVER's (radius + max(accuracy, 50 m), `classifyPoint` in lib/attendance-outside.ts): with
+    /// a smaller one the phone announced "you're outside" 30–50 m past the edge while the server's
+    /// clock never started (28 Sep 2026).
+    static let outsideMargin: Double = 50
     static func decisive(_ p: WorkTrailPoint, fence: WorkTrailFence) -> Bool? {
         let acc = p.accuracy ?? decisiveAccuracy
         guard acc >= 0, acc <= decisiveAccuracy else { return nil }
         let d = distance(p.lat, p.lng, fence.lat, fence.lng)
         if d <= fence.radius { return true }
-        if d > fence.radius + max(acc, 30) { return false }
+        if d > fence.radius + max(acc, outsideMargin) { return false }
         return nil
     }
 
