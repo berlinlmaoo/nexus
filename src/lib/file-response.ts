@@ -108,7 +108,9 @@ export async function serveFile(
     const downloadParam =
       opts.forceInline || explicitName ? null : req.nextUrl.searchParams.get("download")
     const asAttachment = !INLINE_OK.has(ext) || Boolean(opts.forceDownload) || Boolean(downloadParam)
-    const kind = opts.forceInline || !asAttachment ? "inline" : "attachment"
+    // forceInline (a view-only vault link) never makes an unsafe type inline: an SVG/HTML served
+    // inline on this origin runs its script with the viewer's session (security audit, 29 Sep 2026).
+    const kind = (opts.forceInline && INLINE_OK.has(ext)) || !asAttachment ? "inline" : "attachment"
 
     // Strip CRLF/quotes to avoid header injection; add an ASCII fallback + RFC 5987 filename* so a
     // unicode name survives.

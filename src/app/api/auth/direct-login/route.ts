@@ -1,4 +1,5 @@
 import { encode } from 'next-auth/jwt'
+import { checkRateLimitByKey, trustedClientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { logAudit } from '@/lib/audit'
 import { verifyCredentialUser } from '@/lib/credentials-auth'
@@ -100,6 +101,13 @@ export async function POST(request: NextRequest) {
     ? String(body.callbackUrl)
     : FALLBACK_REDIRECT
 
+  // 60 attempts per IP per 15 minutes (an office behind one NAT stays far below it).
+  if (!checkRateLimitByKey('login-ip', trustedClientIp(request), { limit: 60, windowSeconds: 900 }).allowed) {
+    return NextResponse.json(
+      { ok: false, error: 'TooManyAttempts', message: 'Terlalu banyak percobaan masuk. Tunggu 15 menit lalu coba lagi.' },
+      { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '900' } },
+    )
+  }
   const result = await verifyCredentialUser(email, password)
 
   if (!result) {

@@ -1,3 +1,4 @@
+import { checkRateLimitByKey } from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { canonicalEmail, normalizePasswordForMobileInput } from '@/lib/email-auth'
@@ -32,6 +33,12 @@ export async function verifyCredentialUser(rawEmail: unknown, rawPassword: unkno
 
   if (!email || !password) {
     log.warn('credentials login: missing email or password', { email: email || '<empty>' })
+    return null
+  }
+  // At most 20 password attempts per account per 15 minutes, from anywhere (security audit, 29 Sep
+  // 2026: nothing stopped guessing a staff password). Counted before bcrypt, so a flood costs nothing.
+  if (!checkRateLimitByKey('login-email', email, { limit: 20, windowSeconds: 900 }).allowed) {
+    log.warn('credentials login: too many attempts for this account', { email })
     return null
   }
 

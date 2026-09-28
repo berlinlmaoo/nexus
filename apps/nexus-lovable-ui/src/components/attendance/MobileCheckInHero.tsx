@@ -191,7 +191,7 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
       const ll: L.LatLngExpression = [o.latitude as number, o.longitude as number];
       pts.push(ll);
       L.circle(ll, { radius: o.radiusMeters ?? 100, color: "#4f46e5", weight: 1.5, fillColor: "#4f46e5", fillOpacity: 0.1 }).addTo(layer);
-      L.marker(ll, { icon: L.divIcon({ className: "", html: `<div style="font-size:26px;line-height:1">🏢</div>`, iconSize: [26, 26], iconAnchor: [13, 24] }) }).addTo(layer).bindTooltip(o.name ?? "Office");
+      L.marker(ll, { icon: L.divIcon({ className: "", html: `<div style="font-size:26px;line-height:1">🏢</div>`, iconSize: [26, 26], iconAnchor: [13, 24] }) }).addTo(layer).bindTooltip(escapeHtml(o.name ?? "Office"));
     }
     if (userPos) {
       const ll: L.LatLngExpression = [userPos.lat, userPos.lng];
@@ -372,4 +372,9 @@ async function hasFace(file: File): Promise<boolean> {
     bitmap.close();
     return faces.some((f) => Math.min(f.boundingBox.width, f.boundingBox.height) >= min);
   } catch { return true; }
+}
+
+// Leaflet writes tooltip strings as HTML: an office name must never become markup.
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }

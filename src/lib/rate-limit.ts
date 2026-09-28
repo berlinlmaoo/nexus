@@ -41,10 +41,9 @@ export function trustedClientIp(req: NextRequest): string {
 }
 
 function getClientKey(req: NextRequest, userId?: string): string {
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
+  // Not the left-most X-Forwarded-For: the client writes that one, so every request could claim a
+  // new "IP" and never be limited (security audit, 29 Sep 2026).
+  const ip = trustedClientIp(req)
   return userId ? `user:${userId}` : `ip:${ip}`
 }
 
