@@ -223,6 +223,24 @@ class ApiClient(
         }
     }
 
+    /**
+     * Like [send] but hands back the raw 2xx body (GIDEON's `text/event-stream`), through the same
+     * headers, cookie, LAN route and 426/401 handling. [readTimeoutMs]: a long answer is not a stall.
+     */
+    suspend fun sendText(request: Request, readTimeoutMs: Long): String {
+        val session = sessionProvider()
+        val prepared = request.newBuilder().apply {
+            if (session != null && mayCarrySession(request.url.host)) header("Cookie", "${session.cookieName}=${session.token}")
+        }.build()
+        val client = http.newBuilder().readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS).callTimeout(readTimeoutMs + 30_000, TimeUnit.MILLISECONDS).build()
+        val response = try { client.newCall(prepared).await() } catch (e: IOException) { throw ApiError.Transport(e) }
+        response.use { res ->
+            val raw = try { res.body.string() } catch (e: IOException) { throw ApiError.Transport(e) }
+            if (res.isSuccessful) return raw
+            throw classify(res.code, raw, session)
+        }
+    }
+
     private fun classify(status: Int, raw: String?, authedSession: Session?): ApiError {
         val body = ErrorBody.parse(json, raw)
         val code = ErrorBody.code(body)

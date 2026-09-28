@@ -1109,4 +1109,19 @@
     <string name="ag_pick_date">Pick a date to see its events.</string>
     <string name="ag_no_events">No events on this date.</string>
     <string name="ag_all_day">All day</string>
+    <string name="gd_empty">Ask GIDEON about NEXUS</string>
+    <string name="gd_empty_sub">Projects, tasks, who is busy, what is overdue.</string>
+    <string name="gd_typing">GIDEON is typing…</string>
+    <string name="gd_placeholder">Ask anything about NEXUS…</string>
+    <string name="gd_clear">Clear chat</string>
+    <string name="gd_clear_q">Clear the whole conversation?</string>
+    <string name="gd_image_attached">Image attached</string>
+    <string name="gd_too_big">File is over the 10MB limit.</string>
+    <string name="gd_unsupported">GIDEON can\'t read that kind of file yet.</string>
+    <string name="gd_unreadable">Couldn\'t read that file.</string>
+    <string name="gd_failed">GIDEON couldn\'t answer. Try again.</string>
+    <string name="gd_astra">Deepest. For analysis and decisions.</string>
+    <string name="gd_luna">Everyday.</string>
+    <string name="gd_terra">Light. Short questions.</string>
+    <string name="gd_experimental">Local model in the office. Slow, and can be wrong.</string>
 </resources>

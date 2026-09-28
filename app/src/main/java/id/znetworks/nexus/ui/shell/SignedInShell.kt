@@ -15,6 +15,7 @@ import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
 import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
+import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.agenda.TeamCalendarScreen
 import id.znetworks.nexus.feature.people.LeaderboardScreen
@@ -222,6 +223,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { goTab(Tab.MORE) },
                     // Quick actions built in the app open here; the rest on the web until built.
+                    onOpenGideon = { nav.navigate("gideon") },
                     onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar" -> nav.navigate("team-calendar"); else -> openWeb(context, it) } },
                 )
             }
@@ -258,6 +260,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
             composable("team-calendar") { TeamCalendarScreen(onBack = { nav.popBackStack() }) }
+            composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {

@@ -209,6 +209,7 @@ fun HomeScreen(
     onOpenTask: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenWeb: (String) -> Unit,
+    onOpenGideon: () -> Unit = {},
     vm: HomeViewModel = viewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -220,6 +221,7 @@ fun HomeScreen(
     // Every visit re-reads: a task finished elsewhere, a check-in, a claimed quest.
     LaunchedEffect(Unit) { vm.load() }
 
+    Box(Modifier.fillMaxSize()) {
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Greeting(session?.userName)
@@ -233,8 +235,12 @@ fun HomeScreen(
             ShortcutsCard(vm.shortcuts, onOpenProject)
             AgendaCard(s.tasks, onOpenTask)
             ProfileCard(session?.userName, s.game, onOpenSettings)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(72.dp))
         }
+    }
+    // GIDEON's launcher lives on Home only (iOS floating button).
+    androidx.compose.material3.FloatingActionButton(onClick = onOpenGideon, containerColor = c.violet, contentColor = Color.White,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.AutoAwesome, "GIDEON") }
     }
     stat?.let { StatSheet(it, s, vm, onOpenProject, onOpenTask) { stat = null } }
     if (levelOpen) LevelSheet(s.game) { levelOpen = false }

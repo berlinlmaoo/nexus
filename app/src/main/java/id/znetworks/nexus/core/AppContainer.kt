@@ -84,6 +84,7 @@ class AppContainer(private val context: Context) {
 
     val router = Router()
     val viewer = Viewer(api)
+    val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope)
     val shortcuts = id.znetworks.nexus.feature.home.ProjectShortcuts(context) { sessionStore.current?.userId }
     val uploads = id.znetworks.nexus.core.net.Uploads(context, api)
     val announcements = AnnouncementHost(InboxApi(api))
@@ -134,6 +135,7 @@ class AppContainer(private val context: Context) {
                 // A cached roster or task list must not outlive the session that fetched it.
                 responseCache.clearAll()
                 viewer.reset()
+                gideon.reset()
                 if (deliberate) shortcuts.clearAll()
                 id.znetworks.nexus.ui.components.ImageMemory.clear()
                 // Location stops with the session; unsent points go with it.

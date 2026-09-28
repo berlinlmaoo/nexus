@@ -1103,4 +1103,19 @@
     <string name="ag_pick_date">Pilih tanggal buat lihat event-nya.</string>
     <string name="ag_no_events">Nggak ada event di tanggal ini.</string>
     <string name="ag_all_day">Seharian</string>
+    <string name="gd_empty">Tanya GIDEON soal NEXUS</string>
+    <string name="gd_empty_sub">Proyek, task, siapa yang sibuk, apa yang telat.</string>
+    <string name="gd_typing">GIDEON sedang mengetik…</string>
+    <string name="gd_placeholder">Tanya apa saja soal NEXUS…</string>
+    <string name="gd_clear">Hapus obrolan</string>
+    <string name="gd_clear_q">Hapus seluruh percakapan?</string>
+    <string name="gd_image_attached">Gambar terlampir</string>
+    <string name="gd_too_big">File maks 10MB.</string>
+    <string name="gd_unsupported">Tipe file itu belum bisa dibaca GIDEON.</string>
+    <string name="gd_unreadable">Gagal membaca file itu.</string>
+    <string name="gd_failed">GIDEON tidak bisa menjawab. Coba lagi.</string>
+    <string name="gd_astra">Paling dalam. Untuk analisis dan keputusan.</string>
+    <string name="gd_luna">Sehari-hari.</string>
+    <string name="gd_terra">Ringan. Pertanyaan pendek.</string>
+    <string name="gd_experimental">Model lokal di kantor. Lambat dan bisa keliru.</string>
 </resources>
