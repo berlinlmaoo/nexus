@@ -61,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -234,7 +235,10 @@ fun AttendanceScreen(
             if (q.count > 0) {
                 InfoBanner(pluralStringResource(R.plurals.queue_waiting, q.count, q.count), c.warning)
             }
-            Metrics(s, forcePending)
+            val trail = (context.applicationContext as NexusApplication).container.workTrail
+            val trailTick by trail.changes.collectAsState()
+            val hereName = remember(trailTick) { id.znetworks.nexus.feature.attendance.trail.TrailMachine.officeHere(trail.state)?.name }
+            Metrics(s, forcePending, hereName.takeIf { s.today?.today?.let { it.hasCheckedIn && !it.hasCheckedOut } == true })
             // Filing changes today's quota and cover: re-read it after a request goes in.
             SubmissionsCard(requests, onFiled = { vm.load() })
             CrewBoardCard(board)
@@ -426,7 +430,7 @@ private fun OffsitePrompt(reason: String, onReason: (String) -> Unit, onCancel: 
 }
 
 @Composable
-private fun Metrics(s: AttendanceUiState, forcePending: Boolean) {
+private fun Metrics(s: AttendanceUiState, forcePending: Boolean, hereName: String? = null) {
     val c = Nx.colors
     val rec = s.today?.today ?: s.today?.pendingCheckout
     val todayValue = when {
@@ -437,7 +441,8 @@ private fun Metrics(s: AttendanceUiState, forcePending: Boolean) {
     }
     val free = s.today?.noGeofence == true
     // Location-free: where they checked in (the server's address), not an office they were never at.
-    val officeName = if (free) null else rec?.officeLocation?.name
+    // While working: the active office they are in now (moved from A to B = B), else the record's.
+    val officeName = if (free) null else hereName ?: rec?.officeLocation?.name
     val officeValue = if (free) {
         rec?.checkInAddress?.let(::shortAddress)?.takeIf { it.isNotBlank() }
             ?: stringResource(if (rec?.checkInAt != null) R.string.checked_in_away else R.string.location_free)

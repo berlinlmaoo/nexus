@@ -1414,4 +1414,5 @@
     <string name="covered_title">Your approved request covers today</string>
     <string name="covered_request">Request</string>
     <string name="covered_body">No check-in needed — it\'s already on your record.</string>
+    <string name="work_session_at">At %1$s · location checked about once an hour</string>
 </resources>

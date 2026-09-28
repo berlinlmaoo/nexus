@@ -1408,4 +1408,5 @@
     <string name="covered_title">Pengajuanmu yang disetujui mencakup hari ini</string>
     <string name="covered_request">Pengajuan</string>
     <string name="covered_body">Tidak perlu check-in — sudah tercatat di absensimu.</string>
+    <string name="work_session_at">Di %1$s · lokasi dicek sekitar sejam sekali</string>
 </resources>

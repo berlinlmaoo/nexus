@@ -173,7 +173,7 @@ class WorkTrailService : Service() {
 
     private fun refreshNotification() {
         outsideAlerts(System.currentTimeMillis())
-        val key = listOf(currentMode, OutsideClock.present(trail.state, System.currentTimeMillis()), trail.state.checkInAtMillis)
+        val key = listOf(currentMode, OutsideClock.present(trail.state, System.currentTimeMillis()), trail.state.checkInAtMillis, TrailMachine.officeHere(trail.state)?.name)
         if (key == shown) return
         getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification())
     }
@@ -181,7 +181,8 @@ class WorkTrailService : Service() {
     private fun notification(): Notification {
         val now = System.currentTimeMillis()
         val outside = OutsideClock.present(trail.state, now)
-        shown = listOf(currentMode, outside, trail.state.checkInAtMillis)
+        val here = TrailMachine.officeHere(trail.state)?.name
+        shown = listOf(currentMode, outside, trail.state.checkInAtMillis, here)
         val since = trail.state.checkInAtMillis
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -196,7 +197,12 @@ class WorkTrailService : Service() {
         if (outside == null) {
             b.setColor(VIOLET)
                 .setContentTitle(getString(R.string.work_session_title))
-                .setContentText(getString(if (currentMode == WorkTrail.Mode.OUTSIDE) R.string.work_session_outside else R.string.work_session_inside))
+                .setContentText(when {
+                    currentMode == WorkTrail.Mode.OUTSIDE -> getString(R.string.work_session_outside)
+                    // Whichever active office holds them now, not only the one they checked in at.
+                    here != null -> getString(R.string.work_session_at, here)
+                    else -> getString(R.string.work_session_inside)
+                })
                 .setShowWhen(since != null)
                 .setUsesChronometer(since != null)
                 .apply { if (since != null) setWhen(since) }

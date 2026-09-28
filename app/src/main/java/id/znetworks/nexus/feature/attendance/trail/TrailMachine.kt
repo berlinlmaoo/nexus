@@ -23,7 +23,7 @@ import kotlin.math.sqrt
 //   • the server has the last word: `tracking:false` stops everything.
 
 @Serializable
-data class TrailFence(val lat: Double, val lng: Double, val radius: Double)
+data class TrailFence(val lat: Double, val lng: Double, val radius: Double, val name: String? = null)
 
 @Serializable
 data class TrailPoint(
@@ -84,7 +84,14 @@ data class TrailState(
     val serverOutsideSinceAtMillis: Long? = null,
     /** When [stage] and [serverNextAtMillis] were last written by a trail reply. */
     val serverStageAtMillis: Long? = null,
+    /**
+     * The workspace's OTHER active offices. The server classifies a point against every active
+     * office (`officesForRecord`), so working in office B after checking in at A is inside.
+     */
+    val others: List<TrailFence> = emptyList(),
 ) {
+    /** Every office a point may be inside: the record's first. */
+    val fences: List<TrailFence> get() = listOfNotNull(fence) + others
     val isActive: Boolean get() = recordId != null
 }
 
@@ -155,13 +162,34 @@ class TrailMachine(var state: TrailState = TrailState()) {
          * (radius + max(accuracy, 50 m), `classifyPoint` in lib/attendance-outside.ts): with a smaller
          * one the phone said "outside" while the server's clock never started (iOS 81abc62).
          */
-        fun decisive(p: TrailPoint, fence: TrailFence): Boolean? {
+        fun decisive(p: TrailPoint, fence: TrailFence): Boolean? = decisive(p, listOf(fence))
+
+        /** Inside ANY of [fences] is inside; outside only when clearly outside every one of them. */
+        fun decisive(p: TrailPoint, fences: List<TrailFence>): Boolean? {
+            if (fences.isEmpty()) return null
             val acc = p.accuracy ?: DECISIVE_ACCURACY
             if (acc < 0 || acc > DECISIVE_ACCURACY) return null
-            val d = distance(p.lat, p.lng, fence.lat, fence.lng)
-            if (d <= fence.radius) return true
-            if (d > fence.radius + max(acc, OUTSIDE_MARGIN)) return false
+            val d = fences.map { it to distance(p.lat, p.lng, it.lat, it.lng) }
+            if (d.any { (f, m) -> m <= f.radius }) return true
+            if (d.all { (f, m) -> m > f.radius + max(acc, OUTSIDE_MARGIN) }) return false
             return null
+        }
+
+        /** Active offices with a position, as fences (an office switched off is nobody's inside). */
+        fun activeFences(offices: List<id.znetworks.nexus.feature.attendance.OfficeRef>): List<TrailFence> =
+            offices.filter { it.isActive != false && it.latitude != null && it.longitude != null }
+                .map { TrailFence(it.latitude!!, it.longitude!!, it.radiusMeters ?: 100.0, it.name) }
+
+        /**
+         * The office the person is in now: the one whose radius holds the latest fix, else the
+         * record's own while the zone is inside. Null outside or before the zone is known.
+         */
+        fun officeHere(state: TrailState): TrailFence? {
+            if (state.zone != TrailZone.INSIDE) return null
+            val p = state.latest
+            val here = p?.let { pt -> state.fences.minByOrNull { distance(pt.lat, pt.lng, it.lat, it.lng) - it.radius }
+                ?.takeIf { distance(pt.lat, pt.lng, it.lat, it.lng) <= it.radius } }
+            return here ?: state.fence
         }
 
         fun usable(p: TrailPoint): Boolean {
@@ -219,6 +247,12 @@ class TrailMachine(var state: TrailState = TrailState()) {
         if (excused) state = state.copy(stage = OutsideClock.PAUSED)
     }
 
+    /** The workspace's active offices (the record's own is dropped: it is [TrailState.fence]). */
+    fun offices(all: List<TrailFence>) {
+        val others = all.filter { it != state.fence }.distinct()
+        if (others != state.others) state = state.copy(others = others)
+    }
+
     /** A request covering today was just filed here: the server pauses the clock at once (PENDING counts). */
     fun excuseFiled() {
         if (state.isActive) state = state.copy(stage = OutsideClock.PAUSED)
@@ -265,7 +299,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
         // A zone answer that a fresh, clear fix contradicts is stale, not a crossing: take the fix's.
         val fence = state.fence
         if (lastKnown != null && now - lastKnown.atMillis <= FRESH_FIX_MS && fence != null) {
-            val fixSays = decisive(lastKnown, fence)
+            val fixSays = decisive(lastKnown, state.fences)
             if (fixSays != null && fixSays != inside) return determined(fixSays, lastKnown, now)
         }
         val previous = state.zone
@@ -300,7 +334,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
 
         // A clear fix settles the zone (also how a presence check finds a missed exit).
         val fence = state.fence
-        val inside = fence?.let { decisive(p, it) }
+        val inside = fence?.let { decisive(p, state.fences) }
         if (inside != null && (if (inside) TrailZone.INSIDE else TrailZone.OUTSIDE) != state.zone) {
             val fx = determined(inside, p, now)
             return if (state.zone == TrailZone.OUTSIDE) fx else fx + presence(p, now)

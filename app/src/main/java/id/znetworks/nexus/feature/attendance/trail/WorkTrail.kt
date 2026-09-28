@@ -87,7 +87,7 @@ class WorkTrail(
                 // Nothing to measure "outside" against; the server cannot either.
                 lat == null || lng == null -> if (machine.state.isActive) machine.stop(keepUnsent = true) else emptyList()
                 else -> {
-                    val fence = TrailFence(lat, lng, office.radiusMeters ?: 100.0)
+                    val fence = TrailFence(lat, lng, office.radiusMeters ?: 100.0, office.name)
                     val checkIn = rec.checkInAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
                     machine.start(rec.id, checkIn, fence, now()).also {
                         if (machine.state.isActive) {
@@ -103,7 +103,26 @@ class WorkTrail(
             persist()
         }
         apply(fx)
-        startedRecord?.let { ensureConsent(it) }
+        startedRecord?.let { ensureConsent(it); loadOffices(it) }
+    }
+
+    private var officesFor: String? = null
+
+    /**
+     * The workspace's active offices, once per record: inside any of them is inside, as the server
+     * classifies (`officesForRecord`). A failed fetch keeps what was known; the next sync retries.
+     */
+    private fun loadOffices(recordId: String) {
+        if (officesFor == recordId) return
+        scope.launch {
+            val list = runCatching { api.get("/api/attendance/offices", id.znetworks.nexus.feature.attendance.OfficesResponse.serializer()).offices }.getOrNull() ?: return@launch
+            officesFor = recordId
+            lock.withLock {
+                machine.offices(TrailMachine.activeFences(list))
+                persist()
+            }
+            changes.value = changes.value + 1
+        }
     }
 
     /** A request covering today was filed from this phone: the outside countdown stops now. */

@@ -276,4 +276,36 @@ class TrailMachineTest {
         assertTrue(m.fix(old, now).isEmpty())
         assertEquals(TrailZone.UNKNOWN, m.state.zone)
     }
+
+    // Audit S2 (Berlin): inside ANY active office is inside; the office they are in is the one shown.
+    @Test fun anotherActiveOfficeIsInsideAndNamed() {
+        m.start("r1", now, fence.copy(name = "HQ"), now)
+        val b = TrailFence(-6.195, 106.8, 100.0, "Studio") // ~555 m north, where outside() lands
+        m.offices(TrailMachine.activeFences(listOf(
+            id.znetworks.nexus.feature.attendance.OfficeRef(name = "HQ", latitude = -6.2, longitude = 106.8, radiusMeters = 100.0, isActive = true),
+            id.znetworks.nexus.feature.attendance.OfficeRef(name = "Studio", latitude = -6.195, longitude = 106.8, radiusMeters = 100.0, isActive = true),
+            id.znetworks.nexus.feature.attendance.OfficeRef(name = "Closed", latitude = -6.3, longitude = 106.8, radiusMeters = 100.0, isActive = false))))
+        assertEquals(listOf(b), m.state.others) // the record's own office and inactive ones are not repeated
+        m.fix(inside(), now)
+        assertEquals("HQ", TrailMachine.officeHere(m.state)?.name)
+        now += 10 * min
+        val fx = m.fix(outside(), now) // at Studio
+        assertEquals(TrailZone.INSIDE, m.state.zone)
+        assertFalse(TrailEffect.StartContinuous in fx)
+        assertTrue(m.state.pending.none { it.event == TrailPoint.Event.exit })
+        assertEquals("Studio", TrailMachine.officeHere(m.state)?.name)
+        // Between the two, clear of both: outside, and no office is named.
+        now += 10 * min
+        m.fix(at(0.0025), now)
+        assertEquals(TrailZone.OUTSIDE, m.state.zone)
+        assertNull(TrailMachine.officeHere(m.state))
+    }
+
+    @Test fun decisiveNeedsAllFencesClearForOutside() {
+        val a = TrailFence(0.0, 0.0, 100.0); val b = TrailFence(0.0, 0.002, 100.0) // ~222 m apart
+        val p = TrailPoint(recordId = "", lat = 0.0, lng = 0.0014, accuracy = 10.0, atMillis = 0) // ~156 m from a, ~67 m from b
+        assertEquals(false, TrailMachine.decisive(p, a))
+        assertEquals(true, TrailMachine.decisive(p, listOf(a, b)))
+        assertNull(TrailMachine.decisive(p, emptyList()))
+    }
 }
