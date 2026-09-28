@@ -88,7 +88,16 @@ export function iosFloor(): string {
 }
 
 /** The policy at time `now` for a floor and the recorded releases. Pure — the rule, in one place. */
-export function computeIosVersionPolicy(floor: string, releases: readonly IosRelease[], now: number): IosVersionPolicy {
+/**
+ * Versions the owner made the minimum the moment the App Store has them, with no 3-day grace
+ * (AppSetting "ios-immediate-minimum": string[]; owner, 29 Sep 2026: "setelah 0.1.6 di-approve Apple,
+ * jadikan 0.1.6 versi minimum"). Still only once the App Store actually serves the version — before
+ * that there is nothing to update to.
+ */
+export const IMMEDIATE_KEY = "ios-immediate-minimum"
+const graceFor = (v: string, immediate: ReadonlySet<string>) => (immediate.has(v) ? 0 : GRACE_MS)
+
+export function computeIosVersionPolicy(floor: string, releases: readonly IosRelease[], now: number, immediate: ReadonlySet<string> = new Set()): IosVersionPolicy {
   let min = normalizeVersion(floor) ?? IOS_FLOOR_DEFAULT
   let highestSeen: string | null = null
   for (const r of releases) {
@@ -96,14 +105,14 @@ export function computeIosVersionPolicy(floor: string, releases: readonly IosRel
     if (!v) continue
     if (!highestSeen || compareVersions(v, highestSeen) > 0) highestSeen = v
     if (compareVersions(v, ROLLING_FROM) < 0) continue
-    if (r.firstSeenAt.getTime() + GRACE_MS <= now && compareVersions(v, min) > 0) min = v
+    if (r.firstSeenAt.getTime() + graceFor(v, immediate) <= now && compareVersions(v, min) > 0) min = v
   }
   // The next step up: of the releases still inside their window and above the minimum, the one that
   // matures first (the highest, if several mature at the same moment).
   let next: { version: string; at: number } | null = null
   for (const r of releases) {
     const v = normalizeVersion(r.version)
-    const at = r.firstSeenAt.getTime() + GRACE_MS
+    const at = r.firstSeenAt.getTime() + (v ? graceFor(v, immediate) : GRACE_MS)
     if (!v || at <= now || compareVersions(v, min) <= 0 || compareVersions(v, ROLLING_FROM) < 0) continue
     if (!next || at < next.at || (at === next.at && compareVersions(v, next.version) > 0)) next = { version: v, at }
   }
@@ -118,13 +127,15 @@ export function computeIosVersionPolicy(floor: string, releases: readonly IosRel
 
 interface PolicyState {
   releases: IosRelease[] | null
+  /** IMMEDIATE_KEY, read with the releases. */
+  immediate: Set<string>
   loadedAt: number
   inflight: Promise<void> | null
   /** Highest minimum ever returned by this process: belt and braces for "never lower". */
   highWater: string | null
 }
 const g = globalThis as unknown as { __nexusIosVersionPolicy?: PolicyState }
-const state: PolicyState = (g.__nexusIosVersionPolicy ??= { releases: null, loadedAt: 0, inflight: null, highWater: null })
+const state: PolicyState = (g.__nexusIosVersionPolicy ??= { releases: null, immediate: new Set(), loadedAt: 0, inflight: null, highWater: null })
 
 function refresh(): Promise<void> {
   if (!state.inflight) {
@@ -135,6 +146,9 @@ function refresh(): Promise<void> {
           select: { version: true, firstSeenAt: true },
         })
         state.releases = rows
+        const imm = await prisma.appSetting.findUnique({ where: { key: IMMEDIATE_KEY } }).catch(() => null)
+        const list = Array.isArray(imm?.value) ? (imm!.value as unknown[]) : []
+        state.immediate = new Set(list.map((x) => normalizeVersion(String(x))).filter((x): x is string => !!x))
         state.loadedAt = Date.now()
       } catch (e) {
         // Keep the previous rows: a failed read must not lower the minimum. Retry after the window.
@@ -164,7 +178,7 @@ export function invalidateIosVersionPolicy(): void {
 export async function getIosVersionPolicy(now = Date.now()): Promise<IosVersionPolicy> {
   if (!state.releases) await refresh()
   else if (now - state.loadedAt > ROWS_FRESH_MS) void refresh()
-  const policy = computeIosVersionPolicy(iosFloor(), state.releases ?? [], now)
+  const policy = computeIosVersionPolicy(iosFloor(), state.releases ?? [], now, state.immediate ?? new Set())
   if (state.highWater && compareVersions(state.highWater, policy.minSupported) > 0) {
     policy.minSupported = state.highWater
   } else {
