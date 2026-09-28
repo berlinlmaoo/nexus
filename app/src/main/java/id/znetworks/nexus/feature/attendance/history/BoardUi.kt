@@ -283,7 +283,16 @@ fun CrewBoardCard(vm: BoardViewModel) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
-    val period = BoardModel.periodKey(s.offset)
+    // A board left open past 00:00 WIB on the 28th moves to the new period by itself (audit R5).
+    var periodNow by remember { mutableStateOf(BoardModel.periodKey(0)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            val k = BoardModel.periodKey(0)
+            if (k != periodNow) { periodNow = k; vm.load() }
+        }
+    }
+    val period = remember(s.offset, periodNow) { BoardModel.periodKey(s.offset) }
     val days = remember(period) { BoardModel.days(period) }
     val today = OfficeTime.today()
     val session = (context.applicationContext as NexusApplication).container.sessionStore.current
@@ -506,7 +515,8 @@ private fun DayDetail(vm: BoardViewModel, r: HistoryRow) {
                     r.reviewedBy?.name?.let { Fact(stringResource(R.string.detail_approver), it) }
                     r.supportingDocumentUrl?.let { AttachmentChip(it, r.supportingDocumentName, r.requestType) }
                 }
-                if (vm.canManage && r.user?.id != null) ChangeStatusPanel(vm, r)
+                // Never for a future day, row or not: the server refuses it (audit R13).
+                if (vm.canManage && r.user?.id != null && !BoardModel.isFuture(r.dayKey)) ChangeStatusPanel(vm, r)
                 // BoD record actions, confirmed and audited server-side.
                 if (vm.canManage && r.isRecord) {
                     Spacer(Modifier.height(8.dp))

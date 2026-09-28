@@ -224,7 +224,9 @@ Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes membe
 | R10 (RENDAH) audit entry: old values not struck, no links | "old → new" with the old value struck through; details linked to a task, project or person open it (iOS 3ae2630) | e2f4655 |
 | R11 (RENDAH) update deadline not in More | During the grace window More shows "Update NEXUS by <date, time>. After that, this version can't take attendance." with Update, in place of the plain "available" row (iOS UpdateDeadlineRow) | 029cd92 |
 | R12 (RENDAH) invite link read as "Reset password" | `/forgot-password?…&invited=1` (https and nexus://) opens the same flow titled "Set your password" (iOS ResetPasswordView); a forgotten password stays "Reset your password" (LinksTest) | 4cc45a4 |
-| R7 (RENDAH) member record: requests not tappable; Remove could be sent twice | A request opens in full (status, dates, reason, reviewer and note); a deduction being given back hides its Remove until the answer, so one tap is one request | this step |
+| R7 (RENDAH) member record: requests not tappable; Remove could be sent twice | A request opens in full (status, dates, reason, reviewer and note); a deduction being given back hides its Remove until the answer, so one tap is one request | 186a315 |
+| R5 (RENDAH) board period stuck past 00:00 WIB on the 28th | The board checks the period every minute and moves (and reloads) when it turns | this step |
+| R13 (RENDAH) cosmetics | Fixed: "Change status" never offered for a future day, row or not. Left as they are (cosmetic, no wrong data): face-check window does not follow the face, no month line on the board, empty cells darker than iOS; key rotation would need `signingCertificateHistory` compared by lineage (no rotation planned); sha256 stays optional as the server sends it | this step |
 
 **New for 0.1.6 (Berlin, 28 Sep; iOS b186172): no sign-out while a workday runs.** Logout in More is
 refused while checked in and not checked out (live, or a check-in still queued offline; before today was

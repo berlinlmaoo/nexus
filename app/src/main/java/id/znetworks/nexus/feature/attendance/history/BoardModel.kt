@@ -50,6 +50,10 @@ data class Score(val shown: Int, val target: Int, val surplus: Int) {
 }
 
 object BoardModel {
+    /** After today in the office's time zone. */
+    fun isFuture(dayKey: String, today: java.time.LocalDate = id.znetworks.nexus.core.time.OfficeTime.today()): Boolean =
+        runCatching { java.time.LocalDate.parse(dayKey.take(10)).isAfter(today) }.getOrDefault(false)
+
     /** A member-record day: real records for everyone; id-less rows and empty past days for the BoD; never the future. */
     fun dayOpens(row: HistoryRow?, canManage: Boolean, future: Boolean): Boolean = when {
         future -> false

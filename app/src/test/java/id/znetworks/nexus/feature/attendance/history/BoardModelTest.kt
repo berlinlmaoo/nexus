@@ -113,4 +113,11 @@ class BoardModelTest {
         assertEquals("—", m.first { it.id == "x" }.name)
         assertEquals("Viewer", m.first { it.id == "me-id" }.name)
     }
+
+    @Test fun futureDaysAreFuture() {
+        val today = java.time.LocalDate.of(2026, 9, 28)
+        assertEquals(true, BoardModel.isFuture("2026-09-29", today))
+        assertEquals(false, BoardModel.isFuture("2026-09-28", today))
+        assertEquals(false, BoardModel.isFuture("", today))
+    }
 }
