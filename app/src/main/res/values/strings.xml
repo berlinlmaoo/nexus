@@ -1100,4 +1100,13 @@
     <string name="pf_quest_penalty">Penalty quest</string>
     <string name="pf_task_done">Task completed</string>
     <string name="pf_streak_bonus">Daily streak</string>
+    <string name="ag_rooms_sub">Room bookings — VIP, Meeting, Studio.</string>
+    <string name="ag_upcoming">Upcoming</string>
+    <string name="ag_history">History</string>
+    <string name="ag_no_bookings_next">No bookings in the next 14 days.</string>
+    <string name="ag_no_bookings_past">No bookings in the last 30 days.</string>
+    <string name="ag_all_teams">All teams</string>
+    <string name="ag_pick_date">Pick a date to see its events.</string>
+    <string name="ag_no_events">No events on this date.</string>
+    <string name="ag_all_day">All day</string>
 </resources>

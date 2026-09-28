@@ -1094,4 +1094,13 @@
     <string name="pf_quest_penalty">Penalty quest</string>
     <string name="pf_task_done">Task completed</string>
     <string name="pf_streak_bonus">Daily streak</string>
+    <string name="ag_rooms_sub">Booking ruangan — VIP, Meeting, Studio.</string>
+    <string name="ag_upcoming">Mendatang</string>
+    <string name="ag_history">Riwayat</string>
+    <string name="ag_no_bookings_next">Belum ada booking dalam 14 hari ke depan.</string>
+    <string name="ag_no_bookings_past">Nggak ada booking dalam 30 hari terakhir.</string>
+    <string name="ag_all_teams">Semua tim</string>
+    <string name="ag_pick_date">Pilih tanggal buat lihat event-nya.</string>
+    <string name="ag_no_events">Nggak ada event di tanggal ini.</string>
+    <string name="ag_all_day">Seharian</string>
 </resources>

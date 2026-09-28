@@ -15,6 +15,8 @@ import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
 import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
+import id.znetworks.nexus.feature.agenda.RoomBookingScreen
+import id.znetworks.nexus.feature.agenda.TeamCalendarScreen
 import id.znetworks.nexus.feature.people.LeaderboardScreen
 import id.znetworks.nexus.feature.people.MemberProfileScreen
 import id.znetworks.nexus.feature.reports.PersonReportScreen
@@ -173,6 +175,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${t.folderId.orEmpty()}&trash=") }
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${t.slug}") }
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/$it/0" } ?: "reports") }
+            Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
+            Target.TeamCalendar -> { container.router.consumed(t); nav.navigate("team-calendar") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
@@ -218,7 +222,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { goTab(Tab.MORE) },
                     // Quick actions built in the app open here; the rest on the web until built.
-                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); else -> openWeb(context, it) } },
+                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar" -> nav.navigate("team-calendar"); else -> openWeb(context, it) } },
                 )
             }
             composable("account") { AccountScreen(onBack = { nav.popBackStack() }) }
@@ -252,6 +256,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("leaderboard") { LeaderboardScreen(onBack = { nav.popBackStack() }, onOpenPerson = { nav.navigate("profile/$it") }) }
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
+            composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
+            composable("team-calendar") { TeamCalendarScreen(onBack = { nav.popBackStack() }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {

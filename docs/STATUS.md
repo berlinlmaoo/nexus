@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (225 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (227 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -137,7 +137,8 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 3.5 | Knowledge Library (More): searchable doc list, reader drawing BlockNote blocks (headings, bullets, numbered, checklists, quotes, code) or `contentText`, project Pages tab, search and `/docs/<id>` links open docs in the app. Read-only, as iOS. Home's Chat/Threads quick actions go to the app screens | f3c07dc |
 | 3.6 | Z Vault (More): browse folders with breadcrumb and quota, workspace search, image thumbnails, open/share files through the session (never a browser), new folder, upload (≤ 64 MiB single, larger through the chunk route with `target=vault`, 1 GB cap, 507 "Vault penuh…" shown), rename, trash (restore, delete forever, empty), share links (members-only `/v/` or public `/s/` if allowed, download on/off, expiry, copy, revoke, views); `/v/<slug>` App Link opens the shared file in the app; `/s/` is never claimed (test pins the manifest) | ff7bee3 |
 | 3.7 | Reports (More): Me and My team (hidden for staff on `REPORT_SELF_ONLY`), attendance period 28→27 with prev/next, headline stats with arrows vs last period (good/bad per metric), completed per week, overdue now (opens the task), by project, attendance breakdown, XP with level/streak/penalties (server kinds); team list with search by name/email/team and flags (3+ overdue, late 3+, few reflections), tap → that person's report; `REPORT_OUT_OF_SCOPE` said plainly; `/reports[/<id>]` links | 1cfbca6 |
-| 3.8 | Leaderboard (Home quick action, `/leaderboard`): this period's ranking with shared places, you highlighted, tap → profile. Member profile (leaderboard, search members): header, Message (opens/creates the DM), level from the leaderboard, and the **member record** (`/api/members/<id>/record`, scoped like Reports; a 403 leaves those sections out): period prev/next, score worked/working (+surplus), counts, late, day-off and XP lines, streak board (tones, red dot for a deduction), XP log with load older and **BoD remove a deduction** (with note, refund route), requests with reviewer | this step |
+| 3.8 | Leaderboard (Home quick action, `/leaderboard`): this period's ranking with shared places, you highlighted, tap → profile. Member profile (leaderboard, search members): header, Message (opens/creates the DM), level from the leaderboard, and the **member record** (`/api/members/<id>/record`, scoped like Reports; a 403 leaves those sections out): period prev/next, score worked/working (+surplus), counts, late, day-off and XP lines, streak board (tones, red dot for a deduction), XP log with load older and **BoD remove a deduction** (with note, refund route), requests with reviewer | 7cd5f92 |
+| 3.9 | Room Booking (upcoming 14 days / history 30 days, grouped by office day) and Team Calendar (month grid, per-team or all teams merged — the server needs one call per team), both read-only as iOS; Home quick actions and `/room-booking`, `/master-calendar` links open them | this step |
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 
