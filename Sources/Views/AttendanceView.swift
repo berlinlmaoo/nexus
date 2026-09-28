@@ -524,7 +524,6 @@ struct AttendanceView: View {
             }
             .overlay {
                 // The celebration the web has always had, kept inside the button it belongs to.
-                if case .done = flow, !reduceMotion { ConfettiBurst().allowsHitTesting(false) }
             }
             .shadow(color: l.enabled || flow != nil ? l.fill.opacity(0.35) : .clear, radius: 12, y: 6)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -1222,53 +1221,6 @@ private struct DrawnCheck: View {
             p.addLine(to: CGPoint(x: r.maxX - r.width * 0.08, y: r.minY + r.height * 0.16))
             return p
         }
-    }
-}
-
-/// A small burst of confetti out of the button on a confirmed check-in or check-out. Only drawn
-/// when Reduce Motion is off (the caller checks); it fades by itself and never takes a tap.
-private struct ConfettiBurst: View {
-    @State private var out = false
-    private static let colors: [Color] = [Color(hex: "#10b981"), Color(hex: "#f59e0b"), Color(hex: "#7c3aed"),
-                                          Color(hex: "#f43f5e"), Color(hex: "#0ea5e9"), .white]
-
-    var body: some View {
-        GeometryReader { g in
-            ZStack {
-                ForEach(0..<18, id: \.self) { i in
-                    ConfettiPiece(index: i, out: out, color: Self.colors[i % Self.colors.count],
-                                  center: CGPoint(x: g.size.width / 2, y: g.size.height / 2))
-                }
-            }
-        }
-        .onAppear { withAnimation(.easeOut(duration: 1.1)) { out = true } }
-    }
-}
-
-/// One piece of the burst. Its numbers are worked out as plain CGFloats first: written inline in one
-/// modifier chain, the arithmetic was too much for the type checker ("unable to type-check this
-/// expression in reasonable time").
-private struct ConfettiPiece: View {
-    let index: Int
-    let out: Bool
-    let color: Color
-    let center: CGPoint
-
-    var body: some View {
-        let turn: Double = index.isMultiple(of: 2) ? 0.2 : -0.1
-        let angle: Double = Double(index) / 18.0 * 2.0 * Double.pi + turn
-        let reach: Double = Double(40 + (index * 37) % 50)
-        let dx: CGFloat = out ? CGFloat(cos(angle) * reach * 1.8) : 0
-        let dy: CGFloat = out ? CGFloat(sin(angle) * reach) : 0
-        let height: CGFloat = index.isMultiple(of: 3) ? 9 : 6
-        let degrees: Double = out ? Double(index * 47) : 0
-        return RoundedRectangle(cornerRadius: 1.5)
-            .fill(color)
-            .frame(width: 5, height: height)
-            .rotationEffect(.degrees(degrees))
-            .offset(x: dx, y: dy)
-            .opacity(out ? 0 : 1)
-            .position(x: center.x, y: center.y)
     }
 }
 
