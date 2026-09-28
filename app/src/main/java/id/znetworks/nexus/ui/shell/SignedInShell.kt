@@ -1,5 +1,6 @@
 package id.znetworks.nexus.ui.shell
 
+import id.znetworks.nexus.feature.tasks.MyTasksScreen
 import id.znetworks.nexus.feature.tasks.TaskDetailScreen
 import android.Manifest
 import android.content.Context
@@ -162,7 +163,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.fillMaxSize().padding(padding)) {
             // Attendance is the core: it is Home until the full dashboard lands (Phase 2).
             composable(Tab.HOME.route) { AttendanceScreen() }
-            composable(Tab.TASKS.route) { NotYet(Tab.TASKS) }
+            composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
@@ -171,7 +172,6 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("project/{id}") {
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") })
             }
-            // Not built yet on this step: the web page, and back.
             composable("task/{id}") {
                 TaskDetailScreen(
                     onBack = { nav.popBackStack() },

@@ -551,4 +551,12 @@
     <string name="outside_auto_at">Auto check-out %1$s</string>
     <string name="outside_remind">File a permit or head back to the office · Auto check-out %1$s</string>
     <string name="outside_warn">Last warning: automatic offsite check-out at %1$s unless you\'re back or file a permit</string>
+    <string name="mytasks_title">My Quest Log</string>
+    <string name="mytasks_hot">Hot today</string>
+    <string name="mytasks_motion">In motion</string>
+    <string name="mytasks_done">Recently slayed</string>
+    <string name="mytasks_empty">No quests yet</string>
+    <string name="mytasks_empty_sub">Tasks assigned to you land here, from a mission board or a form. Nothing is waiting on you right now — pick something up from a mission.</string>
+    <string name="mytasks_browse">Browse missions</string>
+    <string name="mytasks_load_failed">Couldn\'t load.</string>
 </resources>

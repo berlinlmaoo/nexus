@@ -545,4 +545,12 @@
     <string name="outside_auto_at">Auto check-out %1$s</string>
     <string name="outside_remind">Ajukan izin atau balik ke kantor · Auto check-out %1$s</string>
     <string name="outside_warn">Peringatan terakhir: auto check-out offsite jam %1$s kalau belum balik atau ajukan izin</string>
+    <string name="mytasks_title">Catatan Quest Saya</string>
+    <string name="mytasks_hot">Panas hari ini</string>
+    <string name="mytasks_motion">Sedang jalan</string>
+    <string name="mytasks_done">Baru ditaklukkan</string>
+    <string name="mytasks_empty">Belum ada quest</string>
+    <string name="mytasks_empty_sub">Task yang ditugaskan ke kamu muncul di sini, dari papan mission atau form. Belum ada yang menunggu kamu — ambil dari salah satu mission.</string>
+    <string name="mytasks_browse">Lihat mission</string>
+    <string name="mytasks_load_failed">Gagal memuat.</string>
 </resources>
