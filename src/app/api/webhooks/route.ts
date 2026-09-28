@@ -4,6 +4,9 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { checkProjectAccess } from '@/lib/rbac'
+import { isAdminOrOrgBodPlus } from '@/lib/org'
+import { webhookUrlError } from '@/lib/webhook-dispatcher'
 
 export async function GET() {
   try {
@@ -63,11 +66,10 @@ export async function POST(req: Request) {
       )
     }
 
-    // Validate URL
-    try {
-      new URL(url)
-    } catch {
-      return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
+    // Validate URL: https, and not pointing at this server / the LAN / Tailscale (SSRF).
+    const urlError = await webhookUrlError(url)
+    if (urlError) {
+      return NextResponse.json({ error: urlError }, { status: 400 })
     }
 
     // Validate events
@@ -79,17 +81,20 @@ export async function POST(req: Request) {
       )
     }
 
-    // Verify project membership if projectId provided
+    // A project webhook needs access to that project. A global one (no project) hears about every
+    // project in the system: system admin or company BoD+ only.
     if (projectId) {
-      const member = await prisma.projectMember.findUnique({
-        where: { userId_projectId: { userId: session.user.id, projectId } },
-      })
-      if (!member) {
+      if (typeof projectId !== 'string' || !(await checkProjectAccess(session.user.id, projectId, ['MEMBER'])).allowed) {
         return NextResponse.json(
           { error: 'Not a member of this project' },
           { status: 403 }
         )
       }
+    } else if (!(await isAdminOrOrgBodPlus(session.user.id))) {
+      return NextResponse.json(
+        { error: 'Only BoD can create a webhook for all projects' },
+        { status: 403 }
+      )
     }
 
     const webhook = await prisma.webhook.create({
