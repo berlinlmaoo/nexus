@@ -30,6 +30,17 @@ class BoardModelTest {
         assertEquals("2026-09", BoardModel.periodKey(-1, LocalDate.of(2026, 9, 30)))
     }
 
+    @Test fun periodFlipsAtMidnightWibOnThe28th() {
+        // iOS 8838eec used the calendar month. 27 Sep 23:59 WIB is still "2026-09"; 28 Sep 00:00 WIB
+        // (= 27 Sep 17:00 UTC, while it is still the 27th in UTC) is already "2026-10".
+        val before = id.znetworks.nexus.core.time.OfficeTime.today(java.time.Instant.parse("2026-09-27T16:59:00Z"))
+        val after = id.znetworks.nexus.core.time.OfficeTime.today(java.time.Instant.parse("2026-09-27T17:00:00Z"))
+        assertEquals("2026-09", BoardModel.periodKey(0, before))
+        assertEquals("2026-10", BoardModel.periodKey(0, after))
+        assertEquals(LocalDate.of(2026, 9, 28), BoardModel.days(BoardModel.periodKey(0, after)).first())
+        assertEquals("2026-09", BoardModel.periodKey(-1, after)) // previous period from the 28th
+    }
+
     @Test fun membersGroupedViewerFirst() {
         val m = BoardModel.members(listOf(row("2026-09-01", user = "u2", name = "Zed"), row("2026-09-02", user = "me", name = "Bagas"),
             row("2026-09-01", user = "u3", name = "Ana")), viewerId = "me", selfName = "x")
