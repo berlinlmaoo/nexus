@@ -1,5 +1,8 @@
 package id.znetworks.nexus.ui.shell
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.WatchLater
+import id.znetworks.nexus.feature.home.HomeScreen
 import id.znetworks.nexus.feature.tasks.MyTasksScreen
 import id.znetworks.nexus.feature.tasks.TaskDetailScreen
 import android.Manifest
@@ -89,7 +92,7 @@ import id.znetworks.nexus.feature.update.startUpdate
 import kotlinx.coroutines.launch
 
 private enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
-    HOME("home", R.string.tab_home, Icons.Filled.Home, "/attendance"),
+    HOME("home", R.string.tab_home, Icons.Filled.Home, "/dashboard"),
     TASKS("tasks", R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
     INBOX("inbox", R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
     PROJECTS("projects", R.string.tab_projects, Icons.Filled.Folder, "/projects"),
@@ -127,7 +130,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     // Links: switch to the owning screen; attendance focus is claimed by that screen itself.
     LaunchedEffect(pending) {
         when (val t = pending) {
-            is Target.Attendance -> goTab(Tab.HOME)
+            // Claimed by the attendance screen itself (focus survives a cold start and a sign-in).
+            is Target.Attendance -> nav.navigate("attendance") { launchSingleTop = true }
             Target.Inbox -> { goTab(Tab.INBOX); container.router.consumed(t) }
             Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
@@ -161,14 +165,25 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         },
     ) { padding ->
         NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Attendance is the core: it is Home until the full dashboard lands (Phase 2).
-            composable(Tab.HOME.route) { AttendanceScreen() }
+            composable(Tab.HOME.route) {
+                HomeScreen(
+                    onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } },
+                    onOpenInbox = { goTab(Tab.INBOX) },
+                    // Search lands in 2.8; until then Mission Control's search covers missions and tasks.
+                    onSearch = { goTab(Tab.PROJECTS) },
+                    onOpenProject = { nav.navigate("project/$it") },
+                    onOpenTask = { nav.navigate("task/$it") },
+                    onOpenSettings = { goTab(Tab.MORE) },
+                    onOpenWeb = { openWeb(context, it) },
+                )
+            }
+            composable("attendance") { AttendanceScreen(onBack = { nav.popBackStack() }) }
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }) }
             composable("project/{id}") {
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") })
             }
@@ -197,7 +212,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -213,6 +228,13 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
         Text(session.userName.ifBlank { session.userEmail }, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground)
         Text(session.userEmail, color = c.mutedFg)
         Spacer(Modifier.height(20.dp))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.home_attendance)) },
+            supportingContent = { Text(stringResource(R.string.more_attendance_sub)) },
+            leadingContent = { Icon(Icons.Filled.WatchLater, null, tint = c.success) },
+            colors = itemColors, modifier = shape.clickable(onClick = onOpenAttendance),
+        )
+        Spacer(Modifier.height(12.dp))
         gateState.available?.let { version ->
             // Soft "update available": Tuning Room only, never a nag (REQ-ATT-41).
             ListItem(

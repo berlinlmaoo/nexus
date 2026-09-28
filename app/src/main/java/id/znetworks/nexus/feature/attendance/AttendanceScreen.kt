@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.attendance
 
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.Manifest
 import android.content.Intent
 import android.provider.Settings
@@ -98,6 +100,8 @@ private val AMBER_FILL = Color(0xFFD97706)
 /** Port of iOS `AttendanceView` (PRD REQ-ATT-44), minus the map, crew board and requests (next). */
 @Composable
 fun AttendanceScreen(
+    /** Pushed from Home or More: a back row on top. */
+    onBack: (() -> Unit)? = null,
     vm: AttendanceViewModel = viewModel(),
     requests: RequestsViewModel = viewModel(),
     board: BoardViewModel = viewModel(),
@@ -154,7 +158,14 @@ fun AttendanceScreen(
     val reflectionOk = vm.reflectionOk(s)
     val c = Nx.colors
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load(); board.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background)) {
+    if (onBack != null) {
+        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.home_attendance), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
+        }
+    }
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load(); board.load() }, modifier = Modifier.fillMaxSize().weight(1f)) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -209,6 +220,7 @@ fun AttendanceScreen(
             SubmissionsCard(requests, onFiled = { vm.load() })
             CrewBoardCard(board)
         }
+    }
     }
 
     s.flow?.let { FlowCard(it, onDismiss = vm::dismissFlow) }

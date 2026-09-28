@@ -121,6 +121,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
             val all = runCatching { api.projectTasks(projectId).value }.getOrDefault(emptyList())
             val lanes = BoardLogic.mergeSubtasks(d.value.taskLists.sortedBy { it.position ?: Int.MAX_VALUE }, all)
             _state.update { it.copy(detail = d.value, lanes = lanes, loading = false, error = null, locked = false, savedAt = d.savedAtMillis) }
+            c.shortcuts.visited(id.znetworks.nexus.feature.home.ShortcutRef(d.value.id, d.value.name, d.value.icon, d.value.color))
         } catch (e: ApiError) {
             // 403: an existing project this person is not in.
             val locked = e is ApiError.Http && e.status == 403
