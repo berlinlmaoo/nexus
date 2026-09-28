@@ -122,7 +122,9 @@ fun WorkspaceMembersCard(onOpenProfile: (String) -> Unit) {
                     }
                 }
                 var open by remember { mutableStateOf(false) }
-                val editable = Roles.canEdit(r.role, m.role)
+                // Never your own row: the server refuses removing or re-ranking yourself (audit R8).
+                val me = (LocalContext.current.applicationContext as id.znetworks.nexus.NexusApplication).container.sessionStore.current?.userId
+                val editable = Roles.canEdit(r.role, m.role) && m.userId != me
                 Box {
                     Text(Roles.label(m.role), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.violetText,
                         modifier = Modifier.clip(CircleShape).background(c.violet.copy(alpha = 0.12f)).then(if (editable) Modifier.clickable { open = true } else Modifier).padding(horizontal = 9.dp, vertical = 5.dp))

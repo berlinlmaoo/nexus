@@ -307,7 +307,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                             val next = if (on) m.restDays - d.value else m.restDays + d.value
                             // Fewer than 7: somebody always has a working day (server rule).
                             if (next.size < 7) patch("restDays" to JsonArray(next.sorted().map { JsonPrimitive(it) }))
-                        }, { Text(d.getDisplayName(TextStyle.SHORT, Locale.getDefault())) }, enabled = canManage && !busy)
+                        }, { Text(d.getDisplayName(TextStyle.SHORT, Locale.getDefault())) }, enabled = canEdit && !busy) // a BoD peer's are locked, as iOS (audit R8)
                     }
                 }
             }
