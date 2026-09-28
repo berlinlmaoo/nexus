@@ -49,6 +49,22 @@ android {
         val f = File(System.getenv("NEXUS_FIREBASE_PROPERTIES")
             ?: "${System.getProperty("user.home")}/.nexus-android-secrets/firebase.properties")
         if (f.exists()) f.inputStream().use { load(it) }
+        // Or the standard google-services.json dropped into app/ (git-ignored): read the same four
+        // values from it, so no Google Services plugin is needed.
+        val json = file("google-services.json")
+        if (json.exists() && getProperty("projectId").isNullOrBlank()) {
+            @Suppress("UNCHECKED_CAST")
+            val root = groovy.json.JsonSlurper().parse(json) as Map<String, Any?>
+            val info = root["project_info"] as? Map<String, Any?>
+            val clients = (root["client"] as? List<Map<String, Any?>>).orEmpty()
+            val client = clients.firstOrNull {
+                ((it["client_info"] as? Map<*, *>)?.get("android_client_info") as? Map<*, *>)?.get("package_name") == "id.znetworks.nexus"
+            } ?: clients.firstOrNull()
+            setProperty("projectId", info?.get("project_id")?.toString().orEmpty())
+            setProperty("senderId", info?.get("project_number")?.toString().orEmpty())
+            setProperty("applicationId", (client?.get("client_info") as? Map<*, *>)?.get("mobilesdk_app_id")?.toString().orEmpty())
+            setProperty("apiKey", ((client?.get("api_key") as? List<*>)?.firstOrNull() as? Map<*, *>)?.get("current_key")?.toString().orEmpty())
+        }
     }
     defaultConfig {
         listOf("projectId", "applicationId", "apiKey", "senderId").forEach { key ->

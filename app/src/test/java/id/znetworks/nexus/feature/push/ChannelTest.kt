@@ -13,6 +13,8 @@ class ChannelTest {
     }
 
     @Test fun byTypeWhenNoChannel() {
+        // Extra day off granted (UPDATES 28 Sep §5): an attendance reminder.
+        assertEquals("attendance_reminders", PushManager.channelFor("dayoff_bonus_granted", null))
         assertEquals("approvals", PushManager.channelFor("attendance_request_pending", null))
         assertEquals("approvals", PushManager.channelFor("offsite_checkout_reviewed", null))
         assertEquals("attendance_location", PushManager.channelFor("attendance_auto_offsite_checkout", null))
