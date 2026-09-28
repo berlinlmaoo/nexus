@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,8 +77,16 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
     val focus = LocalFocusManager.current
     val context = LocalContext.current
     val c = Nx.colors
-    fun openWeb(path: String) {
-        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(NexusConfig.PUBLIC_BASE + path))) }
+    val activity = context.findActivity()
+    // Links that belong to the signed-out screens (API.md §3.3), held by the router until here.
+    val router = (context.applicationContext as id.znetworks.nexus.NexusApplication).container.router
+    val pending by router.pending.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(pending) {
+        when (val t = pending) {
+            is id.znetworks.nexus.core.nav.Target.ResetPassword -> { router.consumed(t); vm.openReset(t.email) }
+            is id.znetworks.nexus.core.nav.Target.Register -> { router.consumed(t); vm.openRegister(t.workspaceCode) }
+            else -> Unit
+        }
     }
 
     Box(Modifier.fillMaxSize().background(c.cream)) {
@@ -108,63 +117,106 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                         letterSpacing = 4.sp, color = c.onyx)
                     Spacer(Modifier.height(30.dp))
 
-                    FieldLabel(stringResource(R.string.login_email_label))
-                    NxField(
-                        value = state.email, onChange = vm::onEmail, placeholder = "commander@nexus.app",
-                        keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false),
-                        actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    FieldLabel(stringResource(R.string.login_password_label))
-                    NxField(
-                        value = state.password, onChange = vm::onPassword, placeholder = "••••••••", secret = true,
-                        keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
-                        actions = KeyboardActions(onGo = { focus.clearFocus(); vm.submit() }),
-                    )
-
-                    state.error?.let { err ->
-                        Spacer(Modifier.height(18.dp))
-                        Text(
-                            err, color = c.danger, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                            modifier = Modifier.fillMaxWidth()
-                                .background(Color(0xFFFEF2F2), RoundedCornerShape(16.dp))
-                                .border(1.dp, c.danger.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                        )
-                    }
-
-                    Spacer(Modifier.height(26.dp))
-                    Button(
-                        onClick = { focus.clearFocus(); vm.submit() },
-                        enabled = !state.busy,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = c.onyx, disabledContainerColor = c.onyx.copy(alpha = 0.7f),
-                            contentColor = Color.White, disabledContentColor = Color.White),
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                    ) {
-                        if (state.busy) {
-                            CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                            Spacer(Modifier.size(8.dp))
-                            Text(stringResource(R.string.login_busy), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        } else {
-                            Text(stringResource(R.string.login_cta), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Spacer(Modifier.size(8.dp))
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, Modifier.size(16.dp))
+                    when (state.mode) {
+                        AuthMode.LOGIN -> {
+                            FieldLabel(stringResource(R.string.login_email_label))
+                            NxField(
+                                value = state.email, onChange = vm::onEmail, placeholder = "commander@nexus.app",
+                                keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false),
+                                actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                            )
+                            Spacer(Modifier.height(18.dp))
+                            FieldLabel(stringResource(R.string.login_password_label))
+                            NxField(
+                                value = state.password, onChange = vm::onPassword, placeholder = "••••••••", secret = true,
+                                keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
+                                actions = KeyboardActions(onGo = { focus.clearFocus(); vm.submit() }),
+                            )
+                            Messages(state)
+                            Spacer(Modifier.height(26.dp))
+                            PrimaryButton(stringResource(R.string.login_cta), state.busy, arrow = true) { focus.clearFocus(); vm.submit() }
+                            Spacer(Modifier.height(10.dp))
+                            TextButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null) {
+                                Icon(Icons.Filled.Key, null, Modifier.size(16.dp), tint = c.onyx)
+                                Spacer(Modifier.size(6.dp))
+                                Text(stringResource(R.string.passkey_sign_in), color = c.onyx, fontFamily = TextFont, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+                            TextButton(onClick = { vm.go(AuthMode.SIGNUP) }, enabled = !state.busy) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(stringResource(R.string.login_new_to_nexus), color = c.mutedFg, fontFamily = TextFont, fontSize = 14.sp)
+                                    Spacer(Modifier.size(5.dp))
+                                    Text(stringResource(R.string.login_create_account), color = c.onyx, fontFamily = TextFont,
+                                        fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
+                            }
+                            TextButton(onClick = { vm.go(AuthMode.FORGOT) }, enabled = !state.busy) {
+                                Text(stringResource(R.string.login_forgot_password), color = c.mutedFg, fontFamily = TextFont,
+                                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            }
                         }
-                    }
-
-                    Spacer(Modifier.height(22.dp))
-                    TextButton(onClick = { openWeb("/register") }, enabled = !state.busy) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.login_new_to_nexus), color = c.mutedFg, fontFamily = TextFont, fontSize = 14.sp)
-                            Spacer(Modifier.size(5.dp))
-                            Text(stringResource(R.string.login_create_account), color = c.onyx, fontFamily = TextFont,
-                                fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        AuthMode.SIGNUP -> {
+                            Title(stringResource(R.string.signup_title), stringResource(R.string.signup_sub))
+                            FieldLabel(stringResource(R.string.signup_name))
+                            NxField(state.name, vm::onName, stringResource(R.string.signup_name_ph),
+                                keyboard = KeyboardOptions(imeAction = ImeAction.Next), actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }))
+                            Spacer(Modifier.height(14.dp))
+                            FieldLabel(stringResource(R.string.login_email_label))
+                            NxField(state.email, vm::onEmail, "name@company.com",
+                                keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false),
+                                actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }))
+                            Spacer(Modifier.height(14.dp))
+                            FieldLabel(stringResource(R.string.login_password_label))
+                            NxField(state.password, vm::onPassword, stringResource(R.string.password_min_ph), secret = true,
+                                keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                                actions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }))
+                            Spacer(Modifier.height(14.dp))
+                            FieldLabel(stringResource(R.string.signup_code))
+                            NxField(state.workspaceCode, vm::onWorkspaceCode, stringResource(R.string.signup_code_ph),
+                                keyboard = KeyboardOptions(imeAction = ImeAction.Go, autoCorrectEnabled = false),
+                                actions = KeyboardActions(onGo = { focus.clearFocus(); vm.signupStart() }))
+                            Text(stringResource(R.string.signup_code_help), fontSize = 11.sp, color = c.mutedFg, fontFamily = TextFont,
+                                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 6.dp))
+                            Messages(state)
+                            Spacer(Modifier.height(22.dp))
+                            PrimaryButton(stringResource(R.string.signup_send_code), state.busy) { focus.clearFocus(); vm.signupStart() }
+                            BackToLogin(vm, state.busy)
                         }
-                    }
-                    TextButton(onClick = { openWeb("/forgot-password") }, enabled = !state.busy) {
-                        Text(stringResource(R.string.login_forgot_password), color = c.mutedFg, fontFamily = TextFont,
-                            fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        AuthMode.SIGNUP_CODE, AuthMode.FORGOT_CODE -> {
+                            val signup = state.mode == AuthMode.SIGNUP_CODE
+                            Title(stringResource(R.string.code_title), stringResource(R.string.code_sub, state.codeEmail))
+                            FieldLabel(stringResource(R.string.code_label))
+                            NxField(state.code, vm::onCode, "123456",
+                                keyboard = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = if (signup) ImeAction.Go else ImeAction.Next),
+                                actions = KeyboardActions(onGo = { focus.clearFocus(); vm.signupVerify() }, onNext = { focus.moveFocus(FocusDirection.Down) }))
+                            if (!signup) {
+                                Spacer(Modifier.height(14.dp))
+                                FieldLabel(stringResource(R.string.reset_new_password))
+                                NxField(state.newPassword, vm::onNewPassword, stringResource(R.string.password_min_ph), secret = true,
+                                    keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
+                                    actions = KeyboardActions(onGo = { focus.clearFocus(); vm.resetVerify() }))
+                            }
+                            Messages(state)
+                            Spacer(Modifier.height(22.dp))
+                            PrimaryButton(stringResource(if (signup) R.string.signup_create else R.string.reset_set), state.busy) {
+                                focus.clearFocus(); if (signup) vm.signupVerify() else vm.resetVerify()
+                            }
+                            TextButton(onClick = { if (signup) vm.signupResend() else vm.resetResend() }, enabled = !state.busy && state.resendIn == 0) {
+                                Text(if (state.resendIn > 0) stringResource(R.string.code_resend_in, state.resendIn) else stringResource(R.string.code_resend),
+                                    color = c.mutedFg, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            }
+                            BackToLogin(vm, state.busy)
+                        }
+                        AuthMode.FORGOT -> {
+                            Title(stringResource(R.string.reset_title), stringResource(R.string.reset_sub))
+                            FieldLabel(stringResource(R.string.login_email_label))
+                            NxField(state.email, vm::onEmail, "name@company.com",
+                                keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Go, autoCorrectEnabled = false),
+                                actions = KeyboardActions(onGo = { focus.clearFocus(); vm.resetRequest() }))
+                            Messages(state)
+                            Spacer(Modifier.height(22.dp))
+                            PrimaryButton(stringResource(R.string.signup_send_code), state.busy) { focus.clearFocus(); vm.resetRequest() }
+                            BackToLogin(vm, state.busy)
+                        }
                     }
                 }
                 Text(
@@ -217,4 +269,75 @@ private fun NxField(
         ),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun Title(title: String, sub: String) {
+    val c = Nx.colors
+    Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.onyx, modifier = Modifier.fillMaxWidth())
+    Spacer(Modifier.height(4.dp))
+    Text(sub, fontFamily = TextFont, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.fillMaxWidth())
+    Spacer(Modifier.height(18.dp))
+}
+
+@Composable
+private fun Messages(state: LoginUiState) {
+    val c = Nx.colors
+    state.error?.let { err ->
+        Spacer(Modifier.height(18.dp))
+        Text(
+            err, color = c.danger, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth()
+                .background(Color(0xFFFEF2F2), RoundedCornerShape(16.dp))
+                .border(1.dp, c.danger.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+        )
+    }
+    state.info?.let { msg ->
+        Spacer(Modifier.height(18.dp))
+        Text(
+            msg, color = c.success, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth()
+                .background(c.success.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                .border(1.dp, c.success.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+        )
+    }
+}
+
+@Composable
+private fun PrimaryButton(label: String, busy: Boolean, arrow: Boolean = false, onClick: () -> Unit) {
+    val c = Nx.colors
+    Button(
+        onClick = onClick, enabled = !busy, shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = c.onyx, disabledContainerColor = c.onyx.copy(alpha = 0.7f),
+            contentColor = Color.White, disabledContentColor = Color.White),
+        modifier = Modifier.fillMaxWidth().height(54.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.login_busy), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        } else {
+            Text(label, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            if (arrow) { Spacer(Modifier.size(8.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, Modifier.size(16.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun BackToLogin(vm: LoginViewModel, busy: Boolean) {
+    TextButton(onClick = { vm.go(AuthMode.LOGIN) }, enabled = !busy) {
+        Text(stringResource(R.string.back_to_login), color = Nx.colors.mutedFg, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    }
+}
+
+/** The Activity behind a (possibly wrapped, e.g. per-app locale) context: the passkey sheet needs one. */
+fun android.content.Context.findActivity(): android.app.Activity? {
+    var c: android.content.Context? = this
+    while (c is android.content.ContextWrapper) {
+        if (c is android.app.Activity) return c
+        c = c.baseContext
+    }
+    return null
 }

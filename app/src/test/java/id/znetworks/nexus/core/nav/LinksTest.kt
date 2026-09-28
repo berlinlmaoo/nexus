@@ -53,4 +53,10 @@ class LinksTest {
         r.consumed(t)
         assertEquals(null, r.pending.value)
     }
+
+    @Test fun inviteAndSignupLinksReachTheSignedOutScreens() {
+        assertEquals(Target.ResetPassword("a@b.id"), Links.parse("nexus://forgot-password?email=a%40b.id&invited=1"))
+        assertEquals(Target.ResetPassword(null), Links.parse("https://nexus.znetworks.id/forgot-password"))
+        assertEquals(Target.Register("ZNET-12"), Links.parse("/register?code=ZNET-12"))
+    }
 }

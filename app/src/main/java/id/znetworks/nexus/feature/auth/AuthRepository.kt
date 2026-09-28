@@ -67,6 +67,14 @@ class AuthRepository(
         return persist(res, fallbackEmail = email.trim())
     }
 
+    /** A passkey sign-in answers exactly like app-login: stored through the same path. */
+    fun signedInWith(res: LoginResponse): Session = persist(res, fallbackEmail = res.user.email.orEmpty())
+
+    /** After a verified email change: the token stays valid, only the stored address changes. */
+    fun updateEmail(email: String) {
+        store.current?.let { store.save(it.copy(userEmail = email)) }
+    }
+
     private fun persist(res: LoginResponse, fallbackEmail: String): Session {
         val session = Session(
             token = res.token,

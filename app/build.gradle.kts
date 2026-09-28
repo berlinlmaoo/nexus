@@ -140,6 +140,9 @@ dependencies {
     // OpenStreetMap, same tiles as the web (owner: no Google Maps API).
     implementation(libs.osmdroid)
     implementation(libs.firebase.messaging)
+    // Passkeys (Credential Manager; the play-services provider for Android 13 and below).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

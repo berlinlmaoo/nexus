@@ -2,6 +2,8 @@ package id.znetworks.nexus.ui.shell
 
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
+import androidx.compose.material.icons.filled.Key
+import id.znetworks.nexus.feature.auth.AccountScreen
 import id.znetworks.nexus.feature.home.HomeScreen
 import id.znetworks.nexus.feature.search.SearchScreen
 import id.znetworks.nexus.feature.projects.ProjectSettingsScreen
@@ -142,6 +144,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
             is Target.External -> { container.router.consumed(t); openUrl(context, t.url) }
+            // Signed in already: nothing to reset or register.
+            is Target.ResetPassword, is Target.Register -> container.router.consumed(t)
             null -> Unit
         }
     }
@@ -178,6 +182,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenWeb = { openWeb(context, it) },
                 )
             }
+            composable("account") { AccountScreen(onBack = { nav.popBackStack() }) }
             composable("search") {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
@@ -192,7 +197,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") })
@@ -230,7 +235,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -251,6 +256,13 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             supportingContent = { Text(stringResource(R.string.more_attendance_sub)) },
             leadingContent = { Icon(Icons.Filled.WatchLater, null, tint = c.success) },
             colors = itemColors, modifier = shape.clickable(onClick = onOpenAttendance),
+        )
+        Spacer(Modifier.height(12.dp))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.acct_title)) },
+            supportingContent = { Text(stringResource(R.string.acct_sub)) },
+            leadingContent = { Icon(Icons.Filled.Key, null, tint = c.violetText) },
+            colors = itemColors, modifier = shape.clickable(onClick = onOpenAccount),
         )
         Spacer(Modifier.height(12.dp))
         gateState.available?.let { version ->

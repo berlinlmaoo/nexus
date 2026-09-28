@@ -18,6 +18,9 @@ sealed interface Target {
     data class Task(val id: String) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
+    /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
+    data class ResetPassword(val email: String?) : Target
+    data class Register(val workspaceCode: String?) : Target
     /** A screen Android does not have yet: opened on the web instead of doing nothing. */
     data class Web(val path: String) : Target
     /** Not a NEXUS page: opened outside the app. */
@@ -87,6 +90,8 @@ object Links {
             Regex("^/projects/([^/]+)$").matches(p) -> Target.Project(path.trimEnd('/').substringAfterLast('/'))
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
             p == "/settings" -> Target.Settings
+            p == "/forgot-password" -> Target.ResetPassword(q["email"])
+            p == "/register" -> Target.Register(q["code"])
             // Everything else exists on the web: open it there rather than landing nowhere.
             else -> Target.Web(path + (query?.let { "?$it" } ?: ""))
         }
