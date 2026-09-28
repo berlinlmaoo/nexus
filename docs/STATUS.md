@@ -4,9 +4,13 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (295 JVM tests, all green).
-Version 0.1.6 (versionCode 3 in the tree; nothing published yet), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
-Phases 1–4 done, Phase 5 done except Wear OS (Berlin's decision); re-audit of 28 Sep: every finding closed.
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (305 JVM tests, all green).
+Version 0.1.6 (versionCode 5 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
+**Release candidate: build 5** (`NEXUS-0.1.6-5.apk`, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`,
+from b122e0f, 300 JVM tests at that commit): security + parity audit 266af90 = **RILIS LAYAK**; it goes
+out for Berlin to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
+after it and ride in the next build, which is made only when the main session says so.
+Phases 1–5 done; Wear OS not built (Berlin: not a Play Store priority).
 
 ## Done (Phase 1, attendance MVP)
 
@@ -177,7 +181,7 @@ Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profile
 | 5.2 | **LAN upload shortcut**: already there since Phase 1 (`core/net/LanRoute.kt`, the same `lan.nexus.znetworks.id` route as iOS LANRoute). Checked for Phase 5: every upload (task/vault single request, every 16 MiB chunk, avatar, folder icon, chat photo, forms) and every download goes through `ApiClient`'s one OkHttp client with the route interceptor; a request with a body keeps the 60 s timeout on the LAN and is never replayed once it may have left (LanRouteTest). Nothing to build | 6e88d2d |
 | 5.3 | **Tablet navigation rail**: from 600 dp wide (tablets, unfolded phones, landscape on large phones) the five tabs move from the bottom bar to a NavigationRail on the left, same items, same back-stack behaviour; phones unchanged. Not seen on a device yet (needs a signed-in session) | 1a548fe |
 | 5.4 | **Suspect-record review = Control Room › Fake GPS** (server f7f5f1c, iOS c977091; BoD/OAA tab after Extra day off): period switch (28→27), chips Fake GPS / Worth a look / Reviewed with the server's counts, a card per record (name, date, place, badge; check-in and check-out blocks with selfie, the server's signals in the app's language with the speed kept, offline mark, short address, ±accuracy, Map link), note (≤ 300), "It's fine" for any open record, "Not valid…" only for FAKE with a note of 3+ characters and one confirmation that says what happens (day deleted, TK, −150 XP after day off, person notified); server refusals (422 NOT_PROOF…) shown as sent. FakeGpsTest | 7aa6283, 17f59b4 |
-| 5.5 | **Wear OS: postponed (main session, 29 Sep) — not built until Berlin decides.** Background: A Wear OS app is installed on the watch itself, from the Play Store on the watch; a sideloaded phone APK (our only channel, /download/android) cannot carry it, so each watch would need adb over Wi-Fi. Until there is a Play listing (or Berlin wants an adb-installed build for a few people), the watch gets what the phone already posts: ordinary pushes (approvals, reminders) are mirrored by the Wear OS companion. Scope if built: today's status + 7 dots (as the widget) and approvals (as iOS Watch ApprovalsView), session from the phone over the Wear Data Layer | — |
+| 5.5 | **Wear OS: NOT built — Berlin's decision (29 Sep): not a Play Store priority.** Background: A Wear OS app is installed on the watch itself, from the Play Store on the watch; a sideloaded phone APK (our only channel, /download/android) cannot carry it, so each watch would need adb over Wi-Fi. Until there is a Play listing (or Berlin wants an adb-installed build for a few people), the watch gets what the phone already posts: ordinary pushes (approvals, reminders) are mirrored by the Wear OS companion. Scope if built: today's status + 7 dots (as the widget) and approvals (as iOS Watch ApprovalsView), session from the phone over the Wear Data Layer | — |
 | — | "Close web check-in": not ours (server decision after adoption, Berlin) | — |
 
 ## iOS bug checklist (UPDATES §8), checked 28 Sep 2026
@@ -212,7 +216,8 @@ until the main session says; build 5 goes out for Berlin to test.
 | R3 an id with "/" from a link crashed the app | Every id put into a route from a link or push is `Uri.encode`d (ticket, submission, chat, doc, vault, report, profile, folder, task, project, thread post, form); guarded in AttendanceGuardTest | ec14393, ae5d60b |
 | R4 files in cache/shared and cache/evidence survived logout | Both emptied at sign-out with the rest of the session (the offline copy was already); AttendanceGuardTest checks every FileProvider cache path is covered | 7bd6270 |
 | R6 "Now at" parity | Shown only when the trail tracks the record on the card (iOS WorkPlace.recordId); the office is read from the freshest clear fix among the latest and the last queued point (iOS latest / lastGood). TrailMachineTest | 1e7d413 |
-| R7 Fake GPS review path not encoded | The record id goes in as one encoded path segment (`addPathSegment`), the period query encoded too (FakeGpsTest) | this step |
+| R7 Fake GPS review path not encoded | The record id goes in as one encoded path segment (`addPathSegment`), the period query encoded too (FakeGpsTest) | 68358b0 |
+| R8 STATUS did not record build 5 | Header: build 5 with its sha256 and the 300 tests it was built with (305 now); "APK ready" names build 5 (566ca4a); Wear OS marked not built | this step |
 
 ## Re-audit 28 Sep 2026 evening (docs/AUDIT.md, HEAD 8842c35, "RILIS BELUM LAYAK"): fixes
 
