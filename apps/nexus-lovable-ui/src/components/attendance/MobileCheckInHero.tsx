@@ -2,26 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, LocateFixed, LogIn, LogOut, PenLine } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { LocateFixed, PenLine } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
 import { IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
+import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, whereHint, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
 
 type TodayData = NexusAttendanceToday | null;
 
-const REFLECTION_MIN = 200;
-
 function jktTime(d: Date) {
   return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour12: false });
+}
+/** HH:mm of the time the server recorded, or of now when it sent none. */
+function atOf(iso?: string | null) {
+  return iso ? fmtTime(iso) : jktTime(new Date()).slice(0, 5);
 }
 function jktDate(d: Date) {
   return d.toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-export function MobileCheckInHero({ today, disabled }: { today: TodayData; disabled: boolean }) {
+export function MobileCheckInHero({ today, disabled, failed = false }: { today: TodayData; disabled: boolean; failed?: boolean }) {
   const checkedIn = Boolean(today?.today?.checkInAt);
   const checkedOut = Boolean(today?.today?.checkOutAt);
   const pending = today?.pendingCheckout ?? null;
@@ -45,40 +48,38 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
   const lastOut = useRef<AttendanceActionPayload | null>(null);
   const [offsitePrompt, setOffsitePrompt] = useState<{ officeName: string; distanceMeters: number } | null>(null);
   const [offsiteReason, setOffsiteReason] = useState("");
-  // Daily Reflection — mandatory recap (≥200 chars) collected BEFORE the selfie on check-out.
-  const [reflectOpen, setReflectOpen] = useState(false);
+  // Daily Reflection — mandatory recap (≥200 chars). Written on the page while checked in; the one
+  // button stays locked (with the count on it) until it is long enough.
   const [reflection, setReflection] = useState("");
+  const reflectionCount = reflection.trim().length;
   const errOf = (e: unknown, fb: string) => (e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? fb) : fb);
-  // Big success popup after a confirmed check-in/out (in addition to the confetti).
-  const reduce = useReducedMotion();
-  const [success, setSuccess] = useState<{ kind: "in" | "out"; time: string } | null>(null);
-  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (successTimer.current) clearTimeout(successTimer.current); }, []);
-  const showSuccess = (kind: "in" | "out") => {
-    setSuccess({ kind, time: jktTime(new Date()) });
-    if (successTimer.current) clearTimeout(successTimer.current);
-    successTimer.current = setTimeout(() => setSuccess(null), 2800);
-  };
-  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); showSuccess("in"); }, onError: (e) => { if (isUseIosAppError(e)) { setIosOnly(true); setMsg(null); return; } setMsgOk(false); setMsg(errOf(e, "Couldn't check in.")); } });
+  // The press, drawn in the button: face check → location → sending → result.
+  const press = useAttendancePress();
+  const checkIn = useMutation({
+    mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p),
+    onSuccess: (data) => { setMsg(null); refresh(); press.succeed(successTitle("in", atOf(data?.record?.checkInAt), data?.record)); },
+    onError: (e) => { if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMsg(null); return; } press.fail(errOf(e, "Couldn't check in."), "in"); },
+  });
   const checkOut = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckOut(p),
     onSuccess: (data) => {
       setOffsitePrompt(null); setOffsiteReason(""); setReflection(""); refresh();
-      if (data?.pendingApproval) { setMsgOk(true); setMsg("Offsite checkout sent — waiting on BoD approval ⏳"); }
-      else { setMsg(null); celebrate("Checked out. Good run today 🏁"); showSuccess("out"); }
+      // Offsite: the button itself becomes "Check-out sent · waiting for approval" once today reloads.
+      if (data?.pendingApproval) { press.set(null); setMsgOk(true); setMsg("Offsite checkout sent — waiting on BoD approval ⏳"); }
+      else { setMsg(null); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
-      if (isUseIosAppError(e)) { setIosOnly(true); setMsg(null); return; }
+      if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMsg(null); return; }
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         // Outside the geofence → offer an offsite checkout with a reason (pending BoD approval).
-        setMsg(null); setOffsiteReason("");
+        press.set(null); setMsg(null); setOffsiteReason("");
         setOffsitePrompt({ officeName: payload.officeName ?? "the office", distanceMeters: payload.distanceMeters ?? 0 });
-      } else { setMsgOk(false); setMsg(errOf(e, "Couldn't check out.")); }
+      } else { press.fail(errOf(e, "Couldn't check out."), "out"); }
     },
   });
-  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
-  const busy = checkIn.isPending || checkOut.isPending || locating;
+  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; press.set({ step: "sending", place: "Outside the office · with your reason" }); checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
+  const busy = checkIn.isPending || checkOut.isPending || locating || press.busy;
 
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingMode = useRef<"in" | "out" | null>(null);
@@ -93,18 +94,13 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     pendingMode.current = mode;
     fileRef.current?.click();
   };
-  // Check-in goes straight to the selfie; check-out asks for the daily reflection first.
+  // Both go straight to the face check. A check-out is only pressable once the reflection on the
+  // page is long enough (the button is locked until then), and the server checks it again.
   const trigger = (mode: "in" | "out") => {
     if (busy || disabled) return;
-    setMsg(null);
-    if (mode === "out") { setReflectOpen(true); return; }
+    if (mode === "out" && reflectionCount < REFLECTION_MIN) return;
+    setMsg(null); setOffsitePrompt(null); press.set(null);
     startSelfie(mode);
-  };
-  // After the reflection passes ≥200 chars, continue the check-out into the selfie/GPS flow.
-  const proceedCheckout = () => {
-    if (reflection.trim().length < REFLECTION_MIN) return;
-    setReflectOpen(false);
-    startSelfie("out");
   };
   const onSelfie = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -117,27 +113,31 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
   const proceed = (file: File, mode: "in" | "out", verified: boolean) => {
     setMsg(null);
     setLocating(true);
+    press.set({ step: "face" });
     // A selfie with no face in it is not an attendance photo. The face check already proved a live
     // person; a plain photo is at least asked for a face where the browser has a detector.
     (verified ? Promise.resolve(true) : hasFace(file))
-      .then((ok) => { if (!ok) throw new NoFaceError(); return getAttendanceFix(); })
-      .then((fix) => {
+      .then(async (ok) => {
+        if (!ok) throw new NoFaceError();
+        await press.hold({ step: "selfie" });
+        press.set({ step: "locating" });
+        return getAttendanceFix();
+      })
+      .then(async (fix) => {
+        const place = placeLine(fix, officesQ.data?.offices, today?.noGeofence);
+        await press.hold({ step: "located", text: place.text, inside: place.inside });
         setLocating(false);
+        press.set({ step: "sending", place: place.text });
         const payload: AttendanceActionPayload = { lat: fix.lat, lng: fix.lng, selfie: file, ...(mode === "out" ? { reflection: reflection.trim() } : {}) };
         if (mode === "out") lastOut.current = payload; // keep it so an offsite retry can resubmit the same selfie+GPS+reflection
         (mode === "in" ? checkIn : checkOut).mutate(payload);
       })
       .catch((err) => {
         setLocating(false);
-        if (err instanceof NoFaceError) { setMsg("No face in the photo. Take the selfie with your face clearly visible, then try again."); return; }
-        setMsgOk(false);
-        setMsg(err instanceof GeoError ? err.message : "Couldn't get your location. Try again.");
+        if (err instanceof NoFaceError) { press.fail("No face in the photo. Take the selfie with your face clearly visible, then try again.", mode); return; }
+        press.fail(err instanceof GeoError ? err.message : "Couldn't get your location. Try again.", mode);
       });
   };
-
-  // IN allowed only when not yet checked in & not force-pending; OUT when checked-in-not-out or force-pending.
-  const inDisabled = disabled || busy || checkedIn || forcePending;
-  const outDisabled = disabled || busy || (!forcePending && (!checkedIn || checkedOut));
 
   // ---- map (Leaflet + OSM) ----
   const officesQ = useQuery({ queryKey: ["attendance-offices"], queryFn: nexusApi.attendanceOffices, retry: 1 });
@@ -206,6 +206,25 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
 
   const status = forcePending ? "Finish yesterday's attendance" : checkedOut ? "Done for today 🎉" : checkedIn ? "Clocked in" : "Ready to check in";
 
+  // What the one button is for today. The forgotten check-out of a previous day comes first (the
+  // server will not take today's check-in until it is closed); an approved request covering today
+  // means there is nothing to press (the server refuses the check-in), so a card says why instead.
+  const needsReflection = forcePending || (checkedIn && !checkedOut);
+  const coveredByRequest = Boolean(today?.todayRequest) && !forcePending && !checkedIn;
+  const worked = workedLabel(today?.today?.workedMinutes);
+  const day: DayState =
+    !today && failed ? { kind: "unavailable" }
+    : !today && disabled ? { kind: "loading" }
+    : today?.today?.checkOutApproval === "PENDING" && !forcePending ? { kind: "waiting-approval" }
+    : needsReflection ? { kind: "check-out", reflectionCount, previousDay: forcePending }
+    : checkedOut ? { kind: "done", line: `Done for today${worked ? ` · worked ${worked}` : ""}`, times: `In ${fmtTime(today?.today?.checkInAt)} · Out ${fmtTime(today?.today?.checkOutAt)}` }
+    : { kind: "check-in", hint: whereHint(userPos, officesQ.data?.offices, today?.noGeofence) };
+  const onPress = () => {
+    if (press.phase?.step === "failed") { trigger(press.phase.mode); return; } // retry = a fresh face check
+    if (day.kind === "check-in") trigger("in");
+    else if (day.kind === "check-out") trigger("out");
+  };
+
   return (
     <div className="space-y-3">
       <section className="relative isolate h-[46vh] min-h-[360px] w-full overflow-hidden rounded-3xl border border-border shadow-soft">
@@ -247,24 +266,38 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
         </div>
       </section>
 
-      {/* IN / OUT buttons — in normal flow (below the map) so they never overlap the fixed navbar */}
-      {iosOnly && (!checkedOut || forcePending) ? <IosAppCheckInCard /> : <>
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={() => trigger("in")}
-          disabled={inDisabled}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 text-base font-black uppercase tracking-wide text-white shadow-lg transition active:scale-[0.98] disabled:opacity-40"
-        >
-          {busy && pendingMode.current === "in" ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />} Presence In
-        </button>
-        <button
-          onClick={() => trigger("out")}
-          disabled={outDisabled}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-rose-500 py-4 text-base font-black uppercase tracking-wide text-white shadow-lg transition active:scale-[0.98] disabled:opacity-40"
-        >
-          {busy && pendingMode.current === "out" ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />} Presence Out
-        </button>
-      </div>
+      {/* The forgotten check-out of a previous day, said before anything else. */}
+      {forcePending && !iosOnly && (
+        <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
+          ⚠️ You still have an earlier shift that was never checked out. {reflectionCount >= REFLECTION_MIN ? "Tap Check out to close it first — then you can check in again." : "Write the daily reflection below first — Check out unlocks at 200 characters."}
+        </div>
+      )}
+
+      {/* Daily Reflection — required (≥200 chars) before check-out, written right here while checked in */}
+      {needsReflection && !iosOnly && (
+        <div className="rounded-2xl border border-border bg-card p-3 shadow-soft">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-foreground"><PenLine className="h-4 w-4 text-primary" /> Daily reflection</span>
+            <span className={`text-xs font-bold tabular-nums ${reflectionCount >= REFLECTION_MIN ? "text-emerald-600" : "text-amber-600"}`}>{reflectionCount}/{REFLECTION_MIN}</span>
+          </div>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">Required before check-out. What you worked on today, the progress, any blockers, what's next.</p>
+          <textarea
+            value={reflection}
+            onChange={(e) => setReflection(e.target.value)}
+            rows={4}
+            disabled={busy}
+            placeholder="Today I worked on… the progress was… the blocker was… tomorrow I'll continue…"
+            className={`mt-2 w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:ring-2 focus:ring-primary/20 ${reflectionCount >= REFLECTION_MIN ? "border-emerald-400/60" : "border-border focus:border-primary"}`}
+          />
+          {reflectionCount < REFLECTION_MIN && (
+            <p className="mt-1 text-[11px] font-semibold text-amber-600">{REFLECTION_MIN - reflectionCount} more characters needed before you can check out.</p>
+          )}
+        </div>
+      )}
+
+      {/* The one attendance button — in normal flow (below the map) so it never overlaps the fixed navbar */}
+      {iosOnly && (!checkedOut || forcePending) ? <IosAppCheckInCard /> : coveredByRequest ? <CoveredByRequestCard type={today?.todayRequest?.type ? statusWords(today.todayRequest.type) : null} /> : <>
+      <AttendanceButton phase={press.phase} day={day} shakes={press.shakes} onPress={onPress} onDismiss={() => press.set(null)} />
       {(!checkedOut || forcePending) && <WebCheckInNote />}
       </>}
 
@@ -313,137 +346,17 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
         )}
       </AnimatePresence>
 
-      {/* Daily Reflection — required (≥200 chars) before check-out, captured before the selfie */}
-      <AnimatePresence>
-        {reflectOpen && (
-          <motion.div
-            className="fixed inset-0 z-[65] grid place-items-center bg-slate-900/50 p-3 backdrop-blur-sm"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => { if (reflection.trim().length === 0) setReflectOpen(false); }}
-          >
-            <motion.div
-              initial={reduce ? { opacity: 0 } : { y: 30, opacity: 0 }}
-              animate={reduce ? { opacity: 1 } : { y: 0, opacity: 1 }}
-              exit={reduce ? { opacity: 0 } : { y: 24, opacity: 0 }}
-              transition={reduce ? { duration: 0.15 } : { type: "spring", stiffness: 300, damping: 28 }}
-              className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl bg-card p-5 shadow-2xl ring-1 ring-border"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><PenLine className="h-5 w-5" /></div>
-                <div>
-                  <div className="text-base font-black text-foreground">Daily Reflection</div>
-                  <div className="text-xs font-medium text-muted-foreground">Required before check-out · min {REFLECTION_MIN} characters</div>
-                </div>
-              </div>
-              <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium leading-relaxed text-muted-foreground">
-                Tell us: what you worked on today, the progress you made, any blockers, and what's next.
-              </p>
-              <textarea
-                value={reflection}
-                onChange={(e) => setReflection(e.target.value)}
-                rows={5}
-                placeholder="Today I worked on… the progress was… the blocker was… tomorrow I'll continue…"
-                className="mt-3 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-              <div className="mt-1.5 flex items-center justify-between text-[11px] font-semibold">
-                <span className={reflection.trim().length >= REFLECTION_MIN ? "text-emerald-600" : "text-muted-foreground"}>
-                  {reflection.trim().length}/{REFLECTION_MIN}
-                </span>
-                {reflection.trim().length < REFLECTION_MIN && (
-                  <span className="text-muted-foreground">{REFLECTION_MIN - reflection.trim().length} characters to go</span>
-                )}
-              </div>
-              <div className="mt-3 flex gap-2">
-                <button onClick={() => setReflectOpen(false)} className="flex-1 rounded-2xl border border-border bg-background py-3 text-sm font-semibold text-muted-foreground transition hover:bg-accent active:scale-[0.98]">Cancel</button>
-                <button
-                  onClick={proceedCheckout}
-                  disabled={reflection.trim().length < REFLECTION_MIN}
-                  className="flex-[1.6] rounded-2xl bg-rose-500 py-3 text-sm font-bold text-white shadow-lg transition active:scale-[0.98] disabled:opacity-40"
-                >
-                  Continue · take selfie
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Loading overlay — visible while the selfie/GPS/upload is in flight */}
-      <AnimatePresence>
-        {busy && (
-          <motion.div
-            className="fixed inset-0 z-[60] grid place-items-center bg-slate-900/45 p-6 backdrop-blur-sm"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          >
-            <motion.div
-              initial={reduce ? { opacity: 0 } : { scale: 0.9, y: 12, opacity: 0 }}
-              animate={reduce ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
-              exit={reduce ? { opacity: 0 } : { scale: 0.95, opacity: 0 }}
-              className="w-full max-w-xs rounded-3xl bg-card p-6 shadow-2xl ring-1 ring-border"
-            >
-              <div className="flex items-center gap-3">
-                <Loader2 className="h-6 w-6 shrink-0 animate-spin text-primary" />
-                <div className="text-sm font-bold text-foreground">
-                  {locating ? "Grabbing your GPS location…" : checkIn.isPending ? "Sending your check-in to the server…" : checkOut.isPending ? "Sending your check-out to the server…" : "Processing…"}
-                </div>
-              </div>
-              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-primary/15">
-                {reduce ? (
-                  <motion.div className="h-full w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }} />
-                ) : (
-                  <motion.div className="h-full w-1/2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" animate={{ x: ["-60%", "220%"] }} transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }} />
-                )}
-              </div>
-              <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">One sec — don't close this page just yet…</p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Success popup — confirmed check-in / check-out */}
-      <AnimatePresence>
-        {success && (
-          <motion.div
-            className="fixed inset-0 z-[70] grid place-items-center bg-slate-900/45 p-6 backdrop-blur-sm"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setSuccess(null)}
-          >
-            <motion.div
-              initial={reduce ? { opacity: 0 } : { scale: 0.8, y: 20, opacity: 0 }}
-              animate={reduce ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
-              exit={reduce ? { opacity: 0 } : { scale: 0.9, opacity: 0 }}
-              transition={reduce ? { duration: 0.15 } : { type: "spring", stiffness: 320, damping: 22 }}
-              className="w-full max-w-xs rounded-3xl bg-card p-7 text-center shadow-2xl ring-1 ring-border"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <motion.div
-                initial={reduce ? { opacity: 0 } : { scale: 0 }}
-                animate={reduce ? { opacity: 1 } : { scale: 1 }}
-                transition={reduce ? { duration: 0.15 } : { type: "spring", stiffness: 260, damping: 14, delay: 0.05 }}
-                className={`mx-auto grid h-20 w-20 place-items-center rounded-full ${success.kind === "in" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
-              >
-                <CheckCircle2 className="h-12 w-12" strokeWidth={2.5} />
-              </motion.div>
-              <div className="mt-4 text-xl font-black text-foreground">
-                {success.kind === "in" ? "Checked In! ☕" : "Checked Out! 🏁"}
-              </div>
-              <div className="mt-1 text-sm font-semibold text-muted-foreground">
-                {success.time} · {success.kind === "in" ? "Have a great one, happy working!" : "Nice, good run today!"}
-              </div>
-              <button onClick={() => setSuccess(null)} className="mt-5 w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground transition active:scale-[0.98]">
-                Got it
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
 
 class NoFaceError extends Error { constructor() { super("no face"); } }
+
+/** "DAY_OFF" → "Day Off". */
+function statusWords(raw: string) {
+  return raw.split(/[_\s]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}
 
 /** true when a face is found, or when this browser cannot look (no FaceDetector API). */
 async function hasFace(file: File): Promise<boolean> {

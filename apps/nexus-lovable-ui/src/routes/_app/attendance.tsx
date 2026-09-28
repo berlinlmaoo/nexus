@@ -13,7 +13,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Globe, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, MapPinOff, Moon, Pencil, PenLine, Route as RouteIcon, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
-import { SelfieCapture } from "@/components/attendance/SelfieCapture";
+import { SelfieCapture, type SelfieCaptureHandle } from "@/components/attendance/SelfieCapture";
+import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
 import { MorphPanel, rectCenter, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { cn } from "@/lib/utils";
@@ -338,7 +339,7 @@ function Attendance() {
       <div className="p-4 md:p-8 space-y-5">
         {/* Mobile: new map-centric check-in hero. Desktop: keep the dashboard card. */}
         <div className="md:hidden">
-          <MobileCheckInHero today={today.data ?? null} disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)} />
+          <MobileCheckInHero today={today.data ?? null} failed={today.isError} disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)} />
         </div>
         <div className="hidden md:block">
           <AttendanceActionCard
@@ -350,6 +351,10 @@ function Attendance() {
             checkOutApproval={today.data?.today?.checkOutApproval ?? null}
             pendingCheckout={today.data?.pendingCheckout ? { attendanceDate: today.data.pendingCheckout.attendanceDate, checkInAt: today.data.pendingCheckout.checkInAt, officeName: today.data.pendingCheckout.officeLocation?.name } : null}
             disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)}
+            loading={today.isLoading}
+            workedMinutes={today.data?.today?.workedMinutes ?? null}
+            noGeofence={Boolean(today.data?.noGeofence)}
+            coveredBy={today.data?.todayRequest && !today.data?.pendingCheckout && !today.data?.today?.checkInAt ? statusLabel(today.data.todayRequest.type) : null}
           />
         </div>
 
@@ -1920,11 +1925,8 @@ function fmtDateShort(value?: string | null) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const REFLECTION_MIN = 200;
-
-function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, officeName, checkOutApproval, pendingCheckout, disabled }: { checkedIn: boolean; checkedOut: boolean; checkInAt?: string | null; checkOutAt?: string | null; officeName?: string | null; checkOutApproval?: string | null; pendingCheckout?: { attendanceDate?: string | null; checkInAt?: string | null; officeName?: string | null } | null; disabled: boolean }) {
+function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, officeName, checkOutApproval, pendingCheckout, disabled, loading, workedMinutes, noGeofence, coveredBy }: { checkedIn: boolean; checkedOut: boolean; checkInAt?: string | null; checkOutAt?: string | null; officeName?: string | null; checkOutApproval?: string | null; pendingCheckout?: { attendanceDate?: string | null; checkInAt?: string | null; officeName?: string | null } | null; disabled: boolean; loading?: boolean; workedMinutes?: number | null; noGeofence?: boolean; coveredBy?: string | null }) {
   const qc = useQueryClient();
-  const [selfie, setSelfie] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
   const [reflection, setReflection] = useState("");
   const [message, setMessage] = useState("");
@@ -1937,33 +1939,44 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   // Shown once the server actually refuses (it only does after the 0.1.6 minimum starts).
   const [iosOnly, setIosOnly] = useState(false);
 
-  const pick = (f: File | null) => { setMessage(""); setSelfie(f); };
+  // The selfie comes from the face check (SelfieCapture opens LivenessCapture, and falls back to the
+  // plain camera / file picker only where the face check cannot run). Opened by the one button.
+  const selfieRef = useRef<SelfieCaptureHandle>(null);
+  const pendingMode = useRef<"check-in" | "check-out" | null>(null);
+  const press = useAttendancePress();
+  const officesQ = useQuery({ queryKey: ["attendance-offices"], queryFn: nexusApi.attendanceOffices, retry: 1 });
+  const errOf = (e: unknown, fb: string) => (e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? fb) : fb);
+  const atOf = (iso?: string | null) => (iso ? fmtTime(iso) : fmtTime(new Date().toISOString()));
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["attendance-today"] });
     qc.invalidateQueries({ queryKey: ["attendance-history"] });
     qc.invalidateQueries({ queryKey: ["my-penalties"] });
   };
-  const checkIn = useMutation({ mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckIn(payload), onSuccess: () => { refresh(); pick(null); celebrate("Checked in. Let’s cook ☕✨"); }, onError: (e) => { if (isUseIosAppError(e)) { setIosOnly(true); setMessage(""); } } });
+  const checkIn = useMutation({
+    mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckIn(payload),
+    onSuccess: (data) => { refresh(); setNotes(""); press.succeed(successTitle("in", atOf(data?.record?.checkInAt), data?.record)); },
+    onError: (e) => { if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMessage(""); return; } press.fail(errOf(e, "Check-in failed."), "in"); },
+  });
   const checkOut = useMutation({
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
-      refresh(); pick(null); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
-      if (data?.pendingApproval) setOkMessage("Offsite checkout submitted — waiting for BoD approval ⏳");
-      else { setOkMessage(""); celebrate("Checked out. Good run today 🏁"); }
+      refresh(); setNotes(""); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
+      if (data?.pendingApproval) { press.set(null); setOkMessage("Offsite checkout submitted — waiting for BoD approval ⏳"); }
+      else { setOkMessage(""); press.succeed(successTitle("out", atOf(data?.record?.checkOutAt), data?.record)); }
     },
     onError: (e) => {
-      if (isUseIosAppError(e)) { setIosOnly(true); setMessage(""); return; }
+      if (isUseIosAppError(e)) { press.set(null); setIosOnly(true); setMessage(""); return; }
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
-        setMessage(""); setOffsiteReason("");
+        press.set(null); setMessage(""); setOffsiteReason("");
         setOffsitePrompt({ officeName: payload.officeName ?? "office", distanceMeters: payload.distanceMeters ?? 0 });
-      } else { setMessage(e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? "Check-out failed.") : "Check-out failed."); }
+      } else { press.fail(errOf(e, "Check-out failed."), "out"); }
     },
   });
-  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
+  const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; press.set({ step: "sending", place: "Outside the office · with your reason" }); checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
   const active = checkIn.isPending || checkOut.isPending;
-  const busy = active || locating;
+  const busy = active || locating || press.busy;
   // A forgotten previous-day check-out blocks today's check-in — force check-out mode for it.
   const forcePending = Boolean(pendingCheckout);
   const mode = forcePending ? "check-out" : !checkedIn ? "check-in" : checkedOut ? "done" : "check-out";
@@ -1971,24 +1984,47 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   const effOfficeName = forcePending ? pendingCheckout?.officeName : officeName;
   const effCheckInAt = forcePending ? pendingCheckout?.checkInAt : checkInAt;
 
-  function submit() {
-    setMessage("");
-    if (mode === "done") return;
-    if (mode === "check-out" && reflection.trim().length < REFLECTION_MIN) {
-      setMessage(`Fill in your daily reflection first (min ${REFLECTION_MIN} characters) before checking out.`);
-      return;
-    }
-    if (!selfie) { setMessage("Take a selfie first — tap the selfie tile to open the camera."); return; }
+  const reflectionCount = reflection.trim().length;
+  const day: DayState =
+    loading ? { kind: "loading" }
+    : checkOutApproval === "PENDING" && !forcePending ? { kind: "waiting-approval" }
+    : mode === "check-out" ? { kind: "check-out", reflectionCount, previousDay: forcePending }
+    : mode === "done" ? { kind: "done", line: `Done for today${workedLabel(workedMinutes) ? ` · worked ${workedLabel(workedMinutes)}` : ""}`, times: `In ${fmtTime(checkInAt)} · Out ${fmtTime(checkOutAt)}` }
+    : { kind: "check-in", hint: noGeofence ? "Location-free — clock in from anywhere" : "Selfie + GPS — geofence-verified" };
+
+  // The one button: face check first, then the position, then the upload — each drawn in the button.
+  function start(m: "check-in" | "check-out") {
+    setMessage(""); setOkMessage(""); setOffsitePrompt(null); press.set(null);
+    if (disabled || busy) return;
+    if (m === "check-out" && reflectionCount < REFLECTION_MIN) return; // the button is locked until then; the server checks again
+    pendingMode.current = m;
+    selfieRef.current?.open();
+  }
+  function onPress() {
+    if (press.phase?.step === "failed") { start(press.phase.mode === "in" ? "check-in" : "check-out"); return; } // retry = a fresh face check
+    if (mode === "check-in" || mode === "check-out") start(mode);
+  }
+  function submit(selfie: File) {
+    const m = pendingMode.current;
+    pendingMode.current = null;
+    if (!m) return;
     setLocating(true);
-    getAttendanceFix()
-      .then((fix) => {
+    void (async () => {
+      await press.hold({ step: "selfie" });
+      press.set({ step: "locating" });
+      return getAttendanceFix();
+    })()
+      .then(async (fix) => {
+        const place = placeLine(fix, officesQ.data?.offices, noGeofence);
+        await press.hold({ step: "located", text: place.text, inside: place.inside });
         setLocating(false);
-        const payload = { lat: fix.lat, lng: fix.lng, selfie, notes: notes.trim() || undefined, ...(mode === "check-out" ? { reflection: reflection.trim() } : {}) };
-        if (mode === "check-in") checkIn.mutate(payload); else { lastOut.current = payload; checkOut.mutate(payload); }
+        press.set({ step: "sending", place: place.text });
+        const payload = { lat: fix.lat, lng: fix.lng, selfie, notes: notes.trim() || undefined, ...(m === "check-out" ? { reflection: reflection.trim() } : {}) };
+        if (m === "check-in") checkIn.mutate(payload); else { lastOut.current = payload; checkOut.mutate(payload); }
       })
       .catch((err) => {
         setLocating(false);
-        setMessage(err instanceof GeoError ? err.message : "Couldn’t get your location. Attendance needs GPS for the geofence.");
+        press.fail(err instanceof GeoError ? err.message : "Couldn’t get your location. Attendance needs GPS for the geofence.", m === "check-in" ? "in" : "out");
       });
   }
 
@@ -2014,22 +2050,18 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
         </div>
       )}
 
-      {mode === "done" ? (
-        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-sm font-semibold text-success"><CheckCircle2 className="h-5 w-5" /> Attendance complete for today. Nice one! 🙌</div>
-      ) : iosOnly ? (
+      {coveredBy && !forcePending && mode === "check-in" ? (
+        <CoveredByRequestCard type={coveredBy} className="mt-4" />
+      ) : iosOnly && mode !== "done" ? (
         <IosAppCheckInCard className="mt-4" />
+      ) : mode === "done" ? (
+        <AttendanceButton className="mt-4" phase={press.phase} day={day} shakes={press.shakes} onPress={onPress} onDismiss={() => press.set(null)} />
       ) : (
-        <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr]">
-          {/* selfie (live camera + file fallback) */}
-          <SelfieCapture file={selfie} onChange={pick} disabled={busy} />
+        <div className="mt-4">
+          {/* The face check (live camera, plain-photo fallback) — opened by the button, no tile. */}
+          <SelfieCapture ref={selfieRef} renderTile={false} file={null} onChange={() => {}} onCapture={submit} disabled={busy} />
 
-          {/* steps + action */}
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
-              <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-1", selfie ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}>{selfie ? <CheckCircle2 className="h-3 w-3" /> : <Camera className="h-3 w-3" />} Selfie</span>
-              <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-1", locating ? "bg-info/15 text-info" : "bg-muted text-muted-foreground")}>{locating ? <Loader2 className="h-3 w-3 animate-spin" /> : <MapPin className="h-3 w-3" />} GPS{locating ? "…" : ""}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-muted-foreground"><Clock className="h-3 w-3" /> Geofence auto</span>
-            </div>
             {mode === "check-out" && (
               <div className="rounded-xl border border-primary/20 bg-card/80 p-2.5">
                 <div className="flex items-center justify-between">
@@ -2039,10 +2071,8 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
                 <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder="What you worked on today, progress, blockers, and what’s next…" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
               </div>
             )}
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note: traffic, WFH context, etc." className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
-            <button disabled={disabled || busy} onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">
-              {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {locating ? "Locating…" : "Recording…"}</> : <><Camera className="h-4 w-4" /> {forcePending ? "Check out yesterday" : mode === "check-in" ? "Check in now" : "Check out now"}</>}
-            </button>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} placeholder="Optional note: traffic, WFH context, etc." className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
+            <AttendanceButton phase={press.phase} day={day} shakes={press.shakes} onPress={onPress} onDismiss={() => press.set(null)} />
             <WebCheckInNote />
           </div>
         </div>
@@ -2060,7 +2090,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       )}
       {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{okMessage}</p>}
       {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">⏳ Offsite checkout — waiting for BoD approval</p>}
-      {!iosOnly && (message || checkIn.isError) && <p className="mt-3 text-sm font-semibold text-destructive">{message || "Attendance failed — check your session, selfie, GPS, or whether you’re outside the office radius."}</p>}
+      {!iosOnly && message && <p className="mt-3 text-sm font-semibold text-destructive">{message}</p>}
     </section>
   );
 }
