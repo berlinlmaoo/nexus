@@ -231,13 +231,15 @@ The first staff member's device checklist is in `docs/INSTALL-APK.md` (13 checks
 
 ## APK ready (for the main session, R2) — publish only on Berlin's go
 
-**APK siap: versionCode 2, sha256 `2993075c64b28f0718b1504dbeba2d9ef16d7d4128d6f288cf7a9215040b946a`**
-`agents:~/nexus-android-release/NEXUS-0.1.6-2.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 2,
-arm64-v8a + armeabi-v7a, targetSdk 36, 22.5 MB, signed by the release key (SHA-256
-53:22:FE:…:AD:26, the fingerprint in assetlinks.json, so passkeys can be tested with it), built with
-Firebase. Contains Phase 2, UPDATES §9–§11, B13/B14 and Phase 3.1 (Messages), commit 1f03e22 + the
-versionCode bump. Rule (Berlin, 28 Sep, replaces the main session's): **every published APK raises versionName** (0.1.6 first, then 0.1.7, …) **and versionCode +1**; update offers and the 426 floor compare versionName, so an old build can't check in/out once the minimum passes it.
+**APK siap (untuk audit, BELUM terbit): versionCode 3, sha256 `e63ca19dfb66e8922c283e99e266d8177790d5db0e9ae216607085604133a326`**
+`agents:~/nexus-android-release/NEXUS-0.1.6-3.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 3, 23.1 MB,
+targetSdk 36, signed by the release key (SHA-256 53:22:FE:…:AD:26 = assetlinks), with Firebase. Contains
+Phases 2–4, every UPDATES section, the 28 Sep audit fixes and the parity items after it. Berlin's rule: not
+published until parity + a clean audit and his go; it goes out as **0.1.6** (the first published APK), and
+every later one raises versionName (0.1.7, …) and versionCode +1; update offers and the 426 floor compare
+versionName, so an old build can't check in/out once the minimum passes it.
 
+Superseded, never published: `NEXUS-0.1.6-2.apk` (versionCode 2, sha256 `2993075c…b946a`, Phase 2 + chat).
 Older: `NEXUS-0.1.6-1.apk` (versionCode 1, sha256 `5fabc061…2d97e`), before Phase 2.
 
 ## Not verified yet (the first thing to do)
