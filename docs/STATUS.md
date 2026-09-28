@@ -208,7 +208,8 @@ Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes membe
 | Finding | Fix | Commit |
 |---|---|---|
 | K1 (KRITIS) in-app update always "not a NEXUS build" on Android 9–10 | Archive read with GET_SIGNATURES + GET_SIGNING_CERTIFICATES on API 28–29 (only GET_SIGNING_CERTIFICATES from 30); signers fall back to the legacy field. Flags per SDK pinned in UpdateVerdictTest. Not yet run on an API 28/29 emulator (no image on agents) | 49d791a |
-| T3 (TINGGI) update dialog stuck on "Installing…" | The system confirmation is a step of its own (`Confirm`, with the installer's intent): started at once when allowed, else a notification "Finish updating NEXUS" opens it; the dialog shows "Continue installing" (starts it from the app in front) and Cancel. Installing can be cancelled too; cancel/failure abandons the PackageInstaller session. Guarded in AttendanceGuardTest | this step |
+| T3 (TINGGI) update dialog stuck on "Installing…" | The system confirmation is a step of its own (`Confirm`, with the installer's intent): started at once when allowed, else a notification "Finish updating NEXUS" opens it; the dialog shows "Continue installing" (starts it from the app in front) and Cancel. Installing can be cancelled too; cancel/failure abandons the PackageInstaller session. Guarded in AttendanceGuardTest | b99064e |
+| T4 (TINGGI) Approval chart editable by Managers, every save 403 | The chart row in Users is drawn for BoD/OAA only (iOS `canManageAttendanceFlags`); the chart itself is read-only below BoD (no picker, hint says only BoD changes approvers) | this step |
 
 ## Audit 28 Sep 2026 (docs/AUDIT.md, HEAD 4b50f89): fixes
 

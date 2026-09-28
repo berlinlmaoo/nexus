@@ -139,7 +139,8 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                     Roles.ALL.forEach { k -> FilterChip(role == k, { role = if (role == k) "ALL" else k }, { Text("${Roles.label(k)} · ${r.members.count { it.role == k }}") }) }
                 }
             }
-            item {
+            // BoD and One Above All only, as iOS and the server (a Manager's every save would be 403).
+            if (isBoD) item {
                 val unplaced = Roles.unplaced(r.members).size
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp)).clickable(onClick = onOpenChart).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {

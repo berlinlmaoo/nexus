@@ -197,6 +197,8 @@ fun ApprovalChartScreen(onBack: () -> Unit, @Suppress("UNUSED_PARAMETER") onOpen
             return@Column
         }
         val people = r.members
+        // Only BoD/OAA set approvers (server rule); anyone else who gets here reads it.
+        val canEdit = Roles.tier(r.role) >= 3
         val kids = ChartLogic.children(people)
         val trees = ChartLogic.trees(people)
         val alone = ChartLogic.alone(people)
@@ -207,7 +209,7 @@ fun ApprovalChartScreen(onBack: () -> Unit, @Suppress("UNUSED_PARAMETER") onOpen
             Stat(unplaced, stringResource(R.string.ch_unplaced), if (unplaced == 0) c.success else c.warning)
             Stat(trees.size, stringResource(R.string.ch_tops), null)
             Spacer(Modifier.weight(1f))
-            Text(problem ?: stringResource(R.string.ch_hint), fontSize = 10.sp, color = if (problem != null) c.danger else c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(problem ?: stringResource(if (canEdit) R.string.ch_hint else R.string.ch_hint_read), fontSize = 10.sp, color = if (problem != null) c.danger else c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         HorizontalDivider(color = c.border)
         Box(Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewport = it }
@@ -224,14 +226,14 @@ fun ApprovalChartScreen(onBack: () -> Unit, @Suppress("UNUSED_PARAMETER") onOpen
                     .drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }
                     .background(c.background).padding(28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.Top) {
-                        trees.forEach { root -> TreeNode(root, kids, rootless = !ChartLogic.isSenior(root)) { if (!busy) picking = it } }
+                        trees.forEach { root -> TreeNode(root, kids, rootless = !ChartLogic.isSenior(root)) { if (!busy && canEdit) picking = it } }
                     }
                     if (alone.isNotEmpty()) Column(Modifier.widthIn(max = 640.dp).background(c.warning.copy(alpha = 0.06f), RoundedCornerShape(14.dp)).padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(stringResource(R.string.ch_alone, alone.size), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.warning)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             alone.forEach { p ->
-                                Row(Modifier.clip(CircleShape).background(c.card).dashed(c.warning.copy(alpha = 0.5f), 50.dp).clickable { if (!busy) picking = p }
+                                Row(Modifier.clip(CircleShape).background(c.card).dashed(c.warning.copy(alpha = 0.5f), 50.dp).clickable(enabled = canEdit) { if (!busy) picking = p }
                                     .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Avatar(p.name, p.avatar, 20.dp); Spacer(Modifier.width(6.dp))
                                     Text(p.displayName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
