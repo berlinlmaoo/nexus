@@ -41,10 +41,20 @@ class BoardModelTest {
         assertEquals("2026-09", BoardModel.periodKey(-1, after)) // previous period from the 28th
     }
 
-    @Test fun membersGroupedViewerFirst() {
+    @Test fun membersAreAToZLikeIosAndTheWeb() {
         val m = BoardModel.members(listOf(row("2026-09-01", user = "u2", name = "Zed"), row("2026-09-02", user = "me", name = "Bagas"),
-            row("2026-09-01", user = "u3", name = "Ana")), viewerId = "me", selfName = "x")
-        assertEquals(listOf("Bagas", "Ana", "Zed"), m.map { it.name })
+            row("2026-09-01", user = "u3", name = "ana")), viewerId = "me", selfName = "x")
+        assertEquals(listOf("ana", "Bagas", "Zed"), m.map { it.name })
+    }
+
+    @Test fun rosterShowsEveryoneEvenWithoutRows() {
+        // First day of a period: only Zed has checked in; the other two must still be on the board.
+        val roster = listOf(PersonRef("u1", "Citra", dayOffQuota = 6), PersonRef("u2", "Zed"), PersonRef("u3", null, email = "ana@x.id"))
+        val m = BoardModel.members(listOf(row("2026-09-28", user = "u2", name = "Zed")), viewerId = "u2", selfName = "x", roster = roster)
+        assertEquals(listOf("ana@x.id", "Citra", "Zed"), m.map { it.name })
+        assertEquals(6, m.first { it.id == "u1" }.quota)
+        assertTrue(m.first { it.id == "u1" }.rows.isEmpty())
+        assertEquals(1, m.first { it.id == "u2" }.rows.size)
     }
 
     @Test fun scoreCountsPresentPermitWfhAgainstTheEffectiveQuota() {

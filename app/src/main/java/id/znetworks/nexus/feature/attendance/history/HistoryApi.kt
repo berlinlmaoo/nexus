@@ -49,8 +49,12 @@ data class HistoryRow(
     val dayKey: String get() = attendanceDate.orEmpty().take(10)
 }
 
+/**
+ * [roster] (scope=workspace, main session 28 Sep 2026): everyone who belongs on the board, with or
+ * without a row yet. Absent on older servers and on scope=me.
+ */
 @Serializable
-data class HistoryResponse(val records: List<HistoryRow> = emptyList())
+data class HistoryResponse(val records: List<HistoryRow> = emptyList(), val roster: List<PersonRef> = emptyList())
 
 @Serializable
 data class TrailResponse(
@@ -109,8 +113,8 @@ class HistoryApi(private val api: ApiClient) {
         api.postJson("/api/attendance/override", OverrideBody(userId, date, action, note), OverrideBody.serializer(), OverrideResponse.serializer())
 
     /** [period] is the 28→27 period key `YYYY-MM`; `workspace` needs BoD or direct reports. */
-    suspend fun history(scope: String, period: String): List<HistoryRow> =
-        api.get("/api/attendance/history?scope=$scope&month=$period", HistoryResponse.serializer()).records
+    suspend fun history(scope: String, period: String): HistoryResponse =
+        api.get("/api/attendance/history?scope=$scope&month=$period", HistoryResponse.serializer())
 
     suspend fun trail(recordId: String): TrailResponse =
         api.get("/api/attendance/records/$recordId/trail", TrailResponse.serializer())

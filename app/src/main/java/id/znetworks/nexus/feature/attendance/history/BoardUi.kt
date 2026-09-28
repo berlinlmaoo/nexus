@@ -89,6 +89,8 @@ import java.util.Locale
 data class BoardState(
     val offset: Int = 0,
     val rows: List<HistoryRow> = emptyList(),
+    /** Everyone who belongs on the board, rows or not (scope=workspace). */
+    val roster: List<id.znetworks.nexus.feature.attendance.requests.PersonRef> = emptyList(),
     val loading: Boolean = true,
     val error: String? = null,
     val selected: HistoryRow? = null,
@@ -130,8 +132,8 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(loading = true, error = null) }
         val period = BoardModel.periodKey(_state.value.offset)
         try {
-            val rows = api.history(if (wide) "workspace" else "me", period)
-            _state.update { it.copy(rows = rows, loading = false) }
+            val r = api.history(if (wide) "workspace" else "me", period)
+            _state.update { it.copy(rows = r.records, roster = r.roster, loading = false) }
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, error = e.describe(res)) }
         }
@@ -256,7 +258,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
     val days = remember(period) { BoardModel.days(period) }
     val today = OfficeTime.today()
     val session = (context.applicationContext as NexusApplication).container.sessionStore.current
-    val members = remember(s.rows) { BoardModel.members(s.rows, vm.today?.viewerId ?: session?.userId, session?.userName.orEmpty()) }
+    val members = remember(s.rows, s.roster) { BoardModel.members(s.rows, vm.today?.viewerId ?: session?.userId, session?.userName.orEmpty(), s.roster) }
     var full by remember { mutableStateOf(false) }
 
     Column(

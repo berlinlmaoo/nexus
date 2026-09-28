@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.attendance.history
 
+import id.znetworks.nexus.feature.attendance.requests.PersonRef
 import id.znetworks.nexus.core.time.OfficeTime
 import java.time.LocalDate
 
@@ -66,17 +67,26 @@ object BoardModel {
         return generateSequence(r.start) { it.plusDays(1) }.takeWhile { !it.isAfter(r.endInclusive) }.toList()
     }
 
-    /** One row per person, the viewer's own first, then by name. */
-    fun members(rows: List<HistoryRow>, viewerId: String?, selfName: String): List<BoardMember> =
-        rows.groupBy { it.user?.id ?: viewerId ?: "me" }.map { (uid, rs) ->
+    /**
+     * One row per person, A–Z (as iOS and the web). The roster and the rows together: on the first
+     * day of a period only those who already checked in have rows, and the board must still show
+     * everybody else (bug from the main session, 28 Sep 2026).
+     */
+    fun members(rows: List<HistoryRow>, viewerId: String?, selfName: String, roster: List<PersonRef> = emptyList()): List<BoardMember> {
+        val byUser = rows.groupBy { it.user?.id ?: viewerId ?: "me" }
+        val rosterById = roster.filter { !it.id.isNullOrBlank() }.associateBy { it.id!! }
+        return (rosterById.keys + byUser.keys).distinct().map { uid ->
+            val rs = byUser[uid].orEmpty()
+            val person = rosterById[uid]
             BoardMember(
                 id = uid,
-                name = rs.firstNotNullOfOrNull { it.user?.name } ?: selfName,
+                name = rs.firstNotNullOfOrNull { it.user?.name } ?: person?.name ?: person?.email ?: selfName,
                 cells = rs.associate { it.dayKey to AttTone.of(it) },
                 rows = rs.associateBy { it.dayKey },
-                quota = rs.firstNotNullOfOrNull { it.user?.dayOffQuota } ?: DEFAULT_QUOTA,
+                quota = rs.firstNotNullOfOrNull { it.user?.dayOffQuota } ?: person?.dayOffQuota ?: DEFAULT_QUOTA,
             )
-        }.sortedWith(compareBy({ it.id != viewerId }, { it.name.lowercase() }))
+        }.sortedBy { it.name.lowercase() }
+    }
 
     /** Period key [offset] periods away from today's. */
     fun periodKey(offset: Int, today: LocalDate = OfficeTime.today()): String {
