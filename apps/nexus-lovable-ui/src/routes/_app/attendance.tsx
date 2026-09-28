@@ -40,6 +40,25 @@ function recTone(r: HistRow): "present" | "permit" | "wfh" | "leave" | "sick" | 
   return "none";
 }
 
+/** The line under "Today's status": what today actually looks like, not where the number came from. */
+function todayStatusHelper(d: { today?: { checkInAt?: string | null; checkOutAt?: string | null; lateMinutes?: number | null; workedMinutes?: number | null; checkOutOffsite?: boolean | null; checkOutApproval?: string | null } | null; todayRequest?: { status?: string | null } | null; myShift?: { endTime: string; flexi?: boolean } | null } | undefined, isError: boolean) {
+  if (isError) return "Couldn’t load today — refresh the page or sign in again.";
+  const t = d?.today;
+  if (t?.checkOutAt) {
+    const w = t.workedMinutes ?? 0;
+    const worked = w > 0 ? `Worked ${Math.floor(w / 60)}h ${w % 60}m` : `Out at ${fmtTime(t.checkOutAt)}`;
+    const offsite = t.checkOutOffsite ? ` · offsite${t.checkOutApproval === "PENDING" ? ", waiting for approval" : t.checkOutApproval === "REJECTED" ? ", rejected" : ""}` : "";
+    return worked + offsite;
+  }
+  if (t?.checkInAt) {
+    const late = (t.lateMinutes ?? 0) > 0 ? ` · ${t.lateMinutes} min late` : " · on time";
+    return `In since ${fmtTime(t.checkInAt)}${late}`;
+  }
+  if (d?.todayRequest?.status === "APPROVED") return "Your request covers today — no check-in needed.";
+  if (d?.todayRequest?.status === "PENDING") return "Your request for today is waiting for approval.";
+  return "Check in with a selfie inside the office area.";
+}
+
 export const Route = createFileRoute("/_app/attendance")({
   component: Attendance,
   // `?request=<id>` / `?offsite=<id>` is what a notification links to: the row is shown even if it
@@ -416,7 +435,7 @@ function Attendance() {
             icon={<Coffee className="h-5 w-5" />}
             label="Today’s status"
             value={today.data?.today?.status ? statusLabel(today.data.today.status) : today.data?.todayRequest?.status ? `${statusLabel(today.data.todayRequest.type)} ${statusLabel(today.data.todayRequest.status)}` : "Ready to check in"}
-            helper={today.isError ? "Login/session needed for live data" : "Pulled from NEXUS attendance API"}
+            helper={todayStatusHelper(today.data, today.isError)}
             tone="green"
           />
           <FunMetric
