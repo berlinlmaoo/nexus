@@ -103,33 +103,4 @@ class VersionGateTest {
         assertEquals("0.0.0", live.android?.minSupported)
         assertNull(VersionGate.evaluate("0.1.6", live.android!!, Instant.now()).required)
     }
-
-    // Audit T2: builds share versionName 0.1.6, so "newer" is the versionCode.
-    @Test fun newerBuildWithSameNameIsOffered() = runTest {
-        policy = AndroidPolicy(minSupported = "0.1.6", latest = "0.1.6")
-        var release: ReleaseBuild? = ReleaseBuild("0.1.6", 3)
-        val g = VersionGate("0.1.6", MapStorage(), fetchPolicy = { policy }, now = { clock }, runningCode = 2, fetchRelease = { release })
-        g.checkPolicy(force = true)
-        assertEquals("0.1.6 (3)", g.state.value.available)
-        assertNull(g.state.value.required) // an offer, never a lock
-        release = ReleaseBuild("0.1.6", 2)
-        val same = VersionGate("0.1.6", MapStorage(), fetchPolicy = { policy }, now = { clock }, runningCode = 2, fetchRelease = { release })
-        same.checkPolicy(force = true)
-        assertNull(same.state.value.available)
-        assertNull(VersionGate.releaseOffer(ReleaseBuild("0.1.6", 3), null))
-    }
-
-    @Test fun buildFloorLocksUntilThatBuildRuns() = runTest {
-        val storage = MapStorage()
-        policy = AndroidPolicy(minSupported = "0.1.6", minBuild = 3, storeUrl = "https://x/download/android")
-        val g = VersionGate("0.1.6", storage, fetchPolicy = { policy }, now = { clock }, runningCode = 2)
-        g.checkPolicy(force = true)
-        assertNotNull(g.state.value.required)
-        // Cold start offline: still locked on build 2, lifted on build 3.
-        assertNotNull(VersionGate("0.1.6", storage, fetchPolicy = { null }, now = { clock }, runningCode = 2).state.value.required)
-        assertNull(VersionGate("0.1.6", storage, fetchPolicy = { null }, now = { clock }, runningCode = 3).state.value.required)
-        // Without build fields the name rule stands alone (today's server).
-        assertNull(VersionGate.evaluate("0.1.6", AndroidPolicy(minSupported = "0.1.6"), clock, runningCode = 1).required)
-        assertEquals("0.1.6 (4)", VersionGate.evaluate("0.1.6", AndroidPolicy(latest = "0.1.6", latestBuild = 4), clock, runningCode = 2).available)
-    }
 }

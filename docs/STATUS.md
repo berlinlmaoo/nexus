@@ -185,13 +185,15 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 
 ## Audit 28 Sep 2026 (docs/AUDIT.md, HEAD 4b50f89): fixes
 
-No KRITIS findings. Decisions from the main session: build number compared by versionCode; any
-active office counts as inside; a replayed check-in answered 409 "already checked in" has landed.
+No KRITIS findings. Decisions (Berlin, 28 Sep, replacing the main session's first answers): an approved request covering
+today hides Check in; versionName rises per published APK and stays what is compared; inside ANY active
+office is inside, and the office the person is in is shown; a replayed check-in answered 409 "already
+checked in" has landed.
 
 | Finding | Fix | Commit |
 |---|---|---|
 | T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | c10ca62 |
-| T2 (TINGGI) a new build with the same versionName was never offered | "Update available" compares `versionCode` from `/api/app/android/release` (launch/foreground/sign-in, signed in only) and shows "0.1.6 (3)"; the gate also reads `minBuild/latestBuild/nextMinimumBuild` when the server sends them (build floor persisted, lifted only by that build). Server fields asked in SERVER-REQUESTS **R5 (OPEN)** | c283de2 |
+| T2 (TINGGI) a new build with the same versionName was never offered | Resolved by the release rule instead: every published APK raises versionName (Berlin). The versionCode offer/floor of c283de2 was taken out again; R5 DROPPED | c283de2, reverted this step |
 | S3 (SEDANG) one refusal at the head of the queue held the check-out behind it | A replayed check-in answered 409 "You have already checked in today." (no code) is done: dropped silently, counts as landed, the next entry goes on. PENDING_CHECKOUT and "approved request covers today" stay refusals. iOS has the same (I3 for the main session) | this step |
 
 ## Release rule (Berlin, 28 Sep 2026)
@@ -215,7 +217,7 @@ The first staff member's device checklist is in `docs/INSTALL-APK.md` (13 checks
 arm64-v8a + armeabi-v7a, targetSdk 36, 22.5 MB, signed by the release key (SHA-256
 53:22:FE:…:AD:26, the fingerprint in assetlinks.json, so passkeys can be tested with it), built with
 Firebase. Contains Phase 2, UPDATES §9–§11, B13/B14 and Phase 3.1 (Messages), commit 1f03e22 + the
-versionCode bump. Rule (main session, 28 Sep): versionName stays 0.1.6, versionCode +1 per published APK.
+versionCode bump. Rule (Berlin, 28 Sep, replaces the main session's): **every published APK raises versionName** (0.1.6 first, then 0.1.7, …) **and versionCode +1**; update offers and the 426 floor compare versionName, so an old build can't check in/out once the minimum passes it.
 
 Older: `NEXUS-0.1.6-1.apk` (versionCode 1, sha256 `5fabc061…2d97e`), before Phase 2.
 

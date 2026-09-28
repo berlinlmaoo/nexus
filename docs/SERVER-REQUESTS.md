@@ -113,7 +113,7 @@ you want the once-a-day "Update NEXUS by <date>" warning on Android too, add `ne
 
 ---
 
-## R5. Android build numbers in the version policy and the 426 floor — OPEN (audit 28 Sep 2026, T2)
+## R5. Android build numbers in the version policy and the 426 floor — DROPPED (Berlin, 28 Sep: versionName rises per published APK and stays what is compared; nothing to build)
 
 **Decision (main session, 28 Sep):** versionName stays 0.1.6, versionCode +1 per APK; update offers and
 the floor compare the **versionCode**.

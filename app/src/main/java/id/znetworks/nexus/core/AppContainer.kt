@@ -70,13 +70,6 @@ class AppContainer(private val context: Context) {
             // Unauthenticated: a signed-out phone must learn it is too old before it signs in.
             api.get("/api/app/version-policy", VersionPolicyResponse.serializer(), authed = false, callTimeoutMs = 8_000).android
         },
-        runningCode = identity.versionCode,
-        fetchRelease = {
-            // Session only (the route answers 401 otherwise); nothing published = no offer.
-            if (sessionStore.current == null) null
-            else api.get("/api/app/android/release", id.znetworks.nexus.feature.update.AndroidRelease.serializer(), callTimeoutMs = 8_000)
-                .let { r -> r.versionCode?.takeIf { r.available }?.let { code -> id.znetworks.nexus.core.version.ReleaseBuild(r.versionName, code) } }
-        },
     )
 
     val auth = AuthRepository(api, sessionStore)
