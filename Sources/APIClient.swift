@@ -936,6 +936,31 @@ struct APIClient {
                       decode: XpLogResponse.self)
     }
 
+    /// One person's record for one attendance period (28th → 27th; nil = the current one) — the
+    /// data under the profile screen's period, streak row, XP log and requests. The server scopes
+    /// it like Reports per crew: yourself, a manager's direct reports, the BoD everyone; anybody
+    /// else is a 403, which the screen reads as "not yours to see" and simply leaves the sections out.
+    func memberRecord(userId: String, period: String? = nil) async throws -> MemberRecord {
+        var path = "/api/members/\(enc(userId))/record"
+        if let period { path += "?period=\(enc(period))" }
+        return try await run(makeRequest(path), decode: MemberRecord.self)
+    }
+    /// The XP rows of one earlier period — "Load older" on the profile's XP log.
+    func memberRecordXp(userId: String, period: String) async throws -> RecordXpPage {
+        try await run(makeRequest("/api/members/\(enc(userId))/record?period=\(enc(period))&only=xp"), decode: RecordXpPage.self)
+    }
+    /// BoD: remove ONE XP deduction — its XP goes back and the nightly jobs do not take it again.
+    /// 409 when it was removed already, 400 when it is not a deduction; both surface as `.http`
+    /// with the server's sentence.
+    func removeXpDeduction(transactionId: String, note: String? = nil) async throws -> XpRefundResponse {
+        var req = makeRequest("/api/gamification/xp-transactions/\(enc(transactionId))/refund", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = [:]
+        if let note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { body["note"] = note }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await run(req, decode: XpRefundResponse.self)
+    }
+
     func docs() async throws -> [Doc] {
         (try await run(makeRequest("/api/docs"), decode: DocsResponse.self)).docs ?? []
     }
@@ -2136,6 +2161,14 @@ struct APIClient {
     func attendanceHistory(scope: String, month: String) async throws -> [AttendanceRow] {
         let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
         return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self, cache: "attendance-history-\(scope)-\(month)")).all
+    }
+    /// One person's rows of the board for a period — the member profile's streak row. `scope` is
+    /// "me" for yourself, "workspace" for someone else (the server narrows a manager to their
+    /// direct reports). Not cached: it is re-read after every status change made from the row.
+    func attendanceHistory(scope: String, month: String, userId: String) async throws -> [AttendanceRow] {
+        var path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
+        if scope != "me" { path += "&userId=\(enc(userId))" }
+        return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self)).all
     }
     /// BoD cleanup: omit `part` to delete the whole record (e.g. an accidental check-in), or part="checkout" to clear only the check-out (reopen).
     @discardableResult
