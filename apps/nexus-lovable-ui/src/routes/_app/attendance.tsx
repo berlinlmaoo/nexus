@@ -22,6 +22,7 @@ import { PERIOD_BASELINE_XP } from "@/lib/levels";
 // The board's colours and the BoD "Change status" panel live in shared files since the member record
 // page (/people/:userId) draws the same cells and offers the same panel (28 Sep 2026).
 import { recTone, sCls, toneLabel } from "@/lib/attendance-tone";
+import { recordPlace } from "@/lib/attendance-place";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
@@ -265,6 +266,8 @@ function Attendance() {
   const [correctRecord, setCorrectRecord] = useState<HistRow | null>(null);
   // The viewer's own trail for today, opened from the office card.
   const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
+  // Today's place: the office, or the check-in address when it was made away from the office.
+  const todayPlace = recordPlace(today.data?.today);
   const todayKey = today.data?.attendanceDateKey?.slice(0, 10) || jakartaDateKey();
   const [leaveDetail, setLeaveDetail] = useState<HistRow | null>(null);
   // BoD: override a member-day that has NO record/request yet (empty board cell → set status).
@@ -347,9 +350,9 @@ function Attendance() {
             checkedOut={Boolean(today.data?.today?.checkOutAt)}
             checkInAt={today.data?.today?.checkInAt}
             checkOutAt={today.data?.today?.checkOutAt}
-            officeName={today.data?.today?.officeLocation?.name}
+            officeName={today.data?.today?.checkInAt ? recordPlace(today.data.today).label || null : today.data?.today?.officeLocation?.name}
             checkOutApproval={today.data?.today?.checkOutApproval ?? null}
-            pendingCheckout={today.data?.pendingCheckout ? { attendanceDate: today.data.pendingCheckout.attendanceDate, checkInAt: today.data.pendingCheckout.checkInAt, officeName: today.data.pendingCheckout.officeLocation?.name } : null}
+            pendingCheckout={today.data?.pendingCheckout ? { attendanceDate: today.data.pendingCheckout.attendanceDate, checkInAt: today.data.pendingCheckout.checkInAt, officeName: recordPlace(today.data.pendingCheckout).label || null } : null}
             disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)}
             loading={today.isLoading}
             workedMinutes={today.data?.today?.workedMinutes ?? null}
@@ -369,14 +372,15 @@ function Attendance() {
           />
           <FunMetric
             icon={<MapPin className="h-5 w-5" />}
-            // Location-free members: where they actually checked in, not the office the record is filed under.
-            label={today.data?.noGeofence ? (today.data?.today?.checkInAt ? "Where you checked in" : "Location-free") : "Office checkpoint"}
-            value={today.data?.noGeofence
-              ? (today.data?.today?.checkInAddress?.split(",").slice(0, 2).join(",") || (today.data?.today?.checkInAt ? "Away from the office" : "Clock in from anywhere"))
-              : (today.data?.today?.officeLocation?.name || `${today.data?.activeOfficeCount ?? 0} active offices`)}
-            helper={`In ${fmtTime(today.data?.today?.checkInAt)} · Out ${fmtTime(today.data?.today?.checkOutAt)}${today.data?.today?.id && today.data.today.checkInAt ? " · tap for your location trail" : ""}`}
+            // Per record (owner, 28 Sep 2026): a check-in made away from the office shows the address it
+            // was made at, not the office the record is filed under; inside the radius it stays the office.
+            label={todayPlace.away ? "Where you checked in" : today.data?.noGeofence && !today.data?.today?.checkInAt ? "Location-free" : "Office checkpoint"}
+            value={today.data?.today?.checkInAt
+              ? (todayPlace.label || `${today.data?.activeOfficeCount ?? 0} active offices`)
+              : today.data?.noGeofence ? "Clock in from anywhere" : (today.data?.today?.officeLocation?.name || `${today.data?.activeOfficeCount ?? 0} active offices`)}
+            helper={`${todayPlace.away ? "Away from the office · " : ""}In ${fmtTime(today.data?.today?.checkInAt)} · Out ${fmtTime(today.data?.today?.checkOutAt)}${today.data?.today?.id && today.data.today.checkInAt ? " · tap for your location trail" : ""}`}
             tone="purple"
-            onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: "Your location trail", subtitle: `Today${today.data?.today?.officeLocation?.name ? ` · ${today.data.today.officeLocation.name}` : ""}` }) : undefined}
+            onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: "Your location trail", subtitle: `Today${todayPlace.label ? ` · ${todayPlace.label}${todayPlace.away ? " (away from the office)" : ""}` : ""}` }) : undefined}
           />
           <FunMetric
             icon={<Sparkles className="h-5 w-5" />}
@@ -466,6 +470,7 @@ function Attendance() {
                         <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", sCls[tone])} />
                         <span className="truncate font-medium">{r.user?.name || "PATS Crew"}</span>
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
+                        {r.checkInAway === true && <span title="Checked in away from the office" className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">Away</span>}
                         {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
                         <TrackingBadges rec={r} isToday={(r.attendanceDate || "").slice(0, 10) === todayKey} />
                       </div>
@@ -860,10 +865,12 @@ function MemberAvatar({ user }: { user: { id: string; avatar?: string | null } }
 }
 
 // One evidence card (selfie + location) for a check-in or check-out leg — the audit view.
-function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters, atIso, offsite, reason }: {
+function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters, atIso, offsite, reason, away, officeName }: {
   kind: "in" | "out";
   photoUrl?: string | null; address?: string | null; lat?: number | null; lng?: number | null;
   distanceMeters?: number | null; atIso?: string | null; offsite?: boolean | null; reason?: string | null;
+  /** Check-in made outside the office radius (location-free) — the address IS the day's place. */
+  away?: boolean; officeName?: string | null;
 }) {
   const hasAny = !!photoUrl || !!address || lat != null;
   const mapUrl = lat != null && lng != null ? `https://www.google.com/maps?q=${lat},${lng}` : null;
@@ -886,6 +893,8 @@ function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters,
           )}
           <div className="min-w-0 flex-1 space-y-1 text-xs">
             {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
+            {away && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">Away from the office</span>}
+            {!away && officeName && <p className="font-semibold text-foreground">{officeName}</p>}
             <p className="leading-snug text-foreground/80">{address || (lat != null ? `${lat.toFixed(5)}, ${lng?.toFixed(5)}` : "Location not recorded")}</p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
               {distanceMeters != null && <span>±{Math.round(distanceMeters)}m from office</span>}
@@ -964,7 +973,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
         </div>
         <div className="mt-4 space-y-2">
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attendance evidence · location & selfie</p>
-          <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} />
+          <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} away={recordPlace(record).away} officeName={record.checkInAt ? record.officeLocation?.name : null} />
           <AttendanceEvidence kind="out" photoUrl={record.checkOutPhotoUrl} address={record.checkOutAddress} lat={record.checkOutLat} lng={record.checkOutLng} distanceMeters={record.checkOutDistanceMeters} atIso={record.checkOutAt} offsite={record.checkOutOffsite} reason={record.checkOutReason} />
         </div>
         {record.id && record.checkInAt && <TrailSection record={record} recordId={record.id} />}

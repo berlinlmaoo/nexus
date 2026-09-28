@@ -6,6 +6,7 @@ import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 import { isHoliday } from "@/lib/holidays"
 import { createInAppNotification, notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
+import { isCheckInAway, placeLabel } from "@/lib/attendance-place"
 import { createLogger } from "@/lib/logger"
 import { getAppSetting } from "@/lib/app-setting"
 import {
@@ -541,6 +542,11 @@ export async function buildRecordTrail(record: RecordForClock) {
       checkOutAt: record.checkOutAt?.toISOString() ?? null,
       checkOutOffsite: record.checkOutOffsite,
       locationTrackingState: record.locationTrackingState ?? null,
+      // Where the day was, for the dialog title: the check-in address when it was away from the
+      // office (location-free members), else the office name. Additive: older clients read office.
+      checkInAway: isCheckInAway(record),
+      checkInAddress: record.checkInAddress ?? null,
+      placeLabel: placeLabel(record) || null,
       office: record.officeLocation
         ? {
             name: record.officeLocation.name,
