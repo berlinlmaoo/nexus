@@ -36,6 +36,21 @@ class BoardModelTest {
         assertEquals(listOf("Bagas", "Ana", "Zed"), m.map { it.name })
     }
 
+    @Test fun scoreCountsPresentPermitWfhAgainstTheEffectiveQuota() {
+        val rows = (1..25).map { d -> row("2026-09-%02d".format(d), "PRESENT", checkIn = "2026-09-%02dT02:00:00Z".format(d)) } +
+            row("2026-09-26", "PERMIT_APPROVED") + row("2026-09-27", "SICK_APPROVED")
+        val withQuota = rows.map { it.copy(user = it.user?.copy(dayOffQuota = 9)) }
+        val m = BoardModel.members(withQuota, viewerId = "u1", selfName = "x").single()
+        assertEquals(9, m.quota)
+        assertEquals(26, m.worked) // 25 present + 1 permit; sick is not worked
+        // 31-day period, quota 9 → 22 working days: shown capped, surplus beside it.
+        assertEquals(Score(22, 22, 4), BoardModel.score(m.worked, 31, m.quota))
+        assertEquals("22/22", BoardModel.score(m.worked, 31, m.quota).text)
+        // No quota from the server: 4.
+        assertEquals(4, BoardModel.members(rows, "u1", "x").single().quota)
+        assertEquals(Score(10, 27, 0), BoardModel.score(10, 31, 4))
+    }
+
     @Test fun historyDecodesServerShape() {
         val rows = NexusJson.decodeFromString(HistoryResponse.serializer(),
             """{"scope":"me","records":[{"id":"a","attendanceDate":"2026-09-24T00:00:00.000Z","recordKind":"ATTENDANCE","checkInAt":"2026-09-24T02:00:00.000Z","officeLocation":{"id":"o","name":"HQ","latitude":-6.2,"longitude":106.8,"radiusMeters":150,"workdays":[1,2]}},

@@ -12,7 +12,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 // API.md §2.2 (requests) and §2.3 (offsite review). Tolerant like every other model.
 
 @Serializable
-data class PersonRef(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null)
+data class PersonRef(
+    val id: String? = null,
+    val name: String? = null,
+    val email: String? = null,
+    val avatar: String? = null,
+    /** On history rows (server c2ba2a1): that person's EFFECTIVE day-off quota for the period. */
+    val dayOffQuota: Int? = null,
+)
 
 @Serializable
 data class AttendanceRequest(

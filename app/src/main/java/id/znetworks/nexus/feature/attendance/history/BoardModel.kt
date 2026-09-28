@@ -31,9 +31,35 @@ enum class AttTone { PRESENT, PERMIT, WFH, LEAVE, SICK, DAYOFF, ABSENT, NONE;
     }
 }
 
-data class BoardMember(val id: String, val name: String, val cells: Map<String, AttTone>, val rows: Map<String, HistoryRow>)
+data class BoardMember(
+    val id: String,
+    val name: String,
+    val cells: Map<String, AttTone>,
+    val rows: Map<String, HistoryRow>,
+    /** Effective day-off quota for the period (member quota + extra days); 4 when the server sent none. */
+    val quota: Int = BoardModel.DEFAULT_QUOTA,
+) {
+    /** Days worked: present (a check-in), approved permit, or WFH, as on web and iOS. */
+    val worked: Int get() = cells.values.count { it == AttTone.PRESENT || it == AttTone.PERMIT || it == AttTone.WFH }
+}
+
+/** The Score cell: "22/22" capped at the working days, plus the surplus ("+3") when there is one. */
+data class Score(val shown: Int, val target: Int, val surplus: Int) {
+    val text: String get() = "$shown/$target"
+}
 
 object BoardModel {
+    const val DEFAULT_QUOTA = 4
+
+    /** Working days: the period's calendar days minus that person's day-off quota (31 → 27 with 4). */
+    fun workingDays(periodDays: Int, quota: Int) = maxOf(0, periodDays - quota)
+
+    /** A day cut from the quota for being >120 min late is still worked, so worked can exceed it. */
+    fun score(worked: Int, periodDays: Int, quota: Int): Score {
+        val target = workingDays(periodDays, quota)
+        return Score(minOf(worked, target), target, maxOf(0, worked - target))
+    }
+
     /** Every office date of the 28→27 period [periodKey], in order. */
     fun days(periodKey: String): List<LocalDate> {
         val r = OfficeTime.periodRange(periodKey)
@@ -48,6 +74,7 @@ object BoardModel {
                 name = rs.firstNotNullOfOrNull { it.user?.name } ?: selfName,
                 cells = rs.associate { it.dayKey to AttTone.of(it) },
                 rows = rs.associateBy { it.dayKey },
+                quota = rs.firstNotNullOfOrNull { it.user?.dayOffQuota } ?: DEFAULT_QUOTA,
             )
         }.sortedWith(compareBy({ it.id != viewerId }, { it.name.lowercase() }))
 

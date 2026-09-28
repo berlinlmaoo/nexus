@@ -365,4 +365,5 @@
     <string name="presence_checks">Cek kehadiran</string>
     <string name="presence_hours_at_office">%1$d dari %2$d jam di kantor</string>
     <string name="presence_legend">✓ di kantor · ✗ di luar · ? tidak jelas · – tidak ada cek. Kira-kira sekali cek per jam selama di kantor; di luar kantor, lihat rute di atas.</string>
+    <string name="board_score">Skor</string>
 </resources>

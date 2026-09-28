@@ -134,6 +134,13 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     fun select(r: HistoryRow?) = _state.update { it.copy(selected = r) }
 
+    /** A tapped board cell. Returns whether a day sheet opened. */
+    fun selectCell(m: BoardMember, day: LocalDate): Boolean {
+        val row = m.rows[day.toString()] ?: return false
+        select(row)
+        return true
+    }
+
     fun openTrail(r: HistoryRow) {
         _state.update { it.copy(trailFor = r, trail = null, trailError = null) }
         val id = r.id ?: return
@@ -247,7 +254,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
                 stringResource(R.string.try_again), { vm.load() })
             members.isEmpty() -> EmptyState(Icons.Filled.GridView, stringResource(R.string.board_empty), stringResource(R.string.board_empty_sub),
                 stringResource(R.string.previous_period), { vm.shift(-1) })
-            else -> Grid(members, days, today, onCell = vm::select, compact = true)
+            else -> Grid(members, days, today, onCell = { m, d -> vm.selectCell(m, d) }, compact = true)
         }
         Legend()
     }
@@ -259,7 +266,11 @@ fun CrewBoardCard(vm: BoardViewModel) {
                     Text(stringResource(R.string.board_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
                     IconButton(onClick = { full = false }) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) }
                 }
-                Column(Modifier.verticalScroll(rememberScrollState())) { Grid(members, days, today, onCell = { full = false; vm.select(it) }, compact = false); Legend() }
+                // The grid scrolls vertically under its own pinned header; the legend stays below.
+                Grid(members, days, today, onCell = { m, d -> if (vm.selectCell(m, d)) full = false }, compact = false,
+                    modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.height(8.dp))
+                Legend()
             }
         }
     }
@@ -270,45 +281,79 @@ fun CrewBoardCard(vm: BoardViewModel) {
     }
 }
 
+/**
+ * Freeze panes, as on the web board and iOS a9ca4f4: the date row (weekday abbreviation above the
+ * day number) stays on top, names stay left, Score stays right; only the day cells scroll sideways,
+ * all rows together. Today is highlighted.
+ */
 @Composable
-private fun Grid(members: List<BoardMember>, days: List<LocalDate>, today: LocalDate, onCell: (HistoryRow) -> Unit, compact: Boolean) {
+private fun Grid(
+    members: List<BoardMember>,
+    days: List<LocalDate>,
+    today: LocalDate,
+    onCell: (BoardMember, LocalDate) -> Unit,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val c = Nx.colors
     val cell = if (compact) 22.dp else 26.dp
-    val scroll = rememberScrollState()
+    val gap = 3.dp
+    val nameW = if (compact) 72.dp else 96.dp
+    val scoreW = if (compact) 52.dp else 60.dp
+    val hScroll = rememberScrollState()
+    val vScroll = rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val weekday = remember(locale) { DateTimeFormatter.ofPattern("EEE", locale) }
     // Opens on today, not on the 28th of last month.
     LaunchedEffect(days) {
         val idx = days.indexOf(today)
-        if (idx > 3) with(density) { scroll.scrollTo(((cell + 3.dp) * (idx - 3)).roundToPx()) }
+        if (idx > 3) with(density) { hScroll.scrollTo(((cell + gap) * (idx - 3)).roundToPx()) }
     }
-    Row {
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Spacer(Modifier.height(cell))
-            members.forEach { m ->
-                Box(Modifier.height(cell).width(if (compact) 72.dp else 96.dp), contentAlignment = Alignment.CenterStart) {
-                    Text(m.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
-                }
-            }
-        }
-        Column(Modifier.horizontalScroll(scroll), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(modifier) {
+        // Pinned header row.
+        Row(verticalAlignment = Alignment.Bottom) {
+            Spacer(Modifier.width(nameW))
+            Row(Modifier.weight(1f).horizontalScroll(hScroll), horizontalArrangement = Arrangement.spacedBy(gap)) {
                 days.forEach { d ->
-                    Box(Modifier.size(cell), contentAlignment = Alignment.Center) {
-                        Text("${d.dayOfMonth}", fontSize = 10.sp, fontWeight = if (d == today) FontWeight.Bold else FontWeight.Normal,
-                            color = if (d == today) c.violetText else c.mutedFg)
+                    val isToday = d == today
+                    Column(
+                        Modifier.width(cell).background(if (isToday) c.accentBg else Color.Transparent, RoundedCornerShape(5.dp)),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(weekday.format(d).uppercase(locale).take(3), fontSize = 7.sp, maxLines = 1,
+                            color = if (isToday) c.violetText else c.mutedFg, fontWeight = FontWeight.SemiBold)
+                        Text("${d.dayOfMonth}", fontSize = 10.sp, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isToday) c.violetText else c.mutedFg)
                     }
                 }
             }
+            Text(stringResource(R.string.board_score), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
+                modifier = Modifier.width(scoreW).padding(start = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        }
+        Spacer(Modifier.height(gap))
+        val body = if (compact) Modifier else Modifier.weight(1f, fill = false).verticalScroll(vScroll)
+        Column(body, verticalArrangement = Arrangement.spacedBy(gap)) {
+            val periodDays = days.size
             members.forEach { m ->
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    days.forEach { d ->
-                        val key = d.toString()
-                        val row = m.rows[key]
-                        Box(
-                            Modifier.size(cell).background(toneColor(m.cells[key] ?: AttTone.NONE), RoundedCornerShape(5.dp))
-                                .then(if (d == today) Modifier.border(1.5.dp, c.violet, RoundedCornerShape(5.dp)) else Modifier)
-                                .then(if (row != null) Modifier.clickable { onCell(row) } else Modifier),
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.height(cell).width(nameW), contentAlignment = Alignment.CenterStart) {
+                        Text(m.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
+                    }
+                    Row(Modifier.weight(1f).horizontalScroll(hScroll), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        days.forEach { d ->
+                            val key = d.toString()
+                            Box(
+                                Modifier.size(cell).background(toneColor(m.cells[key] ?: AttTone.NONE), RoundedCornerShape(5.dp))
+                                    .then(if (d == today) Modifier.border(1.5.dp, c.violet, RoundedCornerShape(5.dp)) else Modifier)
+                                    .clickable { onCell(m, d) },
+                            )
+                        }
+                    }
+                    val score = BoardModel.score(m.worked, periodDays, m.quota)
+                    Row(Modifier.width(scoreW).padding(start = 4.dp), horizontalArrangement = Arrangement.End) {
+                        Text(score.text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1)
+                        if (score.surplus > 0) Text(" +${score.surplus}", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.success, maxLines = 1)
                     }
                 }
             }

@@ -371,4 +371,5 @@
     <string name="presence_checks">Presence checks</string>
     <string name="presence_hours_at_office">%1$d of %2$d hours at the office</string>
     <string name="presence_legend">✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route above.</string>
+    <string name="board_score">Score</string>
 </resources>
