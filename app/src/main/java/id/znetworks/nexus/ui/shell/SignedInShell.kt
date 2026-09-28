@@ -65,6 +65,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import id.znetworks.nexus.feature.projects.ProjectDetailScreen
 import id.znetworks.nexus.feature.projects.ProjectsScreen
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
@@ -166,11 +167,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
             composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut) }
-            // Not built yet on this step: the web page, and back.
-            composable("project/{id}") { e ->
-                val id = e.arguments?.getString("id").orEmpty()
-                LaunchedEffect(id) { openWeb(context, "/projects/$id"); nav.popBackStack() }
+            composable("project/{id}") {
+                ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") })
             }
+            // Not built yet on this step: the web page, and back.
             composable("task/{id}") { e ->
                 val id = e.arguments?.getString("id").orEmpty()
                 LaunchedEffect(id) { openWeb(context, "/tasks/$id"); nav.popBackStack() }
