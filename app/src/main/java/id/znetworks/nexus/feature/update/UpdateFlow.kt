@@ -52,6 +52,7 @@ fun UpdateFlowHost() {
     }
     val s = step
     if (s == ApkUpdater.Step.Idle) return
+    val locked = c.versionGate.state.collectAsStateWithLifecycle().value.required != null
     val busy = s is ApkUpdater.Step.Checking || s is ApkUpdater.Step.Downloading || s is ApkUpdater.Step.Verifying || s is ApkUpdater.Step.Installing
     AlertDialog(
         onDismissRequest = { if (!busy) updater.reset() },
@@ -69,7 +70,9 @@ fun UpdateFlowHost() {
                     ApkUpdater.Step.Installing -> Text(stringResource(R.string.updater_installing))
                     is ApkUpdater.Step.Confirm -> Text(stringResource(R.string.updater_confirm_body))
                     ApkUpdater.Step.NeedsPermission -> Text(stringResource(R.string.updater_permission))
-                    is ApkUpdater.Step.UpToDate -> Text(stringResource(R.string.updater_up_to_date))
+                    // Locked by the minimum version but nothing newer published yet: say that, never
+                    // "already the latest" to somebody who cannot check in (audit S5).
+                    is ApkUpdater.Step.UpToDate -> Text(stringResource(if (locked) R.string.updater_not_published_yet else R.string.updater_up_to_date))
                     is ApkUpdater.Step.Failed -> Text(s.message ?: stringResource(
                         when (s.reason) {
                             ApkUpdater.Reason.NOTHING_PUBLISHED -> R.string.updater_nothing
@@ -79,6 +82,7 @@ fun UpdateFlowHost() {
                             ApkUpdater.Reason.NOT_NEWER -> R.string.updater_not_newer
                             ApkUpdater.Reason.INSTALL -> R.string.updater_install_failed
                             ApkUpdater.Reason.SIGNED_OUT -> R.string.updater_signed_out
+                            ApkUpdater.Reason.NOT_ANNOUNCED -> R.string.updater_not_announced
                         },
                     ))
                     ApkUpdater.Step.Idle -> Unit

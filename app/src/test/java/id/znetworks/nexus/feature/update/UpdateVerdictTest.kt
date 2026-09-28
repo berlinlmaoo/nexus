@@ -45,4 +45,12 @@ class UpdateVerdictTest {
         assertEquals(certs, ApkUpdater.signatureFlags(36))
         assertEquals(sigs, ApkUpdater.signatureFlags(26))
     }
+
+    // Audit S5: the downloaded file must be the announced build (code and name).
+    @Test fun archiveMustBeTheAnnouncedBuild() {
+        val k = setOf("k")
+        assertNull(ApkUpdater.verdict(true, "p", "p", k, k, 4, 3, announcedCode = 4, archiveName = "0.1.7", announcedName = "0.1.7"))
+        assertEquals(Reason.NOT_ANNOUNCED, ApkUpdater.verdict(true, "p", "p", k, k, 5, 3, announcedCode = 4, archiveName = "0.1.7", announcedName = "0.1.7"))
+        assertEquals(Reason.NOT_ANNOUNCED, ApkUpdater.verdict(true, "p", "p", k, k, 4, 3, announcedCode = 4, archiveName = "0.1.6", announcedName = "0.1.7"))
+    }
 }

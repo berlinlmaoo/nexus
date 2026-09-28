@@ -1462,4 +1462,6 @@
     <string name="ch_hint_read">Cubit = zoom · hanya BoD yang bisa mengubah atasan</string>
     <string name="camera_off_title">Kamera dimatikan untuk NEXUS</string>
     <string name="camera_off_body">Untuk ambil foto di sini, izinkan Kamera untuk NEXUS di Settings, lalu coba lagi. Kamu juga bisa pilih foto dari galeri.</string>
+    <string name="updater_not_published_yet">Versi yang dibutuhkan HP ini belum terbit. Coba lagi sebentar lagi; absen bisa lagi setelah versi itu terpasang.</string>
+    <string name="updater_not_announced">File yang terunduh bukan versi yang diumumkan NEXUS, jadi tidak dipasang. Coba lagi nanti.</string>
 </resources>

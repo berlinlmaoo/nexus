@@ -62,7 +62,7 @@ class ApkUpdater(
         data class Failed(val reason: Reason, val message: String? = null) : Step
     }
 
-    enum class Reason { NOTHING_PUBLISHED, NETWORK, CHECKSUM, WRONG_APP, NOT_NEWER, INSTALL, SIGNED_OUT }
+    enum class Reason { NOTHING_PUBLISHED, NETWORK, CHECKSUM, WRONG_APP, NOT_NEWER, INSTALL, SIGNED_OUT, NOT_ANNOUNCED }
 
     private val _step = MutableStateFlow<Step>(Step.Idle)
     val step: StateFlow<Step> = _step.asStateFlow()
@@ -176,7 +176,7 @@ class ApkUpdater(
         val archive = pm.getPackageArchiveInfo(apk.path, flags)
         val installed = runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()
         return verdict(checksumOk, archive?.packageName, context.packageName, archive?.let(::signers), installed?.let(::signers),
-            archive?.let(::versionCode), runningCode)
+            archive?.let(::versionCode), runningCode, release.versionCode, archive?.versionName, release.versionName)
     }
 
     private fun install(apk: File) {
@@ -231,11 +231,16 @@ class ApkUpdater(
         fun verdict(
             checksumOk: Boolean?, archivePackage: String?, ownPackage: String,
             archiveSigners: Set<String>?, installedSigners: Set<String>?, archiveCode: Int?, runningCode: Int,
+            announcedCode: Int? = null, archiveName: String? = null, announcedName: String? = null,
         ): Reason? = when {
             checksumOk == false -> Reason.CHECKSUM
             archivePackage == null || archivePackage != ownPackage -> Reason.WRONG_APP
             archiveSigners.isNullOrEmpty() || installedSigners.isNullOrEmpty() || archiveSigners != installedSigners -> Reason.WRONG_APP
             archiveCode == null || !isNewer(archiveCode, runningCode) -> Reason.NOT_NEWER
+            // Audit S5: the file must be the build the server announced, name and code, or the lock
+            // (versionName) and this updater (versionCode) could disagree after installing it.
+            (announcedCode != null && archiveCode != announcedCode) ||
+                (announcedName != null && archiveName != null && archiveName != announcedName) -> Reason.NOT_ANNOUNCED
             else -> null
         }
 
