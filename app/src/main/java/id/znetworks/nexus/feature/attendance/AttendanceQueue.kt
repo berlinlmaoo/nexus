@@ -139,7 +139,8 @@ class AttendanceQueue(
         val me = currentUserId() ?: return FlushResult.SIGNED_OUT
 
         val mine = _state.value.entries
-            .filter { it.ownerId == null || it.ownerId == me }
+            // Only this person's: an entry with no owner can't be proven theirs (Android never shipped one).
+            .filter { it.ownerId == me }
             .sortedBy { it.deviceAtMillis }
         for (entry in mine) {
             val selfie = runCatching { selfieFile(entry.id).readBytes() }.getOrNull()
@@ -224,7 +225,8 @@ class AttendanceQueue(
     /** A sign-in succeeded: somebody else's taps are deleted, never replayed under this cookie. */
     @Synchronized
     fun keepOnly(ownerId: String) {
-        val foreign = _state.value.entries.filter { it.ownerId != null && it.ownerId != ownerId }
+        // Ownerless entries go too: nobody can say whose tap it was, so it is never sent under this cookie.
+        val foreign = _state.value.entries.filter { it.ownerId != ownerId }
         if (foreign.isEmpty()) return
         foreign.forEach { selfieFile(it.id).delete() }
         mutate { s -> s.copy(entries = s.entries.filterNot { it in foreign }) }

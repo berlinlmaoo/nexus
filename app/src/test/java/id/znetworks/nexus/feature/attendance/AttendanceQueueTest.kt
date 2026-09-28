@@ -207,4 +207,18 @@ class AttendanceQueueTest {
             ApiError.Http(409, "Attendance cannot be recorded because an approved sick request already covers today.", null, null)))
         assertFalse(AttendanceQueue.alreadyCheckedIn(AttendanceKind.CHECK_OUT, ApiError.Http(409, "You have already checked in today.", null, null)))
     }
+
+    // Audit R4: a tap with no owner is never replayed for whoever is signed in, and goes at sign-in.
+    @Test fun ownerlessEntriesAreNeverReplayedAndDroppedAtSignIn() = runTest {
+        user = null
+        val q = queue()
+        q.add("x", AttendanceKind.CHECK_IN, 1) // no session: no owner
+        assertEquals(null, q.state.value.entries.single().ownerId)
+        user = "u2"
+        assertEquals(AttendanceQueue.FlushResult.DRAINED, q.flush())
+        assertTrue(sender.calls.isEmpty())
+        q.keepOnly("u2")
+        assertEquals(0, q.state.value.count)
+        assertFalse(tmp.root.resolve("x.jpg").exists())
+    }
 }
