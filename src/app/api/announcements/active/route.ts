@@ -20,9 +20,16 @@ export async function GET() {
       },
       orderBy: { createdAt: "desc" },
       take: 5,
-      select: { id: true, title: true, body: true, tone: true, imageUrl: true, createdAt: true },
+      select: {
+        id: true, title: true, body: true, tone: true, imageUrl: true, createdAt: true,
+        kind: true, attachmentUrl: true, attachmentName: true, targetUserIds: true,
+      },
     })
-    return NextResponse.json({ announcements })
+    // `targeted`: addressed to the caller personally (an SP, a warning) rather than to everyone.
+    // The target list itself is not sent — it is other people's business.
+    return NextResponse.json({
+      announcements: announcements.map(({ targetUserIds, ...a }) => ({ ...a, targeted: targetUserIds.length > 0 })),
+    })
   } catch (error) {
     console.error("announcements active error:", error)
     return NextResponse.json({ announcements: [] })

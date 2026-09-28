@@ -23,7 +23,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params
     const a = await prisma.announcement.findUnique({
       where: { id },
-      select: { id: true, title: true, body: true, tone: true, imageUrl: true, active: true, createdAt: true, targetUserIds: true, createdById: true },
+      select: {
+        id: true, title: true, body: true, tone: true, imageUrl: true, active: true, createdAt: true, targetUserIds: true, createdById: true,
+        kind: true, attachmentUrl: true, attachmentName: true,
+      },
     })
     if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const me = session.user.id
@@ -32,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
     const author = a.createdById ? await prisma.user.findUnique({ where: { id: a.createdById }, select: { name: true } }) : null
     const { targetUserIds: _t, createdById: _c, ...rest } = a
-    return NextResponse.json({ announcement: { ...rest, authorName: author?.name ?? null } })
+    return NextResponse.json({ announcement: { ...rest, targeted: a.targetUserIds.length > 0, authorName: author?.name ?? null } })
   } catch (error) {
     console.error("announcement get error:", error)
     return NextResponse.json({ error: "Failed" }, { status: 500 })

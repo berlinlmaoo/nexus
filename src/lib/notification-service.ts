@@ -738,7 +738,7 @@ export async function notifyViolationAnnouncement(data: { reportedName: string; 
 export async function notifyAnnouncement(announcementId: string) {
   const announcement = await prisma.announcement.findUnique({
     where: { id: announcementId },
-    select: { id: true, title: true, body: true, active: true, targetUserIds: true, createdById: true },
+    select: { id: true, title: true, body: true, active: true, targetUserIds: true, createdById: true, kind: true },
   })
   if (!announcement || !announcement.active) return
   // No relation on the model — `createdById` is a bare column — so the name is one extra lookup.
@@ -769,7 +769,8 @@ export async function notifyAnnouncement(announcementId: string) {
       createInAppNotification({
         userId,
         type: "announcement",
-        title: `📣 ${announcement.title}`,
+        // A personal warning or an SP must not look like a company notice on the lock screen.
+        title: `${announcement.kind === "sp" ? "📄 SP" : announcement.kind === "warning" ? "⚠️" : "📣"} ${announcement.title}`,
         message: author ? `${author}: ${message}` : message,
         link: `/dashboard?announcement=${announcement.id}`,
         push: true,
