@@ -1207,4 +1207,27 @@
     <string name="aa_summarize">Summarize with GIDEON</string>
     <string name="aa_summarizing">Summarizing… (can take a minute)</string>
     <string name="aa_no_reflections">No reflections this month.</string>
+    <string name="au_search">Search the audit log</string>
+    <string name="au_create">Create</string>
+    <string name="au_update">Update</string>
+    <string name="au_delete">Delete</string>
+    <string name="au_login">Login</string>
+    <string name="au_no_match">Nothing matches this filter</string>
+    <string name="au_empty">No audit entries yet.</string>
+    <string name="au_today">Today</string>
+    <string name="au_yesterday">Yesterday</string>
+    <string name="au_system">System</string>
+    <string name="au_load_more">Load more</string>
+    <string name="au_all_n">That\'s all %1$d entries.</string>
+    <string name="au_entry">Audit entry</string>
+    <string name="au_changed">What changed</string>
+    <string name="au_set_to">Set to %1$s</string>
+    <string name="au_cleared">Cleared</string>
+    <string name="au_details">Details</string>
+    <string name="au_technical">Technical</string>
+    <string name="au_device">Device</string>
+    <string name="au_ip">IP address</string>
+    <string name="au_entity">Entity</string>
+    <string name="au_entry_id">Entry ID</string>
+    <string name="au_metadata">Metadata</string>
 </resources>

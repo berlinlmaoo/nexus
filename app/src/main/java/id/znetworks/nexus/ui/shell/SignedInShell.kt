@@ -20,6 +20,7 @@ import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
+import id.znetworks.nexus.feature.admin.AuditEntryScreen
 import id.znetworks.nexus.feature.admin.MemberAttendanceAdminScreen
 import id.znetworks.nexus.feature.admin.OfficesScreen
 import id.znetworks.nexus.feature.admin.ReflectionsScreen
@@ -281,6 +282,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("admin-att/{id}") { e -> MemberAttendanceAdminScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenReflections = { nav.navigate("reflections/$it") }) }
             composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
             composable("reflections/{id}") { e -> ReflectionsScreen(e.arguments?.getString("id"), onBack = { nav.popBackStack() }) }
+            composable("audit/{id}") { e -> AuditEntryScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }

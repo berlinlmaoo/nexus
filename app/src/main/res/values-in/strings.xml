@@ -1201,4 +1201,27 @@
     <string name="aa_summarize">Ringkas dengan GIDEON</string>
     <string name="aa_summarizing">Meringkas… (bisa semenit)</string>
     <string name="aa_no_reflections">Belum ada refleksi bulan ini.</string>
+    <string name="au_search">Cari di log audit</string>
+    <string name="au_create">Buat</string>
+    <string name="au_update">Ubah</string>
+    <string name="au_delete">Hapus</string>
+    <string name="au_login">Login</string>
+    <string name="au_no_match">Tidak ada yang cocok dengan filter ini</string>
+    <string name="au_empty">Belum ada entri audit.</string>
+    <string name="au_today">Hari ini</string>
+    <string name="au_yesterday">Kemarin</string>
+    <string name="au_system">Sistem</string>
+    <string name="au_load_more">Muat lagi</string>
+    <string name="au_all_n">Itu semua %1$d entri.</string>
+    <string name="au_entry">Entri audit</string>
+    <string name="au_changed">Yang berubah</string>
+    <string name="au_set_to">Diisi %1$s</string>
+    <string name="au_cleared">Dikosongkan</string>
+    <string name="au_details">Detail</string>
+    <string name="au_technical">Teknis</string>
+    <string name="au_device">Perangkat</string>
+    <string name="au_ip">Alamat IP</string>
+    <string name="au_entity">Entitas</string>
+    <string name="au_entry_id">ID entri</string>
+    <string name="au_metadata">Metadata</string>
 </resources>

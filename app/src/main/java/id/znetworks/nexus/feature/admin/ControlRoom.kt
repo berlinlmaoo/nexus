@@ -108,6 +108,7 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
             when (tab) {
                 "users" -> UsersTab(viewer.isBoD, nav.openUser, nav.openChart)
                 "attendance" -> AttendanceAdminTab(viewer.isBoD, nav.openMemberAttendance, nav.openOffices)
+                "audit" -> AuditTab(nav.openAudit)
                 else -> if (!tabContent(tab, viewer.isBoD)) EmptyState(Icons.Filled.AdminPanelSettings, tabLabel(tab), stringResource(R.string.not_on_android_message),
                     stringResource(R.string.open_on_web), { nav.openWeb("/admin") }, Modifier.fillMaxSize())
             }
