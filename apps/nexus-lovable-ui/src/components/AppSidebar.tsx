@@ -437,7 +437,7 @@ export function AppSidebar() {
             <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {g.items.map((item) => (
+                {g.items.filter((item) => orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                       <Link to={item.url} className="flex items-center gap-2">

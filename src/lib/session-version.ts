@@ -13,9 +13,13 @@
  * Pure: no imports, so `node src/lib/session-version.test.mjs` can load it directly.
  */
 
-/** True when a token must be refused: it carries a sessionVersion and it is not the user's current one. */
+/**
+ * True when a token must be refused: it has no sessionVersion (issued before 24 Sep 2026 — owner,
+ * 29 Sep 2026: those sessions could never be revoked, so everyone signs in again once), or it is not
+ * the user's current one.
+ */
 export function sessionVersionRejects(tokenVersion: unknown, currentVersion: number): boolean {
-  if (tokenVersion === undefined || tokenVersion === null) return false
+  if (tokenVersion === undefined || tokenVersion === null) return true
   return Number(tokenVersion) !== currentVersion
 }
 

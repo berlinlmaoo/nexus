@@ -241,6 +241,7 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
 function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; onChanged: () => void }) {
   const [mode, setMode] = useState<"idle" | "editing" | "sent">("idle");
   const [newEmail, setNewEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
@@ -251,9 +252,9 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
     return () => clearInterval(t);
   }, [cooldown]);
 
-  const reset = () => { setMode("idle"); setNewEmail(""); setCode(""); setMsg(null); };
+  const reset = () => { setMode("idle"); setNewEmail(""); setPassword(""); setCode(""); setMsg(null); };
   const request = useMutation({
-    mutationFn: () => nexusApi.requestEmailChange(newEmail.trim()),
+    mutationFn: () => nexusApi.requestEmailChange(newEmail.trim(), password),
     onSuccess: (r) => { setMode("sent"); setCode(""); setMsg(null); setCooldown(r.resendInSeconds ?? 60); },
     onError: (e) => setMsg(e instanceof Error ? e.message : "Gagal ngirim kode."),
   });
@@ -282,10 +283,22 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
           />
           {mode === "editing" && (
+            <>
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={request.isPending}
+              type="password"
+              autoComplete="current-password"
+              placeholder="password kamu sekarang"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
+            />
+            <p className="text-[11px] text-muted-foreground">Untuk memastikan ini kamu. Email lamamu akan diberi tahu soal perubahan ini.</p>
             <div className="flex items-center gap-2">
-              <button type="button" disabled={!newEmail.trim() || request.isPending} onClick={() => request.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{request.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Kirim kode</button>
+              <button type="button" disabled={!newEmail.trim() || !password || request.isPending} onClick={() => request.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{request.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Kirim kode</button>
               <button type="button" onClick={reset} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
             </div>
+            </>
           )}
           {mode === "sent" && (
             <>

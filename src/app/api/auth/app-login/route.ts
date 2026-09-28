@@ -23,7 +23,7 @@ const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
  * cookie header directly. The token is AUTH_SECRET-signed, so it can't be forged.)
  */
 import { getSessionCookieName } from "@/lib/session-cookie"
-import { currentSessionVersion } from "@/lib/session-issue"
+import { currentSessionVersion, newSessionId } from "@/lib/session-issue"
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       email: result.user.email,
       picture: result.user.image,
       sessionVersion: await currentSessionVersion(result.user.id),
+      sid: newSessionId(),
     },
   })
 

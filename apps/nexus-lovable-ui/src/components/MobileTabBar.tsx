@@ -191,7 +191,10 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
   const { isDark, toggle: toggleTheme } = useTheme();
   // Org role gates management-only nav (Control Room + Crew Hub) — hidden from Staff.
-  const orgRole = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data?.role;
+  const membersInfo = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data;
+  const orgRole = membersInfo?.role;
+  // Z Vault and Threads are the company's (Z Networks) only.
+  const isCompany = membersInfo?.isCompany === true;
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
   // Threads / Integrity show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
   // page there. Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
@@ -241,7 +244,7 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
                 <div key={g.label} className="mb-3">
                   <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</div>
                   <div className="grid grid-cols-1 gap-0.5">
-                    {g.items.map((item) => {
+                    {g.items.filter((item) => isCompany || (item.url !== "/vault" && item.url !== "/threads")).map((item) => {
                       const active = isActive(item.url);
                       return (
                         <Link

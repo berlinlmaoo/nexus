@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
+import { orgRoleOf } from '@/lib/org'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { GIDEON_EMAIL } from '@/lib/gideon-identity'
@@ -84,6 +85,8 @@ export async function GET(req: NextRequest) {
       workspaceId: string
       workspaceName: string
       role: string
+      /** Member of the company workspace: Z Vault, the NAS and Threads are shown only then. */
+      isCompany: boolean
       members: Array<{
         id: string
         userId: string
@@ -116,6 +119,7 @@ export async function GET(req: NextRequest) {
       workspaceId: member.workspaceId,
       workspaceName: member.workspace.name,
       role: member.role,
+      isCompany: (await orgRoleOf(session.user.id)) != null,
       members: members.map(m => ({
         id: m.id,
         userId: m.user.id,

@@ -17,6 +17,7 @@ import {
   upsertEmailOtp,
 } from "@/lib/auth-otp"
 import { emailChangeOtpEmail, sendEmail } from "@/lib/email"
+import bcrypt from "bcryptjs"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -31,8 +32,19 @@ export async function POST(request: NextRequest) {
   const newEmail = canonicalEmail(typeof body?.email === "string" ? body.email : "")
   if (!EMAIL_RE.test(newEmail)) return NextResponse.json({ error: "Masukin alamat email yang valid." }, { status: 400 })
 
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true, name: true } })
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true, name: true, password: true } })
   if (!me) return NextResponse.json({ error: "User not found" }, { status: 404 })
+  // The current password, so a stolen phone or session cannot move the account to another address
+  // (security audit, 29 Sep 2026). Accounts without a password (none today) are let through.
+  if (me.password) {
+    const current = typeof body?.currentPassword === "string" ? body.currentPassword : ""
+    if (!current) return NextResponse.json({ error: "Masukkan password kamu yang sekarang.", code: "PASSWORD_REQUIRED" }, { status: 400 })
+    const pwLimit = checkRateLimitByKey("email-change:password", session.user.id, { limit: 5, windowSeconds: 900 })
+    if (!pwLimit.allowed) return rateLimitResponse(pwLimit.resetAt)
+    if (!(await bcrypt.compare(current, me.password))) {
+      return NextResponse.json({ error: "Password salah.", code: "PASSWORD_WRONG" }, { status: 403 })
+    }
+  }
   if (canonicalEmail(me.email) === newEmail) {
     return NextResponse.json({ error: "Itu email kamu yang sekarang." }, { status: 400 })
   }
