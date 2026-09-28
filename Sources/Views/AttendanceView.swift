@@ -870,17 +870,22 @@ struct AttendanceView: View {
                 Text("\(reflectionCount)/\(reflectionMin)")
                     .font(NXFont.text(12, .bold)).monospacedDigit()
                     .foregroundStyle(reflectionOK ? NX.success : NX.warning)
+                // Done sits in the card, beside the count, while typing (owner, 29 Sep 2026): the
+                // keyboard toolbar drew an empty glass capsule over the Check out button on iOS 26.
+                if reflectionFocused {
+                    Button { reflectionFocused = false } label: {
+                        Text(T("Done")).font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 12).padding(.vertical, 5)
+                            .background(NX.violet, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+                }
             }
             Text(T("Required before check-out. Tell us what you worked on today."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             TextField(T("Today I worked on…"), text: $reflection, axis: .vertical)
                 .focused($reflectionFocused)
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button(T("Done")) { reflectionFocused = false }.font(NXFont.text(15, .bold))
-                    }
-                }
                 .font(NXFont.text(14)).lineLimit(5...12)
                 .padding(10)
                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
