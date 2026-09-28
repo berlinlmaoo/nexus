@@ -92,8 +92,6 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val GREEN = Color(0xFF10B981)
-private val ROSE = Color(0xFFF43F5E)
 private val SKY = Color(0xFF0EA5E9)
 private val AMBER_FILL = Color(0xFFD97706)
 
@@ -186,20 +184,10 @@ fun AttendanceScreen(
                 if (needsReflection) ReflectionCard(s.reflection, vm.reflectionCount(s), reflectionOk, vm::onReflection)
                 ReflectionsLink(onOpen = { showReflections = true })
                 if (s.locationOff) LocationOffBanner()
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PresenceButton(stringResource(R.string.presence_in), Icons.AutoMirrored.Filled.Login, GREEN,
-                        enabled = !(checkedIn || forcePending || offsitePending) && !s.loading, busy = s.flow?.busy == true && s.flow?.kind == AttendanceKind.CHECK_IN,
-                        modifier = Modifier.weight(1f)) { press(AttendanceKind.CHECK_IN) }
-                    PresenceButton(stringResource(R.string.presence_out), Icons.AutoMirrored.Filled.Logout, ROSE,
-                        enabled = (checkedIn || forcePending) && !checkedOut && !offsitePending && reflectionOk && !s.loading,
-                        busy = s.flow?.busy == true && s.flow?.kind == AttendanceKind.CHECK_OUT,
-                        modifier = Modifier.weight(1f)) { press(AttendanceKind.CHECK_OUT) }
-                }
-                // Say WHY the button is grey, right where the grey button is.
-                if (needsReflection && !reflectionOk) {
-                    Text(stringResource(R.string.presence_out_locked), color = c.mutedFg, fontSize = 11.sp,
-                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                }
+                // One control that changes with the day (UPDATES §11); the press flow is drawn inside it.
+                val mode = AttendanceButtonLogic.mode(checkedIn, checkedOut, forcePending, offsitePending,
+                    vm.reflectionCount(s), AttendanceViewModel.REFLECTION_MIN, s.today?.today?.checkInAt, s.today?.today?.checkOutAt)
+                AttendanceButton(mode, s.flow, enabled = !s.loading, onPress = ::press, onDismissFlow = vm::dismissFlow)
                 if (s.offsitePrompt) OffsitePrompt(s.offsiteReason, vm::onOffsiteReason, vm::cancelOffsite, vm::submitOffsite)
             }
 
@@ -223,7 +211,6 @@ fun AttendanceScreen(
     }
     }
 
-    s.flow?.let { FlowCard(it, onDismiss = vm::dismissFlow) }
     if (q.heldNoticeDue && q.isHeldForUpdate) HeldNotice(q, onDismiss = vm::heldNoticeSeen)
 }
 
@@ -333,22 +320,6 @@ private fun hhmmIso(iso: String?): String = iso?.let {
 } ?: "--:--"
 
 // endregion
-
-@Composable
-private fun PresenceButton(title: String, icon: ImageVector, tint: Color, enabled: Boolean, busy: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Button(
-        onClick = onClick, enabled = enabled && !busy,
-        shape = RoundedCornerShape(18.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = tint, contentColor = Color.White,
-            disabledContainerColor = tint, disabledContentColor = Color.White),
-        modifier = modifier.heightIn(min = 56.dp).alpha(if (enabled) 1f else 0.4f),
-    ) {
-        if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-        else Icon(icon, null)
-        Spacer(Modifier.size(8.dp))
-        Text(title.uppercase(Locale.ROOT), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-    }
-}
 
 @Composable
 private fun ReflectionCard(text: String, count: Int, ok: Boolean, onChange: (String) -> Unit) {
@@ -548,76 +519,6 @@ private fun PhoneOnlyCard() {
 }
 
 // region flow card
-
-@Composable
-private fun FlowCard(flow: CaptureFlow, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val c = Nx.colors
-    val isIn = flow.kind == AttendanceKind.CHECK_IN
-    val tint = when (flow) {
-        is CaptureFlow.Locating, is CaptureFlow.Sending -> c.violet
-        is CaptureFlow.Done -> if (isIn) GREEN else ROSE
-        is CaptureFlow.SavedOffline -> c.warning
-        is CaptureFlow.Failed -> c.danger
-    }
-    val title = when (flow) {
-        is CaptureFlow.Locating -> stringResource(R.string.flow_locating)
-        is CaptureFlow.Sending -> stringResource(if (isIn) R.string.flow_sending_in else R.string.flow_sending_out)
-        is CaptureFlow.Done -> stringResource(if (isIn) R.string.flow_done_in else R.string.flow_done_out, flow.at)
-        is CaptureFlow.SavedOffline -> stringResource(if (isIn) R.string.flow_saved_in else R.string.flow_saved_out)
-        is CaptureFlow.Failed -> stringResource(if (isIn) R.string.flow_failed_in else R.string.flow_failed_out)
-    }
-    val body = when (flow) {
-        is CaptureFlow.Locating -> stringResource(R.string.flow_locating_body)
-        is CaptureFlow.Sending -> stringResource(R.string.flow_sending_body)
-        is CaptureFlow.Done -> stringResource(
-            when {
-                flow.pendingApproval -> R.string.offsite_waiting
-                isIn -> R.string.flow_done_in_body
-                else -> R.string.flow_done_out_body
-            },
-        )
-        is CaptureFlow.SavedOffline -> stringResource(R.string.flow_saved_body, flow.at)
-        is CaptureFlow.Failed -> flow.message
-    }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.widthIn(max = 320.dp).background(c.card, RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp)).padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(Modifier.size(72.dp).background(tint.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
-                when (flow) {
-                    is CaptureFlow.Locating, is CaptureFlow.Sending -> CircularProgressIndicator(color = tint)
-                    is CaptureFlow.Done -> Icon(Icons.Filled.Check, null, tint = tint, modifier = Modifier.size(32.dp))
-                    is CaptureFlow.SavedOffline -> Icon(Icons.Filled.PhoneAndroid, null, tint = tint, modifier = Modifier.size(30.dp))
-                    is CaptureFlow.Failed -> Icon(Icons.Filled.Close, null, tint = tint, modifier = Modifier.size(32.dp))
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(6.dp))
-            Text(body, fontSize = 13.sp, color = c.mutedFg, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(14.dp))
-            if (flow.busy) {
-                // Two stages, drawn as two segments: location, then send.
-                Row(Modifier.widthIn(max = 160.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.weight(1f).height(4.dp).background(tint, CircleShape))
-                    Box(Modifier.weight(1f).height(4.dp).background(if (flow is CaptureFlow.Sending) tint else c.muted, CircleShape))
-                }
-            } else {
-                if (flow is CaptureFlow.Failed && flow.fix != null) {
-                    TextButton(onClick = {
-                        if (flow.fix == FixHint.LOCATION_SETTINGS) {
-                            runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
-                        } else openAppSettings(context)
-                    }) { Text(stringResource(R.string.open_settings), color = tint, fontWeight = FontWeight.Bold) }
-                }
-                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = tint, contentColor = Color.White)) { Text("OK", fontWeight = FontWeight.Bold) }
-            }
-        }
-    }
-}
 
 @Composable
 private fun HeldNotice(q: AttendanceQueue.State, onDismiss: () -> Unit) {

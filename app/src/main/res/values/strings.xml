@@ -52,7 +52,7 @@
     <string name="attendance_title">Attendance</string>
     <string name="presence_in">Presence In</string>
     <string name="presence_out">Presence Out</string>
-    <string name="presence_out_locked">PRESENCE OUT unlocks once the daily reflection above reaches 200 characters.</string>
+    <string name="presence_out_locked">Check out unlocks once the daily reflection above reaches 200 characters.</string>
     <string name="status_ready">Ready to check in</string>
     <string name="status_clocked_in">Currently clocked-in</string>
     <string name="status_done">Done for today 🎉</string>
@@ -676,4 +676,21 @@
     <string name="pt_pnl_none">P&amp;L isn\'t enabled / BoD access required.</string>
     <string name="pt_paid">Paid %1$s</string>
     <string name="pt_outstanding">Left %1$s</string>
+    <string name="btn_check_in">Check in</string>
+    <string name="btn_check_out">Check out</string>
+    <string name="btn_done">Done for today</string>
+    <string name="btn_done_worked">Done for today · worked %1$dh %2$dm</string>
+    <string name="btn_selfie_ok">Selfie ✓</string>
+    <string name="btn_locating">Finding your location…</string>
+    <string name="btn_at_office">At %1$s · %2$d m ✓</string>
+    <string name="btn_near_office">%1$s · %2$d m away</string>
+    <string name="btn_sending">Sending…</string>
+    <string name="btn_checked_in">Checked in %1$s</string>
+    <string name="btn_checked_in_on_time">Checked in %1$s · on time</string>
+    <string name="btn_checked_in_late">Checked in %1$s · %2$d min late</string>
+    <string name="btn_checked_out">Checked out %1$s</string>
+    <string name="btn_offsite_sent">Offsite check-out sent for approval</string>
+    <string name="btn_saved_offline">Saved on this phone — sends itself when NEXUS is back</string>
+    <string name="btn_retry_in">Try check-in again</string>
+    <string name="btn_retry_out">Try check-out again</string>
 </resources>

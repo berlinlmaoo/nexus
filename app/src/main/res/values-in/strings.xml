@@ -48,7 +48,7 @@
     <string name="attendance_title">Absen</string>
     <string name="presence_in">Presence In</string>
     <string name="presence_out">Presence Out</string>
-    <string name="presence_out_locked">PRESENCE OUT terbuka setelah refleksi harian di atas mencapai 200 karakter.</string>
+    <string name="presence_out_locked">Check out terbuka setelah refleksi harian di atas mencapai 200 karakter.</string>
     <string name="status_ready">Siap absen masuk</string>
     <string name="status_clocked_in">Sedang absen masuk</string>
     <string name="status_done">Selesai hari ini 🎉</string>
@@ -68,7 +68,7 @@
     <string name="offsite_waiting">⏳ Absen pulang di luar area kantor — menunggu persetujuan BoD</string>
     <string name="offsite_rejected">Absen pulang di luar area kamu ditolak BoD.</string>
     <string name="force_pending_ready">⚠️ Masih ada shift sebelumnya yang belum absen pulang. Tekan PRESENCE OUT untuk menutupnya dulu — setelah itu kamu bisa absen masuk lagi.</string>
-    <string name="force_pending_reflection">⚠️ Masih ada shift sebelumnya yang belum absen pulang. Isi refleksi harian di atas dulu — PRESENCE OUT terbuka setelah 200 karakter.</string>
+    <string name="force_pending_reflection">⚠️ Masih ada shift sebelumnya yang belum absen pulang. Isi refleksi harian di atas dulu — Check out terbuka setelah 200 karakter.</string>
     <string name="banner_checkin_ok">Absen masuk berhasil ✓</string>
     <string name="banner_checkout_ok">Absen pulang berhasil ✓</string>
     <string name="banner_offsite_sent">Absen pulang terkirim — menunggu persetujuan BoD ⏳</string>
@@ -670,4 +670,21 @@
     <string name="pt_pnl_none">P&amp;L belum diaktifin / akses BoD diperlukan.</string>
     <string name="pt_paid">Dibayar %1$s</string>
     <string name="pt_outstanding">Sisa %1$s</string>
+    <string name="btn_check_in">Check in</string>
+    <string name="btn_check_out">Check out</string>
+    <string name="btn_done">Selesai hari ini</string>
+    <string name="btn_done_worked">Selesai hari ini · kerja %1$dj %2$dm</string>
+    <string name="btn_selfie_ok">Selfie ✓</string>
+    <string name="btn_locating">Mencari lokasimu…</string>
+    <string name="btn_at_office">Di %1$s · %2$d m ✓</string>
+    <string name="btn_near_office">%1$s · %2$d m dari sini</string>
+    <string name="btn_sending">Mengirim…</string>
+    <string name="btn_checked_in">Check in %1$s</string>
+    <string name="btn_checked_in_on_time">Check in %1$s · tepat waktu</string>
+    <string name="btn_checked_in_late">Check in %1$s · telat %2$d menit</string>
+    <string name="btn_checked_out">Check out %1$s</string>
+    <string name="btn_offsite_sent">Check out offsite dikirim, menunggu persetujuan</string>
+    <string name="btn_saved_offline">Tersimpan di HP ini — terkirim sendiri saat NEXUS kembali</string>
+    <string name="btn_retry_in">Coba check in lagi</string>
+    <string name="btn_retry_out">Coba check out lagi</string>
 </resources>

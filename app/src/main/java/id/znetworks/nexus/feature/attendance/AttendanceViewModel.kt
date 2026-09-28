@@ -26,15 +26,23 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /** The capture flow card drawn over the screen (iOS `Flow`). */
+/**
+ * The press flow, drawn inside the one attendance button (UPDATES §11): face check → "Selfie ✓" →
+ * locating → "At <office> · 12 m ✓" + sending → done / saved offline / failed.
+ */
 sealed interface CaptureFlow {
     val kind: AttendanceKind
+    data class SelfieOk(override val kind: AttendanceKind) : CaptureFlow
     data class Locating(override val kind: AttendanceKind) : CaptureFlow
-    data class Sending(override val kind: AttendanceKind) : CaptureFlow
-    data class Done(override val kind: AttendanceKind, val at: String, val pendingApproval: Boolean) : CaptureFlow
+    /** [place]: the nearest office to the fix (display only; the verdict is the server's). */
+    data class Sending(override val kind: AttendanceKind, val place: Place? = null) : CaptureFlow
+    data class Done(override val kind: AttendanceKind, val at: String, val pendingApproval: Boolean, val lateMinutes: Int? = null) : CaptureFlow
     data class SavedOffline(override val kind: AttendanceKind, val at: String) : CaptureFlow
     data class Failed(override val kind: AttendanceKind, val message: String, val fix: FixHint? = null) : CaptureFlow
-    val busy: Boolean get() = this is Locating || this is Sending
+    val busy: Boolean get() = this is SelfieOk || this is Locating || this is Sending
 }
+
+data class Place(val name: String, val meters: Int, val inside: Boolean)
 
 /** The next step a refusal points to (REQ-ATT-00b: no dead ends). */
 enum class FixHint { APP_SETTINGS, LOCATION_SETTINGS }
@@ -171,6 +179,7 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
             FaceGuard.Verdict.UNREADABLE -> return fail(kind, res.getString(R.string.face_guard_unreadable))
         }
         pendingSelfie = selfie
+        _state.update { it.copy(flow = CaptureFlow.SelfieOk(kind)) }
         // One id for this tap, sent live AND reused if it ends up queued: the same event to the server.
         val tapId = UUID.randomUUID().toString()
         _state.update { it.copy(flow = CaptureFlow.Locating(kind)) }
@@ -183,7 +192,7 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
         val reflection = _state.value.reflection
         val sentAt = System.currentTimeMillis()
         val uptime = SystemClock.elapsedRealtime() / 1000
-        _state.update { it.copy(flow = CaptureFlow.Sending(kind)) }
+        _state.update { it.copy(flow = CaptureFlow.Sending(kind, placeOf(fix))) }
         try {
             val outcome = when (kind) {
                 AttendanceKind.CHECK_IN -> c.attendanceApi.checkIn(selfie, fix, tapId)
@@ -228,8 +237,9 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
                     kind == AttendanceKind.CHECK_IN -> res.getString(R.string.banner_checkin_ok)
                     else -> res.getString(R.string.banner_checkout_ok)
                 }
+                val late = if (kind == AttendanceKind.CHECK_IN) outcome.record?.lateMinutes else null
                 _state.update {
-                    it.copy(flow = CaptureFlow.Done(kind, at, outcome.pendingApproval), banner = bannerText to true, offsiteReason = "")
+                    it.copy(flow = CaptureFlow.Done(kind, at, outcome.pendingApproval, late), banner = bannerText to true, offsiteReason = "")
                 }
                 if (kind == AttendanceKind.CHECK_OUT) clearReflection()
                 load()
@@ -351,6 +361,7 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
         val offices = runCatching { c.attendanceApi.offices() }.getOrNull().orEmpty()
             .filter { it.isActive != false && it.latitude != null && it.longitude != null }
         if (offices.isEmpty()) return@launch
+        knownOffices = offices
         val fix = c.location.roughFix() ?: return@launch
         _state.update { it.copy(here = fix) }
         val best = offices.map { o ->
@@ -362,6 +373,20 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(nearest = NearestOffice(best.first.name.orEmpty(), best.second, best.second <= (best.first.radiusMeters ?: 100.0),
                 best.first.latitude!!, best.first.longitude!!, best.first.radiusMeters ?: 100.0))
         }
+    }
+
+    /** Offices seen by [refreshNearest]; the in-button "At <office> · 12 m" is drawn from them. */
+    private var knownOffices: List<OfficeRef> = emptyList()
+
+    /** Today's office when the record names one, else the nearest known; null when none is known. */
+    private fun placeOf(fix: LocationFix): Place? {
+        val assigned = _state.value.today?.today?.officeLocation?.takeIf { it.latitude != null && it.longitude != null }
+        val candidates = listOfNotNull(assigned).ifEmpty { knownOffices }
+        return candidates.map { o ->
+            val out = FloatArray(1)
+            Location.distanceBetween(fix.lat, fix.lng, o.latitude!!, o.longitude!!, out)
+            o to out[0].toDouble()
+        }.minByOrNull { it.second }?.let { (o, d) -> Place(o.name.orEmpty(), d.roundToInt(), d <= (o.radiusMeters ?: 100.0)) }
     }
 
     companion object {

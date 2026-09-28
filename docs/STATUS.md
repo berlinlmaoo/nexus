@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (169 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (174 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -79,6 +79,24 @@ against the text once it is there).
 - The work-session text and the prominent location disclosure now say "every ~50 m or 5 min".
   PRD REQ-ATT-34/36 still say 15 min (owner's document, not edited here).
 
+## One attendance button with the flow inside it (UPDATES §11), 28 Sep 2026
+
+Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
+- Ready → green "Check in". Checked in (or an earlier day still open) → "Check out", grey and locked
+  with "120/200" and a progress line until the reflection reaches 200 characters, then red. An
+  offsite check-out awaiting approval keeps it locked. Checked out → calm "Selesai hari ini · kerja
+  8j 45m" (check-in → check-out). Rules are `AttendanceButtonLogic.mode` (JVM-tested), the same
+  conditions the two buttons had.
+- Press: the face check (full screen, unchanged) → "Selfie ✓" → "Mencari lokasimu…" (spinner) →
+  "Di <office> · 12 m ✓" (or "<office> · 340 m dari sini"; display only, the server decides) with
+  "Mengirim…" → success: check mark, confirm haptic, confetti, "Check in 09:02 · tepat waktu / · telat
+  6 menit" (lateMinutes from the reply); offline → amber "Tersimpan di HP ini — terkirim sendiri saat
+  NEXUS kembali"; failure → shake, reject haptic, the server's sentence under the button, the button
+  becomes "Coba check in lagi" (+ Settings link when the fix is a permission). The old result dialog
+  is gone.
+- With system animations off: no shake, no confetti. Submitted data, clientId/idempotency and the
+  queue are untouched (AttendanceGuardTest still passes).
+
 ## Phase 2 (tasks & projects), in progress since 28 Sep 2026
 
 | Part | What exists | Commit |
@@ -88,7 +106,7 @@ against the text once it is there).
 | 2.3 | Task detail (iOS TaskDetailView + extras): parent breadcrumb, title edited in place (commits on Done/focus loss), status/priority menus, start/due pickers with clear, assignee picker from project members, BoD quest banner + "Make it a quest" (workspace role via `Viewer`), description editor (BlockNote flattened), subtasks (progress, toggle, add with Enter, open), files (camera/gallery/files; ≤64 MiB single request, above that 16 MiB chunks under one uploadId, one progress bar; open or share through FileProvider; delete), dependencies (blocked by/blocking, picker from the project's tasks, duplicates never sent), time log (total, last 6), comments (draft kept until posted), activity (last 12), delete task; PROOF_REQUIRED and other server sentences shown as-is | 2a0567d |
 | 2.4 | Tasks tab = My Quest Log (iOS TasksView): Hot today (open, due within 2 days incl. overdue, soonest first, max 8) / In motion (12) / Recently slayed (8), shared TaskCard with project, done toggle, re-read on every visit, saved copy offline, empty state → Browse missions | 224ad86 |
 | 2.5 | Home = dashboard (iOS DashboardView): greeting by office hour, **attendance card** (today's state incl. queued taps, open day, rest day; one tap to Attendance), level/XP card + level sheet, search pill (→ Mission Control search until 2.8) and bell with unread → Inbox, stat tiles Projects / Your Mission / Quest with sheets (quest **Claim**, one at a time, server sentence on refusal), XP rules (same tables as iOS/web), quick actions (Chat, Attendance, Leaderboard, Room Booking, Threads, Team Calendar; web until built), pinned + recent project shortcuts (per person on the phone, cleared on logout), 14-day agenda from my tasks, profile card. Attendance moved to its own screen reached from Home, More, pushes and links (`nexus://attendance…` focus still claimed by it) | 6f2f5a1 |
-| 2.6 | Project tabs as the web/iOS: Sheet (every card + custom-field columns), Calendar (month grid, day list, add a task on that day), Timeline (gantt: title column, day axis, weekends, today line, priority colours, web taskWindow fallbacks), Sprints (Active/Planning/Shipped, progress, start/complete; **`requiresAction` handled**: asks backlog or another sprint and re-sends with `moveIncompleteTo` — iOS silently did nothing), Automations (IF → THEN, enable switch; LEAD refusal shown), Finance (name contains "finance") and P&L (flag + BoD) read-only by year. Pages, Forms and project Chat open the project on the web until Phase 3. Search box only on tabs that draw tasks | this step |
+| 2.6 | Project tabs as the web/iOS: Sheet (every card + custom-field columns), Calendar (month grid, day list, add a task on that day), Timeline (gantt: title column, day axis, weekends, today line, priority colours, web taskWindow fallbacks), Sprints (Active/Planning/Shipped, progress, start/complete; **`requiresAction` handled**: asks backlog or another sprint and re-sends with `moveIncompleteTo` — iOS silently did nothing), Automations (IF → THEN, enable switch; LEAD refusal shown), Finance (name contains "finance") and P&L (flag + BoD) read-only by year. Pages, Forms and project Chat open the project on the web until Phase 3. Search box only on tabs that draw tasks | af4e36e |
 
 Still on the web until built: custom fields on a task (2.7), dashboard, search, sign-up/reset/passkeys, What's New.
 
