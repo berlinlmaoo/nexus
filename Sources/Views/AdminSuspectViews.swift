@@ -14,9 +14,11 @@ struct SuspectSide: Decodable, Sendable {
     let photoUrl: String?
     let address: String?
     let offline: Bool?
-    /// "FAKE" | "CHECK" | nil
+    /// "FAKE" | "NOFACE" | "CHECK" | nil
     let level: String?
     let signals: [String]?
+    /// Faces found in this selfie by the server's check; nil = not checked yet.
+    let faceCount: Int?
 }
 
 struct SuspectItem: Decodable, Identifiable, Sendable {
@@ -30,7 +32,15 @@ struct SuspectItem: Decodable, Identifiable, Sendable {
     let checkIn: SuspectSide?
     let checkOut: SuspectSide?
     let review: Review?
+    /// Warnings already sent about this day, newest first.
+    let warnings: [Warning]?
     var id: String { recordId }
+
+    struct Warning: Decodable, Sendable {
+        let at: String?
+        let by: Review.Actor?
+        let message: String?
+    }
 
     struct Person: Decodable, Sendable { let id: String; let name: String? ; let image: String? }
     struct Review: Decodable, Sendable {
@@ -41,6 +51,7 @@ struct SuspectItem: Decodable, Identifiable, Sendable {
         struct Actor: Decodable, Sendable { let id: String?; let name: String? }
     }
     var isFake: Bool { level == "FAKE" }
+    var isNoFace: Bool { level == "NOFACE" }
 }
 
 struct SuspectList: Decodable, Sendable {
@@ -49,10 +60,11 @@ struct SuspectList: Decodable, Sendable {
     let currentPeriodKey: String?
     let counts: Counts?
     let items: [SuspectItem]?
-    struct Counts: Decodable, Sendable { let fakeOpen: Int?; let checkOpen: Int?; let valid: Int?; let invalid: Int? }
+    struct Counts: Decodable, Sendable { let fakeOpen: Int?; let noFaceOpen: Int?; let checkOpen: Int?; let valid: Int?; let invalid: Int? }
 }
 
 struct SuspectReviewed: Decodable, Sendable { let ok: Bool?; let verdict: String?; let date: String? }
+struct SuspectWarned: Decodable, Sendable { let ok: Bool?; let announcementId: String? }
 
 // MARK: - Control Room → Fake GPS
 
@@ -73,12 +85,17 @@ struct AdminSuspectSection: View {
     @State private var problem: String?
     /// The ONE confirmation this view presents (two presentations on one view leave one dead).
     @State private var confirming: SuspectItem?
+    /// The card a warning is being written for; the sheet hangs off the list, not the root, so it
+    /// never shares a view with the confirmation dialog.
+    @State private var warning: SuspectItem?
+    @State private var warnDraft = ""
 
     private var items: [SuspectItem] {
         (list?.items ?? []).filter {
             switch tab {
             case 0: return $0.state == "open" && $0.isFake
-            case 1: return $0.state == "open" && $0.level == "CHECK"
+            case 1: return $0.state == "open" && $0.isNoFace
+            case 2: return $0.state == "open" && $0.level == "CHECK"
             default: return $0.state != "open"
             }
         }
@@ -128,15 +145,17 @@ struct AdminSuspectSection: View {
         }
         .refreshable { await load() }
         .scrollDismissesKeyboard(.interactively)
+        .sheet(item: $warning) { item in warnSheet(item) }
     }
 
     private var emptyTitle: String {
-        switch tab { case 0: return T("No fake GPS this period"); case 1: return T("Nothing to look at"); default: return T("Nothing reviewed yet") }
+        switch tab { case 0: return T("No fake GPS this period"); case 1: return T("Every selfie shows a face"); case 2: return T("Nothing to look at"); default: return T("Nothing reviewed yet") }
     }
     private var emptySubtitle: String {
         switch tab {
         case 0: return T("No phone reported a mock location and nobody jumped impossibly far.")
-        case 1: return T("No weak signals this period.")
+        case 1: return T("No check-in or check-out selfie without a face this period.")
+        case 2: return T("No weak signals this period.")
         default: return T("Verdicts given this period show here.")
         }
     }
@@ -153,11 +172,12 @@ struct AdminSuspectSection: View {
                 Button { shift(1) } label: { Image(systemName: "chevron.right") }.disabled(periodKey == nil || isCurrent)
             }
             .foregroundStyle(NX.violetText)
-            HStack(spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) {
                 chip(0, T("Fake GPS"), list?.counts?.fakeOpen)
-                chip(1, T("Worth a look"), list?.counts?.checkOpen)
-                chip(2, T("Reviewed"), (list?.counts?.valid ?? 0) + (list?.counts?.invalid ?? 0))
-            }
+                chip(1, T("No face"), list?.counts?.noFaceOpen)
+                chip(2, T("Worth a look"), list?.counts?.checkOpen)
+                chip(3, T("Reviewed"), (list?.counts?.valid ?? 0) + (list?.counts?.invalid ?? 0))
+            } }
         }
         .nexusCard()
     }
@@ -217,6 +237,23 @@ struct AdminSuspectSection: View {
                     }
                 }
                 .disabled(busy != nil)
+            }
+            // A warning goes to the person as a push and a personal pop-up (owner, 29 Sep 2026).
+            Button { warnDraft = Self.defaultWarning(item); warning = item } label: {
+                Label(T("Send warning…"), systemImage: "exclamationmark.bubble.fill")
+                    .font(NXFont.text(14, .bold)).frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .background(NX.warning.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(NX.warning)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy != nil)
+            if let ws = item.warnings, !ws.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(ws.enumerated()), id: \.offset) { _, w in
+                        Text("⚠︎ \(w.by?.name ?? "BoD") · \(Self.clock(w.at)) — \(w.message ?? "")")
+                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(3)
+                    }
+                }
             }
         }
         .nexusCard()
@@ -311,6 +348,54 @@ struct AdminSuspectSection: View {
         let f = DateFormatter(); f.dateFormat = "EEE d MMM"; f.timeZone = TimeZone(identifier: "UTC")
         f.locale = Locale(identifier: AppLanguage.shared.lang.rawValue == "id" ? "id_ID" : "en_US")
         return f.string(from: d)
+    }
+
+    private func warnSheet(_ item: SuspectItem) -> some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(String(format: T("%@ gets this as a push notification and a pop-up in NEXUS."), item.user.name ?? "—"))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                TextField(T("Message"), text: $warnDraft, axis: .vertical)
+                    .font(NXFont.text(15)).lineLimit(4...10).padding(12)
+                    .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Button { Task { await sendWarning(item) } } label: {
+                    Text(busy != nil ? T("Sending…") : T("Send warning"))
+                }
+                .buttonStyle(NexusPrimaryButton())
+                .disabled(busy != nil || warnDraft.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+                Spacer()
+            }
+            .padding(20)
+            .navigationTitle(T("Send warning")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { warning = nil } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private static func defaultWarning(_ item: SuspectItem) -> String {
+        let day = dayLabel(item.date)
+        if item.isNoFace {
+            return String(format: T("Your attendance selfie on %@ doesn't show your face. Attendance selfies must show your face clearly — next time it may count as absent."), day)
+        }
+        if item.isFake {
+            return String(format: T("Your attendance on %@ came from a faked location. Turn off any fake-GPS app — next time it counts as absent."), day)
+        }
+        return String(format: T("Your attendance location on %@ looked unusual. Make sure location is on and accurate when you check in."), day)
+    }
+
+    private func sendWarning(_ item: SuspectItem) async {
+        busy = item.recordId
+        defer { busy = nil }
+        do {
+            _ = try await APIClient.shared.warnSuspectAttendance(recordId: item.recordId,
+                                                                 message: warnDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+            warning = nil
+            problem = nil
+            notice = String(format: T("Warning sent to %@."), item.user.name ?? "—")
+            await load()
+        } catch {
+            problem = error.localizedDescription
+        }
     }
 
     private func shift(_ by: Int) {

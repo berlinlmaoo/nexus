@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 // MARK: models
 
@@ -81,7 +82,18 @@ struct AdminAnnouncement: Decodable, Identifiable, Sendable {
     let imageUrl: String?
     let seenCount: Int?
     let createdAt: String?
+    /// "announcement" | "warning" | "sp" (a warning letter, with its PDF). Servers from 29 Sep 2026.
+    let kind: String?
+    let attachmentUrl: String?
+    let attachmentName: String?
+    /// Who it is for; empty = everyone.
+    let targetUserIds: [String]?
+    let targets: [Target]?
+    struct Target: Decodable, Sendable { let id: String?; let name: String? }
 }
+
+/// POST /api/announcements/attachment → the stored PDF.
+struct AnnouncementAttachment: Decodable, Sendable { let url: String; let name: String?; let size: Int? }
 
 // MARK: - Control Room (segmented: Users / Audit / Quests / Pengumuman)
 
@@ -99,7 +111,7 @@ struct AdminView: View {
         if viewer.canAnnounce {
             t.append((T("Announcements"), "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
-            if RemoteConfig.shared.fakeGpsReview { t.append((T("Fake GPS"), "suspects")) }
+            if RemoteConfig.shared.fakeGpsReview { t.append((T("Absen Monitor"), "suspects")) }
             t.append(("GIDEON", "gideon"))
             t.append(("App", "app"))
         }
@@ -531,7 +543,7 @@ struct AdminAnnouncementsSection: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         Button { showCreate = true } label: {
-                            Label("Pengumuman baru", systemImage: "megaphone.fill").font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                            Label(T("New announcement"), systemImage: "megaphone.fill").font(NXFont.text(13, .bold)).foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).padding(.vertical, 11).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }.buttonStyle(.plain)
                         if rows.isEmpty { TabEmpty(icon: "megaphone", text: T("No announcements yet.")) }
@@ -552,6 +564,14 @@ struct AdminAnnouncementsSection: View {
                 Button { Task { try? await APIClient.shared.deleteAnnouncement(a.id); await load() } } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }.buttonStyle(.plain)
             }
             if let b = a.body, !b.isEmpty { Text(b).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(3) }
+            if let ts = a.targets, !ts.isEmpty {
+                Label(ts.compactMap(\.name).joined(separator: ", "), systemImage: "person.2.fill")
+                    .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText).lineLimit(2)
+            }
+            if let n = a.attachmentName ?? (a.attachmentUrl != nil ? "PDF" : nil) {
+                Label(n, systemImage: "doc.richtext.fill").font(NXFont.text(11, .semibold))
+                    .foregroundStyle(a.kind == "sp" ? NX.danger : NX.mutedFg).lineLimit(1)
+            }
             HStack {
                 Text("\(T("read by")) \(a.seenCount ?? 0) \(T("people"))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 Spacer()
@@ -575,6 +595,15 @@ struct CreateAnnouncementSheet: View {
     /// 0 = posted once, which is what every announcement did before repeats existed.
     @State private var repeatDays = 0
     @State private var repeatAt = Self.defaultTime
+    /// Audience: everyone, or the people picked here (owner, 29 Sep 2026 — e.g. a warning letter).
+    @State private var everyone = true
+    @State private var picked: Set<String> = []
+    @State private var roster: [WorkspaceRoster.Member] = []
+    @State private var search = ""
+    /// The PDF (SP) uploaded for this announcement.
+    @State private var pdf: AnnouncementAttachment?
+    @State private var pickingPDF = false
+    @State private var uploading = false
     private let tones: [(String, String)] = [("info", "Info"), ("success", "Success"), ("warning", "Warning")]
     private let repeatChoices: [Int] = [0, 2, 3, 5, 7]
     /// 09:00 today, in the device's own zone. Only the hour and minute are ever sent.
@@ -594,7 +623,9 @@ struct CreateAnnouncementSheet: View {
                     VStack(alignment: .leading, spacing: 16) {
                         f(T("TITLE")) { TextField(T("Announcement title"), text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
                         f(T("BODY")) { TextField(T("Announcement body…"), text: $body_, axis: .vertical).font(NXFont.text(15)).lineLimit(3...8).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
-                        f("TONE") {
+                        f(T("AUDIENCE")) { audiencePicker }
+                        f(T("PDF (SP)")) { pdfRow }
+                        f(T("TONE")) {
                             HStack(spacing: 8) {
                                 ForEach(tones, id: \.0) { t in
                                     Button { tone = t.0 } label: {
@@ -636,7 +667,8 @@ struct CreateAnnouncementSheet: View {
                         // body required"), so the button says why it is off instead of just being off.
                         let missing: String? = title.trimmingCharacters(in: .whitespaces).isEmpty
                             ? T("Add a title to post.")
-                            : body_.trimmingCharacters(in: .whitespaces).isEmpty ? T("Add the announcement body to post.") : nil
+                            : body_.trimmingCharacters(in: .whitespaces).isEmpty ? T("Add the announcement body to post.")
+                            : (!everyone && picked.isEmpty) ? T("Pick at least one person.") : nil
                         Button { Task { await create() } } label: { HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(busy ? T("Posting…") : T("Post")) } }
                             .buttonStyle(NexusPrimaryButton()).disabled(busy || missing != nil)
                         if let missing {
@@ -650,12 +682,98 @@ struct CreateAnnouncementSheet: View {
                     }.padding(20)
                 }
             }
-            .navigationTitle("Pengumuman baru").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(T("New announcement")).navigationBarTitleDisplayMode(.inline)
+            .fileImporter(isPresented: $pickingPDF, allowedContentTypes: [.pdf]) { result in
+                if case .success(let url) = result { Task { await uploadPDF(url) } }
+            }
+            .keyboardDoneBar()
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 7) { SectionLabel(l); c() }
+    }
+
+    private var audiencePicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach([(true, T("Everyone")), (false, T("Selected people"))], id: \.0) { opt in
+                    Button { everyone = opt.0 } label: {
+                        Text(opt.1).font(NXFont.text(13, .semibold)).padding(.horizontal, 14).padding(.vertical, 8)
+                            .foregroundStyle(everyone == opt.0 ? .white : NX.mutedFg)
+                            .background(everyone == opt.0 ? NX.violet : NX.card, in: Capsule())
+                            .overlay(Capsule().strokeBorder(everyone == opt.0 ? .clear : NX.border))
+                    }.buttonStyle(.plain)
+                }
+            }
+            if !everyone {
+                TextField(T("Search name or email…"), text: $search)
+                    .font(NXFont.text(14)).padding(10)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                if !picked.isEmpty {
+                    Text(String(format: T("%d selected"), picked.count)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                }
+                let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+                let rows = roster.filter { m in
+                    guard m.userId != nil else { return false }
+                    return q.isEmpty || m.displayName.lowercased().contains(q) || (m.emailText ?? "").lowercased().contains(q)
+                }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+                VStack(spacing: 0) {
+                    ForEach(rows.prefix(60), id: \.userId) { m in
+                        let id = m.userId ?? ""
+                        Button {
+                            if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: picked.contains(id) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(picked.contains(id) ? NX.violet : NX.mutedFg)
+                                Text(m.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(.vertical, 9).padding(.horizontal, 12).contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                        Divider().overlay(NX.border)
+                    }
+                }
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            }
+        }
+        .task { if roster.isEmpty { roster = (try? await APIClient.shared.roster())?.members ?? [] } }
+    }
+
+    private var pdfRow: some View {
+        HStack(spacing: 10) {
+            if let pdf {
+                Label(pdf.name ?? "SP.pdf", systemImage: "doc.richtext.fill").font(NXFont.text(13, .semibold))
+                    .foregroundStyle(NX.danger).lineLimit(1)
+                Spacer()
+                Button { self.pdf = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+            } else {
+                Button { pickingPDF = true } label: {
+                    HStack(spacing: 6) {
+                        if uploading { ProgressView() }
+                        Text(uploading ? T("Uploading…") : T("Attach PDF (SP)"))
+                    }
+                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(NX.card, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
+                }.buttonStyle(.plain).disabled(uploading)
+                Spacer()
+            }
+        }
+    }
+
+    private func uploadPDF(_ url: URL) async {
+        uploading = true; defer { uploading = false }
+        problem = nil
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { problem = T("Couldn't read that file."); return }
+        guard data.count <= 10 * 1024 * 1024 else { problem = T("The PDF must be 10 MB or smaller."); return }
+        do { pdf = try await APIClient.shared.uploadAnnouncementAttachment(fileName: url.lastPathComponent, data: data) }
+        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't upload the PDF.") }
     }
     private func create() async {
         busy = true; defer { busy = false }
@@ -664,7 +782,9 @@ struct CreateAnnouncementSheet: View {
             _ = try await APIClient.shared.createAnnouncement(
                 title: title.trimmingCharacters(in: .whitespaces),
                 body: body_.trimmingCharacters(in: .whitespaces),
-                tone: tone, repeatDays: repeatDays, repeatAtTime: repeatAtHHmm)
+                tone: tone, repeatDays: repeatDays, repeatAtTime: repeatAtHHmm,
+                targetUserIds: everyone ? [] : Array(picked),
+                attachment: pdf)
         } catch {
             // Swallowed before: a refused post closed the sheet as if it had worked.
             problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post.")

@@ -16,6 +16,9 @@ struct AnnouncementModal: View {
 
     @State private var queue: [AdminAnnouncement] = []
     @State private var dismissing = false
+    /// The SP's PDF, opened in the in-app viewer with the session.
+    @State private var pdfPreview: AttachmentPreview?
+    @State private var openingPDF = false
 
     private var current: AdminAnnouncement? { queue.first }
 
@@ -32,6 +35,7 @@ struct AnnouncementModal: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: current?.id)
+        .fullScreenCover(item: $pdfPreview) { AttachmentViewerView(preview: $0) }
         .task { await load() }
         .onChange(of: router.focus) { _, _ in Task { await load() } }
         .onChange(of: scenePhase) { _, phase in
@@ -51,6 +55,11 @@ struct AnnouncementModal: View {
                         .foregroundStyle(tint(announcement.tone))
                         .frame(width: 36, height: 36)
                         .background(tint(announcement.tone).opacity(0.14), in: Circle())
+                    if announcement.kind == "sp" {
+                        Text("SP").font(NXFont.text(11, .black)).foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(NX.danger, in: Capsule())
+                    }
                     Text(announcement.title)
                         .font(NXFont.display(17, .bold))
                         .foregroundStyle(NX.foreground)
@@ -83,6 +92,20 @@ struct AnnouncementModal: View {
                 }
             }
             .padding(20)
+
+            if let url = announcement.attachmentUrl {
+                Button { Task { await openPDF(url, name: announcement.attachmentName ?? "SP.pdf") } } label: {
+                    HStack(spacing: 8) {
+                        if openingPDF { ProgressView().tint(NX.danger) } else { Image(systemName: "doc.richtext.fill") }
+                        Text(T("Open PDF"))
+                    }
+                    .font(NXFont.text(14, .bold)).foregroundStyle(NX.danger)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(NX.danger.opacity(0.1))
+                }
+                .buttonStyle(.plain)
+                .disabled(openingPDF)
+            }
 
             Divider().overlay(NX.border)
 
@@ -133,10 +156,18 @@ struct AnnouncementModal: View {
         queue.removeAll { $0.id == announcement.id }
     }
 
+    private func openPDF(_ url: String, name: String) async {
+        openingPDF = true; defer { openingPDF = false }
+        let file = name.lowercased().hasSuffix(".pdf") ? name : name + ".pdf"
+        guard let local = try? await APIClient.shared.downloadAttachment(url: url, fileName: file) else { return }
+        pdfPreview = AttachmentPreview(id: url, name: file, kind: .pdf, source: local)
+    }
+
     private func tint(_ tone: String?) -> Color {
         switch (tone ?? "info").lowercased() {
         case "success": return NX.success
         case "warning": return NX.warning
+        case "danger": return NX.danger
         default: return NX.violetText
         }
     }

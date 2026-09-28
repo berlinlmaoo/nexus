@@ -1579,10 +1579,18 @@ struct APIClient {
     /// been deployed yet behaves the same as before instead of erroring on fields it cannot read.
     @discardableResult
     func createAnnouncement(title: String, body: String, tone: String,
-                            repeatDays: Int = 0, repeatAtTime: String = "09:00") async throws -> Bool {
+                            repeatDays: Int = 0, repeatAtTime: String = "09:00",
+                            targetUserIds: [String] = [], attachment: AnnouncementAttachment? = nil) async throws -> Bool {
         var req = makeRequest("/api/announcements", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var payload: [String: Any] = ["title": title, "body": body, "tone": tone]
+        // Selected people only (empty = everyone), and a warning letter (SP) as PDF — 29 Sep 2026.
+        if !targetUserIds.isEmpty { payload["targetUserIds"] = targetUserIds }
+        if let attachment {
+            payload["attachmentUrl"] = attachment.url
+            payload["attachmentName"] = attachment.name ?? "SP.pdf"
+            payload["kind"] = "sp"
+        }
         if repeatDays > 0 {
             payload["repeatDays"] = repeatDays
             payload["repeatAtTime"] = repeatAtTime
@@ -1599,6 +1607,30 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// A PDF for an announcement (a warning letter). Multipart field "file", PDF only, ≤ 10 MB.
+    func uploadAnnouncementAttachment(fileName: String, data: Data) async throws -> AnnouncementAttachment {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/announcements/attachment", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        let safe = fileName.replacingOccurrences(of: "\"", with: "")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safe)\"\r\nContent-Type: application/pdf\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        return try await run(req, decode: AnnouncementAttachment.self)
+    }
+
+    /// Absen Monitor: a personal warning (push + pop-up) about one attendance day.
+    func warnSuspectAttendance(recordId: String, message: String) async throws -> SuspectWarned {
+        let id = recordId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? recordId
+        var req = makeRequest("/api/attendance/suspects/\(id)/warn", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["message": message])
+        return try await run(req, decode: SuspectWarned.self)
+    }
+
     @discardableResult
     func deleteAnnouncement(_ id: String) async throws -> Bool {
         _ = try await run(makeRequest("/api/announcements/\(id)", method: "DELETE"), decode: SuccessResponse.self)
