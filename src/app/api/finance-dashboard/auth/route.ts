@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { checkRateLimitByKey, rateLimitResponse, trustedClientIp } from "@/lib/rate-limit"
 import {
   createFinanceDashboardToken,
   financeDashboardCookieOptions,
@@ -16,6 +17,10 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  // One shared password guards every finance dashboard: 10 attempts per IP per 15 minutes.
+  const rl = checkRateLimitByKey("finance_dashboard_auth", trustedClientIp(request), { limit: 10, windowSeconds: 15 * 60 })
+  if (!rl.allowed) return rateLimitResponse(rl.resetAt)
 
   const body = await request.json().catch(() => null)
   const projectId = String(body?.projectId ?? "")

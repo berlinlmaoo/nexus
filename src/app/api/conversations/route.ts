@@ -72,6 +72,20 @@ export async function POST(req: NextRequest) {
     const others: string[] = Array.isArray(userIds) ? userIds.filter((u: string) => u && u !== userId) : []
     if (others.length === 0) return NextResponse.json({ error: "userIds required" }, { status: 400 })
 
+    // Only people the caller shares at least one workspace with. Otherwise anyone who signs up could
+    // open a chat with (and push notifications to) any account whose id they learn.
+    const myWorkspaceIds = (
+      await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } })
+    ).map((m) => m.workspaceId)
+    const reachable = await prisma.workspaceMember.findMany({
+      where: { userId: { in: others }, workspaceId: { in: myWorkspaceIds } },
+      select: { userId: true },
+    })
+    const reachableIds = new Set(reachable.map((m) => m.userId))
+    if (others.some((u) => !reachableIds.has(u))) {
+      return NextResponse.json({ error: "Kamu cuma bisa ngobrol dengan orang yang satu workspace denganmu." }, { status: 403 })
+    }
+
     // DM dedupe: find an existing 1:1 between exactly these two users.
     if (type === "DM" && others.length === 1) {
       const existing = await prisma.conversation.findFirst({

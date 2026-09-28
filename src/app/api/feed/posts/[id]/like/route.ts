@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { orgRoleOf } from "@/lib/org"
 import prisma from "@/lib/prisma"
 
 // POST /api/feed/posts/[id]/like — body-less idempotent toggle. Returns { liked, likeCount }.
@@ -9,6 +10,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // The Wire is the company feed: members of the company workspace only.
+    if (!(await orgRoleOf(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const me = session.user.id
     const { id } = await params
 
