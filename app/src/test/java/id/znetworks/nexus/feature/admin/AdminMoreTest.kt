@@ -28,4 +28,9 @@ class AdminMoreTest {
         assertEquals(1, x.totals.platforms["android"]); assertEquals("0.1.6", x.totals.versionsByPlatform["android"]!!.single().version)
         assertEquals("Android", AppInstallsLogic.platformName(x.installs.single().platform)); assertEquals("iOS", AppInstallsLogic.platformName(null))
     }
+
+    @Test fun notUsingTheAppSaysWebOnlyOrNever() {
+        assertEquals(null, AppInstallsLogic.activity(null))
+        assertEquals(true, AppInstallsLogic.activity("2026-09-24T02:00:00Z")!!.startsWith("24"))
+    }
 }

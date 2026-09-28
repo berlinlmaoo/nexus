@@ -373,7 +373,12 @@ fun AppInstallsTab() {
                 items(x.notInstalled, key = { "n" + it.id }) { p ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(p.name, p.avatar, 24.dp); Spacer(Modifier.width(8.dp))
-                        Text(p.name ?: p.email ?: "—", fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name ?: p.email ?: "—", fontSize = 13.sp, color = c.foreground)
+                            // Signs in on the web, or never signed in at all (iOS 74c6750).
+                            Text(AppInstallsLogic.activity(p.lastActiveAt)?.let { stringResource(R.string.ai_web_only, it) } ?: stringResource(R.string.ai_never_signed_in),
+                                fontSize = 11.sp, color = c.mutedFg)
+                        }
                         Text(Roles.label(p.role), fontSize = 11.sp, color = c.mutedFg)
                     }
                 }
@@ -385,4 +390,8 @@ fun AppInstallsTab() {
 object AppInstallsLogic {
     /** Rows written before the server stored a platform are iOS: Android did not exist yet. */
     fun platformName(p: String?) = if (p == "android") "Android" else "iOS"
+    /** "24 Sep" of the last activity (web only), or null when the person never signed in. */
+    fun activity(lastActiveAt: String?): String? = lastActiveAt?.let {
+        runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()).format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
+    }
 }

@@ -1504,4 +1504,6 @@
     <string name="fg_check_in">Check-in</string>
     <string name="fg_check_out">Check-out</string>
     <string name="fg_map">Map</string>
+    <string name="ai_web_only">Web only · %1$s</string>
+    <string name="ai_never_signed_in">Never signed in</string>
 </resources>
