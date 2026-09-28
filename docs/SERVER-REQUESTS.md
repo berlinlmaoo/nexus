@@ -132,6 +132,31 @@ refuse when `versionCode < minBuild` too, with the same body (`minSupported`, `s
 (signed in); no build floor. **After:** reads the three fields (already implemented and tested:
 `VersionGate.evaluate`, `lockLifted` with a persisted build floor), no app change needed.
 
+## R6. Review of suspect attendance records (PRD Phase 5) — OPEN (28 Sep 2026)
+
+**Why.** Check-in/out already carry a server verdict (`checkInSuspect` / `checkInSuspectReason` /
+`checkInImpliedKmh`, same for check-out; `src/lib/attendance.ts` integrity check) but nothing lets anybody
+look at them: no list, no "reviewed" state, no decision. PRD Phase 5 asks for a review UI on web + iOS +
+Android; Berlin (28 Sep): Android builds it only once the endpoints exist. Nothing is built on Android yet.
+
+**Proposed shape** (BoD / One Above All; a direct manager sees their reports only, like offsite review):
+- `GET /api/attendance/suspects?period=YYYY-MM[&status=open|reviewed|all]` →
+  `{ period, items: [{ recordId, side: "in"|"out", user: {id,name,avatar}, attendanceDate, at, reason,
+  impliedKmh, accuracyM, simulated, distanceMeters, address, photoUrl, officeName, review: null |
+  {verdict: "cleared"|"confirmed", note, by: {id,name}, at} }], counts: {open, reviewed} }`,
+  newest first. `reason` as the server's own sentence (or a code + sentence).
+- `POST /api/attendance/suspects/{recordId}/review` `{ side: "in"|"out", verdict: "cleared"|"confirmed",
+  note?: string (≤ 500) }` → `{ review }`; idempotent per side; audit-logged. "Confirmed" changes no status
+  by itself — a penalty or status change stays the existing override flow (`/api/attendance/override`),
+  so the review can link to it.
+- Schema: per side `…SuspectReviewedAt`, `…SuspectReviewedById`, `…SuspectVerdict`, `…SuspectNote`.
+- Optional: `suspect` + `review` on history rows (board day sheet badge) and a push to BoD when a new
+  suspect record lands (channel `attendance_approvals`), deduplicated per record.
+
+**Android after it lands:** Control Room › Absensi gets a "Suspect records" list (open/reviewed, period
+switch) with the evidence (selfie, map point, speed, accuracy, mock flag, reason) and Cleared / Confirmed
+with a note; the board day sheet shows the badge. iOS and web the same.
+
 ## Found while porting (iOS, for the main session) — not Android work
 
 ### I1. Queued check-in refused for distance is retried 5× instead of dropped and said — DONE on iOS (caaca89). Server unchanged: adding `code` would flip live check-in into the offsite prompt on 0.1.4–0.1.6
