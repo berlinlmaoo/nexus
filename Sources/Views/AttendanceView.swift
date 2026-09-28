@@ -1142,6 +1142,13 @@ struct StreakBoardCard: View {
     /// The period's working days: its calendar days minus the weekly-rest quota (4 by default), so 31
     /// days give 27 and 30 give 26 — the web board's Score column uses the same rule.
     static func workingDays(_ periodDays: Int, dayOffQuota: Int = 4) -> Int { max(0, periodDays - dayOffQuota) }
+    /// "22/22 +3": capped at the working days with the surplus beside it, as on the web. A day cut from
+    /// the quota for being >120 min late is still a day worked, so worked can exceed the target.
+    static func scoreText(worked: Int, target: Int) -> Text {
+        let base = Text("\(min(worked, target))/\(target)")
+        guard worked > target else { return base }
+        return base + Text(" +\(worked - target)").foregroundColor(NX.success)
+    }
     private static func buildMembers(_ rows: [AttendanceRow]) -> [Member] {
         let groups = Dictionary(grouping: rows) { $0.user?.id ?? "me" }
         return groups.map { uid, rs -> Member in
@@ -1249,7 +1256,7 @@ struct StreakBoardCard: View {
 
     /// Date row: weekday over day number.
     private let headerH: CGFloat = 24
-    private let scoreW: CGFloat = 34
+    private let scoreW: CGFloat = 48
     private static let boardSpace = "streakBoardCells"
     /// Where the cell grid is scrolled to. Only the pinned strips read it, so a scroll frame
     /// re-renders those three and not the whole card.
@@ -1339,7 +1346,7 @@ struct StreakBoardCard: View {
     private var scoreColumn: some View {
         VStack(alignment: .trailing, spacing: gap) {
             ForEach(members) { m in
-                Text("\(m.workedDays)/\(Self.workingDays(periodDays.count, dayOffQuota: m.quota))")
+                Self.scoreText(worked: m.workedDays, target: Self.workingDays(periodDays.count, dayOffQuota: m.quota))
                     .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(width: scoreW, height: cell, alignment: .trailing)
@@ -1470,7 +1477,7 @@ struct StreakBoardCard: View {
                 VStack(alignment: .trailing, spacing: gap) {
                     Text(T("Score")).font(.system(size: 9, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(height: 26, alignment: .bottom)
                     ForEach(members) { m in
-                        Text("\(m.workedDays)/\(StreakBoardCard.workingDays(periodDays.count, dayOffQuota: m.quota))")
+                        StreakBoardCard.scoreText(worked: m.workedDays, target: StreakBoardCard.workingDays(periodDays.count, dayOffQuota: m.quota))
                             .font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                             .frame(height: cell, alignment: .trailing)
                     }
