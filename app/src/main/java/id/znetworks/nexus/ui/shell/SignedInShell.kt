@@ -211,12 +211,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version)) }
     if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
+    // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5).
+    val rail = ShellLayout.useRail(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
+    val current = Tab.entries.firstOrNull { it.route == route }
+        ?: Tab.entries.firstOrNull { t -> backStack?.destination?.hierarchy?.any { it.route == t.route } == true }
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
-            NavigationBar(containerColor = Nx.colors.card) {
-                val current = Tab.entries.firstOrNull { it.route == route }
-                    ?: Tab.entries.firstOrNull { t -> backStack?.destination?.hierarchy?.any { it.route == t.route } == true }
+            if (!rail) NavigationBar(containerColor = Nx.colors.card) {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
                         selected = t == current, onClick = { goTab(t) },
@@ -227,7 +229,17 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
         },
     ) { padding ->
-        NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.fillMaxSize().padding(padding)) {
+      androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding)) {
+        if (rail) androidx.compose.material3.NavigationRail(containerColor = Nx.colors.card) {
+            Tab.entries.forEach { t ->
+                androidx.compose.material3.NavigationRailItem(
+                    selected = t == current, onClick = { goTab(t) },
+                    icon = { Icon(t.icon, contentDescription = null) },
+                    label = { Text(stringResource(t.label)) },
+                )
+            }
+        }
+        NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.weight(1f).fillMaxSize()) {
             composable(Tab.HOME.route) {
                 HomeScreen(
                     onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } },
@@ -333,7 +345,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 )
             }
         }
+      }
     }
+}
+
+/** Where the tabs go: a bottom bar on phones, a rail from 600 dp wide (Material's medium width). */
+object ShellLayout {
+    fun useRail(widthDp: Int) = widthDp >= 600
 }
 
 @Composable
