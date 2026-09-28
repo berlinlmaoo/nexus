@@ -6,15 +6,17 @@ import { auth } from "@/lib/auth"
 import { attendancePeriodKey, formatAttendanceDateKey, getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { periodBounds, periodLabel } from "@/lib/day-off-bonus"
 import { placeLabel } from "@/lib/attendance-place"
-import { recordLevel, side, type SuspectSide } from "@/lib/attendance-suspect"
+import { recordLevel, recordSides, type SuspectSide } from "@/lib/attendance-suspect"
 
 /**
  * GET /api/attendance/suspects?periodKey=YYYY-MM   BoD / One Above All (canManageAttendance) only.
+ * Shown as "Absen Monitor" (was "Fake GPS").
  *
- * Attendance flagged for its location in one 28→27 period, newest first: records still open for
- * review, and every verdict given (an INVALID one from its snapshot — the record is gone, the day is
- * TK). `level` FAKE = proof of a fake location, CHECK = a weak signal (see lib/attendance-suspect).
- * Only FAKE items may be judged INVALID (POST ./[recordId]/review).
+ * Abnormal attendance in one 28→27 period, newest first: records still open for review, and every
+ * verdict given (an INVALID one from its snapshot — the record is gone, the day is TK). `level`
+ * FAKE = proof of a fake location, NOFACE = a selfie with no face in it, CHECK = a weak location
+ * signal (see lib/attendance-suspect). Only FAKE items may be judged INVALID (POST ./[recordId]/review);
+ * any item can be answered with a warning to the person (POST ./[recordId]/warn), listed in `warnings`.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -39,7 +41,10 @@ export async function GET(req: NextRequest) {
         where: {
           workspaceId,
           attendanceDate: { gte: start, lte: end },
-          OR: [{ checkInSuspect: true }, { checkOutSuspect: true }, { checkInSimulated: true }, { checkOutSimulated: true }],
+          OR: [
+            { checkInSuspect: true }, { checkOutSuspect: true }, { checkInSimulated: true }, { checkOutSimulated: true },
+            { checkInFaceCount: 0 }, { checkOutFaceCount: 0 },
+          ],
         },
         include: {
           user: { select: { id: true, name: true, avatar: true } },
@@ -67,19 +72,11 @@ export async function GET(req: NextRequest) {
       place: string | null
       checkIn: SuspectSide | null; checkOut: SuspectSide | null
       review: ReturnType<typeof reviewOut>
+      warnings: Array<{ at: string; by: { name: string | null }; message: string }>
     }
     const items: Item[] = []
     for (const r of records) {
-      const checkIn = side({
-        at: r.checkInAt, lat: r.checkInLat, lng: r.checkInLng, accuracyM: r.checkInAccuracyM,
-        simulated: r.checkInSimulated, suspect: r.checkInSuspect, reason: r.checkInSuspectReason, impliedKmh: r.checkInImpliedKmh,
-        photoUrl: r.checkInPhotoUrl, address: r.checkInAddress, offline: r.checkInOffline,
-      })
-      const checkOut = side({
-        at: r.checkOutAt, lat: r.checkOutLat, lng: r.checkOutLng, accuracyM: r.checkOutAccuracyM,
-        simulated: r.checkOutSimulated, suspect: r.checkOutSuspect, reason: r.checkOutSuspectReason, impliedKmh: r.checkOutImpliedKmh,
-        photoUrl: r.checkOutPhotoUrl, address: r.checkOutAddress, offline: r.checkOutOffline,
-      })
+      const { checkIn, checkOut } = recordSides(r)
       const rv = reviewByRecord.get(r.id)
       items.push({
         recordId: r.id, date: formatAttendanceDateKey(r.attendanceDate),
@@ -89,6 +86,7 @@ export async function GET(req: NextRequest) {
         place: placeLabel(r),
         checkIn, checkOut,
         review: reviewOut(rv),
+        warnings: [],
       })
     }
     // INVALID verdicts: the record was deleted; the snapshot is what is left.
@@ -97,7 +95,26 @@ export async function GET(req: NextRequest) {
       const snap = (rv.snapshot ?? {}) as { item?: Item }
       if (!snap.item) continue
       const person = personById.get(rv.userId)
-      items.push({ ...snap.item, state: "invalid", review: reviewOut(rv), user: { id: rv.userId, name: person?.name ?? snap.item.user?.name ?? null, image: person?.avatar ?? null } })
+      items.push({ ...snap.item, state: "invalid", review: reviewOut(rv), warnings: [], user: { id: rv.userId, name: person?.name ?? snap.item.user?.name ?? null, image: person?.avatar ?? null } })
+    }
+    // Warnings sent from this screen, latest first, attached to their record (INVALID ones included:
+    // the warning rows outlive the deleted record on purpose).
+    const warnings = items.length
+      ? await prisma.attendanceWarning.findMany({
+          where: { workspaceId, recordId: { in: items.map((i) => i.recordId) } },
+          orderBy: { createdAt: "desc" },
+        })
+      : []
+    if (warnings.length) {
+      const senders = await prisma.user.findMany({ where: { id: { in: [...new Set(warnings.map((w) => w.createdById))] } }, select: { id: true, name: true } })
+      const senderName = new Map(senders.map((u) => [u.id, u.name] as const))
+      const byRecord = new Map<string, Item["warnings"]>()
+      for (const w of warnings) {
+        const list = byRecord.get(w.recordId) ?? []
+        list.push({ at: w.createdAt.toISOString(), by: { name: senderName.get(w.createdById) ?? null }, message: w.message })
+        byRecord.set(w.recordId, list)
+      }
+      for (const i of items) i.warnings = byRecord.get(i.recordId) ?? []
     }
     const rank = (i: Item) => (i.state === "open" ? 0 : 1)
     items.sort((a, b) => rank(a) - rank(b) || b.date.localeCompare(a.date) || (a.user.name ?? "").localeCompare(b.user.name ?? ""))
@@ -110,6 +127,7 @@ export async function GET(req: NextRequest) {
       currentPeriodKey: current,
       counts: {
         fakeOpen: items.filter((i) => i.state === "open" && i.level === "FAKE").length,
+        noFaceOpen: items.filter((i) => i.state === "open" && i.level === "NOFACE").length,
         checkOpen: items.filter((i) => i.state === "open" && i.level === "CHECK").length,
         valid: items.filter((i) => i.state === "valid").length,
         invalid: items.filter((i) => i.state === "invalid").length,
