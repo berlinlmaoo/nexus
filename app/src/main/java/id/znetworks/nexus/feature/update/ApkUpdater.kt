@@ -125,7 +125,7 @@ class ApkUpdater(
     private fun verify(apk: File, release: AndroidRelease): Reason? {
         val checksumOk = release.sha256?.takeIf { it.isNotBlank() }?.let { expected -> sha256(apk).equals(expected.replace(":", ""), ignoreCase = true) }
         val pm = context.packageManager
-        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+        val flags = signatureFlags(Build.VERSION.SDK_INT)
         val archive = pm.getPackageArchiveInfo(apk.path, flags)
         val installed = runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()
         return verdict(checksumOk, archive?.packageName, context.packageName, archive?.let(::signers), installed?.let(::signers),
@@ -161,6 +161,19 @@ class ApkUpdater(
         fun isNewer(candidate: Int, running: Int) = candidate > running
 
         /**
+         * Audit K1: on Android 9–10 (API 28–29) `getPackageArchiveInfo` collects an ARCHIVE's
+         * certificates only when GET_SIGNATURES is asked for (android-9/10 PackageManager); from 11 on
+         * GET_SIGNING_CERTIFICATES alone does it. Asking only for the latter left every update on those
+         * phones "not a NEXUS build". Both are asked for there; [signers] reads whichever came back.
+         */
+        @Suppress("DEPRECATION")
+        fun signatureFlags(sdk: Int): Int = when {
+            sdk >= 30 -> PackageManager.GET_SIGNING_CERTIFICATES
+            sdk >= 28 -> PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES
+            else -> PackageManager.GET_SIGNATURES
+        }
+
+        /**
          * The whole gate before PackageInstaller, as a pure rule: a checksum that was given must
          * match; the file must be THIS app, signed by the SAME key as the installed one (so a
          * swapped or tampered APK never installs even without a checksum), and strictly newer.
@@ -191,9 +204,11 @@ class ApkUpdater(
 
         @Suppress("DEPRECATION")
         private fun signers(p: PackageInfo): Set<String> {
-            val sigs = if (Build.VERSION.SDK_INT >= 28) {
+            val modern = if (Build.VERSION.SDK_INT >= 28) {
                 p.signingInfo?.let { if (it.hasMultipleSigners()) it.apkContentsSigners else it.signingCertificateHistory }
-            } else p.signatures
+            } else null
+            // An archive read on API 28–29 may carry only the legacy field.
+            val sigs = modern?.takeIf { it.isNotEmpty() } ?: p.signatures
             return sigs.orEmpty().map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }.toSet()
         }
 

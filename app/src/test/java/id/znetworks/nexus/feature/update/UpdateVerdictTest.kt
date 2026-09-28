@@ -32,4 +32,17 @@ class UpdateVerdictTest {
         assertEquals(Reason.NOT_NEWER, v(code = 1))
         assertEquals(Reason.NOT_NEWER, v(code = null))
     }
+
+    // Audit K1: Android 9–10 only read an archive's certificates with GET_SIGNATURES.
+    @Test fun archiveSignatureFlagsPerAndroidVersion() {
+        val sigs = 0x40            // PackageManager.GET_SIGNATURES
+        val certs = 0x08000000     // PackageManager.GET_SIGNING_CERTIFICATES
+        for (sdk in listOf(28, 29)) {
+            assertEquals("API $sdk", sigs, ApkUpdater.signatureFlags(sdk) and sigs)
+            assertEquals("API $sdk", certs, ApkUpdater.signatureFlags(sdk) and certs)
+        }
+        assertEquals(certs, ApkUpdater.signatureFlags(30))
+        assertEquals(certs, ApkUpdater.signatureFlags(36))
+        assertEquals(sigs, ApkUpdater.signatureFlags(26))
+    }
 }
