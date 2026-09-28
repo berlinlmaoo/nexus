@@ -376,7 +376,11 @@ function Attendance() {
     if (!r.user?.id || !r.attendanceDate) continue;
     recMap.set(`${r.user.id}:${r.attendanceDate.slice(0, 10)}`, r);
   }
-  const presentCount = (uid: string) => rows.filter((r) => r.user?.id === uid && recTone(r) === "present").length;
+  // Days worked: a check-in, an approved permit (working elsewhere with the approver's blessing — green
+  // on the board too) or WFH. Out of the period's WORKING days: its calendar days minus the person's
+  // weekly-rest quota (default 4), so a 31-day period has 27 and a 30-day period 26 (owner, 28 Sep 2026).
+  const presentCount = (uid: string) => rows.filter((r) => { if (r.user?.id !== uid) return false; const t = recTone(r); return t === "present" || t === "permit" || t === "wfh"; }).length;
+  const workDaysOf = (uid: string) => Math.max(0, periodDays.length - (dayOffOf(uid)?.quota ?? 4));
 
   return (
     <div>
@@ -700,7 +704,7 @@ function Attendance() {
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground">{presentCount(u.id)}/{periodDays.length}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title="Days worked (present, permit or WFH) out of this period's working days: calendar days minus the day-off quota">{presentCount(u.id)}/{workDaysOf(u.id)}</td>
                   </tr>
                 ))}
                 {!history.isLoading && hiddenCount > 0 && (
