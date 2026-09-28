@@ -10,7 +10,8 @@ const MODES: ApproveMode[] = ["queue", "schedule", "now"]
 export async function POST(request: NextRequest) {
   const { session, context } = await getAdminSessionContext()
   if (!context?.user || !session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!context.workspaceMemberships.some((m) => m.role === "ONE_ABOVE_ALL")) {
+  // One Above All of the COMPANY workspace, not of any (personal) workspace.
+  if (context.orgRole !== "ONE_ABOVE_ALL") {
     return NextResponse.json({ error: "Khusus One Above All." }, { status: 403 })
   }
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 export async function getAdminAccessContext(userId: string) {
   const [user, workspaceMemberships] = await prisma.$transaction([
@@ -26,9 +27,10 @@ export async function getAdminAccessContext(userId: string) {
   ])
 
   const isSystemAdmin = user?.role === "ADMIN"
-  const isWorkspaceAdmin = workspaceMemberships.some(
-    (membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL"
-  )
+  // Company-level admin rights come from the role in the COMPANY workspace only. A role in any
+  // other workspace (e.g. the personal workspace every sign-up owns as ONE_ABOVE_ALL) grants none.
+  const orgRole = workspaceMemberships.find((membership) => membership.workspaceId === ORG_WORKSPACE_ID)?.role ?? null
+  const isWorkspaceAdmin = orgRole === "BOD" || orgRole === "MANAGER" || orgRole === "ONE_ABOVE_ALL"
 
   return {
     user,
@@ -36,6 +38,7 @@ export async function getAdminAccessContext(userId: string) {
     primaryWorkspaceMembership: workspaceMemberships[0] ?? null,
     isSystemAdmin,
     isWorkspaceAdmin,
+    orgRole,
     canAccessUserManagement: Boolean(user && (isSystemAdmin || isWorkspaceAdmin)),
   }
 }

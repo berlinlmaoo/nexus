@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma"
+import { orgRoleOf } from "@/lib/org"
 
 // The Wire (Feed) — shared constants + helpers. Company-wide firehose: not workspace-scoped.
 export const POST_TEXT_MAX = 280
@@ -9,10 +9,12 @@ export const EDIT_WINDOW_MS = 15 * 60 * 1000 // 15-minute edit window
 export const RATE_MIN_GAP_MS = 20 * 1000 // ≥20s between posts
 export const RATE_HOURLY_MAX = 30 // ≤30 posts/hour
 
-/** A user's workspace org role (ONE_ABOVE_ALL/BOD/MANAGER/STAFF). Single-company deploy → first membership. */
+/**
+ * A user's role in the COMPANY workspace (ONE_ABOVE_ALL/BOD/MANAGER/STAFF), null when not a member.
+ * Never "first membership": anyone can sign up and be ONE_ABOVE_ALL of a personal workspace.
+ */
 export async function getUserOrgRole(userId: string): Promise<string | null> {
-  const m = await prisma.workspaceMember.findFirst({ where: { userId }, select: { role: true } })
-  return m?.role ?? null
+  return orgRoleOf(userId)
 }
 export function isManagerRole(role?: string | null): boolean {
   return role === "ONE_ABOVE_ALL" || role === "BOD" || role === "MANAGER"

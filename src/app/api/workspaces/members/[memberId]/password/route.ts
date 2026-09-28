@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { canWriteGlobalAccount } from "@/lib/org"
 import { WORKSPACE_HIERARCHY, isSystemAdminUser } from "@/lib/rbac"
 import type { WorkspaceRole } from "@/generated/prisma/client"
 
@@ -47,6 +48,11 @@ export async function POST(
     const targetTier = WORKSPACE_HIERARCHY[targetMember.role as WorkspaceRole]
     if (callerTier !== 4 && targetTier >= callerTier) {
       return NextResponse.json({ error: "Nggak bisa reset password orang yang levelnya sama / di atas kamu" }, { status: 403 })
+    }
+    // The password belongs to the whole account, not to this workspace: outranking the member here
+    // is not enough if they also belong to workspaces where the caller does not outrank them.
+    if (!(await canWriteGlobalAccount(session.user.id, targetMember.userId))) {
+      return NextResponse.json({ error: "Akun ini juga ada di workspace lain yang bukan wewenang kamu, jadi password-nya nggak bisa kamu reset" }, { status: 403 })
     }
 
     const hashed = await bcrypt.hash(password, 12)

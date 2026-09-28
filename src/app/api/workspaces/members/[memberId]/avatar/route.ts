@@ -5,6 +5,7 @@ import { mkdir, readdir, unlink, writeFile } from "fs/promises"
 import path from "path"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { canWriteGlobalAccount } from "@/lib/org"
 import prisma from "@/lib/prisma"
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
@@ -60,6 +61,10 @@ export async function POST(
     // email, dan sandi di /api/admin/users/[userId].
     if (currentMember.role !== "BOD" && currentMember.role !== "ONE_ABOVE_ALL") {
       return NextResponse.json({ error: "Hanya BoD ke atas yang bisa mengganti foto profil orang lain." }, { status: 403 })
+    }
+    // The photo belongs to the whole account (every workspace sees it), not to this workspace.
+    if (!(await canWriteGlobalAccount(session.user.id, targetMember.userId))) {
+      return NextResponse.json({ error: "Kamu tidak bisa mengganti foto profil akun ini." }, { status: 403 })
     }
 
     const formData = await request.formData()

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 import { getLeaderboardPeriodStart } from "@/lib/gamification"
 import {
   formatAttendanceDateKey,
@@ -23,16 +24,13 @@ export async function GET(req: NextRequest) {
     const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
     const isSysAdmin = me?.role === "ADMIN"
 
-    const memberships = await prisma.workspaceMember.findMany({
-      where: { userId: session.user.id },
-      select: { workspaceId: true, role: true },
-    })
-    const isBoD = memberships.some((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL")
+    // BoD+ of the COMPANY workspace only (every sign-up is One Above All of a personal workspace).
+    const orgRole = await orgRoleOf(session.user.id)
+    const isBoD = orgRole === "BOD" || orgRole === "ONE_ABOVE_ALL"
     if (!isSysAdmin && !isBoD) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Peers = everyone the caller shares a workspace with (same scope as leaderboard).
-    const workspaceIds = memberships.map((m) => m.workspaceId)
-    if (workspaceIds.length === 0) return NextResponse.json({ rows: [], hasMore: false, nextOffset: 0 })
+    // Peers = everyone in the company workspace.
+    const workspaceIds = [ORG_WORKSPACE_ID]
     const peers = await prisma.workspaceMember.findMany({
       where: { workspaceId: { in: workspaceIds } },
       select: { userId: true },

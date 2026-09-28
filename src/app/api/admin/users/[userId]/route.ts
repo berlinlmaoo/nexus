@@ -358,7 +358,8 @@ export async function DELETE(
 
     const canDelete =
       context.isSystemAdmin ||
-      context.workspaceMemberships.some((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL")
+      // BoD+ of the COMPANY workspace only — every sign-up is One Above All of a personal workspace.
+      isBodPlus(context.orgRole)
     if (!canDelete) {
       return NextResponse.json({ error: "Forbidden — hanya system admin / BoD yang bisa hapus akun." }, { status: 403 })
     }

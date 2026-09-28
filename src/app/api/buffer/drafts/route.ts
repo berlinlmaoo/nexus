@@ -7,7 +7,8 @@ import { listDraftsCached, peekDraftsCache, bufferConfigured, BufferError } from
 async function gate() {
   const { context } = await getAdminSessionContext()
   if (!context?.user) return { ok: false as const, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
-  const isOAA = context.workspaceMemberships.some((m) => m.role === "ONE_ABOVE_ALL")
+  // One Above All of the COMPANY workspace, not of any (personal) workspace.
+  const isOAA = context.orgRole === "ONE_ABOVE_ALL"
   if (!isOAA) return { ok: false as const, res: NextResponse.json({ error: "Khusus One Above All." }, { status: 403 }) }
   return { ok: true as const }
 }

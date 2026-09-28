@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { orgRoleOf } from "@/lib/org"
 
 /**
  * Who uses GIDEON, and how much.
@@ -14,8 +15,9 @@ import prisma from "@/lib/prisma"
 async function isBoD(userId: string): Promise<boolean> {
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
   if (me?.role === "ADMIN") return true
-  const memberships = await prisma.workspaceMember.findMany({ where: { userId }, select: { role: true } })
-  return memberships.some((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL")
+  // Company workspace only: every sign-up is One Above All of their own personal workspace.
+  const role = await orgRoleOf(userId)
+  return role === "BOD" || role === "ONE_ABOVE_ALL"
 }
 
 type Row = {
