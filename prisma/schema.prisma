@@ -291,6 +291,17 @@ model AttendanceSuspectReview {
   @@index([workspaceId, attendanceDate])
 }
 
+/// A single session (JWT `sid`) ended by its own sign-out (POST /api/auth/app-logout, security audit
+/// 29 Sep 2026). Checked in the jwt callback; rows past `expiresAt` mean nothing and may be deleted.
+model RevokedSession {
+  sid       String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
 model DayOffBonus {
   id          String    @id @default(cuid())
   workspaceId String

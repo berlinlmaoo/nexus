@@ -80,6 +80,12 @@ export const nexusNextAuthConfig = {
           // reset, or a password change from the web) and is treated like a deleted account's. A token
           // without the field — every session issued before this existed — is left alone.
           if (dbUser && user) token.sessionVersion = dbUser.sessionVersion
+          if (user && !token.sid) token.sid = crypto.randomUUID()
+          // One session signed out on its own (POST /api/auth/app-logout).
+          if (typeof token.sid === 'string') {
+            const revoked = await prisma.revokedSession.findUnique({ where: { sid: token.sid }, select: { sid: true } })
+            if (revoked) return null
+          }
           if (dbUser && sessionVersionRejects(token.sessionVersion, dbUser.sessionVersion)) {
             return null
           }

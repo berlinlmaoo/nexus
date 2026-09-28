@@ -3,6 +3,11 @@ import type { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getSessionCookieName, shouldUseSecureAuthCookies } from "@/lib/session-cookie"
 
+/** A fresh id for one session, carried as the JWT `sid` so that session alone can be revoked. */
+export function newSessionId(): string {
+  return crypto.randomUUID()
+}
+
 /** Same lifetime every sign-in route uses. */
 export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 
@@ -47,6 +52,7 @@ export async function reissueSessionCookie(
       email: user.email,
       picture: user.avatar,
       sessionVersion,
+      sid: newSessionId(),
     },
   })
 

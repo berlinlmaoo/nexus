@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { logAudit } from '@/lib/audit'
 import { verifyCredentialUser } from '@/lib/credentials-auth'
 import { createLogger } from '@/lib/logger'
-import { currentSessionVersion } from "@/lib/session-issue"
+import { currentSessionVersion, newSessionId } from "@/lib/session-issue"
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
       email: result.user.email,
       picture: result.user.image,
       sessionVersion: await currentSessionVersion(result.user.id),
+      sid: newSessionId(),
     },
   })
 

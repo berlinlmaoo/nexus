@@ -1,6 +1,7 @@
 // Self-service email change — step 2: verify the code sent to the new address and commit the change.
 export const dynamic = "force-dynamic"
 
+import { emailChangedNoticeEmail, sendEmail } from "@/lib/email"
 import { NextRequest, NextResponse } from "next/server"
 import { OtpPurpose } from "@/generated/prisma"
 import { auth } from "@/lib/auth"
@@ -40,6 +41,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Kode salah." }, { status: 400 })
   }
 
+  const before = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true, name: true } })
+  const oldEmail = before?.email ?? null
+  const oldName = before?.name ?? null
+
   // Re-check uniqueness at commit time — someone else could have claimed the address since step 1.
   const taken = await prisma.user.findFirst({
     where: { email: { equals: newEmail, mode: "insensitive" }, id: { not: session.user.id } },
@@ -56,6 +61,11 @@ export async function POST(request: NextRequest) {
       }),
     ])
     logAudit({ action: "update", entityType: "user", entityId: session.user.id, entityName: `email changed to ${newEmail}`, userId: session.user.id, request })
+    // Tell the OLD address (security audit, 29 Sep 2026): a change the owner did not make is noticed.
+    if (oldEmail && oldEmail.toLowerCase() !== newEmail.toLowerCase()) {
+      sendEmail({ ...emailChangedNoticeEmail({ recipientName: oldName || "there", newEmail }), to: oldEmail })
+        .catch((e) => console.error("email change notice failed", e))
+    }
     return NextResponse.json({ ok: true, email: updated.email })
   } catch (error) {
     console.error("email change verify error:", error)

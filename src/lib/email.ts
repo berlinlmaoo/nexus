@@ -220,6 +220,19 @@ export function emailChangeOtpEmail(data: {
   }
 }
 
+export function emailChangedNoticeEmail(data: { recipientName: string; newEmail: string }): EmailPayload {
+  return {
+    to: "",
+    subject: "Your NEXUS sign-in email was changed",
+    html: wrapHtml(
+      "Your Email Was Changed",
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`The email you sign in to NEXUS with was just changed to <b>${escapeHtml(data.newEmail)}</b>. From now on, sign in with that address.`) +
+        paragraph("If you did not do this, tell your BoD or the NEXUS admin right away — someone may have your password.")
+    ),
+  }
+}
+
 export function passwordResetOtpEmail(data: {
   recipientName: string
   otpCode: string

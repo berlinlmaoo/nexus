@@ -678,6 +678,8 @@ export type NexusDayOffBonusList = {
 export type NexusDayOffBonusBreakdown = { days: number; grants: { days: number; reason: string }[] };
 
 export type WorkspaceMembersResponse = {
+  /** Member of the company workspace (Z Networks): Z Vault and Threads are shown only then. */
+  isCompany?: boolean;
   workspaceId: string;
   /** Nama workspace si pemanggil — untuk label tombol "Masukkan ke …". */
   workspaceName?: string;
@@ -2400,7 +2402,7 @@ export const nexusApi = {
   bufferApprove: (postId: string, mode: "queue" | "schedule" | "now", dueAt?: string) => apiFetch<{ ok: boolean }>("/api/buffer/approve", { method: "POST", body: JSON.stringify({ postId, mode, dueAt }) }),
   bufferReject: (postId: string) => apiFetch<{ ok: boolean }>("/api/buffer/reject", { method: "POST", body: JSON.stringify({ postId }) }),
   updateProfile: (payload: { name?: string; phoneNumber?: string | null; dndUntil?: string | null; markOnboarded?: boolean }) => apiFetch<{ user?: NexusUser }>("/api/user/profile", { method: "PATCH", body: JSON.stringify(payload) }),
-  requestEmailChange: (email: string) => apiFetch<{ ok: boolean; resendInSeconds?: number }>("/api/user/email/request", { method: "POST", body: JSON.stringify({ email }) }),
+  requestEmailChange: (email: string, currentPassword: string) => apiFetch<{ ok: boolean; resendInSeconds?: number }>("/api/user/email/request", { method: "POST", body: JSON.stringify({ email, currentPassword }) }),
   verifyEmailChange: (email: string, code: string) => apiFetch<{ ok: boolean; email: string }>("/api/user/email/verify", { method: "POST", body: JSON.stringify({ email, code }) }),
   changePassword: (currentPassword: string, newPassword: string) => apiFetch<{ success?: boolean }>("/api/user/password", { method: "PATCH", body: JSON.stringify({ currentPassword, newPassword }) }),
   notificationPreferences: () => apiFetch<{ preferences?: NexusNotificationPrefs }>("/api/notifications/preferences"),
@@ -2685,7 +2687,11 @@ export const nexusApi = {
 
   login: loginWithCredentials,
   // Clears all auth cookies server-side (NextAuth session/csrf/callback).
-  logout: () => apiFetch<{ ok?: boolean }>("/api/auth/clear-session", { method: "POST" }),
+  // Ends this session on the server first (a copied cookie stops working), then clears the cookies.
+  logout: async () => {
+    await apiFetch<{ ok?: boolean }>("/api/auth/app-logout", { method: "POST" }).catch(() => null);
+    return apiFetch<{ ok?: boolean }>("/api/auth/clear-session", { method: "POST" });
+  },
   // Self-service account deletion (deactivate + anonymise). Call logout() after it succeeds.
   deleteMyAccount: () => apiFetch<{ ok: true }>("/api/user/account/delete", { method: "POST", body: JSON.stringify({ confirm: "DELETE" }) }),
 

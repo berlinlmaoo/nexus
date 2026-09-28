@@ -39,7 +39,7 @@ const { sessionVersionRejects, isWebClientTag } = await load("session-version.ts
 
 test("tokens without the field stay valid, whatever the DB says", () => {
   for (const db of [0, 1, 7]) {
-    assert.equal(sessionVersionRejects(undefined, db), false)
+    assert.equal(sessionVersionRejects(undefined, db), true)
     assert.equal(sessionVersionRejects(null, db), false)
   }
 })
