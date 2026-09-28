@@ -162,6 +162,13 @@ class ApkUpdater(
             if (!canInstall()) { _step.value = Step.NeedsPermission; return }
             _step.value = Step.Installing
             withContext(Dispatchers.IO) { install(apk) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // IOException / SecurityException from the disk or PackageInstaller: said, and the session
+            // left open by a half-done install is abandoned (audit S8).
+            abandon()
+            _step.value = Step.Failed(if (_step.value is Step.Installing) Reason.INSTALL else Reason.NETWORK, e.message)
         } finally {
             running.unlock()
         }

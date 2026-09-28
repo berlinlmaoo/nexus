@@ -48,7 +48,10 @@ class AppContainer(private val context: Context) {
     val identity = ClientIdentity.current()
 
     /** Lives as long as the process: work that must not die with a screen (queue flush, checks). */
-    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        // A background job that throws something unexpected is logged, never a crash of the app (audit S8).
+        android.util.Log.w("NEXUS", "background job failed: ${e.javaClass.simpleName}")
+    })
 
     val sessionStore = SessionStore(
         file = File(context.noBackupFilesDir, "session/session.bin"),

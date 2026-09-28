@@ -136,7 +136,9 @@ class ApiClient(
         onEtag: (String?) -> Unit = {},
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): String? {
-        val url = if (pathOrUrl.startsWith("http")) pathOrUrl.toHttpUrl() else url(pathOrUrl)
+        // A malformed absolute URL from the server is a failed download, not a crash (audit S8).
+        val url = if (pathOrUrl.startsWith("http")) runCatching { pathOrUrl.toHttpUrl() }.getOrElse { throw ApiError.Transport(IOException("Bad download URL")) }
+            else url(pathOrUrl)
         val session = sessionProvider()
         val have = if (target.exists() && etag != null) target.length() else 0L
         val req = Request.Builder().url(url).header("Accept", "*/*").apply {
