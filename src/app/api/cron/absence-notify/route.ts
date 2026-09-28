@@ -1,9 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { isCronRequest } from "@/lib/cron-auth"
 import { formatAttendanceDateKey } from "@/lib/attendance"
 import { attendanceWaiverReason, getOutageDateKeys, isAutoDeduction } from "@/lib/attendance-absence"
 import { isDeletedAccountEmail } from "@/lib/account-deletion"
@@ -39,15 +38,8 @@ type Skip = { id: string; userId: string; dateKey: string; reason: string }
 
 export async function POST(req: NextRequest) {
   try {
-    const cronSecret = process.env.CRON_SECRET
-    const authHeader = req.headers.get("authorization") || ""
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
-    let authorized = Boolean(cronSecret && bearer && bearer === cronSecret)
-    if (!authorized) {
-      const session = await auth()
-      if (session?.user?.id && isBodPlus(await getUserOrgRole(session.user.id))) authorized = true
-    }
-    if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
+    if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     type Body = { dryRun?: boolean }
     let body: Body | null = null

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { secretMatches } from "@/lib/cron-auth"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get("authorization") || ""
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
 
-    let authorized = bearer.length > 0 && bearer === cronSecret
+    let authorized = secretMatches(bearer, cronSecret)
     let workspaceId: string | null = null
     if (!authorized) {
       const session = await auth()

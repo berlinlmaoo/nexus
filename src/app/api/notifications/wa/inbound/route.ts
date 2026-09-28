@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { secretMatches } from "@/lib/cron-auth"
 import { handleWaInbound } from "@/lib/wa-bot"
 
 // Called by the Hermes bridge when a WA DM arrives. Shared-secret gated (x-wa-secret) — NOT a session,
@@ -8,7 +9,7 @@ import { handleWaInbound } from "@/lib/wa-bot"
 export async function POST(req: NextRequest) {
   const secret = process.env.NEXUS_WA_INBOUND_SECRET
   if (!secret) return NextResponse.json({ error: "inbound not configured" }, { status: 503 })
-  if ((req.headers.get("x-wa-secret") || "") !== secret) {
+  if (!secretMatches(req.headers.get("x-wa-secret") || "", secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 

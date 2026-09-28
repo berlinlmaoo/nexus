@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { secretMatches } from "@/lib/cron-auth"
 import prisma from "@/lib/prisma"
 import { notifyBookingSoon } from "@/lib/notification-service"
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     const secret = process.env.CRON_SECRET
     const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
     if (!secret) return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
-    if (bearer !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!secretMatches(bearer, secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const now = new Date()
     const until = new Date(now.getTime() + LEAD_MINUTES * 60_000)

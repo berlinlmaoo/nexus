@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { secretMatches } from "@/lib/cron-auth"
 import { remindOutdatedApps } from "@/lib/app-update"
 
 /**
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     const secret = process.env.CRON_SECRET
     const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
     if (!secret) return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
-    if (bearer !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!secretMatches(bearer, secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     let body: { dryRun?: boolean; userIds?: string[] } | null = null
     try { body = await req.json() } catch { /* no body */ }
     const userIds = Array.isArray(body?.userIds) ? body!.userIds.filter((id) => typeof id === "string" && id.length > 0) : undefined

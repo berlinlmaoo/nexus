@@ -2,9 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { statfs } from "fs/promises"
-import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
 
 // Disk watch. Nothing in this repo watched free space until now, and the day it runs out the
@@ -29,17 +28,8 @@ function todayKey(pct: number) {
 
 export async function POST(req: NextRequest) {
   try {
-    const cronSecret = process.env.CRON_SECRET
-    const authHeader = req.headers.get("authorization") || ""
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
-
-    let authorized = Boolean(cronSecret && bearer && bearer === cronSecret)
-    if (!authorized) {
-      // Manual run from a BoD account, so this is testable without the cron secret.
-      const session = await auth()
-      if (session?.user?.id && isBodPlus(await getUserOrgRole(session.user.id))) authorized = true
-    }
-    if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
+    if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const fs = await statfs(UPLOADS_PATH)
     const total = fs.blocks * fs.bsize
