@@ -6,16 +6,10 @@ import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,11 +43,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -73,9 +64,6 @@ import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 import java.time.Duration
 import java.time.Instant
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.random.Random
 
 private val IN_GREEN = Color(0xFF10B981)
 private val OUT_ROSE = Color(0xFFF43F5E)
@@ -108,13 +96,6 @@ object AttendanceButtonLogic {
     }
 }
 
-/** System animations off (Settings › Remove animations): no shake, no confetti. */
-@Composable
-private fun reducedMotion(): Boolean {
-    val cr = LocalContext.current.contentResolver
-    return remember { runCatching { Settings.Global.getFloat(cr, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) == 0f }
-}
-
 @Composable
 fun AttendanceButton(
     mode: ButtonMode,
@@ -126,17 +107,12 @@ fun AttendanceButton(
     val c = Nx.colors
     val context = LocalContext.current
     val view = LocalView.current
-    val still = reducedMotion()
-    val shake = remember { Animatable(0f) }
 
-    // Feedback belongs to the outcome, once per outcome.
+    // Feedback belongs to the outcome, once per outcome: a light tick, nothing theatrical (owner, 28 Sep).
     LaunchedEffect(flow) {
         when (flow) {
-            is CaptureFlow.Done -> view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS)
-            is CaptureFlow.Failed -> {
-                view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS)
-                if (!still) for (x in listOf(14f, -12f, 9f, -6f, 3f, 0f)) shake.animateTo(x, tween(55, easing = LinearEasing))
-            }
+            is CaptureFlow.Done -> view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.KEYBOARD_TAP)
+            is CaptureFlow.Failed -> view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.KEYBOARD_TAP)
             else -> Unit
         }
     }
@@ -171,7 +147,7 @@ fun AttendanceButton(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box {
             Box(
-                Modifier.fillMaxWidth().heightIn(min = 64.dp).offset(x = shake.value.dp).clip(RoundedCornerShape(20.dp)).background(bg)
+                Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(20.dp)).background(bg)
                     .clickable(enabled = clickable) {
                         when (flow) {
                             // Failed: the button is the retry.
@@ -184,8 +160,9 @@ fun AttendanceButton(
                     .padding(horizontal = 18.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
+                // A plain crossfade between steps: simple and smooth, no bounce.
                 AnimatedContent(flow?.let { it::class to it } ?: (mode::class to mode), transitionSpec = {
-                    (fadeIn(tween(180)) + scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy), initialScale = 0.92f)) togetherWith fadeOut(tween(120))
+                    fadeIn(tween(200)) togetherWith fadeOut(tween(150))
                 }, label = "attendance-label") { (_, state) ->
                     when (state) {
                         is CaptureFlow -> FlowLabel(state, fg)
@@ -193,7 +170,6 @@ fun AttendanceButton(
                     }
                 }
             }
-            if (flow is CaptureFlow.Done && !still) Confetti(Modifier.matchParentSize())
         }
         // Reflection progress under a locked check-out.
         if (flow == null && mode is ButtonMode.CheckOut && !mode.unlocked && !mode.waiting) {
@@ -261,26 +237,5 @@ private fun FlowLabel(flow: CaptureFlow, fg: Color) {
         }
         is CaptureFlow.SavedOffline -> Line(Icons.Filled.PhoneAndroid, stringResource(R.string.btn_saved_offline), fg)
         is CaptureFlow.Failed -> Line(Icons.Filled.Refresh, stringResource(if (isIn) R.string.btn_retry_in else R.string.btn_retry_out), fg)
-    }
-}
-
-/** A short burst from the button's centre. Skipped when system animations are off. */
-@Composable
-private fun Confetti(modifier: Modifier) {
-    val progress = remember { Animatable(0f) }
-    val pieces = remember {
-        val colors = listOf(Color(0xFFFCD34D), Color(0xFF7B68EE), Color(0xFF10B981), Color(0xFFF43F5E), Color.White)
-        List(28) { Triple(Random.nextDouble(0.0, Math.PI * 2), Random.nextDouble(0.5, 1.0), colors[it % colors.size]) }
-    }
-    LaunchedEffect(Unit) { progress.animateTo(1f, tween(900)) }
-    if (progress.value >= 1f) return
-    Canvas(modifier) {
-        val t = progress.value
-        val centre = Offset(size.width / 2, size.height / 2)
-        pieces.forEach { (angle, speed, color) ->
-            val r = size.width * 0.45f * speed.toFloat() * t
-            val p = Offset(centre.x + (cos(angle) * r).toFloat(), centre.y + (sin(angle) * r * 0.6f).toFloat() + 40f * t * t)
-            drawCircle(color.copy(alpha = 1f - t), radius = 4.dp.toPx(), center = p)
-        }
     }
 }

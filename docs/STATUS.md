@@ -92,13 +92,13 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
   conditions the two buttons had.
 - Press: the face check (full screen, unchanged) → "Selfie ✓" → "Mencari lokasimu…" (spinner) →
   "Di <office> · 12 m ✓" (or "<office> · 340 m dari sini"; display only, the server decides) with
-  "Mengirim…" → success: check mark, confirm haptic, confetti, "Check in 09:02 · tepat waktu / · telat
-  6 menit" (lateMinutes from the reply); offline → amber "Tersimpan di HP ini — terkirim sendiri saat
-  NEXUS kembali"; failure → shake, reject haptic, the server's sentence under the button, the button
-  becomes "Coba check in lagi" (+ Settings link when the fix is a permission). The old result dialog
-  is gone.
-- With system animations off: no shake, no confetti. Submitted data, clientId/idempotency and the
-  queue are untouched (AttendanceGuardTest still passes).
+  "Mengirim…" → success: check mark, light haptic, "Check in 09:02 · tepat waktu / · telat 6 menit"
+  (lateMinutes from the reply); offline → amber "Tersimpan di HP ini — terkirim sendiri saat NEXUS
+  kembali"; failure → light reject haptic, the server's sentence under the button, the button becomes
+  "Coba check in lagi" (+ Settings link when the fix is a permission). The old result dialog is gone.
+- Owner's correction (28 Sep): NO confetti, no shake, no bounce — steps inside the button, a check
+  mark, a light haptic, plain crossfades. Submitted data, clientId/idempotency and the queue are
+  untouched (AttendanceGuardTest still passes).
 
 ## Phase 2 (tasks & projects), in progress since 28 Sep 2026
 
