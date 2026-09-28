@@ -3,6 +3,7 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.AutoAwesome
 import id.znetworks.nexus.feature.auth.AccountScreen
@@ -10,6 +11,10 @@ import id.znetworks.nexus.feature.home.HomeScreen
 import id.znetworks.nexus.feature.chat.ChatThreadScreen
 import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
+import id.znetworks.nexus.feature.forms.FormFillScreen
+import id.znetworks.nexus.feature.forms.SubmissionsScreen
+import id.znetworks.nexus.feature.forms.SubmissionDetailScreen
+import id.znetworks.nexus.core.files.FileOpener
 import id.znetworks.nexus.feature.tickets.TicketDetailScreen
 import id.znetworks.nexus.feature.tickets.TicketsScreen
 import id.znetworks.nexus.feature.whatsnew.WhatsNew
@@ -152,6 +157,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Task -> { container.router.consumed(t); nav.navigate("task/${t.id}") }
             is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=$it" } ?: "threads") }
             is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/$it" } ?: "tickets") }
+            is Target.Form -> { container.router.consumed(t); nav.navigate("form/${android.net.Uri.encode(t.idOrSlug)}") }
+            is Target.Submissions -> { container.router.consumed(t); nav.navigate(t.submissionId?.let { "submission/$it" } ?: "submissions") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
@@ -204,6 +211,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("tickets") { TicketsScreen(onBack = { nav.popBackStack() }, onOpenTicket = { nav.navigate("ticket/$it") }) }
             composable("ticket/{id}") { TicketDetailScreen(onBack = { nav.popBackStack() }) }
+            composable("form/{id}") { FormFillScreen(onBack = { nav.popBackStack() }, onOpenSubmissions = { nav.navigate("submissions") }) }
+            composable("submissions") { SubmissionsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate("submission/$it") }) }
+            composable("submission/{id}") { e ->
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                SubmissionDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
+                    onOpenFile = { url -> scope.launch { runCatching { FileOpener.open(context, container.api, url, url.substringAfterLast('/')) } } })
+            }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
@@ -220,11 +234,12 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
-                    onOpenChat = { nav.navigate("chat/$it") })
+                    onOpenChat = { nav.navigate("chat/$it") },
+                    onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") })
             }
             composable("project/{id}/settings") {
                 ProjectSettingsScreen(
@@ -259,7 +274,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -294,6 +309,13 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             supportingContent = { Text(stringResource(R.string.tk_more_sub)) },
             leadingContent = { Icon(Icons.Filled.SupportAgent, null, tint = c.violetText) },
             colors = itemColors, modifier = shape.clickable(onClick = onOpenTickets),
+        )
+        Spacer(Modifier.height(12.dp))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.form_my_submissions)) },
+            supportingContent = { Text(stringResource(R.string.form_more_sub)) },
+            leadingContent = { Icon(Icons.Filled.Assignment, null, tint = c.violetText) },
+            colors = itemColors, modifier = shape.clickable(onClick = onOpenSubmissions),
         )
         Spacer(Modifier.height(12.dp))
         if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {

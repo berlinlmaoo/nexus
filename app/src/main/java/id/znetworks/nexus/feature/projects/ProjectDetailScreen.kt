@@ -185,7 +185,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 }
 
 @Composable
-fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, onOpenChat: (String) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
+fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, onOpenChat: (String) -> Unit = {}, onOpenForm: (String) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     // Back from settings or a task: what changed there shows here.
@@ -250,7 +250,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.FINANCE -> FinanceTab(vm.projectId)
                             ProjectTab.PNL -> PnlTab(vm.projectId)
                             ProjectTab.PAGES -> WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_pages), web)
-                            ProjectTab.FORMS -> WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_forms), web)
+                            ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm)
                             ProjectTab.CHAT -> id.znetworks.nexus.feature.chat.ProjectChatTab(vm.projectId) { onOpenChat(it); tab = ProjectTab.BOARD }
                         }
                     }

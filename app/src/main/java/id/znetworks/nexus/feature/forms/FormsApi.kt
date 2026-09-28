@@ -73,7 +73,7 @@ class FormsApi(private val context: Context, private val api: ApiClient, private
         override fun contentType() = type
         override fun contentLength() = u.size
         override fun writeTo(sink: BufferedSink) {
-            context.contentResolver.openInputStream(u.uri)!!.source().use { src ->
+            context.contentResolver.openInputStream(android.net.Uri.parse(u.uri))!!.source().use { src ->
                 val buf = okio.Buffer()
                 var done = 0L
                 while (true) {

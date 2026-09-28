@@ -1,6 +1,5 @@
 package id.znetworks.nexus.feature.forms
 
-import android.net.Uri
 import id.znetworks.nexus.feature.projects.optionList
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -79,7 +78,7 @@ data class SubmitResult(val task: SubmitTask? = null)
 data class SubmitTask(val id: String? = null, val title: String? = null)
 
 /** A file picked for a form: a part name (`file:<fieldId>` or `attachment:<fieldId>`), streamed from disk. */
-data class FormUpload(val partName: String, val filename: String, val mime: String, val size: Long, val uri: Uri)
+data class FormUpload(val partName: String, val filename: String, val mime: String, val size: Long, val uri: String)
 
 /** One answer, kept in the four JSON shapes the web uses, so empty text and an unticked box stay apart. */
 sealed interface FormValue {

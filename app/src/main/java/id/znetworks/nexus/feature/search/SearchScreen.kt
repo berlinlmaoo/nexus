@@ -126,6 +126,7 @@ fun SearchScreen(
     onOpenTask: (String) -> Unit,
     onOpenProject: (String) -> Unit,
     onOpenWeb: (String) -> Unit,
+    onOpenForm: (String) -> Unit = { onOpenWeb("/f/$it") },
     vm: SearchViewModel = viewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -154,7 +155,7 @@ fun SearchScreen(
                 group(R.string.search_tasks, r.tasks) { t -> Hit(Icons.Filled.Checklist, c.success, t.title, null) { onOpenTask(t.id) } }
                 // Docs and forms open on the web until Phase 3 builds them here.
                 group(R.string.search_docs, r.docs) { d -> Hit(Icons.Filled.Description, c.violetText, d.title, null) { onOpenWeb("/docs/${d.id}") } }
-                group(R.string.search_forms, r.forms) { f -> Hit(Icons.Filled.Assignment, c.blue, f.name, null) { onOpenWeb("/f/${f.id}") } }
+                group(R.string.search_forms, r.forms) { f -> Hit(Icons.Filled.Assignment, c.blue, f.name, null) { onOpenForm(f.id) } }
                 group(R.string.search_members, r.members) { m -> Hit(Icons.Filled.Person, c.danger, m.name ?: m.email ?: "—", m.email, null) }
             }
         }

@@ -942,4 +942,26 @@
     <string name="tk_propose_failed">Couldn\'t send the attendance correction.</string>
     <string name="tk_decide_failed">Couldn\'t record that decision.</string>
     <string name="tk_decide_moved">That day\'s attendance changed after this proposal was made, so it can\'t be applied. Ask for a new proposal.</string>
+    <string name="form_title">Form</string>
+    <string name="form_gone">This form is private or no longer exists.</string>
+    <string name="form_closed">This form is closed right now</string>
+    <string name="form_load_failed">Couldn\'t load the form.</string>
+    <string name="form_sent">Sent</string>
+    <string name="form_sent_task">It\'s on the board as “%1$s”.</string>
+    <string name="form_sent_sub">Your answers are in.</string>
+    <string name="form_my_submissions">My submissions</string>
+    <string name="form_more_sub">What happened to the forms you sent</string>
+    <string name="form_submit">Send</string>
+    <string name="form_pick_date">Pick a date</string>
+    <string name="form_attach">Attach a file</string>
+    <string name="form_add_files">Add files</string>
+    <string name="form_file_too_big">“%1$s” is over 50 MB, the limit for a form file.</string>
+    <string name="form_too_much">Together these files are too big to send at once (64 MB).</string>
+    <string name="form_fill_first">Fill these first: %1$s</string>
+    <string name="form_login_required">This form needs you signed in. Your answers are still here.</string>
+    <string name="form_no_submissions">You haven\'t sent a form yet.</string>
+    <string name="form_not_processed">Not processed yet</string>
+    <string name="form_proofs">Proofs</string>
+    <string name="form_none_in_project">No forms in this project yet.</string>
+    <string name="form_submissions_n">%1$d submissions</string>
 </resources>

@@ -936,4 +936,26 @@
     <string name="tk_propose_failed">Gagal ngirim koreksi absen.</string>
     <string name="tk_decide_failed">Keputusan gagal disimpan.</string>
     <string name="tk_decide_moved">Absensi hari itu berubah setelah usulan dibuat, jadi tidak bisa diterapkan. Minta usulan baru.</string>
+    <string name="form_title">Form</string>
+    <string name="form_gone">Form ini privat atau sudah tidak ada.</string>
+    <string name="form_closed">Form ini sedang ditutup</string>
+    <string name="form_load_failed">Form gagal dimuat.</string>
+    <string name="form_sent">Terkirim</string>
+    <string name="form_sent_task">Sudah masuk board sebagai “%1$s”.</string>
+    <string name="form_sent_sub">Jawabanmu sudah masuk.</string>
+    <string name="form_my_submissions">Kiriman saya</string>
+    <string name="form_more_sub">Status form yang kamu kirim</string>
+    <string name="form_submit">Kirim</string>
+    <string name="form_pick_date">Pilih tanggal</string>
+    <string name="form_attach">Lampirkan file</string>
+    <string name="form_add_files">Tambah file</string>
+    <string name="form_file_too_big">“%1$s” lebih dari 50 MB, batas file form.</string>
+    <string name="form_too_much">Semua file ini terlalu besar untuk dikirim sekaligus (64 MB).</string>
+    <string name="form_fill_first">Isi dulu: %1$s</string>
+    <string name="form_login_required">Form ini perlu login. Jawabanmu masih tersimpan di sini.</string>
+    <string name="form_no_submissions">Kamu belum mengirim form.</string>
+    <string name="form_not_processed">Belum diproses</string>
+    <string name="form_proofs">Bukti</string>
+    <string name="form_none_in_project">Belum ada form di project ini.</string>
+    <string name="form_submissions_n">%1$d kiriman</string>
 </resources>
