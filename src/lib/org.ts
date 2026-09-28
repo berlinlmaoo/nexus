@@ -91,3 +91,12 @@ export async function isAdminOrOrgBodPlus(userId: string): Promise<boolean> {
   ])
   return user?.role === "ADMIN" || role === "BOD" || role === "ONE_ABOVE_ALL"
 }
+
+/** System admin, or a member (any role) of the company workspace. */
+export async function isAdminOrOrgMember(userId: string): Promise<boolean> {
+  const [user, role] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    orgRoleOf(userId),
+  ])
+  return user?.role === "ADMIN" || role !== null
+}
