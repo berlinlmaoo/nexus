@@ -106,8 +106,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun requestEmail(newEmail: String) = act {
-        val sent = account.changeEmailRequest(newEmail)
+    fun requestEmail(newEmail: String, currentPassword: String, onSent: () -> Unit = {}) = act {
+        val sent = account.changeEmailRequest(newEmail, currentPassword)
+        onSent()
         _state.update { it.copy(pendingEmail = sent.email) }
     }
 
@@ -155,7 +156,13 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, vm: 
                 if (pending == null) {
                     OutlinedTextField(newEmail, { newEmail = it }, singleLine = true, label = { Text(stringResource(R.string.acct_new_email)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-                    OutlinedButton(onClick = { vm.requestEmail(newEmail) }, enabled = newEmail.contains('@') && !s.busy, modifier = Modifier.fillMaxWidth()) {
+                    // Never saved into the restorable state: a password only lives while the field does.
+                    var currentPassword by remember { mutableStateOf("") }
+                    OutlinedTextField(currentPassword, { currentPassword = it }, singleLine = true, label = { Text(stringResource(R.string.acct_current_password)) },
+                        supportingText = { Text(stringResource(R.string.acct_email_password_help)) },
+                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                    OutlinedButton(onClick = { vm.requestEmail(newEmail, currentPassword) { currentPassword = "" } },
+                        enabled = newEmail.contains('@') && currentPassword.isNotEmpty() && !s.busy, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.signup_send_code))
                     }
                 } else {

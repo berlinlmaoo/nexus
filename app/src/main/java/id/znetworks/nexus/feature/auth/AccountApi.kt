@@ -88,7 +88,9 @@ class AccountApi(private val api: ApiClient) {
 
     // region signed in: email, password
 
-    suspend fun changeEmailRequest(email: String) = sent(call("/api/user/email/request", buildJsonObject { put("email", email.trim()) }, authed = true), email.trim())
+    /** The current password proves it is the owner asking (Berlin 29 Sep; server requires it). */
+    suspend fun changeEmailRequest(email: String, currentPassword: String) =
+        sent(call("/api/user/email/request", buildJsonObject { put("email", email.trim()); put("currentPassword", currentPassword) }, authed = true), email.trim())
 
     /** Returns the canonical new email, to be written into the stored session. */
     suspend fun changeEmailVerify(email: String, code: String): String =
