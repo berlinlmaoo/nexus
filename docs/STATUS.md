@@ -291,15 +291,16 @@ no R8 / serialization / missing-class errors in logcat. Nothing past login (no t
 
 ## APK ready (for the main session, R2) — publish only on Berlin's go
 
-**APK siap (untuk audit, BELUM terbit): versionCode 3, sha256 `e63ca19dfb66e8922c283e99e266d8177790d5db0e9ae216607085604133a326`**
-`agents:~/nexus-android-release/NEXUS-0.1.6-3.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 3, 23.1 MB,
-targetSdk 36, signed by the release key (SHA-256 53:22:FE:…:AD:26 = assetlinks), with Firebase. Contains
-Phases 2–4, every UPDATES section, the 28 Sep audit fixes and the parity items after it. Berlin's rule: not
-published until parity + a clean audit and his go; it goes out as **0.1.6** (the first published APK), and
-every later one raises versionName (0.1.7, …) and versionCode +1; update offers and the 426 floor compare
-versionName, so an old build can't check in/out once the minimum passes it.
+**APK siap (untuk audit, BELUM terbit): versionCode 4, sha256 `98b608ffaa05c35a15785691cd8d9d76ba7b0877a71940cd55b5d18e143ceb8e`**
+`agents:~/nexus-android-release/NEXUS-0.1.6-4.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 4, 23.9 MB,
+signed by the release key (SHA-256 53:22:FE:…:AD:26), with Firebase. Contains everything through the
+re-audit fixes, no-logout-during-workday and Fake GPS (commit 2050db4 + versionCode). Smoke-tested on the
+agents emulator (API 34): cold start to login, no crash, no R8/serialization errors, widget provider
+registered. Berlin's rule: published only after parity + a clean audit and his go, as **0.1.6**; later
+APKs raise versionName and versionCode.
 
-Superseded, never published: `NEXUS-0.1.6-2.apk` (versionCode 2, sha256 `2993075c…b946a`, Phase 2 + chat).
+Superseded, never published: `NEXUS-0.1.6-3.apk` (versionCode 3, sha256 `e63ca19d…a326`, audited "not
+releasable"); `NEXUS-0.1.6-2.apk` (versionCode 2).
 Older: `NEXUS-0.1.6-1.apk` (versionCode 1, sha256 `5fabc061…2d97e`), before Phase 2.
 
 ## Not verified yet (the first thing to do)
