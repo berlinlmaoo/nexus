@@ -4,8 +4,9 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (305 JVM tests, all green).
-Version 0.1.6 (versionCode 5 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (308 JVM tests, all green).
+Version 0.1.6 (versionCode 6 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
+**Next audit candidate: build 6** (sha256 `ec06a64e…1934`, from 91dded1, 308 tests) — see "APK ready".
 **Release candidate: build 5** (`NEXUS-0.1.6-5.apk`, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`,
 from b122e0f, 300 JVM tests at that commit): security + parity audit 266af90 = **RILIS LAYAK**; it goes
 out for Berlin to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
@@ -212,7 +213,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | Logout revokes the token on the server | A manual logout (and delete account) sends `POST /api/auth/app-logout` with that session's cookie, fire and forget, after the push device is deleted (it needs the same cookie); the phone signs out at once regardless: offline, a 404 while the route is new, or any error change nothing, and a 401 there never touches the current session (AuthRepositoryTest) | 0fdbdee |
 | Email change needs the current password | Account › Email: a required "Current password" field (sign-in button off while empty), help "To make sure this is you. Your old email will be told about this change."; sent as `currentPassword` to `/api/user/email/request`, never trimmed, never kept in restorable state, cleared once the code is sent (AccountApiTest) | 38be2f2 |
 | Old tokens get 401 once (server sessionVersion) — checked | Every send path (JSON, text/SSE, downloads) goes through one `classify`: a 401 on a session call ends that session exactly once (not deliberate: no server revoke), concurrent 401s end it once, background jobs cannot crash (appScope handler); queued taps are kept for the same person and replayed after the next sign-in, never under another session. Session storage (Keystore + noBackupFilesDir) unchanged. AuthRepositoryTest, AttendanceQueueTest | c9db448 |
-| Z Vault and Threads only for the company workspace (iOS 14b086f) | `Viewer.isCompany` from `/api/workspaces/members` (`isCompany`); the Z Vault row in More and the Threads tile on Home are drawn only when true (hidden while unknown and on older servers); the vault, vault-share (`/v/` links) and threads routes show "Only for Z Networks" when false (the server answers 403 anyway), a spinner while unknown. ViewerTest | this step |
+| Z Vault and Threads only for the company workspace (iOS 14b086f) | `Viewer.isCompany` from `/api/workspaces/members` (`isCompany`); the Z Vault row in More and the Threads tile on Home are drawn only when true (hidden while unknown and on older servers); the vault, vault-share (`/v/` links) and threads routes show "Only for Z Networks" when false (the server answers 403 anyway), a spinner while unknown. ViewerTest | 91dded1 |
 
 ## Security + parity audit of build 5 (docs/AUDIT.md 266af90): RILIS LAYAK, 8 RENDAH
 
@@ -334,15 +335,20 @@ no R8 / serialization / missing-class errors in logcat. Nothing past login (no t
 
 ## APK ready (for the main session, R2) — publish only on Berlin's go
 
-**APK siap (untuk audit ulang + audit keamanan, BELUM terbit): versionCode 5, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`**
-`agents:~/nexus-android-release/NEXUS-0.1.6-5.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 5, 23.9 MB,
-built from **b122e0f** (HEAD 83defc5 + versionCode 5), signed by the release key (SHA-256
-53:22:FE:…:AD:26), with Firebase; 300 JVM tests green. Contains everything up to remote config and
-"check-in needs location all the time". Smoke test on the agents emulator (API 34): three cold starts to
-login, no crash, no R8/serialization errors, widget provider registered. (One crash seen in the first run
-was a second process started while the APK was still being installed — empty DexPathList — and did not
-come back after install; not an app fault.) Berlin's rule: published only after parity + a clean audit and
-his go, as **0.1.6**; later APKs raise versionName and versionCode.
+**APK siap (untuk audit, BELUM terbit): versionCode 6, sha256 `ec06a64eb4ecfb2c64c89d4113a205af1ea887b73c5264c8e26fe6221da11934`**
+`agents:~/nexus-android-release/NEXUS-0.1.6-6.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 6, 23.9 MB,
+built from **91dded1**, signed by the release key (SHA-256 53:22:FE:…:AD:26), with Firebase; 308 JVM tests
+green. Contains build 5 + the fixes of audit 266af90 (R1, R3, R4, R6, R7) + 29 Sep changes (logout revokes
+the token on the server, email change needs the current password, 401/sessionVersion checked, Z Vault and
+Threads only for the company workspace). Smoke test on the agents emulator (API 34): three cold starts of
+the app, no crash in the app's process. A crash in the crash buffer was a *stale* `BOOT_COMPLETED` to
+`WorkTrailBootReceiver` for the uid of the package the test script had just uninstalled (Start proc …
+u0a200 while the new install is u0a201, empty DexPathList): an artefact of uninstall+reinstall right after
+an emulator boot; a real update keeps the uid and cannot hit it. (An earlier build-6 file from 948f5e0,
+sha256 39f989f6…77ce1, was replaced by this one before anyone saw it.)
+
+Previous candidate, audited RILIS LAYAK (266af90) and going out for Berlin to test: `NEXUS-0.1.6-5.apk`
+(versionCode 5, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`, from b122e0f).
 
 Superseded, never published: `NEXUS-0.1.6-4.apk` (versionCode 4, sha256 `98b608ff…ceb8e`, before remote config).
 Superseded, never published: `NEXUS-0.1.6-3.apk` (versionCode 3, sha256 `e63ca19d…a326`, audited "not
