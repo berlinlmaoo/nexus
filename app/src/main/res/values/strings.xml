@@ -1419,4 +1419,15 @@
     <string name="btn_checkout_saved_phone">Check-out saved on this phone</string>
     <string name="now_at">Now at %1$s</string>
     <string name="ad_not_placed">Not placed on the Approval Chart</string>
+    <string name="ch_placed">have an approver</string>
+    <string name="ch_unplaced">not placed</string>
+    <string name="ch_tops">at the top</string>
+    <string name="ch_hint">Tap a card = choose the approver · pinch = zoom</string>
+    <string name="ch_fit">Fit to screen</string>
+    <string name="ch_share">Share as an image</string>
+    <string name="ch_move_failed">Couldn\'t move them.</string>
+    <string name="ch_export_failed">Couldn\'t make the image.</string>
+    <string name="ch_no_approver">no approver</string>
+    <string name="ch_alone">Not placed · %1$d · their requests go to every BoD</string>
+    <string name="ch_pick_for">Approver for %1$s</string>
 </resources>

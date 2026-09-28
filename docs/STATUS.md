@@ -150,6 +150,7 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 |---|---|---|
 | 4.1 | Control Room (More, MANAGER+ only; tabs as iOS, BoD-only ones for BoD/OAA; tabs not built yet open `/admin` on the web). **Users**: role counts as filters, search, A–Z, invite by email with roles strictly below yours, bring in signed-up users (absorbs their personal workspace); **user detail**: role, approver (loop guarded before the server refuses), flexi, location-free, rest days (< 7), work hours (default start/end, overnight ok), memberships, account (name/email/password, only changed keys), remove from workspace, delete account (BoD). **Approval chart**: approvers with their direct reports, the unplaced listed | 7e42359 |
 | 4.1b | Users list rows as iOS: Flexi / Mobile / Google (@) badges only when on, "Approver: X" or "Not placed on the Approval Chart" (Staff/Manager only), "N projects · N teams" from one memberships call | this step |
+| 4.1c | **Approval chart as a tree** (iOS ApprovalChartView): cards coloured by role (BoD navy, Manager blue, Staff white), hours or Flexi, Mobile icon, report count; branches in columns with connector lines, childless staff stacked in one box; "no approver" tag on a top that is not BoD; not-placed chips; stats strip (have an approver / not placed / at the top); pinch, drag, double-tap zoom, fit to screen; tap any card → choose the approver (self and everyone below excluded, or detach); share as PNG | this step |
 | 4.2 | Control Room › **Absensi** (BoD/OAA): calendar month bar, public-holiday allowance (warns at 0) and holidays (add/remove), members list → member settings: day-off allowance per period (override / reset to 4), granted day-offs (grant with date+reason, remove), hours per weekday (whole map replaced, overnight ok, validated), export that member's month (xlsx, share sheet), their reflections. **Offices**: list, active toggle, edit (never the shift), add at my current position, archive. **Reflections** of a person by calendar month with GIDEON day notes, month summary and summarize (long timeout; a 503 is GIDEON's sentence) | 6cc56f9 |
 | 4.3 | Control Room › **Audit**: search (debounced), action filters (create/update/delete/login), pages of 50 with load more, grouped by office day (Today/Yesterday), action icons; entry detail: title, who/when, what changed (from → to, set, cleared), details, technical (device, IP, entity, id, metadata JSON) | 8ff15b1 |
 | 4.4 | Control Room › **Quests**: active list, create (finish N / clear N overdue / N high-priority / at most N overdue, XP 0–50, optional deadline), delete. **Pengumuman** (BoD): list with read count and repeat window, activate/deactivate, delete, create (title, body, tone, repeat once/+2/+3/+5/+7 days at HH:mm WIB; repeat keys sent only when repeating). **GIDEON** usage (BoD): totals + per person. **App** (BoD): using / not yet / devices, versions split per platform (`versionsByPlatform`), device rows with platform, people not using the app | e5e7c88 |
@@ -252,9 +253,8 @@ lock + held tap, day-off never over quota.
 
 ## Not built
 
-Phases 2–4 of PRD §5 are built (28 Sep 2026). Left, by decision: Phase 5 (after adoption), the
-approval chart as a zoom/pan tree with PNG export (Android lists approvers with their reports; each
-row opens the user, where the approver is changed), and Sheets on mobile (0.1.7 on iOS too).
+Phases 2–4 of PRD §5 are built (28 Sep 2026). Left, by decision: Phase 5 (after adoption) and Sheets
+on mobile (0.1.7 on iOS too).
 
 ## Next steps
 

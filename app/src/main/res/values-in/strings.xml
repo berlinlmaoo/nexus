@@ -1413,4 +1413,15 @@
     <string name="btn_checkout_saved_phone">Check-out tersimpan di HP ini</string>
     <string name="now_at">Sekarang di %1$s</string>
     <string name="ad_not_placed">Belum ditaruh di Bagan Approval</string>
+    <string name="ch_placed">punya atasan</string>
+    <string name="ch_unplaced">belum ditaruh</string>
+    <string name="ch_tops">puncak</string>
+    <string name="ch_hint">Ketuk kartu = pilih atasan · cubit = zoom</string>
+    <string name="ch_fit">Pas ke layar</string>
+    <string name="ch_share">Bagikan sebagai gambar</string>
+    <string name="ch_move_failed">Gagal memindahkan.</string>
+    <string name="ch_export_failed">Gagal membuat gambar.</string>
+    <string name="ch_no_approver">tanpa atasan</string>
+    <string name="ch_alone">Belum ditaruh · %1$d · request-nya masuk ke semua BoD</string>
+    <string name="ch_pick_for">Atasan untuk %1$s</string>
 </resources>
