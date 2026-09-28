@@ -19,6 +19,7 @@ import {
   formatExportDateLabel,
   formatExportPeriod,
   exportWorkingDays,
+  coverAbsencesWithDayOffQuota,
 } from "@/lib/attendance-export-format"
 import { getPrimaryWorkspaceDefaults } from "@/lib/workspace-defaults"
 
@@ -188,6 +189,13 @@ export function buildAttendanceSheetGrid(input: {
   const byKey = new Map<string, AttendanceDayType>()
   for (const person of people) for (const day of input.days.get(person.id) ?? []) byKey.set(`${person.id}:${day.dateKey}`, day.dayType)
   const counters = people.map(() => ({ H: 0, C: 0, S: 0, DO: 0, TK: 0, TOTAL: 0 }) as Record<string, number>)
+  // TK uses up the remaining day-off quota first (shown as DO), in date order — see coverAbsencesWithDayOffQuota.
+  const codeByKey = new Map<string, string>()
+  for (const person of people) {
+    const keys = dates.map((d) => d.toISOString().slice(0, 10))
+    const { codes } = coverAbsencesWithDayOffQuota(keys.map((k) => attendanceExportCode(byKey.get(`${person.id}:${k}`))), person.dayOffQuota ?? 4)
+    keys.forEach((k, i) => codeByKey.set(`${person.id}:${k}`, codes[i]))
+  }
 
   dates.forEach((date, i) => {
     const r = HEADER_ROWS + i
@@ -195,7 +203,7 @@ export function buildAttendanceSheetGrid(input: {
     const dateKey = date.toISOString().slice(0, 10)
     for (let c = 1; c < columnCount; c++) {
       const person = people[c - 1]
-      const code = person ? attendanceExportCode(byKey.get(`${person.id}:${dateKey}`)) : ""
+      const code = person ? codeByKey.get(`${person.id}:${dateKey}`) ?? "" : ""
       rows[r][c] = { value: code || null, fill: attendanceExportFill(code), bold: Boolean(code), fontSize: 10, fontColor: C.cellFont, hAlign: "CENTER" }
       if (code && person) {
         counters[c - 1][code] = (counters[c - 1][code] ?? 0) + 1
