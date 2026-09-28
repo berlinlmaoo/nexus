@@ -21,6 +21,8 @@ enum class AuthMode { LOGIN, SIGNUP, SIGNUP_CODE, FORGOT, FORGOT_CODE }
 
 data class LoginUiState(
     val mode: AuthMode = AuthMode.LOGIN,
+    /** Came from an invite: the reset flow reads "Set your password" (audit R12, iOS ResetPasswordView). */
+    val invited: Boolean = false,
     val email: String = "",
     val password: String = "",
     val name: String = "",
@@ -56,7 +58,7 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
     fun go(mode: AuthMode) = _state.update { it.copy(mode = mode, error = null, info = null, code = "", newPassword = "") }
 
     /** The invite email's "set your password" link lands here with the address filled in. */
-    fun openReset(email: String?) = _state.update { it.copy(mode = AuthMode.FORGOT, email = email ?: it.email, error = null, info = null) }
+    fun openReset(email: String?, invited: Boolean = false) = _state.update { it.copy(mode = AuthMode.FORGOT, email = email ?: it.email, invited = invited, error = null, info = null) }
 
     fun openRegister(code: String?) = _state.update { it.copy(mode = AuthMode.SIGNUP, workspaceCode = code ?: it.workspaceCode, error = null, info = null) }
 

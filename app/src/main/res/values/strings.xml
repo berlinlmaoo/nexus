@@ -1506,4 +1506,6 @@
     <string name="fg_map">Map</string>
     <string name="ai_web_only">Web only · %1$s</string>
     <string name="ai_never_signed_in">Never signed in</string>
+    <string name="set_title">Set your password</string>
+    <string name="set_sub">Your NEXUS account is ready. Get a code at your email to set its password.</string>
 </resources>

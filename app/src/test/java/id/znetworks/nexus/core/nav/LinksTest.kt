@@ -58,7 +58,7 @@ class LinksTest {
     }
 
     @Test fun inviteAndSignupLinksReachTheSignedOutScreens() {
-        assertEquals(Target.ResetPassword("a@b.id"), Links.parse("nexus://forgot-password?email=a%40b.id&invited=1"))
+        assertEquals(Target.ResetPassword("a@b.id", invited = true), Links.parse("nexus://forgot-password?email=a%40b.id&invited=1"))
         assertEquals(Target.ResetPassword(null), Links.parse("https://nexus.znetworks.id/forgot-password"))
         assertEquals(Target.Register("ZNET-12"), Links.parse("/register?code=ZNET-12"))
     }
@@ -67,5 +67,10 @@ class LinksTest {
         assertEquals(Target.Tickets("t1"), Links.parse("/complaints?id=t1"))
         assertEquals(Target.Tickets(null), Links.forNotification("complaint_reply", null, null, null))
         assertEquals(Target.Tab("home"), Links.forNotification("announcement", null, null, null)) // never the browser
+    }
+
+    @Test fun inviteLinkSetsAPassword() {
+        assertEquals(Target.ResetPassword("a@z.id", invited = true), Links.parse("/forgot-password?email=a@z.id&invited=1"))
+        assertEquals(Target.ResetPassword("a@z.id", invited = false), Links.parse("/forgot-password?email=a@z.id"))
     }
 }

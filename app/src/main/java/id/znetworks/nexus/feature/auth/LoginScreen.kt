@@ -83,7 +83,7 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
     val pending by router.pending.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(pending) {
         when (val t = pending) {
-            is id.znetworks.nexus.core.nav.Target.ResetPassword -> { router.consumed(t); vm.openReset(t.email) }
+            is id.znetworks.nexus.core.nav.Target.ResetPassword -> { router.consumed(t); vm.openReset(t.email, t.invited) }
             is id.znetworks.nexus.core.nav.Target.Register -> { router.consumed(t); vm.openRegister(t.workspaceCode) }
             else -> Unit
         }
@@ -207,7 +207,7 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                             BackToLogin(vm, state.busy)
                         }
                         AuthMode.FORGOT -> {
-                            Title(stringResource(R.string.reset_title), stringResource(R.string.reset_sub))
+                            Title(stringResource(if (state.invited) R.string.set_title else R.string.reset_title), stringResource(if (state.invited) R.string.set_sub else R.string.reset_sub))
                             FieldLabel(stringResource(R.string.login_email_label))
                             NxField(state.email, vm::onEmail, "name@company.com",
                                 keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Go, autoCorrectEnabled = false),

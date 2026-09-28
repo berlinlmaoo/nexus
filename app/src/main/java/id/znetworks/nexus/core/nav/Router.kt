@@ -42,7 +42,8 @@ sealed interface Target {
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
-    data class ResetPassword(val email: String?) : Target
+    /** [invited]: the invite email's "set your password" link (`invited=1`), not a forgotten one. */
+    data class ResetPassword(val email: String?, val invited: Boolean = false) : Target
     data class Register(val workspaceCode: String?) : Target
     /** A screen Android does not have yet: opened on the web instead of doing nothing. */
     data class Web(val path: String) : Target
@@ -133,7 +134,7 @@ object Links {
             Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/complaints/([^/]+)$").matches(p) -> Target.Tickets(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/messages/([^/]+)$").matches(p) -> Target.Chat(path.trimEnd('/').substringAfterLast('/'))
-            p == "/forgot-password" -> Target.ResetPassword(q["email"])
+            p == "/forgot-password" -> Target.ResetPassword(q["email"], invited = q["invited"] == "1" || q["invited"].equals("true", ignoreCase = true))
             p == "/register" -> Target.Register(q["code"])
             // Everything else exists on the web: open it there rather than landing nowhere.
             else -> Target.Web(path + (query?.let { "?$it" } ?: ""))
