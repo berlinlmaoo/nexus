@@ -85,6 +85,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.time.OfficeTime
@@ -221,6 +230,8 @@ fun HomeScreen(
     // Every visit re-reads: a task finished elsewhere, a check-in, a claimed quest.
     LaunchedEffect(Unit) { vm.load() }
 
+    // Card rects, not state: written on every scroll frame, read only when a card is tapped (iOS MorphFrameStore).
+    val statRects = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
     Box(Modifier.fillMaxSize()) {
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -229,7 +240,7 @@ fun HomeScreen(
             LevelCard(s.game) { levelOpen = true }
             SearchRow(s.unread, onSearch, onOpenInbox)
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg) }
-            StatCards(s) { stat = it }
+            StatCards(s, statRects) { stat = it }
             XpRulesCard()
             QuickActions(onOpenAttendance, onOpenWeb)
             ShortcutsCard(vm.shortcuts, onOpenProject)
@@ -242,7 +253,8 @@ fun HomeScreen(
     androidx.compose.material3.FloatingActionButton(onClick = onOpenGideon, containerColor = c.violet, contentColor = Color.White,
         modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.AutoAwesome, "GIDEON") }
     }
-    stat?.let { StatSheet(it, s, vm, onOpenProject, onOpenTask) { stat = null } }
+    // Grows from the tapped card, one gradient, no scrim (iOS MorphFlip; Berlin, 29 Sep, point 5).
+    stat?.let { i -> StatMorph(i, statRects[i], s, vm, onOpenProject, onOpenTask) { stat = null } }
     if (levelOpen) LevelSheet(s.game) { levelOpen = false }
 }
 
@@ -378,11 +390,11 @@ private fun stats(s: HomeState) = listOf(
 )
 
 @Composable
-private fun StatCards(s: HomeState, onOpen: (Int) -> Unit) {
+private fun StatCards(s: HomeState, rects: MutableMap<Int, androidx.compose.ui.geometry.Rect>, onOpen: (Int) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         stats(s).forEachIndexed { i, d ->
             Column(
-                Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(d.grad)).clickable { onOpen(i) }
+                Modifier.weight(1f).onGloballyPositioned { rects[i] = it.boundsInRoot() }.clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(d.grad)).clickable { onOpen(i) }
                     .padding(vertical = 16.dp, horizontal = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -400,33 +412,76 @@ private fun StatCards(s: HomeState, onOpen: (Int) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The stat card's detail as iOS MorphFlip / the web's layoutId: drawn full size in the middle, then a
+ * scale + translate makes it START exactly on the tapped card and spring to full (response 0.4,
+ * damping 0.84). One gradient top to bottom, no scrim; the list fades in once it has landed. A tap
+ * outside, the close button or back shrinks it back into the card.
+ */
 @Composable
-private fun StatSheet(i: Int, s: HomeState, vm: HomeViewModel, onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onClose: () -> Unit) {
+private fun StatMorph(i: Int, source: androidx.compose.ui.geometry.Rect?, s: HomeState, vm: HomeViewModel,
+                      onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onClose: () -> Unit) {
     val d = stats(s)[i]
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = d.grad.last()) {
-        Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(d.grad)).padding(horizontal = 18.dp).padding(bottom = 18.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
-                Box(Modifier.size(52.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
+    val scope = rememberCoroutineScope()
+    val progress = remember { androidx.compose.animation.core.Animatable(if (source == null) 1f else 0f) }
+    var target by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    val spring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.84f, stiffness = 247f)
+    LaunchedEffect(target) { if (target != null) progress.animateTo(1f, spring) }
+    var closing by remember { mutableStateOf(false) }
+    fun close(then: () -> Unit = {}) {
+        if (closing) return
+        closing = true
+        scope.launch { if (source != null) progress.animateTo(0f, spring); onClose(); then() }
+    }
+    androidx.activity.compose.BackHandler { close() }
+    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { close() } }) {
+        Column(
+            Modifier.align(Alignment.Center).padding(horizontal = 18.dp).widthIn(max = 560.dp)
+                .onGloballyPositioned { if (target == null) target = it.boundsInRoot() }
+                .graphicsLayer {
+                    val t = target
+                    val src = source
+                    if (src != null && t == null) { alpha = 0f; return@graphicsLayer } // measuring: no flash
+                    if (src == null || t == null || t.width <= 1f) return@graphicsLayer
+                    val f = 1f - progress.value
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                    scaleX = 1f + (src.width / t.width - 1f) * f
+                    scaleY = 1f + (src.height / t.height - 1f) * f
+                    translationX = (src.left - t.left) * f
+                    translationY = (src.top - t.top) * f
+                }
+                .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = d.grad.last(), spotColor = d.grad.last())
+                .clip(RoundedCornerShape(28.dp))
+                .background(Brush.linearGradient(d.grad))
+                .pointerInput(Unit) { detectTapGestures { } } // a tap on the card is not a tap outside
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(56.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
                     Icon(d.icon, null, tint = Color.White, modifier = Modifier.size(26.dp))
                 }
                 Spacer(Modifier.width(14.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text("${d.value}", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 34.sp, color = Color.White)
-                        d.total?.let { Text("/$it", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(bottom = 4.dp)) }
+                        Text("${d.value}", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 38.sp, color = Color.White)
+                        d.total?.let { Text("/$it", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(bottom = 5.dp)) }
                     }
-                    Text(stringResource(d.label), fontSize = 14.sp, color = Color.White.copy(alpha = 0.9f))
+                    Text(stringResource(d.label), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.9f))
+                }
+                Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)).clickable { close() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
-            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // The header scales with the card; the list fades in once it has landed (web: delay 0.15 s).
+            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()).graphicsLayer { alpha = ((progress.value - 0.85f) / 0.15f).coerceIn(0f, 1f) },
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (i) {
                     0 -> if (s.projects.isEmpty()) SheetEmpty(stringResource(R.string.home_no_projects))
-                    else s.projects.take(40).forEach { p -> SheetRow(p.name, p.status.orEmpty().lowercase().replaceFirstChar(Char::titlecase)) { onClose(); onOpenProject(p.id) } }
+                    else s.projects.take(40).forEach { p -> SheetRow(p.name, p.status.orEmpty().lowercase().replaceFirstChar(Char::titlecase)) { close { onOpenProject(p.id) } } }
                     1 -> if (s.tasks.isEmpty()) SheetEmpty(stringResource(R.string.home_no_tasks))
                     else s.tasks.take(40).forEach { t ->
-                        SheetRow(t.title, stringResource(if (t.isDone) R.string.home_done else R.string.home_open)) { onClose(); onOpenTask(t.id) }
+                        SheetRow(t.title, stringResource(if (t.isDone) R.string.home_done else R.string.home_open)) { close { onOpenTask(t.id) } }
                     }
                     else -> QuestList(s, vm)
                 }
