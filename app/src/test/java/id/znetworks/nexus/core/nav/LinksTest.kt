@@ -14,7 +14,7 @@ class LinksTest {
     }
 
     @Test fun otherScreensOpenOnTheWeb() {
-        assertEquals(Target.Web("/admin?tab=users"), Links.parse("/admin?tab=users"))
+        assertEquals(Target.Web("/peer-reports?x=1"), Links.parse("/peer-reports?x=1"))
         assertEquals(Target.Announcement("a1"), Links.parse("/dashboard?announcement=a1"))
         assertEquals(Target.Inbox, Links.parse("/inbox"))
         assertEquals(Target.Settings, Links.parse("nexus://settings"))

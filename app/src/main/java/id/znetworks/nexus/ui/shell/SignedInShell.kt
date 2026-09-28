@@ -3,6 +3,7 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Assignment
@@ -15,6 +16,10 @@ import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
 import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
+import id.znetworks.nexus.feature.admin.AdminNav
+import id.znetworks.nexus.feature.admin.AdminUserScreen
+import id.znetworks.nexus.feature.admin.ApprovalChartScreen
+import id.znetworks.nexus.feature.admin.ControlRoomScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.agenda.TeamCalendarScreen
@@ -178,6 +183,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/$it/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
             Target.TeamCalendar -> { container.router.consumed(t); nav.navigate("team-calendar") }
+            Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
@@ -261,6 +267,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
             composable("team-calendar") { TeamCalendarScreen(onBack = { nav.popBackStack() }) }
             composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
+            composable("admin") {
+                ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
+                    openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") },
+                    openProfile = { nav.navigate("profile/$it") }, openWeb = { openWeb(context, it) }, openAudit = { nav.navigate("audit/$it") },
+                ))
+            }
+            composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
+            composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
@@ -280,7 +294,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }, onOpenReports = { nav.navigate("reports") }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }, onOpenReports = { nav.navigate("reports") }, onOpenAdmin = { nav.navigate("admin") }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
@@ -321,7 +335,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit, onOpenVault: () -> Unit, onOpenReports: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit, onOpenVault: () -> Unit, onOpenReports: () -> Unit, onOpenAdmin: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -386,6 +400,17 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             colors = itemColors, modifier = shape.clickable(onClick = onOpenReports),
         )
         Spacer(Modifier.height(12.dp))
+        // Control Room is drawn for MANAGER and above only (the server re-checks every call).
+        val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
+        if (canAdmin) {
+            ListItem(
+                headlineContent = { Text("Control Room") },
+                supportingContent = { Text(stringResource(R.string.ad_more_sub)) },
+                leadingContent = { Icon(Icons.Filled.AdminPanelSettings, null, tint = c.violetText) },
+                colors = itemColors, modifier = shape.clickable(onClick = onOpenAdmin),
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.wn_title)) },

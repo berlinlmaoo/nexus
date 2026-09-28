@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (231 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (234 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -140,9 +140,16 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 3.8 | Leaderboard (Home quick action, `/leaderboard`): this period's ranking with shared places, you highlighted, tap → profile. Member profile (leaderboard, search members): header, Message (opens/creates the DM), level from the leaderboard, and the **member record** (`/api/members/<id>/record`, scoped like Reports; a 403 leaves those sections out): period prev/next, score worked/working (+surplus), counts, late, day-off and XP lines, streak board (tones, red dot for a deduction), XP log with load older and **BoD remove a deduction** (with note, refund route), requests with reviewer | 7cd5f92 |
 | 3.9 | Room Booking (upcoming 14 days / history 30 days, grouped by office day) and Team Calendar (month grid, per-team or all teams merged — the server needs one call per team), both read-only as iOS; Home quick actions and `/room-booking`, `/master-calendar` links open them | 5b9fe27 |
 | 3.10 | GIDEON: launcher on Home, history, model tiers (Astra/Luna/Terra/Experimental), questions with an image or a document (≤ 10 MB, the server's extensions), SSE answer parsed (text appended, error sentence, stop at done, bad frames skipped), 180 s read timeout, 413/415 sentences, clear chat. **Through the common client** (headers, cookie, LAN, 426), unlike iOS. The transcript lives in the container, so closing the screen does not lose the answer; wiped on logout | fba39b8 |
-| 3.11 | Offline warm-up, DATA + MEDIA (iOS OfflineSync): data pass (today + workspace board/requests for managers, my tasks, projects, XP, my board and requests, my submissions) on sign-in, on foreground when older than 30 min and hourly (WorkManager, any network); media pass (every project's board and tasks, then this period's selfies and task attachments ≤ 40 MB for ≤ 80 tasks per project) every 6 h on unmetered networks unless "files on mobile data" is on; files kept under `cache/offline` keyed by URL (1.5 GB cap, oldest first) and reused by images and file opening; crew board and requests now read through the response cache too. More › **Offline copy** card: when data/files were saved, size, update now, mobile-data toggle. Wiped with the session | this step |
+| 3.11 | Offline warm-up, DATA + MEDIA (iOS OfflineSync): data pass (today + workspace board/requests for managers, my tasks, projects, XP, my board and requests, my submissions) on sign-in, on foreground when older than 30 min and hourly (WorkManager, any network); media pass (every project's board and tasks, then this period's selfies and task attachments ≤ 40 MB for ≤ 80 tasks per project) every 6 h on unmetered networks unless "files on mobile data" is on; files kept under `cache/offline` keyed by URL (1.5 GB cap, oldest first) and reused by images and file opening; crew board and requests now read through the response cache too. More › **Offline copy** card: when data/files were saved, size, update now, mobile-data toggle. Wiped with the session | fa29801 |
 
 **Phase 3 is complete** (28 Sep 2026). Next: Phase 4 (Control Room).
+
+## Phase 4 (administration), in progress since 28 Sep 2026
+
+| Part | What exists | Commit |
+|---|---|---|
+| 4.1 | Control Room (More, MANAGER+ only; tabs as iOS, BoD-only ones for BoD/OAA; tabs not built yet open `/admin` on the web). **Users**: role counts as filters, search, A–Z, invite by email with roles strictly below yours, bring in signed-up users (absorbs their personal workspace); **user detail**: role, approver (loop guarded before the server refuses), flexi, location-free, rest days (< 7), work hours (default start/end, overnight ok), memberships, account (name/email/password, only changed keys), remove from workspace, delete account (BoD). **Approval chart**: approvers with their direct reports, the unplaced listed | this step |
+
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 

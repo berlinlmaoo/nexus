@@ -35,6 +35,8 @@ sealed interface Target {
     data object Leaderboard : Target
     data object RoomBooking : Target
     data object TeamCalendar : Target
+    /** Control Room (manager and above). */
+    data object Admin : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -120,6 +122,7 @@ object Links {
             p == "/leaderboard" -> Target.Leaderboard
             p == "/room-booking" -> Target.RoomBooking
             p == "/master-calendar" -> Target.TeamCalendar
+            p == "/admin" -> Target.Admin
             Regex("^/reports/([^/]+)$").matches(p) -> Target.Reports(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))
