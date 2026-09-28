@@ -1299,7 +1299,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
     onSuccess: (r) => {
       refreshAll();
       toast.success(`${r.grants.length} ${r.grants.length === 1 ? "person" : "people"} got ${r.days} extra day${r.days === 1 ? "" : "s"} off`, {
-        description: `Period ${r.periodLabel}. ${r.notified === r.grants.length ? "Everyone was notified." : `${r.notified} of ${r.grants.length} notified.`}`,
+        description: `Period ${r.periodLabel}. ${r.notified < r.grants.length ? `${r.notified} of ${r.grants.length} notified.` : r.grants.length === 1 ? "They were notified." : `All ${r.grants.length} were notified.`}`,
       });
       setSelected(new Set()); setReason(""); setDays("1");
     },
