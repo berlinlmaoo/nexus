@@ -2,8 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { auth } from "@/lib/auth"
-import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { isCronRequest } from "@/lib/cron-auth"
 import { previousMonthKey, isMonthKey, summarizeReflectionMonth } from "@/lib/reflection-summaries"
 
 /**
@@ -15,15 +14,8 @@ import { previousMonthKey, isMonthKey, summarizeReflectionMonth } from "@/lib/re
  * `?month=YYYY-MM` overrides the month for a manual re-run.
  */
 export async function POST(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET
-  const authHeader = req.headers.get("authorization") || ""
-  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
-  let authorized = Boolean(cronSecret && bearer && bearer === cronSecret)
-  if (!authorized) {
-    const session = await auth()
-    if (session?.user?.id && isBodPlus(await getUserOrgRole(session.user.id))) authorized = true
-  }
-  if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
+  if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const override = req.nextUrl.searchParams.get("month")
   const month = isMonthKey(override) ? override : previousMonthKey()

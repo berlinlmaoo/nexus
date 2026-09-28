@@ -1,9 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
 import { GIDEON_TICKET_CATEGORIES } from "@/lib/gideon-ticket"
 import { GIDEON_EMAIL } from "@/lib/gideon-identity"
@@ -29,17 +28,8 @@ const RECENT_DAYS = 7
 
 export async function POST(req: NextRequest) {
   try {
-    const cronSecret = process.env.CRON_SECRET
-    const authHeader = req.headers.get("authorization") || ""
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
-
-    let authorized = Boolean(cronSecret && bearer && bearer === cronSecret)
-    if (!authorized) {
-      // Manual run from a BoD account, so this is testable without the cron secret.
-      const session = await auth()
-      if (session?.user?.id && isBodPlus(await getUserOrgRole(session.user.id))) authorized = true
-    }
-    if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
+    if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     // dryRun detects and reports without notifying anyone. There are ten BoD and `push: true` reaches
     // their phones, so proving the DETECTION works must not cost ten people a 5am notification. The

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { secretMatches } from "@/lib/cron-auth"
 import { sendDigestToAll } from "@/lib/wa-bot"
 
 // Morning WhatsApp digest. Triggered by an external scheduler with the CRON_SECRET bearer (same pattern
@@ -8,7 +9,7 @@ import { sendDigestToAll } from "@/lib/wa-bot"
 async function run(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
   const auth = req.headers.get("authorization") || ""
-  if (!cronSecret || auth !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || !secretMatches(auth, `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
   // ?userId=<id> → test mode: send only to that user, even if they have no tasks (to preview delivery).

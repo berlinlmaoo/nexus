@@ -2,8 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { auth } from "@/lib/auth"
-import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { isCronRequest } from "@/lib/cron-auth"
 import { ensureRevisionTrigger } from "@/lib/project-sheets"
 
 /**
@@ -24,17 +23,8 @@ const RETENTION_DAYS = 90
 
 export async function POST(req: NextRequest) {
   try {
-    const cronSecret = process.env.CRON_SECRET
-    const authHeader = req.headers.get("authorization") || ""
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
-
-    let authorized = Boolean(cronSecret && bearer && bearer === cronSecret)
-    if (!authorized) {
-      // Manual run from a BoD account, so this is testable without the cron secret.
-      const session = await auth()
-      if (session?.user?.id && isBodPlus(await getUserOrgRole(session.user.id))) authorized = true
-    }
-    if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // CRON_SECRET only (Authorization: Bearer, as cron/nexus-cron.sh sends it). No session fallback.
+    if (!isCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
