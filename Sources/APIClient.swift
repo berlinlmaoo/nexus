@@ -2159,8 +2159,13 @@ struct APIClient {
     }
 
     func attendanceHistory(scope: String, month: String) async throws -> [AttendanceRow] {
+        try await attendanceHistoryResponse(scope: scope, month: month).all
+    }
+    /// The whole response, roster included — the crew board lists everyone, rows or not. Same request
+    /// and cache key as `attendanceHistory(scope:month:)`.
+    func attendanceHistoryResponse(scope: String, month: String) async throws -> AttendanceHistoryResponse {
         let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
-        return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self, cache: "attendance-history-\(scope)-\(month)")).all
+        return try await run(makeRequest(path), decode: AttendanceHistoryResponse.self, cache: "attendance-history-\(scope)-\(month)")
     }
     /// One person's rows of the board for a period — the member profile's streak row. `scope` is
     /// "me" for yourself, "workspace" for someone else (the server narrows a manager to their

@@ -1164,15 +1164,22 @@ struct StreakBoardCard: View {
         guard worked > target else { return base }
         return base + Text(" +\(worked - target)").foregroundColor(NX.success)
     }
-    private static func buildMembers(_ rows: [AttendanceRow]) -> [Member] {
+    private static func buildMembers(_ rows: [AttendanceRow], roster: [AttendanceHistoryResponse.RosterEntry]? = nil) -> [Member] {
         let groups = Dictionary(grouping: rows) { $0.user?.id ?? "me" }
-        return groups.map { uid, rs -> Member in
+        var members = groups.map { uid, rs -> Member in
             var cells: [String: AttTone] = [:]
             var rowByDay: [String: AttendanceRow] = [:]
             for r in rs { if let k = Self.dayKey(r.attendanceDate) { cells[k] = AttTone.of(r); rowByDay[k] = r } }
             return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay,
                           quota: rs.compactMap { $0.user?.dayOffQuota }.first ?? 4)
-        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+        // Everyone the server lists for the board gets a line, rows or not: on the first day of a
+        // period most of the crew has no row yet, and the board used to show only a handful of names.
+        for person in roster ?? [] where groups[person.id] == nil {
+            members.append(Member(id: person.id, name: person.name ?? T("Unknown"), cells: [:], rowByDay: [:],
+                                  quota: person.dayOffQuota ?? 4))
+        }
+        return members.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     /// Whether a tap on this cell opens it, and with which row.
     ///
@@ -1538,8 +1545,8 @@ struct StreakBoardCard: View {
         // the whole crew restored into a personal board would be a quiet, convincing lie.
         let scope = wide ? "workspace" : "me"
         do {
-            let fetched = try await APIClient.shared.attendanceHistory(scope: scope, month: monthKey)
-            members = Self.buildMembers(fetched)
+            let fetched = try await APIClient.shared.attendanceHistoryResponse(scope: scope, month: monthKey)
+            members = Self.buildMembers(fetched.all, roster: fetched.roster)
             cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }   // leaves the board as it was, same as before
@@ -1549,7 +1556,7 @@ struct StreakBoardCard: View {
             // underneath says when the copy was taken.
             if let hit = ResponseCache.decoded("attendance-history-\(scope)-\(monthKey)",
                                                as: AttendanceHistoryResponse.self) {
-                members = Self.buildMembers(hit.value.all)
+                members = Self.buildMembers(hit.value.all, roster: hit.value.roster)
                 cachedFrom = hit.savedAt
             } else {
                 members = []

@@ -87,7 +87,11 @@ struct AttendanceRecord: Decodable, Sendable {
 struct AttendanceHistoryResponse: Decodable, Sendable {
     let rows: [AttendanceRow]?
     let records: [AttendanceRow]?
+    /// Everyone the board lists, rows or not (workspace scope; servers from 28 Sep 2026). On the first
+    /// day of a period most people have no row yet — without this the board showed a handful of names.
+    let roster: [RosterEntry]?
     var all: [AttendanceRow] { rows ?? records ?? [] }
+    struct RosterEntry: Decodable, Sendable { let id: String; let name: String?; let dayOffQuota: Int? }
 }
 struct AttendanceRow: Decodable, Identifiable, Sendable {
     let id: String?
