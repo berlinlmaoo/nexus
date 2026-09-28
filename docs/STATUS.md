@@ -45,9 +45,9 @@ Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796
 ## First APK, ready to publish (for the main session, R2)
 
 `agents:~/nexus-android-release/NEXUS-0.1.6-1.apk` — versionName 0.1.6, versionCode 1, arm64-v8a +
-armeabi-v7a, targetSdk 36, 21.9 MB, sha256 `b5e05ab8d184e383217c9259a8bc046445cf6732ec3e2a8c2da2f04a955e3133`,
-signed by the release key (SHA-256 53:22:FE:…:AD:26). Built WITHOUT Firebase (no google-services.json
-yet): push is off in this build; rebuild after the file lands.
+armeabi-v7a, targetSdk 36, 21.9 MB, sha256 `5fabc061f5200e9783c594627e6a82f029614b26aafa8b7f8583411862e2d97e`,
+signed by the release key (SHA-256 53:22:FE:…:AD:26). Built WITH Firebase (project
+nexus-znetworks-android, read from `~/.nexus-android-secrets/firebase.properties`, 28 Sep).
 
 ## Not verified yet (the first thing to do)
 
