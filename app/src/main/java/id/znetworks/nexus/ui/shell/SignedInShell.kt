@@ -18,6 +18,7 @@ import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
 import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
+import id.znetworks.nexus.feature.admin.TeamDetailScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
 import id.znetworks.nexus.feature.admin.AuditEntryScreen
@@ -278,7 +279,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     openMemberAttendance = { nav.navigate("admin-att/$it") }, openOffices = { nav.navigate("admin-offices") },
                 ))
             }
-            composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
+            composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }) }
+            composable("admin-team/{id}") { e -> TeamDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
             composable("admin-att/{id}") { e -> MemberAttendanceAdminScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenReflections = { nav.navigate("reflections/$it") }) }
             composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
             composable("reflections/{id}") { e -> ReflectionsScreen(e.arguments?.getString("id"), onBack = { nav.popBackStack() }) }

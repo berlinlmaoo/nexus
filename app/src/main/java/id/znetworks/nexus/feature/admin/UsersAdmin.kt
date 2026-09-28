@@ -197,7 +197,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
 /** One member: role, approver, attendance mode, rest days, work hours, account, memberships, danger. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) -> Unit) {
+fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) -> Unit, onOpenTeam: (String) -> Unit = {}) {
     val api = adminApi()
     val c = Nx.colors
     val context = LocalContext.current
@@ -291,15 +291,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                         fontSize = 12.sp, color = c.mutedFg)
                 }
             }
-            ms?.let { mm ->
-                AdminCard(stringResource(R.string.ad_memberships)) {
-                    if (mm.teams.isNotEmpty()) Text(stringResource(R.string.ad_teams) + ": " + mm.teams.joinToString(", ") { it.name }, fontSize = 12.sp, color = c.foreground)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        mm.projects.forEach { p -> Pill((p.icon?.takeIf { !it.startsWith("/") }?.let { "$it " } ?: "") + p.name + (p.viaTeam?.let { " · $it" } ?: ""), c.mutedFg) }
-                    }
-                    if (mm.projects.isEmpty() && mm.teams.isEmpty()) Text(stringResource(R.string.ad_no_memberships), fontSize = 12.sp, color = c.mutedFg)
-                }
-            }
+            MembershipEditor(m.userId, m.displayName, ms, canManage, onOpenTeam) { block -> run(block) }
             if (canManage) AccountCard(m) { f -> run { api.updateAccount(m.userId, f) } }
             if (canManage && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.ps_danger)) {
                 OutlinedButton(onClick = { confirm = "remove" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_remove_ws), color = c.danger) }
