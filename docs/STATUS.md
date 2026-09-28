@@ -5,8 +5,9 @@
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
 Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (314 JVM tests, all green).
-Version 0.1.6 (versionCode 6 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
-**Next audit candidate: build 6** (sha256 `ec06a64e…1934`, from 91dded1, 308 tests) — see "APK ready".
+Version 0.1.6 (versionCode 7 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
+**Build 7 ready, NOT published** (`~/nexus-android-release/NEXUS-0.1.6-7.apk`, sha256 `f10f4887e2eba6f83521e3584206b35cc04d09b92cb6417b22574612d66b1873`, from 1e3e706, 314 tests; versionCode 7, versionName 0.1.6, signer 5322fe4c…ad26): UI points 1–7 vs iOS + update offered by build number (latestName/latestBuild). Emulator smoke: 3 cold launches drawn, no crash from this install (the one crash in the log is the known stale BOOT_COMPLETED to the uninstalled previous uid).
+Build 6 (sha256 `ec06a64e…1934`, from 91dded1, 308 tests) — see "APK ready".
 **Release candidate: build 5** (`NEXUS-0.1.6-5.apk`, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`,
 from b122e0f, 300 JVM tests at that commit): security + parity audit 266af90 = **RILIS LAYAK**; it goes
 out for Berlin to test. The fixes for that audit's RENDAH findings (R1, R3, R4, R6, R7) are in the code
