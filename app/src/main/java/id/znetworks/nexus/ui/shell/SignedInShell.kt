@@ -3,6 +3,7 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import id.znetworks.nexus.feature.home.HomeScreen
+import id.znetworks.nexus.feature.search.SearchScreen
 import id.znetworks.nexus.feature.projects.ProjectSettingsScreen
 import id.znetworks.nexus.feature.tasks.MyTasksScreen
 import id.znetworks.nexus.feature.tasks.TaskDetailScreen
@@ -170,11 +171,18 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 HomeScreen(
                     onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } },
                     onOpenInbox = { goTab(Tab.INBOX) },
-                    // Search lands in 2.8; until then Mission Control's search covers missions and tasks.
-                    onSearch = { goTab(Tab.PROJECTS) },
+                    onSearch = { nav.navigate("search") },
                     onOpenProject = { nav.navigate("project/$it") },
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { goTab(Tab.MORE) },
+                    onOpenWeb = { openWeb(context, it) },
+                )
+            }
+            composable("search") {
+                SearchScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenTask = { nav.navigate("task/$it") },
+                    onOpenProject = { nav.navigate("project/$it") },
                     onOpenWeb = { openWeb(context, it) },
                 )
             }

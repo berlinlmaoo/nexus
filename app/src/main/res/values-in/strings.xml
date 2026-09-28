@@ -735,4 +735,13 @@
     <string name="ps_delete_q">Hapus “%1$s”?</string>
     <string name="ps_delete_body">Semua task, field &amp; data project ikut kehapus. Gabisa di-undo.</string>
     <string name="ps_delete_forever">Hapus permanen</string>
+    <string name="search_hint">Cari task, project, doc, member…</string>
+    <string name="search_start">Mulai ngetik buat nyari.</string>
+    <string name="search_min">Ketik minimal 2 huruf buat nyari.</string>
+    <string name="search_none">Tidak ada hasil untuk “%1$s”.</string>
+    <string name="search_projects">Proyek</string>
+    <string name="search_tasks">Task</string>
+    <string name="search_docs">Dokumen</string>
+    <string name="search_forms">Form</string>
+    <string name="search_members">Anggota</string>
 </resources>

@@ -741,4 +741,13 @@
     <string name="ps_delete_q">Delete “%1$s”?</string>
     <string name="ps_delete_body">Every task, field and project data goes with it. This cannot be undone.</string>
     <string name="ps_delete_forever">Delete permanently</string>
+    <string name="search_hint">Search tasks, projects, docs, members…</string>
+    <string name="search_start">Start typing to search.</string>
+    <string name="search_min">Type at least 2 characters to search.</string>
+    <string name="search_none">No results for “%1$s”.</string>
+    <string name="search_projects">Projects</string>
+    <string name="search_tasks">Tasks</string>
+    <string name="search_docs">Docs</string>
+    <string name="search_forms">Forms</string>
+    <string name="search_members">Members</string>
 </resources>
