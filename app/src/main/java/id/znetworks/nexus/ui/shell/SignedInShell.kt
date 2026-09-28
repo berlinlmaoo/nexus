@@ -117,6 +117,11 @@ import id.znetworks.nexus.feature.projects.ProjectDetailScreen
 import id.znetworks.nexus.feature.projects.ProjectsScreen
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.EnterTransition
 import id.znetworks.nexus.ui.components.CompanyOnly
 import id.znetworks.nexus.ui.components.rememberIsCompany
 import id.znetworks.nexus.core.nav.Target
@@ -252,7 +257,15 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 )
             }
         }
-        NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.weight(1f).fillMaxSize()) {
+        // iOS push/pop (Berlin, 29 Sep, point 7): a screen slides in from the right and, on back, out to
+        // the right while the one below comes back from the left; never a scale/zoom. The predictive
+        // back gesture drives the same pop transition. Switching tabs has no animation, as the iOS tab bar.
+        NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.weight(1f).fillMaxSize(),
+            enterTransition = { if (ShellMotion.betweenTabs(initialState.destination.route, targetState.destination.route)) EnterTransition.None else ShellMotion.pushIn },
+            exitTransition = { if (ShellMotion.betweenTabs(initialState.destination.route, targetState.destination.route)) ExitTransition.None else ShellMotion.pushOut },
+            popEnterTransition = { if (ShellMotion.betweenTabs(initialState.destination.route, targetState.destination.route)) EnterTransition.None else ShellMotion.popIn },
+            popExitTransition = { if (ShellMotion.betweenTabs(initialState.destination.route, targetState.destination.route)) ExitTransition.None else ShellMotion.popOut },
+        ) {
             composable(Tab.HOME.route) {
                 HomeScreen(
                     onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } },
@@ -367,6 +380,17 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         }
       }
     }
+}
+
+/** The shell's navigation motion (iOS push/pop, point 7). */
+object ShellMotion {
+    private val TABS = setOf("home", "tasks", "inbox", "projects", "more")
+    private const val MS = 300
+    fun betweenTabs(from: String?, to: String?) = from in TABS && to in TABS
+    val pushIn: EnterTransition = slideInHorizontally(tween(MS)) { it }
+    val pushOut: ExitTransition = slideOutHorizontally(tween(MS)) { -it / 3 }
+    val popIn: EnterTransition = slideInHorizontally(tween(MS)) { -it / 3 }
+    val popOut: ExitTransition = slideOutHorizontally(tween(MS)) { it }
 }
 
 /** Where the tabs go: a bottom bar on phones, a rail from 600 dp wide (Material's medium width). */
