@@ -190,7 +190,8 @@ active office counts as inside; a replayed check-in answered 409 "already checke
 
 | Finding | Fix | Commit |
 |---|---|---|
-| T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | this step |
+| T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | c10ca62 |
+| T2 (TINGGI) a new build with the same versionName was never offered | "Update available" compares `versionCode` from `/api/app/android/release` (launch/foreground/sign-in, signed in only) and shows "0.1.6 (3)"; the gate also reads `minBuild/latestBuild/nextMinimumBuild` when the server sends them (build floor persisted, lifted only by that build). Server fields asked in SERVER-REQUESTS **R5 (OPEN)** | this step |
 
 ## Release rule (Berlin, 28 Sep 2026)
 

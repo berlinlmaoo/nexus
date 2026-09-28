@@ -113,6 +113,25 @@ you want the once-a-day "Update NEXUS by <date>" warning on Android too, add `ne
 
 ---
 
+## R5. Android build numbers in the version policy and the 426 floor — OPEN (audit 28 Sep 2026, T2)
+
+**Decision (main session, 28 Sep):** versionName stays 0.1.6, versionCode +1 per APK; update offers and
+the floor compare the **versionCode**.
+
+**Why.** `android.minSupported/latest/nextMinimum` and the 426 gate (`src/lib/client-version.ts`,
+`src/lib/version-policy.ts`) compare versionName only, so build 2 and build 3 look the same: a broken
+build 2 can't be locked out in favour of build 3.
+
+**Shape** (additive; the `android` block of `GET /api/app/version-policy`):
+`minBuild?: number`, `latestBuild?: number`, `nextMinimumBuild?: number` (same meaning as the name fields,
+for the versionCode). The 426 gate: the header is already `X-Nexus-Client: android/<versionName>/<versionCode>`;
+refuse when `versionCode < minBuild` too, with the same body (`minSupported`, `storeUrl`) plus `minBuild`.
+`latestBuild` can come from `current.json.versionCode`.
+
+**Android before:** "Update available" already compares `versionCode` from `GET /api/app/android/release`
+(signed in); no build floor. **After:** reads the three fields (already implemented and tested:
+`VersionGate.evaluate`, `lockLifted` with a persisted build floor), no app change needed.
+
 ## Found while porting (iOS, for the main session) — not Android work
 
 ### I1. Queued check-in refused for distance is retried 5× instead of dropped and said — DONE on iOS (caaca89). Server unchanged: adding `code` would flip live check-in into the offsite prompt on 0.1.4–0.1.6
