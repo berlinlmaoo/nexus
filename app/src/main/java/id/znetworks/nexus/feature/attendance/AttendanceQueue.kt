@@ -164,6 +164,8 @@ class AttendanceQueue(
                     // this tap's job is done. Dropped without a word, and the check-out behind it goes on.
                     alreadyCheckedIn(entry.kind, e) -> {
                         remove(entry.id)
+                        // An earlier attempt's warning no longer holds (iOS db9295c clears it too).
+                        mutate { it.copy(problem = null) }
                         onCheckInLanded()
                         continue
                     }

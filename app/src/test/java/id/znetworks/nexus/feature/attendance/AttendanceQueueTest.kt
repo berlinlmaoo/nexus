@@ -221,4 +221,15 @@ class AttendanceQueueTest {
         assertEquals(0, q.state.value.count)
         assertFalse(tmp.root.resolve("x.jpg").exists())
     }
+
+    @Test fun alreadyCheckedInAfterAFailedTryClearsTheWarning() = runTest {
+        val q = queue()
+        q.add("in", AttendanceKind.CHECK_IN, 1)
+        sender.answers += ApiError.Http(400, "Selfie photo is required.", null, null)
+        q.flush()
+        assertTrue(q.state.value.problem != null)
+        sender.answers += ApiError.Http(409, "You have already checked in today.", null, null)
+        assertEquals(AttendanceQueue.FlushResult.DRAINED, q.flush())
+        assertEquals(null, q.state.value.problem)
+    }
 }
