@@ -947,10 +947,31 @@ export async function GET(request: NextRequest) {
     // Each person's weekly-rest quota rides on their rows, so every client computes the Score column
     // (days worked / period days minus quota) the same way — 4 for most people, 9 for some, plus any
     // extra day off granted for the requested period.
-    const quotaByUserId = await dayOffQuotaByUser(context.workspace.id, [...new Set(rows.map((r) => r.user.id))], quotaPeriodKey)
+    // Everyone the board should list, rows or not (owner, 28 Sep 2026): on the first day of a period
+    // most people have no row yet, and a board built only from rows showed a handful of names. Same
+    // people as the rows would cover — the manager's reports + self, or the workspace minus BoD/OAA —
+    // limited to members who had joined by the end of the range. Additive: older clients ignore it.
+    const rosterMembers = scope === "workspace" && !parsed.data.userId
+      ? await prisma.workspaceMember.findMany({
+          where: {
+            workspaceId: context.workspace.id,
+            joinedAt: { lte: new Date(range.end.getTime() + 24 * 60 * 60 * 1000) },
+            ...(teamScopeUserIds ? { userId: { in: teamScopeUserIds } } : exemptUserIds.length ? { userId: { notIn: exemptUserIds } } : {}),
+          },
+          select: { user: { select: { id: true, name: true, email: true, avatar: true } } },
+        })
+      : []
+    const quotaByUserId = await dayOffQuotaByUser(
+      context.workspace.id,
+      [...new Set([...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)])],
+      quotaPeriodKey,
+    )
     return NextResponse.json({
       scope,
       records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA } })),
+      roster: rosterMembers
+        .map((m) => ({ ...m.user, dayOffQuota: quotaByUserId.get(m.user.id) ?? DEFAULT_DAY_OFF_QUOTA }))
+        .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     })
   } catch (error) {
     console.error("Error fetching attendance history:", error)

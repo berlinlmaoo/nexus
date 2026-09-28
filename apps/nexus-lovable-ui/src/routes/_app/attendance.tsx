@@ -349,9 +349,12 @@ function Attendance() {
   const [overrideTarget, setOverrideTarget] = useState<{ userId: string; name: string | null; dateKey: string } | null>(null);
   const rows = Array.isArray(history.data?.rows) ? history.data.rows : [];
   // Full de-duped member list (search runs over ALL members, not a pre-sliced subset).
-  const allMembers = rows
-    .map((row) => row.user)
-    .filter((user, index, arr): user is NonNullable<typeof user> => Boolean(user?.id) && arr.findIndex((other) => other?.id === user?.id) === index);
+  // Rows plus the server's roster: everyone on the board even before they have a single day in the
+  // period (the first day of a period used to list only whoever had already checked in).
+  const roster = (history.data?.roster ?? []) as Array<NonNullable<(typeof rows)[number]["user"]>>;
+  const allMembers = [...rows.map((row) => row.user), ...roster]
+    .filter((user, index, arr): user is NonNullable<typeof user> => Boolean(user?.id) && arr.findIndex((other) => other?.id === user?.id) === index)
+    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   const q = memberQuery.trim().toLowerCase();
   const matchMember = (u?: { name?: string | null; email?: string | null } | null) => {
     if (!q) return true;
