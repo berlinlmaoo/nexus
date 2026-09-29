@@ -1615,7 +1615,7 @@
     <string name="cf_revoke_link_body">It stops working at once for everyone who has it.</string>
     <string name="leave_dates">Dates</string>
     <string name="missing_dates">Pick the dates of your leave.</string>
-    <string name="wn_leave_multi">Annual leave: pick several dates at once, up to the days you have left</string>
+    <string name="wn_leave_multi">Annual leave: pick a range of dates at once, up to the days you have left</string>
     <string name="leave_tap_range">Tap the first day, then the last</string>
     <string name="leave_summary">%1$s · %2$d of %3$d days</string>
     <string name="leave_too_long">That\'s %1$d days — only %2$d left.</string>

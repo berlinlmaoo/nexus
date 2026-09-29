@@ -1609,7 +1609,7 @@
     <string name="cf_revoke_link_body">Link langsung tidak bisa dipakai oleh siapa pun yang memilikinya.</string>
     <string name="leave_dates">Tanggal</string>
     <string name="missing_dates">Pilih tanggal cutimu.</string>
-    <string name="wn_leave_multi">Cuti: pilih beberapa tanggal sekaligus, sebanyak sisa jatahmu</string>
+    <string name="wn_leave_multi">Cuti: pilih rentang tanggal sekaligus, sebanyak sisa jatahmu</string>
     <string name="leave_tap_range">Ketuk hari pertama, lalu hari terakhir</string>
     <string name="leave_summary">%1$s · %2$d dari %3$d hari</string>
     <string name="leave_too_long">Itu %1$d hari — sisa %2$d saja.</string>
