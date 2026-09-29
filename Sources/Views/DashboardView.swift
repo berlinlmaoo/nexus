@@ -170,10 +170,11 @@ struct DashboardView: View {
                 // window still gets the single column. The explicit idealWidth is what ViewThatFits
                 // measures, so long text inside cannot push the wide layout out.
                 ViewThatFits(in: .horizontal) {
+                    threeColumns.frame(minWidth: 1500, idealWidth: 1500, maxWidth: .infinity)
                     wideColumns.frame(minWidth: 980, idealWidth: 980, maxWidth: .infinity)
                     singleColumn
                 }
-                .padding(16)
+                .padding(.horizontal, 28).padding(.vertical, 16)
                 #else
                 singleColumn.padding(16)
                 #endif
@@ -261,6 +262,36 @@ struct DashboardView: View {
                     xpRulesCard
                 }
                 .frame(width: 360)
+            }
+            Color.clear.frame(height: 8)
+        }
+    }
+
+    /// Mac, very wide (full screen, sidebar hidden): the day's work, then projects and agenda, then
+    /// the person.
+    private var threeColumns: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            greeting
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 18) {
+                    attendanceBar
+                    searchRow
+                    statCards
+                    quickActions
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 18) {
+                    dailyCalendarCard
+                    projectShortcuts
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 18) {
+                    levelCard
+                    profileCard
+                    if showPasskeyNudge { passkeyNudge }
+                    xpRulesCard
+                }
+                .frame(width: 380)
             }
             Color.clear.frame(height: 8)
         }
