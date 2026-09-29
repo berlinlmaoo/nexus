@@ -1165,6 +1165,8 @@ struct RequestComposerSheet: View {
     /// of consecutive dates is sent as one request.
     @State private var leaveDates: Set<DateComponents> = []
     @State private var leaveCapNote: String?
+    /// Set right before this view changes `leaveDates` itself, so that change is not read as a tap.
+    @State private var leaveSelfWrite = false
     @State private var reason = ""
     @State private var attach: (name: String, data: Data)?
     @State private var showImporter = false
@@ -1210,7 +1212,8 @@ struct RequestComposerSheet: View {
     // piece of evidence, one decision. A range was a second way to file several days that nothing
     // else in attendance understood, so the UNTIL picker is gone and endDate is always startDate.
     /// Izin is today or later; sakit may be filed for a day that has already happened.
-    private var earliest: Date? { type == "PERMIT" && !canGrant ? Calendar.current.startOfDay(for: Date()) : nil }
+    /// Today or later for every type (owner, 29 Sep 2026): a past day is filed by a BoD for the person.
+    private var earliest: Date? { Calendar.current.startOfDay(for: Date()) }
     /// Days left in the bucket this type draws from, if it draws from one.
     private var remainingDays: Int? {
         switch type {
@@ -1232,12 +1235,55 @@ struct RequestComposerSheet: View {
     /// "(OPTIONAL)" and the submit was then refused — so the label lied and the person had no idea why.
     /// A sick day needs the doctor's note for everyone filing their own, a BoD included (owner, 29 Sep
     /// 2026) — this composer only ever files for the signed-in person.
-    private var attachmentRequired: Bool { type == "SICK" || (!canGrant && type == "PERMIT") }
+    private var attachmentRequired: Bool { type == "SICK" || type == "PERMIT" }
     private var isLeave: Bool { type == "LEAVE" }
     /// The picked leave dates as days, oldest first.
     private var leaveDays: [Date] {
         leaveDates.compactMap { ProjDate.cal.date(from: $0) }.map { ProjDate.cal.startOfDay(for: $0) }.sorted()
     }
+    /// Leave is a RANGE (owner, 29 Sep 2026): tap the first day, then the last, and every day between
+    /// is taken; a third tap starts a new range, tapping a picked day clears it. Capped at the days left.
+    private func pickLeave(old: Set<DateComponents>, new: Set<DateComponents>) {
+        if leaveSelfWrite { leaveSelfWrite = false; return }
+        // The picker's own calendar: components built with another one would not match its cells.
+        let cal = Calendar.current
+        let day = { (c: DateComponents) in cal.date(from: c).map { cal.startOfDay(for: $0) } }
+        /// Writes only when it changes something (an equal write reports nothing back).
+        func write(_ v: Set<DateComponents>) { if v != new { leaveSelfWrite = true; leaveDates = v } }
+        if new.count < old.count { write([]); leaveCapNote = nil; return }
+        guard let added = new.subtracting(old).first, let tapped = day(added) else { return }
+        if old.count == 1, let first = old.first.flatMap(day) {
+            let (a, b) = first <= tapped ? (first, tapped) : (tapped, first)
+            var fill: Set<DateComponents> = []
+            var d = a
+            while d <= b {
+                fill.insert(cal.dateComponents([.calendar, .era, .year, .month, .day], from: d))
+                guard let n = cal.date(byAdding: .day, value: 1, to: d) else { break }
+                d = n
+            }
+            if let left = remainingDays, fill.count > left {
+                write(old)
+                leaveCapNote = String(format: T("That's %d days — only %d left."), fill.count, left)
+            } else {
+                write(fill)
+                leaveCapNote = nil
+            }
+        } else {
+            // A range was already picked (or none): this tap starts over from here.
+            write([added])
+            leaveCapNote = nil
+        }
+    }
+
+    private var leaveSummary: String {
+        let days = leaveDays
+        guard let first = days.first, let last = days.last else { return T("Tap the first day, then the last") }
+        let f = DateFormatter(); f.dateFormat = "d MMM"; f.timeZone = ProjDate.cal.timeZone
+        f.locale = Locale(identifier: AppLanguage.shared.lang.rawValue == "id" ? "id_ID" : "en_US")
+        let range = days.count == 1 ? f.string(from: first) : "\(f.string(from: first)) – \(f.string(from: last))"
+        return String(format: T("%@ · %d of %d days"), range, days.count, remainingDays ?? 0)
+    }
+
     /// Consecutive days → one (start, end) block each.
     private var leaveBlocks: [(Date, Date)] {
         var out: [(Date, Date)] = []
@@ -1281,7 +1327,7 @@ struct RequestComposerSheet: View {
             if !l.eligible { return l.reason ?? T("Annual leave needs 12 months of service.") }
             return String(format: T("Annual leave: %d of %d days left this year."), l.remaining ?? 0, l.quota ?? 12)
         case "SICK":
-            return T("One day per request, and a photo of the doctor's note is required. A day that has already passed is fine.")
+            return T("One day per request, today or later, with a photo of the doctor's note. A past day is filed by a BoD.")
         case "PERMIT":
             return T("One day per request, today or later, with a photo and your location.")
         case "DAY_OFF":
@@ -1329,13 +1375,13 @@ struct RequestComposerSheet: View {
                         if isLeave {
                             field(T("DATES")) {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    MultiDatePicker(T("Dates"), selection: $leaveDates)
+                                    MultiDatePicker(T("Dates"), selection: $leaveDates, in: Calendar.current.startOfDay(for: Date())...)
                                         .tint(NX.violetText)
                                         .padding(8)
                                         .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
                                     HStack(spacing: 8) {
-                                        Text(String(format: T("%d of %d days picked"), leaveDates.count, remainingDays ?? 0))
+                                        Text(leaveSummary)
                                             .font(NXFont.text(12, .bold))
                                             .padding(.horizontal, 9).padding(.vertical, 4)
                                             .background(NX.violet.opacity(0.12), in: Capsule())
@@ -1346,15 +1392,7 @@ struct RequestComposerSheet: View {
                                     }
                                 }
                             }
-                            .onChange(of: leaveDates) { old, new in
-                                // Capped at the days left: the date that would go past it is not taken.
-                                if let left = remainingDays, new.count > left {
-                                    leaveDates = old
-                                    leaveCapNote = String(format: T("Only %d days left."), left)
-                                } else {
-                                    leaveCapNote = nil
-                                }
-                            }
+                            .onChange(of: leaveDates) { old, new in pickLeave(old: old, new: new) }
                         } else {
                         field(T("DATE")) {
                             HStack(spacing: 10) {
