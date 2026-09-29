@@ -1,8 +1,8 @@
-GAK ADA SINYAL? NEXUS TETAP KEBUKA.
+SATU TOMBOL. SELESAI.
 
-Proyek, task, file, absen hari ini, board crew, pengajuan, sampai foto absen — semua disimpan di HP dan diperbarui diam-diam di belakang.
-Di lokasi tanpa sinyal, semuanya tetap bisa dibuka. Ada keterangan kapan terakhir disimpan, biar kamu tahu itu bukan data barusan.
-File cuma diunduh lewat Wi-Fi. Mau pakai kuota? Nyalakan sendiri di Tuning Room.
+Check in dan check out sekarang cuma satu tombol.
+Cek wajah, cari lokasi, kirim — semuanya kelihatan di dalam tombolnya.
+Tadinya mau ada konfeti. Nggak jadi.
 
 LOKASI IKUT TERCATAT. CUMA SELAMA JAM KERJA.
 
@@ -10,40 +10,41 @@ Dari check-in sampai check-out, NEXUS cek posisimu kira-kira sejam sekali.
 Seharian di kantor? Sekarang ada buktinya.
 Keluar area kantor, rutemu ikut tercatat selama kamu di luar.
 Sebelum check-in dan sesudah check-out, tidak ada yang dicatat.
-Begitu keluar, kamu langsung dikabari sisa waktunya sebelum check-out otomatis.
-Kelamaan di luar? Kamu diingatkan lagi, tombol Ajukan izin sudah siap.
+Begitu keluar, kamu langsung dikabari sisa waktunya — hitung mundurnya ada di Dynamic Island.
 Lewat 2 jam 30 menit tanpa izin, kamu otomatis check-out offsite.
+Pindah ke kantor lain? Tetap dihitung di dalam. NEXUS tahu kamu di kantor mana.
+Satu syarat: izin lokasi "Selalu", dengan Lokasi Akurat menyala.
+
+SISA JAM KERJA, LANGSUNG DI BERANDA.
+
+Begitu check in, Beranda bilang berapa lama lagi.
+Flexi: 9 jam dari check in. Shift: sampai jam pulangmu.
+
+GAK ADA SINYAL? NEXUS TETAP KEBUKA.
+
+Proyek, task, file, absen hari ini, board crew, pengajuan, sampai foto absen — semua disimpan di HP.
+Di lokasi tanpa sinyal, semuanya tetap bisa dibuka, lengkap dengan kapan terakhir disimpan.
 
 IZIN DARI HP, SEKARANG LENGKAP BUKTINYA.
 
-Begitu kamu pilih Izin, lokasimu langsung diambil dan terkunci di layar.
+Pilih Izin, lokasimu langsung diambil dan terkunci di layar.
 Foto buktinya bisa dari kamera atau galeri.
-Approver-mu lihat semuanya di satu tempat, tanpa perlu tanya balik.
-
-FORM PENGAJUAN CUMA MENAWARKAN YANG BISA KAMU PAKAI.
-
-Cuti tahunan muncul kalau jatahmu memang masih ada.
-Tanggal merah muncul kalau bulan ini ada jatahnya.
-Sakit dan izin satu tanggal. Sakit boleh mundur, izin tidak.
-Minta day off lebih banyak dari sisa jatah? Diberitahu sebelum dikirim, bukan sesudah.
+Form pengajuan cuma menawarkan yang memang bisa kamu pakai.
 
 REPORTS SEKARANG NGOMONGIN KAMU.
 
-Periode 28 sampai 27: task selesai, yang tepat waktu, yang telat, absen, sampai XP.
-Semua dibanding periode lalu. Bukan dibanding orang lain.
+Periode 28 sampai 27: task, absen, sampai XP — dibanding periode lalu, bukan dibanding orang lain.
 Manager juga bisa lihat timnya, satu per satu.
 
-DAFTAR, LUPA PASSWORD, GANTI EMAIL — SEMUA DARI APP.
-
-Punya kode workspace? Bikin akun langsung di sini.
-Lupa password? Reset dari layar masuk.
-
 Juga di versi ini:
-- Kartu absensi menyebut kamu sedang di kantor mana, bukan menghitung kantor perusahaan.
-- Lampiran bisa dari kamera dan galeri, dan Choose files akhirnya jalan di iPad.
-- Foto izin tidak lagi tersimpan dengan nama surat sakit.
-- Aplikasi Mac kini satu nomor versi dengan HP, dan bisa memotret lewat webcam.
+- Daftar akun, lupa password, dan ganti email, semua dari app.
+- Lagi check in? Keluar akun ditahan dulu sampai kamu check out.
+- Keluar akun sekarang benar-benar menutup sesimu, bukan cuma di HP ini.
+- Ganti email minta password dulu, dan email lamamu dikabari.
+- Check in dari luar kantor mencatat alamatnya, bukan nama kantor.
+- Board crew menampilkan semua orang sejak hari pertama periode.
+- Pindah ke Bahasa Indonesia tidak lagi bikin app tertutup sendiri.
+- Aplikasi Mac kini satu nomor versi dengan HP.
 - Ikon baru: tanda X, hitam di atas putih.
-- Scroll daftar pengajuan jauh lebih mulus.
-- XP quest diklaim langsung dari kartu Quest.
-- Pengingat absen pulang mengikuti jam pulang aslimu, bukan jam yang salah.
+
+Bagas sudah tes semuanya. Katanya.
