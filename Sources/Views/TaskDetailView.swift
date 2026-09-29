@@ -78,7 +78,7 @@ struct TaskDetailView: View {
         .alert(T("Couldn't do that"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
-        .confirmationDialog(T("Delete this task?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert(T("Delete this task?"), isPresented: $confirmDelete) {
             Button(T("Delete"), role: .destructive) { Task { await deleteTask() } }
             Button(T("Cancel"), role: .cancel) {}
         } message: { Text(T("The task, its subtasks and comments will be deleted.")) }

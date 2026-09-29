@@ -157,7 +157,7 @@ struct OfficeComposerSheet: View {
                                     .frame(maxWidth: .infinity).padding(.vertical, 10)
                             }
                             .buttonStyle(.plain).disabled(busy)
-                            .confirmationDialog(T("Delete this office?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                            .alert(T("Delete this office?"), isPresented: $confirmDelete) {
                                 Button(T("Delete"), role: .destructive) { Task { await remove() } }
                             } message: { Text(T("It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.")) }
                         }

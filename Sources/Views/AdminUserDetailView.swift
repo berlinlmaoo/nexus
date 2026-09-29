@@ -120,10 +120,9 @@ struct AdminUserDetailView: View {
                 )
             }
         }
-        .confirmationDialog(
+        .alert(
             exitTarget.map { "\(T("Keluarkan")) \($0.userName) \(T("dari")) \($0.teamName)?" } ?? "",
-            isPresented: Binding(get: { exitTarget != nil }, set: { if !$0 { exitTarget = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { exitTarget != nil }, set: { if !$0 { exitTarget = nil } })
         ) {
             Button(T("Keluarkan"), role: .destructive) {
                 if let t = exitTarget {
@@ -139,7 +138,7 @@ struct AdminUserDetailView: View {
                     : "\(T("Ikut hilang: akses ke")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
             } ?? "")
         }
-        .confirmationDialog("\(T("Delete account")) \"\(member.displayName)\"?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert("\(T("Delete account")) \"\(member.displayName)\"?", isPresented: $confirmDelete) {
             Button(T("Delete permanently"), role: .destructive) {
                 Task {
                     guard let uid = member.userId else { return }

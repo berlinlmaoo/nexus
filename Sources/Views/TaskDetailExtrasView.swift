@@ -187,7 +187,7 @@ struct TaskAttachmentsCard: View {
         }
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
-        .confirmationDialog("\(T("Delete")) \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+        .alert("\(T("Delete")) \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })) {
             Button(T("Delete"), role: .destructive) { if let a = deleteTarget { deleteTarget = nil; Task { await remove(a) } } }
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         }

@@ -106,10 +106,10 @@ struct ThreadsView: View {
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .navigationDestination(item: $openPost) { p in PostThreadView(post: p) }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
-        .confirmationDialog(T("Delete this post?"), isPresented: Binding(
+        .alert(T("Delete this post?"), isPresented: Binding(
             get: { confirmingDelete != nil },
             set: { if !$0 { confirmingDelete = nil } }
-        ), titleVisibility: .visible) {
+        )) {
             Button(T("Delete"), role: .destructive) {
                 if let p = confirmingDelete { Task { await remove(p) } }
             }

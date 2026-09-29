@@ -154,8 +154,7 @@ struct AdminExtraDayOffSection: View {
             }
         }
         .task { await viewer.loadIfNeeded(); await load() }
-        .confirmationDialog(dialogTitle, isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
-                            titleVisibility: .visible, presenting: pending) { p in
+        .alert(dialogTitle, isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), presenting: pending) { p in
             switch p {
             case .grant:
                 Button(T("Give extra day off")) { pending = nil; Task { await grant() } }

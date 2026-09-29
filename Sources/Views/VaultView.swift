@@ -100,10 +100,9 @@ struct VaultView: View {
             Button(T("Save")) { Task { await rename() } }
             Button(T("Cancel"), role: .cancel) { renaming = nil }
         }
-        .confirmationDialog(
+        .alert(
             deleteTarget.map { "\(trash ? T("Delete forever") : T("Move to trash")) \"\($0.name)\"?" } ?? "",
-            isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })
         ) {
             // In the trash this is the irreversible one, and it says so rather than sharing a word
             // with the reversible one a screen earlier.

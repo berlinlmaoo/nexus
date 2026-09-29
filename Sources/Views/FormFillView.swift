@@ -61,7 +61,7 @@ struct FormFillView: View {
                     Task { await addPhotos(items) }
                 }
         }
-        .confirmationDialog(T("Add file"), isPresented: $showSourceMenu, titleVisibility: .visible) {
+        .alert(T("Add file"), isPresented: $showSourceMenu) {
             // A beat after the dialog goes, so the next presentation is not swallowed by its exit.
             Button(T("Take a photo")) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showCamera = true } }
             Button(T("Choose from Photos")) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotos = true } }

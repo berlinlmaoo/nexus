@@ -202,7 +202,7 @@ struct ProjectSettingsView: View {
             Button(role: .destructive) { confirmDelete = true } label: {
                 Label(T("Delete project"), systemImage: "trash").font(NXFont.text(14, .bold)).foregroundStyle(NX.danger)
             }.disabled(busy)
-            .confirmationDialog("\(T("Delete")) \"\(name)\"? \(T("Every task, field and project data goes with it. This cannot be undone."))", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .alert("\(T("Delete")) \"\(name)\"? \(T("Every task, field and project data goes with it. This cannot be undone."))", isPresented: $confirmDelete) {
                 Button(T("Delete permanently"), role: .destructive) { Task { await deleteProj() } }
                 Button(T("Cancel"), role: .cancel) {}
             }

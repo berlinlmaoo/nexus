@@ -115,8 +115,7 @@ struct AdminSuspectSection: View {
             }
         }
         .task { await load() }
-        .confirmationDialog(T("Make this day TK?"), isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
-                            titleVisibility: .visible, presenting: confirming) { item in
+        .alert(T("Make this day TK?"), isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), presenting: confirming) { item in
             Button(T("Not valid — make it TK"), role: .destructive) { confirming = nil; Task { await review(item, verdict: "INVALID") } }
             Button(T("Cancel"), role: .cancel) { confirming = nil }
         } message: { item in

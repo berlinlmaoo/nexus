@@ -313,9 +313,8 @@ struct PasskeyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard()
         .task { await load() }
-        .confirmationDialog(revokeTitle,
-                            isPresented: Binding(get: { revokeTarget != nil }, set: { if !$0 { revokeTarget = nil } }),
-                            titleVisibility: .visible) {
+        .alert(revokeTitle,
+                            isPresented: Binding(get: { revokeTarget != nil }, set: { if !$0 { revokeTarget = nil } })) {
             Button(T("Revoke"), role: .destructive) {
                 if let p = revokeTarget { revokeTarget = nil; Task { await revoke(p) } }
             }
@@ -325,7 +324,7 @@ struct PasskeyCard: View {
         }
     }
 
-    /// Built outside the `.confirmationDialog(…)` call so the label lookup never has to happen
+    /// Built outside the `.alert(…)` call so the label lookup never has to happen
     /// inside a string interpolation.
     private var revokeTitle: String {
         guard let p = revokeTarget else { return "" }

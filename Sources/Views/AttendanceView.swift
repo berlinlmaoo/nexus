@@ -2060,7 +2060,7 @@ struct RecordActionsSheet: View {
             .navigationTitle(T("Attendance detail")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
             .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
-            .confirmationDialog("\(T("Delete the whole attendance record for")) \(dateLabel)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .alert("\(T("Delete the whole attendance record for")) \(dateLabel)?", isPresented: $confirmDelete) {
                 Button(T("Delete"), role: .destructive) { Task { await del(part: nil) } }
                 Button(T("Cancel"), role: .cancel) {}
             } message: { Text(T("That day's check-in & check-out are deleted permanently, and the day is shielded from attendance deductions.")) }
@@ -2134,9 +2134,8 @@ struct RecordActionsSheet: View {
         .background(NX.violet.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.violet.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         // Its own view for the dialog: the sheet's stack already carries the delete confirmation.
-        .confirmationDialog(pendingOverride.map { overrideTitle($0) } ?? "",
-                            isPresented: Binding(get: { pendingOverride != nil }, set: { if !$0 { pendingOverride = nil } }),
-                            titleVisibility: .visible, presenting: pendingOverride) { action in
+        .alert(pendingOverride.map { overrideTitle($0) } ?? "",
+                            isPresented: Binding(get: { pendingOverride != nil }, set: { if !$0 { pendingOverride = nil } }), presenting: pendingOverride) { action in
             Button(action == "CLEAR_PENALTY" ? T("Clear penalty") : String(format: T("Change to %@"), Self.overrideLabel(action))) {
                 Task { await applyOverride(action) }
             }
