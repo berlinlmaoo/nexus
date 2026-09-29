@@ -106,6 +106,12 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         // with empty margins either side.
         case .attendance, .projects, .submissions, .teamCalendar, .roomBooking, .reports, .messages:
             return nil
+        #if targetEnvironment(macCatalyst)
+        // Home goes two columns on a wide Mac window (DashboardView.wideColumns); 900 would squeeze
+        // it back into one.
+        case .dashboard:
+            return 1400
+        #endif
         default:
             return 900
         }

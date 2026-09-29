@@ -42,6 +42,7 @@ struct NexusApp: App {
                         .environment(auth)
                         .environment(router)
                         .tint(NX.violetText)
+                        .hideMacWindowTitle()
                         // Siri, Shortcuts, the Live Activity and the widgets all arrive here as a URL
                         // — and so does a tapped Universal Link on iOS. AppRouter.open decides which of the
                         // two vocabularies (`nexus://` or `https://`) a URL is speaking.
@@ -123,5 +124,22 @@ struct NexusApp: App {
         tab.backgroundColor = bg
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
+    }
+}
+
+extension View {
+    /// Mac: no "NEXUS By Z" title bar above the app (owner, 29 Sep 2026). The sidebar already says
+    /// where you are, and the bar only took a strip off the top. The traffic lights stay.
+    func hideMacWindowTitle() -> some View {
+        #if targetEnvironment(macCatalyst)
+        return onAppear {
+            for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                scene.titlebar?.titleVisibility = .hidden
+                scene.titlebar?.toolbar = nil
+            }
+        }
+        #else
+        return self
+        #endif
     }
 }

@@ -164,23 +164,19 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    greeting
-                    attendanceBar
-                    levelCard
-                    searchRow
-                    statCards
-                    // No "Your Quests" card here: the owner dropped it. It only repeated the Monthly
-                    // Quests stat tile above, whose modal still lists every quest with its progress.
-                    xpRulesCard
-                    if showPasskeyNudge { passkeyNudge }
-                    quickActions
-                    projectShortcuts
-                    dailyCalendarCard
-                    profileCard
-                    Color.clear.frame(height: 8)
+                #if targetEnvironment(macCatalyst)
+                // A full-screen Mac left most of the window as empty margins either side of one
+                // phone-width column (owner, 29 Sep 2026). Two columns once there is room; a narrow
+                // window still gets the single column. The explicit idealWidth is what ViewThatFits
+                // measures, so long text inside cannot push the wide layout out.
+                ViewThatFits(in: .horizontal) {
+                    wideColumns.frame(minWidth: 980, idealWidth: 980, maxWidth: .infinity)
+                    singleColumn
                 }
                 .padding(16)
+                #else
+                singleColumn.padding(16)
+                #endif
             }
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
@@ -222,6 +218,51 @@ struct DashboardView: View {
                 if phase == .active { Task { attToday = try? await APIClient.shared.attendanceToday() } }
             }
             .onDisappear { router.homeIsRoot = false }
+        }
+    }
+
+    private var singleColumn: some View {
+        LazyVStack(alignment: .leading, spacing: 18) {
+            greeting
+            attendanceBar
+            levelCard
+            searchRow
+            statCards
+            // No "Your Quests" card here: the owner dropped it. It only repeated the Monthly
+            // Quests stat tile above, whose modal still lists every quest with its progress.
+            xpRulesCard
+            if showPasskeyNudge { passkeyNudge }
+            quickActions
+            projectShortcuts
+            dailyCalendarCard
+            profileCard
+            Color.clear.frame(height: 8)
+        }
+    }
+
+    /// Mac, wide window: the day's work on the left, the person (level, profile, XP rules) on the right.
+    private var wideColumns: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            greeting
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 18) {
+                    attendanceBar
+                    searchRow
+                    statCards
+                    quickActions
+                    projectShortcuts
+                    dailyCalendarCard
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 18) {
+                    levelCard
+                    profileCard
+                    if showPasskeyNudge { passkeyNudge }
+                    xpRulesCard
+                }
+                .frame(width: 360)
+            }
+            Color.clear.frame(height: 8)
         }
     }
 
