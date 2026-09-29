@@ -4,12 +4,14 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -41,10 +43,24 @@ object AlwaysLocation {
 
     private fun granted(c: Context, p: String) = ContextCompat.checkSelfPermission(c, p) == PackageManager.PERMISSION_GRANTED
 
-    /** Each system dialog is offered once; after that (or "don't ask again") the way is Settings. */
-    private const val PREFS = "nexus.alwaysLocation"
-    fun asked(context: Context, m: Missing) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(m.name, false)
-    fun markAsked(context: Context, m: Missing) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(m.name, true).apply()
+    /**
+     * A permission request Android answers without showing anything (refused for good: "Don't ask
+     * again", or twice on 11+) comes back at once. Faster than any person could tap = nothing was shown.
+     */
+    const val SILENT_REFUSAL_MS = 400L
+    fun refusedSilently(startedAt: Long, now: Long) = now - startedAt < SILENT_REFUSAL_MS
+
+    /**
+     * Refused for good after a request came back denied: answered without a dialog (fast), or Android
+     * will no longer show one (no rationale left: "Don't ask again", or the second refusal on 11+).
+     */
+    fun refusedForGood(fast: Boolean, rationaleLeft: Boolean) = fast || !rationaleLeft
+
+    fun rationaleLeft(context: Context, permission: String): Boolean {
+        val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }.filterIsInstance<android.app.Activity>().firstOrNull()
+            ?: return true
+        return androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
+    }
 }
 
 /**
@@ -54,18 +70,30 @@ object AlwaysLocation {
 @Composable
 fun AlwaysLocationDialog(onDismiss: () -> Unit, onReady: () -> Unit) {
     val context = LocalContext.current
-    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        if (AlwaysLocation.missing(context) == null) onReady() else onDismiss()
+    // Scan final (Berlin 29 Sep): the button leads to the app's own Location permission screen. On
+    // Android 11+ asking for "all the time" IS that screen (the system opens it); precise location is
+    // the system dialog. Only when Android refuses without showing anything is App info the way left
+    // (no public intent opens a single permission page), and the dialog text says where to tap.
+    val startedAt = remember { longArrayOf(0L) }
+    fun settled(fallback: Boolean) {
+        when {
+            AlwaysLocation.missing(context) == null -> onReady()
+            fallback -> { openAppSettings(context); onDismiss() }
+            else -> onDismiss()
+        }
     }
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        settled(AlwaysLocation.refusedForGood(AlwaysLocation.refusedSilently(startedAt[0], SystemClock.elapsedRealtime()),
+            AlwaysLocation.rationaleLeft(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)))
+    }
+    fun askBackground() { startedAt[0] = SystemClock.elapsedRealtime(); background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }
     val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         when (AlwaysLocation.missing(context)) {
             null -> onReady()
-            // Precise now, "all the time" next: Android 10 asks in a dialog, 11+ opens the setting.
-            AlwaysLocation.Missing.ALL_THE_TIME -> if (!AlwaysLocation.asked(context, AlwaysLocation.Missing.ALL_THE_TIME)) {
-                AlwaysLocation.markAsked(context, AlwaysLocation.Missing.ALL_THE_TIME)
-                background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            } else { openAppSettings(context); onDismiss() }
-            AlwaysLocation.Missing.PRECISE -> onDismiss()
+            // Precise now, "all the time" next: Android 10 asks in a dialog, 11+ opens the location screen.
+            AlwaysLocation.Missing.ALL_THE_TIME -> askBackground()
+            AlwaysLocation.Missing.PRECISE -> settled(AlwaysLocation.refusedForGood(AlwaysLocation.refusedSilently(startedAt[0], SystemClock.elapsedRealtime()),
+                AlwaysLocation.rationaleLeft(context, Manifest.permission.ACCESS_FINE_LOCATION)))
         }
     }
     AlertDialog(
@@ -74,16 +102,13 @@ fun AlwaysLocationDialog(onDismiss: () -> Unit, onReady: () -> Unit) {
         text = { Text(configText("location.always.body", R.string.always_body)) },
         confirmButton = {
             TextButton(onClick = {
-                when (val m = AlwaysLocation.missing(context)) {
+                when (AlwaysLocation.missing(context)) {
                     null -> onReady()
-                    else -> if (!AlwaysLocation.asked(context, m)) {
-                        AlwaysLocation.markAsked(context, m)
-                        if (m == AlwaysLocation.Missing.PRECISE) fine.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                        else background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                    } else {
-                        // Refused before: Android will not ask again; Settings › Location is the way.
-                        openAppSettings(context); onDismiss()
+                    AlwaysLocation.Missing.PRECISE -> {
+                        startedAt[0] = SystemClock.elapsedRealtime()
+                        fine.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
+                    AlwaysLocation.Missing.ALL_THE_TIME -> askBackground()
                 }
             }) { Text(configText("location.always.button", R.string.always_button), fontWeight = FontWeight.Bold) }
         },
