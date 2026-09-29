@@ -1713,8 +1713,8 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const [date, setDate] = useState(today);
   // Annual leave is picked as several dates (owner, 29 Sep 2026), capped at the days left; each run of
   // consecutive dates goes to the server as one request.
-  const [leaveDates, setLeaveDates] = useState<string[]>([]);
-  const [leaveCapNote, setLeaveCapNote] = useState<string | null>(null);
+  const [leaveFrom, setLeaveFrom] = useState("");
+  const [leaveTo, setLeaveTo] = useState("");
   const [reason, setReason] = useState("");
   const [targetUserId, setTargetUserId] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -1778,30 +1778,19 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   // way to erase an attendance penalty — nothing to verify.
   // A sick day needs the note for everyone filing their own, a BoD included; only a grant for
   // somebody else is exempt (owner, 29 Sep 2026).
-  const attachmentRequired = (type === "SICK" && !granting) || (!canGrant && type === "PERMIT");
+  // Photo required for sick AND permit when filing your own, a BoD included (owner, 29 Sep 2026).
+  const attachmentRequired = (type === "SICK" || type === "PERMIT") && !granting;
+  // Annual leave is a range: pick the first and the last day; every day between counts, capped at the
+  // days left (owner, 29 Sep 2026).
   const multiLeave = type === "LEAVE" && !granting;
-  const addLeaveDate = (d: string) => {
-    if (!d) return;
-    setLeaveCapNote(null);
-    setLeaveDates((cur) => {
-      if (cur.includes(d)) return cur;
-      if (remainingDays != null && cur.length >= remainingDays) {
-        setLeaveCapNote(`You have ${remainingDays} leave day${remainingDays === 1 ? "" : "s"} left — that's the most you can pick.`);
-        return cur;
-      }
-      return [...cur, d].sort();
-    });
-  };
-  // Consecutive dates → one [start, end] block each.
-  const leaveBlocks = (() => {
-    const out: Array<[string, string]> = [];
-    const next = (d: string) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };
-    for (const d of leaveDates) {
-      const last = out[out.length - 1];
-      if (last && next(last[1]) === d) last[1] = d; else out.push([d, d]);
-    }
-    return out;
-  })();
+  const leaveDayCount = leaveFrom && leaveTo && leaveTo >= leaveFrom
+    ? Math.round((Date.parse(leaveTo + "T00:00:00Z") - Date.parse(leaveFrom + "T00:00:00Z")) / 86_400_000) + 1
+    : leaveFrom ? 1 : 0;
+  const leaveCapNote = multiLeave && remainingDays != null && leaveDayCount > remainingDays
+    ? `That's ${leaveDayCount} days — you have ${remainingDays} left.`
+    : null;
+  const leaveDates = leaveFrom ? [leaveFrom] : [];
+  const leaveBlocks: Array<[string, string]> = leaveFrom ? [[leaveFrom, leaveTo && leaveTo >= leaveFrom ? leaveTo : leaveFrom]] : [];
   const showAttachment = type === "SICK" || type === "PERMIT";
   const needsLocation = !canGrant && type === "PERMIT";
   const permitBackdated = type === "PERMIT" && !canGrant && date < today;
@@ -1852,7 +1841,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{granting ? "Grant a request to a user" : "New attendance request"}</h2>
-        {!granting && <p className="mt-1 text-xs text-muted-foreground">One day per request (annual leave: pick several). Only the types you can actually use are listed.</p>}
+        {!granting && <p className="mt-1 text-xs text-muted-foreground">One day per request (annual leave: a range of days). Only the types you can actually use are listed.</p>}
         {canGrant && (
           <div className="mt-3 inline-flex rounded-xl border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Who is this for">
             <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>For myself</button>
@@ -1919,21 +1908,17 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           )}
           {multiLeave ? (
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Dates
-                <input type="date" value="" onChange={(e) => addLeaveDate(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
-              </label>
-              <p className="mt-1 text-[11px] text-muted-foreground">Pick a date to add it; pick as many as you have days left.</p>
-              {leaveDates.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {leaveDates.map((d) => (
-                    <button key={d} type="button" onClick={() => { setLeaveDates((cur) => cur.filter((x) => x !== d)); setLeaveCapNote(null); }}
-                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
-                      {fmtDate(d)} <span aria-hidden>×</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">From
+                  <input type="date" value={leaveFrom} onChange={(e) => { setLeaveFrom(e.target.value); if (leaveTo && e.target.value > leaveTo) setLeaveTo(""); }}
+                    className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+                </label>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Until
+                  <input type="date" value={leaveTo} min={leaveFrom || undefined} onChange={(e) => setLeaveTo(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+                </label>
+              </div>
+              {leaveFrom && <p className="mt-1 text-[11px] font-semibold text-foreground">{fmtDate(leaveFrom)}{leaveTo && leaveTo > leaveFrom ? ` – ${fmtDate(leaveTo)}` : ""} · {leaveDayCount} day{leaveDayCount === 1 ? "" : "s"}</p>}
               {leaveCapNote && <p className="mt-1 text-[11px] font-semibold text-destructive">{leaveCapNote}</p>}
             </div>
           ) : (
@@ -1945,7 +1930,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           )}
           {!granting && remainingDays != null && (
             <div className="flex items-center gap-2">
-              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{multiLeave ? `${leaveDates.length} day${leaveDates.length === 1 ? "" : "s"}` : "1 day"}</span>
+              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{multiLeave ? `${leaveDayCount} day${leaveDayCount === 1 ? "" : "s"}` : "1 day"}</span>
               <span className="text-xs text-muted-foreground">{remainingDays} left</span>
             </div>
           )}
@@ -1971,7 +1956,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           )}
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || (multiLeave && leaveDates.length === 0) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? `Grant ${(REQ_LABEL[type] ?? "request").toLowerCase()}` : "Submit request"}</button>
+          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || (multiLeave && (leaveDates.length === 0 || Boolean(leaveCapNote))) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? `Grant ${(REQ_LABEL[type] ?? "request").toLowerCase()}` : "Submit request"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
           {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
         </div>

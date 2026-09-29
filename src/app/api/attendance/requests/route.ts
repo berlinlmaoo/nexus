@@ -437,10 +437,12 @@ export async function POST(request: NextRequest) {
     }
     // Izin now demands the same evidence check-in does — photo + coordinates. Without it, izin was
     // strictly cheaper than showing up: no proof, no location, no time.
+    // The photo is required for everyone filing their own izin, a BoD included (owner, 29 Sep 2026);
+    // only a grant for somebody else is exempt. Location and the no-backdating rule stay staff-only.
+    if (!filingForOther && reqType === "PERMIT" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
+      return NextResponse.json({ error: "Izin wajib melampirkan foto sebagai bukti." }, { status: 400 })
+    }
     if (!canGrant && reqType === "PERMIT") {
-      if (!(supportingDocument instanceof File && supportingDocument.size > 0)) {
-        return NextResponse.json({ error: "Izin wajib melampirkan foto sebagai bukti." }, { status: 400 })
-      }
       if (modernClient && (!Number.isFinite(submittedLat) || !Number.isFinite(submittedLng))) {
         return NextResponse.json(
           { error: "Izin wajib menyertakan lokasi. Aktifin izin lokasi di browser/HP kamu ya." },
