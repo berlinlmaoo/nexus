@@ -71,6 +71,15 @@ class RequestRulesTest {
         assertNull(r.missing("PERMIT", "event", false, false, todayWib.minusDays(3), now))
     }
 
+    // Berlin 29 Sep (server, iOS 22c4ecb): a sick day filed by yourself always needs the note, BoD too.
+    @Test fun sickNoteRequiredForBoDToo() {
+        val bod = RequestRules(today(), true)
+        assertTrue(bod.attachmentRequired("SICK"))
+        assertEquals(Missing.ATTACHMENT, bod.missing("SICK", "demam", false, false, todayWib, now))
+        assertNull(bod.missing("SICK", "demam", true, false, todayWib, now))
+        assertFalse(bod.attachmentRequired("PERMIT"))
+    }
+
     @Test fun cameraNamesByType() {
         val r = RequestRules(today(), false)
         assertEquals("sick-note.jpg", r.cameraFileName("SICK"))

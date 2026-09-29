@@ -9,8 +9,8 @@ import java.time.LocalDate
  * What the composer may offer and when it may submit (PRD §2.8), ported from iOS
  * `RequestComposerSheet`. Pure, so every rule is a unit test.
  *
- * [canGrant] = canManageAttendance (BoD): the server skips the "self-filed" checks for them (photo,
- * location, no backdating), but never the quota checks, so neither does this.
+ * [canGrant] = canManageAttendance (BoD): the server skips the "self-filed" checks for them (izin photo,
+ * location, no backdating), but never the quota checks or a sick note, so neither does this.
  */
 class RequestRules(private val today: AttendanceToday?, private val canGrant: Boolean) {
 
@@ -53,7 +53,11 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
     }
 
     fun showsAttachment(type: String) = type == "SICK" || type == "PERMIT"
-    fun attachmentRequired(type: String) = !canGrant && showsAttachment(type)
+    /**
+     * A sick day needs the doctor's note from everyone filing their own, a BoD included (Berlin 29 Sep,
+     * server + iOS 22c4ecb; this composer only files for the signed-in person). Izin's photo stays self-filed only.
+     */
+    fun attachmentRequired(type: String) = type == "SICK" || (!canGrant && type == "PERMIT")
     fun needsLocation(type: String) = !canGrant && type == "PERMIT"
 
     /** Named by what it is evidence of, never "sick-note.jpg" for a permit (REQ-ATT-30). */
