@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LocationOn
@@ -43,8 +44,8 @@ import id.znetworks.nexus.R
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 
-/** One card: something you will do differently tomorrow (iOS WhatsNew headline tier). */
-data class WhatsNewEntry(val icon: ImageVector, val title: Int, val body: Int)
+/** One card: something you will do differently tomorrow (iOS headline tier); without [body], a one-line "also" (iOS `.also`). */
+data class WhatsNewEntry(val icon: ImageVector, val title: Int, val body: Int? = null)
 
 /**
  * "What's new", once per version after it is installed (iOS WhatsNew). Keyed by versionName; a
@@ -64,6 +65,7 @@ object WhatsNew {
         WhatsNewEntry(Icons.Filled.ViewKanban, R.string.wn016_projects_t, R.string.wn016_projects_b),
         WhatsNewEntry(Icons.Filled.Key, R.string.wn016_account_t, R.string.wn016_account_b),
         WhatsNewEntry(Icons.Filled.SystemUpdate, R.string.wn016_update_t, R.string.wn016_update_b),
+        WhatsNewEntry(Icons.Filled.CalendarMonth, R.string.wn_leave_multi),
     )
 
     private const val PREFS = "nexus.whatsnew"
@@ -95,8 +97,9 @@ fun WhatsNewSheet(version: String, onClose: () -> Unit) {
                         }
                         Spacer(Modifier.width(14.dp))
                         Column {
-                            Text(stringResource(e.title), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
-                            Text(stringResource(e.body), fontSize = 13.sp, color = c.mutedFg)
+                            Text(stringResource(e.title), fontWeight = if (e.body != null) FontWeight.Bold else FontWeight.SemiBold,
+                                fontSize = if (e.body != null) 15.sp else 14.sp, color = c.foreground)
+                            e.body?.let { Text(stringResource(it), fontSize = 13.sp, color = c.mutedFg) }
                         }
                     }
                 }
