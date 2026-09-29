@@ -33,4 +33,19 @@ class AdminMoreTest {
         assertEquals(null, AppInstallsLogic.activity(null))
         assertEquals(true, AppInstallsLogic.activity("2026-09-24T02:00:00Z")!!.startsWith("24"))
     }
+
+    // 29 Sep (server, iOS 7920142): every device per person, newest first; older servers fall back to the row.
+    @Test fun installsListEveryDevice() {
+        val x = id.znetworks.nexus.core.net.NexusJson.decodeFromString(AppInstalls.serializer(), """{"installs":[
+          {"id":"i1","platform":"ios","appVersion":"0.1.5","buildNumber":"12","user":{"name":"Ana"},
+           "devices":[{"id":"d2","platform":"android","appVersion":"0.1.6","buildNumber":"8","osVersion":"Android 14"},
+                      {"id":"d1","platform":"ios","appVersion":null,"osVersion":"iOS 18.6"}]},
+          {"id":"i2","platform":"android","appVersion":"0.1.6","buildNumber":"7","osVersion":"Android 13"}]}""")
+        val ana = AppInstallsLogic.devices(x.installs[0])
+        org.junit.Assert.assertEquals(listOf("android", "ios"), ana.map { it.platform })
+        org.junit.Assert.assertEquals("0.1.6 (8)", AppInstallsLogic.versionLabel(ana[0]))
+        org.junit.Assert.assertNull(AppInstallsLogic.versionLabel(ana[1]))
+        val old = AppInstallsLogic.devices(x.installs[1]).single()
+        org.junit.Assert.assertEquals("Android 13", old.osVersion); org.junit.Assert.assertEquals("0.1.6 (7)", AppInstallsLogic.versionLabel(old))
+    }
 }

@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.admin
 
+import androidx.compose.material.icons.filled.PhoneIphone
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.compose.material.icons.filled.Description
@@ -100,7 +101,11 @@ import java.time.ZoneOffset
 @Serializable data class GideonUsage(val users: List<UsageUser> = emptyList(), val totals: UsageTotals = UsageTotals())
 @Serializable data class InstallUser(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null)
 @Serializable data class Install(val id: String, val appVersion: String? = null, val buildNumber: String? = null, val osVersion: String? = null,
-                                 val deviceModel: String? = null, val platform: String? = null, val lastSeenAt: String? = null, val user: InstallUser? = null)
+                                 val deviceModel: String? = null, val platform: String? = null, val lastSeenAt: String? = null, val user: InstallUser? = null,
+                                 /** Every active device of this person, newest first (server 29 Sep 2026); empty on older servers. */
+                                 val devices: List<InstallDevice> = emptyList())
+@Serializable data class InstallDevice(val id: String, val platform: String? = null, val appVersion: String? = null, val buildNumber: String? = null,
+                                       val osVersion: String? = null, val deviceModel: String? = null, val lastSeenAt: String? = null)
 @Serializable data class NotInstalled(val id: String, val name: String? = null, val email: String? = null, val avatar: String? = null, val role: String? = null, val lastActiveAt: String? = null)
 @Serializable data class VersionCount(val version: String = "", val count: Int = 0)
 @Serializable data class InstallTotals(val people: Int = 0, val devices: Int = 0, val members: Int = 0, val notInstalled: Int = 0,
@@ -382,12 +387,22 @@ fun AppInstallsTab() {
             }
             if (x.installs.isEmpty()) item { TabEmpty(Icons.Filled.PhoneAndroid, stringResource(R.string.ai_nobody)) }
             items(x.installs, key = { it.id }) { i ->
-                Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.Top) {
                     Avatar(i.user?.name, i.user?.avatar, 28.dp); Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(i.user?.name ?: "—", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                        Text(listOfNotNull(AppInstallsLogic.platformName(i.platform), i.appVersion?.let { v -> v + (i.buildNumber?.let { " ($it)" } ?: "") } ?: stringResource(R.string.ai_not_reported),
-                            i.deviceModel, i.osVersion, i.lastSeenAt?.let { chatTime(it) }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(i.user?.name ?: i.user?.email ?: "—", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        // One line per device (iOS 7920142): someone on an iPhone and an Android phone shows both.
+                        AppInstallsLogic.devices(i).forEach { d ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (d.platform == "android") Icons.Filled.PhoneAndroid else Icons.Filled.PhoneIphone, AppInstallsLogic.platformName(d.platform),
+                                    tint = c.mutedFg, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(listOfNotNull(d.osVersion ?: "—", d.deviceModel, d.lastSeenAt?.let { chatTime(it) }).joinToString(" · "),
+                                    fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(8.dp))
+                                AppInstallsLogic.versionLabel(d)?.let { Pill(it, c.violetText) } ?: Text(stringResource(R.string.ai_not_reported), fontSize = 11.sp, color = c.mutedFg)
+                            }
+                        }
                     }
                 }
             }
@@ -413,6 +428,12 @@ fun AppInstallsTab() {
 object AppInstallsLogic {
     /** Rows written before the server stored a platform are iOS: Android did not exist yet. */
     fun platformName(p: String?) = if (p == "android") "Android" else "iOS"
+    /** The person's devices; an older server sends only the latest one on the row itself. */
+    fun devices(i: Install): List<InstallDevice> = i.devices.ifEmpty {
+        listOf(InstallDevice(i.id, i.platform, i.appVersion, i.buildNumber, i.osVersion, i.deviceModel, i.lastSeenAt))
+    }
+    /** "0.1.6 (8)", or null when the device never reported a version. */
+    fun versionLabel(d: InstallDevice) = d.appVersion?.let { v -> v + (d.buildNumber?.let { " ($it)" } ?: "") }
     /** "24 Sep" of the last activity (web only), or null when the person never signed in. */
     fun activity(lastActiveAt: String?): String? = lastActiveAt?.let {
         runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()).format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
