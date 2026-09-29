@@ -61,11 +61,15 @@ struct GideonLauncher: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("GIDEON")
-        .padding(.leading, 20)
-        // Clears the tab bar on a phone. On the iPad sidebar layout there is no bar, so this is
-        // simply a comfortable margin.
-        .padding(.bottom, 76)
-        .sheet(isPresented: $open) { GideonPanel() }
+        // Phone: bottom-left, clear of the tab bar. iPad and Mac: bottom-right of the window, so it
+        // sits over Home's content instead of on top of the sidebar's rows (owner, 29 Sep 2026).
+        .padding(hSize == .regular ? .trailing : .leading, hSize == .regular ? 28 : 20)
+        .padding(.bottom, hSize == .regular ? 28 : 76)
+        .frame(maxWidth: .infinity, maxHeight: .infinity,
+               alignment: hSize == .regular ? .bottomTrailing : .bottomLeading)
+        // Handed over explicitly: on Mac Catalyst the sheet did not inherit them and opening the
+        // panel trapped on "No Observable object of type AuthStore found".
+        .sheet(isPresented: $open) { GideonPanel().environment(auth).environment(router) }
     }
 }
 

@@ -294,7 +294,9 @@ struct SidebarRoot: View {
                             Label {
                                 Text(screen.title).font(NXFont.text(15, .semibold))
                             } icon: {
-                                Image(systemName: screen.icon).foregroundStyle(screen.tint)
+                                // White on the violet selection: Home's own violet vanished into it.
+                                Image(systemName: screen.icon)
+                                    .foregroundStyle(selection == .screen(screen) ? Color.white : screen.tint)
                             }
                             .tag(NXSelection.screen(screen))
                         }

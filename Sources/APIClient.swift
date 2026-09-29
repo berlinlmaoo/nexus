@@ -653,6 +653,17 @@ struct APIClient {
         return true
     }
 
+    /// GET /api/projects/pins: the signed-in person's pinned project ids, in order. The same list
+    /// the web sidebar reads, so a pin made on one device shows on all of them.
+    func projectPins() async throws -> [String] {
+        try await run(makeRequest("/api/projects/pins"), decode: ProjectPinsReply.self).projectIds
+    }
+    func setProjectPin(_ projectId: String, pinned: Bool) async throws {
+        var req = makeRequest("/api/projects/pins", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["projectId": projectId, "pinned": pinned])
+        _ = try await run(req, decode: ProjectPinReply.self)
+    }
     func projects() async throws -> [Project] {
         try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
     }
@@ -2842,3 +2853,6 @@ struct SignupRetryLater: LocalizedError, Sendable {
     let seconds: Int?
     var errorDescription: String? { message }
 }
+
+struct ProjectPinsReply: Decodable { let projectIds: [String] }
+struct ProjectPinReply: Decodable { let pinned: Bool? }

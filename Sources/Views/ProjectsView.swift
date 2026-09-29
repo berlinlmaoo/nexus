@@ -266,6 +266,14 @@ struct ProjectFolderLink: View {
         }
         .buttonStyle(PressableCardStyle())
         .contextMenu {
+            let ref = ProjectRef(id: project.id, name: project.name, icon: project.icon)
+            Button {
+                ProjectShortcuts.shared.togglePin(ref)
+            } label: {
+                ProjectShortcuts.shared.isPinned(project.id)
+                    ? Label(T("Unpin"), systemImage: "pin.slash")
+                    : Label(T("Pin"), systemImage: "pin")
+            }
             Menu(T("Move to folder")) {
                 if project.folderId != nil { Button(T("No folder")) { Task { await onMove(project, nil) } } }
                 ForEach(folders.filter { $0.id != project.folderId }) { f in

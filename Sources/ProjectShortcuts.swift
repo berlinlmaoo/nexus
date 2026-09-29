@@ -16,11 +16,11 @@ struct ProjectRef: Codable, Hashable, Identifiable {
     }
 }
 
-/// Pinned and recently-opened projects, kept on the device.
+/// Pinned and recently-opened projects.
 ///
-/// Deliberately local rather than server-side. "Which projects do I keep coming back to" is a
-/// property of a person at a desk, not of the project — the same account on a phone and an iPad
-/// reasonably wants different shortcuts, and syncing it would need an API that does not exist.
+/// Pins are the person's, on every device: they live on the server (`/api/projects/pins`, the list
+/// the web sidebar pins into) and this keeps a copy so the sidebar draws before the network answers
+/// (owner, 29 Sep 2026). Recents stay on the device — what was opened here is about this device.
 ///
 /// Recents are recorded by ProjectDetailView itself rather than by whatever opened it, so a project
 /// counts as visited no matter the route in: the projects list, the sidebar, or a link from a task.
@@ -43,14 +43,52 @@ final class ProjectShortcuts {
 
     func isPinned(_ id: String) -> Bool { pinned.contains { $0.id == id } }
 
-    func togglePin(_ ref: ProjectRef) {
+    /// Changed here at once, then on the server; a refusal puts it back so the two never disagree.
+    @MainActor func togglePin(_ ref: ProjectRef) {
+        let nowPinned: Bool
         if let i = pinned.firstIndex(where: { $0.id == ref.id }) {
             pinned.remove(at: i)
+            nowPinned = false
         } else {
             pinned.append(ref)
+            nowPinned = true
         }
         Self.save(pinned, Self.pinnedKey)
+        Task { @MainActor in
+            do {
+                try await APIClient.shared.setProjectPin(ref.id, pinned: nowPinned)
+            } catch {
+                if nowPinned { pinned.removeAll { $0.id == ref.id } } else if !isPinned(ref.id) { pinned.append(ref) }
+                Self.save(pinned, Self.pinnedKey)
+            }
+        }
     }
+
+    /// Takes the server's list as the truth: its order, and only projects this person can still
+    /// open (the same filter the web sidebar applies). Pins made on this device before pins were
+    /// synced are sent up once, so nobody loses the ones they had.
+    @MainActor func syncPins() async {
+        guard var ids = try? await APIClient.shared.projectPins() else { return }
+        if !UserDefaults.standard.bool(forKey: Self.pinsUploadedKey) {
+            for ref in pinned where !ids.contains(ref.id) {
+                if (try? await APIClient.shared.setProjectPin(ref.id, pinned: true)) != nil { ids.append(ref.id) }
+            }
+            UserDefaults.standard.set(true, forKey: Self.pinsUploadedKey)
+        }
+        var known = Dictionary((pinned + recent).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        if let list = try? await APIClient.shared.projects() {
+            var visible: [String: ProjectRef] = [:]
+            for p in list { visible[p.id] = ProjectRef(id: p.id, name: p.name, icon: p.icon ?? known[p.id]?.icon) }
+            known = visible
+        }
+        let synced = ids.compactMap { known[$0] }
+        if synced != pinned {
+            pinned = synced
+            Self.save(pinned, Self.pinnedKey)
+        }
+    }
+    private static let pinsUploadedKey = "nexus.projects.pinsUploaded"
+
 
     /// Call on every open. Moves an existing entry to the front instead of duplicating it, and
     /// refreshes the stored name so a renamed project doesn't keep its old label in the sidebar.

@@ -70,6 +70,7 @@ struct NexusApp: App {
                                 // Launch and sign-in: an open check-in from earlier today resumes
                                 // the trail without the Attendance screen having to be opened.
                                 await WorkLocationTracker.shared.reconcileFromServer()
+                                await ProjectShortcuts.shared.syncPins()
                             }
                         }
                         .onChange(of: scenePhase) { _, phase in
@@ -78,6 +79,8 @@ struct NexusApp: App {
                             // below is the forced one.
                             if phase == .active { Task { await versionGate.checkPolicy() } }
                             if phase == .active { Task { await RemoteConfig.shared.refresh() } }
+                            // A pin made on the web or another device shows up when the app comes back.
+                            if phase == .active, auth.session != nil { Task { await ProjectShortcuts.shared.syncPins() } }
                             // On the way out, which is the only moment iOS will accept the request: an app
                             // in the foreground is not a candidate for either window.
                             if phase == .background { BackgroundRefresh.schedule() }
