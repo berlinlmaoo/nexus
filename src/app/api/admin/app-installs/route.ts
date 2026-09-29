@@ -65,7 +65,19 @@ export async function GET() {
     for (const row of rows) {
       if (!byUser.has(row.user.id)) byUser.set(row.user.id, row)
     }
-    const installs = [...byUser.values()]
+    // Every active device per person, newest first — someone on an iPhone AND an Android phone shows
+    // both (owner, 29 Sep 2026). One per platform + model: a reinstall leaves a stale twin behind.
+    const devicesBy = new Map<string, (typeof rows)[number][]>()
+    for (const row of rows) {
+      const list = devicesBy.get(row.user.id) ?? []
+      if (!list.some((d) => d.platform === row.platform && d.deviceModel === row.deviceModel)) list.push(row)
+      devicesBy.set(row.user.id, list)
+    }
+    const installs = [...byUser.values()].map((row) => ({
+      ...row,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      devices: (devicesBy.get(row.user.id) ?? []).map(({ user: _u, ...d }) => d),
+    }))
 
     // Members with no active device, and when they were last seen doing anything: the latest sign-in
     // (every login is audit-logged) or check-in, whichever is newer. NOT UserSession — the web signs in
@@ -116,10 +128,19 @@ export async function GET() {
       const label = i.appVersion ? `${i.appVersion}${i.buildNumber ? ` (${i.buildNumber})` : ""}` : "unknown"
       const key = i.platform !== "android" ? label : i.appVersion ? `Android ${label}` : "Android (not reported)"
       versions.set(key, (versions.get(key) ?? 0) + 1)
-      const bucket = byPlatform.get(i.platform) ?? new Map<string, number>()
-      bucket.set(label, (bucket.get(label) ?? 0) + 1)
-      byPlatform.set(i.platform, bucket)
-      platforms[i.platform] = (platforms[i.platform] ?? 0) + 1
+    }
+    // Per platform: each person's newest device ON that platform, so a two-phone person counts on both.
+    for (const list of devicesBy.values()) {
+      const seen = new Set<string>()
+      for (const i of list) {
+        if (seen.has(i.platform)) continue
+        seen.add(i.platform)
+        const label = i.appVersion ? `${i.appVersion}${i.buildNumber ? ` (${i.buildNumber})` : ""}` : "unknown"
+        const bucket = byPlatform.get(i.platform) ?? new Map<string, number>()
+        bucket.set(label, (bucket.get(label) ?? 0) + 1)
+        byPlatform.set(i.platform, bucket)
+        platforms[i.platform] = (platforms[i.platform] ?? 0) + 1
+      }
     }
     const countList = (m: Map<string, number>) =>
       [...m.entries()].map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count)

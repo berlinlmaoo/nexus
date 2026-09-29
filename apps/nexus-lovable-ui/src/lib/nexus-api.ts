@@ -2658,7 +2658,9 @@ export const nexusApi = {
   }>("/api/gideon/usage"),
 
   appInstalls: () => apiFetch<{
-    installs: { id: string; appVersion: string | null; buildNumber: string | null; osVersion: string | null; deviceModel: string | null; environment: string; lastSeenAt: string; user: { id: string; name: string; email: string | null; avatar: string | null } }[];
+    installs: { id: string; platform?: string; appVersion: string | null; buildNumber: string | null; osVersion: string | null; deviceModel: string | null; environment: string; lastSeenAt: string; user: { id: string; name: string; email: string | null; avatar: string | null };
+      /** Every active device of this person, newest first (29 Sep 2026). */
+      devices?: { id: string; platform: string; appVersion: string | null; buildNumber: string | null; osVersion: string | null; deviceModel: string | null; lastSeenAt: string }[] }[];
     notInstalled?: { id: string; name: string; email: string | null; avatar: string | null; role: string; joinedAt: string; lastActiveAt: string | null }[];
     totals: { people: number; devices: number; members?: number; notInstalled?: number; versions: { version: string; count: number }[] };
   }>("/api/admin/app-installs"),
