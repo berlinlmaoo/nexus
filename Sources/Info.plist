@@ -36,7 +36,7 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>NEXUS by Z Networks checks your location only between your check-in and check-out, including while the app is closed, so your manager can see where you worked during work hours: about once an hour while you are at the office, and your route while you are out of the office. Nothing is recorded before check-in or after check-out.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>NEXUS by Z Networks accesses your photo library to attach receipts and expense photos.</string>
+	<string>NEXUS by Z Networks accesses your photo library to attach photos to requests, tasks, forms, chats and Threads.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIStatusBarStyle</key>

@@ -1161,6 +1161,10 @@ struct RequestComposerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var type: String = "DAY_OFF"
     @State private var start = Date()
+    /// Annual leave is picked as several dates (owner, 29 Sep 2026), capped at the days left; each run
+    /// of consecutive dates is sent as one request.
+    @State private var leaveDates: Set<DateComponents> = []
+    @State private var leaveCapNote: String?
     @State private var reason = ""
     @State private var attach: (name: String, data: Data)?
     @State private var showImporter = false
@@ -1226,7 +1230,27 @@ struct RequestComposerSheet: View {
     private var showAttachment: Bool { type == "SICK" || type == "PERMIT" }
     /// The server demands a photo for a self-filed izin too, not only for sakit. The form said
     /// "(OPTIONAL)" and the submit was then refused — so the label lied and the person had no idea why.
-    private var attachmentRequired: Bool { !canGrant && (type == "SICK" || type == "PERMIT") }
+    /// A sick day needs the doctor's note for everyone filing their own, a BoD included (owner, 29 Sep
+    /// 2026) — this composer only ever files for the signed-in person.
+    private var attachmentRequired: Bool { type == "SICK" || (!canGrant && type == "PERMIT") }
+    private var isLeave: Bool { type == "LEAVE" }
+    /// The picked leave dates as days, oldest first.
+    private var leaveDays: [Date] {
+        leaveDates.compactMap { ProjDate.cal.date(from: $0) }.map { ProjDate.cal.startOfDay(for: $0) }.sorted()
+    }
+    /// Consecutive days → one (start, end) block each.
+    private var leaveBlocks: [(Date, Date)] {
+        var out: [(Date, Date)] = []
+        for d in leaveDays {
+            if let last = out.last, let next = ProjDate.cal.date(byAdding: .day, value: 1, to: last.1),
+               ProjDate.cal.isDate(next, inSameDayAs: d) {
+                out[out.count - 1].1 = d
+            } else {
+                out.append((d, d))
+            }
+        }
+        return out
+    }
     private var needsLocation: Bool { !canGrant && type == "PERMIT" }
     private var canSubmit: Bool {
         reason.trimmingCharacters(in: .whitespaces).count >= 3
@@ -1235,6 +1259,7 @@ struct RequestComposerSheet: View {
             && !(attachmentRequired && attach == nil)
             && !(needsLocation && coords == nil)
             && quotaProblem == nil
+            && !(isLeave && leaveDates.isEmpty)
     }
     /// What the picked photo is called once it reaches the reviewer's screen. It used to be
     /// "sick-note.jpg" for every type, so an izin arrived carrying a sick note's name.
@@ -1301,6 +1326,36 @@ struct RequestComposerSheet: View {
                                 .animation(.easeInOut(duration: 0.15), value: typeHint)
                             }
                         }
+                        if isLeave {
+                            field(T("DATES")) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    MultiDatePicker(T("Dates"), selection: $leaveDates)
+                                        .tint(NX.violetText)
+                                        .padding(8)
+                                        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
+                                    HStack(spacing: 8) {
+                                        Text(String(format: T("%d of %d days picked"), leaveDates.count, remainingDays ?? 0))
+                                            .font(NXFont.text(12, .bold))
+                                            .padding(.horizontal, 9).padding(.vertical, 4)
+                                            .background(NX.violet.opacity(0.12), in: Capsule())
+                                            .foregroundStyle(NX.violetText)
+                                        if let leaveCapNote {
+                                            Text(leaveCapNote).font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger)
+                                        }
+                                    }
+                                }
+                            }
+                            .onChange(of: leaveDates) { old, new in
+                                // Capped at the days left: the date that would go past it is not taken.
+                                if let left = remainingDays, new.count > left {
+                                    leaveDates = old
+                                    leaveCapNote = String(format: T("Only %d days left."), left)
+                                } else {
+                                    leaveCapNote = nil
+                                }
+                            }
+                        } else {
                         field(T("DATE")) {
                             HStack(spacing: 10) {
                                 // `in: dateRange` carries the per-type floor: izin cannot be backdated,
@@ -1316,6 +1371,7 @@ struct RequestComposerSheet: View {
                                 }
                                 Spacer(minLength: 0)
                             }
+                        }
                         }
                         if let quotaProblem {
                             HStack(alignment: .top, spacing: 7) {
@@ -1511,6 +1567,28 @@ struct RequestComposerSheet: View {
     private func submit() async {
         busy = true; err = nil; defer { busy = false }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
+        if isLeave {
+            // One request per run of consecutive dates. A refusal stops the rest and says which dates
+            // were already sent, so nothing is filed twice on a retry.
+            var sent: [String] = []
+            for (from, to) in leaveBlocks {
+                do {
+                    try await APIClient.shared.createAttendanceRequest(type: type, startDate: f.string(from: from),
+                                                                       endDate: f.string(from: to),
+                                                                       reason: reason.trimmingCharacters(in: .whitespaces), attachment: nil,
+                                                                       lat: nil, lng: nil, progress: uploadProgress)
+                    sent.append(from == to ? f.string(from: from) : "\(f.string(from: from))–\(f.string(from: to))")
+                } catch {
+                    let why = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the request.")
+                    err = sent.isEmpty ? why : String(format: T("Sent: %@. Then refused: %@"), sent.joined(separator: ", "), why)
+                    if !sent.isEmpty { await onCreated() }
+                    return
+                }
+            }
+            await onCreated()
+            dismiss()
+            return
+        }
         do {
             // endDate is sent, and equal to startDate, rather than left out: the route still reads a
             // range, and one date is the range that starts and ends on it.

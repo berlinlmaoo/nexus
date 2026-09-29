@@ -19,6 +19,7 @@ struct AnnouncementModal: View {
     /// The SP's PDF, opened in the in-app viewer with the session.
     @State private var pdfPreview: AttachmentPreview?
     @State private var openingPDF = false
+    @State private var pdfFailed = false
 
     private var current: AdminAnnouncement? { queue.first }
 
@@ -105,6 +106,10 @@ struct AnnouncementModal: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(openingPDF)
+                if pdfFailed {
+                    Text(T("Couldn't open the PDF. Check your connection and try again."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.danger).padding(.horizontal, 20).padding(.bottom, 8)
+                }
             }
 
             Divider().overlay(NX.border)
@@ -159,7 +164,8 @@ struct AnnouncementModal: View {
     private func openPDF(_ url: String, name: String) async {
         openingPDF = true; defer { openingPDF = false }
         let file = name.lowercased().hasSuffix(".pdf") ? name : name + ".pdf"
-        guard let local = try? await APIClient.shared.downloadAttachment(url: url, fileName: file) else { return }
+        pdfFailed = false
+        guard let local = try? await APIClient.shared.downloadAttachment(url: url, fileName: file) else { pdfFailed = true; return }
         pdfPreview = AttachmentPreview(id: url, name: file, kind: .pdf, source: local)
     }
 

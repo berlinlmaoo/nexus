@@ -30,6 +30,7 @@ IZIN DARI HP, SEKARANG LENGKAP BUKTINYA.
 Pilih Izin, lokasimu langsung diambil dan terkunci di layar.
 Foto buktinya bisa dari kamera atau galeri.
 Form pengajuan cuma menawarkan yang memang bisa kamu pakai.
+Cuti bisa pilih beberapa tanggal sekaligus — sebanyak sisa jatahmu, nggak lebih.
 
 REPORTS SEKARANG NGOMONGIN KAMU.
 

@@ -104,6 +104,7 @@ enum WhatsNew {
             title: T("Attachments open everywhere"),
             body: T("Choose files did nothing on iPad and on most phones; now it opens, and a form or a sick note can come straight from the camera or your photos. A permit's photo is no longer filed under a sick note's name.")
         ),
+        WhatsNewEntry(kind: .also, icon: "calendar.badge.plus", title: T("Annual leave: pick several dates at once, up to the days you have left")),
         WhatsNewEntry(kind: .also, icon: "location.fill", title: T("Check-in needs location set to Always with Precise Location on — the app shows you where to switch it")),
         WhatsNewEntry(kind: .also, icon: "building.2.fill", title: T("Moving to another office still counts as at the office, and the card says which one")),
         WhatsNewEntry(kind: .also, icon: "lock.fill", title: T("Signing out waits until you check out, and signing out now ends your session everywhere it was copied")),

@@ -150,6 +150,7 @@ struct DashboardView: View {
     /// Same trade as marking one read: the rows and the badge are struck off here, and the whole
     /// dashboard is not refetched to learn something already known. The endpoint is scoped to the
     /// caller server-side, so this can only ever clear the reader's own signals.
+    @Environment(\.scenePhase) private var scenePhase
     /// GET /api/attendance/today, for the attendance bar above the XP card.
     @State private var attToday: AttendanceToday?
 
@@ -215,6 +216,11 @@ struct DashboardView: View {
             // mounted through a push and would never report one. Two writes per push, and none
             // while scrolling.
             .onAppear { router.homeIsRoot = true }
+            // The attendance bar re-reads today whenever Home comes back (after checking in from it).
+            .onAppear { if loaded { Task { attToday = try? await APIClient.shared.attendanceToday() } } }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { attToday = try? await APIClient.shared.attendanceToday() } }
+            }
             .onDisappear { router.homeIsRoot = false }
         }
     }
@@ -322,7 +328,7 @@ struct DashboardView: View {
     }
     private static func hm(_ minutes: Int) -> String {
         let h = minutes / 60, m = minutes % 60
-        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
+        return h > 0 ? String(format: T("%dh %dm"), h, m) : String(format: T("%dm"), m)
     }
 
     // MARK: level/XP card

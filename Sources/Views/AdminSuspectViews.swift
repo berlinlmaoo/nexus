@@ -362,6 +362,9 @@ struct AdminSuspectSection: View {
                 }
                 .buttonStyle(NexusPrimaryButton())
                 .disabled(busy != nil || warnDraft.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+                if let problem {
+                    Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                }
                 Spacer()
             }
             .padding(20)
