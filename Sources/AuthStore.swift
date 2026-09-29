@@ -100,7 +100,11 @@ final class AuthStore {
     /// A 401 still ends the session through `logout()`; only the person's own tap is held.
     @discardableResult
     func signOutIfAllowed() -> Bool {
+        // The block exists so the phone keeps following the workday. A Mac never takes attendance
+        // or tracks location, so a person checked in on their phone can still sign out on the Mac.
+        #if !targetEnvironment(macCatalyst)
         guard !(RemoteConfig.shared.blockSignOutDuringWorkday && AttendancePresence.workdayOpen) else { return false }
+        #endif
         signOut()
         return true
     }
