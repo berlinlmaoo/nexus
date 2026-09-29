@@ -1161,7 +1161,7 @@ struct RequestComposerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var type: String = "DAY_OFF"
     @State private var start = Date()
-    /// Annual leave is picked as several dates (owner, 29 Sep 2026), capped at the days left; each run
+    /// Annual leave is picked as one range (owner, 29 Sep 2026), capped at the days left; each run
     /// of consecutive dates is sent as one request.
     @State private var leaveDates: Set<DateComponents> = []
     @State private var leaveCapNote: String?

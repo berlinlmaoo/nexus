@@ -87,7 +87,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "checklist",
             title: T("The request form only offers what you can actually use"),
-            body: T("Annual leave appears when you have days left, public holiday when there is an allowance this month. Sick and permit are a single date — sick can be backdated, permit cannot. Ask for more day-off days than you have left and it says so before you send, not after.")
+            body: T("Annual leave appears when you have days left, public holiday when there is an allowance this month. Sick and permit are a single date and need a photo; annual leave is one range. None of them can start before today. Ask for more day-off days than you have left and it says so before you send, not after.")
         ),
         WhatsNewEntry(
             icon: "mappin.circle.fill",
