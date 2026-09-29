@@ -2000,15 +2000,34 @@ function AppInstalls() {
                     <div className="font-semibold">{i.user.name}</div>
                     {i.user.email && <div className="text-xs text-muted-foreground">{i.user.email}</div>}
                   </td>
+                  {/* One line per device: someone on an iPhone and an Android phone shows both. */}
                   <td className="px-4 py-3">
-                    {i.appVersion ? (
-                      <span className="font-semibold tabular-nums">{i.appVersion}{i.buildNumber ? ` (${i.buildNumber})` : ""}</span>
-                    ) : (
-                      <span className="text-muted-foreground">Not reported</span>
-                    )}
+                    <div className="space-y-1">
+                      {(i.devices?.length ? i.devices : [i]).map((d) => (
+                        <div key={d.id} className="tabular-nums">
+                          {d.appVersion ? (
+                            <span className="font-semibold">{d.appVersion}{d.buildNumber ? ` (${d.buildNumber})` : ""}</span>
+                          ) : (
+                            <span className="text-muted-foreground">Not reported</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{i.osVersion ?? i.deviceModel ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{when(i.lastSeenAt)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    <div className="space-y-1">
+                      {(i.devices?.length ? i.devices : [i]).map((d) => (
+                        <div key={d.id}>{d.osVersion ?? d.deviceModel ?? "—"}</div>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    <div className="space-y-1">
+                      {(i.devices?.length ? i.devices : [i]).map((d) => (
+                        <div key={d.id}>{when(d.lastSeenAt)}</div>
+                      ))}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
