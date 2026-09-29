@@ -1711,6 +1711,10 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   // Every request is ONE day, for everyone — the grant mode included. The server still takes a
   // startDate/endDate pair; both are this date.
   const [date, setDate] = useState(today);
+  // Annual leave is picked as several dates (owner, 29 Sep 2026), capped at the days left; each run of
+  // consecutive dates goes to the server as one request.
+  const [leaveDates, setLeaveDates] = useState<string[]>([]);
+  const [leaveCapNote, setLeaveCapNote] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [targetUserId, setTargetUserId] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -1772,7 +1776,32 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   // A sick day filed for yourself needs the doctor's note; a permit carries the same evidence a
   // check-in does: photo + coordinates + when it was filed. Without it, a permit was the cheapest
   // way to erase an attendance penalty — nothing to verify.
-  const attachmentRequired = !canGrant && (type === "SICK" || type === "PERMIT");
+  // A sick day needs the note for everyone filing their own, a BoD included; only a grant for
+  // somebody else is exempt (owner, 29 Sep 2026).
+  const attachmentRequired = (type === "SICK" && !granting) || (!canGrant && type === "PERMIT");
+  const multiLeave = type === "LEAVE" && !granting;
+  const addLeaveDate = (d: string) => {
+    if (!d) return;
+    setLeaveCapNote(null);
+    setLeaveDates((cur) => {
+      if (cur.includes(d)) return cur;
+      if (remainingDays != null && cur.length >= remainingDays) {
+        setLeaveCapNote(`You have ${remainingDays} leave day${remainingDays === 1 ? "" : "s"} left — that's the most you can pick.`);
+        return cur;
+      }
+      return [...cur, d].sort();
+    });
+  };
+  // Consecutive dates → one [start, end] block each.
+  const leaveBlocks = (() => {
+    const out: Array<[string, string]> = [];
+    const next = (d: string) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };
+    for (const d of leaveDates) {
+      const last = out[out.length - 1];
+      if (last && next(last[1]) === d) last[1] = d; else out.push([d, d]);
+    }
+    return out;
+  })();
   const showAttachment = type === "SICK" || type === "PERMIT";
   const needsLocation = !canGrant && type === "PERMIT";
   const permitBackdated = type === "PERMIT" && !canGrant && date < today;
@@ -1803,7 +1832,16 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   useEffect(() => { if (needsLocation && !coords) askLocation(); }, [needsLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = useMutation({
-    mutationFn: () => nexusApi.createAttendanceRequest({ type, startDate: date, endDate: date, reason: reason.trim(), targetUserId: granting && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null }),
+    mutationFn: async () => {
+      if (multiLeave) {
+        // One request per run of consecutive dates; stop at the first refusal and say which dates it hit.
+        for (const [startDate, endDate] of leaveBlocks) {
+          await nexusApi.createAttendanceRequest({ type, startDate, endDate, reason: reason.trim(), supportingDocument: null, lat: null, lng: null });
+        }
+        return;
+      }
+      await nexusApi.createAttendanceRequest({ type, startDate: date, endDate: date, reason: reason.trim(), targetUserId: granting && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+    },
     onSuccess: () => { onCreated(); onClose(); },
   });
 
@@ -1814,7 +1852,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{granting ? "Grant a request to a user" : "New attendance request"}</h2>
-        {!granting && <p className="mt-1 text-xs text-muted-foreground">One day per request. Only the types you can actually use are listed.</p>}
+        {!granting && <p className="mt-1 text-xs text-muted-foreground">One day per request (annual leave: pick several). Only the types you can actually use are listed.</p>}
         {canGrant && (
           <div className="mt-3 inline-flex rounded-xl border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Who is this for">
             <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>For myself</button>
@@ -1879,14 +1917,35 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
                 ? "bg-destructive/10 text-destructive"
                 : "bg-success/10 text-success")}>{leaveNote}</p>
           )}
+          {multiLeave ? (
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Dates
+                <input type="date" value="" onChange={(e) => addLeaveDate(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+              </label>
+              <p className="mt-1 text-[11px] text-muted-foreground">Pick a date to add it; pick as many as you have days left.</p>
+              {leaveDates.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {leaveDates.map((d) => (
+                    <button key={d} type="button" onClick={() => { setLeaveDates((cur) => cur.filter((x) => x !== d)); setLeaveCapNote(null); }}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
+                      {fmtDate(d)} <span aria-hidden>×</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {leaveCapNote && <p className="mt-1 text-[11px] font-semibold text-destructive">{leaveCapNote}</p>}
+            </div>
+          ) : (
           <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date
             <input type="date" value={date} min={type === "PERMIT" && !canGrant ? today : undefined}
               onChange={(e) => setDate(e.target.value)}
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
           </label>
+          )}
           {!granting && remainingDays != null && (
             <div className="flex items-center gap-2">
-              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>1 day</span>
+              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{multiLeave ? `${leaveDates.length} day${leaveDates.length === 1 ? "" : "s"}` : "1 day"}</span>
               <span className="text-xs text-muted-foreground">{remainingDays} left</span>
             </div>
           )}
@@ -1912,7 +1971,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
           )}
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? `Grant ${(REQ_LABEL[type] ?? "request").toLowerCase()}` : "Submit request"}</button>
+          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || (multiLeave && leaveDates.length === 0) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? `Grant ${(REQ_LABEL[type] ?? "request").toLowerCase()}` : "Submit request"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
           {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
         </div>
