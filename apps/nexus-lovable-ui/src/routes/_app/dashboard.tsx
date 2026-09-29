@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { AndroidAppBanner } from "@/components/attendance/IosAppCheckInCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
@@ -80,6 +81,7 @@ function Dashboard() {
     <div className="w-full px-5 py-6 md:px-8 md:py-8 2xl:px-10">
       <OnboardingWizard />
       <TopBar userName={userName} unread={notifications.data?.unreadCount ?? 5} />
+      <AndroidAppBanner className="mt-5" />
 
       <div className="mt-7 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
         {/* main: stats, XP rules. No "Your Quests" card: the owner dropped it; quests are

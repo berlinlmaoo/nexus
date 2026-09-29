@@ -1,4 +1,5 @@
-import { ExternalLink, Globe, Smartphone } from "lucide-react";
+import { useState } from "react";
+import { Download, ExternalLink, Globe, Smartphone, X } from "lucide-react";
 import { ApiError } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -49,5 +50,69 @@ export function WebCheckInNote({ className }: { className?: string }) {
     <p className={cn("flex items-center justify-center gap-1 text-center text-[11px] text-muted-foreground", className)}>
       <Globe className="h-3 w-3 shrink-0" /> Checked in from the web — your location isn't tracked during the day.
     </p>
+  );
+}
+
+/**
+ * Android: the NEXUS app (sideloaded, /download/android) is announced to people who still use NEXUS
+ * in an Android browser (owner, 29 Sep 2026). Only an Android browser ever sees these; the app itself
+ * is native and never loads this page.
+ */
+export const NEXUS_ANDROID_DOWNLOAD = "/download/android";
+
+export function isAndroidBrowser() {
+  if (typeof navigator === "undefined") return false;
+  return /Android/i.test(navigator.userAgent || "");
+}
+
+const ANDROID_BANNER_KEY = "nexus.androidAppBanner.hiddenUntil";
+
+function bannerHidden() {
+  try {
+    const until = Number(localStorage.getItem(ANDROID_BANNER_KEY) || 0);
+    return until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+/** Top of Home in an Android browser. Closing it hides it for 7 days, not forever. */
+export function AndroidAppBanner({ className }: { className?: string }) {
+  const [hidden, setHidden] = useState(() => !isAndroidBrowser() || bannerHidden());
+  if (hidden) return null;
+  const close = () => {
+    try { localStorage.setItem(ANDROID_BANNER_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch { /* private mode */ }
+    setHidden(true);
+  };
+  return (
+    <div className={cn("relative rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+      <button type="button" onClick={close} aria-label="Hide" className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent">
+        <X className="h-4 w-4" />
+      </button>
+      <div className="flex items-start gap-3 pr-8">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Smartphone className="h-5 w-5" /></span>
+        <div className="min-w-0">
+          <p className="font-display text-base font-bold leading-snug tracking-tight">NEXUS is now an app on Android</p>
+          <p className="mt-1 text-sm text-muted-foreground">Check in with one tap, get notified the moment something needs you, and keep working with no signal.</p>
+        </div>
+      </div>
+      <a href={NEXUS_ANDROID_DOWNLOAD} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground shadow-soft transition hover:bg-primary/90 active:scale-[0.99]">
+        <Download className="h-4 w-4" /> Download the app
+      </a>
+    </div>
+  );
+}
+
+/** Under the web check-in button in an Android browser: the app keeps the day's trail, the web can't. */
+export function AndroidAppCheckInNote({ className }: { className?: string }) {
+  if (!isAndroidBrowser()) return null;
+  return (
+    <a href={NEXUS_ANDROID_DOWNLOAD} className={cn("flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm transition hover:bg-primary/10", className)}>
+      <span className="flex min-w-0 items-center gap-2">
+        <Smartphone className="h-4 w-4 shrink-0 text-primary" />
+        <span className="min-w-0 font-semibold text-foreground">Check in from the NEXUS app for Android</span>
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1 font-bold text-primary"><Download className="h-3.5 w-3.5" /> Get it</span>
+    </a>
   );
 }
