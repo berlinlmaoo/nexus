@@ -681,26 +681,37 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
 @Composable
 private fun ShortcutsCard(shortcuts: ProjectShortcuts, onOpenProject: (String) -> Unit) {
     val lists by shortcuts.lists.collectAsStateWithLifecycle()
-    // A project in both lists reads as a duplicate: pinned wins.
-    val all = lists.pinned + lists.recent.filterNot { r -> lists.pinned.any { it.id == r.id } }
-    if (all.isEmpty()) return
-    val c = Nx.colors
+    // Pinned first, in the server's order (synced with the web and the other devices); a project in
+    // both lists reads as a duplicate, so pinned wins.
+    val recent = lists.recent.filterNot { r -> lists.pinned.any { it.id == r.id } }
+    if (lists.pinned.isEmpty() && recent.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Caption(stringResource(R.string.home_projects))
-        Card(padding = 0) {
-            Column {
-                all.forEachIndexed { i, ref ->
-                    if (i > 0) HorizontalDivider(color = c.border)
-                    Row(Modifier.fillMaxWidth().clickable { onOpenProject(ref.id) }.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(ref.icon, "📁", size = 32)
-                        Spacer(Modifier.width(10.dp))
-                        Text(ref.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        val pinned = lists.pinned.any { it.id == ref.id }
-                        IconButton(onClick = { shortcuts.togglePin(ref) }) {
-                            Icon(if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, stringResource(if (pinned) R.string.home_unpin else R.string.home_pin),
-                                tint = if (pinned) c.violetText else c.mutedFg, modifier = Modifier.size(18.dp))
-                        }
+        if (lists.pinned.isNotEmpty()) {
+            Caption(stringResource(R.string.home_pinned))
+            ShortcutRows(lists.pinned, pinned = true, shortcuts, onOpenProject)
+        }
+        if (recent.isNotEmpty()) {
+            Caption(stringResource(if (lists.pinned.isEmpty()) R.string.home_projects else R.string.home_recent))
+            ShortcutRows(recent, pinned = false, shortcuts, onOpenProject)
+        }
+    }
+}
+
+@Composable
+private fun ShortcutRows(refs: List<ShortcutRef>, pinned: Boolean, shortcuts: ProjectShortcuts, onOpenProject: (String) -> Unit) {
+    val c = Nx.colors
+    Card(padding = 0) {
+        Column {
+            refs.forEachIndexed { i, ref ->
+                if (i > 0) HorizontalDivider(color = c.border)
+                Row(Modifier.fillMaxWidth().clickable { onOpenProject(ref.id) }.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    IconTile(ref.icon, "📁", size = 32)
+                    Spacer(Modifier.width(10.dp))
+                    Text(ref.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { shortcuts.togglePin(ref) }) {
+                        Icon(if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, stringResource(if (pinned) R.string.home_unpin else R.string.home_pin),
+                            tint = if (pinned) c.violetText else c.mutedFg, modifier = Modifier.size(18.dp))
                     }
                 }
             }

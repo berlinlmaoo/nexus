@@ -1,5 +1,10 @@
 package id.znetworks.nexus.feature.projects
 
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.ui.platform.LocalContext
+import id.znetworks.nexus.feature.home.ShortcutRef
 import android.app.Application
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -215,6 +220,10 @@ fun IconTile(icon: String?, fallback: String, size: Int = 44) {
 /** "Mission Control" (iOS ProjectsView): search, folder tree, project cards, create. */
 @Composable
 fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onOpenFolder: (String) -> Unit = {}, vm: ProjectsViewModel = viewModel()) {
+    val shortcuts = (LocalContext.current.applicationContext as NexusApplication).container.shortcuts
+    val shortcutLists by shortcuts.lists.collectAsStateWithLifecycle()
+    val pinnedIds = shortcutLists.pinned.map { it.id }
+    androidx.compose.runtime.LaunchedEffect(Unit) { shortcuts.refresh() }
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
@@ -266,6 +275,14 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
                     items(s.taskHits, key = { "t-" + it.id }) { t -> TaskHitRow(t) { onOpenTask(t.id) } }
                 }
                 else -> {
+                    // Pinned (Berlin 29 Sep, iOS 286cada): the person's pins, synced with the web and the other
+                    // devices, in the server's order; only projects in this list.
+                    val pinned = pinnedIds.mapNotNull { id -> s.projects.firstOrNull { it.id == id } }
+                    if (pinned.isNotEmpty()) {
+                        item { Section(stringResource(R.string.home_pinned)) }
+                        items(pinned, key = { "pin-" + it.id }) { p -> MovableCard(p, s, onOpenProject, vm::move) }
+                        item { Section(stringResource(R.string.projects_section_all)) }
+                    }
                     val roots = s.folders.filter { it.parentFolderId == null || s.folders.none { f -> f.id == it.parentFolderId } }
                         .sortedWith(compareBy({ it.position ?: Int.MAX_VALUE }, { it.name.lowercase() }))
                     items(roots, key = { "f-" + it.id }) { f ->
@@ -349,6 +366,13 @@ private fun MovableCard(p: Project, s: ProjectsState, onOpen: (String) -> Unit, 
     Box {
         ProjectCard(p, s.tallies?.get(p.id), s.tallies != null, onClick = { onOpen(p.id) }, onLongClick = { menu = true })
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            val shortcuts = (LocalContext.current.applicationContext as NexusApplication).container.shortcuts
+            val lists by shortcuts.lists.collectAsStateWithLifecycle()
+            val pinned = lists.pinned.any { it.id == p.id }
+            DropdownMenuItem(text = { Text(stringResource(if (pinned) R.string.home_unpin else R.string.home_pin)) },
+                leadingIcon = { Icon(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, null) },
+                onClick = { menu = false; shortcuts.refresh(); shortcuts.togglePin(ShortcutRef(p.id, p.name, p.icon, p.color)) })
+            HorizontalDivider()
             Text(stringResource(R.string.folder_move_to), fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             if (p.folderId != null) DropdownMenuItem(text = { Text(stringResource(R.string.folder_none)) }, onClick = { menu = false; onMove(p, null) })
             s.folders.filter { it.id != p.folderId }.forEach { f ->

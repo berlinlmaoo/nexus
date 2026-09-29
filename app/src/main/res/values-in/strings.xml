@@ -1613,4 +1613,7 @@
     <string name="leave_tap_range">Ketuk hari pertama, lalu hari terakhir</string>
     <string name="leave_summary">%1$s · %2$d dari %3$d hari</string>
     <string name="leave_too_long">Itu %1$d hari — sisa %2$d saja.</string>
+    <string name="home_pinned">Disematkan</string>
+    <string name="home_recent">Terakhir dibuka</string>
+    <string name="projects_section_all">Semua project</string>
 </resources>

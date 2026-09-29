@@ -35,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -99,7 +100,7 @@ class AppContainer(private val context: Context) {
         id.znetworks.nexus.core.offline.DiskFiles.init(context.cacheDir)
         id.znetworks.nexus.core.offline.OfflineSync(context, this)
     }
-    val shortcuts = id.znetworks.nexus.feature.home.ProjectShortcuts(context) { sessionStore.current?.userId }
+    val shortcuts = id.znetworks.nexus.feature.home.ProjectShortcuts(context, { sessionStore.current?.userId }, ProjectPins(api), appScope)
     val uploads = id.znetworks.nexus.core.net.Uploads(context, api)
     val announcements = AnnouncementHost(InboxApi(api))
     val appearance = Appearance(context)
@@ -148,6 +149,8 @@ class AppContainer(private val context: Context) {
                 push.register()
                 offline.schedule()
                 offline.syncAll()
+                // Pins made on the web or another device, and this phone's old local ones sent up once.
+                appScope.launch { shortcuts.syncPins() }
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
@@ -236,4 +239,23 @@ class Appearance(context: Context) {
         prefs.edit().putString("theme", t.name).apply()
         _theme.value = t
     }
+}
+
+/** `/api/projects/pins` (iOS APIClient.projectPins / setProjectPin, web sidebar). */
+private class ProjectPins(private val api: id.znetworks.nexus.core.net.ApiClient) : id.znetworks.nexus.feature.home.PinRemote {
+    @kotlinx.serialization.Serializable private data class Pins(val projectIds: List<String> = emptyList())
+
+    override suspend fun pins() = api.get("/api/projects/pins", Pins.serializer()).projectIds
+
+    override suspend fun setPin(projectId: String, pinned: Boolean) {
+        api.send(okhttp3.Request.Builder().url(api.url("/api/projects/pins")).post(
+            kotlinx.serialization.json.buildJsonObject {
+                put("projectId", kotlinx.serialization.json.JsonPrimitive(projectId)); put("pinned", kotlinx.serialization.json.JsonPrimitive(pinned))
+            }.toString().toJsonBody()).build(), kotlinx.serialization.json.JsonObject.serializer())
+    }
+
+    override suspend fun projects() = runCatching {
+        id.znetworks.nexus.feature.projects.ProjectsApi(api).projects().value
+            .map { id.znetworks.nexus.feature.home.ShortcutRef(it.id, it.name, it.icon, it.color) }
+    }.getOrNull()
 }

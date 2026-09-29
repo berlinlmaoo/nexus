@@ -34,6 +34,8 @@ class NexusApplication : Application() {
                 // Back in the foreground: are we in the office? (API.md §1.2)
                 container.lanRoute.reprobe(force = true)
                 container.appScope.launch { container.remoteConfig.refresh() }
+                // Pinned projects follow the web and the other devices (iOS 286cada); launch counts as a return too.
+                if (container.sessionStore.current != null) container.appScope.launch { container.shortcuts.syncPins() }
                 container.appScope.launch {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.

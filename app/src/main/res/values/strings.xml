@@ -1619,4 +1619,7 @@
     <string name="leave_tap_range">Tap the first day, then the last</string>
     <string name="leave_summary">%1$s · %2$d of %3$d days</string>
     <string name="leave_too_long">That\'s %1$d days — only %2$d left.</string>
+    <string name="home_pinned">Pinned</string>
+    <string name="home_recent">Recent</string>
+    <string name="projects_section_all">All projects</string>
 </resources>
