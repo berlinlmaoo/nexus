@@ -1563,7 +1563,7 @@ final class AppLanguage {
         "That's %d days — only %d left.": "Itu %d hari — sisa %d saja.",
         "Tap the first day, then the last": "Ketuk hari pertama, lalu hari terakhir",
         "%@ · %d of %d days": "%@ · %d dari %d hari",
-        "Annual leave: pick several dates at once, up to the days you have left": "Cuti: pilih beberapa tanggal sekaligus, sebanyak sisa jatahmu",
+        "Annual leave: tap the first day and the last, up to the days you have left": "Cuti: ketuk hari pertama dan terakhir, sebanyak sisa jatahmu",
         "DATES": "TANGGAL",
         "Dates": "Tanggal",
         "%d of %d days picked": "%d dari %d hari dipilih",
