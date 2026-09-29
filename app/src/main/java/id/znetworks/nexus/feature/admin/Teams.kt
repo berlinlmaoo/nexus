@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.PendingConfirm
+import id.znetworks.nexus.ui.components.ConfirmDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -307,6 +309,10 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
                         val key = "member-${m.uid}"
                         // Keyed by person: after a reload the open menu stays on the row it was opened on.
                         var open by remember(m.uid) { mutableStateOf(false) }
+                        var ask by remember(m.uid) { mutableStateOf<PendingConfirm?>(null) }
+                        val askTitle = stringResource(R.string.cf_remove_from_team, m.user?.name ?: m.user?.email ?: "—", t.name)
+                        val askAction = stringResource(R.string.tm_remove_member)
+                        ConfirmDialog(ask) { ask = null }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.weight(1f).clickable(enabled = m.uid != null) { m.uid?.let(onOpenProfile) }, verticalAlignment = Alignment.CenterVertically) {
                                 Avatar(m.displayName, m.user?.avatar, 34.dp); Spacer(Modifier.width(12.dp))
@@ -322,7 +328,7 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
                                     // No "make lead": team leads are gone; approvals live in the approval chart.
                                     if (canManageAtt) DropdownMenuItem({ Text(stringResource(if (m.isAttendancePrimary == true) R.string.tm_unset_primary else R.string.tm_set_primary)) },
                                         { open = false; act(key) { api.setPrimary(t.id, m.uid!!, m.isAttendancePrimary != true) } })
-                                    DropdownMenuItem({ Text(stringResource(R.string.tm_remove_member), color = c.danger) }, { open = false; act(key) { api.removeMember(t.id, m.uid!!) } })
+                                    DropdownMenuItem({ Text(stringResource(R.string.tm_remove_member), color = c.danger) }, { open = false; ask = PendingConfirm(askTitle, null, askAction) { act(key) { api.removeMember(t.id, m.uid!!) } } })
                                 }
                             }
                         }
@@ -400,6 +406,10 @@ private fun DivisionsDialog(api: TeamsApi, divisions: List<Division>, onDismiss:
             if (divisions.isEmpty()) Text(stringResource(R.string.tm_no_divisions), fontSize = 12.sp, color = c.mutedFg)
             divisions.forEach { d ->
                 var open by remember { mutableStateOf(false) }
+                var ask by remember { mutableStateOf<PendingConfirm?>(null) }
+                val askTitle = stringResource(R.string.cf_delete_division, d.name)
+                val askAction = stringResource(R.string.tm_delete_division)
+                ConfirmDialog(ask) { ask = null }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).background(parseColor(d.color ?: "#64748B", c.mutedFg), CircleShape)); Spacer(Modifier.width(8.dp))
                     Text(d.name, fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
@@ -407,7 +417,7 @@ private fun DivisionsDialog(api: TeamsApi, divisions: List<Division>, onDismiss:
                         IconButton(onClick = { open = true }, enabled = !busy) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = c.mutedFg) }
                         DropdownMenu(open, { open = false }) {
                             DropdownMenuItem({ Text(stringResource(R.string.tm_rename)) }, { open = false; renaming = d })
-                            DropdownMenuItem({ Text(stringResource(R.string.tm_delete_division), color = c.danger) }, { open = false; run { api.deleteDivision(d.id) } })
+                            DropdownMenuItem({ Text(stringResource(R.string.tm_delete_division), color = c.danger) }, { open = false; ask = PendingConfirm(askTitle, null, askAction) { run { api.deleteDivision(d.id) } } })
                         }
                     }
                 }
@@ -464,11 +474,15 @@ fun MembershipEditor(userId: String, userName: String, ms: UserMemberships?, can
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             projects.forEach { p ->
                 var open by remember { mutableStateOf(false) }
+                var ask by remember { mutableStateOf<PendingConfirm?>(null) }
+                val askTitle = stringResource(R.string.cf_leave_project, p.name)
+                val askAction = stringResource(R.string.tm_leave_project)
+                ConfirmDialog(ask) { ask = null }
                 Box {
                     Chip((p.icon?.takeIf { !it.startsWith("/") }?.let { "$it " } ?: "") + p.name + (p.viaTeam?.let { " · via $it" } ?: ""), null,
                         if (canEdit && p.viaTeam == null) ({ open = true }) else null)
                     DropdownMenu(open, { open = false }) {
-                        DropdownMenuItem({ Text(stringResource(R.string.tm_leave_project), color = c.danger) }, { open = false; run { api.removeProjectMember(p.id, userId) } })
+                        DropdownMenuItem({ Text(stringResource(R.string.tm_leave_project), color = c.danger) }, { open = false; ask = PendingConfirm(askTitle, null, askAction) { run { api.removeProjectMember(p.id, userId) } } })
                     }
                 }
             }

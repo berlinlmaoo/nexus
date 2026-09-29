@@ -1606,4 +1606,11 @@
     <string name="an_missing_body">Add the announcement body to post.</string>
     <string name="an_missing_people">Pick at least one person.</string>
     <string name="an_tab">Announcements</string>
+    <string name="cf_remove_member_ws">Remove %1$s from the workspace?</string>
+    <string name="cf_remove_member_ws_body">They lose access to its projects, chats and attendance at once.</string>
+    <string name="cf_remove_from_team">Remove %1$s from %2$s?</string>
+    <string name="cf_delete_division">Delete the division %1$s?</string>
+    <string name="cf_leave_project">Remove them from %1$s?</string>
+    <string name="cf_revoke_link">Revoke this link?</string>
+    <string name="cf_revoke_link_body">It stops working at once for everyone who has it.</string>
 </resources>

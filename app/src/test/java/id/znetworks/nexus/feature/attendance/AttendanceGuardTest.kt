@@ -1,6 +1,7 @@
 package id.znetworks.nexus.feature.attendance
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -174,5 +175,16 @@ class AttendanceGuardTest {
             }
             assertEquals(f.name, 0, Regex("""Column\(Modifier\.fillMaxSize\(\)\.background\(c\.background\)\) \{""").findAll(src).count())
         }
+    }
+
+    @Test fun destructiveMenuItemsAskInACentredDialog() {
+        // Berlin 29 Sep (iOS 173ffff): confirmations are plain centred alerts. A red (destructive) menu item may
+        // only open one, never call the server itself; no confirmation lives in a bottom sheet.
+        sources.forEach { (f, src) ->
+            src.lines().filter { it.contains("DropdownMenuItem(") && it.contains("color = c.danger") }.forEach { l ->
+                assertFalse("${f.name}: $l", Regex("""api\.|vm\.|scope\.launch""").containsMatchIn(l.substringAfter("color = c.danger").substringBefore("PendingConfirm(")))
+            }
+        }
+        assertEquals(sortedSetOf("HomeScreen.kt", "ThreadsScreen.kt", "WhatsNew.kt"), filesMatching(Regex("""ModalBottomSheet\(""")))
     }
 }

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.PendingConfirm
+import id.znetworks.nexus.ui.components.ConfirmDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -122,6 +124,11 @@ fun WorkspaceMembersCard(onOpenProfile: (String) -> Unit) {
                     }
                 }
                 var open by remember { mutableStateOf(false) }
+                var ask by remember { mutableStateOf<PendingConfirm?>(null) }
+                val askTitle = stringResource(R.string.cf_remove_member_ws, m.displayName)
+                val askMsg = stringResource(R.string.cf_remove_member_ws_body)
+                val askAction = stringResource(R.string.wm_remove)
+                ConfirmDialog(ask) { ask = null }
                 // Never your own row: the server refuses removing or re-ranking yourself (audit R8).
                 val me = (LocalContext.current.applicationContext as id.znetworks.nexus.NexusApplication).container.sessionStore.current?.userId
                 val editable = Roles.canEdit(r.role, m.role) && m.userId != me
@@ -132,8 +139,8 @@ fun WorkspaceMembersCard(onOpenProfile: (String) -> Unit) {
                         roles.forEach { k -> DropdownMenuItem({ Text(Roles.label(k)) }, { open = false; scope.launch {
                             try { api.patchMember(m.id, ws, mapOf("role" to JsonPrimitive(k))) } catch (e: ApiError) { err = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }; tick++ } }) }
                         HorizontalDivider()
-                        DropdownMenuItem({ Text(stringResource(R.string.wm_remove), color = c.danger) }, { open = false; scope.launch {
-                            try { api.removeMember(m.id, ws) } catch (e: ApiError) { err = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }; tick++ } })
+                        DropdownMenuItem({ Text(stringResource(R.string.wm_remove), color = c.danger) }, { open = false; ask = PendingConfirm(askTitle, askMsg, askAction) { scope.launch {
+                            try { api.removeMember(m.id, ws) } catch (e: ApiError) { err = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }; tick++ } } })
                     }
                 }
             }

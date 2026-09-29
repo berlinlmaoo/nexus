@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.vault
 
+import id.znetworks.nexus.ui.components.PendingConfirm
+import id.znetworks.nexus.ui.components.ConfirmDialog
 import android.app.Application
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -304,6 +306,11 @@ private fun ShareDialog(item: VaultItem, api: VaultApi, canExternal: Boolean, on
     var download by remember { mutableStateOf(true) }
     var expires by remember { mutableStateOf("permanent") }
     var tick by remember { mutableStateOf(0) }
+    var askRevoke by remember { mutableStateOf<PendingConfirm?>(null) }
+    val revokeTitle = stringResource(R.string.cf_revoke_link)
+    val revokeMsg = stringResource(R.string.cf_revoke_link_body)
+    val revokeAction = stringResource(R.string.vault_revoke)
+    ConfirmDialog(askRevoke) { askRevoke = null }
     LaunchedEffect(item.id, tick) { shares = runCatching { api.shares(item.id) }.getOrDefault(emptyList()) }
     AlertDialog(
         onDismissRequest = onClose,
@@ -319,7 +326,7 @@ private fun ShareDialog(item: VaultItem, api: VaultApi, canExternal: Boolean, on
                             Text(listOfNotNull(stringResource(if (sh.requireAuth) R.string.vault_internal else R.string.vault_external),
                                 stringResource(R.string.vault_views, sh.viewCount), sh.expiresAt?.let { chatTime(it) }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
                         }
-                        TextButton(onClick = { scope.launch { runCatching { api.revoke(sh.id) }.onFailure { e -> error = (e as? ApiError)?.describe(res) }; tick++ } }) {
+                        TextButton(onClick = { askRevoke = PendingConfirm(revokeTitle, revokeMsg, revokeAction) { scope.launch { runCatching { api.revoke(sh.id) }.onFailure { e -> error = (e as? ApiError)?.describe(res) }; tick++ } } }) {
                             Text(stringResource(R.string.vault_revoke), color = c.danger, fontSize = 12.sp)
                         }
                     }

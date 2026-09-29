@@ -1600,4 +1600,11 @@
     <string name="an_missing_body">Tambahkan isi pengumuman untuk memposting.</string>
     <string name="an_missing_people">Pilih minimal satu orang.</string>
     <string name="an_tab">Pengumuman</string>
+    <string name="cf_remove_member_ws">Keluarkan %1$s dari workspace?</string>
+    <string name="cf_remove_member_ws_body">Aksesnya ke project, chat, dan absensi workspace ini langsung hilang.</string>
+    <string name="cf_remove_from_team">Keluarkan %1$s dari %2$s?</string>
+    <string name="cf_delete_division">Hapus divisi %1$s?</string>
+    <string name="cf_leave_project">Keluarkan dia dari %1$s?</string>
+    <string name="cf_revoke_link">Cabut link ini?</string>
+    <string name="cf_revoke_link_body">Link langsung tidak bisa dipakai oleh siapa pun yang memilikinya.</string>
 </resources>
