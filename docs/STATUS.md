@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (331 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (330 JVM tests, all green).
 Version 0.1.6 (versionCode 9 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 9 ready, NOT published** (`~/nexus-android-release/NEXUS-0.1.6-9.apk`, sha256 `de3d5d61eb534cf86d1d22cede2466addbc2420b4401406060d4b7d94afdeaf6`, from 3dea3c4, 324 tests; versionCode 9, versionName 0.1.6, signer 5322fe4c…ad26): build 8 + Control Room › App per device + centred confirmations. Emulator smoke: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
 **Build 8 PUBLISHED** (29 Sep, by the main session: nexus-prod current.json versionCode 8, version-policy latestBuild 8; waiting for Berlin's test) (`~/nexus-android-release/NEXUS-0.1.6-8.apk`, sha256 `1a4fd49bc7b801dd0f482272baa25565acfa4ec6542ad8005cc38db8aa36eacc`, from b7000aa, 322 tests; versionCode 8, versionName 0.1.6, signer 5322fe4c…ad26): build 7 + Batch 2 A/B/C (Absen Monitor with warnings, Control Room keyboard, targeted announcements with SP PDF). Same emulator smoke as build 7: 3 cold launches drawn, no crash from this install (only the stale BOOT_COMPLETED to the removed previous uid).
