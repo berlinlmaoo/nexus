@@ -437,6 +437,16 @@ export async function POST(request: NextRequest) {
     }
     // Izin now demands the same evidence check-in does — photo + coordinates. Without it, izin was
     // strictly cheaper than showing up: no proof, no location, no time.
+    // No request for a day that has already passed when filing your own — leave, sick, izin, day off,
+    // public holiday; a BoD included (owner, 29 Sep 2026). A past day goes through a BoD filing FOR the
+    // person, where a human signs off on it. Held only to clients that can obey it (0.1.6+ and the web):
+    // an older app keeps its picker, and refusing it would give no hint why.
+    if (modernClient && !filingForOther && isBackdated(parsedStartDate)) {
+      return NextResponse.json(
+        { error: "Tanggal yang sudah lewat tidak bisa diajukan sendiri. Minta BoD yang menginputnya.", code: "BACKDATED_SELF" },
+        { status: 400 }
+      )
+    }
     // The photo is required for everyone filing their own izin, a BoD included (owner, 29 Sep 2026);
     // only a grant for somebody else is exempt. Location and the no-backdating rule stay staff-only.
     if (!filingForOther && reqType === "PERMIT" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
