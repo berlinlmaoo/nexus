@@ -34,6 +34,10 @@ data class ComposerState(
     val error: String? = null,
     /** Opened from "File a permit" (push / 1 h 30 outside): the reason is started, not finished. */
     val prefillReason: String? = null,
+    /** Annual leave: several dates, capped at the days left (iOS 22c4ecb). */
+    val leaveDates: Set<LocalDate> = emptySet(),
+    /** The last tap went past the days left. */
+    val leaveCapped: Boolean = false,
 )
 
 data class RequestsUiState(
@@ -195,6 +199,13 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setDate(d: LocalDate) = updateComposer { it.copy(date = d, error = null) }
+    fun toggleLeaveDate(d: LocalDate) {
+        val left = rules().remainingDays("LEAVE")
+        updateComposer { cs ->
+            val (dates, capped) = MultiDateLogic.toggle(cs.leaveDates, d, left)
+            cs.copy(leaveDates = dates, leaveCapped = capped, error = null)
+        }
+    }
     fun setReason(r: String) = updateComposer { it.copy(reason = r, error = null) }
     fun clearAttachment() = updateComposer { it.copy(attachment = null) }
 
@@ -233,8 +244,9 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
     fun submit(onFiled: () -> Unit) {
         val cs = _state.value.composer ?: return
         val rules = rules()
-        if (rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason) != null) return
+        if (rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason, leaveDays = cs.leaveDates.size) != null) return
         updateComposer { it.copy(sending = true, error = null) }
+        if (cs.type == "LEAVE") { submitLeave(cs, onFiled); return }
         viewModelScope.launch {
             try {
                 val loc = if (rules.needsLocation(cs.type) || cs.type == "PERMIT") cs.location else null
@@ -250,6 +262,29 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
                 updateComposer { it.copy(sending = false, error = e.describe(res)) }
             }
         }
+    }
+
+    /**
+     * Annual leave: one request per run of consecutive dates. A refusal stops the rest and says which
+     * dates already went, so a retry never files one twice (iOS 22c4ecb).
+     */
+    private fun submitLeave(cs: ComposerState, onFiled: () -> Unit) = viewModelScope.launch {
+        val sent = mutableListOf<String>()
+        for ((from, to) in MultiDateLogic.blocks(cs.leaveDates)) {
+            try {
+                api.create("LEAVE", from.toString(), cs.reason, null, null, null, endDate = to.toString())
+                sent += if (from == to) from.toString() else "$from–$to"
+                if (!from.isAfter(OfficeTime.today()) && !to.isBefore(OfficeTime.today())) c.workTrail.excuseFiled()
+            } catch (e: ApiError) {
+                val why = e.describe(res)
+                updateComposer { it.copy(sending = false, error = if (sent.isEmpty()) why else res.getString(R.string.leave_sent_then_refused, sent.joinToString(", "), why)) }
+                if (sent.isNotEmpty()) load()
+                return@launch
+            }
+        }
+        _state.update { it.copy(composer = null) }
+        load()
+        onFiled()
     }
 
     // endregion

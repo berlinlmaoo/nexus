@@ -502,12 +502,26 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 }
                 Text(typeHint(rules, cs.type, vm), fontSize = 12.sp, color = c.mutedFg)
 
-                // One date control, every type (REQ-ATT-25).
+                if (cs.type == "LEAVE") {
+                    // Annual leave: several dates at once, capped at the days left (Berlin 29 Sep, iOS 22c4ecb).
+                    Label(stringResource(R.string.leave_dates))
+                    MultiDatePicker(cs.leaveDates, vm::toggleLeaveDate)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.leave_picked, cs.leaveDates.size, rules.remainingDays("LEAVE") ?: 0), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            color = c.violetText, modifier = Modifier.background(c.violet.copy(alpha = 0.12f), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 4.dp))
+                        if (cs.leaveCapped) {
+                            Spacer(Modifier.size(8.dp))
+                            Text(stringResource(R.string.leave_only_left, rules.remainingDays("LEAVE") ?: 0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
+                        }
+                    }
+                } else {
+                // One date control, every other type (REQ-ATT-25).
                 Label(stringResource(R.string.req_date))
                 OutlinedButton(onClick = { pickingDate = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                     Icon(Icons.Filled.CalendarMonth, null, Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
                     Text(DAY.format(cs.date), modifier = Modifier.weight(1f))
+                }
                 }
 
                 Label(stringResource(R.string.req_reason))
@@ -563,7 +577,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                     }
                 }
 
-                val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason)
+                val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason, leaveDays = cs.leaveDates.size)
                 if (missing == RequestRules.Missing.QUOTA) {
                     Text(stringResource(R.string.quota_none_left, 1, rules.remainingDays(cs.type) ?: 0), color = c.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
@@ -573,7 +587,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 }
                 Spacer(Modifier.height(8.dp))
             }
-            val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason)
+            val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason, leaveDays = cs.leaveDates.size)
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 // Why the button is grey, next to the button.
                 missing?.takeIf { it != RequestRules.Missing.QUOTA }?.let {
@@ -583,6 +597,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                             RequestRules.Missing.ATTACHMENT -> R.string.missing_photo
                             RequestRules.Missing.LOCATION -> R.string.missing_location
                             RequestRules.Missing.DATE -> R.string.missing_date
+                            RequestRules.Missing.DATES -> R.string.missing_dates
                             RequestRules.Missing.QUOTA -> R.string.missing_reason
                         },
                     ), fontSize = 11.sp, color = c.mutedFg, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))

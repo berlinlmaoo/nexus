@@ -101,8 +101,8 @@ open class RequestsApi(private val api: ApiClient) {
         api.get("/api/attendance/offsite-checkouts?status=ALL", OffsiteResponse.serializer()).items
 
     /**
-     * One date per request, every type (REQ-ATT-25): `endDate` is always `startDate`. [lat]/[lng]
-     * go together or not at all.
+     * One date per request (REQ-ATT-25): `endDate` is `startDate`, except annual leave, which the
+     * server takes as a run of consecutive dates (Berlin 29 Sep). [lat]/[lng] go together or not at all.
      */
     open suspend fun create(
         type: String,
@@ -111,11 +111,12 @@ open class RequestsApi(private val api: ApiClient) {
         attachment: Attachment?,
         lat: Double?,
         lng: Double?,
+        endDate: String = date,
     ) {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("type", type)
             .addFormDataPart("startDate", date)
-            .addFormDataPart("endDate", date)
+            .addFormDataPart("endDate", endDate)
             .addFormDataPart("reason", reason.trim())
             .apply {
                 if (lat != null && lng != null) {

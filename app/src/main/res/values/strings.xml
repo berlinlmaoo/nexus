@@ -1613,4 +1613,10 @@
     <string name="cf_leave_project">Remove them from %1$s?</string>
     <string name="cf_revoke_link">Revoke this link?</string>
     <string name="cf_revoke_link_body">It stops working at once for everyone who has it.</string>
+    <string name="leave_dates">Dates</string>
+    <string name="leave_picked">%1$d of %2$d days picked</string>
+    <string name="leave_only_left">Only %1$d days left.</string>
+    <string name="leave_sent_then_refused">Sent: %1$s. Then refused: %2$s</string>
+    <string name="missing_dates">Pick the dates of your leave.</string>
+    <string name="wn_leave_multi">Annual leave: pick several dates at once, up to the days you have left</string>
 </resources>

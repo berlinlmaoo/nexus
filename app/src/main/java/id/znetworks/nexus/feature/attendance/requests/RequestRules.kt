@@ -71,10 +71,13 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
         date: LocalDate,
         now: Instant = Instant.now(),
         prefillReason: String? = null,
+        /** Annual leave is picked as several dates: how many are picked (ignored for other types). */
+        leaveDays: Int = 0,
     ): Missing? {
         val r = reason.trim()
         return when {
             quotaExhausted(type) -> Missing.QUOTA
+            type == "LEAVE" && leaveDays < 1 -> Missing.DATES
             earliest(type, now)?.let { date.isBefore(it) } == true -> Missing.DATE
             r.length < 3 || (prefillReason != null && r == prefillReason.trim()) -> Missing.REASON
             attachmentRequired(type) && !hasAttachment -> Missing.ATTACHMENT
@@ -83,7 +86,7 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
         }
     }
 
-    enum class Missing { QUOTA, DATE, REASON, ATTACHMENT, LOCATION }
+    enum class Missing { QUOTA, DATE, DATES, REASON, ATTACHMENT, LOCATION }
 
     companion object {
         const val MAX_ATTACHMENT_BYTES = 10L * 1024 * 1024

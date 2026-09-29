@@ -1607,4 +1607,10 @@
     <string name="cf_leave_project">Keluarkan dia dari %1$s?</string>
     <string name="cf_revoke_link">Cabut link ini?</string>
     <string name="cf_revoke_link_body">Link langsung tidak bisa dipakai oleh siapa pun yang memilikinya.</string>
+    <string name="leave_dates">Tanggal</string>
+    <string name="leave_picked">%1$d dari %2$d hari dipilih</string>
+    <string name="leave_only_left">Sisa %1$d hari saja.</string>
+    <string name="leave_sent_then_refused">Terkirim: %1$s. Lalu ditolak: %2$s</string>
+    <string name="missing_dates">Pilih tanggal cutimu.</string>
+    <string name="wn_leave_multi">Cuti: pilih beberapa tanggal sekaligus, sebanyak sisa jatahmu</string>
 </resources>
