@@ -936,6 +936,7 @@ private struct RequestFocusSheet: View {
                     .padding(16)
                 }
             }
+            .keyboardDoneBar()
             .navigationTitle(T("From your notification"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
@@ -1128,6 +1129,7 @@ struct RejectReasonSheet: View {
                     .padding(20)
                 }
             }
+            .keyboardDoneBar()
             .navigationTitle(T("Reject"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
@@ -1163,10 +1165,9 @@ struct RequestComposerSheet: View {
     @State private var start = Date()
     /// Annual leave is picked as one range (owner, 29 Sep 2026), capped at the days left; each run
     /// of consecutive dates is sent as one request.
-    @State private var leaveDates: Set<DateComponents> = []
+    @State private var leaveStart: Date?
+    @State private var leaveEnd: Date?
     @State private var leaveCapNote: String?
-    /// Set right before this view changes `leaveDates` itself, so that change is not read as a tap.
-    @State private var leaveSelfWrite = false
     @State private var reason = ""
     @State private var attach: (name: String, data: Data)?
     @State private var showImporter = false
@@ -1239,39 +1240,32 @@ struct RequestComposerSheet: View {
     private var isLeave: Bool { type == "LEAVE" }
     /// The picked leave dates as days, oldest first.
     private var leaveDays: [Date] {
-        leaveDates.compactMap { ProjDate.cal.date(from: $0) }.map { ProjDate.cal.startOfDay(for: $0) }.sorted()
+        guard let a = leaveStart else { return [] }
+        let b = leaveEnd ?? a
+        var out: [Date] = []
+        var d = a
+        while d <= b {
+            out.append(d)
+            guard let n = ProjDate.cal.date(byAdding: .day, value: 1, to: d) else { break }
+            d = n
+        }
+        return out
     }
     /// Leave is a RANGE (owner, 29 Sep 2026): tap the first day, then the last, and every day between
-    /// is taken; a third tap starts a new range, tapping a picked day clears it. Capped at the days left.
-    private func pickLeave(old: Set<DateComponents>, new: Set<DateComponents>) {
-        if leaveSelfWrite { leaveSelfWrite = false; return }
-        // The picker's own calendar: components built with another one would not match its cells.
-        let cal = Calendar.current
-        let day = { (c: DateComponents) in cal.date(from: c).map { cal.startOfDay(for: $0) } }
-        /// Writes only when it changes something (an equal write reports nothing back).
-        func write(_ v: Set<DateComponents>) { if v != new { leaveSelfWrite = true; leaveDates = v } }
-        if new.count < old.count { write([]); leaveCapNote = nil; return }
-        guard let added = new.subtracting(old).first, let tapped = day(added) else { return }
-        if old.count == 1, let first = old.first.flatMap(day) {
-            let (a, b) = first <= tapped ? (first, tapped) : (tapped, first)
-            var fill: Set<DateComponents> = []
-            var d = a
-            while d <= b {
-                fill.insert(cal.dateComponents([.calendar, .era, .year, .month, .day], from: d))
-                guard let n = cal.date(byAdding: .day, value: 1, to: d) else { break }
-                d = n
+    /// is taken; a third tap starts a new range, tapping a lone first day again clears it. Capped at the days left.
+    private func tapLeave(_ d: Date) {
+        if let a = leaveStart, leaveEnd == nil {
+            if d == a { leaveStart = nil; leaveCapNote = nil; return }
+            let (lo, hi) = a < d ? (a, d) : (d, a)
+            let n = (ProjDate.cal.dateComponents([.day], from: lo, to: hi).day ?? 0) + 1
+            if let left = remainingDays, n > left {
+                leaveCapNote = String(format: T("That's %d days — only %d left."), n, left)
+                return
             }
-            if let left = remainingDays, fill.count > left {
-                write(old)
-                leaveCapNote = String(format: T("That's %d days — only %d left."), fill.count, left)
-            } else {
-                write(fill)
-                leaveCapNote = nil
-            }
+            leaveStart = lo; leaveEnd = hi; leaveCapNote = nil
         } else {
-            // A range was already picked (or none): this tap starts over from here.
-            write([added])
-            leaveCapNote = nil
+            // Nothing picked yet, or a whole range already is: this tap starts over from here.
+            leaveStart = d; leaveEnd = nil; leaveCapNote = nil
         }
     }
 
@@ -1305,7 +1299,7 @@ struct RequestComposerSheet: View {
             && !(attachmentRequired && attach == nil)
             && !(needsLocation && coords == nil)
             && quotaProblem == nil
-            && !(isLeave && leaveDates.isEmpty)
+            && !(isLeave && leaveStart == nil)
     }
     /// What the picked photo is called once it reaches the reviewer's screen. It used to be
     /// "sick-note.jpg" for every type, so an izin arrived carrying a sick note's name.
@@ -1375,9 +1369,12 @@ struct RequestComposerSheet: View {
                         if isLeave {
                             field(T("DATES")) {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    MultiDatePicker(T("Dates"), selection: $leaveDates, in: Calendar.current.startOfDay(for: Date())...)
-                                        .tint(NX.violetText)
-                                        .padding(8)
+                                    // Not MultiDatePicker: it draws each picked day as a loose dot and cannot show
+                                    // the days between as one range (owner, 29 Sep 2026).
+                                    LeaveRangeCalendar(start: leaveStart, end: leaveEnd,
+                                                       earliest: ProjDate.cal.startOfDay(for: Date()),
+                                                       onTap: tapLeave)
+                                        .padding(.horizontal, 8).padding(.vertical, 12)
                                         .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
                                     HStack(spacing: 8) {
@@ -1392,7 +1389,6 @@ struct RequestComposerSheet: View {
                                     }
                                 }
                             }
-                            .onChange(of: leaveDates) { old, new in pickLeave(old: old, new: new) }
                         } else {
                         field(T("DATE")) {
                             HStack(spacing: 10) {
@@ -1496,6 +1492,7 @@ struct RequestComposerSheet: View {
                     .padding(20)
                 }
             }
+            .keyboardDoneBar()
             .navigationTitle(T("New request"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
@@ -1644,6 +1641,122 @@ struct RequestComposerSheet: View {
             dismiss()
         } catch {
             err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the request.")
+        }
+    }
+}
+
+/// A month grid for picking annual leave as one range: the first and last day as filled circles, the
+/// days between joined by a band. Plain stacks, no lazy grid, no offsets.
+private struct LeaveRangeCalendar: View {
+    let start: Date?
+    let end: Date?
+    let earliest: Date
+    let onTap: (Date) -> Void
+    @State private var month: Date?
+
+    private static let cell: CGFloat = 40
+    private static let dot: CGFloat = 36
+
+    private var cal: Calendar { var c = ProjDate.cal; c.firstWeekday = 2; return c }
+    private var locale: Locale { Locale(identifier: AppLanguage.shared.lang.rawValue == "id" ? "id_ID" : "en_US") }
+    private func firstOfMonth(_ d: Date) -> Date { cal.date(from: cal.dateComponents([.year, .month], from: d)) ?? d }
+    private var shown: Date { month ?? firstOfMonth(start ?? earliest) }
+    private var canGoBack: Bool { shown > firstOfMonth(earliest) }
+
+    private var title: String {
+        let f = DateFormatter(); f.dateFormat = "LLLL yyyy"; f.timeZone = cal.timeZone; f.locale = locale
+        return f.string(from: shown)
+    }
+    /// Short weekday names, Monday first.
+    private var weekdays: [String] {
+        let f = DateFormatter(); f.locale = locale
+        let sym = f.shortStandaloneWeekdaySymbols ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        return (0..<7).map { sym[($0 + cal.firstWeekday - 1) % 7].uppercased() }
+    }
+    /// The month as rows of seven, nil where a cell belongs to the month before or after.
+    private var weeks: [[Date?]] {
+        let first = shown
+        let count = cal.range(of: .day, in: .month, for: first)?.count ?? 30
+        let lead = (cal.component(.weekday, from: first) - cal.firstWeekday + 7) % 7
+        var cells: [Date?] = Array(repeating: nil, count: lead)
+        for i in 0..<count { cells.append(cal.date(byAdding: .day, value: i, to: first)) }
+        while cells.count % 7 != 0 { cells.append(nil) }
+        return stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<$0 + 7]) }
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(title).font(NXFont.text(16, .bold)).foregroundStyle(NX.foreground)
+                Spacer()
+                Button { step(-1) } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 36, height: 32)
+                }
+                .disabled(!canGoBack)
+                .opacity(canGoBack ? 1 : 0.3)
+                Button { step(1) } label: {
+                    Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold)).frame(width: 36, height: 32)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(NX.violetText)
+            .padding(.horizontal, 6)
+            HStack(spacing: 0) {
+                ForEach(Array(weekdays.enumerated()), id: \.offset) { _, w in
+                    Text(w).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity)
+                }
+            }
+            ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                HStack(spacing: 0) {
+                    ForEach(0..<7, id: \.self) { i in dayCell(week[i]) }
+                }
+            }
+        }
+    }
+
+    private func step(_ by: Int) {
+        if let d = cal.date(byAdding: .month, value: by, to: shown) { month = d }
+    }
+
+    @ViewBuilder private func dayCell(_ day: Date?) -> some View {
+        if let d = day {
+            let lo = start
+            let hi = end ?? start
+            let inRange = lo != nil && hi != nil && d >= lo! && d <= hi!
+            let isEdge = d == lo || d == hi
+            let isRange = end != nil && end != start
+            let disabled = d < earliest
+            let isToday = cal.isDate(d, inSameDayAs: Date())
+            ZStack {
+                if isRange && inRange {
+                    // The band: a half on the first and last day so it starts and ends inside their circles.
+                    HStack(spacing: 0) {
+                        Rectangle().fill(d == lo ? Color.clear : NX.violet.opacity(0.16))
+                        Rectangle().fill(d == hi ? Color.clear : NX.violet.opacity(0.16))
+                    }
+                    .frame(height: Self.dot)
+                }
+                if isEdge {
+                    Circle().fill(NX.violet).frame(width: Self.dot, height: Self.dot)
+                } else if isToday {
+                    Circle().strokeBorder(NX.violetText.opacity(0.6), lineWidth: 1).frame(width: Self.dot, height: Self.dot)
+                }
+                Text("\(cal.component(.day, from: d))")
+                    .font(NXFont.text(15, isEdge ? .bold : (inRange ? .semibold : .regular)))
+                    .monospacedDigit()
+                    .foregroundStyle(isEdge ? Color.white
+                                     : disabled ? NX.mutedFg.opacity(0.4)
+                                     : inRange ? NX.violetText : NX.foreground)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.cell)
+            .contentShape(Rectangle())
+            .onTapGesture { if !disabled { onTap(d) } }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ProjDate.longLabel(d))
+            .accessibilityAddTraits(isEdge ? [.isButton, .isSelected] : .isButton)
+        } else {
+            Color.clear.frame(maxWidth: .infinity).frame(height: Self.cell)
         }
     }
 }
