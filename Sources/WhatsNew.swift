@@ -50,6 +50,16 @@ enum WhatsNew {
     /// ship iPhone and Mac from one version number.
     private static var v016: [WhatsNewEntry] { [
         WhatsNewEntry(
+            icon: "hand.tap.fill",
+            title: T("One button for the whole day"),
+            body: T("Check in and check out are now one button. The face check, finding your location and sending all happen inside it, and it tells you exactly what went wrong if something does.")
+        ),
+        WhatsNewEntry(
+            icon: "clock.badge.checkmark.fill",
+            title: T("Time left, right on Home"),
+            body: T("Once you check in, Home shows how long your working day has left — nine hours from check-in on Flexi, until your shift ends otherwise. Tap it to open Attendance.")
+        ),
+        WhatsNewEntry(
             icon: "wifi.slash",
             title: T("NEXUS opens with no signal"),
             body: T("Your projects, their tasks and files, today's attendance, the crew board, your requests and your selfies are kept on this phone and refreshed in the background. On a site with no bars it all still opens, with a line saying when it was saved. Files download on Wi-Fi only unless you switch it on in Tuning Room.")
@@ -94,6 +104,10 @@ enum WhatsNew {
             title: T("Attachments open everywhere"),
             body: T("Choose files did nothing on iPad and on most phones; now it opens, and a form or a sick note can come straight from the camera or your photos. A permit's photo is no longer filed under a sick note's name.")
         ),
+        WhatsNewEntry(kind: .also, icon: "location.fill", title: T("Check-in needs location set to Always with Precise Location on — the app shows you where to switch it")),
+        WhatsNewEntry(kind: .also, icon: "building.2.fill", title: T("Moving to another office still counts as at the office, and the card says which one")),
+        WhatsNewEntry(kind: .also, icon: "lock.fill", title: T("Signing out waits until you check out, and signing out now ends your session everywhere it was copied")),
+        WhatsNewEntry(kind: .also, icon: "envelope.badge.shield.half.filled", title: T("Changing your email asks for your password, and your old address is told")),
     ] }
 
     private static var v015: [WhatsNewEntry] { [
