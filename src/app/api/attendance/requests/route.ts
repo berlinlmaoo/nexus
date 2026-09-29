@@ -402,8 +402,11 @@ export async function POST(request: NextRequest) {
         )
       }
     }
-    // Sick self-requests must include the doctor's note photo (BoD grants are exempt).
-    if (!canGrant && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
+    // Sick requests must include the doctor's note photo. Only a BoD filing FOR SOMEBODY ELSE is exempt
+    // (owner, 29 Sep 2026: a BoD's own sick day needs the note like anyone's; it used to be waived for
+    // every BoD request, so the form told a BoD it was optional).
+    const filingForOther = Boolean(targetUserId && targetUserId !== session.user.id)
+    if (!filingForOther && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
       return NextResponse.json({ error: "Request sakit wajib melampirkan foto surat sakit." }, { status: 400 })
     }
     // One request, one date — for EVERY type (owner, 24 Sep 2026: LEAVE, SICK, PERMIT, DAY_OFF and
@@ -414,7 +417,10 @@ export async function POST(request: NextRequest) {
     // An older phone keeps its START–UNTIL picker and its range is accepted as before: refusing it
     // would lock people out with nothing on their screen to explain why. BoD grants (canGrant) stay
     // exempt, so a multi-day grant still goes through in one step.
-    if (modernClient && !canGrant && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
+    // Except annual leave (owner, 29 Sep 2026): leave is picked as several dates, capped at the days left,
+    // and the app files each run of consecutive dates as one request — one decision per block, and the
+    // yearly quota check below still counts every day.
+    if (modernClient && !canGrant && reqType !== "LEAVE" && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
       return NextResponse.json(
         {
           error: "Pengajuan diisi per hari. Pilih satu tanggal — kalau lebih dari sehari, ajukan per tanggal.",
