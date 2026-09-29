@@ -1754,7 +1754,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const typeHint = granting
     ? `Granted to the person you pick below and approved straight away; it doesn't use up their quota.`
     : type === "LEAVE" ? (!leave ? "Uses one day of your annual leave." : !leave.eligible ? (leave.reason ?? "Annual leave needs 12 months of service.") : `Annual leave: ${leave.remaining} of ${leave.quota} days left this year.`)
-    : type === "SICK" ? "A photo of the doctor's note is required. A day that has already passed is fine."
+    : type === "SICK" ? "A photo of the doctor's note is required. Today or later — a past day is filed by a BoD."
     : type === "PERMIT" ? "Today or later, with a photo and your location."
     : type === "DAY_OFF" ? `Day off: ${remainingDays ?? 0} of ${todayQ.data?.dayOffQuota ?? 0} left this period.`
     : `Public holiday: ${remainingDays ?? 0} of ${redQuota} left this month.`;
@@ -1763,7 +1763,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
     if (t !== "SICK" && t !== "PERMIT") setAttachment(null);
     // A permit cannot be backdated: bring the date into line the moment the type changes, rather
     // than at submit time.
-    if (!canGrant && t === "PERMIT" && date < today) setDate(today);
+    if (date < today) setDate(today);
   };
   const pickMode = (m: "self" | "grant") => { setMode(m); if (m === "self") setTargetUserId(""); };
   const leaveNote = !leave || granting
@@ -1793,7 +1793,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
   const leaveBlocks: Array<[string, string]> = leaveFrom ? [[leaveFrom, leaveTo && leaveTo >= leaveFrom ? leaveTo : leaveFrom]] : [];
   const showAttachment = type === "SICK" || type === "PERMIT";
   const needsLocation = !canGrant && type === "PERMIT";
-  const permitBackdated = type === "PERMIT" && !canGrant && date < today;
+  const permitBackdated = !granting && date < today;
   const shiftStart = todayQ.data?.myShift?.startTime ?? null;
   // Preview of how late this filing is, so the warning appears BEFORE submitting rather than as a
   // surprise on the approver's screen.
@@ -1910,11 +1910,11 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
             <div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">From
-                  <input type="date" value={leaveFrom} onChange={(e) => { setLeaveFrom(e.target.value); if (leaveTo && e.target.value > leaveTo) setLeaveTo(""); }}
+                  <input type="date" value={leaveFrom} min={today} onChange={(e) => { setLeaveFrom(e.target.value); if (leaveTo && e.target.value > leaveTo) setLeaveTo(""); }}
                     className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
                 </label>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Until
-                  <input type="date" value={leaveTo} min={leaveFrom || undefined} onChange={(e) => setLeaveTo(e.target.value)}
+                  <input type="date" value={leaveTo} min={leaveFrom || today} onChange={(e) => setLeaveTo(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
                 </label>
               </div>
@@ -1923,7 +1923,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
             </div>
           ) : (
           <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date
-            <input type="date" value={date} min={type === "PERMIT" && !canGrant ? today : undefined}
+            <input type="date" value={date} min={!granting ? today : undefined}
               onChange={(e) => setDate(e.target.value)}
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
           </label>
