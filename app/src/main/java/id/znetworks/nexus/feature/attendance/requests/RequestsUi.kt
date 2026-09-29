@@ -44,6 +44,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.rememberDateRangePickerState
+import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -127,6 +129,8 @@ private fun statusTone(s: String?): Color = when (s.orEmpty().uppercase()) {
 }
 
 private val DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
+/** "29 Sep" in the app's language at the moment it is drawn. */
+private fun shortDay(d: LocalDate): String = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(d)
 private val STAMP = DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.getDefault())
 
 /** Date-only columns are stored at 00:00 UTC: read the date part, not a zoned instant. */
@@ -482,6 +486,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
     val c = Nx.colors
     val rules = vm.rules()
     var pickingDate by remember { mutableStateOf(false) }
+    var pickingRange by remember { mutableStateOf(false) }
 
     val camera = rememberCameraCapture("shot") { vm.attach(it) }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::attach) }
@@ -503,16 +508,18 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 Text(typeHint(rules, cs.type, vm), fontSize = 12.sp, color = c.mutedFg)
 
                 if (cs.type == "LEAVE") {
-                    // Annual leave: several dates at once, capped at the days left (Berlin 29 Sep, iOS 22c4ecb).
+                    // Annual leave is one range: first day, last day (Berlin 29 Sep, iOS ed7545e).
                     Label(stringResource(R.string.leave_dates))
-                    MultiDatePicker(cs.leaveDates, vm::toggleLeaveDate)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.leave_picked, cs.leaveDates.size, rules.remainingDays("LEAVE") ?: 0), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                            color = c.violetText, modifier = Modifier.background(c.violet.copy(alpha = 0.12f), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 4.dp))
-                        if (cs.leaveCapped) {
-                            Spacer(Modifier.size(8.dp))
-                            Text(stringResource(R.string.leave_only_left, rules.remainingDays("LEAVE") ?: 0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
-                        }
+                    OutlinedButton(onClick = { pickingRange = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                        Icon(Icons.Filled.CalendarMonth, null, Modifier.size(18.dp))
+                        Spacer(Modifier.size(8.dp))
+                        val s0 = cs.leaveStart; val s1 = cs.leaveEnd
+                        Text(if (s0 == null || s1 == null) stringResource(R.string.leave_tap_range)
+                            else stringResource(R.string.leave_summary, if (s0 == s1) shortDay(s0) else "${shortDay(s0)} – ${shortDay(s1)}", cs.leaveDays, rules.remainingDays("LEAVE") ?: 0),
+                            modifier = Modifier.weight(1f))
+                    }
+                    cs.leaveTooLong?.let { n ->
+                        Text(stringResource(R.string.leave_too_long, n, rules.remainingDays("LEAVE") ?: 0), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
                     }
                 } else {
                 // One date control, every other type (REQ-ATT-25).
@@ -577,7 +584,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                     }
                 }
 
-                val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason, leaveDays = cs.leaveDates.size)
+                val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.dayFor(), prefillReason = cs.prefillReason, leaveDays = cs.leaveDays)
                 if (missing == RequestRules.Missing.QUOTA) {
                     Text(stringResource(R.string.quota_none_left, 1, rules.remainingDays(cs.type) ?: 0), color = c.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
@@ -587,7 +594,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                 }
                 Spacer(Modifier.height(8.dp))
             }
-            val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason, leaveDays = cs.leaveDates.size)
+            val missing = rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.dayFor(), prefillReason = cs.prefillReason, leaveDays = cs.leaveDays)
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 // Why the button is grey, next to the button.
                 missing?.takeIf { it != RequestRules.Missing.QUOTA }?.let {
@@ -614,6 +621,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
         }
     }
 
+    if (pickingRange) LeaveRangeDialog(cs.leaveStart, cs.leaveEnd, rules.earliest(cs.type), onPick = vm::setLeaveRange) { pickingRange = false }
     if (pickingDate) {
         val floor = rules.earliest(cs.type)
         val state = rememberDatePickerState(
@@ -635,6 +643,34 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
             },
             dismissButton = { TextButton(onClick = { pickingDate = false }) { Text(stringResource(R.string.cancel)) } },
         ) { DatePicker(state) }
+    }
+}
+
+/** Material's range picker (Berlin 29 Sep): tap the first day, then the last; nothing before [floor]. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun LeaveRangeDialog(start: LocalDate?, end: LocalDate?, floor: LocalDate?, onPick: (LocalDate, LocalDate) -> Unit, onDismiss: () -> Unit) {
+    fun ms(d: LocalDate) = d.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+    fun day(m: Long) = Instant.ofEpochMilli(m).atZone(ZoneOffset.UTC).toLocalDate()
+    val state = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = start?.let(::ms),
+        initialSelectedEndDateMillis = end?.let(::ms),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long) = floor == null || !day(utcTimeMillis).isBefore(floor)
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                state.selectedStartDateMillis?.let { a -> onPick(day(a), day(state.selectedEndDateMillis ?: a)) }
+                onDismiss()
+            }, enabled = state.selectedStartDateMillis != null) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    ) {
+        DateRangePicker(state, showModeToggle = false, modifier = Modifier.fillMaxWidth().height(480.dp),
+            title = { Text(stringResource(R.string.leave_tap_range), modifier = Modifier.padding(start = 24.dp, top = 16.dp)) })
     }
 }
 

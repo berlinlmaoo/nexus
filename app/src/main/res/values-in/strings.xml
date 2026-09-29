@@ -232,7 +232,7 @@
     <string name="missing_reason">Tulis alasan minimal 3 karakter.</string>
     <string name="missing_photo">Tambahkan foto (kamera, galeri, atau file).</string>
     <string name="missing_location">Menunggu lokasimu.</string>
-    <string name="missing_date">Izin tidak bisa untuk hari yang sudah lewat. Pilih hari ini atau setelahnya.</string>
+    <string name="missing_date">Pengajuan tidak bisa untuk tanggal yang sudah lewat. Pilih hari ini atau setelahnya — tanggal lewat diinput oleh BoD.</string>
     <string name="req_send">Kirim pengajuan</string>
     <string name="attach_too_big">File terlalu besar. Batasnya 10 MB.</string>
     <string name="attach_unsupported">Hanya foto atau PDF yang bisa dilampirkan.</string>
@@ -241,7 +241,7 @@
     <string name="hint_leave">Memakai jatah cuti tahunanmu.</string>
     <string name="hint_leave_ineligible">Cuti tahunan butuh masa kerja 12 bulan.</string>
     <string name="hint_leave_left">Cuti tahunan: sisa %1$d dari %2$d hari tahun ini.</string>
-    <string name="hint_sick">Satu hari per pengajuan, dan foto surat dokter wajib. Hari yang sudah lewat boleh.</string>
+    <string name="hint_sick">Satu hari per pengajuan, hari ini atau setelahnya, dengan foto surat dokter. Tanggal yang sudah lewat diinput oleh BoD.</string>
     <string name="hint_permit">Satu hari per pengajuan, hari ini atau setelahnya, dengan foto dan lokasimu.</string>
     <string name="hint_dayoff">Memakai jatah day-off.</string>
     <string name="hint_dayoff_left">Day off: sisa %1$d dari %2$d periode ini.</string>
@@ -1608,9 +1608,9 @@
     <string name="cf_revoke_link">Cabut link ini?</string>
     <string name="cf_revoke_link_body">Link langsung tidak bisa dipakai oleh siapa pun yang memilikinya.</string>
     <string name="leave_dates">Tanggal</string>
-    <string name="leave_picked">%1$d dari %2$d hari dipilih</string>
-    <string name="leave_only_left">Sisa %1$d hari saja.</string>
-    <string name="leave_sent_then_refused">Terkirim: %1$s. Lalu ditolak: %2$s</string>
     <string name="missing_dates">Pilih tanggal cutimu.</string>
     <string name="wn_leave_multi">Cuti: pilih beberapa tanggal sekaligus, sebanyak sisa jatahmu</string>
+    <string name="leave_tap_range">Ketuk hari pertama, lalu hari terakhir</string>
+    <string name="leave_summary">%1$s · %2$d dari %3$d hari</string>
+    <string name="leave_too_long">Itu %1$d hari — sisa %2$d saja.</string>
 </resources>

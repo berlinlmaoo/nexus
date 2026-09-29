@@ -34,12 +34,14 @@ class RequestRulesTest {
         assertFalse("LEAVE" in RequestRules(today(leave = AnnualLeave(eligible = true, remaining = 0)), false).types)
     }
 
-    @Test fun permitNeverBackdatedSickMayBe() {
-        val r = RequestRules(today(), false)
-        assertEquals(todayWib, r.earliest("PERMIT", now))
-        assertNull(r.earliest("SICK", now))
-        assertEquals(Missing.DATE, r.missing("PERMIT", "shooting konten", true, true, todayWib.minusDays(1), now))
-        assertNull(r.missing("SICK", "demam tinggi", true, false, todayWib.minusDays(1), now))
+    // Berlin 29 Sep (server BACKDATED_SELF, iOS ed7545e): no past day for any type when filing your own.
+    @Test fun noPastDayForAnyType() {
+        listOf(RequestRules(today(), false), RequestRules(today(), true)).forEach { r ->
+            listOf("LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE").forEach { t -> assertEquals(todayWib, r.earliest(t, now)) }
+            assertEquals(Missing.DATE, r.missing("SICK", "demam tinggi", true, true, todayWib.minusDays(1), now))
+            assertEquals(Missing.DATE, r.missing("DAY_OFF", "istirahat", false, false, todayWib.minusDays(1), now))
+            assertNull(r.missing("SICK", "demam tinggi", true, true, todayWib, now))
+        }
     }
 
     @Test fun permitNeedsPhotoAndLocation() {
@@ -65,19 +67,20 @@ class RequestRulesTest {
         assertEquals(Missing.REASON, r.missing("PERMIT", "Out-of-office activity: ", true, true, todayWib, now, "Out-of-office activity: "))
     }
 
-    @Test fun bodSkipsSelfFiledEvidenceRules() {
+    @Test fun bodOnlySkipsThePermitLocation() {
         val r = RequestRules(today(), true)
-        assertNull(r.earliest("PERMIT", now))
-        assertNull(r.missing("PERMIT", "event", false, false, todayWib.minusDays(3), now))
+        assertEquals(Missing.ATTACHMENT, r.missing("PERMIT", "event", false, false, todayWib, now))
+        assertNull(r.missing("PERMIT", "event", true, false, todayWib, now))
+        assertEquals(Missing.DATE, r.missing("PERMIT", "event", true, false, todayWib.minusDays(3), now))
     }
 
-    // Berlin 29 Sep (server, iOS 22c4ecb): a sick day filed by yourself always needs the note, BoD too.
-    @Test fun sickNoteRequiredForBoDToo() {
+    // Berlin 29 Sep (server, iOS ed7545e): sick and permit need their photo from everyone filing their own, BoD too.
+    @Test fun photoRequiredForBoDToo() {
         val bod = RequestRules(today(), true)
-        assertTrue(bod.attachmentRequired("SICK"))
+        assertTrue(bod.attachmentRequired("SICK")); assertTrue(bod.attachmentRequired("PERMIT"))
         assertEquals(Missing.ATTACHMENT, bod.missing("SICK", "demam", false, false, todayWib, now))
         assertNull(bod.missing("SICK", "demam", true, false, todayWib, now))
-        assertFalse(bod.attachmentRequired("PERMIT"))
+        assertFalse(bod.attachmentRequired("DAY_OFF"))
     }
 
     @Test fun cameraNamesByType() {

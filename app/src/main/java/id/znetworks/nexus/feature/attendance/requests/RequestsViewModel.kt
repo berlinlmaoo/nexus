@@ -34,11 +34,16 @@ data class ComposerState(
     val error: String? = null,
     /** Opened from "File a permit" (push / 1 h 30 outside): the reason is started, not finished. */
     val prefillReason: String? = null,
-    /** Annual leave: several dates, capped at the days left (iOS 22c4ecb). */
-    val leaveDates: Set<LocalDate> = emptySet(),
-    /** The last tap went past the days left. */
-    val leaveCapped: Boolean = false,
-)
+    /** Annual leave: one range, first day to last day (iOS ed7545e). */
+    val leaveStart: LocalDate? = null,
+    val leaveEnd: LocalDate? = null,
+    /** The last range picked was this many days, past the days left: it was not taken. */
+    val leaveTooLong: Int? = null,
+) {
+    val leaveDays: Int get() = if (leaveStart != null && leaveEnd != null) LeaveRange.days(leaveStart, leaveEnd) else 0
+    /** The day the "today or later" rule looks at: leave's first day, else the one date. */
+    fun dayFor(): LocalDate = if (type == "LEAVE") leaveStart ?: date else date
+}
 
 data class RequestsUiState(
     val requests: List<AttendanceRequest> = emptyList(),
@@ -199,12 +204,11 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setDate(d: LocalDate) = updateComposer { it.copy(date = d, error = null) }
-    fun toggleLeaveDate(d: LocalDate) {
-        val left = rules().remainingDays("LEAVE")
-        updateComposer { cs ->
-            val (dates, capped) = MultiDateLogic.toggle(cs.leaveDates, d, left)
-            cs.copy(leaveDates = dates, leaveCapped = capped, error = null)
-        }
+    /** A picked range is taken only when it fits the days left; otherwise the previous one stays. */
+    fun setLeaveRange(start: LocalDate, end: LocalDate) {
+        val (a, b) = if (end.isBefore(start)) end to start else start to end
+        val tooLong = LeaveRange.tooLong(a, b, rules().remainingDays("LEAVE"))
+        updateComposer { cs -> if (tooLong != null) cs.copy(leaveTooLong = tooLong) else cs.copy(leaveStart = a, leaveEnd = b, leaveTooLong = null, error = null) }
     }
     fun setReason(r: String) = updateComposer { it.copy(reason = r, error = null) }
     fun clearAttachment() = updateComposer { it.copy(attachment = null) }
@@ -244,7 +248,7 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
     fun submit(onFiled: () -> Unit) {
         val cs = _state.value.composer ?: return
         val rules = rules()
-        if (rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.date, prefillReason = cs.prefillReason, leaveDays = cs.leaveDates.size) != null) return
+        if (rules.missing(cs.type, cs.reason, cs.attachment != null, cs.location != null, cs.dayFor(), prefillReason = cs.prefillReason, leaveDays = cs.leaveDays) != null) return
         updateComposer { it.copy(sending = true, error = null) }
         if (cs.type == "LEAVE") { submitLeave(cs, onFiled); return }
         viewModelScope.launch {
@@ -264,27 +268,19 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Annual leave: one request per run of consecutive dates. A refusal stops the rest and says which
-     * dates already went, so a retry never files one twice (iOS 22c4ecb).
-     */
+    /** Annual leave: the whole range in one request (the server takes startDate..endDate for LEAVE). */
     private fun submitLeave(cs: ComposerState, onFiled: () -> Unit) = viewModelScope.launch {
-        val sent = mutableListOf<String>()
-        for ((from, to) in MultiDateLogic.blocks(cs.leaveDates)) {
-            try {
-                api.create("LEAVE", from.toString(), cs.reason, null, null, null, endDate = to.toString())
-                sent += if (from == to) from.toString() else "$from–$to"
-                if (!from.isAfter(OfficeTime.today()) && !to.isBefore(OfficeTime.today())) c.workTrail.excuseFiled()
-            } catch (e: ApiError) {
-                val why = e.describe(res)
-                updateComposer { it.copy(sending = false, error = if (sent.isEmpty()) why else res.getString(R.string.leave_sent_then_refused, sent.joinToString(", "), why)) }
-                if (sent.isNotEmpty()) load()
-                return@launch
-            }
+        val from = cs.leaveStart ?: return@launch
+        val to = cs.leaveEnd ?: from
+        try {
+            api.create("LEAVE", from.toString(), cs.reason, null, null, null, endDate = to.toString())
+            if (!from.isAfter(OfficeTime.today())) c.workTrail.excuseFiled()
+            _state.update { it.copy(composer = null) }
+            load()
+            onFiled()
+        } catch (e: ApiError) {
+            updateComposer { it.copy(sending = false, error = e.describe(res)) }
         }
-        _state.update { it.copy(composer = null) }
-        load()
-        onFiled()
     }
 
     // endregion

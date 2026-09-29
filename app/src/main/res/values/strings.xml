@@ -238,7 +238,7 @@
     <string name="missing_reason">Write a reason of at least 3 characters.</string>
     <string name="missing_photo">Add a photo (camera, gallery or file).</string>
     <string name="missing_location">Waiting for your location.</string>
-    <string name="missing_date">A permit can\'t be for a day that has passed. Pick today or later.</string>
+    <string name="missing_date">A request can\'t be for a day that has passed. Pick today or later — a past day is filed by a BoD.</string>
     <string name="req_send">Send request</string>
     <string name="attach_too_big">This file is too big. The limit is 10 MB.</string>
     <string name="attach_unsupported">Only a photo or a PDF can be attached.</string>
@@ -247,7 +247,7 @@
     <string name="hint_leave">Uses your annual leave.</string>
     <string name="hint_leave_ineligible">Annual leave needs 12 months of service.</string>
     <string name="hint_leave_left">Annual leave: %1$d of %2$d days left this year.</string>
-    <string name="hint_sick">One day per request, and a photo of the doctor\'s note is required. A day that has already passed is fine.</string>
+    <string name="hint_sick">One day per request, today or later, with a photo of the doctor\'s note. A past day is filed by a BoD.</string>
     <string name="hint_permit">One day per request, today or later, with a photo and your location.</string>
     <string name="hint_dayoff">Uses your day-off quota.</string>
     <string name="hint_dayoff_left">Day off: %1$d of %2$d left this period.</string>
@@ -1614,9 +1614,9 @@
     <string name="cf_revoke_link">Revoke this link?</string>
     <string name="cf_revoke_link_body">It stops working at once for everyone who has it.</string>
     <string name="leave_dates">Dates</string>
-    <string name="leave_picked">%1$d of %2$d days picked</string>
-    <string name="leave_only_left">Only %1$d days left.</string>
-    <string name="leave_sent_then_refused">Sent: %1$s. Then refused: %2$s</string>
     <string name="missing_dates">Pick the dates of your leave.</string>
     <string name="wn_leave_multi">Annual leave: pick several dates at once, up to the days you have left</string>
+    <string name="leave_tap_range">Tap the first day, then the last</string>
+    <string name="leave_summary">%1$s · %2$d of %3$d days</string>
+    <string name="leave_too_long">That\'s %1$d days — only %2$d left.</string>
 </resources>

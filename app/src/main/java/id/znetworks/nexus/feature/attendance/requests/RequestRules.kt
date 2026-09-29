@@ -9,8 +9,10 @@ import java.time.LocalDate
  * What the composer may offer and when it may submit (PRD §2.8), ported from iOS
  * `RequestComposerSheet`. Pure, so every rule is a unit test.
  *
- * [canGrant] = canManageAttendance (BoD): the server skips the "self-filed" checks for them (izin photo,
- * location, no backdating), but never the quota checks or a sick note, so neither does this.
+ * [canGrant] = canManageAttendance (BoD). Since 29 Sep (Berlin, server BACKDATED_SELF, iOS ed7545e) filing
+ * your OWN request is the same for everyone, a BoD included: today or later, a photo for sick and permit,
+ * the quota; only the permit's location is still skipped for a BoD. A past day is filed by a BoD for the
+ * person (Control Room), never from this composer.
  */
 class RequestRules(private val today: AttendanceToday?, private val canGrant: Boolean) {
 
@@ -34,9 +36,9 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
             return l.eligible == true && (l.remaining ?: 0) > 0
         }
 
-    /** Izin is today or later; everything else (sakit included) may be for a day already gone. */
-    fun earliest(type: String, now: Instant = Instant.now()): LocalDate? =
-        if (type == "PERMIT" && !canGrant) OfficeTime.today(now) else null
+    /** Today or later for every type, for everyone filing their own (the server says BACKDATED_SELF). */
+    @Suppress("UNUSED_PARAMETER")
+    fun earliest(type: String, now: Instant = Instant.now()): LocalDate? = OfficeTime.today(now)
 
     fun remainingDays(type: String): Int? = when (type) {
         "DAY_OFF" -> today?.let { maxOf(0, (it.dayOffQuota ?: 0) - (it.dayOffUsedThisMonth ?: 0)) }
@@ -53,11 +55,8 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
     }
 
     fun showsAttachment(type: String) = type == "SICK" || type == "PERMIT"
-    /**
-     * A sick day needs the doctor's note from everyone filing their own, a BoD included (Berlin 29 Sep,
-     * server + iOS 22c4ecb; this composer only files for the signed-in person). Izin's photo stays self-filed only.
-     */
-    fun attachmentRequired(type: String) = type == "SICK" || (!canGrant && type == "PERMIT")
+    /** Sick and permit need their photo from everyone filing their own, a BoD included (iOS ed7545e). */
+    fun attachmentRequired(type: String) = showsAttachment(type)
     fun needsLocation(type: String) = !canGrant && type == "PERMIT"
 
     /** Named by what it is evidence of, never "sick-note.jpg" for a permit (REQ-ATT-30). */
@@ -71,7 +70,7 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
         date: LocalDate,
         now: Instant = Instant.now(),
         prefillReason: String? = null,
-        /** Annual leave is picked as several dates: how many are picked (ignored for other types). */
+        /** Annual leave is a range: its length in days, 0 while none is picked (ignored for other types). */
         leaveDays: Int = 0,
     ): Missing? {
         val r = reason.trim()
@@ -91,6 +90,17 @@ class RequestRules(private val today: AttendanceToday?, private val canGrant: Bo
     companion object {
         const val MAX_ATTACHMENT_BYTES = 10L * 1024 * 1024
     }
+}
+
+/**
+ * Annual leave as ONE range (Berlin 29 Sep, iOS ed7545e): first day, last day, every day between; the
+ * whole range may not be longer than the days left, and goes out as one request startDate..endDate.
+ */
+object LeaveRange {
+    fun days(start: LocalDate, end: LocalDate): Int = java.time.temporal.ChronoUnit.DAYS.between(start, end).toInt() + 1
+
+    /** Null when it fits; else the range's length, for "That's N days — only M left." */
+    fun tooLong(start: LocalDate, end: LocalDate, left: Int?): Int? = days(start, end).takeIf { left != null && it > left }
 }
 
 /** One queue for a reviewer: a filed request or an offsite check-out (iOS `SubmissionEntry`). */

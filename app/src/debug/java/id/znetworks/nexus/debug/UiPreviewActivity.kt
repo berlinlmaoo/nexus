@@ -52,13 +52,8 @@ class UiPreviewActivity : ComponentActivity() {
                             id.znetworks.nexus.feature.inbox.AnnouncementDialog(host)
                         }
                         "always" -> id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = {}, onReady = {})
-                        "leave" -> {
-                            var picked by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf(java.time.LocalDate.of(2026, 10, 1), java.time.LocalDate.of(2026, 10, 2), java.time.LocalDate.of(2026, 10, 6))) }
-                            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(16.dp)) {
-                                id.znetworks.nexus.feature.attendance.requests.MultiDatePicker(picked, { d -> picked = id.znetworks.nexus.feature.attendance.requests.MultiDateLogic.toggle(picked, d, 4).first })
-                                androidx.compose.material3.Text("${picked.size} / 4 · " + id.znetworks.nexus.feature.attendance.requests.MultiDateLogic.blocks(picked).joinToString())
-                            }
-                        }
+                        "range" -> id.znetworks.nexus.feature.attendance.requests.LeaveRangeDialog(java.time.LocalDate.now().plusDays(1), java.time.LocalDate.now().plusDays(4),
+                            java.time.LocalDate.now(), onPick = { _, _ -> }, onDismiss = {})
                         "pdf" -> id.znetworks.nexus.ui.components.PdfPages(samplePdf()) {}
                         else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {})
                     }
