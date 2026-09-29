@@ -100,21 +100,21 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// A board with horizontal columns is *less* usable squeezed into a column, and a map shows more
     /// ground the wider it is.
     var contentMaxWidth: CGFloat? {
+        #if targetEnvironment(macCatalyst)
+        // Mac: every screen fills the window. Capped, a full-screen Mac showed one column in the
+        // middle with most of the window empty either side (owner, 29 Sep 2026).
+        return nil
+        #else
         switch self {
         // Messages is two panes side by side once there is room, and a two-column layout wants the
         // width the same way a board does — capped, it sat squeezed in the middle of the screen
         // with empty margins either side.
         case .attendance, .projects, .submissions, .teamCalendar, .roomBooking, .reports, .messages:
             return nil
-        #if targetEnvironment(macCatalyst)
-        // Home fills the Mac window in two or three columns (DashboardView); any cap left empty
-        // margins, worst with the sidebar hidden (owner, 29 Sep 2026).
-        case .dashboard:
-            return nil
-        #endif
         default:
             return 900
         }
+        #endif
     }
 
     /// True for screens that draw their own header instead of a navigation bar. They are the only
@@ -194,9 +194,14 @@ struct NXCardGrid<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     private var columns: [GridItem] {
-        hSize == .regular
+        #if targetEnvironment(macCatalyst)
+        // A Mac window has no cap any more: as many ~380pt columns as fit.
+        return [GridItem(.adaptive(minimum: 380), spacing: spacing)]
+        #else
+        return hSize == .regular
             ? [GridItem(.flexible(), spacing: spacing), GridItem(.flexible(), spacing: spacing)]
             : [GridItem(.flexible())]
+        #endif
     }
 
     var body: some View {
