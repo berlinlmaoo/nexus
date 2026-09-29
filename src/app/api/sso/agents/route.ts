@@ -42,9 +42,9 @@ export async function GET(req: Request) {
   const session = await auth()
   const userId = session?.user?.id
   if (!userId) {
-    const login = new URL("/login", req.url)
-    login.searchParams.set("callbackUrl", `/sso/agents/${state}`)
-    return NextResponse.redirect(login, { status: 302, headers: { "Cache-Control": "no-store" } })
+    // Relative on purpose: behind nginx, req.url is the container's own address (0.0.0.0:3000).
+    const login = `/login?callbackUrl=${encodeURIComponent(`/sso/agents/${state}`)}`
+    return new NextResponse(null, { status: 302, headers: { Location: login, "Cache-Control": "no-store" } })
   }
 
   const member = await prisma.workspaceMember.findFirst({
