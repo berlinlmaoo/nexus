@@ -4,7 +4,7 @@ NEXUS is the internal workspace app for employees of Z Networks (PATS Group): at
 projects, chat and requests. Accounts belong to a company workspace; the demo account below is in a
 separate demo workspace with no real company data.
 
-Demo account: apple.review@znetworks.id — password: (same as the previous submission)
+Demo account: the user name and password in Sign-In Information above.
 The demo account is "location-free", so check-in works from anywhere, including Apple's review site.
 
 HOW TO TRY ATTENDANCE

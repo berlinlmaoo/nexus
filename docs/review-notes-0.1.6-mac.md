@@ -1,6 +1,6 @@
 NEXUS is the internal workspace app for employees of Z Networks (PATS Group): tasks, projects, chat, requests and a read-only view of attendance. Accounts belong to a company workspace; the demo account below is in a separate demo workspace with no real company data.
 
-Demo account: apple.review@znetworks.id - password: (same as the previous submission)
+Demo account: the user name and password in Sign-In Information above.
 
 THE MAC APP
 This is the same app as the iPhone/iPad version (Mac Catalyst, same version 0.1.6 build 13). The last Mac release was 0.1.1, so this update brings the Mac up to the phone.
