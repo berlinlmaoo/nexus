@@ -36,6 +36,19 @@ struct AppInstalls: Decodable, Sendable {
         let lastSeenAt: String?
         let user: Person?
         struct Person: Decodable, Sendable { let name: String?; let email: String? }
+        /// Every active device of this person, newest first (servers from 29 Sep 2026).
+        let devices: [Device]?
+        struct Device: Decodable, Sendable {
+            let id: String
+            let platform: String?
+            let appVersion: String?
+            let buildNumber: String?
+            let osVersion: String?
+            var versionLabel: String? {
+                guard let appVersion else { return nil }
+                return buildNumber.map { "\(appVersion) (\($0))" } ?? appVersion
+            }
+        }
 
         var versionLabel: String {
             guard let appVersion else { return "—" }
@@ -959,18 +972,35 @@ struct AdminAppInstallsSection: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
     }
 
+    /// One line per device: someone on an iPhone and an Android phone shows both (owner, 29 Sep 2026).
     private func personRow(_ row: AppInstalls.Row) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(row.user?.name ?? row.user?.email ?? "—")
-                    .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(row.osVersion ?? "—").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if row.appVersion == nil {
-                Text(T("Not reported")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(row.user?.name ?? row.user?.email ?? "—")
+                .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+            if let devices = row.devices, !devices.isEmpty {
+                ForEach(devices, id: \.id) { d in
+                    HStack(spacing: 8) {
+                        Image(systemName: d.platform == "android" ? "candybarphone" : "iphone")
+                            .font(.system(size: 12)).foregroundStyle(NX.mutedFg).frame(width: 16)
+                        Text(d.osVersion ?? "—").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Spacer(minLength: 8)
+                        if let v = d.versionLabel {
+                            NexusChip(text: v, tone: .accent)
+                        } else {
+                            Text(T("Not reported")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        }
+                    }
+                }
             } else {
-                NexusChip(text: row.versionLabel, tone: .accent)
+                HStack(spacing: 8) {
+                    Text(row.osVersion ?? "—").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    Spacer(minLength: 8)
+                    if row.appVersion == nil {
+                        Text(T("Not reported")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    } else {
+                        NexusChip(text: row.versionLabel, tone: .accent)
+                    }
+                }
             }
         }
         .padding(.horizontal, 14)
