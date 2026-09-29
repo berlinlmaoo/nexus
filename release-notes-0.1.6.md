@@ -39,6 +39,7 @@ Manager juga bisa lihat timnya, satu per satu.
 
 Juga di versi ini:
 - Daftar akun, lupa password, dan ganti email, semua dari app.
+- Proyek yang kamu sematkan ikut ke web, iPad, dan Mac.
 - Lagi check in? Keluar akun ditahan dulu sampai kamu check out.
 - Keluar akun sekarang benar-benar menutup sesimu, bukan cuma di HP ini.
 - Ganti email minta password dulu, dan email lamamu dikabari.

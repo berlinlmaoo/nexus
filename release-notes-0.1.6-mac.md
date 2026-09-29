@@ -20,6 +20,12 @@ REPORTS SEKARANG NGOMONGIN KAMU.
 Periode 28 sampai 27: task, absen, dan yang terlambat — dibanding periode lalu, bukan dibanding orang lain.
 Manager juga bisa lihat timnya, satu per satu.
 
+LAYAR PENUH, BUKAN KOLOM HP DI TENGAH.
+
+Home sekarang dua kolom, tiga kalau sidebar disembunyikan.
+Task, Inbox, Ticket, sampai Control Room memakai seluruh jendela.
+Proyek yang disematkan muncul di sidebar — sama persis dengan yang kamu sematkan di web dan HP.
+
 Juga di versi ini:
 - Ambil foto langsung dari webcam untuk chat, tiket, dan formulir.
 - Notif pengajuan membuka pengajuannya, tinggal Approve atau Reject.
