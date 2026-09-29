@@ -34,7 +34,7 @@ Cuti tinggal pilih tanggal mulai dan tanggal selesai — sebanyak sisa jatahmu, 
 
 REPORTS SEKARANG NGOMONGIN KAMU.
 
-Periode 28 sampai 27: task, absen, sampai XP — dibanding periode lalu, bukan dibanding orang lain.
+Periode 28 sampai 27: task, absen, dan yang terlambat — dibanding periode lalu, bukan dibanding orang lain.
 Manager juga bisa lihat timnya, satu per satu.
 
 Juga di versi ini:
