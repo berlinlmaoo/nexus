@@ -260,6 +260,8 @@ export function OrgChart() {
         .oc-kid:first-child::after{left:50%}
         .oc-kid:last-child::after{right:50%}
         .oc-kid:only-child::after{display:none}
+        .oc-own{position:relative;padding-top:22px;display:flex;justify-content:center}
+        .oc-own::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-leaves{display:flex;flex-direction:column;gap:6px;padding:6px;border:1.5px dashed var(--oc-line);border-radius:12px;background:rgba(127,127,127,.04)}
         .oc-leaves-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;text-align:center;padding-bottom:2px}
       `}</style>
@@ -407,17 +409,32 @@ type PersonChipProps = { p: OrgChartPerson; busy: boolean; dragging: boolean; on
 
 /** Satu IP/Team beserta turunannya. Orang-orangnya ditumpuk dalam satu kotak, sub-IP/Team berjejer.
  *  Di tingkat modul supaya React tidak me-mount ulang pohon setiap render. */
+const LEAD_ROLES = new Set(["ONE_ABOVE_ALL", "BOD", "MANAGER"]);
+
 function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   u: OrgUnit; childUnits: Map<string, OrgUnit[]>; membersOf: Map<string, OrgChartPerson[]>;
   unitProps: (u: OrgUnit) => UnitCardProps; personProps: (p: OrgChartPerson, fromUnitId?: string | null) => PersonChipProps;
 }) {
   const kids = childUnits.get(u.id) ?? [];
-  const members = membersOf.get(u.id) ?? [];
+  const all = membersOf.get(u.id) ?? [];
+  // Leaders (BoD, One Above All, Manager) hang straight under the card; staff are one branch beside
+  // the sub-units, in the middle of the row (owner, 30 Sep 2026: the C-suite and Agency's Gerro/Riri
+  // directly under their card, Mey level with Geneziz and Z Foundation).
+  const leads = all.filter((p) => LEAD_ROLES.has(p.role));
+  const members = all.filter((p) => !LEAD_ROLES.has(p.role));
   const branches: Array<OrgUnit | "people"> = [...kids];
   if (members.length > 0) branches.splice(Math.floor(kids.length / 2), 0, "people");
   return (
     <div className="oc-node">
       <UnitCard {...unitProps(u)} />
+      {leads.length > 0 && (
+        <div className="oc-own">
+          <div className="oc-leaves">
+            <div className="oc-leaves-label">Pimpinan · {leads.length}</div>
+            {leads.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+          </div>
+        </div>
+      )}
       {/* The unit's own people are one branch beside its sub-units, at the same level (owner: Mey sits
           next to Geneziz and Z Foundation under Kantor CEO), placed in the MIDDLE of the row so they
           hang right under the card (the holding's C-suite had ended up at the far left). */}
