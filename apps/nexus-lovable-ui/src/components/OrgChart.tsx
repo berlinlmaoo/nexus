@@ -69,6 +69,22 @@ export function OrgChart() {
     onError: fail("Gagal merapikan"),
   });
   const [confirmReset, setConfirmReset] = useState(false);
+  // "Di bawah siapa" from the person dialog: put them in the leader's card first (if not there yet),
+  // then under the leader (owner, 30 Sep 2026: click Mey → under Abraham, in one step).
+  const [placingUnder, setPlacingUnder] = useState(false);
+  const placeUnder = async (person: OrgChartPerson, leaderId: string, unitId: string) => {
+    setPlacingUnder(true);
+    try {
+      if (!person.unitIds.includes(unitId)) await nexusApi.addOrgUnitMember(person.userId, unitId);
+      await nexusApi.setOrgUnitMemberReportsTo(person.userId, unitId, leaderId);
+      await qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] });
+      const lead = people.find((p) => p.userId === leaderId);
+      toast.success(`${person.name ?? "Orang"} di bawah ${lead?.name ?? "atasannya"}`);
+    } catch (e) {
+      fail("Gagal menaruh di bawah")(e);
+      refresh();
+    } finally { setPlacingUnder(false); }
+  };
   const removePerson = useMutation({
     mutationFn: ({ person, unitId }: { person: OrgChartPerson; unitId: string }) => nexusApi.removeOrgUnitMember(person.userId, unitId),
     onSuccess: (_r, v) => { refresh(); toast.success(`${v.person.name ?? "Orang"} dilepas dari ${unitsById.get(v.unitId)?.name ?? "IP/Team"}`); },
@@ -256,7 +272,7 @@ export function OrgChart() {
 
   const roots = units.filter((u) => !u.parentId).sort(byPos);
   const unplaced = people.filter((p) => p.unitIds.length === 0);
-  const busy = moveUnit.isPending || addPerson.isPending || removePerson.isPending;
+  const busy = moveUnit.isPending || addPerson.isPending || removePerson.isPending || setReportsTo.isPending || placingUnder;
 
   /** Zona jatuh untuk ORANG. Ke kartu = tambah (atau, kalau sudah di sana, lepas dari "di bawah");
    *  ke baki = lepas dari kartu asalnya saja. Kartu dipindah dengan seret bebas, bukan di sini. */
@@ -575,7 +591,10 @@ export function OrgChart() {
           person={placing}
           units={units}
           busy={busy}
+          people={people}
           onToggle={(unitId, on) => (on ? addPerson : removePerson).mutate({ person: placing, unitId })}
+          onPlaceUnder={placeUnder}
+          onRelease={(unitId) => setReportsTo.mutate({ person: placing, unitId, to: null })}
           onClose={() => setPlacingId(null)}
         />
       )}
@@ -1038,35 +1057,93 @@ function UnitDialog({ title, unit, units, excluded, initial, people = [], member
 }
 
 /** Centang IP/Team untuk satu orang — boleh lebih dari satu. Tiap centang langsung tersimpan. */
-function UnitPicker({ person, units, busy, onToggle, onClose }: { person: OrgChartPerson; units: OrgUnit[]; busy: boolean; onToggle: (unitId: string, on: boolean) => void; onClose: () => void }) {
+function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRelease, onClose }: {
+  person: OrgChartPerson; units: OrgUnit[]; people: OrgChartPerson[]; busy: boolean;
+  onToggle: (unitId: string, on: boolean) => void;
+  onPlaceUnder: (person: OrgChartPerson, leaderId: string, unitId: string) => void;
+  onRelease: (unitId: string) => void;
+  onClose: () => void;
+}) {
   const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
   const byId = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
-  const rows = units.map((u) => ({ id: u.id, u, path: pathOf(u, byId) }))
-    .filter((r) => !q.trim() || r.path.toLowerCase().includes(q.toLowerCase()))
+  const parentPath = (u: OrgUnit) => { const full = pathOf(u, byId); const i = full.lastIndexOf(" › "); return i >= 0 ? full.slice(0, i) : ""; };
+  const rows = units.map((u) => ({ id: u.id, u, path: pathOf(u, byId), parent: parentPath(u) }))
+    .filter((r) => !needle || r.path.toLowerCase().includes(needle))
     .sort((a, b) => a.path.localeCompare(b.path, "id"));
+  // Every BoD / One Above All / Manager, once per card they sit in. A BoD never goes under anyone.
+  const canBeUnder = person.role !== "BOD" && person.role !== "ONE_ABOVE_ALL";
+  const leaderRows = canBeUnder
+    ? people.filter((p) => p.userId !== person.userId && LEAD_ROLES.has(p.role))
+      .flatMap((p) => p.unitIds.map((unitId) => ({ p, unitId, unit: byId.get(unitId), title: p.titles?.[unitId] ?? null })))
+      .filter((r): r is { p: OrgChartPerson; unitId: string; unit: OrgUnit; title: string | null } => !!r.unit)
+      .filter((r) => !needle || `${label(r.p)} ${r.title ?? ""} ${r.unit.name}`.toLowerCase().includes(needle))
+      .sort((a, b) => label(a.p).localeCompare(label(b.p), "id") || a.unit.name.localeCompare(b.unit.name, "id"))
+    : [];
+  const current = Object.entries(person.reportsTo ?? {})
+    .map(([unitId, leaderId]) => ({ unitId, unit: byId.get(unitId), leader: people.find((p) => p.userId === leaderId) }))
+    .filter((c) => c.unit && c.leader);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <div className="text-sm font-bold">IP/Team untuk {label(person)}</div>
+          <div className="text-sm font-bold">{label(person)}</div>
           <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">Centang semua IP/Team-nya — boleh lebih dari satu. Tidak mengubah akses project.</p>
+        <p className="mb-3 text-[11px] text-muted-foreground">Taruh di bawah seseorang, atau centang IP/Team-nya. Tidak mengubah akses project.</p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari IP/Team…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, jabatan, atau IP/Team…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
         </div>
-        <div className="max-h-80 space-y-0.5 overflow-y-auto">
-          {rows.map((r) => { const on = person.unitIds.includes(r.id); return (
-            <label key={r.id} className={cn("flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-accent", on && "bg-primary/10 font-semibold text-primary", busy && "pointer-events-none opacity-60")}>
-              <input type="checkbox" checked={on} disabled={busy} onChange={(e) => onToggle(r.id, e.target.checked)} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
-              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md bg-[#1e3a5f] text-[9px] font-bold text-white">
-                {r.u.logoUrl ? <img src={r.u.logoUrl} alt="" className="h-full w-full bg-white object-contain" /> : initialsOf(r.u.name)}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{r.path}</span>
-            </label>
-          ); })}
-          {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">{units.length === 0 ? "Belum ada IP/Team. Tambahkan dulu." : "Nggak ada yang cocok."}</div>}
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+          {canBeUnder && (
+            <section>
+              <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Di bawah siapa</div>
+              {current.map((c) => (
+                <div key={c.unitId} className="mb-1 flex items-center gap-2 rounded-lg bg-primary/10 px-2 py-1.5 text-xs">
+                  <span className="min-w-0 flex-1 truncate">Sekarang di bawah: <b>{c.leader!.name}</b> · {c.unit!.name}</span>
+                  <button type="button" disabled={busy} onClick={() => onRelease(c.unitId)} className="shrink-0 rounded-md px-2 py-0.5 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Lepas</button>
+                </div>
+              ))}
+              <div className="space-y-0.5">
+                {leaderRows.map((r) => {
+                  const on = person.reportsTo?.[r.unitId] === r.p.userId;
+                  return (
+                    <button key={`${r.p.userId}:${r.unitId}`} type="button" disabled={busy || on} onClick={() => onPlaceUnder(person, r.p.userId, r.unitId)}
+                      className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent disabled:cursor-default", on && "bg-primary/10", busy && "opacity-60")}>
+                      {r.p.avatar
+                        ? <img src={r.p.avatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                        : <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">{initialsOf(r.p.name)}</span>}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{label(r.p)}{r.title ? <span className="font-normal text-muted-foreground"> — {r.title}</span> : null}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">{r.unit.name}</span>
+                      </span>
+                      {on && <span className="shrink-0 text-[11px] font-semibold text-primary">sekarang</span>}
+                    </button>
+                  );
+                })}
+                {leaderRows.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">{needle ? "Nggak ada yang cocok." : "Belum ada BoD atau Manager di kartu mana pun."}</div>}
+              </div>
+            </section>
+          )}
+          <section>
+            <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">IP/Team</div>
+            <div className="space-y-0.5">
+              {rows.map((r) => { const on = person.unitIds.includes(r.id); return (
+                <label key={r.id} className={cn("flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent", on && "bg-primary/10 text-primary", busy && "pointer-events-none opacity-60")}>
+                  <input type="checkbox" checked={on} disabled={busy} onChange={(e) => onToggle(r.id, e.target.checked)} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
+                  <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md bg-[#1e3a5f] text-[9px] font-bold text-white">
+                    {r.u.logoUrl ? <img src={r.u.logoUrl} alt="" className="h-full w-full bg-white object-contain" /> : initialsOf(r.u.name)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold" title={r.path}>{r.u.name}</span>
+                    {r.parent && <span className="block truncate text-[11px] text-muted-foreground" title={r.parent}>{r.parent}</span>}
+                  </span>
+                </label>
+              ); })}
+              {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">{units.length === 0 ? "Belum ada IP/Team. Tambahkan dulu." : "Nggak ada yang cocok."}</div>}
+            </div>
+          </section>
         </div>
         <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Selesai</button>
       </div>
