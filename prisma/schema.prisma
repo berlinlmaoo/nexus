@@ -124,6 +124,7 @@ model User {
   gideonMessages       GideonMessage[]
   orgUnitMemberships OrgUnitMember[] @relation("OrgUnitMemberships")
   orgUnitsLed        OrgUnit[]       @relation("OrgUnitLead")
+  orgUnitReports     OrgUnitMember[] @relation("OrgUnitReportsTo")
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -3059,6 +3060,11 @@ model OrgUnit {
   /// under that person's chip. Ignored when that person is no longer in the parent. Owner, 30 Sep 2026.
   leadUserId  String?
   lead        User?    @relation("OrgUnitLead", fields: [leadUserId], references: [id], onDelete: SetNull)
+  /// Manual canvas position of the card (null = automatic layout, relative to its parent). Owner, 30 Sep 2026.
+  layoutX     Float?
+  layoutY     Float?
+  /// Manual canvas positions of this card's people boxes: { "bod" | "manager" | "staff" | "rt:<userId>": { x, y } }.
+  boxLayout   Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   members     OrgUnitMember[]
@@ -3077,6 +3083,9 @@ model OrgUnitMember {
   workspaceId String
   /// Free text shown on the person's chip in this unit ("CEO", "CFO" …). Max 40 chars, null = none.
   title       String?
+  /// On this card, the BoD/Manager this person sits under (drawn under that person's chip). Null = none.
+  reportsToUserId String?
+  reportsTo   User?    @relation("OrgUnitReportsTo", fields: [reportsToUserId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
   @@unique([unitId, userId])
