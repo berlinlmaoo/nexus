@@ -15,7 +15,7 @@ export async function GET() {
     const [units, rows, links] = await Promise.all([
       prisma.orgUnit.findMany({
         where: { workspaceId: ORG_CHART_WORKSPACE },
-        select: { id: true, name: true, logoUrl: true, parentId: true, position: true },
+        select: { id: true, name: true, kind: true, logoUrl: true, parentId: true, position: true },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       }),
       prisma.workspaceMember.findMany({
@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
     }
     const last = await prisma.orgUnit.aggregate({ where: { workspaceId: ORG_CHART_WORKSPACE, parentId }, _max: { position: true } })
     const unit = await prisma.orgUnit.create({
-      data: { workspaceId: ORG_CHART_WORKSPACE, name, parentId, position: (last._max.position ?? -1) + 1 },
-      select: { id: true, name: true, logoUrl: true, parentId: true, position: true },
+      data: { workspaceId: ORG_CHART_WORKSPACE, name, parentId, kind: body?.kind === "IP" ? "IP" : "DIVISION", position: (last._max.position ?? -1) + 1 },
+      select: { id: true, name: true, kind: true, logoUrl: true, parentId: true, position: true },
     })
     return NextResponse.json({ unit }, { status: 201 })
   } catch (error) {
