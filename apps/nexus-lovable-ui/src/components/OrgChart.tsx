@@ -260,8 +260,6 @@ export function OrgChart() {
         .oc-kid:first-child::after{left:50%}
         .oc-kid:last-child::after{right:50%}
         .oc-kid:only-child::after{display:none}
-        .oc-own{position:relative;padding-top:22px;display:flex;justify-content:center}
-        .oc-own::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-leaves{display:flex;flex-direction:column;gap:6px;padding:6px;border:1.5px dashed var(--oc-line);border-radius:12px;background:rgba(127,127,127,.04)}
         .oc-leaves-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;text-align:center;padding-bottom:2px}
       `}</style>
@@ -415,27 +413,30 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
 }) {
   const kids = childUnits.get(u.id) ?? [];
   const members = membersOf.get(u.id) ?? [];
+  const branches: Array<OrgUnit | "people"> = [...kids];
+  if (members.length > 0) branches.splice(Math.floor(kids.length / 2), 0, "people");
   return (
     <div className="oc-node">
       <UnitCard {...unitProps(u)} />
-      {/* The unit's own people sit straight under its card, and its sub-units hang below them — not
-          beside them as if the people were one more branch (owner, 30 Sep 2026: the holding's
-          C-suite ended up at the far left of the chart). */}
-      {members.length > 0 && (
-        <div className="oc-own">
-          <div className="oc-leaves">
-            <div className="oc-leaves-label">{members.length} orang</div>
-            {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
-          </div>
-        </div>
-      )}
-      {kids.length > 0 && (
+      {/* The unit's own people are one branch beside its sub-units, at the same level (owner: Mey sits
+          next to Geneziz and Z Foundation under Kantor CEO), placed in the MIDDLE of the row so they
+          hang right under the card (the holding's C-suite had ended up at the far left). */}
+      {(kids.length > 0 || members.length > 0) && (
         <div className="oc-kids">
-          {kids.map((k) => (
-            <div key={k.id} className="oc-kid">
-              <UnitNode u={k} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
-            </div>
-          ))}
+          {branches.map((b) =>
+            b === "people" ? (
+              <div key="people" className="oc-kid">
+                <div className="oc-leaves">
+                  <div className="oc-leaves-label">{members.length} orang</div>
+                  {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+                </div>
+              </div>
+            ) : (
+              <div key={b.id} className="oc-kid">
+                <UnitNode u={b} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
+              </div>
+            ),
+          )}
         </div>
       )}
     </div>
@@ -464,7 +465,8 @@ function UnitCard({ u, busy, count, dragging, over, droppable, onDragStart, onDr
         title="Klik untuk mengubah, atau seret ke IP/Team induknya"
         className={cn("flex w-[180px] cursor-grab items-center gap-2.5 rounded-lg bg-[#1e3a5f] px-2.5 py-2 text-left text-white shadow-[0_2px_0_rgba(0,0,0,.2)] transition active:cursor-grabbing disabled:opacity-50", dragging && "opacity-40")}
       >
-        <UnitLogo u={u} size={34} />
+        {/* Only an IP carries a logo; a division is just its name (owner, 30 Sep 2026). */}
+        {u.kind === "IP" && <UnitLogo u={u} size={34} />}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12.5px] font-semibold leading-tight" title={u.name}>{u.name}</span>
           <span className="block text-[10px] leading-tight opacity-75">{count > 0 ? `${count} orang` : "belum ada orang"}</span>
@@ -524,6 +526,7 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
   const [name, setName] = useState(initial.name);
   const [parentId, setParentId] = useState<string>(initial.parentId ?? "");
   const [logo, setLogo] = useState<string | null>(unit?.logoUrl ?? null);
+  const [kind, setKind] = useState<"IP" | "DIVISION">(unit?.kind ?? "DIVISION");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -536,8 +539,8 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
     if (!clean) { toast.error("Nama IP/Team wajib diisi."); return; }
     setSaving(true);
     try {
-      if (unit) await nexusApi.updateOrgUnit(unit.id, { name: clean, parentId: parentId || null });
-      else await nexusApi.createOrgUnit({ name: clean, parentId: parentId || null });
+      if (unit) await nexusApi.updateOrgUnit(unit.id, { name: clean, kind, parentId: parentId || null });
+      else await nexusApi.createOrgUnit({ name: clean, kind, parentId: parentId || null });
       toast.success(unit ? "Tersimpan" : `${clean} ditambahkan`);
       onSaved();
     } catch (e) {
@@ -585,7 +588,16 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
           <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
-        {unit && (
+        <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Jenis</label>
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-border bg-background p-0.5">
+          {(["IP", "DIVISION"] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setKind(k)} className={cn("rounded-md px-3 py-1.5 text-xs font-semibold transition-colors", kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
+              {k === "IP" ? "IP · pakai logo" : "Divisi · tanpa logo"}
+            </button>
+          ))}
+        </div>
+
+        {unit && kind === "IP" && (
           <div className="mb-3 flex items-center gap-3">
             <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#1e3a5f] text-white">
               {logo ? <img src={logo} alt="" className="h-full w-full bg-white object-contain p-1" /> : <span className="text-sm font-bold">{initialsOf(name || unit.name)}</span>}

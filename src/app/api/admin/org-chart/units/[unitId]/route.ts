@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ un
     const unit = await findUnit(unitId)
     if (!unit) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
     const body = await req.json().catch(() => ({}))
-    const data: { name?: string; parentId?: string | null; position?: number; logoUrl?: string | null } = {}
+    const data: { name?: string; kind?: string; parentId?: string | null; position?: number; logoUrl?: string | null } = {}
     if ("name" in body) {
       const name = cleanName(body.name)
       if (!name) return NextResponse.json({ error: "Nama IP/Team wajib diisi." }, { status: 400 })
@@ -33,12 +33,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ un
       if (!Number.isInteger(body.position) || body.position < 0 || body.position > 100000) return NextResponse.json({ error: "Posisi tidak sah." }, { status: 400 })
       data.position = body.position
     }
+    if ("kind" in body) {
+      if (body.kind !== "IP" && body.kind !== "DIVISION") return NextResponse.json({ error: "Jenis harus IP atau Divisi." }, { status: 400 })
+      data.kind = body.kind
+    }
     if ("logoUrl" in body) {
       if (body.logoUrl === null) data.logoUrl = null
       else if (typeof body.logoUrl === "string" && body.logoUrl.startsWith(LOGO_PREFIX) && /^[\w./-]+$/.test(body.logoUrl) && !body.logoUrl.includes("..")) data.logoUrl = body.logoUrl
       else return NextResponse.json({ error: "Logo harus diunggah lewat bagan." }, { status: 400 })
     }
-    const updated = await prisma.orgUnit.update({ where: { id: unitId }, data, select: { id: true, name: true, logoUrl: true, parentId: true, position: true } })
+    const updated = await prisma.orgUnit.update({ where: { id: unitId }, data, select: { id: true, name: true, kind: true, logoUrl: true, parentId: true, position: true } })
     return NextResponse.json({ unit: updated })
   } catch (error) {
     console.error("[admin/org-chart] PATCH unit", error)
