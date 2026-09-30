@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
 import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
+import { loadChart, topBodOf } from "@/lib/attendance-chart"
 
 /**
  * Eskalasi Bagan Approval — fase 2.
@@ -75,10 +76,13 @@ export async function POST(req: NextRequest) {
       // Routing ke kelompok BoD = BoD sudah tahu sejak awal. Tidak ada yang perlu dieskalasi.
       if (r.mode !== "DIRECT_MANAGER" || r.userIds.length !== 1) { skipped.push({ kind, id, reason: "routing BoD_GROUP" }); return }
       const managerId = r.userIds[0]
-      const bod = await prisma.workspaceMember.findMany({
-        where: { workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] }, userId: { notIn: [userId, managerId] } },
-        select: { userId: true },
-      })
+      // Only the BoD at the top of the requester's tree (owner, 30 Sep 2026), not every BoD. With no
+      // BoD above them, One Above All.
+      const chart = await loadChart(workspaceId)
+      const top = topBodOf(userId, chart)
+      const bod = (top ? [top] : chart.filter((m) => m.role === "ONE_ABOVE_ALL").map((m) => m.userId))
+        .filter((id) => id !== userId && id !== managerId)
+        .map((id) => ({ userId: id }))
       const manager = await prisma.user.findUnique({ where: { id: managerId }, select: { name: true } })
       escalated.push({ kind, id, who, managerId, bod: bod.length })
       if (dryRun) return

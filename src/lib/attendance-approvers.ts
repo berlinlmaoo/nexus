@@ -28,9 +28,11 @@ export type ApproverResolution = {
   mode: "DIRECT_MANAGER" | "BOD_GROUP"
 }
 
+/** Who decides for someone with nobody above them: One Above All only (owner, 30 Sep 2026 —
+ *  was every BoD). The name stays: `mode: "BOD_GROUP"` is part of what clients already read. */
 async function bodGroup(workspaceId: string, exceptUserId: string): Promise<string[]> {
   const rows = await prisma.workspaceMember.findMany({
-    where: { workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] }, userId: { not: exceptUserId } },
+    where: { workspaceId, role: "ONE_ABOVE_ALL", userId: { not: exceptUserId } },
     select: { userId: true },
   })
   return rows.map((r) => r.userId)
@@ -66,11 +68,20 @@ export async function canUserReviewRequest(
   viewerId: string,
   requesterUserId: string,
   workspaceId: string,
-  ctx: { canManageAttendance: boolean },
+  ctx: { canManageAttendance: boolean; approvalScopeUserIds?: string[] | null },
 ): Promise<ReviewVerdict> {
-  if (ctx.canManageAttendance) return { ok: true, source: "ADMIN" }
   const r = await resolveAttendanceApprovers(requesterUserId, workspaceId)
-  if (r.mode === "DIRECT_MANAGER" && r.userIds.includes(viewerId)) return { ok: true, source: "DIRECT_MANAGER" }
+  const direct = r.mode === "DIRECT_MANAGER" && r.userIds.includes(viewerId)
+  // Owner, 30 Sep 2026: One Above All decides anything; a BoD anything in their own tree (their
+  // approvalScopeUserIds); everyone else only the people directly under them.
+  if (ctx.approvalScopeUserIds === undefined) {
+    if (ctx.canManageAttendance) return { ok: true, source: direct ? "DIRECT_MANAGER" : "ADMIN" }
+  } else if (ctx.approvalScopeUserIds === null) {
+    return { ok: true, source: direct ? "DIRECT_MANAGER" : "ADMIN" }
+  } else if (ctx.approvalScopeUserIds.includes(requesterUserId)) {
+    return { ok: true, source: direct ? "DIRECT_MANAGER" : "ADMIN" }
+  }
+  if (direct) return { ok: true, source: "DIRECT_MANAGER" }
   return { ok: false }
 }
 

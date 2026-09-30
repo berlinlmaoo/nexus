@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
       workspaceId: context.workspace.id,
       checkOutOffsite: true,
       ...(approvalFilter ? { checkOutApproval: approvalFilter } : {}),
-      ...(isDirectManager ? { userId: { in: context.directReportIds } } : {}),
+      // Same scope as the requests list: a manager their direct reports, a BoD their own tree.
+      ...(context.approvalScopeUserIds !== null ? { userId: { in: context.approvalScopeUserIds } } : {}),
     },
     select: {
       id: true,

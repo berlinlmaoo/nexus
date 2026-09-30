@@ -170,17 +170,17 @@ export async function GET(request: NextRequest) {
       workspaceId: context.workspace.id,
     }
 
-    // Bagan Approval: seorang MANAGER hanya melihat request orang-orang di bawahnya di bagan.
-    // Bukan anggota timnya — tim bukan lagi soal approval. BoD/OAA melihat semuanya.
-    const isDirectManager = !context.canManageAttendance && context.directReportIds.length > 0
+    // Bagan Approval (owner, 30 Sep 2026): a manager sees the people directly under them, a BoD
+    // everyone in their own tree, One Above All everyone (approvalScopeUserIds null).
     let teamScopeUserIds: string[] | null = null
-    if ((scope === "workspace" || scope === "approvals") && isDirectManager) {
-      teamScopeUserIds = context.directReportIds
+    if ((scope === "workspace" || scope === "approvals") && context.approvalScopeUserIds !== null) {
+      teamScopeUserIds = context.approvalScopeUserIds
     }
 
     if (scope === "me") {
       where.userId = session.user.id
     } else if (teamScopeUserIds) {
+      // An empty tree sees nothing (an `in: []` matches no row), never everyone.
       where.userId =
         parsed.data.userId && teamScopeUserIds.includes(parsed.data.userId)
           ? parsed.data.userId
