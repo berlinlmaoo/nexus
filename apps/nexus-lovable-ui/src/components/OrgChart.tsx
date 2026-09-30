@@ -524,6 +524,7 @@ function measureLeadLines(root: HTMLElement): string[] {
     const barY = r.y + 22;
     const kids = Array.from(row.children) as HTMLElement[];
     const plain: number[] = [];
+    let ledRank = 0;
     for (const kid of kids) {
       const k = offsetIn(kid, root);
       const kx = k.x + kid.offsetWidth / 2;
@@ -533,7 +534,9 @@ function measureLeadLines(root: HTMLElement): string[] {
       if (lead && chip) {
         const c = offsetIn(chip, root);
         const sx = c.x + chip.offsetWidth / 2, sy = c.y + chip.offsetHeight;
-        const mid = r.y + 11;
+        // One height per elbow, the leftmost leader highest, so two elbows never share a line.
+        const mid = r.y + Math.min(18, 5 + ledRank * 5);
+        ledRank += 1;
         out.push(`M${sx} ${sy} V${mid} H${kx} V${top}`);
       } else {
         plain.push(kx);
