@@ -588,6 +588,17 @@ struct WorkTrailMachine {
         if var p = candidate {
             p.id = UUID().uuidString
             p.recordId = recordId
+            // A crossing still waiting for its fix (an enter with no fresh position) must not be
+            // dropped by the next one: an enter lost this way left the server believing the person
+            // never reached the other office, and the outside clock ran on (30 Sep 2026). It goes
+            // out first, a second earlier, at the same position.
+            if let waiting = state.pendingTag, waiting != event {
+                var q = p
+                q.id = UUID().uuidString
+                q.event = waiting
+                q.at = p.at.addingTimeInterval(-1)
+                enqueue(q, now: now)
+            }
             p.event = event
             state.pendingTag = nil
             enqueue(p, now: now)

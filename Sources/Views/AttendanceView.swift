@@ -1630,6 +1630,9 @@ struct StreakBoardCard: View {
             periodDays = buildPeriodDays()
             await load()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusAttendanceChanged)) { _ in
+            Task { await load() }
+        }
         .sheet(item: $selectedRow) { row in
             RecordActionsSheet(row: row, canDelete: canManage, canChangeStatus: canManage) { await load() }
         }

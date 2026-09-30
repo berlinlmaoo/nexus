@@ -2296,6 +2296,7 @@ struct APIClient {
         if let reviewNote, !reviewNote.isEmpty { body["reviewNote"] = reviewNote }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
+        NotificationCenter.default.post(name: .nexusAttendanceChanged, object: nil)
         return true
     }
 
@@ -2317,6 +2318,7 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["action": action])
         _ = try await run(req, decode: SuccessResponse.self)
+        NotificationCenter.default.post(name: .nexusAttendanceChanged, object: nil)
         return true
     }
 
@@ -2856,3 +2858,10 @@ struct SignupRetryLater: LocalizedError, Sendable {
 
 struct ProjectPinsReply: Decodable { let projectIds: [String] }
 struct ProjectPinReply: Decodable { let pinned: Bool? }
+
+extension Notification.Name {
+    /// A decision changed someone's attendance (a request or an offsite check-out approved or
+    /// rejected). The crew board reloads on it, so a cell turns from pending to its colour at once
+    /// instead of on the next month switch (owner, 30 Sep 2026).
+    static let nexusAttendanceChanged = Notification.Name("nexusAttendanceChanged")
+}
