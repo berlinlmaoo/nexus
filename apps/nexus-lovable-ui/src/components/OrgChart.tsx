@@ -420,20 +420,24 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   // Leaders (BoD, One Above All, Manager) hang straight under the card; staff are one branch beside
   // the sub-units, in the middle of the row (owner, 30 Sep 2026: the C-suite and Agency's Gerro/Riri
   // directly under their card, Mey level with Geneziz and Z Foundation).
-  const leads = all.filter((p) => LEAD_ROLES.has(p.role));
+  // BoD (and One Above All) and managers are two separate boxes, BoD first (owner, 30 Sep 2026).
+  const bods = all.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL");
+  const managers = all.filter((p) => p.role === "MANAGER");
   const members = all.filter((p) => !LEAD_ROLES.has(p.role));
   const branches: Array<OrgUnit | "people"> = [...kids];
   if (members.length > 0) branches.splice(Math.floor(kids.length / 2), 0, "people");
   return (
     <div className="oc-node">
       <UnitCard {...unitProps(u)} />
-      {leads.length > 0 && (
-        <div className="oc-own">
-          <div className="oc-leaves">
-            <div className="oc-leaves-label">Pimpinan · {leads.length}</div>
-            {leads.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+      {([["BoD", bods], ["Manager", managers]] as const).map(([label, list]) =>
+        list.length > 0 ? (
+          <div key={label} className="oc-own">
+            <div className="oc-leaves">
+              <div className="oc-leaves-label">{label} · {list.length}</div>
+              {list.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+            </div>
           </div>
-        </div>
+        ) : null,
       )}
       {/* The unit's own people are one branch beside its sub-units, at the same level (owner: Mey sits
           next to Geneziz and Z Foundation under Kantor CEO), placed in the MIDDLE of the row so they
