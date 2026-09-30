@@ -260,6 +260,8 @@ export function OrgChart() {
         .oc-kid:first-child::after{left:50%}
         .oc-kid:last-child::after{right:50%}
         .oc-kid:only-child::after{display:none}
+        .oc-own{position:relative;padding-top:22px;display:flex;justify-content:center}
+        .oc-own::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-leaves{display:flex;flex-direction:column;gap:6px;padding:6px;border:1.5px dashed var(--oc-line);border-radius:12px;background:rgba(127,127,127,.04)}
         .oc-leaves-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;text-align:center;padding-bottom:2px}
       `}</style>
@@ -416,16 +418,19 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   return (
     <div className="oc-node">
       <UnitCard {...unitProps(u)} />
-      {(kids.length > 0 || members.length > 0) && (
+      {/* The unit's own people sit straight under its card, and its sub-units hang below them — not
+          beside them as if the people were one more branch (owner, 30 Sep 2026: the holding's
+          C-suite ended up at the far left of the chart). */}
+      {members.length > 0 && (
+        <div className="oc-own">
+          <div className="oc-leaves">
+            <div className="oc-leaves-label">{members.length} orang</div>
+            {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+          </div>
+        </div>
+      )}
+      {kids.length > 0 && (
         <div className="oc-kids">
-          {members.length > 0 && (
-            <div className="oc-kid">
-              <div className="oc-leaves">
-                <div className="oc-leaves-label">{members.length} orang</div>
-                {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
-              </div>
-            </div>
-          )}
           {kids.map((k) => (
             <div key={k.id} className="oc-kid">
               <UnitNode u={k} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
