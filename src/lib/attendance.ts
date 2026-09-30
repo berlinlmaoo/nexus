@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { loadChart, subtreeOf } from "@/lib/attendance-chart"
 import { isCheckInAway } from "@/lib/attendance-place"
 
 export const ATTENDANCE_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Jakarta"
@@ -1035,6 +1036,14 @@ export async function getAttendanceWorkspaceContext(userId: string) {
     directReportIds = reports.map((r) => r.userId)
   }
   const canReviewAttendanceRequests = canManageAttendance || directReportIds.length > 0
+  // Approvals (owner, 30 Sep 2026): whose requests and offsite check-outs this person sees and
+  // decides. null = everyone (One Above All, system admin). A BoD: everyone in their own tree of the
+  // chart, never another BoD's. Anyone else: the people directly under them.
+  let approvalScopeUserIds: string[] | null = null
+  if (!isSystemAdmin && workspaceRole !== "ONE_ABOVE_ALL") {
+    approvalScopeUserIds =
+      workspaceRole === "BOD" && workspace?.id ? subtreeOf(userId, await loadChart(workspace.id)) : directReportIds
+  }
 
   return {
     user,
@@ -1046,6 +1055,7 @@ export async function getAttendanceWorkspaceContext(userId: string) {
     canManageAttendance,
     directReportIds,
     canReviewAttendanceRequests,
+    approvalScopeUserIds,
   }
 }
 
