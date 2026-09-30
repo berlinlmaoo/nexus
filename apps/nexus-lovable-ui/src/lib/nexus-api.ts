@@ -637,6 +637,17 @@ export type ApprovalChart = {
   stats: { total: number; withApprover: number; unassigned: number; bod: number };
 };
 
+/** Bagan IP & Divisi (30 Sep 2026): IP/Team units, free depth, each person in at most one unit.
+ *  Grants nothing — project access stays with direct project invites. */
+export type OrgUnit = { id: string; name: string; logoUrl: string | null; parentId: string | null; position: number };
+export type OrgChartPerson = { userId: string; name: string | null; email: string; avatar: string | null; role: string; orgUnitId: string | null };
+export type OrgChart = {
+  workspaceId: string;
+  units: OrgUnit[];
+  people: OrgChartPerson[];
+  stats: { units: number; people: number; placed: number };
+};
+
 export type NexusHoliday = {
   id: string;
   date: string; // "YYYY-MM-DD"
@@ -2184,6 +2195,21 @@ export const nexusApi = {
     apiFetch<{ member: NexusWorkspaceMember; orphaned?: Array<{ id: string; name: string | null }> }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
   /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */
   approvalChart: () => apiFetch<ApprovalChart>("/api/admin/approval-chart"),
+  orgChart: () => apiFetch<OrgChart>("/api/admin/org-chart"),
+  createOrgUnit: (body: { name: string; parentId?: string | null }) =>
+    apiFetch<{ unit: OrgUnit }>("/api/admin/org-chart", { method: "POST", body: JSON.stringify(body) }),
+  updateOrgUnit: (id: string, body: { name?: string; parentId?: string | null; position?: number; logoUrl?: string | null }) =>
+    apiFetch<{ unit: OrgUnit }>(`/api/admin/org-chart/units/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteOrgUnit: (id: string) =>
+    apiFetch<{ ok: true; movedUp: number; released: number }>(`/api/admin/org-chart/units/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  setOrgUnitMember: (userId: string, orgUnitId: string | null) =>
+    apiFetch<{ ok: true }>(`/api/admin/org-chart/members/${encodeURIComponent(userId)}`, { method: "PATCH", body: JSON.stringify({ orgUnitId }) }),
+  uploadOrgUnitLogo: (unitId: string, file: File) => {
+    const fd = new FormData();
+    fd.append("unitId", unitId);
+    fd.append("file", file);
+    return apiFetch<{ unit: OrgUnit }>("/api/admin/org-chart/logo", { method: "POST", body: fd });
+  },
   removeWorkspaceMember: (memberId: string, workspaceId?: string) =>
     apiFetch<{ success?: boolean }>(`/api/workspaces/members?memberId=${encodeURIComponent(memberId)}${workspaceId ? `&workspaceId=${encodeURIComponent(workspaceId)}` : ""}`, { method: "DELETE" }),
   // Per-user day-off management (BoD only) for Control Room → Members.

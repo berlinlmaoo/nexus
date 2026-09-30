@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
+import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
+import { OrgChart } from "@/components/OrgChart";
 import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
@@ -28,7 +29,7 @@ function initialsOf(name?: string | null) {
 
 function Admin() {
   const qc = useQueryClient();
-  const [view, setView] = useState<"users" | "approval" | "extra-dayoff" | "suspects" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
+  const [view, setView] = useState<"users" | "approval" | "org" | "extra-dayoff" | "suspects" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -195,6 +196,7 @@ function Admin() {
         <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
           {canAnnounce && <button onClick={() => setView("approval")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "approval" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GitBranch className="h-3.5 w-3.5" /> Bagan Approval</button>}
+          {canAnnounce && <button onClick={() => setView("org")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "org" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Network className="h-3.5 w-3.5" /> Bagan IP &amp; Divisi</button>}
           {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> Extra day off</button>}
           {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> Absen Monitor</button>}
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
@@ -205,6 +207,7 @@ function Admin() {
         </div>
 
         {view === "approval" && canAnnounce && <ApprovalChart />}
+        {view === "org" && canAnnounce && <OrgChart />}
         {view === "extra-dayoff" && canManageShift && <ExtraDayOffAdmin members={wsMembers} />}
         {view === "suspects" && canManageShift && <SuspectAttendanceAdmin />}
         {view === "audit" && <AuditLog />}
