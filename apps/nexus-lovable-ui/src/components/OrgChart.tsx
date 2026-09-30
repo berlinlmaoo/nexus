@@ -434,7 +434,10 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
           <div key={label} className="oc-own">
             <div className="oc-leaves">
               <div className="oc-leaves-label">{label} · {list.length}</div>
-              {list.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+              {/* Side by side, like a C-suite row (owner, 30 Sep 2026). */}
+              <div className="flex gap-1.5">
+                {list.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+              </div>
             </div>
           </div>
         ) : null,
