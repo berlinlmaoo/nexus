@@ -464,10 +464,49 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   );
 }
 
+/**
+ * Whether a logo is mostly light (white text on a transparent PNG) or dark, from its own pixels, so it
+ * gets a background it can be read on: light logos on the card's dark blue, dark ones on white
+ * (owner, 30 Sep 2026: a white logo vanished on the white tile). Cached per URL.
+ */
+const logoTone = new Map<string, "light" | "dark">();
+function useLogoTone(url: string | null): "light" | "dark" | null {
+  const [tone, setTone] = useState<"light" | "dark" | null>(url ? logoTone.get(url) ?? null : null);
+  useEffect(() => {
+    if (!url) { setTone(null); return; }
+    const known = logoTone.get(url);
+    if (known) { setTone(known); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = 32; c.height = 32;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, 32, 32);
+        const d = ctx.getImageData(0, 0, 32, 32).data;
+        let sum = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const a = d[i + 3] / 255;
+          if (a < 0.2) continue;
+          sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+          n++;
+        }
+        const t = n > 0 && sum / n > 0.72 ? "light" : "dark";
+        logoTone.set(url, t);
+        setTone(t);
+      } catch { /* unreadable pixels: keep the white tile */ }
+    };
+    img.src = url;
+  }, [url]);
+  return tone;
+}
+
 function UnitLogo({ u, size }: { u: OrgUnit; size: number }) {
   const [broken, setBroken] = useState(false);
+  const tone = useLogoTone(u.logoUrl && !broken ? u.logoUrl : null);
   if (u.logoUrl && !broken) {
-    return <img src={u.logoUrl} alt="" onError={() => setBroken(true)} style={{ width: size, height: size }} className="shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-white/30" />;
+    return <img src={u.logoUrl} alt="" onError={() => setBroken(true)} style={{ width: size, height: size }} className={cn("shrink-0 rounded-lg object-contain p-0.5 ring-1 ring-white/30", tone === "light" ? "bg-[#0f1b2d]" : "bg-white")} />;
   }
   return <span style={{ width: size, height: size }} className="grid shrink-0 place-items-center rounded-lg bg-white/15 text-[11px] font-bold">{initialsOf(u.name)}</span>;
 }
@@ -548,6 +587,7 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
   const [parentId, setParentId] = useState<string>(initial.parentId ?? "");
   const [logo, setLogo] = useState<string | null>(unit?.logoUrl ?? null);
   const [kind, setKind] = useState<"IP" | "DIVISION">(unit?.kind ?? "DIVISION");
+  const previewTone = useLogoTone(logo);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -621,7 +661,7 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
         {unit && kind === "IP" && (
           <div className="mb-3 flex items-center gap-3">
             <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#1e3a5f] text-white">
-              {logo ? <img src={logo} alt="" className="h-full w-full bg-white object-contain p-1" /> : <span className="text-sm font-bold">{initialsOf(name || unit.name)}</span>}
+              {logo ? <img src={logo} alt="" className={cn("h-full w-full object-contain p-1", previewTone === "light" ? "bg-[#0f1b2d]" : "bg-white")} /> : <span className="text-sm font-bold">{initialsOf(name || unit.name)}</span>}
             </div>
             <div className="flex flex-wrap gap-1.5">
               <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
