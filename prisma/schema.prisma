@@ -242,6 +242,7 @@ model Workspace {
   customFieldLibraries CustomFieldLibrary[]
   quests               Quest[]
   divisions            Division[]
+  orgUnits             OrgUnit[]
   holidays             Holiday[]
   redDateQuotas        RedDateQuota[]
   dayOffBonuses        DayOffBonus[]
@@ -408,6 +409,9 @@ model WorkspaceMember {
   /// bagan → jatuh ke BoD sebagai jaring pengaman (bukan ke lead tim; lead tim sudah tidak ada).
   approverId String?
   approver   User?   @relation("AttendanceApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  // Bagan IP & Divisi (30 Sep 2026): the one IP/Team this person sits in. At most one, by design.
+  orgUnitId  String?
+  orgUnit    OrgUnit? @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
 
   userId      String
   workspaceId String
@@ -417,6 +421,7 @@ model WorkspaceMember {
 
   @@unique([userId, workspaceId])
   @@index([approverId])
+  @@index([orgUnitId])
 }
 
 model Project {
@@ -3033,4 +3038,26 @@ model AttendanceLocationPoint {
 
   @@unique([userId, at])
   @@index([recordId, at])
+}
+
+/// Bagan IP & Divisi (owner, 30 Sep 2026): the company's IPs, divisions and teams as one free-depth
+/// tree, each with a logo and the people in it. Replaces the old Team/Division. Grants NOTHING:
+/// no project access, no attendance rule — project access stays with direct project invites.
+model OrgUnit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  /// /api/files/attachments/org-units/<file> (png/jpg/webp), or null for initials.
+  logoUrl     String?
+  parentId    String?
+  parent      OrgUnit?  @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    OrgUnit[] @relation("OrgUnitTree")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     WorkspaceMember[]
+
+  @@index([workspaceId])
+  @@index([parentId])
 }
