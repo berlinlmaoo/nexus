@@ -123,6 +123,7 @@ model User {
   sheetRevisions       SheetCellRevision[] @relation("SheetRevisionAuthor")
   gideonMessages       GideonMessage[]
   orgUnitMemberships OrgUnitMember[] @relation("OrgUnitMemberships")
+  orgUnitsLed        OrgUnit[]       @relation("OrgUnitLead")
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -3054,6 +3055,10 @@ model OrgUnit {
   parent      OrgUnit?  @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: SetNull)
   children    OrgUnit[] @relation("OrgUnitTree")
   position    Int      @default(0)
+  /// Who leads this unit — one of the BoD/Manager people of its PARENT unit; the chart draws the unit
+  /// under that person's chip. Ignored when that person is no longer in the parent. Owner, 30 Sep 2026.
+  leadUserId  String?
+  lead        User?    @relation("OrgUnitLead", fields: [leadUserId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   members     OrgUnitMember[]
@@ -3070,6 +3075,8 @@ model OrgUnitMember {
   userId      String
   user        User     @relation("OrgUnitMemberships", fields: [userId], references: [id], onDelete: Cascade)
   workspaceId String
+  /// Free text shown on the person's chip in this unit ("CEO", "CFO" …). Max 40 chars, null = none.
+  title       String?
   createdAt   DateTime @default(now())
 
   @@unique([unitId, userId])

@@ -639,8 +639,8 @@ export type ApprovalChart = {
 
 /** Bagan IP & Divisi (30 Sep 2026): IP/Team units, free depth; a person may be in several units.
  *  Grants nothing — project access stays with direct project invites. */
-export type OrgUnit = { id: string; name: string; kind: "IP" | "DIVISION"; logoUrl: string | null; parentId: string | null; position: number };
-export type OrgChartPerson = { userId: string; name: string | null; email: string; avatar: string | null; role: string; unitIds: string[] };
+export type OrgUnit = { id: string; name: string; kind: "IP" | "DIVISION"; logoUrl: string | null; parentId: string | null; position: number; leadUserId?: string | null };
+export type OrgChartPerson = { userId: string; name: string | null; email: string; avatar: string | null; role: string; unitIds: string[]; titles?: Record<string, string> };
 export type OrgChart = {
   workspaceId: string;
   units: OrgUnit[];
@@ -2198,12 +2198,14 @@ export const nexusApi = {
   orgChart: () => apiFetch<OrgChart>("/api/admin/org-chart"),
   createOrgUnit: (body: { name: string; parentId?: string | null; kind?: "IP" | "DIVISION" }) =>
     apiFetch<{ unit: OrgUnit }>("/api/admin/org-chart", { method: "POST", body: JSON.stringify(body) }),
-  updateOrgUnit: (id: string, body: { name?: string; kind?: "IP" | "DIVISION"; parentId?: string | null; position?: number; logoUrl?: string | null }) =>
+  updateOrgUnit: (id: string, body: { name?: string; kind?: "IP" | "DIVISION"; parentId?: string | null; position?: number; logoUrl?: string | null; leadUserId?: string | null }) =>
     apiFetch<{ unit: OrgUnit }>(`/api/admin/org-chart/units/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteOrgUnit: (id: string) =>
     apiFetch<{ ok: true; movedUp: number; released: number }>(`/api/admin/org-chart/units/${encodeURIComponent(id)}`, { method: "DELETE" }),
   addOrgUnitMember: (userId: string, unitId: string) =>
     apiFetch<{ ok: true }>("/api/admin/org-chart/members", { method: "POST", body: JSON.stringify({ userId, unitId }) }),
+  setOrgUnitMemberTitle: (userId: string, unitId: string, title: string | null) =>
+    apiFetch<{ ok: true; title: string | null }>("/api/admin/org-chart/members", { method: "PATCH", body: JSON.stringify({ userId, unitId, title }) }),
   removeOrgUnitMember: (userId: string, unitId: string) =>
     apiFetch<{ ok: true; removed: number }>(`/api/admin/org-chart/members?userId=${encodeURIComponent(userId)}&unitId=${encodeURIComponent(unitId)}`, { method: "DELETE" }),
   uploadOrgUnitLogo: (unitId: string, file: File) => {

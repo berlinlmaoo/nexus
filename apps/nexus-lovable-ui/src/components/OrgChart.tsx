@@ -245,6 +245,7 @@ export function OrgChart() {
     onClick: () => setPlacingId(p.userId),
     onRemove: fromUnitId ? () => removePerson.mutate({ person: p, unitId: fromUnitId }) : undefined,
     extra: p.unitIds.length > 1 ? p.unitIds.length - 1 : 0,
+    jobTitle: fromUnitId ? p.titles?.[fromUnitId] ?? null : null,
   });
   const placing = placingId ? people.find((p) => p.userId === placingId) ?? null : null;
 
@@ -362,6 +363,7 @@ export function OrgChart() {
           units={units}
           excluded={descendantsOf(editing.id).add(editing.id)}
           initial={{ name: editing.name, parentId: editing.parentId }}
+          people={people}
           members={membersOf.get(editing.id)?.length ?? 0}
           subUnits={childUnits.get(editing.id)?.length ?? 0}
           onAddChild={() => { const parentId = editing.id; setEditing(null); setAdding({ parentId }); }}
@@ -405,7 +407,7 @@ type UnitCardProps = {
   u: OrgUnit; busy: boolean; count: number; dragging: boolean; over: boolean; droppable: boolean;
   onDragStart: () => void; onDragEnd: () => void; onClick: () => void; drop: DropProps;
 };
-type PersonChipProps = { p: OrgChartPerson; busy: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onClick: () => void; onRemove?: () => void; extra: number };
+type PersonChipProps = { p: OrgChartPerson; busy: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onClick: () => void; onRemove?: () => void; extra: number; jobTitle?: string | null };
 
 /** Satu IP/Team beserta turunannya. Orang-orangnya ditumpuk dalam satu kotak, sub-IP/Team berjejer.
  *  Di tingkat modul supaya React tidak me-mount ulang pohon setiap render. */
@@ -424,13 +426,45 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   const bods = all.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL");
   const managers = all.filter((p) => p.role === "MANAGER");
   const members = all.filter((p) => !LEAD_ROLES.has(p.role));
-  const branches: Array<OrgUnit | "people"> = [...kids];
-  if (members.length > 0) branches.splice(Math.floor(kids.length / 2), 0, "people");
+  // "Dipimpin oleh" (owner, 30 Sep 2026): a sub-unit whose lead is one of THIS card's BoD/Manager
+  // people hangs under that person's chip. A lead who is no longer here is simply not drawn.
+  const leaderIds = new Set([...bods, ...managers].map((p) => p.userId));
+  const ledBy = new Map<string, OrgUnit[]>();
+  for (const k of kids) if (k.leadUserId && leaderIds.has(k.leadUserId)) ledBy.set(k.leadUserId, [...(ledBy.get(k.leadUserId) ?? []), k]);
+  const free = kids.filter((k) => !(k.leadUserId && leaderIds.has(k.leadUserId)));
+  const branches: Array<OrgUnit | "people"> = [...free];
+  if (members.length > 0) branches.splice(Math.floor(free.length / 2), 0, "people");
   return (
     <div className="oc-node">
       <UnitCard {...unitProps(u)} />
       {([["BoD", bods], ["Manager", managers]] as const).map(([label, list]) =>
-        list.length > 0 ? (
+        list.length === 0 ? null : list.some((p) => ledBy.has(p.userId)) ? (
+          // Someone in this row leads a sub-unit: every person is a column — chip, line, their units.
+          <div key={label} className="oc-own">
+            <div className="flex flex-col items-center">
+              <div className="oc-leaves-label">{label} · {list.length}</div>
+              <div className="flex items-start gap-3">
+                {list.map((p) => {
+                  const led = ledBy.get(p.userId) ?? [];
+                  return (
+                    <div key={p.userId} className="oc-node">
+                      <PersonChip {...personProps(p, u.id)} />
+                      {led.length > 0 && (
+                        <div className="oc-kids">
+                          {led.map((k) => (
+                            <div key={k.id} className="oc-kid">
+                              <UnitNode u={k} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : (
           <div key={label} className="oc-own">
             <div className="oc-leaves">
               <div className="oc-leaves-label">{label} · {list.length}</div>
@@ -440,12 +474,12 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
               </div>
             </div>
           </div>
-        ) : null,
+        ),
       )}
       {/* The unit's own people are one branch beside its sub-units, at the same level (owner: Mey sits
           next to Geneziz and Z Foundation under Kantor CEO), placed in the MIDDLE of the row so they
           hang right under the card (the holding's C-suite had ended up at the far left). */}
-      {(kids.length > 0 || members.length > 0) && (
+      {(free.length > 0 || members.length > 0) && (
         <div className="oc-kids">
           {branches.map((b) =>
             b === "people" ? (
@@ -539,7 +573,7 @@ function UnitCard({ u, busy, count, dragging, over, droppable, onDragStart, onDr
   );
 }
 
-function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemove, extra }: PersonChipProps) {
+function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemove, extra, jobTitle }: PersonChipProps) {
   return (
     <div className="group relative">
     <button
@@ -558,7 +592,7 @@ function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemo
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[12px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
         <span className="block truncate text-[10px] leading-tight text-muted-foreground">
-          {ROLE_SUB[p.role] ?? p.role}{extra > 0 && ` · +${extra} IP/Team lain`}
+          {jobTitle ? <b className="font-semibold text-foreground">{jobTitle} · </b> : null}{ROLE_SUB[p.role] ?? p.role}{extra > 0 && ` · +${extra} IP/Team lain`}
         </span>
       </span>
     </button>
@@ -582,14 +616,19 @@ function pathOf(u: OrgUnit, byId: Map<string, OrgUnit>): string {
 }
 
 /** Tambah atau ubah satu IP/Team: nama, induk, logo, hapus. */
-function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUnits = 0, onAddChild, onClose, onSaved }: {
-  title: string; unit?: OrgUnit; units: OrgUnit[]; excluded: Set<string>; initial: { name: string; parentId: string | null };
+function UnitDialog({ title, unit, units, excluded, initial, people = [], members = 0, subUnits = 0, onAddChild, onClose, onSaved }: {
+  title: string; unit?: OrgUnit; units: OrgUnit[]; excluded: Set<string>; initial: { name: string; parentId: string | null }; people?: OrgChartPerson[];
   members?: number; subUnits?: number; onAddChild?: () => void; onClose: () => void; onSaved: () => void;
 }) {
   const [name, setName] = useState(initial.name);
   const [parentId, setParentId] = useState<string>(initial.parentId ?? "");
   const [logo, setLogo] = useState<string | null>(unit?.logoUrl ?? null);
   const [kind, setKind] = useState<"IP" | "DIVISION">(unit?.kind ?? "DIVISION");
+  const [leadUserId, setLeadUserId] = useState<string>(unit?.leadUserId ?? "");
+  // Who may lead: the BoD / One Above All / Manager people of the chosen PARENT card.
+  const leadCandidates = parentId ? people.filter((p) => p.unitIds.includes(parentId) && LEAD_ROLES.has(p.role)) : [];
+  const leadValid = !leadUserId || leadCandidates.some((p) => p.userId === leadUserId);
+  const cardPeople = unit ? people.filter((p) => p.unitIds.includes(unit.id)) : [];
   const previewTone = useLogoTone(logo);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -603,7 +642,7 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
     if (!clean) { toast.error("Nama IP/Team wajib diisi."); return; }
     setSaving(true);
     try {
-      if (unit) await nexusApi.updateOrgUnit(unit.id, { name: clean, kind, parentId: parentId || null });
+      if (unit) await nexusApi.updateOrgUnit(unit.id, { name: clean, kind, parentId: parentId || null, leadUserId: leadValid ? leadUserId || null : null });
       else await nexusApi.createOrgUnit({ name: clean, kind, parentId: parentId || null });
       toast.success(unit ? "Tersimpan" : `${clean} ditambahkan`);
       onSaved();
@@ -686,6 +725,28 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
           {parents.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
         </select>
 
+        {unit && parentId && (
+          <>
+            <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Dipimpin oleh</label>
+            <select value={leadValid ? leadUserId : ""} onChange={(e) => setLeadUserId(e.target.value)} disabled={leadCandidates.length === 0} className="mb-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60">
+              <option value="">— Tidak ada —</option>
+              {leadCandidates.map((p) => <option key={p.userId} value={p.userId}>{label(p)} · {ROLE_SUB[p.role] ?? p.role}</option>)}
+            </select>
+            <div className="mb-4 text-[10.5px] text-muted-foreground">
+              {leadCandidates.length === 0 ? "Kartu induknya belum punya BoD atau Manager." : "Kartu ini digambar di bawah orang itu, di kartu induknya."}
+            </div>
+          </>
+        )}
+
+        {unit && cardPeople.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Jabatan di kartu ini</div>
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {cardPeople.map((p) => <TitleRow key={p.userId} person={p} unitId={unit.id} />)}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           {unit && (
             <button type="button" disabled={saving} onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
@@ -759,6 +820,34 @@ function UnitPicker({ person, units, busy, onToggle, onClose }: { person: OrgCha
         </div>
         <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Selesai</button>
       </div>
+    </div>
+  );
+}
+
+/** One person's title on one card. Saved on blur or Enter; empty = no title. */
+function TitleRow({ person, unitId }: { person: OrgChartPerson; unitId: string }) {
+  const qc = useQueryClient();
+  const initial = person.titles?.[unitId] ?? "";
+  const [v, setV] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    const next = v.trim();
+    if (next === initial) return;
+    setSaving(true);
+    try {
+      await nexusApi.setOrgUnitMemberTitle(person.userId, unitId, next || null);
+      qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] });
+    } catch (e) {
+      toast.error("Gagal menyimpan jabatan", { description: e instanceof ApiError ? e.message : "Coba lagi." });
+      setV(initial);
+    } finally { setSaving(false); }
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-xs">{label(person)} <span className="text-muted-foreground">· {ROLE_SUB[person.role] ?? person.role}</span></span>
+      <input value={v} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        maxLength={40} placeholder="Jabatan" disabled={saving}
+        className="w-28 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-60" />
     </div>
   );
 }
