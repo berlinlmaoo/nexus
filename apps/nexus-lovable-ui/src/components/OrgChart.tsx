@@ -110,6 +110,25 @@ export function OrgChart() {
     return () => ro.disconnect();
   }, [fitView, full, units.length, people.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Lead connectors (SVG overlay inside the scaled canvas, so zoom and the PNG export both carry them).
+  const treeRef = useRef<HTMLDivElement>(null);
+  const [leadLines, setLeadLines] = useState<{ d: string[]; w: number; h: number }>({ d: [], w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const tree = treeRef.current, root = innerRef.current;
+    if (!tree || !root) return;
+    const run = () => {
+      const d = measureLeadLines(root);
+      setLeadLines((prev) => {
+        const next = { d, w: root.scrollWidth, h: root.scrollHeight };
+        return prev.w === next.w && prev.h === next.h && prev.d.join("|") === d.join("|") ? prev : next;
+      });
+    };
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(tree);
+    return () => ro.disconnect();
+  }, [units, people, full]);
+
   const zoomAt = (factor: number, cx: number, cy: number) => {
     const v = viewRef.current;
     const s = clampS(v.s * factor);
@@ -264,6 +283,7 @@ export function OrgChart() {
         .oc-own{position:relative;padding-top:22px;display:flex;justify-content:center}
         .oc-own::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-leaves{display:flex;flex-direction:column;gap:6px;padding:6px;border:1.5px dashed var(--oc-line);border-radius:12px;background:rgba(127,127,127,.04)}
+        .oc-kids-svg::before,.oc-kids-svg>.oc-kid::before,.oc-kids-svg>.oc-kid::after{display:none}
         .oc-leaves-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;text-align:center;padding-bottom:2px}
       `}</style>
 
@@ -320,9 +340,14 @@ export function OrgChart() {
               style={{ touchAction: "none" }}
             >
               <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transformOrigin: "0 0", willChange: "transform" }}>
-                <div className="flex items-start gap-10 p-4">
+                <div ref={treeRef} className="flex items-start gap-10 p-4">
                   {roots.map((u) => <UnitNode key={u.id} u={u} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />)}
                 </div>
+                {leadLines.d.length > 0 && (
+                  <svg className="pointer-events-none absolute left-0 top-0" width={leadLines.w} height={leadLines.h} aria-hidden>
+                    {leadLines.d.map((d, i) => <path key={i} d={d} fill="none" stroke="#c7cfdb" strokeWidth={2} />)}
+                  </svg>
+                )}
               </div>
             </div>
           </section>
@@ -426,71 +451,49 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   const bods = all.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL");
   const managers = all.filter((p) => p.role === "MANAGER");
   const members = all.filter((p) => !LEAD_ROLES.has(p.role));
-  // "Dipimpin oleh" (owner, 30 Sep 2026): a sub-unit whose lead is one of THIS card's BoD/Manager
-  // people hangs under that person's chip. A lead who is no longer here is simply not drawn.
-  const leaderIds = new Set([...bods, ...managers].map((p) => p.userId));
-  const ledBy = new Map<string, OrgUnit[]>();
-  for (const k of kids) if (k.leadUserId && leaderIds.has(k.leadUserId)) ledBy.set(k.leadUserId, [...(ledBy.get(k.leadUserId) ?? []), k]);
-  const free = kids.filter((k) => !(k.leadUserId && leaderIds.has(k.leadUserId)));
-  const branches: Array<OrgUnit | "people"> = [...free];
-  if (members.length > 0) branches.splice(Math.floor(free.length / 2), 0, "people");
+  // "Dipimpin oleh" (owner, 30 Sep 2026): every sub-unit stays in the ordinary row below the boxes;
+  // the ones led by someone in THIS card's BoD/Manager boxes come first, in the order of their leaders,
+  // and their connector is drawn by the chart's SVG overlay from that person's chip (LeadLines). A lead
+  // who is no longer in this card is simply not drawn.
+  const leaders = [...bods, ...managers];
+  const leaderIdx = new Map(leaders.map((p, i) => [p.userId, i]));
+  const isLed = (k: OrgUnit) => !!k.leadUserId && leaderIdx.has(k.leadUserId);
+  const led = kids.filter(isLed).sort((a, b) => leaderIdx.get(a.leadUserId!)! - leaderIdx.get(b.leadUserId!)! || byPos(a, b));
+  const free = kids.filter((k) => !isLed(k));
+  const ordered = [...led, ...free];
+  const branches: Array<OrgUnit | "people"> = [...ordered];
+  if (members.length > 0) branches.splice(Math.floor(ordered.length / 2), 0, "people");
+  const custom = led.length > 0;
   return (
     <div className="oc-node">
       <UnitCard {...unitProps(u)} />
       {([["BoD", bods], ["Manager", managers]] as const).map(([label, list]) =>
-        list.length === 0 ? null : list.some((p) => ledBy.has(p.userId)) ? (
-          // Someone in this row leads a sub-unit: every person is a column — chip, line, their units.
-          <div key={label} className="oc-own">
-            <div className="flex flex-col items-center">
-              <div className="oc-leaves-label">{label} · {list.length}</div>
-              <div className="flex items-start gap-3">
-                {list.map((p) => {
-                  const led = ledBy.get(p.userId) ?? [];
-                  return (
-                    <div key={p.userId} className="oc-node">
-                      <PersonChip {...personProps(p, u.id)} />
-                      {led.length > 0 && (
-                        <div className="oc-kids">
-                          {led.map((k) => (
-                            <div key={k.id} className="oc-kid">
-                              <UnitNode u={k} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ) : (
+        list.length > 0 ? (
           <div key={label} className="oc-own">
             <div className="oc-leaves">
               <div className="oc-leaves-label">{label} · {list.length}</div>
               {/* Side by side, like a C-suite row (owner, 30 Sep 2026). */}
               <div className="flex gap-1.5">
-                {list.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
+                {list.map((p) => <div key={p.userId} data-oc-chip={`${u.id}:${p.userId}`}><PersonChip {...personProps(p, u.id)} /></div>)}
               </div>
             </div>
           </div>
-        ),
+        ) : null,
       )}
-      {/* The unit's own people are one branch beside its sub-units, at the same level (owner: Mey sits
-          next to Geneziz and Z Foundation under Kantor CEO), placed in the MIDDLE of the row so they
-          hang right under the card (the holding's C-suite had ended up at the far left). */}
-      {(free.length > 0 || members.length > 0) && (
-        <div className="oc-kids">
+      {/* The unit's own staff are one branch in the MIDDLE of the row of sub-units. A row with a led
+          sub-unit draws all its connectors in SVG (oc-kids-svg), so the CSS bar cannot run into it. */}
+      {branches.length > 0 && (
+        <div className={cn("oc-kids", custom && "oc-kids-svg")} data-oc-row={custom ? u.id : undefined}>
           {branches.map((b) =>
             b === "people" ? (
-              <div key="people" className="oc-kid">
+              <div key="people" className="oc-kid" data-oc-lead="">
                 <div className="oc-leaves">
                   <div className="oc-leaves-label">{members.length} orang</div>
                   {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
                 </div>
               </div>
             ) : (
-              <div key={b.id} className="oc-kid">
+              <div key={b.id} className="oc-kid" data-oc-lead={isLed(b) ? b.leadUserId! : ""}>
                 <UnitNode u={b} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
               </div>
             ),
@@ -499,6 +502,50 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
       )}
     </div>
   );
+}
+
+/** Position of `el` inside `root` in unscaled layout pixels (offsets, not getBoundingClientRect — the
+ *  canvas is CSS-scaled). Every positioned ancestor on the way is an offsetParent. */
+function offsetIn(el: HTMLElement, root: HTMLElement): { x: number; y: number } {
+  let x = 0, y = 0;
+  let cur: HTMLElement | null = el;
+  while (cur && cur !== root) { x += cur.offsetLeft; y += cur.offsetTop; cur = cur.offsetParent as HTMLElement | null; }
+  return { x, y };
+}
+
+/** SVG paths for every row that contains a led sub-unit (see UnitNode): the normal connector for the
+ *  unled branches (stub, bar, drops), and an elbow from each leader's chip to the unit they lead. */
+function measureLeadLines(root: HTMLElement): string[] {
+  const out: string[] = [];
+  for (const row of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-row]"))) {
+    const parentId = row.dataset.ocRow!;
+    const r = offsetIn(row, root);
+    const cx = r.x + row.offsetWidth / 2;
+    const barY = r.y + 22;
+    const kids = Array.from(row.children) as HTMLElement[];
+    const plain: number[] = [];
+    for (const kid of kids) {
+      const k = offsetIn(kid, root);
+      const kx = k.x + kid.offsetWidth / 2;
+      const top = k.y + 22;
+      const lead = kid.dataset.ocLead;
+      const chip = lead ? root.querySelector<HTMLElement>(`[data-oc-chip="${parentId}:${lead}"]`) : null;
+      if (lead && chip) {
+        const c = offsetIn(chip, root);
+        const sx = c.x + chip.offsetWidth / 2, sy = c.y + chip.offsetHeight;
+        const mid = r.y + 11;
+        out.push(`M${sx} ${sy} V${mid} H${kx} V${top}`);
+      } else {
+        plain.push(kx);
+        out.push(`M${kx} ${barY} V${top}`);
+      }
+    }
+    if (plain.length > 0) {
+      out.push(`M${cx} ${r.y} V${barY}`);
+      out.push(`M${Math.min(cx, ...plain)} ${barY} H${Math.max(cx, ...plain)}`);
+    }
+  }
+  return out;
 }
 
 /**
