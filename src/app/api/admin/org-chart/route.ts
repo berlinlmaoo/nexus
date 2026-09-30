@@ -6,13 +6,13 @@ import { cleanName, findUnit, ORG_CHART_WORKSPACE, orgChartGuard } from "@/lib/o
 
 /**
  * Bagan IP & Divisi — every unit and every member of the company workspace in one call. The client
- * builds the tree (free depth, parentId) and puts people under their unit (orgUnitId, at most one).
+ * builds the tree (free depth, parentId) and puts people under each of their units (unitIds).
  */
 export async function GET() {
   const g = await orgChartGuard("read")
   if (g instanceof NextResponse) return g
   try {
-    const [units, rows] = await Promise.all([
+    const [units, rows, links] = await Promise.all([
       prisma.orgUnit.findMany({
         where: { workspaceId: ORG_CHART_WORKSPACE },
         select: { id: true, name: true, logoUrl: true, parentId: true, position: true },
@@ -20,20 +20,23 @@ export async function GET() {
       }),
       prisma.workspaceMember.findMany({
         where: { workspaceId: ORG_CHART_WORKSPACE, user: { email: { not: "gideon@znetworks.id" } } },
-        select: { role: true, orgUnitId: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
+        select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
         orderBy: { user: { name: "asc" } },
       }),
+      prisma.orgUnitMember.findMany({ where: { workspaceId: ORG_CHART_WORKSPACE }, select: { unitId: true, userId: true }, orderBy: { createdAt: "asc" } }),
     ])
     const ids = new Set(units.map((u) => u.id))
+    const unitsOf = new Map<string, string[]>()
+    for (const l of links) if (ids.has(l.unitId)) unitsOf.set(l.userId, [...(unitsOf.get(l.userId) ?? []), l.unitId])
     const people = rows.map((r) => ({
       userId: r.user.id, name: r.user.name, email: r.user.email, avatar: r.user.avatar, role: r.role,
-      orgUnitId: r.orgUnitId && ids.has(r.orgUnitId) ? r.orgUnitId : null,
+      unitIds: unitsOf.get(r.user.id) ?? [],
     }))
     return NextResponse.json({
       workspaceId: ORG_CHART_WORKSPACE,
       units: units.map((u) => ({ ...u, parentId: u.parentId && ids.has(u.parentId) ? u.parentId : null })),
       people,
-      stats: { units: units.length, people: people.length, placed: people.filter((p) => p.orgUnitId).length },
+      stats: { units: units.length, people: people.length, placed: people.filter((p) => p.unitIds.length > 0).length },
     })
   } catch (error) {
     console.error("[admin/org-chart] GET", error)

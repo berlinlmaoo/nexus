@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ un
   }
 }
 
-/** DELETE — its sub-units move up to its parent; its people become "belum ditaruh". */
+/** DELETE — its sub-units move up to its parent; its memberships go with it (people stay in their other units). */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ unitId: string }> }) {
   const g = await orgChartGuard("write")
   if (g instanceof NextResponse) return g
@@ -56,7 +56,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!unit) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
     const [moved, released] = await prisma.$transaction([
       prisma.orgUnit.updateMany({ where: { workspaceId: ORG_CHART_WORKSPACE, parentId: unitId }, data: { parentId: unit.parentId } }),
-      prisma.workspaceMember.updateMany({ where: { workspaceId: ORG_CHART_WORKSPACE, orgUnitId: unitId }, data: { orgUnitId: null } }),
+      prisma.orgUnitMember.deleteMany({ where: { unitId } }),
       prisma.orgUnit.delete({ where: { id: unitId } }),
     ])
     return NextResponse.json({ ok: true, movedUp: moved.count, released: released.count })

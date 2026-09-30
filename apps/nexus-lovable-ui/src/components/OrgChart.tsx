@@ -12,16 +12,17 @@ import {
 
 /**
  * Bagan IP & Divisi — IP, divisi dan team perusahaan sebagai satu pohon bebas bertingkat, masing-masing
- * dengan logo dan orang-orangnya. Satu orang paling banyak di satu IP/Team.
+ * dengan logo dan orang-orangnya. Satu orang boleh ada di beberapa IP/Team.
  *
  * Bagan ini TIDAK memberi akses apa pun: bukan akses project, bukan aturan absensi. Akses project
  * tetap lewat undangan langsung dari project-nya.
  *
  * Memindahkan: seret kartu IP/Team ke kartu lain untuk menaruhnya di bawahnya; seret orang ke kartu
- * IP/Team untuk memasukkannya. Klik kartu = ubah (nama, logo, induk, hapus); klik orang = pilih IP/Team.
+ * IP/Team untuk MENAMBAHKANNYA ke sana (tetap di kartu lamanya); × di kartu orang = lepas dari kartu
+ * itu saja. Klik kartu = ubah (nama, logo, induk, hapus); klik orang = centang IP/Team-nya.
  * Kanvasnya sama dengan Bagan Approval: scroll/pinch = zoom, seret area kosong = geser.
  */
-type Drag = { kind: "unit"; id: string } | { kind: "person"; id: string } | null;
+type Drag = { kind: "unit"; id: string } | { kind: "person"; id: string; fromUnitId: string | null } | null;
 
 export function OrgChart() {
   const qc = useQueryClient();
@@ -30,7 +31,7 @@ export function OrgChart() {
   const [overId, setOverId] = useState<string | null>(null);
   const [editing, setEditing] = useState<OrgUnit | null>(null);
   const [adding, setAdding] = useState<{ parentId: string | null } | null>(null);
-  const [placing, setPlacing] = useState<OrgChartPerson | null>(null);
+  const [placingId, setPlacingId] = useState<string | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] });
   const fail = (title: string) => (e: unknown) => toast.error(title, { description: e instanceof ApiError ? e.message : "Coba lagi." });
@@ -44,14 +45,15 @@ export function OrgChart() {
     },
     onError: fail("Gagal memindahkan"),
   });
-  const placePerson = useMutation({
-    mutationFn: ({ person, orgUnitId }: { person: OrgChartPerson; orgUnitId: string | null }) => nexusApi.setOrgUnitMember(person.userId, orgUnitId),
-    onSuccess: (_r, v) => {
-      refresh();
-      const to = v.orgUnitId ? unitsById.get(v.orgUnitId)?.name : null;
-      toast.success(to ? `${v.person.name ?? "Orang"} → ${to}` : `${v.person.name ?? "Orang"} dilepas dari bagan`);
-    },
-    onError: fail("Gagal memindahkan"),
+  const addPerson = useMutation({
+    mutationFn: ({ person, unitId }: { person: OrgChartPerson; unitId: string }) => nexusApi.addOrgUnitMember(person.userId, unitId),
+    onSuccess: (_r, v) => { refresh(); toast.success(`${v.person.name ?? "Orang"} + ${unitsById.get(v.unitId)?.name ?? "IP/Team"}`); },
+    onError: fail("Gagal menambahkan"),
+  });
+  const removePerson = useMutation({
+    mutationFn: ({ person, unitId }: { person: OrgChartPerson; unitId: string }) => nexusApi.removeOrgUnitMember(person.userId, unitId),
+    onSuccess: (_r, v) => { refresh(); toast.success(`${v.person.name ?? "Orang"} dilepas dari ${unitsById.get(v.unitId)?.name ?? "IP/Team"}`); },
+    onError: fail("Gagal melepas"),
   });
 
   const units = chart.data?.units ?? [];
@@ -65,7 +67,7 @@ export function OrgChart() {
   }, [units]);
   const membersOf = useMemo(() => {
     const m = new Map<string, OrgChartPerson[]>();
-    for (const p of people) if (p.orgUnitId) m.set(p.orgUnitId, [...(m.get(p.orgUnitId) ?? []), p]);
+    for (const p of people) for (const id of p.unitIds) m.set(id, [...(m.get(id) ?? []), p]);
     for (const list of m.values()) list.sort((a, b) => label(a).localeCompare(label(b), "id"));
     return m;
   }, [people]);
@@ -199,8 +201,8 @@ export function OrgChart() {
   if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Bagan tidak bisa dimuat — butuh akses BoD.</div>;
 
   const roots = units.filter((u) => !u.parentId).sort(byPos);
-  const unplaced = people.filter((p) => !p.orgUnitId);
-  const busy = moveUnit.isPending || placePerson.isPending;
+  const unplaced = people.filter((p) => p.unitIds.length === 0);
+  const busy = moveUnit.isPending || addPerson.isPending || removePerson.isPending;
 
   /** Zona jatuh. `unitId` null = puncak (untuk IP/Team) atau "belum ditaruh" (untuk orang). */
   const dropProps = (unitId: string | null, zone: string) => ({
@@ -220,8 +222,11 @@ export function OrgChart() {
         const unit = unitsById.get(d.id);
         if (unit && unit.parentId !== unitId && !(unitId && forbidden.has(unitId))) moveUnit.mutate({ unit, parentId: unitId });
       } else {
+        // Ke kartu = tambah (bukan pindah). Ke baki = lepas dari kartu asalnya saja.
         const person = people.find((p) => p.userId === d.id);
-        if (person && person.orgUnitId !== unitId) placePerson.mutate({ person, orgUnitId: unitId });
+        if (!person) return;
+        if (unitId && !person.unitIds.includes(unitId)) addPerson.mutate({ person, unitId });
+        else if (!unitId && d.fromUnitId) removePerson.mutate({ person, unitId: d.fromUnitId });
       }
     },
   });
@@ -234,11 +239,14 @@ export function OrgChart() {
     onDragStart: () => setDrag({ kind: "unit", id: u.id }), onDragEnd: () => { setDrag(null); setOverId(null); },
     onClick: () => setEditing(u), drop: dropProps(u.id, u.id),
   });
-  const personProps = (p: OrgChartPerson): PersonChipProps => ({
-    p, busy, dragging: drag?.kind === "person" && drag.id === p.userId,
-    onDragStart: () => setDrag({ kind: "person", id: p.userId }), onDragEnd: () => { setDrag(null); setOverId(null); },
-    onClick: () => setPlacing(p),
+  const personProps = (p: OrgChartPerson, fromUnitId: string | null = null): PersonChipProps => ({
+    p, busy, dragging: drag?.kind === "person" && drag.id === p.userId && drag.fromUnitId === fromUnitId,
+    onDragStart: () => setDrag({ kind: "person", id: p.userId, fromUnitId }), onDragEnd: () => { setDrag(null); setOverId(null); },
+    onClick: () => setPlacingId(p.userId),
+    onRemove: fromUnitId ? () => removePerson.mutate({ person: p, unitId: fromUnitId }) : undefined,
+    extra: p.unitIds.length > 1 ? p.unitIds.length - 1 : 0,
   });
+  const placing = placingId ? people.find((p) => p.userId === placingId) ?? null : null;
 
   return (
     <div className="space-y-4">
@@ -319,7 +327,7 @@ export function OrgChart() {
           <section {...dropProps(null, "__tray__")} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__tray__" ? "bg-rose-50" : "bg-muted/20")}>
             <div className="flex items-baseline justify-between gap-3">
               <Eyebrow>Belum ditaruh <span className="normal-case tracking-normal text-muted-foreground/70">· {unplaced.length} orang · seret ke kartu IP/Team</span></Eyebrow>
-              {drag?.kind === "person" && <span className="text-[11px] font-semibold text-rose-700">Jatuhkan di sini untuk melepas dari bagan</span>}
+              {drag?.kind === "person" && drag.fromUnitId && <span className="text-[11px] font-semibold text-rose-700">Jatuhkan di sini untuk melepas dari {unitsById.get(drag.fromUnitId)?.name ?? "kartu itu"}</span>}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {unplaced.map((p) => <PersonChip key={p.userId} {...personProps(p)} />)}
@@ -363,8 +371,9 @@ export function OrgChart() {
         <UnitPicker
           person={placing}
           units={units}
-          onPick={(orgUnitId) => { const person = placing; setPlacing(null); if (person.orgUnitId !== orgUnitId) placePerson.mutate({ person, orgUnitId }); }}
-          onClose={() => setPlacing(null)}
+          busy={busy}
+          onToggle={(unitId, on) => (on ? addPerson : removePerson).mutate({ person: placing, unitId })}
+          onClose={() => setPlacingId(null)}
         />
       )}
     </div>
@@ -394,13 +403,13 @@ type UnitCardProps = {
   u: OrgUnit; busy: boolean; count: number; dragging: boolean; over: boolean; droppable: boolean;
   onDragStart: () => void; onDragEnd: () => void; onClick: () => void; drop: DropProps;
 };
-type PersonChipProps = { p: OrgChartPerson; busy: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onClick: () => void };
+type PersonChipProps = { p: OrgChartPerson; busy: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onClick: () => void; onRemove?: () => void; extra: number };
 
 /** Satu IP/Team beserta turunannya. Orang-orangnya ditumpuk dalam satu kotak, sub-IP/Team berjejer.
  *  Di tingkat modul supaya React tidak me-mount ulang pohon setiap render. */
 function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
   u: OrgUnit; childUnits: Map<string, OrgUnit[]>; membersOf: Map<string, OrgChartPerson[]>;
-  unitProps: (u: OrgUnit) => UnitCardProps; personProps: (p: OrgChartPerson) => PersonChipProps;
+  unitProps: (u: OrgUnit) => UnitCardProps; personProps: (p: OrgChartPerson, fromUnitId?: string | null) => PersonChipProps;
 }) {
   const kids = childUnits.get(u.id) ?? [];
   const members = membersOf.get(u.id) ?? [];
@@ -413,7 +422,7 @@ function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
             <div className="oc-kid">
               <div className="oc-leaves">
                 <div className="oc-leaves-label">{members.length} orang</div>
-                {members.map((p) => <PersonChip key={p.userId} {...personProps(p)} />)}
+                {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
               </div>
             </div>
           )}
@@ -460,8 +469,9 @@ function UnitCard({ u, busy, count, dragging, over, droppable, onDragStart, onDr
   );
 }
 
-function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick }: PersonChipProps) {
+function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemove, extra }: PersonChipProps) {
   return (
+    <div className="group relative">
     <button
       type="button"
       draggable={!busy}
@@ -477,9 +487,18 @@ function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick }: Pers
         : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(p.name)}</span>}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[12px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
-        <span className="block truncate text-[10px] leading-tight text-muted-foreground">{ROLE_SUB[p.role] ?? p.role}</span>
+        <span className="block truncate text-[10px] leading-tight text-muted-foreground">
+          {ROLE_SUB[p.role] ?? p.role}{extra > 0 && ` · +${extra} IP/Team lain`}
+        </span>
       </span>
     </button>
+    {onRemove && (
+      <button type="button" onClick={onRemove} disabled={busy} aria-label={`Lepas ${label(p)} dari kartu ini`} title="Lepas dari kartu ini"
+        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:text-rose-700 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40">
+        <X className="h-3 w-3" />
+      </button>
+    )}
+    </div>
   );
 }
 
@@ -610,7 +629,7 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
             <AlertDialogHeader>
               <AlertDialogTitle>Hapus {unit.name}?</AlertDialogTitle>
               <AlertDialogDescription>
-                {members > 0 ? `${members} orang di dalamnya jadi "belum ditaruh". ` : ""}
+                {members > 0 ? `${members} orang dilepas dari kartu ini (tetap di IP/Team lainnya). ` : ""}
                 {subUnits > 0 ? `${subUnits} sub-IP/Team naik ke induknya. ` : ""}
                 Tidak ada akses project yang berubah.
               </AlertDialogDescription>
@@ -626,8 +645,8 @@ function UnitDialog({ title, unit, units, excluded, initial, members = 0, subUni
   );
 }
 
-/** Pilih IP/Team untuk satu orang. Satu orang paling banyak di satu IP/Team. */
-function UnitPicker({ person, units, onPick, onClose }: { person: OrgChartPerson; units: OrgUnit[]; onPick: (orgUnitId: string | null) => void; onClose: () => void }) {
+/** Centang IP/Team untuk satu orang — boleh lebih dari satu. Tiap centang langsung tersimpan. */
+function UnitPicker({ person, units, busy, onToggle, onClose }: { person: OrgChartPerson; units: OrgUnit[]; busy: boolean; onToggle: (unitId: string, on: boolean) => void; onClose: () => void }) {
   const [q, setQ] = useState("");
   const byId = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
   const rows = units.map((u) => ({ id: u.id, u, path: pathOf(u, byId) }))
@@ -640,27 +659,24 @@ function UnitPicker({ person, units, onPick, onClose }: { person: OrgChartPerson
           <div className="text-sm font-bold">IP/Team untuk {label(person)}</div>
           <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">Satu orang hanya di satu IP/Team. Tidak mengubah akses project.</p>
+        <p className="mb-3 text-[11px] text-muted-foreground">Centang semua IP/Team-nya — boleh lebih dari satu. Tidak mengubah akses project.</p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari IP/Team…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
         </div>
         <div className="max-h-80 space-y-0.5 overflow-y-auto">
-          {rows.map((r) => (
-            <button key={r.id} type="button" onClick={() => onPick(r.id)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-accent", r.id === person.orgUnitId && "bg-primary/10 font-semibold text-primary")}>
+          {rows.map((r) => { const on = person.unitIds.includes(r.id); return (
+            <label key={r.id} className={cn("flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-accent", on && "bg-primary/10 font-semibold text-primary", busy && "pointer-events-none opacity-60")}>
+              <input type="checkbox" checked={on} disabled={busy} onChange={(e) => onToggle(r.id, e.target.checked)} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
               <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md bg-[#1e3a5f] text-[9px] font-bold text-white">
                 {r.u.logoUrl ? <img src={r.u.logoUrl} alt="" className="h-full w-full bg-white object-contain" /> : initialsOf(r.u.name)}
               </span>
               <span className="min-w-0 flex-1 truncate">{r.path}</span>
-            </button>
-          ))}
+            </label>
+          ); })}
           {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">{units.length === 0 ? "Belum ada IP/Team. Tambahkan dulu." : "Nggak ada yang cocok."}</div>}
         </div>
-        {person.orgUnitId && (
-          <button type="button" onClick={() => onPick(null)} className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
-            Lepas dari bagan
-          </button>
-        )}
+        <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Selesai</button>
       </div>
     </div>
   );
