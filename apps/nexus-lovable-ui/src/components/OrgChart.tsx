@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download, ImagePlus, Loader2, Maximize2, Minimize2, Plus, Scan, Search, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, ImagePlus, Loader2, Maximize2, Minimize2, Plus, Scan, Search, Trash2, Wand2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { toPng } from "html-to-image";
 import { ApiError, nexusApi, type OrgChartPerson, type OrgUnit } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,11 @@ import {
  * itu saja. Klik kartu = ubah (nama, logo, induk, hapus); klik orang = centang IP/Team-nya.
  * Kanvasnya sama dengan Bagan Approval: scroll/pinch = zoom, seret area kosong = geser.
  */
-type Drag = { kind: "unit"; id: string } | { kind: "person"; id: string; fromUnitId: string | null } | null;
+type Drag = { kind: "person"; id: string; fromUnitId: string | null } | null;
+type Rect = { x: number; y: number; w: number; h: number };
+type AutoLayout = { els: Record<string, Rect>; chips: Record<string, { box: string; dx: number; dy: number; w: number; h: number }>; w: number; h: number };
+const SNAP = 8;
+const snap = (v: number) => Math.max(0, Math.round(v / SNAP) * SNAP);
 
 export function OrgChart() {
   const qc = useQueryClient();
@@ -37,7 +41,7 @@ export function OrgChart() {
   const fail = (title: string) => (e: unknown) => toast.error(title, { description: e instanceof ApiError ? e.message : "Coba lagi." });
 
   const moveUnit = useMutation({
-    mutationFn: ({ unit, parentId }: { unit: OrgUnit; parentId: string | null }) => nexusApi.updateOrgUnit(unit.id, { parentId }),
+    mutationFn: ({ unit, parentId }: { unit: OrgUnit; parentId: string | null }) => nexusApi.updateOrgUnit(unit.id, { parentId, layoutX: null, layoutY: null }),
     onSuccess: (_r, v) => {
       refresh();
       const to = v.parentId ? unitsById.get(v.parentId)?.name : null;
@@ -50,6 +54,21 @@ export function OrgChart() {
     onSuccess: (_r, v) => { refresh(); toast.success(`${v.person.name ?? "Orang"} + ${unitsById.get(v.unitId)?.name ?? "IP/Team"}`); },
     onError: fail("Gagal menambahkan"),
   });
+  const setReportsTo = useMutation({
+    mutationFn: ({ person, unitId, to }: { person: OrgChartPerson; unitId: string; to: string | null }) => nexusApi.setOrgUnitMemberReportsTo(person.userId, unitId, to),
+    onSuccess: (_r, v) => {
+      refresh();
+      const who = v.to ? people.find((p) => p.userId === v.to)?.name : null;
+      toast.success(who ? `${v.person.name ?? "Orang"} di bawah ${who}` : `${v.person.name ?? "Orang"} tidak lagi di bawah siapa pun`);
+    },
+    onError: fail("Gagal memindahkan"),
+  });
+  const resetLayout = useMutation({
+    mutationFn: () => nexusApi.resetOrgChartLayout(),
+    onSuccess: () => { setTemp({}); refresh(); toast.success("Bagan dirapikan otomatis"); },
+    onError: fail("Gagal merapikan"),
+  });
+  const [confirmReset, setConfirmReset] = useState(false);
   const removePerson = useMutation({
     mutationFn: ({ person, unitId }: { person: OrgChartPerson; unitId: string }) => nexusApi.removeOrgUnitMember(person.userId, unitId),
     onSuccess: (_r, v) => { refresh(); toast.success(`${v.person.name ?? "Orang"} dilepas dari ${unitsById.get(v.unitId)?.name ?? "IP/Team"}`); },
@@ -77,7 +96,6 @@ export function OrgChart() {
     while (stack.length) { const c = stack.pop()!; if (!out.has(c.id)) { out.add(c.id); stack.push(...(childUnits.get(c.id) ?? [])); } }
     return out;
   }, [childUnits]);
-  const forbidden = useMemo(() => (drag?.kind === "unit" ? descendantsOf(drag.id).add(drag.id) : new Set<string>()), [drag, descendantsOf]);
 
   // ── Kanvas bebas (sama persis dengan Bagan Approval) ──────────────────────────────────────
   // Semua hook di atas return awal — kalau tidak, jumlah hook berubah saat data selesai dimuat.
@@ -110,24 +128,41 @@ export function OrgChart() {
     return () => ro.disconnect();
   }, [fitView, full, units.length, people.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lead connectors (SVG overlay inside the scaled canvas, so zoom and the PNG export both carry them).
-  const treeRef = useRef<HTMLDivElement>(null);
-  const [leadLines, setLeadLines] = useState<{ d: string[]; w: number; h: number }>({ d: [], w: 0, h: 0 });
+  // Free canvas (owner, 30 Sep 2026). A hidden copy of the automatic tree is laid out by the browser
+  // and measured; every card and people box is then drawn absolutely, at its manual position when it
+  // has one, otherwise at its automatic place relative to its parent. All connectors are SVG.
+  const hiddenRef = useRef<HTMLDivElement>(null);
+  const [auto, setAuto] = useState<AutoLayout>({ els: {}, chips: {}, w: 0, h: 0 });
   useLayoutEffect(() => {
-    const tree = treeRef.current, root = innerRef.current;
-    if (!tree || !root) return;
+    const root = hiddenRef.current;
+    if (!root) return;
     const run = () => {
-      const d = measureLeadLines(root);
-      setLeadLines((prev) => {
-        const next = { d, w: root.scrollWidth, h: root.scrollHeight };
-        return prev.w === next.w && prev.h === next.h && prev.d.join("|") === d.join("|") ? prev : next;
-      });
+      const els: AutoLayout["els"] = {};
+      for (const el of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-el]"))) {
+        const o = offsetIn(el, root);
+        els[el.dataset.ocEl!] = { x: o.x, y: o.y, w: el.offsetWidth, h: el.offsetHeight };
+      }
+      const chips: AutoLayout["chips"] = {};
+      for (const chip of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-chip]"))) {
+        const box = chip.closest<HTMLElement>("[data-oc-el]");
+        if (!box) continue;
+        const c = offsetIn(chip, root), b = offsetIn(box, root);
+        chips[chip.dataset.ocChip!] = { box: box.dataset.ocEl!, dx: c.x - b.x, dy: c.y - b.y, w: chip.offsetWidth, h: chip.offsetHeight };
+      }
+      const next = { els, chips, w: root.offsetWidth, h: root.offsetHeight };
+      setAuto((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     };
     run();
     const ro = new ResizeObserver(run);
-    ro.observe(tree);
+    ro.observe(root);
     return () => ro.disconnect();
   }, [units, people, full]);
+  useLayoutEffect(() => { if (auto.w > 0) fitView(); }, [auto.w > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Positions being dragged right now (not yet saved), and the card a dragged card would land in.
+  const [temp, setTemp] = useState<Record<string, { x: number; y: number }>>({});
+  const [dropCard, setDropCard] = useState<string | null>(null);
+  const elDrag = useRef<{ key: string; pointerId: number; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
 
   const zoomAt = (factor: number, cx: number, cy: number) => {
     const v = viewRef.current;
@@ -159,7 +194,7 @@ export function OrgChart() {
   const gesture = useRef<{ x: number; y: number; vx: number; vy: number; dist: number; s: number } | null>(null);
   const [panning, setPanning] = useState(false);
   const onPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest("[draggable='true'],button,input")) return;
+    if ((e.target as HTMLElement).closest("[draggable='true'],button,input,[data-oc-drag]")) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const p = localPoint(e);
     pointers.current.set(e.pointerId, p);
@@ -223,41 +258,43 @@ export function OrgChart() {
   const unplaced = people.filter((p) => p.unitIds.length === 0);
   const busy = moveUnit.isPending || addPerson.isPending || removePerson.isPending;
 
-  /** Zona jatuh. `unitId` null = puncak (untuk IP/Team) atau "belum ditaruh" (untuk orang). */
+  /** Zona jatuh untuk ORANG. Ke kartu = tambah (atau, kalau sudah di sana, lepas dari "di bawah");
+   *  ke baki = lepas dari kartu asalnya saja. Kartu dipindah dengan seret bebas, bukan di sini. */
   const dropProps = (unitId: string | null, zone: string) => ({
-    onDragOver: (e: React.DragEvent) => {
-      if (!drag) return;
-      if (drag.kind === "unit" && unitId && forbidden.has(unitId)) return;
-      if (drag.kind === "person" && zone === "__top__") return;
-      if (drag.kind === "unit" && zone === "__tray__") return;
-      e.preventDefault(); setOverId(zone);
-    },
+    onDragOver: (e: React.DragEvent) => { if (!drag) return; e.preventDefault(); setOverId(zone); },
     onDragLeave: () => setOverId((c) => (c === zone ? null : c)),
     onDrop: (e: React.DragEvent) => {
       e.preventDefault(); setOverId(null);
       const d = drag; setDrag(null);
       if (!d) return;
-      if (d.kind === "unit") {
-        const unit = unitsById.get(d.id);
-        if (unit && unit.parentId !== unitId && !(unitId && forbidden.has(unitId))) moveUnit.mutate({ unit, parentId: unitId });
-      } else {
-        // Ke kartu = tambah (bukan pindah). Ke baki = lepas dari kartu asalnya saja.
-        const person = people.find((p) => p.userId === d.id);
-        if (!person) return;
-        if (unitId && !person.unitIds.includes(unitId)) addPerson.mutate({ person, unitId });
-        else if (!unitId && d.fromUnitId) removePerson.mutate({ person, unitId: d.fromUnitId });
-      }
+      const person = people.find((p) => p.userId === d.id);
+      if (!person) return;
+      if (unitId && !person.unitIds.includes(unitId)) addPerson.mutate({ person, unitId });
+      else if (unitId && person.reportsTo?.[unitId]) setReportsTo.mutate({ person, unitId, to: null });
+      else if (!unitId && d.fromUnitId) removePerson.mutate({ person, unitId: d.fromUnitId });
     },
   });
+  /** Orang dijatuhkan ke chip BoD/Manager di kartu yang sama = "di bawah" orang itu. */
+  const chipDrop = (unitId: string, leader: OrgChartPerson) => {
+    const zone = `chip:${unitId}:${leader.userId}`;
+    const ok = () => {
+      if (!drag || drag.fromUnitId !== unitId || drag.id === leader.userId) return false;
+      const p = people.find((x) => x.userId === drag.id);
+      return !!p && p.role !== "BOD" && p.role !== "ONE_ABOVE_ALL";
+    };
+    return {
+      over: overId === zone,
+      onDragOver: (e: React.DragEvent) => { if (!ok()) return; e.preventDefault(); e.stopPropagation(); setOverId(zone); },
+      onDragLeave: () => setOverId((c) => (c === zone ? null : c)),
+      onDrop: (e: React.DragEvent) => {
+        if (!ok()) return;
+        e.preventDefault(); e.stopPropagation(); setOverId(null);
+        const p = people.find((x) => x.userId === drag!.id)!; setDrag(null);
+        setReportsTo.mutate({ person: p, unitId, to: leader.userId });
+      },
+    };
+  };
 
-  const unitProps = (u: OrgUnit): UnitCardProps => ({
-    u, busy, count: membersOf.get(u.id)?.length ?? 0,
-    dragging: drag?.kind === "unit" && drag.id === u.id,
-    over: overId === u.id,
-    droppable: !!drag && !(drag.kind === "unit" && forbidden.has(u.id)),
-    onDragStart: () => setDrag({ kind: "unit", id: u.id }), onDragEnd: () => { setDrag(null); setOverId(null); },
-    onClick: () => setEditing(u), drop: dropProps(u.id, u.id),
-  });
   const personProps = (p: OrgChartPerson, fromUnitId: string | null = null): PersonChipProps => ({
     p, busy, dragging: drag?.kind === "person" && drag.id === p.userId && drag.fromUnitId === fromUnitId,
     onDragStart: () => setDrag({ kind: "person", id: p.userId, fromUnitId }), onDragEnd: () => { setDrag(null); setOverId(null); },
@@ -266,6 +303,110 @@ export function OrgChart() {
     extra: p.unitIds.length > 1 ? p.unitIds.length - 1 : 0,
     jobTitle: fromUnitId ? p.titles?.[fromUnitId] ?? null : null,
   });
+
+  // ── Posisi akhir: manual (atau sedang diseret) → pakai itu; kalau tidak, posisi otomatis yang
+  //    digeser ikut induknya (kartu induk untuk kartu; kartunya sendiri untuk kotak orang).
+  const groups = new Map(units.map((u) => [u.id, groupUnit(u, childUnits.get(u.id) ?? [], membersOf.get(u.id) ?? [])]));
+  const manualOf = (key: string): { x: number; y: number } | null => {
+    if (temp[key]) return temp[key];
+    const [t, id, ...rest] = key.split(":");
+    const u = unitsById.get(id);
+    if (!u) return null;
+    if (t === "c") return u.layoutX != null && u.layoutY != null ? { x: u.layoutX, y: u.layoutY } : null;
+    return u.boxLayout?.[rest.join(":")] ?? null;
+  };
+  const anchorOf = (key: string): string | null => {
+    const [t, id] = key.split(":");
+    if (t === "b") return `c:${id}`;
+    const parent = unitsById.get(id)?.parentId;
+    return parent && auto.els[`c:${parent}`] ? `c:${parent}` : null;
+  };
+  const finalCache = new Map<string, { x: number; y: number }>();
+  const finalOf = (key: string, depth = 0): { x: number; y: number } => {
+    const hit = finalCache.get(key);
+    if (hit) return hit;
+    const a = auto.els[key] ?? { x: 0, y: 0, w: 0, h: 0 };
+    let out = manualOf(key);
+    if (!out) {
+      const anc = depth < 64 ? anchorOf(key) : null;
+      if (anc) { const ap = finalOf(anc, depth + 1), aa = auto.els[anc]; out = { x: ap.x + (a.x - aa.x), y: ap.y + (a.y - aa.y) }; }
+      else out = { x: a.x, y: a.y };
+    }
+    finalCache.set(key, out);
+    return out;
+  };
+  const rectOf = (key: string): Rect | null => {
+    const a = auto.els[key];
+    if (!a) return null;
+    const f = finalOf(key);
+    return { x: f.x, y: f.y, w: a.w, h: a.h };
+  };
+  const chipRect = (key: string): Rect | null => {
+    const c = auto.chips[key];
+    if (!c) return null;
+    const b = rectOf(c.box);
+    return b ? { x: b.x + c.dx, y: b.y + c.dy, w: c.w, h: c.h } : null;
+  };
+  const keys = Object.keys(auto.els);
+  const lines = buildLines(units, groups, rectOf, chipRect);
+  const extentW = Math.max(auto.w, ...keys.map((k) => { const r = rectOf(k)!; return r.x + r.w; })) + 32;
+  const extentH = Math.max(auto.h, ...keys.map((k) => { const r = rectOf(k)!; return r.y + r.h; })) + 32;
+
+  const canvasPoint = (e: { clientX: number; clientY: number }) => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    const v = viewRef.current;
+    return { x: (e.clientX - (r?.left ?? 0) - v.x) / v.s, y: (e.clientY - (r?.top ?? 0) - v.y) / v.s };
+  };
+  const startElDrag = (key: string) => (e: React.PointerEvent) => {
+    if (e.button !== 0 || busy) return;
+    if ((e.target as HTMLElement).closest("[draggable='true'],input,select")) return; // a person chip: HTML5 drag
+    if (key.startsWith("b:") && (e.target as HTMLElement).closest("button")) return; // × on a chip
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const f = finalOf(key);
+    elDrag.current = { key, pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, ox: f.x, oy: f.y, moved: false };
+  };
+  const moveElDrag = (e: React.PointerEvent) => {
+    const d = elDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const s = viewRef.current.s;
+    const dx = (e.clientX - d.sx) / s, dy = (e.clientY - d.sy) / s;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    d.moved = true;
+    setTemp((t) => ({ ...t, [d.key]: { x: snap(d.ox + dx), y: snap(d.oy + dy) } }));
+    if (d.key.startsWith("c:")) {
+      const id = d.key.slice(2);
+      const banned = descendantsOf(id).add(id);
+      const pt = canvasPoint(e);
+      const hit = units.find((u) => {
+        if (banned.has(u.id)) return false;
+        const r = rectOf(`c:${u.id}`);
+        return !!r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+      });
+      setDropCard(hit?.id ?? null);
+    }
+  };
+  const endElDrag = (e: React.PointerEvent) => {
+    const d = elDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    elDrag.current = null;
+    const target = dropCard;
+    setDropCard(null);
+    const [t, id, ...rest] = d.key.split(":");
+    if (!d.moved) { if (t === "c") { const u = unitsById.get(id); if (u) setEditing(u); } return; }
+    const pos = temp[d.key] ?? { x: snap(d.ox), y: snap(d.oy) };
+    const clear = () => setTemp((m) => { const n = { ...m }; delete n[d.key]; return n; });
+    const u = unitsById.get(id);
+    if (!u) { clear(); return; }
+    if (t === "c" && target && target !== u.parentId) { clear(); moveUnit.mutate({ unit: u, parentId: target }); return; }
+    const save = t === "c" ? nexusApi.updateOrgUnit(id, { layoutX: pos.x, layoutY: pos.y }) : nexusApi.updateOrgUnit(id, { boxLayout: { [rest.join(":")]: pos } });
+    save
+      .then(() => qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] }))
+      .then(clear)
+      .catch((err) => { clear(); fail("Gagal menyimpan posisi")(err); });
+  };
+  const dragHandlers = (key: string) => ({ "data-oc-drag": "", onPointerDown: startElDrag(key), onPointerMove: moveElDrag, onPointerUp: endElDrag, onPointerCancel: endElDrag });
+
   const placing = placingId ? people.find((p) => p.userId === placingId) ?? null : null;
 
   return (
@@ -291,7 +432,7 @@ export function OrgChart() {
         <Stat n={chart.data.stats.units} label="IP/Team" />
         <Stat n={chart.data.stats.placed} of={chart.data.stats.people} label="orang sudah ditaruh" />
         <Stat n={unplaced.length} label="belum ditaruh" tone={unplaced.length > 0 ? "warn" : "ok"} />
-        <span className="text-muted-foreground">Seret kartu ke kartu lain, atau klik kartunya.</span>
+        <span className="text-muted-foreground">Seret kartu atau kotak orang ke mana saja; seret orang ke chip atasannya.</span>
         <button type="button" onClick={() => setAdding({ parentId: null })} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90">
           <Plus className="h-3.5 w-3.5" /> Tambah IP/Team
         </button>
@@ -312,13 +453,16 @@ export function OrgChart() {
           <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border")}>
             <div className={cn("flex items-center gap-2 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
               <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                {full ? "Bagan IP & Divisi" : "IP, divisi & team"} <span className="normal-case tracking-normal text-muted-foreground/70">· scroll/pinch = zoom · seret area kosong = geser · klik dua kali = pas layar</span>
+                {full ? "Bagan IP & Divisi" : "IP, divisi & team"} <span className="normal-case tracking-normal text-muted-foreground/70">· seret kartu/kotak ke mana saja · jatuhkan kartu di atas kartu lain = pindah induk · scroll/pinch = zoom</span>
               </div>
               <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perkecil"><ZoomOut className="h-3.5 w-3.5" /></button>
                 <span className="w-10 text-center tabular-nums">{zoomLabel}%</span>
                 <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perbesar"><ZoomIn className="h-3.5 w-3.5" /></button>
                 <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> Pas layar</button>
+                <button type="button" onClick={() => setConfirmReset(true)} disabled={resetLayout.isPending} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title="Hapus semua posisi manual; bagan disusun ulang otomatis">
+                  {resetLayout.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Rapikan otomatis
+                </button>
                 <button type="button" onClick={exportPng} disabled={exporting} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title="Unduh bagan sebagai PNG tajam (2x), apa pun zoom di layar">
                   {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PNG
                 </button>
@@ -327,11 +471,6 @@ export function OrgChart() {
                 </button>
               </div>
             </div>
-            {drag?.kind === "unit" && (
-              <div {...dropProps(null, "__top__")} className={cn("mx-5 mb-2 rounded-lg border border-dashed px-3 py-2 text-center text-[11px] font-semibold transition", overId === "__top__" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground")}>
-                Jatuhkan di sini untuk menjadikannya puncak (tanpa induk)
-              </div>
-            )}
             <div
               ref={wrapRef}
               onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
@@ -340,14 +479,37 @@ export function OrgChart() {
               style={{ touchAction: "none" }}
             >
               <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transformOrigin: "0 0", willChange: "transform" }}>
-                <div ref={treeRef} className="flex items-start gap-10 p-4">
-                  {roots.map((u) => <UnitNode key={u.id} u={u} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />)}
+                {/* Automatic layout, measured but never seen. */}
+                <div ref={hiddenRef} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-start gap-10 p-4">
+                  {roots.map((u) => <AutoNode key={u.id} u={u} groups={groups} personProps={personProps} count={(id) => membersOf.get(id)?.length ?? 0} />)}
                 </div>
-                {leadLines.d.length > 0 && (
-                  <svg className="pointer-events-none absolute left-0 top-0" width={leadLines.w} height={leadLines.h} aria-hidden>
-                    {leadLines.d.map((d, i) => <path key={i} d={d} fill="none" stroke="#c7cfdb" strokeWidth={2} />)}
-                  </svg>
-                )}
+                <div style={{ width: extentW, height: extentH }} />
+                <svg className="pointer-events-none absolute left-0 top-0" width={extentW} height={extentH} aria-hidden>
+                  {lines.map((d, i) => <path key={i} d={d} fill="none" stroke="#c7cfdb" strokeWidth={2} strokeLinejoin="round" />)}
+                </svg>
+                {keys.map((key) => {
+                  const r = rectOf(key)!;
+                  const [t, id, ...rest] = key.split(":");
+                  const u = unitsById.get(id);
+                  if (!u) return null;
+                  const dragging = !!temp[key] && elDrag.current?.key === key;
+                  const style = { left: r.x, top: r.y, width: r.w, zIndex: dragging ? 20 : t === "c" ? 2 : 1 };
+                  if (t === "c") {
+                    return (
+                      <div key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2")} style={style}>
+                        <UnitCard u={u} busy={busy} count={membersOf.get(u.id)?.length ?? 0} dragging={dragging} onKeyOpen={() => setEditing(u)} />
+                      </div>
+                    );
+                  }
+                  const g = groups.get(id)!;
+                  const kind = rest.join(":");
+                  const list = boxPeople(g, kind);
+                  return (
+                    <div key={key} {...dragHandlers(key)} className="absolute cursor-grab touch-none active:cursor-grabbing" style={style}>
+                      <PeopleBox unitId={id} kind={kind} list={list} title={boxTitle(g, kind, people)} personProps={personProps} chipDrop={chipDrop} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </section>
@@ -396,6 +558,18 @@ export function OrgChart() {
           onSaved={() => { setEditing(null); refresh(); }}
         />
       )}
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rapikan otomatis?</AlertDialogTitle>
+            <AlertDialogDescription>Semua posisi yang sudah digeser (kartu dan kotak orang) dihapus, dan bagan disusun ulang otomatis. Induk, orang, jabatan, dan pemimpin tidak berubah.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={() => resetLayout.mutate()}>Rapikan</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {placing && (
         <UnitPicker
           person={placing}
@@ -427,81 +601,147 @@ function Stat({ n, of, label, tone }: { n: number; of?: number; label: string; t
   );
 }
 
-type DropProps = { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void };
-type UnitCardProps = {
-  u: OrgUnit; busy: boolean; count: number; dragging: boolean; over: boolean; droppable: boolean;
-  onDragStart: () => void; onDragEnd: () => void; onClick: () => void; drop: DropProps;
-};
 type PersonChipProps = { p: OrgChartPerson; busy: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onClick: () => void; onRemove?: () => void; extra: number; jobTitle?: string | null };
 
-/** Satu IP/Team beserta turunannya. Orang-orangnya ditumpuk dalam satu kotak, sub-IP/Team berjejer.
- *  Di tingkat modul supaya React tidak me-mount ulang pohon setiap render. */
 const LEAD_ROLES = new Set(["ONE_ABOVE_ALL", "BOD", "MANAGER"]);
 
-function UnitNode({ u, childUnits, membersOf, unitProps, personProps }: {
-  u: OrgUnit; childUnits: Map<string, OrgUnit[]>; membersOf: Map<string, OrgChartPerson[]>;
-  unitProps: (u: OrgUnit) => UnitCardProps; personProps: (p: OrgChartPerson, fromUnitId?: string | null) => PersonChipProps;
-}) {
-  const kids = childUnits.get(u.id) ?? [];
-  const all = membersOf.get(u.id) ?? [];
-  // Leaders (BoD, One Above All, Manager) hang straight under the card; staff are one branch beside
-  // the sub-units, in the middle of the row (owner, 30 Sep 2026: the C-suite and Agency's Gerro/Riri
-  // directly under their card, Mey level with Geneziz and Z Foundation).
-  // BoD (and One Above All) and managers are two separate boxes, BoD first (owner, 30 Sep 2026).
+/** How one card's people and sub-units are arranged: BoD box, Manager box, staff box, one box per
+ *  leader for the people who sit under them ("di bawah"), sub-units led by one of the card's leaders
+ *  (first, in the order of their leaders) and the rest. */
+type Group = { bods: OrgChartPerson[]; managers: OrgChartPerson[]; staff: OrgChartPerson[]; rt: Array<[string, OrgChartPerson[]]>; led: OrgUnit[]; free: OrgUnit[]; leaderIdx: Map<string, number> };
+function groupUnit(u: OrgUnit, kids: OrgUnit[], all: OrgChartPerson[]): Group {
   const bods = all.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL");
-  const managers = all.filter((p) => p.role === "MANAGER");
-  const members = all.filter((p) => !LEAD_ROLES.has(p.role));
-  // "Dipimpin oleh" (owner, 30 Sep 2026): every sub-unit stays in the ordinary row below the boxes;
-  // the ones led by someone in THIS card's BoD/Manager boxes come first, in the order of their leaders,
-  // and their connector is drawn by the chart's SVG overlay from that person's chip (LeadLines). A lead
-  // who is no longer in this card is simply not drawn.
-  const leaders = [...bods, ...managers];
-  const leaderIdx = new Map(leaders.map((p, i) => [p.userId, i]));
+  const allManagers = all.filter((p) => p.role === "MANAGER");
+  const leaderIdx = new Map([...bods, ...allManagers].map((p, i) => [p.userId, i]));
+  const rtOf = (p: OrgChartPerson) => {
+    const to = p.reportsTo?.[u.id];
+    return to && to !== p.userId && leaderIdx.has(to) && p.role !== "BOD" && p.role !== "ONE_ABOVE_ALL" ? to : null;
+  };
+  const rtMap = new Map<string, OrgChartPerson[]>();
+  for (const p of all) { const to = rtOf(p); if (to) rtMap.set(to, [...(rtMap.get(to) ?? []), p]); }
+  const rt = [...rtMap.entries()].sort((a, b) => leaderIdx.get(a[0])! - leaderIdx.get(b[0])!);
   const isLed = (k: OrgUnit) => !!k.leadUserId && leaderIdx.has(k.leadUserId);
   const led = kids.filter(isLed).sort((a, b) => leaderIdx.get(a.leadUserId!)! - leaderIdx.get(b.leadUserId!)! || byPos(a, b));
-  const free = kids.filter((k) => !isLed(k));
-  const ordered = [...led, ...free];
-  const branches: Array<OrgUnit | "people"> = [...ordered];
-  if (members.length > 0) branches.splice(Math.floor(ordered.length / 2), 0, "people");
-  const custom = led.length > 0;
+  return {
+    bods, managers: allManagers.filter((p) => !rtOf(p)), staff: all.filter((p) => !LEAD_ROLES.has(p.role) && !rtOf(p)),
+    rt, led, free: kids.filter((k) => !isLed(k)), leaderIdx,
+  };
+}
+function boxPeople(g: Group, kind: string): OrgChartPerson[] {
+  if (kind === "bod") return g.bods;
+  if (kind === "manager") return g.managers;
+  if (kind === "staff") return g.staff;
+  return g.rt.find(([id]) => `rt:${id}` === kind)?.[1] ?? [];
+}
+function boxTitle(g: Group, kind: string, people: OrgChartPerson[]): string {
+  const n = boxPeople(g, kind).length;
+  if (kind === "bod") return `BoD · ${n}`;
+  if (kind === "manager") return `Manager · ${n}`;
+  if (kind === "staff") return `${n} orang`;
+  const lead = people.find((p) => `rt:${p.userId}` === kind);
+  return `Di bawah ${(lead?.name ?? "?").split(" ")[0]} · ${n}`;
+}
+
+/** One card and its whole subtree in the ordinary top-down layout — only to be MEASURED (hidden).
+ *  The visible chart draws the same elements absolutely (see OrgChart). */
+function AutoNode({ u, groups, personProps, count }: {
+  u: OrgUnit; groups: Map<string, Group>; personProps: (p: OrgChartPerson, fromUnitId?: string | null) => PersonChipProps; count: (id: string) => number;
+}) {
+  const g = groups.get(u.id)!;
+  type Item = { type: "unit"; u: OrgUnit } | { type: "box"; kind: string };
+  const row: Item[] = [...g.led.map((k): Item => ({ type: "unit", u: k })), ...g.rt.map(([id]): Item => ({ type: "box", kind: `rt:${id}` })), ...g.free.map((k): Item => ({ type: "unit", u: k }))];
+  if (g.staff.length > 0) row.splice(Math.floor(row.length / 2), 0, { type: "box", kind: "staff" });
+  const box = (kind: string) => (
+    <div data-oc-el={`b:${u.id}:${kind}`}>
+      <PeopleBox unitId={u.id} kind={kind} list={boxPeople(g, kind)} title={boxTitle(g, kind, [])} personProps={personProps} />
+    </div>
+  );
   return (
     <div className="oc-node">
-      <UnitCard {...unitProps(u)} />
-      {([["BoD", bods], ["Manager", managers]] as const).map(([label, list]) =>
-        list.length > 0 ? (
-          <div key={label} className="oc-own">
-            <div className="oc-leaves">
-              <div className="oc-leaves-label">{label} · {list.length}</div>
-              {/* Side by side, like a C-suite row (owner, 30 Sep 2026). */}
-              <div className="flex gap-1.5">
-                {list.map((p) => <div key={p.userId} data-oc-chip={`${u.id}:${p.userId}`}><PersonChip {...personProps(p, u.id)} /></div>)}
-              </div>
+      <div data-oc-el={`c:${u.id}`}><UnitCard u={u} busy={false} count={count(u.id)} dragging={false} /></div>
+      {g.bods.length > 0 && <div className="oc-own">{box("bod")}</div>}
+      {g.managers.length > 0 && <div className="oc-own">{box("manager")}</div>}
+      {row.length > 0 && (
+        <div className="oc-kids">
+          {row.map((it) => (
+            <div key={it.type === "unit" ? it.u.id : it.kind} className="oc-kid">
+              {it.type === "unit" ? <AutoNode u={it.u} groups={groups} personProps={personProps} count={count} /> : box(it.kind)}
             </div>
-          </div>
-        ) : null,
-      )}
-      {/* The unit's own staff are one branch in the MIDDLE of the row of sub-units. A row with a led
-          sub-unit draws all its connectors in SVG (oc-kids-svg), so the CSS bar cannot run into it. */}
-      {branches.length > 0 && (
-        <div className={cn("oc-kids", custom && "oc-kids-svg")} data-oc-row={custom ? u.id : undefined}>
-          {branches.map((b) =>
-            b === "people" ? (
-              <div key="people" className="oc-kid" data-oc-lead="">
-                <div className="oc-leaves">
-                  <div className="oc-leaves-label">{members.length} orang</div>
-                  {members.map((p) => <PersonChip key={p.userId} {...personProps(p, u.id)} />)}
-                </div>
-              </div>
-            ) : (
-              <div key={b.id} className="oc-kid" data-oc-lead={isLed(b) ? b.leadUserId! : ""}>
-                <UnitNode u={b} childUnits={childUnits} membersOf={membersOf} unitProps={unitProps} personProps={personProps} />
-              </div>
-            ),
-          )}
+          ))}
         </div>
       )}
     </div>
   );
+}
+
+/** A people box: BoD / Manager chips side by side, staff and "di bawah" boxes stacked. Leaders' chips
+ *  carry data-oc-chip (for the connectors) and, on the visible chart, take a person dropped on them. */
+function PeopleBox({ unitId, kind, list, title, personProps, chipDrop }: {
+  unitId: string; kind: string; list: OrgChartPerson[]; title: string;
+  personProps: (p: OrgChartPerson, fromUnitId?: string | null) => PersonChipProps;
+  chipDrop?: (unitId: string, leader: OrgChartPerson) => { over: boolean; onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void };
+}) {
+  const row = kind === "bod" || kind === "manager";
+  return (
+    <div className="oc-leaves">
+      <div className="oc-leaves-label">{title}</div>
+      <div className={cn("flex gap-1.5", row ? "flex-row" : "flex-col")}>
+        {list.map((p) => {
+          const leader = LEAD_ROLES.has(p.role);
+          const drop = leader && chipDrop ? chipDrop(unitId, p) : null;
+          return (
+            <div key={p.userId} data-oc-chip={leader ? `${unitId}:${p.userId}` : undefined}
+              onDragOver={drop?.onDragOver} onDragLeave={drop?.onDragLeave} onDrop={drop?.onDrop}
+              className={cn("rounded-lg", drop?.over && "ring-2 ring-primary ring-offset-1")}>
+              <PersonChip {...personProps(p, unitId)} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Right-angled connector: down from (sx,sy) to `my`, across, down to (tx,ty). */
+const elbow = (sx: number, sy: number, tx: number, ty: number, my: number) => `M${sx} ${sy} V${my} H${tx} V${ty}`;
+
+/** Every connector from ACTUAL positions: card → BoD box → Manager box; the last of those → staff box
+ *  and unled sub-units (one shared crossbar); a leader's chip → the unit they lead and the box of the
+ *  people under them (one height per elbow so they never share a line). */
+function buildLines(units: OrgUnit[], groups: Map<string, Group>, rectOf: (k: string) => Rect | null, chipRect: (k: string) => Rect | null): string[] {
+  const out: string[] = [];
+  const bottom = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y + r.h });
+  const top = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y });
+  const link = (a: Rect, b: Rect) => { const s = bottom(a), t = top(b); out.push(elbow(s.x, s.y, t.x, t.y, t.y > s.y + 4 ? (s.y + t.y) / 2 : s.y + 12)); };
+  for (const u of units) {
+    const card = rectOf(`c:${u.id}`);
+    const g = groups.get(u.id);
+    if (!card || !g) continue;
+    let src = card;
+    for (const kind of ["bod", "manager"]) {
+      const r = rectOf(`b:${u.id}:${kind}`);
+      if (r) { link(src, r); src = r; }
+    }
+    const targets = [...(g.staff.length ? [rectOf(`b:${u.id}:staff`)] : []), ...g.free.map((k) => rectOf(`c:${k.id}`))].filter((r): r is Rect => !!r);
+    if (targets.length > 0) {
+      const s = bottom(src);
+      const below = targets.filter((r) => r.y > s.y + 8);
+      const my = below.length ? s.y + Math.min(22, (Math.min(...below.map((r) => r.y)) - s.y) / 2) : s.y + 12;
+      for (const r of targets) { const t = top(r); out.push(elbow(s.x, s.y, t.x, t.y, r.y > s.y + 8 ? my : (s.y + t.y) / 2)); }
+    }
+    const fromChip: Array<[string, Rect | null]> = [
+      ...g.led.map((k): [string, Rect | null] => [k.leadUserId!, rectOf(`c:${k.id}`)]),
+      ...g.rt.map(([id]): [string, Rect | null] => [id, rectOf(`b:${u.id}:rt:${id}`)]),
+    ];
+    fromChip.forEach(([leaderId, r], rank) => {
+      const chip = chipRect(`${u.id}:${leaderId}`);
+      if (!chip || !r) return;
+      const s = bottom(chip), t = top(r);
+      const my = t.y > s.y + 16 ? Math.min(t.y - 6, s.y + 10 + (rank % 4) * 5) : (s.y + t.y) / 2;
+      out.push(elbow(s.x, s.y, t.x, t.y, my));
+    });
+  }
+  return out;
 }
 
 /** Position of `el` inside `root` in unscaled layout pixels (offsets, not getBoundingClientRect — the
@@ -511,44 +751,6 @@ function offsetIn(el: HTMLElement, root: HTMLElement): { x: number; y: number } 
   let cur: HTMLElement | null = el;
   while (cur && cur !== root) { x += cur.offsetLeft; y += cur.offsetTop; cur = cur.offsetParent as HTMLElement | null; }
   return { x, y };
-}
-
-/** SVG paths for every row that contains a led sub-unit (see UnitNode): the normal connector for the
- *  unled branches (stub, bar, drops), and an elbow from each leader's chip to the unit they lead. */
-function measureLeadLines(root: HTMLElement): string[] {
-  const out: string[] = [];
-  for (const row of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-row]"))) {
-    const parentId = row.dataset.ocRow!;
-    const r = offsetIn(row, root);
-    const cx = r.x + row.offsetWidth / 2;
-    const barY = r.y + 22;
-    const kids = Array.from(row.children) as HTMLElement[];
-    const plain: number[] = [];
-    let ledRank = 0;
-    for (const kid of kids) {
-      const k = offsetIn(kid, root);
-      const kx = k.x + kid.offsetWidth / 2;
-      const top = k.y + 22;
-      const lead = kid.dataset.ocLead;
-      const chip = lead ? root.querySelector<HTMLElement>(`[data-oc-chip="${parentId}:${lead}"]`) : null;
-      if (lead && chip) {
-        const c = offsetIn(chip, root);
-        const sx = c.x + chip.offsetWidth / 2, sy = c.y + chip.offsetHeight;
-        // One height per elbow, the leftmost leader highest, so two elbows never share a line.
-        const mid = r.y + Math.min(18, 5 + ledRank * 5);
-        ledRank += 1;
-        out.push(`M${sx} ${sy} V${mid} H${kx} V${top}`);
-      } else {
-        plain.push(kx);
-        out.push(`M${kx} ${barY} V${top}`);
-      }
-    }
-    if (plain.length > 0) {
-      out.push(`M${cx} ${r.y} V${barY}`);
-      out.push(`M${Math.min(cx, ...plain)} ${barY} H${Math.max(cx, ...plain)}`);
-    }
-  }
-  return out;
 }
 
 /**
@@ -598,19 +800,17 @@ function UnitLogo({ u, size }: { u: OrgUnit; size: number }) {
   return <span style={{ width: size, height: size }} className="grid shrink-0 place-items-center rounded-lg bg-white/15 text-[11px] font-bold">{initialsOf(u.name)}</span>;
 }
 
-/** Kartu IP/Team: logo + nama + jumlah orang. Zona jatuhnya kartu itu sendiri. */
-function UnitCard({ u, busy, count, dragging, over, droppable, onDragStart, onDragEnd, onClick, drop }: UnitCardProps) {
+/** Kartu IP/Team: logo + nama + jumlah orang. Diseret oleh kanvas (bebas); klik = ubah. */
+function UnitCard({ u, busy, count, dragging, onKeyOpen }: { u: OrgUnit; busy: boolean; count: number; dragging: boolean; onKeyOpen?: () => void }) {
   return (
-    <div {...drop} className={cn("relative rounded-xl transition", over && "ring-2 ring-primary ring-offset-2", droppable && !over && "ring-1 ring-dashed ring-primary/40")}>
+    <div className="relative rounded-xl">
       <button
         type="button"
-        draggable={!busy}
-        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", u.id); onDragStart(); }}
-        onDragEnd={onDragEnd}
-        onClick={onClick}
+        // A pointer click is handled by the canvas (it tells a click from a drag); a keyboard one is here.
+        onClick={(e) => { if (e.detail === 0) onKeyOpen?.(); }}
         disabled={busy}
-        title="Klik untuk mengubah, atau seret ke IP/Team induknya"
-        className={cn("flex w-[180px] cursor-grab items-center gap-2.5 rounded-lg bg-[#1e3a5f] px-2.5 py-2 text-left text-white shadow-[0_2px_0_rgba(0,0,0,.2)] transition active:cursor-grabbing disabled:opacity-50", dragging && "opacity-40")}
+        title="Klik untuk mengubah · seret untuk memindah · jatuhkan di atas kartu lain untuk pindah induk"
+        className={cn("pointer-events-none flex w-[180px] items-center gap-2.5 rounded-lg bg-[#1e3a5f] px-2.5 py-2 text-left text-white shadow-[0_2px_0_rgba(0,0,0,.2)] transition disabled:opacity-50", dragging && "opacity-80 shadow-lg")}
       >
         {/* Only an IP carries a logo; a division is just its name (owner, 30 Sep 2026). */}
         {u.kind === "IP" && <UnitLogo u={u} size={34} />}
@@ -790,9 +990,9 @@ function UnitDialog({ title, unit, units, excluded, initial, people = [], member
 
         {unit && cardPeople.length > 0 && (
           <div className="mb-4">
-            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Jabatan di kartu ini</div>
-            <div className="max-h-48 space-y-1 overflow-y-auto">
-              {cardPeople.map((p) => <TitleRow key={p.userId} person={p} unitId={unit.id} />)}
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Jabatan & atasan di kartu ini</div>
+            <div className="max-h-56 space-y-1 overflow-y-auto">
+              {cardPeople.map((p) => <TitleRow key={p.userId} person={p} unitId={unit.id} leaders={cardPeople.filter((x) => x.userId !== p.userId && LEAD_ROLES.has(x.role))} />)}
             </div>
           </div>
         )}
@@ -875,7 +1075,7 @@ function UnitPicker({ person, units, busy, onToggle, onClose }: { person: OrgCha
 }
 
 /** One person's title on one card. Saved on blur or Enter; empty = no title. */
-function TitleRow({ person, unitId }: { person: OrgChartPerson; unitId: string }) {
+function TitleRow({ person, unitId, leaders }: { person: OrgChartPerson; unitId: string; leaders: OrgChartPerson[] }) {
   const qc = useQueryClient();
   const initial = person.titles?.[unitId] ?? "";
   const [v, setV] = useState(initial);
@@ -892,12 +1092,28 @@ function TitleRow({ person, unitId }: { person: OrgChartPerson; unitId: string }
       setV(initial);
     } finally { setSaving(false); }
   };
+  const saveReportsTo = async (to: string | null) => {
+    setSaving(true);
+    try {
+      await nexusApi.setOrgUnitMemberReportsTo(person.userId, unitId, to);
+      qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] });
+    } catch (e) {
+      toast.error("Gagal menyimpan atasan", { description: e instanceof ApiError ? e.message : "Coba lagi." });
+    } finally { setSaving(false); }
+  };
   return (
     <div className="flex items-center gap-2">
       <span className="min-w-0 flex-1 truncate text-xs">{label(person)} <span className="text-muted-foreground">· {ROLE_SUB[person.role] ?? person.role}</span></span>
       <input value={v} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         maxLength={40} placeholder="Jabatan" disabled={saving}
-        className="w-28 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-60" />
+        className="w-24 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-60" />
+      {person.role !== "BOD" && person.role !== "ONE_ABOVE_ALL" && leaders.length > 0 && (
+        <select value={person.reportsTo?.[unitId] ?? ""} disabled={saving} onChange={(e) => saveReportsTo(e.target.value || null)} title="Di bawah siapa"
+          className="w-28 rounded-md border border-border bg-background px-1.5 py-1 text-xs outline-none focus:border-primary disabled:opacity-60">
+          <option value="">— di bawah —</option>
+          {leaders.map((l) => <option key={l.userId} value={l.userId}>{label(l)}</option>)}
+        </select>
+      )}
     </div>
   );
 }

@@ -15,7 +15,7 @@ export async function GET() {
     const [units, rows, links] = await Promise.all([
       prisma.orgUnit.findMany({
         where: { workspaceId: ORG_CHART_WORKSPACE },
-        select: { id: true, name: true, kind: true, logoUrl: true, parentId: true, position: true, leadUserId: true },
+        select: { id: true, name: true, kind: true, logoUrl: true, parentId: true, position: true, leadUserId: true, layoutX: true, layoutY: true, boxLayout: true },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       }),
       prisma.workspaceMember.findMany({
@@ -23,21 +23,25 @@ export async function GET() {
         select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
         orderBy: { user: { name: "asc" } },
       }),
-      prisma.orgUnitMember.findMany({ where: { workspaceId: ORG_CHART_WORKSPACE }, select: { unitId: true, userId: true, title: true }, orderBy: { createdAt: "asc" } }),
+      prisma.orgUnitMember.findMany({ where: { workspaceId: ORG_CHART_WORKSPACE }, select: { unitId: true, userId: true, title: true, reportsToUserId: true }, orderBy: { createdAt: "asc" } }),
     ])
     const ids = new Set(units.map((u) => u.id))
     const unitsOf = new Map<string, string[]>()
     const titlesOf = new Map<string, Record<string, string>>()
+    const reportsOf = new Map<string, Record<string, string>>()
     for (const l of links) {
       if (!ids.has(l.unitId)) continue
       unitsOf.set(l.userId, [...(unitsOf.get(l.userId) ?? []), l.unitId])
       if (l.title) titlesOf.set(l.userId, { ...(titlesOf.get(l.userId) ?? {}), [l.unitId]: l.title })
+      if (l.reportsToUserId) reportsOf.set(l.userId, { ...(reportsOf.get(l.userId) ?? {}), [l.unitId]: l.reportsToUserId })
     }
     const people = rows.map((r) => ({
       userId: r.user.id, name: r.user.name, email: r.user.email, avatar: r.user.avatar, role: r.role,
       unitIds: unitsOf.get(r.user.id) ?? [],
       /** Jabatan per kartu: { [unitId]: "CEO" }. */
       titles: titlesOf.get(r.user.id) ?? {},
+      /** Di bawah siapa per kartu: { [unitId]: leaderUserId }. */
+      reportsTo: reportsOf.get(r.user.id) ?? {},
     }))
     return NextResponse.json({
       workspaceId: ORG_CHART_WORKSPACE,
