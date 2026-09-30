@@ -119,10 +119,10 @@ async function classifiedPointsOf(recordId: string, offices: OfficeGeo[]) {
     orderBy: { at: "asc" },
     select: { lat: true, lng: true, accuracy: true, at: true, event: true, inside: true },
   })
-  const classified: (ClassifiedPoint & { lat: number; lng: number; accuracy: number | null; inside: boolean })[] = rows.map((r) => ({
-    ...r,
-    cls: classifyPoint(r, offices).cls,
-  }))
+  const classified: (ClassifiedPoint & { lat: number; lng: number; accuracy: number | null; inside: boolean })[] = rows.map((r) => {
+    const c = classifyPoint(r, offices)
+    return { ...r, cls: c.cls, distanceMeters: c.distanceMeters }
+  })
   return classified
 }
 

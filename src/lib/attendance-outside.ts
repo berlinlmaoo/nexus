@@ -92,7 +92,15 @@ export function classifyPoint(
   return { cls: "ambiguous", distanceMeters: dist }
 }
 
-export type ClassifiedPoint = { at: Date; cls: PointClass; event?: string | null }
+export type ClassifiedPoint = { at: Date; cls: PointClass; event?: string | null; distanceMeters?: number | null }
+
+/**
+ * An "exit" this close to an office proves the phone was inside one until that moment, even when the
+ * matching "enter" never reached us. iOS 0.1.6 can lose the enter: a region entry with no fresh fix
+ * waits for one, and when the next fix already says "outside" only the exit is sent (Azra, 30 Sep
+ * 2026: 8 minutes inside TAN Group HQ, clock kept running from the office she left before).
+ */
+export const EXIT_PROVES_INSIDE_M = 400
 export type OutsideSpan = { from: Date; to: Date | null }
 
 /**
@@ -120,7 +128,14 @@ export function outsideSpans(points: ClassifiedPoint[]): OutsideSpan[] {
       pending = null
       continue
     }
-    if (out) continue
+    if (out) {
+      if (p.event === "exit" && typeof p.distanceMeters === "number" && p.distanceMeters <= EXIT_PROVES_INSIDE_M) {
+        // Inside an office until now (see EXIT_PROVES_INSIDE_M): the episode ends and a new one starts.
+        spans[spans.length - 1].to = p.at
+        spans.push({ from: p.at, to: null })
+      }
+      continue
+    }
     if (p.cls === "outside") {
       if (p.event === "exit") {
         spans.push({ from: p.at, to: null })

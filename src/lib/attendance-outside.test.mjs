@@ -471,4 +471,24 @@ t("check-in client", () => {
   })
 }
 
+t("an exit near an office while already outside restarts the episode (lost enter)", () => {
+  const pts = [
+    { at: at(10), cls: "outside", event: "exit", distanceMeters: 60 },
+    { at: at(20), cls: "outside", distanceMeters: 3000 },
+    { at: at(40), cls: "outside", event: "exit", distanceMeters: 165 },
+    { at: at(50), cls: "outside", distanceMeters: 900 },
+  ]
+  const spans = M.outsideSpans(pts)
+  assert.equal(spans.length, 2)
+  assert.equal(spans[0].to.getTime(), at(40).getTime())
+  assert.equal(M.currentOutsideSince(pts).getTime(), at(40).getTime())
+})
+t("an exit far from every office does not restart the clock", () => {
+  const pts = [
+    { at: at(10), cls: "outside", event: "exit", distanceMeters: 60 },
+    { at: at(40), cls: "outside", event: "exit", distanceMeters: 5000 },
+  ]
+  assert.equal(M.currentOutsideSince(pts).getTime(), at(10).getTime())
+})
+
 console.log(`${passed} passed${process.exitCode ? ", some FAILED" : ""}`)
