@@ -47,3 +47,25 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Gagal melepas." }, { status: 500 })
   }
 }
+
+/** PATCH { userId, unitId, title } — the person's title on that card ("CEO"). Empty = none. */
+export async function PATCH(req: NextRequest) {
+  const g = await orgChartGuard("write")
+  if (g instanceof NextResponse) return g
+  try {
+    const body = await req.json().catch(() => ({}))
+    const userId = typeof body?.userId === "string" ? body.userId : ""
+    const unitId = typeof body?.unitId === "string" ? body.unitId : ""
+    if (!userId || !unitId) return NextResponse.json({ error: "userId dan unitId wajib ada." }, { status: 400 })
+    if (body?.title !== null && typeof body?.title !== "string") return NextResponse.json({ error: "title harus teks atau null." }, { status: 400 })
+    const raw = typeof body.title === "string" ? body.title.replace(/[\r\n\t]+/g, " ").trim() : ""
+    if (raw.length > 40) return NextResponse.json({ error: "Jabatan maksimal 40 karakter." }, { status: 400 })
+    if (!(await findUnit(unitId))) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
+    const r = await prisma.orgUnitMember.updateMany({ where: { unitId, userId, workspaceId: ORG_CHART_WORKSPACE }, data: { title: raw || null } })
+    if (r.count === 0) return NextResponse.json({ error: "Orang ini belum ada di kartu itu." }, { status: 404 })
+    return NextResponse.json({ ok: true, userId, unitId, title: raw || null })
+  } catch (error) {
+    console.error("[admin/org-chart] PATCH member", error)
+    return NextResponse.json({ error: "Gagal menyimpan jabatan." }, { status: 500 })
+  }
+}
