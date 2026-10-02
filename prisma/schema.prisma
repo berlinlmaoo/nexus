@@ -3048,7 +3048,8 @@ model OrgUnit {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
-  /// "IP" (a brand, carries a logo) or "DIVISION" (a function inside one, no logo). Owner, 30 Sep 2026.
+  /// "IP" (a brand, carries a logo), "DIVISION" (a function inside one, no logo) or "GROUP" (only
+  /// arranges cards, e.g. PATS › Outlet › Nightclub: no logo, no people, no lead). Owner, 30 Sep / 2 Oct 2026.
   kind        String   @default("DIVISION")
   /// /api/files/attachments/org-units/<file> (png/jpg/webp), or null for initials.
   logoUrl     String?

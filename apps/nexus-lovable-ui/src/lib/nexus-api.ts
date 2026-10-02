@@ -639,13 +639,13 @@ export type ApprovalChart = {
 
 /** Bagan IP & Divisi (30 Sep 2026): IP/Team units, free depth; a person may be in several units.
  *  Grants nothing — project access stays with direct project invites. */
-export type OrgUnit = { id: string; name: string; kind: "IP" | "DIVISION"; logoUrl: string | null; parentId: string | null; position: number; leadUserId?: string | null; layoutX?: number | null; layoutY?: number | null; boxLayout?: Record<string, { x: number; y: number }> | null };
+export type OrgUnit = { id: string; name: string; kind: "IP" | "DIVISION" | "GROUP"; logoUrl: string | null; parentId: string | null; position: number; leadUserId?: string | null; layoutX?: number | null; layoutY?: number | null; boxLayout?: Record<string, { x: number; y: number }> | null };
 export type OrgChartPerson = { userId: string; name: string | null; email: string; avatar: string | null; role: string; unitIds: string[]; titles?: Record<string, string>; reportsTo?: Record<string, string> };
 export type OrgChart = {
   workspaceId: string;
   units: OrgUnit[];
   people: OrgChartPerson[];
-  stats: { units: number; people: number; placed: number };
+  stats: { units: number; groups?: number; people: number; placed: number };
 };
 
 export type NexusHoliday = {
@@ -2196,9 +2196,9 @@ export const nexusApi = {
   /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */
   approvalChart: () => apiFetch<ApprovalChart>("/api/admin/approval-chart"),
   orgChart: () => apiFetch<OrgChart>("/api/admin/org-chart"),
-  createOrgUnit: (body: { name: string; parentId?: string | null; kind?: "IP" | "DIVISION" }) =>
+  createOrgUnit: (body: { name: string; parentId?: string | null; kind?: "IP" | "DIVISION" | "GROUP" }) =>
     apiFetch<{ unit: OrgUnit }>("/api/admin/org-chart", { method: "POST", body: JSON.stringify(body) }),
-  updateOrgUnit: (id: string, body: { name?: string; kind?: "IP" | "DIVISION"; parentId?: string | null; position?: number; logoUrl?: string | null; leadUserId?: string | null; layoutX?: number | null; layoutY?: number | null; boxLayout?: Record<string, { x: number; y: number } | null> }) =>
+  updateOrgUnit: (id: string, body: { name?: string; kind?: "IP" | "DIVISION" | "GROUP"; parentId?: string | null; position?: number; logoUrl?: string | null; leadUserId?: string | null; layoutX?: number | null; layoutY?: number | null; boxLayout?: Record<string, { x: number; y: number } | null> | null }) =>
     apiFetch<{ unit: OrgUnit }>(`/api/admin/org-chart/units/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteOrgUnit: (id: string) =>
     apiFetch<{ ok: true; movedUp: number; released: number }>(`/api/admin/org-chart/units/${encodeURIComponent(id)}`, { method: "DELETE" }),

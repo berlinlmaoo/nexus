@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { cleanName, findUnit, ORG_CHART_WORKSPACE, orgChartGuard } from "@/lib/org-chart"
+import { cleanName, findUnit, isUnitKind, ORG_CHART_WORKSPACE, orgChartGuard } from "@/lib/org-chart"
 
 /**
  * Bagan IP & Divisi — every unit and every member of the company workspace in one call. The client
@@ -47,7 +47,8 @@ export async function GET() {
       workspaceId: ORG_CHART_WORKSPACE,
       units: units.map((u) => ({ ...u, parentId: u.parentId && ids.has(u.parentId) ? u.parentId : null })),
       people,
-      stats: { units: units.length, people: people.length, placed: people.filter((p) => p.unitIds.length > 0).length },
+      // A group is not an IP/Team, it only arranges them.
+      stats: { units: units.filter((u) => u.kind !== "GROUP").length, groups: units.filter((u) => u.kind === "GROUP").length, people: people.length, placed: people.filter((p) => p.unitIds.length > 0).length },
     })
   } catch (error) {
     console.error("[admin/org-chart] GET", error)
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
     const last = await prisma.orgUnit.aggregate({ where: { workspaceId: ORG_CHART_WORKSPACE, parentId }, _max: { position: true } })
     const unit = await prisma.orgUnit.create({
-      data: { workspaceId: ORG_CHART_WORKSPACE, name, parentId, kind: body?.kind === "IP" ? "IP" : "DIVISION", position: (last._max.position ?? -1) + 1 },
+      data: { workspaceId: ORG_CHART_WORKSPACE, name, parentId, kind: isUnitKind(body?.kind) ? body.kind : "DIVISION", position: (last._max.position ?? -1) + 1 },
       select: { id: true, name: true, kind: true, logoUrl: true, parentId: true, position: true },
     })
     return NextResponse.json({ unit }, { status: 201 })
