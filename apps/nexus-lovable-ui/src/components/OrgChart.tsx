@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Download, ImagePlus, Loader2, Maximize2, Minimize2, Plus, Scan, Search, Trash2, Wand2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { toPng } from "html-to-image";
 import { ApiError, nexusApi, type OrgChartPerson, type OrgUnit } from "@/lib/nexus-api";
+import {
+  LAYOUT, applyManual, pathD, routeAll, tidyLayout,
+  type EdgeSpec, type ManualItem, type Placement, type Pt, type Rect, type Size,
+} from "@/lib/org-chart-layout";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -23,16 +27,12 @@ import {
  * Kanvasnya sama dengan Bagan Approval: scroll/pinch = zoom, seret area kosong = geser.
  */
 type Drag = { kind: "person"; id: string; fromUnitId: string | null } | null;
-type Rect = { x: number; y: number; w: number; h: number };
-type AutoLayout = {
-  els: Record<string, Rect>;
+/** What the hidden tray measured: every card, people box and group title, and where each leader's chip sits in its box. */
+type Measured = {
+  sizes: Record<string, Size>;
   chips: Record<string, { box: string; dx: number; dy: number; w: number; h: number }>;
-  /** Title of each group, relative to its frame: where the group's own connectors start. */
-  titles: Record<string, { dx: number; dy: number; w: number; h: number }>;
-  w: number; h: number;
 };
-const SNAP = 8;
-const snap = (v: number) => Math.max(0, Math.round(v / SNAP) * SNAP);
+const snap = (v: number) => Math.max(0, Math.round(v / LAYOUT.snap) * LAYOUT.snap);
 
 export function OrgChart() {
   const qc = useQueryClient();
@@ -150,48 +150,118 @@ export function OrgChart() {
     return () => ro.disconnect();
   }, [fitView, full, units.length, people.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Free canvas (owner, 30 Sep 2026). A hidden copy of the automatic tree is laid out by the browser
-  // and measured; every card and people box is then drawn absolutely, at its manual position when it
-  // has one, otherwise at its automatic place relative to its parent. All connectors are SVG.
-  const hiddenRef = useRef<HTMLDivElement>(null);
-  const [auto, setAuto] = useState<AutoLayout>({ els: {}, chips: {}, titles: {}, w: 0, h: 0 });
+  // Groups (kind GROUP, owner 2 Oct 2026) only arrange cards. A card inside one belongs to the nearest
+  // card ABOVE the group(s) — that card's BoD/Manager lead it — and is laid out automatically inside
+  // the group's frame (manual positions of anything inside a group are ignored).
+  const tree = useMemo(() => {
+    const parentOf = (id: string) => unitsById.get(id)?.parentId ?? null;
+    /** Parents of a unit, nearest first. */
+    const ancestors = (id: string): string[] => {
+      const out: string[] = [];
+      const seen = new Set([id]);
+      for (let p = parentOf(id); p && unitsById.has(p) && !seen.has(p); p = parentOf(p)) { out.push(p); seen.add(p); }
+      return out;
+    };
+    const effParentOf = (id: string): string | null => ancestors(id).find((p) => unitsById.get(p)?.kind !== "GROUP") ?? null;
+    const groupDepth = (id: string) => ancestors(id).filter((p) => unitsById.get(p)?.kind === "GROUP").length;
+    const depthOf = (id: string) => ancestors(id).length;
+    const inGroup = (id: string) => groupDepth(id) > 0;
+    const leaderOrder = (unitId: string) => {
+      const all = membersOf.get(unitId) ?? [];
+      const ordered = [...all.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL"), ...all.filter((p) => p.role === "MANAGER")];
+      return new Map(ordered.map((p, i) => [p.userId, i]));
+    };
+    const validLead = (k: OrgUnit) => {
+      if (k.kind === "GROUP" || !k.leadUserId) return false;
+      const P = effParentOf(k.id);
+      return !!P && leaderOrder(P).has(k.leadUserId);
+    };
+    const groups = new Map(units.map((u): [string, Group] => {
+      const kids = childUnits.get(u.id) ?? [];
+      if (u.kind !== "GROUP") return [u.id, groupUnit(u, kids, membersOf.get(u.id) ?? [])];
+      // Inside a group: the cards led from the card above it first, in the order of their leaders there.
+      const above = effParentOf(u.id);
+      const idx = above ? leaderOrder(above) : new Map<string, number>();
+      const led = kids.filter(validLead).sort((a, b) => (idx.get(a.leadUserId!) ?? 0) - (idx.get(b.leadUserId!) ?? 0) || byPos(a, b));
+      return [u.id, { bods: [], managers: [], staff: [], rt: [], led, free: kids.filter((k) => !validLead(k)), leaderIdx: new Map() }];
+    }));
+    const roots = units.filter((u) => !u.parentId || !unitsById.has(u.parentId)).sort(byPos);
+    return { effParentOf, groupDepth, depthOf, inGroup, groups, roots };
+  }, [units, unitsById, childUnits, membersOf]);
+
+  // Free canvas, laid out in code (owner, 2 Oct 2026: "Rapikan otomatis" stacked cards on each other).
+  // Every card, people box and group title is rendered once in a hidden tray and MEASURED; a tidy tree is
+  // built from those sizes (lib/org-chart-layout), manual positions move whole subtrees and are pushed
+  // to the nearest free place when they land on something, and connectors are routed around cards.
+  const trayRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState<Measured>({ sizes: {}, chips: {} });
   useLayoutEffect(() => {
-    const root = hiddenRef.current;
-    if (!root) return;
+    const tray = trayRef.current;
+    if (!tray) return;
     const run = () => {
-      const els: AutoLayout["els"] = {};
-      for (const el of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-el]"))) {
-        const o = offsetIn(el, root);
-        els[el.dataset.ocEl!] = { x: o.x, y: o.y, w: el.offsetWidth, h: el.offsetHeight };
+      const next: Measured = { sizes: {}, chips: {} };
+      for (const el of Array.from(tray.querySelectorAll<HTMLElement>("[data-oc-m]"))) {
+        const key = el.dataset.ocM!;
+        next.sizes[key] = { w: el.offsetWidth, h: el.offsetHeight };
+        for (const chip of Array.from(el.querySelectorAll<HTMLElement>("[data-oc-chip]"))) {
+          const o = offsetIn(chip, el);
+          next.chips[chip.dataset.ocChip!] = { box: key, dx: o.x, dy: o.y, w: chip.offsetWidth, h: chip.offsetHeight };
+        }
       }
-      const chips: AutoLayout["chips"] = {};
-      for (const chip of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-chip]"))) {
-        const box = chip.closest<HTMLElement>("[data-oc-el]");
-        if (!box) continue;
-        const c = offsetIn(chip, root), b = offsetIn(box, root);
-        chips[chip.dataset.ocChip!] = { box: box.dataset.ocEl!, dx: c.x - b.x, dy: c.y - b.y, w: chip.offsetWidth, h: chip.offsetHeight };
-      }
-      const titles: AutoLayout["titles"] = {};
-      for (const t of Array.from(root.querySelectorAll<HTMLElement>("[data-oc-title]"))) {
-        const frame = t.closest<HTMLElement>("[data-oc-el]");
-        if (!frame) continue;
-        const a = offsetIn(t, root), b = offsetIn(frame, root);
-        titles[t.dataset.ocTitle!] = { dx: a.x - b.x, dy: a.y - b.y, w: t.offsetWidth, h: t.offsetHeight };
-      }
-      const next = { els, chips, titles, w: root.offsetWidth, h: root.offsetHeight };
-      setAuto((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      setMeasured((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     };
     run();
     const ro = new ResizeObserver(run);
-    ro.observe(root);
+    for (const el of Array.from(tray.querySelectorAll<HTMLElement>("[data-oc-m]"))) ro.observe(el);
     return () => ro.disconnect();
-  }, [units, people, full]);
-  useLayoutEffect(() => { if (auto.w > 0) fitView(); }, [auto.w > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [units, people]);
 
-  // Positions being dragged right now (not yet saved), and the card a dragged card would land in.
-  const [temp, setTemp] = useState<Record<string, { x: number; y: number }>>({});
+  // Positions not saved yet (being dragged, or on their way to the server) and the element being dragged.
+  const [temp, setTemp] = useState<Record<string, Pt>>({});
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  // The card or group a dragged card would land in.
   const [dropCard, setDropCard] = useState<string | null>(null);
-  const elDrag = useRef<{ key: string; pointerId: number; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const elDrag = useRef<{ key: string; pointerId: number; sx: number; sy: number; ox: number; oy: number; moved: boolean; last: Pt | null } | null>(null);
+  // Connectors routed while nothing moves; reused while dragging for the ones whose ends stay put.
+  const routedRef = useRef(new Map<string, Pt[]>());
+
+  const layout = useMemo(() => {
+    if (Object.keys(measured.sizes).length === 0) return null;
+    const { groups, inGroup, depthOf, effParentOf, roots } = tree;
+    const sizeOf = (k: string): Size => measured.sizes[k] ?? { w: 0, h: 0 };
+    const base = tidyLayout({
+      roots: roots.map((u) => u.id),
+      isGroup: (id) => unitsById.get(id)?.kind === "GROUP",
+      stack: (id) => stackOf(id, groups.get(id)!),
+      row: (id) => rowOf(unitsById.get(id)!, groups.get(id)!),
+      // Room for one elbow per led sub-unit / "di bawah" box above the shared crossbar.
+      band: (id) => 46 + 6 * (groups.get(id)!.led.length + groups.get(id)!.rt.length),
+      size: sizeOf,
+    });
+    const items = manualItems(units, inGroup, depthOf, base, temp, dragKey);
+    const { rects } = applyManual(base.rects, items);
+    const edges = buildEdges(units, groups, effParentOf, rects, measured.chips);
+    const isFrame = (k: string) => k.startsWith("c:") && unitsById.get(k.slice(2))?.kind === "GROUP";
+    const id = (e: EdgeSpec) => `${e.from}>${e.to}`;
+    let lines: Array<EdgeSpec & { pts: Pt[] }>;
+    if (!dragKey) {
+      lines = routeAll(edges, rects, isFrame);
+      routedRef.current = new Map(lines.map((e) => [id(e), e.pts]));
+    } else {
+      // While dragging: plain elbows for what moves, the last good route for everything else.
+      lines = edges.map((e) => {
+        const pts = routedRef.current.get(id(e));
+        const same = pts && pts[0].x === Math.round(e.s.x) && pts[0].y === Math.round(e.s.y) && pts[pts.length - 1].x === Math.round(e.t.x) && pts[pts.length - 1].y === Math.round(e.t.y);
+        return same ? { ...e, pts } : routeAll([e], rects, isFrame, true)[0];
+      });
+    }
+    let width = 0, height = 0;
+    for (const r of rects.values()) { width = Math.max(width, r.x + r.w); height = Math.max(height, r.y + r.h); }
+    for (const l of lines) for (const p of l.pts) { width = Math.max(width, p.x); height = Math.max(height, p.y); }
+    const lifted = new Set(dragKey ? items.find((i) => i.id === dragKey)?.keys ?? [] : []);
+    return { base, rects, lines, lifted, width: width + LAYOUT.margin, height: height + LAYOUT.margin };
+  }, [measured, tree, units, unitsById, temp, dragKey]);
+  useLayoutEffect(() => { if (layout) fitView(); }, [!!layout]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const zoomAt = (factor: number, cx: number, cy: number) => {
     const v = viewRef.current;
@@ -283,7 +353,6 @@ export function OrgChart() {
   if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Bagan tidak bisa dimuat — butuh akses BoD.</div>;
 
-  const roots = units.filter((u) => !u.parentId).sort(byPos);
   const unplaced = people.filter((p) => p.unitIds.length === 0);
   const busy = moveUnit.isPending || addPerson.isPending || removePerson.isPending || setReportsTo.isPending || placingUnder;
 
@@ -333,86 +402,7 @@ export function OrgChart() {
     jobTitle: fromUnitId ? p.titles?.[fromUnitId] ?? null : null,
   });
 
-  // ── Posisi akhir: manual (atau sedang diseret) → pakai itu; kalau tidak, posisi otomatis yang
-  //    digeser ikut induknya (kartu induk untuk kartu; kartunya sendiri untuk kotak orang).
-  // Groups (kind GROUP, owner 2 Oct 2026) only arrange cards. A card inside one belongs to the nearest
-  // card ABOVE the group(s) — that card's BoD/Manager lead it — and is laid out automatically inside
-  // the group's frame (manual positions of anything inside a group are ignored).
-  const effParentOf = (id: string): string | null => {
-    const seen = new Set<string>();
-    let p = unitsById.get(id)?.parentId ?? null;
-    while (p && unitsById.get(p)?.kind === "GROUP" && !seen.has(p)) { seen.add(p); p = unitsById.get(p)?.parentId ?? null; }
-    return p && unitsById.get(p)?.kind !== "GROUP" ? p : null;
-  };
-  const groupDepth = (id: string): number => {
-    let n = 0;
-    const seen = new Set<string>();
-    let p = unitsById.get(id)?.parentId ?? null;
-    while (p && !seen.has(p)) { seen.add(p); if (unitsById.get(p)?.kind === "GROUP") n++; p = unitsById.get(p)?.parentId ?? null; }
-    return n;
-  };
-  const inGroup = (id: string) => groupDepth(id) > 0;
-  const leadersOf = (unitId: string) => new Set((membersOf.get(unitId) ?? []).filter((p) => LEAD_ROLES.has(p.role)).map((p) => p.userId));
-  const validLead = (k: OrgUnit) => {
-    if (k.kind === "GROUP" || !k.leadUserId) return false;
-    const P = effParentOf(k.id);
-    return !!P && leadersOf(P).has(k.leadUserId);
-  };
-  const groups = new Map(units.map((u): [string, Group] => {
-    const kids = childUnits.get(u.id) ?? [];
-    if (u.kind === "GROUP") return [u.id, { bods: [], managers: [], staff: [], rt: [], led: kids.filter(validLead), free: kids.filter((k) => !validLead(k)), leaderIdx: new Map() }];
-    return [u.id, groupUnit(u, kids, membersOf.get(u.id) ?? [])];
-  }));
-  const manualOf = (key: string): { x: number; y: number } | null => {
-    if (temp[key]) return temp[key];
-    const [t, id, ...rest] = key.split(":");
-    const u = unitsById.get(id);
-    if (!u || inGroup(id)) return null;
-    if (t === "c") return u.layoutX != null && u.layoutY != null ? { x: u.layoutX, y: u.layoutY } : null;
-    return u.boxLayout?.[rest.join(":")] ?? null;
-  };
-  const anchorOf = (key: string): string | null => {
-    const [t, id] = key.split(":");
-    if (t === "b") return `c:${id}`;
-    const parent = unitsById.get(id)?.parentId;
-    return parent && auto.els[`c:${parent}`] ? `c:${parent}` : null;
-  };
-  const finalCache = new Map<string, { x: number; y: number }>();
-  const finalOf = (key: string, depth = 0): { x: number; y: number } => {
-    const hit = finalCache.get(key);
-    if (hit) return hit;
-    const a = auto.els[key] ?? { x: 0, y: 0, w: 0, h: 0 };
-    let out = manualOf(key);
-    if (!out) {
-      const anc = depth < 64 ? anchorOf(key) : null;
-      if (anc) { const ap = finalOf(anc, depth + 1), aa = auto.els[anc]; out = { x: ap.x + (a.x - aa.x), y: ap.y + (a.y - aa.y) }; }
-      else out = { x: a.x, y: a.y };
-    }
-    finalCache.set(key, out);
-    return out;
-  };
-  const rectOf = (key: string): Rect | null => {
-    const a = auto.els[key];
-    if (!a) return null;
-    const f = finalOf(key);
-    return { x: f.x, y: f.y, w: a.w, h: a.h };
-  };
-  const chipRect = (key: string): Rect | null => {
-    const c = auto.chips[key];
-    if (!c) return null;
-    const b = rectOf(c.box);
-    return b ? { x: b.x + c.dx, y: b.y + c.dy, w: c.w, h: c.h } : null;
-  };
-  const titleRect = (groupId: string): Rect | null => {
-    const t = auto.titles[groupId];
-    const f = rectOf(`c:${groupId}`);
-    return t && f ? { x: f.x + t.dx, y: f.y + t.dy, w: t.w, h: t.h } : null;
-  };
-  const keys = Object.keys(auto.els);
-  const lines = buildLines(units, groups, rectOf, chipRect, titleRect, effParentOf);
-  const extentW = Math.max(auto.w, ...keys.map((k) => { const r = rectOf(k)!; return r.x + r.w; })) + 32;
-  const extentH = Math.max(auto.h, ...keys.map((k) => { const r = rectOf(k)!; return r.y + r.h; })) + 32;
-
+  const { groups, groupDepth, inGroup } = tree;
   const canvasPoint = (e: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
     const v = viewRef.current;
@@ -422,10 +412,11 @@ export function OrgChart() {
     if (e.button !== 0 || busy) return;
     if ((e.target as HTMLElement).closest("[draggable='true'],input,select")) return; // a person chip: HTML5 drag
     if (key.startsWith("b:") && (e.target as HTMLElement).closest("button")) return; // × on a chip
+    const r = layout?.rects.get(key);
+    if (!r) return;
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const f = finalOf(key);
-    elDrag.current = { key, pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, ox: f.x, oy: f.y, moved: false };
+    elDrag.current = { key, pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, ox: r.x, oy: r.y, moved: false, last: null };
   };
   const moveElDrag = (e: React.PointerEvent) => {
     const d = elDrag.current;
@@ -433,9 +424,11 @@ export function OrgChart() {
     const s = viewRef.current.s;
     const dx = (e.clientX - d.sx) / s, dy = (e.clientY - d.sy) / s;
     if (!d.moved && Math.hypot(dx, dy) < 4) return;
-    d.moved = true;
-    setTemp((t) => ({ ...t, [d.key]: { x: snap(d.ox + dx), y: snap(d.oy + dy) } }));
-    if (d.key.startsWith("c:")) {
+    if (!d.moved) { d.moved = true; setDragKey(d.key); }
+    d.last = { x: snap(d.ox + dx), y: snap(d.oy + dy) };
+    const pos = d.last;
+    setTemp((t) => ({ ...t, [d.key]: pos }));
+    if (d.key.startsWith("c:") && layout) {
       const id = d.key.slice(2);
       const banned = descendantsOf(id).add(id);
       const pt = canvasPoint(e);
@@ -445,7 +438,7 @@ export function OrgChart() {
       let best: { id: string; area: number } | null = null;
       for (const u of units) {
         if (banned.has(u.id)) continue;
-        const r = rectOf(`c:${u.id}`);
+        const r = layout.rects.get(`c:${u.id}`);
         if (!r || pt.x < r.x || pt.x > r.x + r.w || pt.y < r.y || pt.y > r.y + r.h) continue;
         if (!best || r.w * r.h < best.area) best = { id: u.id, area: r.w * r.h };
       }
@@ -459,18 +452,24 @@ export function OrgChart() {
     elDrag.current = null;
     const target = dropCard;
     setDropCard(null);
+    setDragKey(null);
     const [t, id, ...rest] = d.key.split(":");
     if (!d.moved) { if (t === "c") { const u = unitsById.get(id); if (u) setEditing(u); } return; }
-    const pos = temp[d.key] ?? { x: snap(d.ox), y: snap(d.oy) };
     const clear = () => setTemp((m) => { const n = { ...m }; delete n[d.key]; return n; });
     const u = unitsById.get(id);
-    if (!u) { clear(); return; }
+    if (!u || !layout) { clear(); return; }
     if (t === "c" && target && target !== u.parentId) { clear(); moveUnit.mutate({ unit: u, parentId: target }); return; }
     if (inGroup(id)) {
       clear();
       toast("Kartu di dalam grup disusun otomatis", { description: "Jatuhkan di atas kartu atau grup lain untuk memindahkannya, atau geser grupnya." });
       return;
     }
+    // Never leave it on top of something: the nearest free place instead (8px grid), saved as such.
+    const want = d.last ?? { x: snap(d.ox), y: snap(d.oy) };
+    const items = manualItems(units, inGroup, tree.depthOf, layout.base, { ...temp, [d.key]: want }, null);
+    const pos = applyManual(layout.base.rects, items).resolved.get(d.key) ?? want;
+    setTemp((m) => ({ ...m, [d.key]: pos }));
+    if (pos.x !== want.x || pos.y !== want.y) toast("Digeser ke tempat kosong terdekat", { description: "Tempat itu sudah terisi kartu atau kotak lain." });
     const save = t === "c" ? nexusApi.updateOrgUnit(id, { layoutX: pos.x, layoutY: pos.y }) : nexusApi.updateOrgUnit(id, { boxLayout: { [rest.join(":")]: pos } });
     save
       .then(() => qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] }))
@@ -484,22 +483,10 @@ export function OrgChart() {
   return (
     <div className="space-y-4">
       <style>{`
-        .oc-node{display:flex;flex-direction:column;align-items:center}
-        .oc-kids{display:flex;align-items:flex-start;position:relative;padding-top:22px}
-        .oc-kids::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
-        .oc-kid{position:relative;padding:22px 6px 0}
-        .oc-kid::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
-        .oc-kid::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--oc-line)}
-        .oc-kid:first-child::after{left:50%}
-        .oc-kid:last-child::after{right:50%}
-        .oc-kid:only-child::after{display:none}
-        .oc-own{position:relative;padding-top:22px;display:flex;justify-content:center}
-        .oc-own::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-leaves{display:flex;flex-direction:column;gap:6px;padding:6px;border:1.5px dashed var(--oc-line);border-radius:12px;background:rgba(127,127,127,.04)}
-        .oc-kids-svg::before,.oc-kids-svg>.oc-kid::before,.oc-kids-svg>.oc-kid::after{display:none}
-        .oc-group{display:flex;flex-direction:column;align-items:center;padding:8px 12px 14px;border:1.5px dashed var(--oc-line);border-radius:18px;background:rgba(127,127,127,.035)}
+        .oc-group{border:1.5px dashed var(--oc-line);border-radius:18px;background:rgba(127,127,127,.035)}
         .oc-group-title{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;padding:2px 10px;border-radius:999px;border:1px solid var(--oc-line)}
-        .oc-group-empty{font-size:11px;color:#94a3b8;padding:18px 24px 6px}
+        .oc-group-empty{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#94a3b8}
         .oc-leaves-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;text-align:center;padding-bottom:2px}
       `}</style>
 
@@ -554,54 +541,82 @@ export function OrgChart() {
               className={cn("relative w-full select-none overflow-hidden bg-[radial-gradient(circle,rgba(0,0,0,.06)_1px,transparent_1px)] [background-size:18px_18px]", full ? "min-h-0 flex-1" : "h-[min(72vh,820px)]", panning ? "cursor-grabbing" : "cursor-grab")}
               style={{ touchAction: "none" }}
             >
-              <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transformOrigin: "0 0", willChange: "transform" }}>
-                {/* Automatic layout, measured but never seen. */}
-                <div ref={hiddenRef} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-start gap-10 p-4">
-                  {roots.map((u) => <AutoNode key={u.id} u={u} groups={groups} personProps={personProps} count={(id) => membersOf.get(id)?.length ?? 0} />)}
+              <div ref={innerRef} data-oc-canvas="" className="absolute left-0 top-0 w-max" style={{ transformOrigin: "0 0", willChange: "transform" }}>
+                {/* Every element once, measured but never seen: the layout is computed from these sizes. */}
+                <div ref={trayRef} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 h-0 w-0 overflow-hidden">
+                  {units.map((u) => {
+                    const g = groups.get(u.id);
+                    if (!g) return null;
+                    if (u.kind === "GROUP") {
+                      return (
+                        <div key={u.id} data-oc-m={`t:${u.id}`} className="absolute left-0 top-0 w-max">
+                          <div className="oc-group-title bg-background text-muted-foreground">{u.name} · {childUnits.get(u.id)?.length ?? 0}</div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <Fragment key={u.id}>
+                        <div data-oc-m={`c:${u.id}`} className="absolute left-0 top-0 w-max"><UnitCard u={u} busy={false} count={membersOf.get(u.id)?.length ?? 0} dragging={false} /></div>
+                        {boxKinds(g).map((kind) => (
+                          <div key={kind} data-oc-m={`b:${u.id}:${kind}`} className="absolute left-0 top-0 w-max">
+                            <PeopleBox unitId={u.id} kind={kind} list={boxPeople(g, kind)} title={boxTitle(g, kind, people)} personProps={personProps} />
+                          </div>
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </div>
-                <div style={{ width: extentW, height: extentH }} />
-                <svg className="pointer-events-none absolute left-0 top-0" style={{ zIndex: 5 }} width={extentW} height={extentH} aria-hidden>
-                  {lines.map((d, i) => <path key={i} d={d} fill="none" stroke="#c7cfdb" strokeWidth={2} strokeLinejoin="round" />)}
-                </svg>
-                {keys.map((key) => {
-                  const r = rectOf(key)!;
-                  const [t, id, ...rest] = key.split(":");
-                  const u = unitsById.get(id);
-                  if (!u) return null;
-                  const dragging = !!temp[key] && elDrag.current?.key === key;
-                  const style = { left: r.x, top: r.y, width: r.w, zIndex: dragging ? 50 : t === "c" ? 11 : 10 };
-                  if (t === "c" && u.kind === "GROUP") {
-                    // A dashed frame around the cards it groups (they are drawn on top of it, separately).
-                    const n = childUnits.get(u.id)?.length ?? 0;
-                    return (
-                      <div key={key} {...dragHandlers(key)} role="button" tabIndex={0} aria-label={`Grup ${u.name}, ${n} isi`}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditing(u); } }}
-                        title="Klik untuk mengubah · seret untuk memindah (isinya ikut) · jatuhkan kartu di sini = masuk grup"
-                        className={cn("oc-group absolute cursor-grab touch-none active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary", dropCard === u.id && "ring-2 ring-primary ring-offset-2")}
-                        style={{ left: r.x, top: r.y, width: r.w, height: r.h, zIndex: 1 + Math.min(3, groupDepth(u.id)) }}>
-                        <div className="oc-group-title bg-background text-muted-foreground">{u.name} · {n}</div>
-                        {n === 0 && <div className="oc-group-empty">Seret kartu ke sini</div>}
-                      </div>
-                    );
-                  }
-                  if (t === "c") {
-                    return (
-                      <div key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2")} style={style}>
-                        <UnitCard u={u} busy={busy} count={membersOf.get(u.id)?.length ?? 0} dragging={dragging} onKeyOpen={() => setEditing(u)} />
-                      </div>
-                    );
-                  }
-                  const g = groups.get(id)!;
-                  const kind = rest.join(":");
-                  const list = boxPeople(g, kind);
-                  // Inside a group everything is laid out automatically: the box is not moved on its own.
-                  const locked = inGroup(id);
-                  return (
-                    <div key={key} {...(locked ? {} : dragHandlers(key))} className={cn("absolute", !locked && "cursor-grab touch-none active:cursor-grabbing")} style={style}>
-                      <PeopleBox unitId={id} kind={kind} list={list} title={boxTitle(g, kind, people)} personProps={personProps} chipDrop={chipDrop} />
-                    </div>
-                  );
-                })}
+                {layout && (
+                  <>
+                    <div style={{ width: layout.width, height: layout.height }} />
+                    <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" style={{ zIndex: 5 }} width={layout.width} height={layout.height} aria-hidden>
+                      {layout.lines.map((l) => <path key={`${l.from}>${l.to}`} data-oc-from={l.from} data-oc-to={l.to} d={pathD(l.pts)} fill="none" stroke="#c7cfdb" strokeWidth={2} strokeLinejoin="round" />)}
+                    </svg>
+                    {[...layout.rects].map(([key, r]) => {
+                      const [t, id, ...rest] = key.split(":");
+                      const u = unitsById.get(id);
+                      if (!u) return null;
+                      const lift = layout.lifted.has(key) ? 40 : 0;
+                      if (t === "t") {
+                        return (
+                          <div key={key} data-oc-key={key} className="oc-group-title pointer-events-none absolute bg-background text-muted-foreground" style={{ left: r.x, top: r.y, zIndex: 6 + lift }}>
+                            {u.name} · {childUnits.get(u.id)?.length ?? 0}
+                          </div>
+                        );
+                      }
+                      if (t === "c" && u.kind === "GROUP") {
+                        // A dashed frame around the cards it groups; its title and cards are drawn on top, separately.
+                        const n = childUnits.get(u.id)?.length ?? 0;
+                        return (
+                          <div key={key} data-oc-key={key} {...dragHandlers(key)} role="button" tabIndex={0} aria-label={`Grup ${u.name}, ${n} isi`}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditing(u); } }}
+                            title="Klik untuk mengubah · seret untuk memindah (isinya ikut) · jatuhkan kartu di sini = masuk grup"
+                            className={cn("oc-group absolute cursor-grab touch-none active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary", dropCard === u.id && "ring-2 ring-primary ring-offset-2")}
+                            style={{ left: r.x, top: r.y, width: r.w, height: r.h, zIndex: 1 + Math.min(3, groupDepth(u.id)) + lift }}>
+                            {n === 0 && <div className="oc-group-empty" style={{ height: LAYOUT.gEmpty }}>Seret kartu ke sini</div>}
+                          </div>
+                        );
+                      }
+                      const style = { left: r.x, top: r.y, width: r.w, zIndex: (t === "c" ? 11 : 10) + lift };
+                      if (t === "c") {
+                        return (
+                          <div key={key} data-oc-key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2")} style={style}>
+                            <UnitCard u={u} busy={busy} count={membersOf.get(u.id)?.length ?? 0} dragging={dragKey === key} onKeyOpen={() => setEditing(u)} />
+                          </div>
+                        );
+                      }
+                      const g = groups.get(id)!;
+                      const kind = rest.join(":");
+                      // Inside a group everything is laid out automatically: the box is not moved on its own.
+                      const locked = inGroup(id);
+                      return (
+                        <div key={key} data-oc-key={key} {...(locked ? {} : dragHandlers(key))} className={cn("absolute", !locked && "cursor-grab touch-none active:cursor-grabbing")} style={style}>
+                          <PeopleBox unitId={id} kind={kind} list={boxPeople(g, kind)} title={boxTitle(g, kind, people)} personProps={personProps} chipDrop={chipDrop} />
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             </div>
           </section>
@@ -737,51 +752,50 @@ function boxTitle(g: Group, kind: string, people: OrgChartPerson[]): string {
   return `Di bawah ${(lead?.name ?? "?").split(" ")[0]} · ${n}`;
 }
 
-/** One card and its whole subtree in the ordinary top-down layout — only to be MEASURED (hidden).
- *  The visible chart draws the same elements absolutely (see OrgChart). */
-function AutoNode({ u, groups, personProps, count }: {
-  u: OrgUnit; groups: Map<string, Group>; personProps: (p: OrgChartPerson, fromUnitId?: string | null) => PersonChipProps; count: (id: string) => number;
-}) {
-  const g = groups.get(u.id)!;
-  if (u.kind === "GROUP") {
-    const kids = [...g.led, ...g.free].sort(byPos);
-    return (
-      <div className="oc-node">
-        <div data-oc-el={`c:${u.id}`} className="oc-group">
-          <div data-oc-title={u.id} className="oc-group-title bg-background text-muted-foreground">{u.name} · {kids.length}</div>
-          {kids.length > 0 ? (
-            <div className="oc-kids">
-              {kids.map((k) => <div key={k.id} className="oc-kid"><AutoNode u={k} groups={groups} personProps={personProps} count={count} /></div>)}
-            </div>
-          ) : <div className="oc-group-empty">Seret kartu ke sini</div>}
-        </div>
-      </div>
-    );
+/** A card with its BoD and Manager boxes under it, top to bottom. */
+function stackOf(id: string, g: Group): string[] {
+  return [`c:${id}`, ...(g.bods.length ? [`b:${id}:bod`] : []), ...(g.managers.length ? [`b:${id}:manager`] : [])];
+}
+/** Left to right under a card: sub-units led by one of its leaders (in the order of the leaders), the
+ *  "di bawah" boxes and the other sub-units, with the staff box in the middle. Inside a group: its cards. */
+function rowOf(u: OrgUnit, g: Group): string[] {
+  if (u.kind === "GROUP") return [...g.led, ...g.free].map((k) => `u:${k.id}`);
+  const row = [...g.led.map((k) => `u:${k.id}`), ...g.rt.map(([id]) => `b:${u.id}:rt:${id}`), ...g.free.map((k) => `u:${k.id}`)];
+  if (g.staff.length > 0) row.splice(Math.floor(row.length / 2), 0, `b:${u.id}:staff`);
+  return row;
+}
+/** The people boxes a card has. */
+function boxKinds(g: Group): string[] {
+  return [...(g.bods.length ? ["bod"] : []), ...(g.managers.length ? ["manager"] : []), ...(g.staff.length ? ["staff"] : []), ...g.rt.map(([id]) => `rt:${id}`)];
+}
+
+/**
+ * Manual positions in the order they are applied: cards outside groups, shallow first (a card takes its
+ * whole subtree along; a deeper card with a position of its own then moves again), then people boxes.
+ * `temp` holds positions not saved yet. Each one is pushed to the nearest free place when it lands on
+ * something — except the one being dragged, which follows the pointer until it is dropped.
+ */
+function manualItems(units: OrgUnit[], inGroup: (id: string) => boolean, depthOf: (id: string) => number, base: Placement, temp: Record<string, Pt>, dragKey: string | null): ManualItem[] {
+  const cards: Array<ManualItem & { depth: number }> = [];
+  const boxes: ManualItem[] = [];
+  for (const u of units) {
+    const key = `c:${u.id}`;
+    if (!base.rects.has(key)) continue;
+    const grouped = inGroup(u.id);
+    // A card inside a group only moves while it is dragged (to be dropped on another card).
+    const pos = temp[key] ?? (!grouped && u.layoutX != null && u.layoutY != null ? { x: u.layoutX, y: u.layoutY } : null);
+    if (pos) cards.push({ id: key, keys: base.subtree.get(u.id) ?? [key], anchor: key, pos, resolve: key !== dragKey, depth: depthOf(u.id) });
+    if (grouped || u.kind === "GROUP") continue;
+    const prefix = `b:${u.id}:`;
+    const kinds = new Set([...Object.keys(u.boxLayout ?? {}), ...Object.keys(temp).filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length))]);
+    for (const kind of kinds) {
+      const bk = prefix + kind;
+      const p = temp[bk] ?? u.boxLayout?.[kind];
+      if (p && base.rects.has(bk)) boxes.push({ id: bk, keys: [bk], anchor: bk, pos: p, resolve: bk !== dragKey });
+    }
   }
-  type Item = { type: "unit"; u: OrgUnit } | { type: "box"; kind: string };
-  const row: Item[] = [...g.led.map((k): Item => ({ type: "unit", u: k })), ...g.rt.map(([id]): Item => ({ type: "box", kind: `rt:${id}` })), ...g.free.map((k): Item => ({ type: "unit", u: k }))];
-  if (g.staff.length > 0) row.splice(Math.floor(row.length / 2), 0, { type: "box", kind: "staff" });
-  const box = (kind: string) => (
-    <div data-oc-el={`b:${u.id}:${kind}`}>
-      <PeopleBox unitId={u.id} kind={kind} list={boxPeople(g, kind)} title={boxTitle(g, kind, [])} personProps={personProps} />
-    </div>
-  );
-  return (
-    <div className="oc-node">
-      <div data-oc-el={`c:${u.id}`}><UnitCard u={u} busy={false} count={count(u.id)} dragging={false} /></div>
-      {g.bods.length > 0 && <div className="oc-own">{box("bod")}</div>}
-      {g.managers.length > 0 && <div className="oc-own">{box("manager")}</div>}
-      {row.length > 0 && (
-        <div className="oc-kids">
-          {row.map((it) => (
-            <div key={it.type === "unit" ? it.u.id : it.kind} className="oc-kid">
-              {it.type === "unit" ? <AutoNode u={it.u} groups={groups} personProps={personProps} count={count} /> : box(it.kind)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  cards.sort((a, b) => a.depth - b.depth);
+  return [...cards, ...boxes];
 }
 
 /** A people box: BoD / Manager chips side by side, staff and "di bawah" boxes stacked. Leaders' chips
@@ -812,51 +826,48 @@ function PeopleBox({ unitId, kind, list, title, personProps, chipDrop }: {
   );
 }
 
-/** Right-angled connector: down from (sx,sy) to `my`, across, down to (tx,ty). */
-const elbow = (sx: number, sy: number, tx: number, ty: number, my: number) => `M${sx} ${sy} V${my} H${tx} V${ty}`;
-
-/** Every connector from ACTUAL positions: card → BoD box → Manager box; the last of those → staff box
- *  and unled sub-units (one shared crossbar); a leader's chip → the unit they lead and the box of the
- *  people under them (one height per elbow so they never share a line). */
-function buildLines(
-  units: OrgUnit[], groups: Map<string, Group>, rectOf: (k: string) => Rect | null, chipRect: (k: string) => Rect | null,
-  titleRect: (groupId: string) => Rect | null, effParentOf: (id: string) => string | null,
-): string[] {
-  const out: string[] = [];
-  const bottom = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y + r.h });
-  const top = (r: Rect) => ({ x: r.x + r.w / 2, y: r.y });
-  const link = (a: Rect, b: Rect) => { const s = bottom(a), t = top(b); out.push(elbow(s.x, s.y, t.x, t.y, t.y > s.y + 4 ? (s.y + t.y) / 2 : s.y + 12)); };
+/** Every connector, between ACTUAL positions: card → BoD box → Manager box; the last of those (a group:
+ *  its title) → the staff box and the unled sub-units on one crossbar; a leader's chip → the sub-unit
+ *  they lead and the box of the people under them, each elbow at its own height. */
+function buildEdges(units: OrgUnit[], groups: Map<string, Group>, effParentOf: (id: string) => string | null, rects: Map<string, Rect>, chips: Measured["chips"]): EdgeSpec[] {
+  const edges: EdgeSpec[] = [];
+  const bottom = (r: Rect): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h });
+  const top = (r: Rect): Pt => ({ x: r.x + r.w / 2, y: r.y });
+  const chipAt = (key: string) => {
+    const c = chips[key];
+    const b = c && rects.get(c.box);
+    return b ? { box: c.box, r: { x: b.x + c.dx, y: b.y + c.dy, w: c.w, h: c.h } } : null;
+  };
   for (const u of units) {
-    const card = rectOf(`c:${u.id}`);
     const g = groups.get(u.id);
-    if (!card || !g) continue;
-    let src = card;
-    if (u.kind === "GROUP") src = titleRect(u.id) ?? { x: card.x + card.w / 2 - 1, y: card.y, w: 2, h: 18 };
-    else for (const kind of ["bod", "manager"]) {
-      const r = rectOf(`b:${u.id}:${kind}`);
-      if (r) { link(src, r); src = r; }
+    if (!g || !rects.has(`c:${u.id}`)) continue;
+    let srcKey = `t:${u.id}`;
+    if (u.kind !== "GROUP") {
+      const stack = stackOf(u.id, g);
+      for (let i = 1; i < stack.length; i++) {
+        const a = rects.get(stack[i - 1]), b = rects.get(stack[i]);
+        if (a && b) edges.push({ from: stack[i - 1], to: stack[i], s: bottom(a), t: top(b), prefY: (a.y + a.h + b.y) / 2 });
+      }
+      srcKey = stack[stack.length - 1];
     }
-    const targets = [...(g.staff.length ? [rectOf(`b:${u.id}:staff`)] : []), ...g.free.map((k) => rectOf(`c:${k.id}`))].filter((r): r is Rect => !!r);
-    if (targets.length > 0) {
-      const s = bottom(src);
-      const below = targets.filter((r) => r.y > s.y + 8);
-      const my = below.length ? s.y + Math.min(22, (Math.min(...below.map((r) => r.y)) - s.y) / 2) : s.y + 12;
-      for (const r of targets) { const t = top(r); out.push(elbow(s.x, s.y, t.x, t.y, r.y > s.y + 8 ? my : (s.y + t.y) / 2)); }
-    }
-    // [chip key, target]: led cards (inside a group: from the card above the group) and "di bawah" boxes.
-    const fromChip: Array<[string, Rect | null]> = [
-      ...g.led.map((k): [string, Rect | null] => [`${u.kind === "GROUP" ? effParentOf(k.id) : u.id}:${k.leadUserId}`, rectOf(`c:${k.id}`)]),
-      ...g.rt.map(([id]): [string, Rect | null] => [`${u.id}:${id}`, rectOf(`b:${u.id}:rt:${id}`)]),
+    const src = rects.get(srcKey);
+    if (!src) continue;
+    const s = bottom(src);
+    const bus = [...(g.staff.length ? [`b:${u.id}:staff`] : []), ...g.free.map((k) => `c:${k.id}`)].filter((k) => rects.has(k));
+    const tops = bus.map((k) => rects.get(k)!.y).filter((y) => y > s.y + 8);
+    const busY = tops.length ? Math.min(...tops) - 18 : s.y + 14;
+    for (const k of bus) edges.push({ from: srcKey, to: k, s, t: top(rects.get(k)!), prefY: busY });
+    // Led cards inside a group are led from the card above the group.
+    const fromChip: Array<[string, string]> = [
+      ...g.led.map((k): [string, string] => [`${u.kind === "GROUP" ? effParentOf(k.id) : u.id}:${k.leadUserId}`, `c:${k.id}`]),
+      ...g.rt.map(([id]): [string, string] => [`${u.id}:${id}`, `b:${u.id}:rt:${id}`]),
     ];
-    fromChip.forEach(([chipKey, r], rank) => {
-      const chip = chipRect(chipKey);
-      if (!chip || !r) return;
-      const s = bottom(chip), t = top(r);
-      const my = t.y > s.y + 16 ? Math.min(t.y - 6, s.y + 10 + (rank % 4) * 5) : (s.y + t.y) / 2;
-      out.push(elbow(s.x, s.y, t.x, t.y, my));
+    fromChip.forEach(([chipKey, to], rank) => {
+      const c = chipAt(chipKey), r = rects.get(to);
+      if (c && r) edges.push({ from: c.box, to, s: bottom(c.r), t: top(r), prefY: s.y + 10 + 6 * rank });
     });
   }
-  return out;
+  return edges;
 }
 
 /** Position of `el` inside `root` in unscaled layout pixels (offsets, not getBoundingClientRect — the
