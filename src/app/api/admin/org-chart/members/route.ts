@@ -17,7 +17,9 @@ export async function POST(req: NextRequest) {
     const userId = typeof body?.userId === "string" ? body.userId : ""
     const unitId = typeof body?.unitId === "string" ? body.unitId : ""
     if (!userId || !unitId) return NextResponse.json({ error: "userId dan unitId wajib ada." }, { status: 400 })
-    if (!(await findUnit(unitId))) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
+    const unit = await findUnit(unitId)
+    if (!unit) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
+    if (unit.kind === "GROUP") return NextResponse.json({ error: "Grup tidak berisi orang — taruh orangnya di kartu IP/Divisi di dalam grup." }, { status: 400 })
     if (!(await isOrgMember(userId))) return NextResponse.json({ error: "Orang ini bukan anggota Z Networks." }, { status: 404 })
     await prisma.orgUnitMember.upsert({
       where: { unitId_userId: { unitId, userId } },
