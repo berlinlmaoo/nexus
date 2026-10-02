@@ -83,7 +83,9 @@ function baseHeaders(profile) {
     h["user-agent"] = `NEXUS-Android/${profile.version} (${profile.build}; Android 34)`
     h["accept-language"] = "id-ID,id;q=0.9"
   } else {
-    h["user-agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+    // An Android phone's browser: since 2 Oct 2026 the only browser allowed to check in or out
+    // (laptops and iPhone browsers get 403 USE_PHONE_APP / USE_IOS_APP).
+    h["user-agent"] = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36"
   }
   if (profile.header) h["x-nexus-client"] = profile.header
   return h

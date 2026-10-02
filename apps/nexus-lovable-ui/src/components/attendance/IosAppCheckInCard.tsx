@@ -21,12 +21,21 @@ export function isIosBrowser() {
   return /Macintosh/i.test(ua) && (navigator.maxTouchPoints ?? 0) > 1;
 }
 
-/** The server's refusal for an iPhone/iPad browser — detection above missed it, so switch to the card. */
+/** The server's refusal for a browser that may not take attendance (iPhone/iPad: USE_IOS_APP; laptop or
+ *  desktop: USE_PHONE_APP) — switch to the card. */
 export function isUseIosAppError(e: unknown) {
-  return e instanceof ApiError && e.status === 403 && (e.payload as { code?: string } | null)?.code === "USE_IOS_APP";
+  const code = e instanceof ApiError && e.status === 403 ? (e.payload as { code?: string } | null)?.code : undefined;
+  return code === "USE_IOS_APP" || code === "USE_PHONE_APP";
+}
+
+/** Only an Android phone's browser may still check in or out (owner, 2 Oct 2026); everything else uses the app. */
+export function browserMayTakeAttendance() {
+  if (typeof navigator === "undefined") return true;
+  return /Android/i.test(navigator.userAgent || "");
 }
 
 export function IosAppCheckInCard({ className }: { className?: string }) {
+  if (!isIosBrowser()) return <PhoneAppCheckInCard className={className} />;
   return (
     <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
       <div className="flex items-start gap-3">
@@ -114,5 +123,24 @@ export function AndroidAppCheckInNote({ className }: { className?: string }) {
       </span>
       <span className="inline-flex shrink-0 items-center gap-1 font-bold text-primary"><Download className="h-3.5 w-3.5" /> Get it</span>
     </a>
+  );
+}
+
+/** Laptop / desktop: attendance happens on the phone (owner, 2 Oct 2026). */
+function PhoneAppCheckInCard({ className }: { className?: string }) {
+  return (
+    <div className={cn("rounded-2xl border border-primary/20 bg-card p-4 shadow-soft", className)}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Smartphone className="h-5 w-5" /></span>
+        <div className="min-w-0">
+          <p className="font-display text-base font-bold leading-snug tracking-tight">Check in and out from the NEXUS app on your phone</p>
+          <p className="mt-1 text-sm text-muted-foreground">Attendance isn't taken from a laptop — the app records where your workday happens. Everything else here still works.</p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <a href={NEXUS_APP_STORE_URL} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold transition hover:bg-accent active:scale-[0.99]">iPhone · App Store <ExternalLink className="h-3.5 w-3.5" /></a>
+        <a href={NEXUS_ANDROID_DOWNLOAD} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold transition hover:bg-accent active:scale-[0.99]"><Download className="h-3.5 w-3.5" /> Android app</a>
+      </div>
+    </div>
   );
 }

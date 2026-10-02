@@ -11,6 +11,8 @@ import { isHoliday } from "@/lib/holidays"
 import { isAutoDeduction, hasAttendanceWaiver, startFloor, isOutageDay } from "@/lib/attendance-absence"
 import { awardXpOnce } from "@/lib/gamification"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
+import { USE_IOS_APP_ERROR, USE_PHONE_APP_ERROR, isDesktopBrowser, isIosBrowserWithoutApp } from "@/lib/attendance-outside"
+import { iosBrowserCheckInBlocked } from "@/lib/version-policy"
 import { attendanceActionSchema } from "@/lib/validations"
 import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 import { assessReflection } from "@/lib/reflection-quality"
@@ -26,8 +28,20 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Check-out is never refused for the browser it comes from: only check-IN from an iPhone browser
-    // is (see check-in). Whoever checked in from a browser must always be able to check out the same way.
+    // Owner, 2 Oct 2026: attendance from a browser is only for Android phones (while the Android app
+    // is in development). A laptop/desktop browser and an iPhone/iPad browser are refused here as at
+    // check-in — before this a day checked in on the app could still be closed from a laptop. Someone
+    // checked in from a laptop earlier closes the day from the app on their phone.
+    {
+      const userAgent = request.headers.get("user-agent")
+      const clientHeader = request.headers.get("x-nexus-client")
+      if (isIosBrowserWithoutApp(userAgent, clientHeader) && (await iosBrowserCheckInBlocked())) {
+        return NextResponse.json(USE_IOS_APP_ERROR, { status: 403 })
+      }
+      if (isDesktopBrowser(userAgent, clientHeader)) {
+        return NextResponse.json(USE_PHONE_APP_ERROR, { status: 403 })
+      }
+    }
 
     const context = await getAttendanceWorkspaceContext(session.user.id)
     if (!context.workspace) {

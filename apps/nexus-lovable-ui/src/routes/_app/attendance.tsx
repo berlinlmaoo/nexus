@@ -1,7 +1,7 @@
 import type React from "react";
 import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
 import { LocationTrail, LocationTrailDialog } from "@/components/attendance/LocationTrail";
-import { AndroidAppCheckInNote, IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
+import { AndroidAppCheckInNote, IosAppCheckInCard, browserMayTakeAttendance, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1995,9 +1995,9 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   const lastOut = useRef<AttendanceActionPayload | null>(null);
   const [offsitePrompt, setOffsitePrompt] = useState<{ officeName: string; distanceMeters: number } | null>(null);
   const [offsiteReason, setOffsiteReason] = useState("");
-  // iPhone/iPad browsers check in from the app (the server refuses them with USE_IOS_APP).
-  // Shown once the server actually refuses (it only does after the 0.1.6 minimum starts).
-  const [iosOnly, setIosOnly] = useState(false);
+  // Only an Android phone's browser takes attendance (owner, 2 Oct 2026); iPhone/iPad and laptops are
+  // shown the card up front, and the server's 403 (USE_IOS_APP / USE_PHONE_APP) switches to it too.
+  const [iosOnly, setIosOnly] = useState(() => !browserMayTakeAttendance());
 
   // The selfie comes from the face check (SelfieCapture opens LivenessCapture, and falls back to the
   // plain camera / file picker only where the face check cannot run). Opened by the one button.

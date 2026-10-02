@@ -13,7 +13,7 @@ import { setLatePenalty, clearLatePenalty } from "@/lib/gamification"
 import { startFloor, isOutageDay, isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
-import { USE_IOS_APP_ERROR, attendanceClientOf, isIosBrowserWithoutApp } from "@/lib/attendance-outside"
+import { USE_IOS_APP_ERROR, USE_PHONE_APP_ERROR, attendanceClientOf, isDesktopBrowser, isIosBrowserWithoutApp } from "@/lib/attendance-outside"
 import { iosBrowserCheckInBlocked } from "@/lib/version-policy"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
@@ -43,6 +43,10 @@ export async function POST(request: NextRequest) {
     const clientHeader = request.headers.get("x-nexus-client")
     if (isIosBrowserWithoutApp(userAgent, clientHeader) && (await iosBrowserCheckInBlocked())) {
       return NextResponse.json(USE_IOS_APP_ERROR, { status: 403 })
+    }
+    // Laptops / desktops: never (owner, 2 Oct 2026) — see isDesktopBrowser.
+    if (isDesktopBrowser(userAgent, clientHeader)) {
+      return NextResponse.json(USE_PHONE_APP_ERROR, { status: 403 })
     }
     const checkInClient = attendanceClientOf(userAgent, clientHeader)
 
