@@ -499,6 +499,30 @@ export function isIosBrowserWithoutApp(userAgent: string | null | undefined, cli
   return /iPhone|iPad|iPod/.test(ua)
 }
 
+/**
+ * A browser on a laptop or desktop (Mac, Windows, Linux, ChromeOS — and iPadOS Safari in desktop mode,
+ * which sends a Mac User-Agent): refused for check-in AND check-out (owner, 2 Oct 2026: "laptop udah
+ * gaboleh"). A laptop cannot report where the day is spent, so a check-in from one escapes the location
+ * trail and the automatic offsite check-out. Android browsers still pass while the Android app is in
+ * development; iPhone/iPad browsers are isIosBrowserWithoutApp's. Apps always pass (ios/… or android/…
+ * header, legacy NEXUS/<build> UA, NEXUS-Android UA), and a caller that is not a browser at all (no
+ * Mozilla UA, no web/ header — curl, scripts) is never guessed at.
+ */
+export function isDesktopBrowser(userAgent: string | null | undefined, clientHeader: string | null | undefined): boolean {
+  const header = (clientHeader ?? "").trim()
+  if (/^(ios|android)\//i.test(header)) return false
+  const ua = (userAgent ?? "").trim()
+  if (/^NEXUS(-Android)?\//.test(ua)) return false
+  const browser = /^web\//i.test(header) || /^Mozilla\//.test(ua)
+  if (!browser) return false
+  return !/Android|iPhone|iPad|iPod/.test(ua)
+}
+
+export const USE_PHONE_APP_ERROR = {
+  error: "Absen pakai app NEXUS di HP ya — dari laptop lokasi kerjamu tidak bisa dicatat.",
+  code: "USE_PHONE_APP",
+} as const
+
 export const USE_IOS_APP_ERROR = {
   error: "Absen dari iPhone pakai app NEXUS ya — di browser iPhone lokasi kerjamu tidak bisa dicatat.",
   code: "USE_IOS_APP",

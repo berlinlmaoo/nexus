@@ -9,7 +9,7 @@ import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAt
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 import { recordPlace } from "@/lib/attendance-place";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
-import { IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
+import { IosAppCheckInCard, browserMayTakeAttendance, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, whereHint, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
 
 type TodayData = NexusAttendanceToday | null;
@@ -43,9 +43,9 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
   const refresh = () => { qc.invalidateQueries({ queryKey: ["attendance-today"] }); qc.invalidateQueries({ queryKey: ["attendance-history"] }); qc.invalidateQueries({ queryKey: ["my-penalties"] }); };
   const [msg, setMsg] = useState<string | null>(null);
   const [msgOk, setMsgOk] = useState(false);
-  // iPhone/iPad browsers check in from the app (the server refuses them with USE_IOS_APP).
-  // Shown once the server actually refuses (it only does after the 0.1.6 minimum starts).
-  const [iosOnly, setIosOnly] = useState(false);
+  // Only an Android phone's browser takes attendance (owner, 2 Oct 2026); iPhone/iPad and laptops are
+  // shown the card up front, and the server's 403 (USE_IOS_APP / USE_PHONE_APP) switches to it too.
+  const [iosOnly, setIosOnly] = useState(() => !browserMayTakeAttendance());
   const [locating, setLocating] = useState(false);
   // Offsite checkout (outside the geofence): captured attempt + the reason prompt.
   const lastOut = useRef<AttendanceActionPayload | null>(null);
