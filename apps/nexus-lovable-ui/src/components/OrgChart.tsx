@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronRight, Download, Focus, ImagePlus, Loader2, Maximize2, Minimize2, Plus, Scan, Search, Trash2, Wand2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowUpToLine, Building2, Check, ChevronRight, Download, Focus, ImagePlus, LayoutGrid, Loader2, Maximize2, Minimize2, Plus, Scan, Search, Trash2, Users, Wand2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { toPng } from "html-to-image";
 import { ApiError, nexusApi, type OrgChartPerson, type OrgUnit } from "@/lib/nexus-api";
 import {
@@ -483,6 +483,7 @@ export function OrgChart() {
   };
   const startElDrag = (key: string) => (e: React.PointerEvent) => {
     if (e.button !== 0 || busy) return;
+    if ((e.target as HTMLElement).closest("[data-oc-add]")) return; // the "+" under a card
     if (key.startsWith("b:") && mode !== "lengkap") return; // people boxes move freely in Lengkap only
     if ((e.target as HTMLElement).closest("[draggable='true'],input,select")) return; // a person chip: HTML5 drag
     if (key.startsWith("b:") && (e.target as HTMLElement).closest("button")) return; // × on a chip
@@ -606,8 +607,8 @@ export function OrgChart() {
         <Stat n={chart.data.stats.placed} of={chart.data.stats.people} label="orang sudah ditaruh" />
         <Stat n={unplaced.length} label="belum ditaruh" tone={unplaced.length > 0 ? "warn" : "ok"} />
         <span className="text-muted-foreground">Seret kartu atau kotak orang ke mana saja; seret orang ke chip atasannya.</span>
-        <button type="button" onClick={() => setAdding({ parentId: null })} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90">
-          <Plus className="h-3.5 w-3.5" /> Tambah IP/Team
+        <button type="button" onClick={() => setAdding({ parentId: focusId ?? (tree.roots.length === 1 ? tree.roots[0].id : null) })} title="Tambah IP/perusahaan, divisi, atau grup" className="ml-auto inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90">
+          <Plus className="h-3.5 w-3.5" /> Tambah
         </button>
       </div>
 
@@ -734,8 +735,14 @@ export function OrgChart() {
                       const style = { left: r.x, top: r.y, width: r.w, zIndex: (t === "c" ? 11 : 10) + lift };
                       if (t === "c") {
                         return (
-                          <div key={key} data-oc-key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2")} style={style}>
+                          <div key={key} data-oc-key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("group/card absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2")} style={style}>
                             <UnitCard u={u} busy={busy} {...cardInfo(u)} dragging={dragKey === key} onKeyOpen={() => setEditing(u)} />
+                            {!dragKey && !busy && (
+                              <button type="button" data-oc-add="" onClick={(e) => { e.stopPropagation(); setAdding({ parentId: u.id }); }} aria-label={`Tambah di bawah ${u.name}`} title={`Tambah di bawah ${u.name}`}
+                                className="absolute -bottom-3 left-1/2 z-10 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:border-[#1e3a5f] hover:text-[#1e3a5f] focus-visible:opacity-100 group-hover/card:opacity-100 dark:hover:border-[#9fb6d6] dark:hover:text-[#9fb6d6]">
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         );
                       }
@@ -776,17 +783,16 @@ export function OrgChart() {
 
       {adding && (
         <UnitDialog
-          title="Tambah IP/Team"
           units={units}
           excluded={new Set()}
           initial={{ name: "", parentId: adding.parentId }}
+          people={people}
           onClose={() => setAdding(null)}
           onSaved={() => { setAdding(null); refresh(); }}
         />
       )}
       {editing && (
         <UnitDialog
-          title={`Ubah ${editing.name}`}
           unit={editing}
           units={units}
           excluded={descendantsOf(editing.id).add(editing.id)}
@@ -801,7 +807,7 @@ export function OrgChart() {
         />
       )}
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <AlertDialogContent>
+        <AlertDialogContent className="z-[80]">
           <AlertDialogHeader>
             <AlertDialogTitle>Rapikan otomatis?</AlertDialogTitle>
             <AlertDialogDescription>Semua posisi yang sudah digeser (kartu dan kotak orang) dihapus, dan bagan disusun ulang otomatis. Induk, orang, jabatan, dan pemimpin tidak berubah.</AlertDialogDescription>
@@ -1176,55 +1182,212 @@ function pathOf(u: OrgUnit, byId: Map<string, OrgUnit>): string {
   return names.join(" › ");
 }
 
-/** Tambah atau ubah satu IP/Team: nama, induk, logo, hapus. */
-function UnitDialog({ title, unit, units, excluded, initial, people = [], members = 0, subUnits = 0, onAddChild, onFocus, onClose, onSaved }: {
-  title: string; unit?: OrgUnit; units: OrgUnit[]; excluded: Set<string>; initial: { name: string; parentId: string | null }; people?: OrgChartPerson[];
+const KIND_ICON = { IP: Building2, DIVISION: Users, GROUP: LayoutGrid } as const;
+const KIND_LABEL: Record<OrgUnit["kind"], string> = { IP: "IP / Perusahaan", DIVISION: "Divisi / Team", GROUP: "Grup" };
+const KIND_SUB: Record<OrgUnit["kind"], string> = { IP: "Punya logo sendiri", DIVISION: "Tim kerja, tanpa logo", GROUP: "Cuma mengelompokkan kartu" };
+
+/** A unit's small square: its logo (an IP that has one) or the icon of its kind. */
+function KindTile({ kind, logoUrl, size = 28 }: { kind: OrgUnit["kind"]; logoUrl?: string | null; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  const showLogo = kind === "IP" && !!logoUrl && !broken;
+  const tone = useLogoTone(showLogo ? logoUrl! : null);
+  if (showLogo) {
+    return <img src={logoUrl!} alt="" onError={() => setBroken(true)} style={{ width: size, height: size }} className={cn("shrink-0 rounded-lg object-contain p-0.5 ring-1 ring-black/5", tone === "light" ? "bg-[#0f1b2d]" : "bg-white")} />;
+  }
+  const Icon = KIND_ICON[kind];
+  return (
+    <span style={{ width: size, height: size }} className={cn("grid shrink-0 place-items-center rounded-lg",
+      kind === "IP" ? "bg-[#1e3a5f] text-white" : kind === "DIVISION" ? "bg-[#edf2f9] text-[#1e3a5f] dark:bg-[#1a2a41] dark:text-[#dce7f6]" : "bg-muted text-muted-foreground")}>
+      <Icon className="h-[55%] w-[55%]" />
+    </span>
+  );
+}
+
+function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: React.ReactNode }) {
+  return (
+    <div className="mb-1.5 flex items-baseline justify-between gap-2">
+      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{children}</span>
+      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+    </div>
+  );
+}
+
+/** "PT. The Z Networks › Framework Agency" — the path ABOVE a unit. */
+function parentTrail(u: OrgUnit, byId: Map<string, OrgUnit>): string {
+  const full = pathOf(u, byId);
+  const i = full.lastIndexOf(" › ");
+  return i >= 0 ? full.slice(0, i) : "";
+}
+
+/**
+ * Where a card sits (owner, 5 Oct 2026: the long "Di bawah" dropdown was cut off and confusing). Shows
+ * the current place; "Ganti" opens the whole chart as an indented list, and typing turns it into a flat
+ * list of paths. The card's own branch is left out — it cannot sit inside itself.
+ */
+function ParentPicker({ units, value, excluded, onChange }: { units: OrgUnit[]; value: string; excluded: Set<string>; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const byId = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
+  const rows = useMemo(() => {
+    const kids = new Map<string | null, OrgUnit[]>();
+    for (const u of units) {
+      const p = u.parentId && byId.has(u.parentId) ? u.parentId : null;
+      kids.set(p, [...(kids.get(p) ?? []), u]);
+    }
+    for (const list of kids.values()) list.sort(byPos);
+    const out: Array<{ u: OrgUnit; depth: number }> = [];
+    const seen = new Set<string>();
+    const walk = (p: string | null, depth: number) => {
+      for (const u of kids.get(p) ?? []) {
+        if (seen.has(u.id) || excluded.has(u.id)) continue;
+        seen.add(u.id);
+        out.push({ u, depth });
+        walk(u.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [units, byId, excluded]);
+  const current = value ? byId.get(value) ?? null : null;
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? rows.filter((r) => pathOf(r.u, byId).toLowerCase().includes(needle)) : rows;
+  const choose = (id: string) => { onChange(id); setOpen(false); setQ(""); };
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2 text-left transition hover:border-[#1e3a5f]/50">
+        {current
+          ? <KindTile kind={current.kind} logoUrl={current.logoUrl} size={28} />
+          : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><ArrowUpToLine className="h-3.5 w-3.5" /></span>}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{current ? current.name : "Paling atas"}</span>
+          <span className="block truncate text-[11px] text-muted-foreground">{current ? parentTrail(current, byId) || "paling atas" : "tanpa induk"}</span>
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-[#1e3a5f] dark:text-[#9fb6d6]">Ganti</span>
+      </button>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#1e3a5f]/40 bg-background dark:border-[#9fb6d6]/40">
+      <div className="relative border-b border-border">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); setQ(""); } }}
+          placeholder="Cari IP, divisi, atau grup…" className="w-full bg-transparent py-2.5 pl-8 pr-16 text-sm outline-none" />
+        <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-0.5 text-xs font-semibold text-muted-foreground hover:bg-accent">Tutup</button>
+      </div>
+      <div className="max-h-64 overflow-y-auto p-1">
+        {!needle && (
+          <PickRow selected={!value} onClick={() => choose("")} depth={0} label="Paling atas" sub="tanpa induk"
+            icon={<span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"><ArrowUpToLine className="h-3 w-3" /></span>} />
+        )}
+        {shown.map(({ u, depth }) => (
+          <PickRow key={u.id} selected={value === u.id} onClick={() => choose(u.id)} depth={needle ? 0 : depth} label={u.name}
+            sub={needle ? parentTrail(u, byId) || undefined : u.kind === "GROUP" ? "grup" : undefined}
+            icon={<KindTile kind={u.kind} logoUrl={u.logoUrl} size={22} />} />
+        ))}
+        {shown.length === 0 && <div className="px-3 py-4 text-center text-xs text-muted-foreground">Nggak ada yang cocok.</div>}
+      </div>
+    </div>
+  );
+}
+function PickRow({ selected, onClick, depth, icon, label, sub }: { selected: boolean; onClick: () => void; depth: number; icon: React.ReactNode; label: string; sub?: string }) {
+  return (
+    <button type="button" onClick={onClick} style={{ paddingLeft: 8 + depth * 18 }}
+      className={cn("flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-sm transition hover:bg-accent", selected && "bg-[#1e3a5f]/[0.07] font-semibold dark:bg-[#9fb6d6]/10")}>
+      {icon}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{label}</span>
+        {sub && <span className="block truncate text-[11px] font-normal text-muted-foreground">{sub}</span>}
+      </span>
+      {selected && <Check className="h-4 w-4 shrink-0 text-[#1e3a5f] dark:text-[#9fb6d6]" />}
+    </button>
+  );
+}
+
+/** Tambah atau ubah satu kartu: jenis, nama, logo, letak, pemimpin, dan jabatan orang-orangnya. */
+function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, subUnits = 0, onAddChild, onFocus, onClose, onSaved }: {
+  unit?: OrgUnit; units: OrgUnit[]; excluded: Set<string>; initial: { name: string; parentId: string | null }; people?: OrgChartPerson[];
   members?: number; subUnits?: number; onAddChild?: () => void; onFocus?: () => void; onClose: () => void; onSaved: () => void;
 }) {
+  const byId = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
   const [name, setName] = useState(initial.name);
   const [parentId, setParentId] = useState<string>(initial.parentId ?? "");
+  // A new card guesses its kind from the cards it will sit next to (a company under the top, a division
+  // under a company) until a kind is picked by hand.
+  const guessKind = (pid: string): OrgUnit["kind"] => {
+    if (!pid) return "IP";
+    const next = units.filter((u) => u.parentId === pid && u.kind !== "GROUP");
+    if (next.length) return next.filter((u) => u.kind === "IP").length * 2 > next.length ? "IP" : "DIVISION";
+    const p = byId.get(pid);
+    return p && !p.parentId && p.kind !== "GROUP" ? "IP" : "DIVISION";
+  };
+  const [kind, setKindRaw] = useState<OrgUnit["kind"]>(unit?.kind ?? guessKind(initial.parentId ?? ""));
+  const [kindPicked, setKindPicked] = useState(!!unit);
+  const setKind = (k: OrgUnit["kind"]) => { setKindRaw(k); setKindPicked(true); };
+  const changeParent = (pid: string) => { setParentId(pid); if (!kindPicked) setKindRaw(guessKind(pid)); };
   const [logo, setLogo] = useState<string | null>(unit?.logoUrl ?? null);
-  const [kind, setKind] = useState<"IP" | "DIVISION" | "GROUP">(unit?.kind ?? "DIVISION");
+  // A new IP's logo waits here and is uploaded right after the card exists.
+  const [pendingLogo, setPendingLogo] = useState<File | null>(null);
+  const pendingUrl = useMemo(() => (pendingLogo ? URL.createObjectURL(pendingLogo) : null), [pendingLogo]);
+  useEffect(() => () => { if (pendingUrl) URL.revokeObjectURL(pendingUrl); }, [pendingUrl]);
+  const shownLogo = pendingUrl ?? logo;
+  const previewTone = useLogoTone(shownLogo);
   const [leadUserId, setLeadUserId] = useState<string>(unit?.leadUserId ?? "");
-  const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
   // Who may lead: the BoD / One Above All / Manager people of the chosen parent card — or, when the
   // parent is a group, of the card above the group(s).
   const leadCard = (() => {
     const seen = new Set<string>();
     let p: string | null = parentId || null;
-    while (p && unitById.get(p)?.kind === "GROUP" && !seen.has(p)) { seen.add(p); p = unitById.get(p)?.parentId ?? null; }
-    return p && unitById.get(p)?.kind !== "GROUP" ? p : null;
+    while (p && byId.get(p)?.kind === "GROUP" && !seen.has(p)) { seen.add(p); p = byId.get(p)?.parentId ?? null; }
+    return p && byId.get(p)?.kind !== "GROUP" ? p : null;
   })();
-  const viaGroup = !!parentId && unitById.get(parentId)?.kind === "GROUP";
+  const viaGroup = !!parentId && byId.get(parentId)?.kind === "GROUP";
   const leadCandidates = leadCard ? people.filter((p) => p.unitIds.includes(leadCard) && LEAD_ROLES.has(p.role)) : [];
   const leadValid = !leadUserId || leadCandidates.some((p) => p.userId === leadUserId);
   const cardPeople = unit ? people.filter((p) => p.unitIds.includes(unit.id)) : [];
   const isGroup = kind === "GROUP";
   const groupBlocked = isGroup && unit?.kind !== "GROUP" && cardPeople.length > 0;
-  const previewTone = useLogoTone(logo);
+  const parent = parentId ? byId.get(parentId) ?? null : null;
+  // Under a division a division is a sub-division (owner, 5 Oct 2026: "sub divisi baru").
+  const kindTitle = (k: OrgUnit["kind"]) => (k === "DIVISION" && parent?.kind === "DIVISION" ? "Sub-divisi" : KIND_LABEL[k]);
+  const examples = units.filter((u) => u.kind === kind && u.id !== unit?.id && (kind !== "IP" || !!u.parentId)).slice(0, 3).map((u) => u.name);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const byId = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
-  const parents = units.filter((u) => !excluded.has(u.id)).map((u) => ({ id: u.id, path: pathOf(u, byId) })).sort((a, b) => a.path.localeCompare(b.path, "id"));
+
+  const title = unit ? unit.name : parent ? `Tambah di bawah ${parent.name}` : "Tambah ke bagan";
+  const subtitle = unit
+    ? [kindTitle(unit.kind), `${members} orang`, subUnits > 0 ? `${subUnits} di bawahnya` : null].filter(Boolean).join(" · ")
+    : "Pilih jenisnya, beri nama, lalu cek letaknya.";
 
   const save = async () => {
     const clean = name.trim();
-    if (!clean) { toast.error("Nama IP/Team wajib diisi."); return; }
+    if (!clean) { toast.error("Namanya diisi dulu."); return; }
     setSaving(true);
     try {
-      if (unit) await nexusApi.updateOrgUnit(unit.id, { name: clean, kind, parentId: parentId || null, leadUserId: isGroup ? null : leadValid ? leadUserId || null : null });
-      else await nexusApi.createOrgUnit({ name: clean, kind, parentId: parentId || null });
-      toast.success(unit ? "Tersimpan" : `${clean} ditambahkan`);
+      if (unit) {
+        await nexusApi.updateOrgUnit(unit.id, { name: clean, kind, parentId: parentId || null, leadUserId: isGroup ? null : leadValid ? leadUserId || null : null });
+        toast.success("Tersimpan");
+      } else {
+        const { unit: made } = await nexusApi.createOrgUnit({ name: clean, kind, parentId: parentId || null });
+        if (!isGroup && leadValid && leadUserId) await nexusApi.updateOrgUnit(made.id, { leadUserId });
+        if (kind === "IP" && pendingLogo) {
+          try { await nexusApi.uploadOrgUnitLogo(made.id, pendingLogo); }
+          catch { toast.error("Logo gagal diunggah", { description: "Kartunya sudah dibuat — pasang logonya lagi dari kartu itu." }); }
+        }
+        toast.success(`${clean} ditambahkan`);
+      }
       onSaved();
     } catch (e) {
       toast.error("Gagal menyimpan", { description: e instanceof ApiError ? e.message : "Coba lagi." });
     } finally { setSaving(false); }
   };
-  const upload = async (file: File | undefined) => {
-    if (!file || !unit) return;
+  const pickLogo = async (file: File | undefined) => {
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
     if (file.size > 2 * 1024 * 1024) { toast.error("Logo maksimal 2 MB."); return; }
+    if (!unit) { setPendingLogo(file); return; }
     setUploading(true);
     try {
       const r = await nexusApi.uploadOrgUnitLogo(unit.id, file);
@@ -1232,10 +1395,10 @@ function UnitDialog({ title, unit, units, excluded, initial, people = [], member
       toast.success("Logo terpasang");
     } catch (e) {
       toast.error("Gagal mengunggah logo", { description: e instanceof ApiError ? e.message : "Coba lagi." });
-    } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+    } finally { setUploading(false); }
   };
   const removeLogo = async () => {
-    if (!unit) return;
+    if (!unit) { setPendingLogo(null); return; }
     setUploading(true);
     try { await nexusApi.updateOrgUnit(unit.id, { logoUrl: null }); setLogo(null); }
     catch (e) { toast.error("Gagal menghapus logo", { description: e instanceof ApiError ? e.message : "Coba lagi." }); }
@@ -1253,99 +1416,130 @@ function UnitDialog({ title, unit, units, excluded, initial, people = [], member
       setSaving(false);
     }
   };
+  const leadTitle = (p: OrgChartPerson) => (leadCard ? p.titles?.[leadCard] : null) ?? ROLE_SUB[p.role] ?? p.role;
 
   return (
     <>
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center gap-2">
-          <div className="min-w-0 flex-1 truncate text-sm font-bold">{title}</div>
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="oc-unit-title" onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[min(92vh,780px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+        <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+          <KindTile kind={kind} logoUrl={shownLogo} size={40} />
+          <div className="min-w-0 flex-1">
+            <div id="oc-unit-title" className="line-clamp-2 text-[15px] font-bold leading-tight">{title}</div>
+            <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{subtitle}</div>
+          </div>
           {onFocus && (
-            <button type="button" onClick={onFocus} title="Tampilkan bagian ini saja, disusun otomatis" className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:bg-accent">
+            <button type="button" onClick={onFocus} title="Tampilkan bagian ini saja, disusun otomatis" className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e3a5f] hover:bg-accent dark:text-[#9fb6d6]">
               <Focus className="h-3.5 w-3.5" /> Lihat isinya
             </button>
           )}
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
-        <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Jenis</label>
-        <div className="mb-3 grid grid-cols-3 gap-1 rounded-lg border border-border bg-background p-0.5">
-          {([["IP", "IP", "pakai logo"], ["DIVISION", "Divisi", "tanpa logo"], ["GROUP", "Grup", "pengelompokan"]] as const).map(([k, name, sub]) => (
-            <button key={k} type="button" onClick={() => setKind(k)} className={cn("rounded-md px-2 py-1.5 text-center leading-tight transition-colors", kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
-              <span className="block text-xs font-semibold">{name}</span>
-              <span className={cn("block text-[10px]", kind === k ? "opacity-80" : "opacity-70")}>{sub}</span>
-            </button>
-          ))}
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <section>
+            <FieldLabel>{unit ? "Jenis" : "Mau nambah apa?"}</FieldLabel>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Jenis">
+              {(["IP", "DIVISION", "GROUP"] as const).map((k) => (
+                <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
+                  className={cn("flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition sm:flex-col sm:items-start sm:gap-1.5",
+                    kind === k ? "border-[#1e3a5f] bg-[#1e3a5f]/[0.06] ring-1 ring-[#1e3a5f] dark:border-[#9fb6d6] dark:bg-[#9fb6d6]/10 dark:ring-[#9fb6d6]" : "border-border hover:border-[#1e3a5f]/40")}>
+                  <KindTile kind={k} size={26} />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold leading-tight">{kindTitle(k)}</span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{KIND_SUB[k]}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {examples.length > 0 && <p className="mt-1.5 text-[11px] text-muted-foreground">Contoh di bagan: {examples.join(", ")}</p>}
+            {isGroup && (
+              <div className={cn("mt-2 rounded-lg px-3 py-2 text-[11px]", groupBlocked ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" : "bg-muted/60 text-muted-foreground")}>
+                {groupBlocked
+                  ? `Kartu ini masih berisi ${cardPeople.length} orang. Lepas orangnya dulu sebelum dijadikan Grup.`
+                  : "Grup hanya mengelompokkan kartu — tanpa logo, tanpa orang, tanpa pemimpin. Isinya disusun otomatis di dalamnya."}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <FieldLabel>Nama</FieldLabel>
+            <input autoFocus={!unit} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); }} maxLength={80}
+              placeholder={kind === "IP" ? "Misal: PATS" : kind === "GROUP" ? "Misal: Creative" : "Misal: Multimedia"}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-[#1e3a5f] focus:ring-2 focus:ring-[#1e3a5f]/15 dark:focus:border-[#9fb6d6]" />
+          </section>
+
+          {kind === "IP" && (
+            <section>
+              <FieldLabel hint="PNG, JPG, atau WebP · maks 2 MB">Logo</FieldLabel>
+              <div className="flex items-center gap-3">
+                <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted/50">
+                  {shownLogo
+                    ? <img src={shownLogo} alt="" className={cn("h-full w-full object-contain p-1", previewTone === "light" ? "bg-[#0f1b2d]" : "bg-white")} />
+                    : <ImagePlus className="h-5 w-5 text-muted-foreground" />}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => pickLogo(e.target.files?.[0])} />
+                  <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-50">
+                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} {shownLogo ? "Ganti logo" : "Pasang logo"}
+                  </button>
+                  {shownLogo && <button type="button" disabled={uploading} onClick={removeLogo} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent disabled:opacity-50">Hapus logo</button>}
+                  <span className="w-full text-[11px] text-muted-foreground">{unit ? "Sebaiknya persegi." : "Opsional, bisa juga nanti. Sebaiknya persegi."}</span>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <section>
+            <FieldLabel>Letaknya</FieldLabel>
+            <ParentPicker units={units} value={parentId} excluded={excluded} onChange={changeParent} />
+          </section>
+
+          {!isGroup && parentId && leadCandidates.length > 0 && (
+            <section>
+              <FieldLabel hint="opsional">Dipimpin oleh</FieldLabel>
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Dipimpin oleh">
+                <LeadChip on={!leadUserId || !leadValid} onClick={() => setLeadUserId("")}>Tidak ada</LeadChip>
+                {leadCandidates.map((p) => (
+                  <LeadChip key={p.userId} on={leadUserId === p.userId} onClick={() => setLeadUserId(p.userId)}>
+                    {p.avatar
+                      ? <img src={p.avatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                      : <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[8px] font-bold text-primary">{initialsOf(p.name)}</span>}
+                    <span className="font-semibold">{label(p)}</span>
+                    <span className="text-muted-foreground">{leadTitle(p)}</span>
+                  </LeadChip>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {viaGroup ? `Dari BoD/Manager ${byId.get(leadCard!)?.name ?? "kartu di atas grup"}. ` : ""}Kartu ini digambar di bawah orang yang dipilih, dan garisnya ditarik dari dia.
+              </p>
+            </section>
+          )}
+
+          {unit && !isGroup && cardPeople.length > 0 && (
+            <section>
+              <FieldLabel hint="jabatan tampil di bagan">Orang di kartu ini · {cardPeople.length}</FieldLabel>
+              <div className="-mx-1 space-y-0.5">
+                {cardPeople.map((p) => <TitleRow key={p.userId} person={p} unitId={unit.id} leaders={cardPeople.filter((x) => x.userId !== p.userId && LEAD_ROLES.has(x.role))} />)}
+              </div>
+            </section>
+          )}
         </div>
-        {isGroup && (
-          <div className={cn("mb-3 rounded-lg px-3 py-2 text-[11px]", groupBlocked ? "bg-rose-50 text-rose-700" : "bg-muted/50 text-muted-foreground")}>
-            {groupBlocked
-              ? `Kartu ini masih berisi ${cardPeople.length} orang. Lepas orangnya dulu sebelum dijadikan Grup.`
-              : "Grup hanya mengelompokkan kartu — tanpa logo, tanpa orang, tanpa pemimpin. Isinya disusun otomatis di dalam bingkainya."}
-          </div>
-        )}
 
-        {unit && kind === "IP" && (
-          <div className="mb-3 flex items-center gap-3">
-            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#1e3a5f] text-white">
-              {logo ? <img src={logo} alt="" className={cn("h-full w-full object-contain p-1", previewTone === "light" ? "bg-[#0f1b2d]" : "bg-white")} /> : <span className="text-sm font-bold">{initialsOf(name || unit.name)}</span>}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
-              <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-50">
-                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} {logo ? "Ganti logo" : "Pasang logo"}
-              </button>
-              {logo && <button type="button" disabled={uploading} onClick={removeLogo} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent disabled:opacity-50">Hapus logo</button>}
-              <div className="w-full text-[10.5px] text-muted-foreground">PNG, JPG, atau WebP · maks 2 MB · sebaiknya persegi</div>
-            </div>
-          </div>
-        )}
-
-        <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Nama</label>
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); }} maxLength={80} placeholder="Misal: Framework Agency" className="mb-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-
-        <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Di bawah</label>
-        <select value={parentId} onChange={(e) => setParentId(e.target.value)} className="mb-4 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-          <option value="">— Puncak (tanpa induk) —</option>
-          {parents.map((p) => <option key={p.id} value={p.id}>{p.path}</option>)}
-        </select>
-
-        {unit && parentId && !isGroup && (
-          <>
-            <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Dipimpin oleh</label>
-            <select value={leadValid ? leadUserId : ""} onChange={(e) => setLeadUserId(e.target.value)} disabled={leadCandidates.length === 0} className="mb-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60">
-              <option value="">— Tidak ada —</option>
-              {leadCandidates.map((p) => <option key={p.userId} value={p.userId}>{label(p)} · {ROLE_SUB[p.role] ?? p.role}</option>)}
-            </select>
-            <div className="mb-4 text-[10.5px] text-muted-foreground">
-              {leadCandidates.length === 0
-                ? viaGroup ? "Kartu di atas grup ini belum punya BoD atau Manager." : "Kartu induknya belum punya BoD atau Manager."
-                : viaGroup ? `Dipilih dari BoD/Manager ${unitById.get(leadCard!)?.name ?? "kartu di atas grup"} — garisnya ditarik dari orang itu.` : "Kartu ini digambar di bawah orang itu, di kartu induknya."}
-            </div>
-          </>
-        )}
-
-        {unit && cardPeople.length > 0 && !isGroup && (
-          <div className="mb-4">
-            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Jabatan & atasan di kartu ini</div>
-            <div className="max-h-56 space-y-1 overflow-y-auto">
-              {cardPeople.map((p) => <TitleRow key={p.userId} person={p} unitId={unit.id} leaders={cardPeople.filter((x) => x.userId !== p.userId && LEAD_ROLES.has(x.role))} />)}
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 border-t border-border bg-muted/30 px-5 py-3">
           {unit && (
-            <button type="button" disabled={saving} onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+            <button type="button" disabled={saving} onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-300 dark:hover:bg-rose-950/40">
               <Trash2 className="h-3.5 w-3.5" /> Hapus
             </button>
           )}
           {unit && onAddChild && (
-            <button type="button" onClick={onAddChild} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-primary hover:bg-accent">
-              <Plus className="h-3.5 w-3.5" /> {unit.kind === "GROUP" ? "Isi grup" : "Sub-team"}
+            <button type="button" onClick={onAddChild} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-[#1e3a5f] hover:bg-accent dark:text-[#9fb6d6]">
+              <Plus className="h-3.5 w-3.5" /> {unit.kind === "GROUP" ? "Tambah ke grup ini" : "Tambah di bawahnya"}
             </button>
           )}
-          <button type="button" disabled={saving || groupBlocked} onClick={save} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          {!unit && <button type="button" onClick={onClose} className="ml-auto rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Batal</button>}
+          <button type="button" disabled={saving || groupBlocked} onClick={save} className={cn("inline-flex items-center gap-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50", unit && "ml-auto")}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {unit ? "Simpan" : "Tambah"}
           </button>
         </div>
@@ -1354,7 +1548,7 @@ function UnitDialog({ title, unit, units, excluded, initial, people = [], member
 
       {unit && (
         <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-          <AlertDialogContent>
+          <AlertDialogContent className="z-[80]">
             <AlertDialogHeader>
               <AlertDialogTitle>Hapus {unit.name}?</AlertDialogTitle>
               <AlertDialogDescription>
@@ -1371,6 +1565,15 @@ function UnitDialog({ title, unit, units, excluded, initial, people = [], member
         </AlertDialog>
       )}
     </>
+  );
+}
+function LeadChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" role="radio" aria-checked={on} onClick={onClick}
+      className={cn("inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition",
+        on ? "border-[#1e3a5f] bg-[#1e3a5f]/[0.07] ring-1 ring-[#1e3a5f] dark:border-[#9fb6d6] dark:bg-[#9fb6d6]/10 dark:ring-[#9fb6d6]" : "border-border hover:border-[#1e3a5f]/40")}>
+      {children}
+    </button>
   );
 }
 
@@ -1402,7 +1605,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
     .map(([unitId, leaderId]) => ({ unitId, unit: byId.get(unitId), leader: people.find((p) => p.userId === leaderId) }))
     .filter((c) => c.unit && c.leader);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <div className="text-sm font-bold">{label(person)}</div>
@@ -1497,14 +1700,20 @@ function TitleRow({ person, unitId, leaders }: { person: OrgChartPerson; unitId:
     } finally { setSaving(false); }
   };
   return (
-    <div className="flex items-center gap-2">
-      <span className="min-w-0 flex-1 truncate text-xs">{label(person)} <span className="text-muted-foreground">· {ROLE_SUB[person.role] ?? person.role}</span></span>
+    <div className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-muted/50">
+      {person.avatar
+        ? <img src={person.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+        : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(person.name)}</span>}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium leading-tight">{label(person)}</span>
+        <span className="block truncate text-[11px] leading-tight text-muted-foreground">{ROLE_SUB[person.role] ?? person.role}</span>
+      </span>
       <input value={v} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        maxLength={40} placeholder="Jabatan" disabled={saving}
-        className="w-24 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary disabled:opacity-60" />
+        maxLength={40} placeholder="Jabatan" disabled={saving} aria-label={`Jabatan ${label(person)}`}
+        className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-[#1e3a5f] disabled:opacity-60 dark:focus:border-[#9fb6d6]" />
       {person.role !== "BOD" && person.role !== "ONE_ABOVE_ALL" && leaders.length > 0 && (
-        <select value={person.reportsTo?.[unitId] ?? ""} disabled={saving} onChange={(e) => saveReportsTo(e.target.value || null)} title="Di bawah siapa"
-          className="w-28 rounded-md border border-border bg-background px-1.5 py-1 text-xs outline-none focus:border-primary disabled:opacity-60">
+        <select value={person.reportsTo?.[unitId] ?? ""} disabled={saving} onChange={(e) => saveReportsTo(e.target.value || null)} title="Di bawah siapa" aria-label={`Atasan ${label(person)}`}
+          className="w-28 rounded-lg border border-border bg-background px-1.5 py-1.5 text-xs outline-none focus:border-[#1e3a5f] disabled:opacity-60">
           <option value="">— di bawah —</option>
           {leaders.map((l) => <option key={l.userId} value={l.userId}>{label(l)}</option>)}
         </select>
