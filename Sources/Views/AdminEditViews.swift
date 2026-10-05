@@ -123,7 +123,7 @@ struct AdminView: View {
                                      ("Audit", "audit"), ("Quests", "quests")]
         if viewer.canAnnounce {
             // Same gate as the web tab: BoD and One Above All, who are also the only ones who may change it.
-            t.append((T("Bagan IP & Divisi"), "org"))
+            t.append((T("IP & Division Chart"), "org"))
             t.append((T("Announcements"), "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
             if RemoteConfig.shared.fakeGpsReview { t.append((T("Absen Monitor"), "suspects")) }

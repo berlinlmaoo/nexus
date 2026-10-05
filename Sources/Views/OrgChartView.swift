@@ -55,9 +55,9 @@ struct AdminOrgChartSection: View {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    EmptyState(icon: "rectangle.3.group", title: T("Bagan tidak bisa dimuat"),
-                               subtitle: problem ?? T("Butuh akses BoD."),
-                               actionTitle: T("Coba lagi"), actionIcon: "arrow.clockwise",
+                    EmptyState(icon: "rectangle.3.group", title: T("The chart couldn't load"),
+                               subtitle: problem ?? T("Needs BoD access."),
+                               actionTitle: T("Try again"), actionIcon: "arrow.clockwise",
                                action: { Task { await load() } })
                         .padding(.top, 40)
                 }
@@ -98,7 +98,7 @@ struct AdminOrgChartSection: View {
             tree = OrgTree(data)
             problem = nil
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Coba lagi.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Try again.")
         }
         loading = false
     }
@@ -115,21 +115,21 @@ struct AdminOrgChartSection: View {
             }
             HStack(spacing: 3) {
                 Text("\(placed)/\(t.people.count)").font(NXFont.text(13, .bold)).monospacedDigit().foregroundStyle(NX.foreground)
-                Text(T("orang ditaruh")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                Text(T("people placed")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 0)
             Button { fitTrigger += 1 } label: {
                 Image(systemName: "arrow.down.left.and.arrow.up.right").font(.system(size: 13, weight: .semibold))
             }
-            .accessibilityLabel(T("Pas ke layar"))
+            .accessibilityLabel(T("Fit to screen"))
             Button { exportPNG(t) } label: {
                 Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold))
             }
-            .accessibilityLabel(T("Bagikan sebagai gambar"))
+            .accessibilityLabel(T("Share as image"))
             Button {
                 adding = OrgAddTarget(parentId: focusId ?? (t.roots.count == 1 ? t.roots[0].id : nil))
             } label: {
-                Label(T("Tambah"), systemImage: "plus").font(NXFont.text(13, .semibold))
+                Label(T("Add"), systemImage: "plus").font(NXFont.text(13, .semibold))
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(NX.foreground, in: Capsule())
                     .foregroundStyle(NX.background)
@@ -148,8 +148,8 @@ struct AdminOrgChartSection: View {
         }
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                OrgViewChip(title: T("Ringkas"), active: summary) { viewKey = "ringkas" }
-                OrgViewChip(title: T("Lengkap"), active: focusId == nil && viewKey == "lengkap") { viewKey = "lengkap" }
+                OrgViewChip(title: T("Summary"), active: summary) { viewKey = "ringkas" }
+                OrgViewChip(title: T("Full"), active: focusId == nil && viewKey == "lengkap") { viewKey = "lengkap" }
                 if !tops.isEmpty {
                     Rectangle().fill(NX.border).frame(width: 1, height: 16).padding(.horizontal, 2)
                 }
@@ -189,7 +189,7 @@ struct AdminOrgChartSection: View {
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
         if !alone.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(T("Belum ditaruh")) · \(alone.count) \(T("orang"))")
+                Text("\(T("Not placed yet")) · \(orgPeopleCount(alone.count))")
                     .font(NXFont.text(10.5, .bold)).tracking(0.6).foregroundStyle(NX.warning)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -232,10 +232,10 @@ struct AdminOrgChartSection: View {
     @MainActor private func exportPNG(_ t: OrgTree) {
         let renderer = ImageRenderer(content: chart(t).environment(\.colorScheme, .light))
         renderer.scale = 2
-        guard let img = renderer.uiImage, let data = img.pngData() else { problem = T("Gagal membuat gambar."); return }
+        guard let img = renderer.uiImage, let data = img.pngData() else { problem = T("Couldn't create the image."); return }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Bagan IP & Divisi \(f.string(from: Date())).png")
-        do { try data.write(to: url); shareItem = ShareItem(url: url) } catch { problem = T("Gagal membuat gambar.") }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(T("IP & Division Chart")) \(f.string(from: Date())).png")
+        do { try data.write(to: url); shareItem = ShareItem(url: url) } catch { problem = T("Couldn't create the image.") }
     }
 }
 
@@ -414,12 +414,12 @@ private struct OrgCardBranch: View {
         case .unit(let id):
             OrgNode(id: id, ctx: ctx)
         case .staff:
-            OrgPeopleBox(unitId: unit.id, title: "\(people.staff.count) \(T("orang"))", people: people.staff,
+            OrgPeopleBox(unitId: unit.id, title: orgPeopleCount(people.staff.count), people: people.staff,
                          horizontal: false, chips: false, ctx: ctx)
         case .under(_, let leaderId):
             let box = people.under.first { $0.leader.userId == leaderId }
             OrgPeopleBox(unitId: unit.id,
-                         title: "\(T("Di bawah")) \(box?.leader.firstName ?? "?") · \(box?.people.count ?? 0)",
+                         title: String(format: T("Under %@ · %d"), box?.leader.firstName ?? "?", box?.people.count ?? 0),
                          people: box?.people ?? [], horizontal: false, chips: false, ctx: ctx)
         }
     }
@@ -433,12 +433,12 @@ private struct OrgCardBranch: View {
     private func meta(shallow: Bool, people: OrgUnitPeople) -> String {
         if shallow {
             let s = ctx.tree.branchStats(unit.id)
-            var parts = [s.people > 0 ? "\(s.people) \(T("orang"))" : T("belum ada orang")]
-            if s.parts > 0 { parts.append("\(s.parts) \(T("bagian"))") }
+            var parts = [s.people > 0 ? orgPeopleCount(s.people) : T("no people yet")]
+            if s.parts > 0 { parts.append(s.parts == 1 ? T("1 part") : String(format: T("%d parts"), s.parts)) }
             return parts.joined(separator: " · ")
         }
         let n = ctx.tree.peopleOf[unit.id]?.count ?? 0
-        return n > 0 ? "\(n) \(T("orang"))" : T("belum ada orang")
+        return n > 0 ? orgPeopleCount(n) : T("no people yet")
     }
 }
 
@@ -478,7 +478,7 @@ private struct OrgGroupFrame: View {
                     }
                 }
             } else if count == 0 {
-                Text(T("Belum ada isi")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.top, 12)
+                Text(T("Nothing in it yet")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).padding(.top, 12)
             }
         }
         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 18)
@@ -670,7 +670,7 @@ private struct OrgPeopleBox: View {
         var parts: [String] = []
         if let t = p.title(in: unitId) { parts.append(t) }
         parts.append(orgRoleLabel(p.role))
-        if p.unitIds.count > 1 { parts.append("+\(p.unitIds.count - 1) \(T("IP/Team lain"))") }
+        if p.unitIds.count > 1 { parts.append(String(format: T("+%d more IP/Team"), p.unitIds.count - 1)) }
         return parts.joined(separator: " · ")
     }
 }
@@ -756,6 +756,11 @@ private struct OrgLogo: View {
 
 // MARK: - change a card / add one
 
+/// "1 person" / "12 people" in either language.
+private func orgPeopleCount(_ n: Int) -> String {
+    n == 1 ? T("1 person") : String(format: T("%d people"), n)
+}
+
 private struct OrgKindOption: Identifiable {
     let kind: String
     let title: String
@@ -765,9 +770,9 @@ private struct OrgKindOption: Identifiable {
 }
 
 private let orgKinds: [OrgKindOption] = [
-    OrgKindOption(kind: "IP", title: "IP / Perusahaan", sub: "Punya logo sendiri", icon: "building.2.fill"),
-    OrgKindOption(kind: "DIVISION", title: "Divisi / Team", sub: "Tim kerja, tanpa logo", icon: "person.2.fill"),
-    OrgKindOption(kind: "GROUP", title: "Grup", sub: "Cuma mengelompokkan kartu", icon: "square.grid.2x2.fill"),
+    OrgKindOption(kind: "IP", title: "IP / Company", sub: "Has its own logo", icon: "building.2.fill"),
+    OrgKindOption(kind: "DIVISION", title: "Division / Team", sub: "A working team, no logo", icon: "person.2.fill"),
+    OrgKindOption(kind: "GROUP", title: "Group", sub: "Only arranges cards", icon: "square.grid.2x2.fill"),
 ]
 
 /// Tambah atau ubah satu kartu: jenis, nama, logo, letak, pemimpin, dan jabatan orang-orangnya.
@@ -836,7 +841,7 @@ private struct OrgUnitSheet: View {
         return tree.descendants(u.id).union([u.id])
     }
     private func kindTitle(_ k: OrgKindOption) -> String {
-        k.kind == "DIVISION" && parent?.kind == "DIVISION" ? T("Sub-divisi") : T(k.title)
+        k.kind == "DIVISION" && parent?.kind == "DIVISION" ? T("Sub-division") : T(k.title)
     }
     private var examples: [String] {
         tree.units.values
@@ -868,20 +873,20 @@ private struct OrgUnitSheet: View {
                     .buttonStyle(.plain)
                 }
             } header: {
-                Text(unit == nil ? T("Mau nambah apa?") : T("Jenis"))
+                Text(unit == nil ? T("What are you adding?") : T("Kind"))
             } footer: {
                 if groupBlocked {
-                    Text("\(T("Kartu ini masih berisi")) \(cardPeople.count) \(T("orang. Lepas orangnya dulu sebelum dijadikan Grup."))")
+                    Text(cardPeople.count == 1 ? T("This card still has 1 person. Remove them before making it a group.") : String(format: T("This card still has %d people. Remove them before making it a group."), cardPeople.count))
                         .foregroundStyle(NX.danger)
                 } else if isGroup {
-                    Text(T("Grup hanya mengelompokkan kartu — tanpa logo, tanpa orang, tanpa pemimpin."))
+                    Text(T("A group only arranges cards — no logo, no people, no leader."))
                 } else if !examples.isEmpty {
-                    Text("\(T("Contoh di bagan:")) \(examples.joined(separator: ", "))")
+                    Text("\(T("Examples in the chart:")) \(examples.joined(separator: ", "))")
                 }
             }
 
-            Section(T("Nama")) {
-                TextField(kind == "IP" ? T("Misal: PATS") : kind == "GROUP" ? T("Misal: Creative") : T("Misal: Multimedia"), text: $name)
+            Section(T("Name")) {
+                TextField(kind == "IP" ? T("e.g. PATS") : kind == "GROUP" ? T("e.g. Creative") : T("e.g. Multimedia"), text: $name)
                     .textInputAutocapitalization(.words)
             }
 
@@ -890,28 +895,28 @@ private struct OrgUnitSheet: View {
                     HStack(spacing: 14) {
                         logoPreview
                         PhotosPicker(selection: $pickedLogo, matching: .images, photoLibrary: .shared()) {
-                            Label((logoURL != nil || pendingLogo != nil) ? T("Ganti logo") : T("Pasang logo"), systemImage: "photo")
+                            Label((logoURL != nil || pendingLogo != nil) ? T("Change logo") : T("Add logo"), systemImage: "photo")
                                 .font(NXFont.text(13, .semibold))
                         }
                         .disabled(busy)
                         if logoURL != nil || pendingLogo != nil {
-                            Button(T("Hapus"), role: .destructive) { Task { await removeLogo() } }
+                            Button(T("Delete"), role: .destructive) { Task { await removeLogo() } }
                                 .font(NXFont.text(13)).disabled(busy)
                         }
                     }
                 } header: { Text(T("Logo")) } footer: {
-                    Text(unit == nil ? T("Opsional, bisa juga nanti. PNG, JPG, atau WebP · maks 2 MB.") : T("PNG, JPG, atau WebP · maks 2 MB · sebaiknya persegi."))
+                    Text(unit == nil ? T("Optional, you can add it later. PNG, JPG or WebP · max 2 MB.") : T("PNG, JPG or WebP · max 2 MB · square works best."))
                 }
             }
 
-            Section(T("Letaknya")) {
+            Section(T("Placement")) {
                 NavigationLink {
                     OrgParentPicker(tree: tree, excluded: excluded, selection: $parentId)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(parent?.name ?? T("Paling atas")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                        Text(parent?.name ?? T("Top level")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                         let trail = parentId.map { tree.trail($0) } ?? ""
-                        Text(parent == nil ? T("tanpa induk") : (trail.isEmpty ? T("paling atas") : trail))
+                        Text(parent == nil ? T("no parent") : (trail.isEmpty ? T("top level") : trail))
                             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
                     }
                 }
@@ -922,15 +927,15 @@ private struct OrgUnitSheet: View {
 
             if !isGroup, parentId != nil, !leadCandidates.isEmpty {
                 Section {
-                    Picker(T("Dipimpin oleh"), selection: $leadUserId) {
-                        Text(T("Tidak ada")).tag(String?.none)
+                    Picker(T("Led by"), selection: $leadUserId) {
+                        Text(T("None")).tag(String?.none)
                         ForEach(leadCandidates) { p in
                             Text("\(p.displayName) · \(leadCard.flatMap { p.title(in: $0) } ?? orgRoleLabel(p.role))")
                                 .tag(Optional(p.userId))
                         }
                     }
                 } footer: {
-                    Text(T("Kartu ini digambar di bawah orang yang dipilih, dan garisnya ditarik dari dia."))
+                    Text(T("This card is drawn under the person you pick, with its line coming from them."))
                 }
             }
 
@@ -942,23 +947,23 @@ private struct OrgUnitSheet: View {
                                     onSaved: { await onDone() })
                     }
                 } header: {
-                    Text("\(T("Orang di kartu ini")) · \(cardPeople.count)")
+                    Text("\(T("People on this card")) · \(cardPeople.count)")
                 } footer: {
-                    Text(T("Jabatan tampil di bagan, misalnya CEO, CMO, atau Lead."))
+                    Text(T("Job titles show on the chart, e.g. CEO, CMO or Lead."))
                 }
             }
 
             if let unit {
                 Section {
                     if let onFocus {
-                        Button { onFocus(unit.id) } label: { Label(T("Lihat isinya saja"), systemImage: "scope") }
+                        Button { onFocus(unit.id) } label: { Label(T("Open on its own"), systemImage: "scope") }
                     }
                     if let onAddChild {
                         Button { onAddChild(unit.id) } label: {
-                            Label(unit.isGroup ? T("Tambah ke grup ini") : T("Tambah di bawahnya"), systemImage: "plus")
+                            Label(unit.isGroup ? T("Add to this group") : T("Add below it"), systemImage: "plus")
                         }
                     }
-                    Button(role: .destructive) { confirmDelete = true } label: { Label(T("Hapus"), systemImage: "trash") }
+                    Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete"), systemImage: "trash") }
                 }
             }
 
@@ -966,13 +971,13 @@ private struct OrgUnitSheet: View {
                 Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) }
             }
         }
-        .navigationTitle(unit?.name ?? (parent.map { "\(T("Tambah di bawah")) \($0.name)" } ?? T("Tambah ke bagan")))
+        .navigationTitle(unit?.name ?? (parent.map { String(format: T("Add under %@"), $0.name) } ?? T("Add to the chart")))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 if busy { ProgressView() } else {
-                    Button(unit == nil ? T("Tambah") : T("Simpan")) { Task { await save() } }
+                    Button(unit == nil ? T("Add") : T("Save")) { Task { await save() } }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || groupBlocked)
                 }
             }
@@ -980,10 +985,10 @@ private struct OrgUnitSheet: View {
         .onChange(of: pickedLogo) { _, item in
             if let item { Task { await pick(item) } }
         }
-        .confirmationDialog(T("Hapus kartu ini?"), isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button(T("Hapus"), role: .destructive) { Task { await remove() } }
+        .confirmationDialog(T("Delete this card?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button(T("Delete"), role: .destructive) { Task { await remove() } }
         } message: {
-            Text(T("Orangnya dilepas dari kartu ini (tetap di IP/Team lainnya) dan isinya naik ke induknya. Tidak ada akses project yang berubah."))
+            Text(T("Its people are removed from this card (they stay in their other IP/Teams) and what is inside it moves up to its parent. No project access changes."))
         }
     }
 
@@ -1007,15 +1012,15 @@ private struct OrgUnitSheet: View {
     private func pick(_ item: PhotosPickerItem) async {
         defer { pickedLogo = nil }
         guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
-            problem = T("Gambarnya tidak bisa dibaca."); return
+            problem = T("Couldn't read that image."); return
         }
         let scale = min(1, 512 / max(image.size.width, image.size.height))
         let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
-        guard let png = resized.pngData() else { problem = T("Gambarnya tidak bisa dibaca."); return }
-        guard png.count <= 2 * 1024 * 1024 else { problem = T("Logo maksimal 2 MB."); return }
+        guard let png = resized.pngData() else { problem = T("Couldn't read that image."); return }
+        guard png.count <= 2 * 1024 * 1024 else { problem = T("The logo can be 2 MB at most."); return }
         guard let unit else { pendingLogo = png; return }
         busy = true
         problem = nil
@@ -1025,7 +1030,7 @@ private struct OrgUnitSheet: View {
             logoURL = saved.logoUrl
             await onDone()
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal mengunggah logo.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't upload the logo.")
         }
     }
 
@@ -1039,7 +1044,7 @@ private struct OrgUnitSheet: View {
             logoURL = nil
             await onDone()
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menghapus logo.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't remove the logo.")
         }
     }
 
@@ -1065,13 +1070,13 @@ private struct OrgUnitSheet: View {
                 if kind == "IP", let pendingLogo {
                     // The card exists already; a failed logo is said, not undone.
                     do { try await APIClient.shared.uploadOrgUnitLogo(unitId: made.id, data: pendingLogo, mime: "image/png", fileName: "logo.png") }
-                    catch { problem = T("Kartunya sudah dibuat, tapi logonya gagal diunggah. Pasang lagi dari kartunya.") }
+                    catch { problem = T("The card was created, but its logo didn't upload. Add it again from the card.") }
                 }
             }
             await onDone()
             if problem == nil { dismiss() }
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menyimpan.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save.")
         }
     }
 
@@ -1085,7 +1090,7 @@ private struct OrgUnitSheet: View {
             await onDone()
             dismiss()
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menghapus.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete.")
         }
     }
 }
@@ -1125,7 +1130,7 @@ private struct OrgTitleRow: View {
                 if saving { ProgressView().controlSize(.small) }
             }
             HStack(spacing: 8) {
-                TextField(T("Jabatan"), text: $title)
+                TextField(T("Job title"), text: $title)
                     .font(NXFont.text(13))
                     .textInputAutocapitalization(.words)
                     .focused($focused)
@@ -1134,13 +1139,13 @@ private struct OrgTitleRow: View {
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 if !person.isSenior, !leaders.isEmpty {
                     Menu {
-                        Button(T("Tidak di bawah siapa pun")) { Task { await saveUnder(nil) } }
+                        Button(T("Not under anyone")) { Task { await saveUnder(nil) } }
                         ForEach(leaders) { l in
                             Button(l.displayName) { Task { await saveUnder(l.userId) } }
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(under.flatMap { id in leaders.first { $0.userId == id }?.firstName }.map { "\(T("di bawah")) \($0)" } ?? T("di bawah —"))
+                            Text(under.flatMap { id in leaders.first { $0.userId == id }?.firstName }.map { String(format: T("under %@"), $0) } ?? T("under —"))
                                 .font(NXFont.text(12)).lineLimit(1)
                             Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
                         }
@@ -1168,7 +1173,7 @@ private struct OrgTitleRow: View {
             try await APIClient.shared.setOrgUnitMemberTitle(userId: person.userId, unitId: unitId, title: next.isEmpty ? nil : next)
             await onSaved()
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menyimpan jabatan.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the job title.")
         }
     }
 
@@ -1180,7 +1185,7 @@ private struct OrgTitleRow: View {
             try await APIClient.shared.setOrgUnitMemberReportsTo(userId: person.userId, unitId: unitId, leaderId: leaderId)
             await onSaved()
         } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menyimpan atasan.")
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save who they are under.")
         }
     }
 }
@@ -1222,8 +1227,8 @@ private struct OrgParentPicker: View {
                     HStack(spacing: 10) {
                         Image(systemName: "arrow.up.to.line").frame(width: 24).foregroundStyle(NX.mutedFg)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(T("Paling atas")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                            Text(T("tanpa induk")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            Text(T("Top level")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                            Text(T("no parent")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
                         Spacer()
                         if selection == nil { Image(systemName: "checkmark").foregroundStyle(OC.accentText) }
@@ -1247,7 +1252,7 @@ private struct OrgParentPicker: View {
                             if !needle.isEmpty, !tree.trail(r.unit.id).isEmpty {
                                 Text(tree.trail(r.unit.id)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                             } else if r.unit.isGroup {
-                                Text(T("grup")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                Text(T("group")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                             }
                         }
                         Spacer()
@@ -1258,8 +1263,8 @@ private struct OrgParentPicker: View {
                 .buttonStyle(.plain)
             }
         }
-        .searchable(text: $query, prompt: T("Cari IP, divisi, atau grup…"))
-        .navigationTitle(T("Letaknya"))
+        .searchable(text: $query, prompt: T("Search IP, division or group…"))
+        .navigationTitle(T("Placement"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -1315,9 +1320,9 @@ private struct OrgPersonSheet: View {
                     ForEach(reportsTo.sorted(by: { $0.key < $1.key }), id: \.key) { unitId, leaderId in
                         if let u = tree.units[unitId], let l = tree.people.first(where: { $0.userId == leaderId }) {
                             HStack {
-                                Text("\(T("Sekarang di bawah")) \(l.displayName) · \(u.name)").font(NXFont.text(12))
+                                Text(String(format: T("Now under %@ · %@"), l.displayName, u.name)).font(NXFont.text(12))
                                 Spacer()
-                                Button(T("Lepas")) { Task { await release(unitId) } }
+                                Button(T("Release")) { Task { await release(unitId) } }
                                     .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger).disabled(busy)
                             }
                         }
@@ -1333,13 +1338,13 @@ private struct OrgPersonSheet: View {
                                     Text(r.unit.name).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                                 }
                                 Spacer()
-                                if on { Text(T("sekarang")).font(NXFont.text(11, .semibold)).foregroundStyle(OC.accentText) }
+                                if on { Text(T("current")).font(NXFont.text(11, .semibold)).foregroundStyle(OC.accentText) }
                             }
                         }
                         .buttonStyle(.plain)
                         .disabled(busy || on)
                     }
-                } header: { Text(T("Di bawah siapa")) }
+                } header: { Text(T("Under whom")) }
             }
             Section {
                 ForEach(unitRows) { u in
@@ -1353,11 +1358,11 @@ private struct OrgPersonSheet: View {
                     .disabled(busy)
                 }
             } header: { Text(T("IP/Team")) } footer: {
-                Text(T("Satu orang boleh di beberapa IP/Team. Tidak mengubah akses project."))
+                Text(T("One person can be in several IP/Teams. Project access doesn't change."))
             }
             if let problem { Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) } }
         }
-        .searchable(text: $query, prompt: T("Cari nama, jabatan, atau IP/Team…"))
+        .searchable(text: $query, prompt: T("Search name, job title or IP/Team…"))
         .navigationTitle(person.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1372,7 +1377,7 @@ private struct OrgPersonSheet: View {
         problem = nil
         defer { busy = false }
         do { try await work(); await onDone() }
-        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Coba lagi.") }
+        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Try again.") }
     }
 
     /// In the leader's card first if they are not there yet, then under the leader — one step.
