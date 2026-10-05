@@ -21,7 +21,10 @@ ENV NEXTAUTH_SECRET=$AUTH_SECRET
 ENV NEXTAUTH_URL=$NEXTAUTH_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXTAUTH_URL
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS=--max-old-space-size=8192
+# next/font fetches Google Fonts during the build. Node 20 gives IPv4 only 250 ms before trying IPv6
+# (happy eyeballs); with ~230 ms RTT to Google and no IPv6 route here, the build failed with
+# ETIMEDOUT (5 Oct 2026). Build stage only — the running server is unaffected.
+ENV NODE_OPTIONS="--max-old-space-size=8192 --no-network-family-autoselection"
 
 RUN npx prisma generate
 RUN npm run build
