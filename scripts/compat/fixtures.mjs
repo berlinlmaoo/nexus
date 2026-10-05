@@ -71,6 +71,27 @@ function asArray(json, key) {
   if (json && Array.isArray(json[key])) return json[key]
   return null
 }
+const isDayKey = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+// Every place a key with one of these names occurs in a JSON body, as a path ("$.units[0].layoutX").
+function keysNamed(value, names, path = "$", out = []) {
+  if (Array.isArray(value)) value.forEach((v, i) => keysNamed(v, names, `${path}[${i}]`, out))
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      if (names.includes(k)) out.push(`${path}.${k}`)
+      keysNamed(v, names, `${path}.${k}`, out)
+    }
+  }
+  return out
+}
+// "YYYY-MM-DD" ± n days (plain calendar arithmetic, no time zone involved).
+function addDays(day, n) {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) + n * 86400e3).toISOString().slice(0, 10)
+}
+// The instant a WIB day starts (00:00 WIB = 17:00 UTC the day before).
+function wibDayStart(day) {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) - 7 * 3600e3)
+}
 
 // Honest, varied 250+ character reflection — passes assessReflection (≥20 words, ≥14 distinct, no
 // padding, no repeated 4-grams). `tag` makes each user's text different from every other user's.
@@ -855,6 +876,281 @@ export function buildFixtures(profile, world, media) {
         check: (j, ctx) => {
           const e = j?.xp?.entries?.find((x) => x.id === ctx.flags.xpCutId)
           return firstError(need(e, "entry missing"), need(e?.amount === 0 && e?.originalAmount === -7, "amounts"), need(e?.removed?.by?.id === ctx.users.bod.id && isStr(e?.removed?.at), "removed.by"))
+        },
+      },
+    })
+  }
+
+  // ---- Teams retired / Team Calendar replaced (5 Oct 2026). What every native build still sends from
+  // its Team Calendar and Crew screens: APIClient.swift teams() / masterCalendar() / teamCreate()
+  // (identical at 5bb9f5b, 02eabab and HEAD), nexus-android feature/agenda/Agenda.kt and
+  // feature/admin/Teams.kt. GET /api/teams stays (an empty list once no team exists); the old calendar
+  // for a team that does not exist is a 4xx the app shows as an error, never a 5xx; creating a team is
+  // 410 TEAMS_RETIRED with a sentence the app shows as it is (src/app/api/teams/route.ts).
+  if (ios) {
+    add({
+      id: "teams-list", title: "GET /api/teams → 200 array", as: "a", kind: "compat",
+      request: () => ({ method: "GET", path: "/api/teams" }),
+      expect: { status: 200, check: (j) => need(Array.isArray(j), "not an array (the app decodes [Team])") },
+    })
+    add({
+      id: "master-cal-old", title: "GET /api/master-calendar?teamId=x (old Team Calendar) → 4xx", as: "a", kind: "compat",
+      request: () => {
+        // TeamCalendarView.loadEvents: the WIB month as ISO8601DateFormatter prints it (UTC, no millis).
+        const first = `${jktDate(0).slice(0, 8)}01`
+        const iso = (day) => wibDayStart(day).toISOString().replace(/\.\d{3}Z$/, "Z")
+        const [y, m] = first.split("-").map(Number)
+        const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`
+        return { method: "GET", path: `/api/master-calendar?teamId=x&rangeStart=${encodeURIComponent(iso(first))}&rangeEnd=${encodeURIComponent(iso(next))}` }
+      },
+      expect: { status: "4xx" },
+    })
+    add({
+      id: "teams-create", title: "POST /api/teams {name} → 410 TEAMS_RETIRED", as: "a", kind: "compat",
+      request: () => ({ method: "POST", path: "/api/teams", json: { name: "Compat" } }),
+      expect: { status: 410, code: "TEAMS_RETIRED", check: (j) => need(isStr(j?.error), "410 without an error sentence to show") },
+    })
+  }
+
+  // ---- web: the saved project calendars (master-calendar.tsx → nexus-api.ts calendars() /
+  // calendarTasks()) keep working next to the new Calendar, and stay limited to projects one is in.
+  const cal = world.calendar
+  const CT = cal?.tasks ?? {}
+  // The WIB days the seeded dated tasks fall on (the overdue one excepted), one day of margin each side.
+  const calDays = cal
+    ? [CT.wibMidnight, CT.utcMidnight, CT.timed, CT.finance].map((t) => new Date(Date.parse(t.due) + 7 * 3600e3).toISOString().slice(0, 10)).sort()
+    : [jktDate(0), jktDate(10)]
+  const calFrom = addDays(calDays[0], -1)
+  const calTo = addDays(calDays[calDays.length - 1], 1)
+  const noCal = () => (cal ? null : "seed has no calendar world (OrgUnit / AppSetting missing from the candidate schema)")
+  if (p.style === "web") {
+    // master-calendar.tsx: the month grid's first day and the day after its last, local (WIB) midnight, toISOString().
+    const tasksPath = (projectId) => `/api/calendar-tasks?projectIds=${encodeURIComponent(projectId)}&rooms=&rangeStart=${encodeURIComponent(wibDayStart(calFrom).toISOString())}&rangeEnd=${encodeURIComponent(wibDayStart(addDays(calTo, 1)).toISOString())}`
+    add({
+      id: "calendars-list", title: "GET /api/calendars → 200 { calendars[] }", as: "a", kind: "compat",
+      request: () => ({ method: "GET", path: "/api/calendars" }),
+      expect: { status: 200, check: (j) => need(Array.isArray(j?.calendars), "calendars not an array") },
+    })
+    add({
+      id: "calendar-tasks", title: "GET /api/calendar-tasks?projectIds=<project>&range → 200 tasks", as: "a", kind: "compat",
+      request: () => ({ method: "GET", path: tasksPath(world.projectId) }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const arr = j?.tasks
+          if (!Array.isArray(arr)) return "tasks not an array"
+          if (!arr.every((t) => isStr(t.id) && isStr(t.title) && t.projectId === world.projectId)) return "task without id/title/projectId"
+          return cal ? need(arr.some((t) => t.id === CT.wibMidnight.id) && arr.some((t) => t.id === CT.utcMidnight.id), "seeded dated tasks missing") : null
+        },
+      },
+    })
+    add({
+      id: "calendar-tasks-priv", title: "GET calendar-tasks for a private project I am not in → no tasks", as: "a", kind: "compat",
+      needs: noCal,
+      // runner.mjs builds the request before it looks at `needs`, so this must not throw without a calendar world.
+      request: () => ({ method: "GET", path: tasksPath(cal?.financeProjectId ?? "none") }),
+      expect: { status: 200, check: (j) => need(Array.isArray(j?.tasks) && j.tasks.length === 0, `${j?.tasks?.length} task(s) of a project the staff member is not in`) },
+    })
+  }
+
+  // ---- the Calendar (/api/calendar/**, 5 Oct 2026), as a STAFF member of the company workspace. Not
+  // in a released build yet: the next iOS / Android builds and the web are written against it, so the
+  // shapes they decode and the privacy rules are `compat`; the range validation is `policy`.
+  // Seed: AppSetting calendar.audience = "all", Bagan IP › GROUP › DIVISION, "Finance Compat" (private
+  // by its name) with one task the staff member is not on. lib/calendar/core.ts has the rules.
+  if (modern || p.style === "web") {
+    const LEAK_KEYS = ["email", "layoutX", "layoutY", "boxLayout"]
+    const noEmail = (j) => need(!JSON.stringify(j ?? null).includes("@compat.invalid"), "an e-mail address is in the body")
+    const itemShape = (i) =>
+      isStr(i?.key) && isDayKey(i?.day) && (i.time === null || /^\d{2}:\d{2}$/.test(i.time)) && typeof i.masked === "boolean" &&
+      "id" in i && "title" in i && "project" in i && Array.isArray(i.placements) && Array.isArray(i.unplacedIds) && typeof i.canEdit === "boolean" &&
+      i.placements.every((pl) => isStr(pl.unitId) && Array.isArray(pl.userIds))
+    // A masked row: no id, title or project, a non-reversible key, nothing the viewer could open.
+    const maskedOk = (m) => firstError(
+      need(m, "masked Finance task missing"),
+      need(m?.id === null && m?.title === null && m?.project === null, `masked row still has id/title/project: ${JSON.stringify(m).slice(0, 120)}`),
+      need(isStr(m?.key) && m.key.startsWith("x_"), `masked key ${m?.key}`),
+      need(m?.canEdit === false && m?.priority === null && m?.parent === null && (m?.linkedProjectIds ?? []).length === 0, "masked row: canEdit/priority/parent/linkedProjectIds"),
+    )
+    const noFinanceLeak = (j) => {
+      const body = JSON.stringify(j ?? null)
+      return firstError(
+        need(!body.includes(CT.finance.id), "the Finance task id is in the body"),
+        need(!body.includes(CT.finance.title), "the Finance task title is in the body"),
+        need(!body.includes(cal.financeProjectId) && !body.includes(cal.financeProjectName), "the Finance project is in the body"),
+      )
+    }
+    const nextWibDay = () => addDays(CT.wibMidnight.due.slice(0, 10), 1)
+    const itemsPath = `/api/calendar/items?from=${calFrom}&to=${calTo}`
+
+    add({
+      id: "cal-structure", title: "GET /api/calendar/structure → Bagan, no email/canvas keys", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: "/api/calendar/structure" }),
+      expect: {
+        status: 200,
+        check: (j, ctx) => {
+          const units = Array.isArray(j?.units) ? j.units : []
+          const unit = (id) => units.find((u) => u.id === id)
+          const person = (id) => (Array.isArray(j?.people) ? j.people : []).find((x) => x.userId === id)
+          const leaked = keysNamed(j, LEAK_KEYS)
+          return firstError(
+            need(j?.access === "all_except_private", `access=${j?.access}, want all_except_private (staff inside audience "all")`),
+            need(leaked.length === 0, `forbidden keys: ${leaked.slice(0, 4).join(" ")}`),
+            noEmail(j),
+            need(isStr(j?.version) && Array.isArray(j?.units) && Array.isArray(j?.people), "version/units/people"),
+            need(j?.me?.userId === ctx.users.a.id && j?.me?.role === "STAFF" && Array.isArray(j?.me?.homeUnitIds), `me=${JSON.stringify(j?.me)}`),
+            need(unit(cal.units.ip)?.kind === "IP" && unit(cal.units.ip)?.parentId === null, "IP unit missing or not at the top"),
+            need(unit(cal.units.group)?.kind === "GROUP" && unit(cal.units.group)?.parentId === cal.units.ip, "GROUP unit missing or not under the IP"),
+            need(unit(cal.units.division)?.kind === "DIVISION" && unit(cal.units.division)?.parentId === cal.units.group, "DIVISION unit missing or not in the group"),
+            need(sameJson(person(cal.unitStaffId)?.homeUnitIds, [cal.units.division]), `staff in the division: homeUnitIds ${JSON.stringify(person(cal.unitStaffId)?.homeUnitIds)}`),
+            need(sameJson(person(ctx.users.manager.id)?.homeUnitIds, [cal.units.ip]), `manager in the IP: homeUnitIds ${JSON.stringify(person(ctx.users.manager.id)?.homeUnitIds)}`),
+          )
+        },
+      },
+    })
+    add({
+      id: "cal-items", title: "GET calendar/items → 17:00Z task on the next WIB day, time null", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: itemsPath }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const items = j?.items
+          if (!Array.isArray(items)) return "items not an array"
+          const bad = items.find((i) => !itemShape(i))
+          if (bad) return `item shape: ${JSON.stringify(bad).slice(0, 120)}`
+          const byId = (t) => items.find((i) => i.id === t.id)
+          const w = byId(CT.wibMidnight), u = byId(CT.utcMidnight), tm = byId(CT.timed)
+          return firstError(
+            need(j?.access === "all_except_private" && j?.from === calFrom && j?.to === calTo, `access/from/to ${j?.access} ${j?.from} ${j?.to}`),
+            need(Array.isArray(j?.holidays) && typeof j?.truncated === "boolean" && j?.people && typeof j.people === "object", "holidays/truncated/people"),
+            noEmail(j),
+            need(w, "the 17:00Z task is missing"),
+            need(w?.day === nextWibDay(), `17:00Z task day ${w?.day}, want ${nextWibDay()} (the NEXT WIB day)`),
+            need(w?.time === null, `17:00Z task time ${w?.time}, want null (00:00 WIB = date only)`),
+            need(w?.masked === false && w?.title === CT.wibMidnight.title && w?.project?.id === world.projectId && w?.canEdit === true, "17:00Z task: not masked, own project, editable"),
+            need(sameJson(w?.placements, [{ unitId: cal.units.division, userIds: [cal.unitStaffId] }]) && w?.unplacedIds?.length === 0, `17:00Z task placements ${JSON.stringify(w?.placements)}`),
+            need(u?.day === CT.utcMidnight.due.slice(0, 10) && u?.time === null, `00:00Z task ${u?.day} ${u?.time}, want ${CT.utcMidnight.due.slice(0, 10)} null`),
+            need(sameJson(u?.unplacedIds, [cal.looseStaffId]) && u?.placements?.length === 0, "00:00Z task: assignee outside the Bagan must be in unplacedIds"),
+            need(tm?.day === CT.timed.due.slice(0, 10) && tm?.time === "10:30", `03:30Z task ${tm?.day} ${tm?.time}, want 10:30`),
+            need(tm?.placements?.[0]?.unitId === cal.units.ip, "the manager's task is not under the IP card"),
+            need(!items.some((i) => i.id === CT.overdue.id), "a task from before `from` is in the range"),
+          )
+        },
+      },
+    })
+    add({
+      id: "cal-items-masked", title: "GET calendar/items → Finance task masked (no id/title/project)", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: itemsPath }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const items = Array.isArray(j?.items) ? j.items : []
+          const masked = items.filter((i) => i.masked)
+          return firstError(
+            need(masked.length === 1, `${masked.length} masked rows, want 1 (the Finance Compat task)`),
+            maskedOk(masked.find((i) => i.day === CT.finance.due.slice(0, 10))),
+            noFinanceLeak(j),
+          )
+        },
+      },
+    })
+    add({
+      id: "cal-overdue", title: "GET /api/calendar/overdue → the open task from 3 days ago", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: "/api/calendar/overdue" }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const items = j?.items
+          if (!Array.isArray(items)) return "items not an array"
+          const o = items.find((i) => i.id === CT.overdue.id)
+          return firstError(
+            need(isDayKey(j?.today) && j?.rules && Number.isInteger(j.rules.overdueWindowDays), "today/rules"),
+            need(items.every(itemShape), "item shape"),
+            need(o, "the seeded overdue task is missing"),
+            need(o?.day === CT.overdue.due.slice(0, 10) && o?.time === null && o?.done === false, `overdue task ${o?.day} ${o?.time}`),
+            need(items.every((i) => i.day < j.today && i.done === false), "an item that is not overdue"),
+          )
+        },
+      },
+    })
+    add({
+      id: "cal-glance-me", title: "GET /api/calendar/glance?scope=me", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: "/api/calendar/glance?scope=me" }),
+      expect: {
+        status: 200,
+        check: (j) => firstError(
+          need(j?.scope === "me" && isDayKey(j?.from) && isDayKey(j?.to) && isDayKey(j?.today), `scope/from/to ${j?.scope} ${j?.from} ${j?.to}`),
+          need(Array.isArray(j?.items) && Array.isArray(j?.undated) && Array.isArray(j?.holidays), "items/undated/holidays"),
+          // The staff member's own seeded task has no due date → "Suatu hari".
+          need(j?.undated?.length >= 1 && j.undated.every((e) => e.day === null && e.m === false), "own undated task missing from undated[]"),
+          need(j?.items?.every((e) => e.m === false), "a masked entry in my own tasks"),
+        ),
+      },
+    })
+    add({
+      id: "cal-glance-all", title: "GET /api/calendar/glance?scope=all → same days, Finance masked", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: "/api/calendar/glance?scope=all" }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const items = Array.isArray(j?.items) ? j.items : []
+          const w = items.find((e) => e.id === CT.wibMidnight.id)
+          const m = items.filter((e) => e.m)
+          return firstError(
+            need(j?.scope === "all" && Array.isArray(j?.items), `scope ${j?.scope}`),
+            need(w?.day === nextWibDay() && w?.time === null, `17:00Z task ${w?.day} ${w?.time}, want ${nextWibDay()} null`),
+            need(m.length === 1 && m[0].id === null && m[0].t === null && m[0].p === null && isStr(m[0].k) && m[0].k.startsWith("x_"), `masked entries ${JSON.stringify(m).slice(0, 120)}`),
+            noFinanceLeak(j),
+            noEmail(j),
+          )
+        },
+      },
+    })
+    add({
+      id: "cal-bad-range", title: "GET calendar/items with to < from → 400 BAD_RANGE", as: "a", kind: "policy",
+      request: () => ({ method: "GET", path: `/api/calendar/items?from=${calTo}&to=${calFrom}` }),
+      expect: { status: 400, code: "BAD_RANGE" },
+    })
+    add({
+      id: "cal-range-63d", title: "GET calendar/items over 63 days → 400 RANGE_TOO_LONG", as: "a", kind: "policy",
+      request: () => ({ method: "GET", path: `/api/calendar/items?from=${calFrom}&to=${addDays(calFrom, 62)}` }),
+      expect: { status: 400, code: "RANGE_TOO_LONG" },
+    })
+    add({
+      id: "cal-anon-structure", title: "GET calendar/structure without a session → 401", as: "anon", kind: "compat",
+      request: () => ({ method: "GET", path: "/api/calendar/structure" }),
+      expect: { status: 401 },
+    })
+    add({
+      id: "cal-anon-items", title: "GET calendar/items without a session → 401", as: "anon", kind: "compat",
+      request: () => ({ method: "GET", path: itemsPath }),
+      expect: { status: 401 },
+    })
+    add({
+      id: "cal-settings-staff", title: "GET /api/admin/calendar-settings as staff → 403", as: "a", kind: "compat",
+      request: () => ({ method: "GET", path: "/api/admin/calendar-settings" }),
+      expect: { status: 403 },
+    })
+    add({
+      id: "cal-settings-bod", title: "GET admin/calendar-settings (BoD) → audience all, Finance private", as: "bod", kind: "compat",
+      needs: (ctx) => noCal() ?? (ctx.sessions.bod ? null : "BoD is not signed in"),
+      request: () => ({ method: "GET", path: "/api/admin/calendar-settings" }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const fin = (j?.projects ?? []).find((x) => x.id === cal.financeProjectId)
+          const own = (j?.projects ?? []).find((x) => x.id === world.projectId)
+          return firstError(
+            need(j?.settings?.audience === "all", `settings.audience ${j?.settings?.audience} (seed sets "all")`),
+            need(fin?.private === true && fin?.privateBy === "prefix", `Finance Compat private=${fin?.private} by ${fin?.privateBy}`),
+            need(own?.private === false, "Compat Project is private"),
+          )
         },
       },
     })

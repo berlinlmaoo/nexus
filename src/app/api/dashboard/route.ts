@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { isOverdueAt } from "@/lib/calendar/core"
 
 function isMissingSchemaError(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
@@ -40,15 +41,18 @@ export async function GET() {
         where: { userId, task: { status: "IN_PROGRESS" } },
       }),
 
-      prisma.taskAssignee.count({
+      // Overdue the way the Calendar counts it (lib/calendar/core.ts isOverdueAt): a task due today
+      // without a time is overdue only once the WIB day is over — it used to count from 07:00 WIB — and
+      // a task of a project without status (calendar-only) can never be done, so it is never overdue.
+      prisma.task.findMany({
         where: {
-          userId,
-          task: {
-            status: { notIn: ["DONE", "CANCELLED"] },
-            dueDate: { not: null, lt: now },
-          },
+          assignees: { some: { userId } },
+          status: { notIn: ["DONE", "CANCELLED"] },
+          dueDate: { not: null, lt: now },
+          taskList: { project: { disableTaskStatus: false } },
         },
-      }),
+        select: { dueDate: true },
+      }).then((rows) => rows.filter((t) => t.dueDate && isOverdueAt(t.dueDate, false, now)).length),
 
       prisma.taskAssignee.count({
         where: {

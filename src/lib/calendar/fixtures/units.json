@@ -1,0 +1,236 @@
+[
+ {
+  "id": "ou8c57f9ec8bbc9d96eabfdd1",
+  "name": "Geneziz",
+  "kind": "IP",
+  "logoUrl": null,
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 0,
+  "leadUserId": null
+ },
+ {
+  "id": "ou7c9cc71ca650c4e0c003f95",
+  "name": "Strategist",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou47f297a5be7b0f6fbbae754",
+  "position": 0,
+  "leadUserId": null
+ },
+ {
+  "id": "ou29b80cb5b6a94b9d74989b3",
+  "name": "Pink Baddies",
+  "kind": "IP",
+  "logoUrl": "/logo/ou29b80cb5b6a94b9d74989b3",
+  "parentId": "cmuqpx0cn000801mrrda3c65k",
+  "position": 0,
+  "leadUserId": null
+ },
+ {
+  "id": "ou02458d48df555b0d61edea1",
+  "name": "PT. The Z Networks",
+  "kind": "IP",
+  "logoUrl": "/logo/ou02458d48df555b0d61edea1",
+  "parentId": null,
+  "position": 0,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqpx0cn000801mrrda3c65k",
+  "name": "Community",
+  "kind": "GROUP",
+  "logoUrl": null,
+  "parentId": "ou6cd7c41336011d50e8dcfd2",
+  "position": 0,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqq9u4e001l01mrn26adgjl",
+  "name": "Event",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou396ea68f26c1bb98b84087c",
+  "position": 0,
+  "leadUserId": null
+ },
+ {
+  "id": "ou2b718beaa10345fc21b9ae2",
+  "name": "Z Foundation",
+  "kind": "IP",
+  "logoUrl": null,
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 1,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqqalgd001o01mrdnghpqcn",
+  "name": "Digital Services",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou396ea68f26c1bb98b84087c",
+  "position": 1,
+  "leadUserId": null
+ },
+ {
+  "id": "oub7186507c81bf7f984bb416",
+  "name": "Finance & Tech",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 2,
+  "leadUserId": "cmnzxse5y005k01qh56f3vaag"
+ },
+ {
+  "id": "oud586f38af44e4329821ef21",
+  "name": "Project Management",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou47f297a5be7b0f6fbbae754",
+  "position": 2,
+  "leadUserId": null
+ },
+ {
+  "id": "ouda117084994807e15c72c9a",
+  "name": "PATS Entertainment",
+  "kind": "IP",
+  "logoUrl": "/logo/ouda117084994807e15c72c9a",
+  "parentId": "ou6cd7c41336011d50e8dcfd2",
+  "position": 2,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqqbytc001r01mrm0dm3zc8",
+  "name": "Production House",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou396ea68f26c1bb98b84087c",
+  "position": 2,
+  "leadUserId": null
+ },
+ {
+  "id": "ou47f297a5be7b0f6fbbae754",
+  "name": "Framework Agency",
+  "kind": "IP",
+  "logoUrl": "/logo/ou47f297a5be7b0f6fbbae754",
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 3,
+  "leadUserId": "cmo7c6q8i001408p80c3qcfvb"
+ },
+ {
+  "id": "ou396ea68f26c1bb98b84087c",
+  "name": "Creative",
+  "kind": "GROUP",
+  "logoUrl": null,
+  "parentId": "ou47f297a5be7b0f6fbbae754",
+  "position": 3,
+  "leadUserId": null
+ },
+ {
+  "id": "ou24e50eb91aa5d1de071550f",
+  "name": "PATS University",
+  "kind": "IP",
+  "logoUrl": "/logo/ou24e50eb91aa5d1de071550f",
+  "parentId": "cmuqpx0cn000801mrrda3c65k",
+  "position": 3,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqqc7ro001s01mruwaq50yd",
+  "name": "KOL Management",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou396ea68f26c1bb98b84087c",
+  "position": 3,
+  "leadUserId": null
+ },
+ {
+  "id": "ou6cd7c41336011d50e8dcfd2",
+  "name": "PATS",
+  "kind": "IP",
+  "logoUrl": "/logo/ou6cd7c41336011d50e8dcfd2",
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 4,
+  "leadUserId": null
+ },
+ {
+  "id": "cmunzttnm000001pbm4at4sth",
+  "name": "PATS X",
+  "kind": "IP",
+  "logoUrl": "/logo/cmunzttnm000001pbm4at4sth",
+  "parentId": "cmuqpx0ae000601mr74ui6hxp",
+  "position": 4,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqpx0ae000601mr74ui6hxp",
+  "name": "Outlet",
+  "kind": "GROUP",
+  "logoUrl": null,
+  "parentId": "ou6cd7c41336011d50e8dcfd2",
+  "position": 4,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqqed05001z01mrlii7qx3u",
+  "name": "Multimedia",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou47f297a5be7b0f6fbbae754",
+  "position": 4,
+  "leadUserId": null
+ },
+ {
+  "id": "oub8dd7a8dcff40cafcafed09",
+  "name": "INTOO",
+  "kind": "IP",
+  "logoUrl": "/logo/oub8dd7a8dcff40cafcafed09",
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 5,
+  "leadUserId": null
+ },
+ {
+  "id": "cmunzu20h000101pbwdik48ih",
+  "name": "PATS BSD",
+  "kind": "IP",
+  "logoUrl": "/logo/cmunzu20h000101pbwdik48ih",
+  "parentId": "cmuqpx0ae000601mr74ui6hxp",
+  "position": 5,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuqufsl3003y01t7zvkf392w",
+  "name": "Business",
+  "kind": "DIVISION",
+  "logoUrl": null,
+  "parentId": "ou47f297a5be7b0f6fbbae754",
+  "position": 5,
+  "leadUserId": null
+ },
+ {
+  "id": "ou8f27050812d85e33c43cef9",
+  "name": "Suwara",
+  "kind": "IP",
+  "logoUrl": "/logo/ou8f27050812d85e33c43cef9",
+  "parentId": "ou02458d48df555b0d61edea1",
+  "position": 6,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuo08aix000801p593ezxuzd",
+  "name": "PATS Archive",
+  "kind": "IP",
+  "logoUrl": "/logo/cmuo08aix000801p593ezxuzd",
+  "parentId": "ou6cd7c41336011d50e8dcfd2",
+  "position": 6,
+  "leadUserId": null
+ },
+ {
+  "id": "cmuo2410d002j01qx2lia7dpq",
+  "name": "Raven Society",
+  "kind": "IP",
+  "logoUrl": null,
+  "parentId": "cmuqpx0cn000801mrrda3c65k",
+  "position": 7,
+  "leadUserId": null
+ }
+]

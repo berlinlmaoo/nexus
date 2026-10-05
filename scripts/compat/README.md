@@ -34,7 +34,8 @@ Once per pass (`--min-version`, default `0.1.4` then `0.1.6`):
 5. Seed (`seed.cjs`, runs inside the candidate image with its own Prisma client): workspace with
    joinCode `COMPAT1`, office at −6.2253, 106.829 r=150 m, shift 09:00–18:00, a BoD, a MANAGER, and
    two STAFF per client profile whose `approverId` is the manager, one project, one list, one task per
-   staff. Refuses to run unless `DATABASE_URL` is `compat@db:5432/compat`.
+   staff, plus the Calendar world (three Bagan units, a private "Finance Compat" project, five dated tasks,
+   AppSetting `calendar`). Refuses to run unless `DATABASE_URL` is `compat@db:5432/compat`.
 6. Candidate app: the candidate image, `node server.js`, on the internal network, with a
    **constructed** env (below), `NEXUS_IOS_MIN_VERSION=<pass>`, no volumes, no published ports.
 7. Runner (`runner.mjs` + `fixtures.mjs`), in a container on the same network, logs in and replays
@@ -129,6 +130,22 @@ Requests (dates from tomorrow, Jakarta):
 | 0.1.3, 0.1.4, 0.1.5, 0.1.6, web | PERMIT with reason "ambil day off" (otherwise complete) | policy: 422 `PERMIT_NOT_DAYOFF` |
 | 0.1.3 | login, profile, projects, tasks, today, history, requests list | 2xx |
 | 0.1.3 | check-in, PERMIT | gate (below) |
+
+Teams retired and the Calendar (5 Oct 2026). Every native profile (iOS 0.1.3–0.1.6, Android): `GET /api/teams`
+→ 200 array · `GET /api/master-calendar?teamId=x&rangeStart&rangeEnd` (old Team Calendar) → 4xx, never 5xx ·
+`POST /api/teams {name}` → 410 `TEAMS_RETIRED` with an `error` sentence. Web: `GET /api/calendars` → 200 ·
+`GET /api/calendar-tasks` for the seeded project → 200 with its dated tasks, for the private project the staff
+member is not in → no tasks. iOS 0.1.6, Android and web, as a STAFF member (seed: AppSetting `calendar` =
+`{audience:"all"}`, Bagan IP › GROUP › DIVISION with the manager and one staff member in it, private project
+"Finance Compat", dated tasks at 17:00Z / 00:00Z / 03:30Z / 3 days ago): `calendar/structure` → 200 with the
+three units and no `email`/`layoutX`/`layoutY`/`boxLayout` key or address anywhere · `calendar/items` → 200,
+the 17:00Z task on the NEXT WIB day with `time:null`, 00:00Z same day `null`, 03:30Z `10:30`, placements under
+the PIC's card or in `unplacedIds` · the Finance task masked (`id`/`title`/`project` null, key `x_…`, its id,
+title and project nowhere in the body) · `calendar/overdue` → the task from 3 days ago · `calendar/glance`
+`scope=me` and `scope=all` → 200, same day rule, Finance masked · without a session → 401 ·
+`admin/calendar-settings` as staff → 403, as BoD → 200 with `audience:"all"` · policy: items with `to < from` →
+400 `BAD_RANGE`, a 63-day range → 400 `RANGE_TOO_LONG`. The calendar fixtures SKIP when the candidate schema has
+no `OrgUnit`/`AppSetting` (seed note).
 
 ## Minimum-version gate
 
