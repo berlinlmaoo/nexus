@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       loadTaskRows({ lt: dayStartUtc(today) }, { open: true, take: CAP, order: "desc" }),
     ])
     // Newest day first; within a day the usual order (URGENT first, titled before masked).
-    const items = buildCalendarItems(rows, caller, s).sort((a, b) => (a.day !== b.day ? (a.day < b.day ? 1 : -1) : compareItems(a, b)))
+    const items = (await buildCalendarItems(rows, caller, s)).sort((a, b) => (a.day !== b.day ? (a.day < b.day ? 1 : -1) : compareItems(a, b)))
     return calendarJson(req, {
       ...base,
       access: caller.access,

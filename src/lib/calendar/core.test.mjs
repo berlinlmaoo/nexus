@@ -21,12 +21,16 @@ const test = (name, fn) => { fn(); passed++; }
 // ── Golden ──────────────────────────────────────────────────────────────────────────────────────────
 const units = fx("units.json"), people = fx("people.json"), links = fx("links.json")
 const s = core.buildStructure(units, people, links)
+// The two folders set by hand in production (AppSetting "calendar", 5 Oct 2026); the rest follows names.
+const SETTINGS = { ...core.CALENDAR_SETTINGS_DEFAULTS, folderUnits: { cm_jagain_folder: "ou47f297a5be7b0f6fbbae754", cmqpiuy72011901pcc89h8uu1: "oub7186507c81bf7f984bb416" } }
+const division = core.projectUnits(fx("projects.json"), fx("folders.json"), s.units, SETTINGS)
 const unitByName = (n) => s.units.find((u) => u.name === n)
 const personByName = (n) => s.people.find((p) => p.name === n)
 const ctxFor = (viewer) => ({
-  viewer, settings: core.CALENDAR_SETTINGS_DEFAULTS,
+  viewer, settings: SETTINGS,
   homeUnitsOf: new Map(s.people.map((p) => [p.userId, p.homeUnitIds])),
   unitRank: new Map(s.units.map((u) => [u.id, u.rank])),
+  projectUnitOf: new Map([...division].map(([id, v]) => [id, v.unitId])),
   maskKey: (id) => `x_${Buffer.from(id).toString("base64url").slice(-12)}`,
 })
 const BOD = { userId: "golden-bod", full: true, memberProjectIds: new Set() }
@@ -35,6 +39,7 @@ const rows = (day) => fx(`tasks-${day}.json`).map((t) => ({ ...t, dueDate: new D
 
 const golden = {
   "structure.json": s,
+  "project-divisions.json": Object.fromEntries([...division].sort((a, b) => (a[0] < b[0] ? -1 : 1))),
   "items-2026-09-18.bod.json": core.buildItems(rows("2026-09-18"), ctxFor(BOD)),
   "items-2026-09-18.staff.json": core.buildItems(rows("2026-09-18"), ctxFor(STAFF)),
   "items-2026-10-03.bod.json": core.buildItems(rows("2026-10-03"), ctxFor(BOD)),
@@ -74,11 +79,35 @@ test("structure: home units (deepest card)", () => {
   assert.deepEqual(homes("Queen Lourdes Purba Tambak"), ["PATS X", "PATS BSD"])
   assert.deepEqual(homes("Fortunatus Narendra"), [])
 })
-test("structure: no email, no canvas position", () => {
+test("structure: no email, no canvas position, no job titles", () => {
   const text = JSON.stringify(s)
-  for (const k of ['"email"', '"layoutX"', '"layoutY"', '"boxLayout"']) assert.ok(!text.includes(k), k)
+  for (const k of ['"email"', '"layoutX"', '"layoutY"', '"boxLayout"', '"titles"', '"title"']) assert.ok(!text.includes(k), k)
 })
-test("18 Sep (A2): 8 tasks; FA 4 (PM 1, Event 1, Multimedia 3), PATS 1, Suwara 1, not in the Bagan 1, no PIC 3", () => {
+test("project divisions: folders mirror the Bagan", () => {
+  const projects = fx("projects.json")
+  const at = (name) => s.units.find((u) => u.id === division.get(projects.find((p) => p.name === name).id).unitId).name
+  const why = (name) => division.get(projects.find((p) => p.name === name).id).why
+  assert.equal(at("PATS Archive: Master Calendar"), "PATS Archive")
+  assert.equal(at("PATS Entertainment: Master Calendar"), "PATS Entertainment")
+  assert.equal(at("PATS X: Master Calendar"), "PATS X")
+  assert.equal(at("PATS BSD: Master Calendar"), "PATS BSD")
+  assert.equal(at("Rosi Senopati: Master Calendar"), "PATS", "PATS Nightlife › Rosi Senopati → PATS")
+  assert.equal(at("PATS Socials: Content Pipeline"), "PATS")
+  assert.equal(at("SPECIAL BUSINESS UNIT"), "PATS")
+  assert.equal(at("FRAMEWORKZ : Z Creative Task"), "Framework Agency")
+  assert.equal(at("PRIMARIA: General Task"), "Framework Agency", "THE Z CREATIVE, set by hand"); assert.equal(why("PRIMARIA: General Task"), "folder")
+  assert.equal(at("Finance PATS Entertainment"), "Finance & Tech")
+  assert.equal(at("Legal"), "Finance & Tech", "Z MANAGEMENT, set by hand")
+  assert.equal(at("SUWARA MASTER CALENDAR"), "Suwara")
+  assert.equal(at("INTOO GEN Z"), "INTOO")
+  assert.equal(at("GENEZIZ - DIGITAL"), "Geneziz")
+  assert.equal(at("PATS UNIVERSITY"), "PATS University"); assert.equal(why("PATS UNIVERSITY"), "project-name")
+  assert.equal(at("INTOO Master Schedule"), "INTOO")
+  assert.equal(why("PESTA DARI SELATAN"), "top")
+  const bare = core.projectUnits(projects, fx("folders.json"), s.units, core.CALENDAR_SETTINGS_DEFAULTS)
+  assert.equal(bare.get(projects.find((p) => p.name === "Legal").id).why, "top", "without the hand-set folder")
+})
+test("18 Sep (A2, decision 4 revised): 8 tasks; FA 4 (PM 1, Event 1, Multimedia 3), PATS 4 (3 without PIC → PATS Entertainment), Suwara 1", () => {
   const items = golden["items-2026-09-18.bod.json"]
   assert.equal(items.length, 8)
   const inUnit = (n) => items.filter((i) => i.placements.some((p) => p.unitId === unitByName(n).id)).length
@@ -87,10 +116,14 @@ test("18 Sep (A2): 8 tasks; FA 4 (PM 1, Event 1, Multimedia 3), PATS 1, Suwara 1
   assert.equal(inUnit("Project Management"), 1)
   assert.equal(inUnit("Event"), 1)
   assert.equal(inUnit("Multimedia"), 3)
-  assert.equal(inSection("PATS"), 1)
+  assert.equal(inSection("PATS"), 4)
+  assert.equal(inUnit("PATS Entertainment"), 3)
   assert.equal(inSection("Suwara"), 1)
-  assert.equal(items.filter((i) => i.unplacedIds.length > 0).length, 1)
-  assert.equal(items.filter((i) => i.assigneeIds.length === 0).length, 3)
+  const noPic = items.filter((i) => i.assigneeIds.length === 0)
+  assert.equal(noPic.length, 3)
+  for (const i of noPic) { assert.equal(i.placedBy, "project"); assert.deepEqual(i.placements[0].userIds, []) }
+  assert.equal(items.filter((i) => i.placements.length === 0).length, 0, "every task has a division")
+  assert.equal(items.filter((i) => i.unplacedIds.length > 0).length, 1, "Fortunatus, beside placed PICs")
 })
 test("3 Oct (A3): sections Finance & Tech, Framework Agency, PATS, Suwara", () => {
   const items = golden["items-2026-10-03.bod.json"]
@@ -161,6 +194,8 @@ test("visibility: private projects, linked projects, own tasks, modes", () => {
   assert.equal(core.effectiveVisibility(empty), "masked_foreign", "no private project defined → hide foreign titles")
   const it = core.buildItem(row({ project: fin, assigneeIds: ["nobody"] }), ctx(staff()))
   assert.equal(it.id, null); assert.equal(it.title, null); assert.deepEqual(it.linkedProjectIds, []); assert.equal(it.unplacedIds[0], "nobody")
+  const viaProject = core.buildItem(row({ assigneeIds: ["nobody"] }), { ...ctx(staff()), projectUnitOf: new Map([["p1", "u-ops"]]) })
+  assert.equal(viaProject.placedBy, "project"); assert.deepEqual(viaProject.placements, [{ unitId: "u-ops", userIds: ["nobody"] }])
   assert.equal(core.buildItem(row({}), ctx(staff())).canEdit, false, "staff outside the project cannot edit")
   assert.equal(core.buildItem(row({}), ctx(staff(["p1"]))).canEdit, true)
 })
@@ -192,8 +227,8 @@ test("glance colours: project for me, my own card for division, the section for 
   assert.equal("ns" in core.glanceEntry(anker, "me", colors(pats)), false)
 })
 test("settings: bad values fall back, audience", () => {
-  const n = core.normalizeCalendarSettings({ audience: "everyone", visibility: 3, overdueWindowDays: 0, urgentDays: 2, privateNamePrefixes: [" Finance ", "", 7], privateProjectIds: "x" })
-  assert.equal(n.audience, "bod"); assert.equal(n.visibility, "all_except_private"); assert.equal(n.overdueWindowDays, 14)
+  const n = core.normalizeCalendarSettings({ audience: "everyone", visibility: 3, overdueWindowDays: 0, urgentDays: 2, privateNamePrefixes: [" Finance ", "", 7], privateProjectIds: "x", folderUnits: { f1: "u1", f2: 5 } })
+  assert.equal(n.audience, "all", "decision 14: everyone"); assert.deepEqual(n.folderUnits, { f1: "u1" }); assert.equal(n.visibility, "all_except_private"); assert.equal(n.overdueWindowDays, 14)
   assert.deepEqual(n.privateNamePrefixes, ["finance"]); assert.deepEqual(n.privateProjectIds, [])
   const a = (aud, orgRole, extra = {}) => core.inAudience({ ...core.CALENDAR_SETTINGS_DEFAULTS, audience: aud, ...extra }, { userId: "u", orgRole, isAdmin: false })
   assert.equal(a("bod", "BOD"), true); assert.equal(a("bod", "ONE_ABOVE_ALL"), true); assert.equal(a("bod", "MANAGER"), false)

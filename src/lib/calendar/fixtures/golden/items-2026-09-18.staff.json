@@ -44,6 +44,7 @@
     ]
    }
   ],
+  "placedBy": "pic",
   "unplacedIds": [
    "cmnr9lfd3000701rq5ev4pkfv"
   ],
@@ -70,7 +71,13 @@
   "linkedProjectIds": [],
   "parent": null,
   "assigneeIds": [],
-  "placements": [],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": []
+   }
+  ],
+  "placedBy": "project",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null
@@ -95,7 +102,13 @@
   "linkedProjectIds": [],
   "parent": null,
   "assigneeIds": [],
-  "placements": [],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": []
+   }
+  ],
+  "placedBy": "project",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null
@@ -130,6 +143,7 @@
     ]
    }
   ],
+  "placedBy": "pic",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null
@@ -154,7 +168,13 @@
   "linkedProjectIds": [],
   "parent": null,
   "assigneeIds": [],
-  "placements": [],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": []
+   }
+  ],
+  "placedBy": "project",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null
@@ -189,6 +209,7 @@
     ]
    }
   ],
+  "placedBy": "pic",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null
@@ -225,6 +246,7 @@
     ]
    }
   ],
+  "placedBy": "pic",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null
@@ -259,6 +281,7 @@
     ]
    }
   ],
+  "placedBy": "pic",
   "unplacedIds": [],
   "canEdit": false,
   "editProjectId": null

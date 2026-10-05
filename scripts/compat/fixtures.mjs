@@ -1032,7 +1032,10 @@ export function buildFixtures(profile, world, media) {
             need(w?.masked === false && w?.title === CT.wibMidnight.title && w?.project?.id === world.projectId && w?.canEdit === true, "17:00Z task: not masked, own project, editable"),
             need(sameJson(w?.placements, [{ unitId: cal.units.division, userIds: [cal.unitStaffId] }]) && w?.unplacedIds?.length === 0, `17:00Z task placements ${JSON.stringify(w?.placements)}`),
             need(u?.day === CT.utcMidnight.due.slice(0, 10) && u?.time === null, `00:00Z task ${u?.day} ${u?.time}, want ${CT.utcMidnight.due.slice(0, 10)} null`),
-            need(sameJson(u?.unplacedIds, [cal.looseStaffId]) && u?.placements?.length === 0, "00:00Z task: assignee outside the Bagan must be in unplacedIds"),
+            // Decision 4 (5 Oct 2026): a task none of whose PICs is in the Bagan goes to its project's division —
+            // the seeded project has no folder and no card-like name, so the top card — with the PIC named there.
+            need(sameJson(u?.unplacedIds, [cal.looseStaffId]) && u?.placedBy === "project" && sameJson(u?.placements, [{ unitId: cal.units.ip, userIds: [cal.looseStaffId] }]),
+              `00:00Z task: assignee outside the Bagan → unplacedIds + the project's division, got ${JSON.stringify(u?.placements)}`),
             need(tm?.day === CT.timed.due.slice(0, 10) && tm?.time === "10:30", `03:30Z task ${tm?.day} ${tm?.time}, want 10:30`),
             need(tm?.placements?.[0]?.unitId === cal.units.ip, "the manager's task is not under the IP card"),
             need(!items.some((i) => i.id === CT.overdue.id), "a task from before `from` is in the range"),

@@ -7,7 +7,10 @@ import { isSystemAdminUser } from "@/lib/rbac"
  *
  * These rules are deliberately the UNION of every path through which a person can already reach the
  * item in the app today, so that nobody who can open it now is refused after this change:
- *  - search (GET /api/search) lists tasks and docs of every project in the searcher's workspaces;
+ *  - the Calendar (GET /api/calendar/items) shows every task of the company workspace to every
+ *    member (owner, 5 Oct 2026), and opening one from there is a read-only preview for non-members —
+ *    except private (Finance/Legal) projects, whose rows carry no id. Search, on the other hand, finds
+ *    only tasks of projects the searcher is in, plus their own (since 5 Oct 2026);
  *  - the dashboard lists tasks assigned to the user whatever the project;
  *  - the project board shows tasks linked in from other projects (TaskProject);
  *  - the docs list shows docs of projects the user is a ProjectMember of;

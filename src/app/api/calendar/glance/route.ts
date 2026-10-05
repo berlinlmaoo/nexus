@@ -43,10 +43,10 @@ export async function GET(req: NextRequest) {
     const myHomes = s.people.find((p) => p.userId === caller.userId)?.homeUnitIds ?? []
     const scope: GlanceScope = requested === "division" && myHomes.length === 0 ? "me" : requested
     const division = subtreeOf(s.units, myHomes)
-    const pick = (rs: typeof rows) => buildCalendarItems(rs, caller, s).filter((i) => inScope(i, scope, caller.userId, division))
+    const pick = async (rs: typeof rows) => (await buildCalendarItems(rs, caller, s)).filter((i) => inScope(i, scope, caller.userId, division))
     const colors = { unitColor: s.unitColor, sectionColor: s.sectionColor, division }
-    const dated = capGlance(pick(rows).map((i) => glanceEntry(i, scope, colors)), today, MAX_DATED)
-    const undated = pick(undatedRows).slice(0, MAX_UNDATED).map((i) => glanceEntry(i, scope, colors, false))
+    const dated = capGlance((await pick(rows)).map((i) => glanceEntry(i, scope, colors)), today, MAX_DATED)
+    const undated = (await pick(undatedRows)).slice(0, MAX_UNDATED).map((i) => glanceEntry(i, scope, colors, false))
     return calendarJson(req, {
       v: 1,
       tz: CALENDAR_TZ,

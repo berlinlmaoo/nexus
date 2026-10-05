@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       loadTaskRows({ gte: dayStartUtc(from), lt: dayStartUtc(addDays(to, 1)) }, { take: ROW_CAP }),
       holidaysBetween(from, to),
     ])
-    const items = buildCalendarItems(rows, caller, s)
+    const items = await buildCalendarItems(rows, caller, s)
     return calendarJson(req, {
       ...base,
       access: caller.access,

@@ -6,8 +6,8 @@ import { auth } from "@/lib/auth"
 import { getAppSetting } from "@/lib/app-setting"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import {
-  buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings,
-  type CalendarSettings, type CalItem, type CalStructure, type CalViewer, type ItemContext, type TaskRow,
+  buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings, projectUnits,
+  type CalendarSettings, type CalItem, type CalStructure, type CalViewer, type ItemContext, type ProjectUnitWhy, type TaskRow,
 } from "@/lib/calendar/core"
 
 /**
@@ -105,6 +105,18 @@ export async function loadStructure(): Promise<LoadedStructure> {
   }
 }
 
+/**
+ * Every company project → its division (core.ts projectUnits): where a task goes when none of its
+ * PICs is in the Bagan. Archived projects included, so nothing moves when a project is archived.
+ */
+export async function loadProjectUnits(s: LoadedStructure, settings: CalendarSettings): Promise<Map<string, { unitId: string; why: ProjectUnitWhy }>> {
+  const [projects, folders] = await Promise.all([
+    prisma.project.findMany({ where: { workspaceId: ORG_WORKSPACE_ID }, select: { id: true, name: true, folderId: true } }),
+    prisma.projectFolder.findMany({ where: { workspaceId: ORG_WORKSPACE_ID }, select: { id: true, name: true, parentFolderId: true } }),
+  ])
+  return projectUnits(projects, folders, s.units, settings)
+}
+
 // ── Tasks ──────────────────────────────────────────────────────────────────────────────────────────
 
 /** A safety cap; a month is ~200 tasks today. */
@@ -193,12 +205,16 @@ export function maskKey(taskId: string): string {
   return `x_${createHmac("sha256", secret).update(`calendar-mask:${taskId}`).digest("base64url").slice(0, 16)}`
 }
 
-export function itemContext(caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure): ItemContext {
-  return { viewer: caller.viewer, settings: caller.settings, homeUnitsOf: s.homeUnitsOf, unitRank: s.unitRank, maskKey }
+export function itemContext(caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure, projectUnitOf: Map<string, { unitId: string }>): ItemContext {
+  return {
+    viewer: caller.viewer, settings: caller.settings, homeUnitsOf: s.homeUnitsOf, unitRank: s.unitRank, maskKey,
+    projectUnitOf: new Map([...projectUnitOf].map(([id, v]) => [id, v.unitId])),
+  }
 }
 
-export function buildCalendarItems(rows: TaskRow[], caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure): CalItem[] {
-  return buildItems(rows, itemContext(caller, s))
+/** The items of these rows for this caller: one query for the project divisions, the rest in memory. */
+export async function buildCalendarItems(rows: TaskRow[], caller: Extract<CalendarCaller, { kind: "ok" }>, s: LoadedStructure): Promise<CalItem[]> {
+  return buildItems(rows, itemContext(caller, s, await loadProjectUnits(s, caller.settings)))
 }
 
 /** Name and avatar of assignees who are not in the structure (former members, bots). */
