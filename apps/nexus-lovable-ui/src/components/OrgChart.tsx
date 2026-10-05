@@ -271,6 +271,11 @@ export function OrgChart() {
 
   // Positions not saved yet (being dragged, or on their way to the server) and the element being dragged.
   const [temp, setTemp] = useState<Record<string, Pt>>({});
+  // The card being moved and how far: the cards and boxes inside it that have places of their own go
+  // along (owner, 5 Oct 2026: dragging Framework Agency left Multimedia behind).
+  const [shift, setShift] = useState<Shift | null>(null);
+  // Where a dragged card snapped to: the top of a card on that level and/or the middle of one above/below.
+  const [guide, setGuide] = useState<{ x?: number; y?: number } | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   // The card or group a dragged card would land in.
   const [dropCard, setDropCard] = useState<string | null>(null);
@@ -298,7 +303,7 @@ export function OrgChart() {
       size: sizeOf,
     });
     // Saved positions count in Lengkap only; elsewhere only the card being dragged leaves its place.
-    const items = manualItems(units, inGroup, depthOf, base, temp, dragKey, mode === "lengkap");
+    const items = manualItems(units, inGroup, depthOf, base, temp, dragKey, mode === "lengkap", shift, isUnder(unitsById));
     let { rects } = applyManual(base.rects, items);
     if (mode === "lengkap" && !dragKey) {
       const rows: string[][] = [];
@@ -329,7 +334,7 @@ export function OrgChart() {
     for (const l of lines) for (const p of l.pts) { width = Math.max(width, p.x); height = Math.max(height, p.y); }
     const lifted = new Set(dragKey ? items.find((i) => i.id === dragKey)?.keys ?? [] : []);
     return { base, rects, lines, lifted, width: width + LAYOUT.margin, height: height + LAYOUT.margin };
-  }, [measured, tree, units, unitsById, temp, dragKey, mode, focusId]);
+  }, [measured, tree, units, unitsById, temp, dragKey, mode, focusId, shift]);
   useLayoutEffect(() => {
     if (!layout || Date.now() > fitUntil.current) return;
     fitView();
@@ -501,18 +506,29 @@ export function OrgChart() {
     if (!d.moved && Math.hypot(dx, dy) < 4) return;
     if (!d.moved) { d.moved = true; setDragKey(d.key); }
     d.last = { x: snap(d.ox + dx), y: snap(d.oy + dy) };
-    // Lengkap: a card let go near the height of a sibling lines up with it exactly.
+    // Lengkap, arranged by hand level by level: the card's top snaps to the top of any card or group
+    // near that height, its middle to the middle of a card above or below; a guide shows which.
+    let snapped: { x?: number; y?: number } | null = null;
     if (mode === "lengkap" && d.key.startsWith("c:") && layout) {
       const id = d.key.slice(2);
-      const parent = unitsById.get(id)?.parentId ?? null;
-      let best: number | null = null;
-      for (const u of units) {
-        if (u.id === id || u.parentId !== parent || inGroup(u.id)) continue;
-        const r = layout.rects.get(`c:${u.id}`);
-        if (r && Math.abs(r.y - d.last.y) <= 14 && (best === null || Math.abs(r.y - d.last.y) < Math.abs(best - d.last.y))) best = r.y;
+      const mine = new Set(layout.base.subtree.get(id) ?? [d.key]);
+      const me = layout.rects.get(d.key);
+      let by: number | null = null, bx: number | null = null;
+      for (const [k, r] of layout.rects) {
+        if (!k.startsWith("c:") || mine.has(k)) continue;
+        if (Math.abs(r.y - d.last.y) <= 14 && (by === null || Math.abs(r.y - d.last.y) < Math.abs(by - d.last.y))) by = r.y;
+        if (me) {
+          const c = r.x + r.w / 2, mc = d.last.x + me.w / 2;
+          if (Math.abs(c - mc) <= 10 && (bx === null || Math.abs(c - mc) < Math.abs(bx - mc))) bx = c;
+        }
       }
-      if (best !== null) d.last = { x: d.last.x, y: best };
+      if (by !== null || bx !== null) {
+        d.last = { x: bx !== null && me ? Math.round(bx - me.w / 2) : d.last.x, y: by ?? d.last.y };
+        snapped = { x: bx ?? undefined, y: by ?? undefined };
+      }
+      setShift({ id, dx: d.last.x - d.ox, dy: d.last.y - d.oy });
     }
+    setGuide(snapped);
     const pos = d.last;
     setTemp((t) => ({ ...t, [d.key]: pos }));
     if (d.key.startsWith("c:") && layout) {
@@ -540,9 +556,10 @@ export function OrgChart() {
     const target = dropCard;
     setDropCard(null);
     setDragKey(null);
+    setGuide(null);
     const [t, id, ...rest] = d.key.split(":");
     if (!d.moved) { if (t === "c") { const u = unitsById.get(id); if (u) setEditing(u); } return; }
-    const clear = () => setTemp((m) => { const n = { ...m }; delete n[d.key]; return n; });
+    const clear = () => { setTemp((m) => { const n = { ...m }; delete n[d.key]; return n; }); setShift(null); };
     const u = unitsById.get(id);
     if (!u || !layout) { clear(); return; }
     if (t === "c" && target && target !== u.parentId) { clear(); moveUnit.mutate({ unit: u, parentId: target }); return; }
@@ -558,15 +575,40 @@ export function OrgChart() {
     }
     // Never leave it on top of something: the nearest free place instead (8px grid), saved as such.
     const want = d.last ?? { x: snap(d.ox), y: snap(d.oy) };
-    const items = manualItems(units, inGroup, tree.depthOf, layout.base, { ...temp, [d.key]: want }, null, true);
+    const along = t === "c" ? { id, dx: want.x - d.ox, dy: want.y - d.oy } : null;
+    const items = manualItems(units, inGroup, tree.depthOf, layout.base, { ...temp, [d.key]: want }, null, true, along, isUnder(unitsById));
     const pos = applyManual(layout.base.rects, items).resolved.get(d.key) ?? want;
     setTemp((m) => ({ ...m, [d.key]: pos }));
     if (pos.x !== want.x || pos.y !== want.y) toast("Digeser ke tempat kosong terdekat", { description: "Tempat itu sudah terisi kartu atau kotak lain." });
-    const save = t === "c" ? nexusApi.updateOrgUnit(id, { layoutX: pos.x, layoutY: pos.y }) : nexusApi.updateOrgUnit(id, { boxLayout: { [rest.join(":")]: pos } });
-    save
+    let saves: Array<Promise<unknown>>;
+    if (t === "c") {
+      // Its own placed cards and boxes keep their place relative to it: they stay with it on screen
+      // and are saved shifted by the same distance.
+      const dx = pos.x - d.ox, dy = pos.y - d.oy;
+      setShift({ id, dx, dy });
+      saves = [nexusApi.updateOrgUnit(id, { layoutX: pos.x, layoutY: pos.y }), ...shiftPlaced(id, dx, dy)];
+    } else {
+      saves = [nexusApi.updateOrgUnit(id, { boxLayout: { [rest.join(":")]: pos } })];
+    }
+    Promise.all(saves)
       .then(() => qc.invalidateQueries({ queryKey: ["nexus", "org-chart"] }))
       .then(clear)
-      .catch((err) => { clear(); fail("Gagal menyimpan posisi")(err); });
+      .catch((err) => { clear(); refresh(); fail("Gagal menyimpan posisi")(err); });
+  };
+  /** Saves for the cards and boxes inside a moved card that have places of their own: same distance. */
+  const shiftPlaced = (id: string, dx: number, dy: number): Array<Promise<unknown>> => {
+    if (!dx && !dy) return [];
+    const below = descendantsOf(id);
+    const out: Array<Promise<unknown>> = [];
+    for (const v of units) {
+      if ((v.id !== id && !below.has(v.id)) || inGroup(v.id)) continue;
+      const body: { layoutX?: number; layoutY?: number; boxLayout?: Record<string, { x: number; y: number }> } = {};
+      if (v.id !== id && v.layoutX != null && v.layoutY != null) { body.layoutX = v.layoutX + dx; body.layoutY = v.layoutY + dy; }
+      const placed = Object.entries(v.boxLayout ?? {}).filter((e): e is [string, { x: number; y: number }] => !!e[1]);
+      if (placed.length) body.boxLayout = Object.fromEntries(placed.map(([k, p]) => [k, { x: p.x + dx, y: p.y + dy }]));
+      if (Object.keys(body).length) out.push(nexusApi.updateOrgUnit(v.id, body));
+    }
+    return out;
   };
   const dragHandlers = (key: string) => ({ "data-oc-drag": "", onPointerDown: startElDrag(key), onPointerMove: moveElDrag, onPointerUp: endElDrag, onPointerCancel: endElDrag });
 
@@ -706,6 +748,8 @@ export function OrgChart() {
                     <div style={{ width: layout.width, height: layout.height }} />
                     <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" style={{ zIndex: 5 }} width={layout.width} height={layout.height} aria-hidden>
                       {layout.lines.map((l) => <path key={`${l.from}>${l.to}`} data-oc-from={l.from} data-oc-to={l.to} d={pathRounded(l.pts)} fill="none" style={{ stroke: "var(--oc-line)" }} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />)}
+                      {guide?.y != null && <line x1={0} x2={layout.width} y1={guide.y} y2={guide.y} stroke="#2f6fde" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.75} />}
+                      {guide?.x != null && <line x1={guide.x} x2={guide.x} y1={0} y2={layout.height} stroke="#2f6fde" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.75} />}
                     </svg>
                     {[...layout.rects].map(([key, r]) => {
                       const [t, id, ...rest] = key.split(":");
@@ -938,29 +982,47 @@ function boxKinds(g: Group): string[] {
   return [...(g.bods.length ? ["bod"] : []), ...(g.managers.length ? ["manager"] : []), ...(g.staff.length ? ["staff"] : []), ...g.rt.map(([id]) => `rt:${id}`)];
 }
 
+type Shift = { id: string; dx: number; dy: number };
+/** Is `id` somewhere below `above`? */
+const isUnder = (byId: Map<string, OrgUnit>) => (id: string, above: string): boolean => {
+  const seen = new Set<string>();
+  for (let p = byId.get(id)?.parentId ?? null; p && !seen.has(p); p = byId.get(p)?.parentId ?? null) {
+    if (p === above) return true;
+    seen.add(p);
+  }
+  return false;
+};
+
 /**
  * Manual positions in the order they are applied: cards outside groups, shallow first (a card takes its
  * whole subtree along; a deeper card with a position of its own then moves again), then people boxes.
  * `temp` holds positions not saved yet. Each one is pushed to the nearest free place when it lands on
- * something — except the one being dragged, which follows the pointer until it is dropped.
+ * something — except the one being dragged, which follows the pointer until it is dropped. While a card
+ * is being moved (`shift`), the cards and boxes inside it that have places of their own move the same
+ * distance, as one block with it.
  */
-function manualItems(units: OrgUnit[], inGroup: (id: string) => boolean, depthOf: (id: string) => number, base: Placement, temp: Record<string, Pt>, dragKey: string | null, useSaved: boolean): ManualItem[] {
+function manualItems(units: OrgUnit[], inGroup: (id: string) => boolean, depthOf: (id: string) => number, base: Placement, temp: Record<string, Pt>, dragKey: string | null, useSaved: boolean, shift: Shift | null = null, under: (id: string, above: string) => boolean = () => false): ManualItem[] {
   const cards: Array<ManualItem & { depth: number }> = [];
   const boxes: ManualItem[] = [];
+  const carried = (id: string, self: boolean) => !!shift && (shift.dx !== 0 || shift.dy !== 0) && ((self && id === shift.id) || under(id, shift.id));
   for (const u of units) {
     const key = `c:${u.id}`;
     if (!base.rects.has(key)) continue;
     const grouped = inGroup(u.id);
     // A card inside a group only moves while it is dragged (to be dropped on another card).
-    const pos = temp[key] ?? (useSaved && !grouped && u.layoutX != null && u.layoutY != null ? { x: u.layoutX, y: u.layoutY } : null);
-    if (pos) cards.push({ id: key, keys: base.subtree.get(u.id) ?? [key], anchor: key, pos, resolve: key !== dragKey, depth: depthOf(u.id) });
+    let pos = temp[key] ?? (useSaved && !grouped && u.layoutX != null && u.layoutY != null ? { x: u.layoutX, y: u.layoutY } : null);
+    const cardAlong = !temp[key] && !!pos && carried(u.id, false);
+    if (pos && cardAlong) pos = { x: pos.x + shift!.dx, y: pos.y + shift!.dy };
+    if (pos) cards.push({ id: key, keys: base.subtree.get(u.id) ?? [key], anchor: key, pos, resolve: key !== dragKey && !cardAlong, depth: depthOf(u.id) });
     if (grouped || u.kind === "GROUP") continue;
     const prefix = `b:${u.id}:`;
     const kinds = new Set([...(useSaved ? Object.keys(u.boxLayout ?? {}) : []), ...Object.keys(temp).filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length))]);
     for (const kind of kinds) {
       const bk = prefix + kind;
-      const p = temp[bk] ?? (useSaved ? u.boxLayout?.[kind] : undefined);
-      if (p && base.rects.has(bk)) boxes.push({ id: bk, keys: [bk], anchor: bk, pos: p, resolve: bk !== dragKey });
+      let p = temp[bk] ?? (useSaved ? u.boxLayout?.[kind] ?? undefined : undefined);
+      const boxAlong = !temp[bk] && !!p && carried(u.id, true);
+      if (p && boxAlong) p = { x: p.x + shift!.dx, y: p.y + shift!.dy };
+      if (p && base.rects.has(bk)) boxes.push({ id: bk, keys: [bk], anchor: bk, pos: p, resolve: bk !== dragKey && !boxAlong });
     }
   }
   cards.sort((a, b) => a.depth - b.depth);
