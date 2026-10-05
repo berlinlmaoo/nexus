@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.admin.orgchart
 
+import id.znetworks.nexus.R
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -80,8 +83,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val KIND_LABEL = mapOf("IP" to "IP / Perusahaan", "DIVISION" to "Divisi / Team", "GROUP" to "Grup")
-private val KIND_SUB = mapOf("IP" to "Punya logo sendiri", "DIVISION" to "Tim kerja, tanpa logo", "GROUP" to "Cuma mengelompokkan kartu")
+private val KIND_LABEL = mapOf("IP" to R.string.oc_kind_ip, "DIVISION" to R.string.oc_kind_division, "GROUP" to R.string.oc_kind_group)
+private val KIND_SUB = mapOf("IP" to R.string.oc_kind_ip_sub, "DIVISION" to R.string.oc_kind_division_sub, "GROUP" to R.string.oc_kind_group_sub)
 private fun kindIcon(kind: String): ImageVector = when (kind) { "IP" -> Icons.Filled.Business; "DIVISION" -> Icons.Filled.Groups; else -> Icons.Filled.GridView }
 
 /** The web's guess for a new card's kind from the cards it will sit next to (a company under the top, a division under a company). */
@@ -163,7 +166,7 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
     var confirmDelete by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var pickingParent by remember { mutableStateOf(false) }
-    fun fail(e: Throwable) { problem = (e as? ApiError.Http)?.serverMessage ?: (e as? ApiError)?.describe(res) ?: "Coba lagi." }
+    fun fail(e: Throwable) { problem = (e as? ApiError.Http)?.serverMessage ?: (e as? ApiError)?.describe(res) ?: res.getString(R.string.try_again) }
 
     val leadUnit = leadCard(tree, parent)
     val viaGroup = parent != null && tree.byId[parent]?.isGroup == true
@@ -173,7 +176,7 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
     val isGroup = kind == "GROUP"
     val groupBlocked = isGroup && unit?.kind != "GROUP" && cardPeople.isNotEmpty()
     val parentUnit = parent?.let(tree.byId::get)
-    fun kindTitle(k: String) = if (k == "DIVISION" && parentUnit?.kind == "DIVISION") "Sub-divisi" else KIND_LABEL.getValue(k)
+    fun kindTitle(k: String) = res.getString(if (k == "DIVISION" && parentUnit?.kind == "DIVISION") R.string.oc_kind_sub else KIND_LABEL.getValue(k))
     val examples = tree.units.filter { it.kind == kind && it.id != unit?.id && (kind != "IP" || it.parentId != null) }.take(3).map { it.name }
     val members = unit?.let { tree.membersOf[it.id].orEmpty().size } ?: 0
     val subUnits = unit?.let { tree.childUnits[it.id].orEmpty().size } ?: 0
@@ -183,10 +186,10 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val mime = context.contentResolver.getType(uri) ?: "image/png"
-            if (mime !in setOf("image/png", "image/jpeg", "image/webp")) { problem = "Logo harus PNG, JPG, atau WebP."; return@launch }
+            if (mime !in setOf("image/png", "image/jpeg", "image/webp")) { problem = res.getString(R.string.oc_logo_type); return@launch }
             val bytes = withContext(Dispatchers.IO) { runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() }
-            if (bytes == null) { problem = "File itu tidak bisa dibaca."; return@launch }
-            if (bytes.size > 2 * 1024 * 1024) { problem = "Logo maksimal 2 MB."; return@launch }
+            if (bytes == null) { problem = res.getString(R.string.oc_file_unreadable); return@launch }
+            if (bytes.size > 2 * 1024 * 1024) { problem = res.getString(R.string.oc_logo_size); return@launch }
             val fileName = runCatching { context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } }.getOrNull() ?: "logo"
             if (unit == null) { pendingLogo = Triple(bytes, mime, fileName); return@launch }
             uploading = true; problem = null
@@ -196,56 +199,56 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
     }
     fun save() {
         val clean = name.trim()
-        if (clean.isEmpty()) { problem = "Namanya diisi dulu."; return }
+        if (clean.isEmpty()) { problem = res.getString(R.string.oc_name_first); return }
         saving = true; problem = null
         scope.launch {
             try {
                 val chosenLead = if (isGroup || !leadValid) null else lead
                 if (unit != null) {
                     api.update(unit.id, name = clean, kind = kind, parentId = parent, setParent = true, leadUserId = chosenLead, setLead = true)
-                    onSaved("Tersimpan")
+                    onSaved(res.getString(R.string.oc_saved))
                 } else {
                     val made = api.create(clean, kind, parent)
                     if (chosenLead != null) api.update(made.id, leadUserId = chosenLead, setLead = true)
-                    var note = "$clean ditambahkan"
+                    var note = res.getString(R.string.oc_added, clean)
                     val pl = pendingLogo
                     if (kind == "IP" && pl != null) runCatching { api.uploadLogo(made.id, pl.first, pl.second, pl.third) }
-                        .onFailure { note = "$clean ditambahkan. Logo gagal diunggah — pasang lagi dari kartunya." }
+                        .onFailure { note = res.getString(R.string.oc_added_logo_failed, clean) }
                     onSaved(note)
                 }
             } catch (e: ApiError) { fail(e); saving = false }
         }
     }
 
-    val title = unit?.name ?: parentUnit?.let { "Tambah di bawah ${it.name}" } ?: "Tambah ke bagan"
-    val subtitle = if (unit != null) listOfNotNull(kindTitle(unit.kind), "$members orang", if (subUnits > 0) "$subUnits di bawahnya" else null).joinToString(" · ")
-        else "Pilih jenisnya, beri nama, lalu cek letaknya."
+    val title = unit?.name ?: parentUnit?.let { res.getString(R.string.oc_add_under, it.name) } ?: res.getString(R.string.oc_add_to_chart)
+    val subtitle = if (unit != null) listOfNotNull(kindTitle(unit.kind), res.getQuantityString(R.plurals.oc_people_n, members, members), if (subUnits > 0) res.getQuantityString(R.plurals.oc_below_n, subUnits, subUnits) else null).joinToString(" · ")
+        else res.getString(R.string.oc_add_hint)
 
     SheetFrame(onClose, header = {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             KindTile(kind, if (pendingLogo != null) null else logo, 40)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (unit != null) "Ubah $title" else title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(if (unit != null) stringResource(R.string.oc_edit_title, title) else title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, fontSize = 12.sp, color = c.mutedFg, maxLines = 2)
             }
-            if (onFocus != null && unit != null) TextButton(onClick = onFocus) { Text("Lihat isinya", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
-            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Tutup") }
+            if (onFocus != null && unit != null) TextButton(onClick = onFocus) { Text(stringResource(R.string.oc_view_inside), fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
         }
     }, footer = {
         if (unit != null) {
-            TextButton(onClick = { confirmDelete = true }, enabled = !saving) { Text("Hapus", color = c.danger, fontWeight = FontWeight.SemiBold) }
-            TextButton(onClick = onAddChild) { Text(if (unit.isGroup) "Tambah ke grup ini" else "Tambah di bawahnya", fontWeight = FontWeight.SemiBold) }
-        } else TextButton(onClick = onClose) { Text("Batal") }
+            TextButton(onClick = { confirmDelete = true }, enabled = !saving) { Text(stringResource(R.string.delete), color = c.danger, fontWeight = FontWeight.SemiBold) }
+            TextButton(onClick = onAddChild) { Text(stringResource(if (unit.isGroup) R.string.oc_add_to_group else R.string.oc_add_below), fontWeight = FontWeight.SemiBold) }
+        } else TextButton(onClick = onClose) { Text(stringResource(R.string.cancel)) }
         Spacer(Modifier.weight(1f))
         Button(onClick = ::save, enabled = !saving && !groupBlocked) {
             if (saving) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White); Spacer(Modifier.width(6.dp)) }
-            Text(if (unit != null) "Simpan" else "Tambah")
+            Text(stringResource(if (unit != null) R.string.oc_save else R.string.oc_add))
         }
     }) {
         problem?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger) }
         Column {
-            FieldLabel(if (unit != null) "Jenis" else "Mau nambah apa?")
+            FieldLabel(stringResource(if (unit != null) R.string.oc_kind else R.string.oc_what_to_add))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("IP", "DIVISION", "GROUP").forEach { k ->
                     val on = kind == k
@@ -255,25 +258,25 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
                         KindTile(k, null, 26); Spacer(Modifier.width(10.dp))
                         Column {
                             Text(kindTitle(k), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                            Text(KIND_SUB.getValue(k), fontSize = 11.sp, color = c.mutedFg)
+                            Text(stringResource(KIND_SUB.getValue(k)), fontSize = 11.sp, color = c.mutedFg)
                         }
                     }
                 }
             }
-            if (examples.isNotEmpty()) Text("Contoh di bagan: ${examples.joinToString(", ")}", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(top = 6.dp))
+            if (examples.isNotEmpty()) Text(stringResource(R.string.oc_examples, examples.joinToString(", ")), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(top = 6.dp))
             if (isGroup) Text(
-                if (groupBlocked) "Kartu ini masih berisi ${cardPeople.size} orang. Lepas orangnya dulu sebelum dijadikan Grup."
-                else "Grup hanya mengelompokkan kartu — tanpa logo, tanpa orang, tanpa pemimpin. Isinya disusun otomatis di dalamnya.",
+                if (groupBlocked) pluralStringResource(R.plurals.oc_group_blocked, cardPeople.size, cardPeople.size)
+                else stringResource(R.string.oc_group_note),
                 fontSize = 11.sp, color = if (groupBlocked) c.danger else c.mutedFg,
                 modifier = Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (groupBlocked) c.danger.copy(alpha = 0.08f) else c.muted.copy(alpha = 0.6f)).padding(10.dp))
         }
         Column {
-            FieldLabel("Nama")
+            FieldLabel(stringResource(R.string.oc_name))
             OutlinedTextField(name, { name = it.take(80) }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done,
-                placeholder = { Text(when (kind) { "IP" -> "Misal: PATS"; "GROUP" -> "Misal: Creative"; else -> "Misal: Multimedia" }) })
+                placeholder = { Text(stringResource(when (kind) { "IP" -> R.string.oc_name_ph_ip; "GROUP" -> R.string.oc_name_ph_group; else -> R.string.oc_name_ph_div })) })
         }
         if (kind == "IP") Column {
-            FieldLabel("Logo", "PNG, JPG, atau WebP · maks 2 MB")
+            FieldLabel(stringResource(R.string.oc_logo), stringResource(R.string.oc_logo_hint))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
                     if (pendingLogo != null) Icon(Icons.Filled.Check, null, tint = c.success)
@@ -285,35 +288,35 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
                     Row {
                         TextButton(onClick = { pickLogo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !uploading) {
                             if (uploading) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                            Text(if (logo != null || pendingLogo != null) "Ganti logo" else "Pasang logo")
+                            Text(stringResource(if (logo != null || pendingLogo != null) R.string.oc_logo_change else R.string.oc_logo_put))
                         }
                         if (logo != null || pendingLogo != null) TextButton(enabled = !uploading, onClick = {
                             if (unit == null) pendingLogo = null
                             else scope.launch { uploading = true; try { api.update(unit.id, logoRemoved = true); logo = null } catch (e: ApiError) { fail(e) }; uploading = false }
-                        }) { Text("Hapus logo", color = c.mutedFg) }
+                        }) { Text(stringResource(R.string.oc_logo_remove), color = c.mutedFg) }
                     }
-                    Text(if (unit != null) "Sebaiknya persegi." else "Opsional, bisa juga nanti. Sebaiknya persegi.", fontSize = 11.sp, color = c.mutedFg)
+                    Text(stringResource(if (unit != null) R.string.oc_logo_square else R.string.oc_logo_optional), fontSize = 11.sp, color = c.mutedFg)
                 }
             }
         }
         Column {
-            FieldLabel("Letaknya")
+            FieldLabel(stringResource(R.string.oc_place))
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp)).clickable { pickingParent = true }.padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 if (parentUnit != null) KindTile(parentUnit.kind, parentUnit.logoUrl, 28)
                 else Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(c.muted), contentAlignment = Alignment.Center) { Icon(Icons.Filled.VerticalAlignTop, null, tint = c.mutedFg, modifier = Modifier.size(16.dp)) }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(parentUnit?.name ?: "Paling atas", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(parentUnit?.let { tree.parentTrail(it).ifEmpty { "paling atas" } } ?: "tanpa induk", fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(parentUnit?.name ?: stringResource(R.string.oc_top), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(parentUnit?.let { tree.parentTrail(it).ifEmpty { stringResource(R.string.oc_top_lower) } } ?: stringResource(R.string.oc_no_parent), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text("Ganti", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1E3A5F))
+                Text(stringResource(R.string.oc_change), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1E3A5F))
             }
         }
         if (!isGroup && parent != null && candidates.isNotEmpty()) Column {
-            FieldLabel("Dipimpin oleh", "opsional")
+            FieldLabel(stringResource(R.string.oc_led_by), stringResource(R.string.oc_optional))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                LeadChip(lead == null || !leadValid, { lead = null }) { Text("Tidak ada", fontSize = 12.sp) }
+                LeadChip(lead == null || !leadValid, { lead = null }) { Text(stringResource(R.string.oc_lead_none), fontSize = 12.sp) }
                 candidates.forEach { p ->
                     LeadChip(lead == p.userId, { lead = p.userId }) {
                         Avatar(p.name, p.avatar, 20.dp); Spacer(Modifier.width(6.dp))
@@ -323,25 +326,25 @@ fun UnitSheet(tree: OrgTree, api: OrgChartApi, unit: OrgUnit?, parentId: String?
                     }
                 }
             }
-            Text((if (viaGroup) "Dari BoD/Manager ${leadUnit?.let(tree.byId::get)?.name ?: "kartu di atas grup"}. " else "") +
-                "Kartu ini digambar di bawah orang yang dipilih, dan garisnya ditarik dari dia.", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(top = 6.dp))
+            Text((if (viaGroup) stringResource(R.string.oc_lead_via_group, leadUnit?.let(tree.byId::get)?.name ?: stringResource(R.string.oc_lead_card_above)) else "") +
+                stringResource(R.string.oc_lead_note), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(top = 6.dp))
         }
         if (unit != null && !isGroup && cardPeople.isNotEmpty()) Column {
-            FieldLabel("Orang di kartu ini · ${cardPeople.size}", "jabatan tampil di bagan")
+            FieldLabel(stringResource(R.string.oc_people_on_card, cardPeople.size), stringResource(R.string.oc_titles_hint))
             cardPeople.forEach { p -> TitleRow(api, p, unit.id, cardPeople.filter { it.userId != p.userId && it.isLead }, onError = { problem = it }) }
         }
     }
     if (pickingParent) ParentPicker(tree, parent, excluded, onPick = { id -> parent = id; if (!kindPicked) kind = guessKind(tree, id); pickingParent = false }) { pickingParent = false }
     if (confirmDelete && unit != null) AlertDialog(
         onDismissRequest = { confirmDelete = false },
-        title = { Text("Hapus ${unit.name}?") },
-        text = { Text((if (members > 0) "$members orang dilepas dari kartu ini (tetap di IP/Team lainnya). " else "") +
-            (if (subUnits > 0) "$subUnits sub-IP/Team naik ke induknya. " else "") + "Tidak ada akses project yang berubah.") },
+        title = { Text(stringResource(R.string.oc_delete_q, unit.name)) },
+        text = { Text((if (members > 0) pluralStringResource(R.plurals.oc_delete_people, members, members) else "") +
+            (if (subUnits > 0) pluralStringResource(R.plurals.oc_delete_children, subUnits, subUnits) else "") + stringResource(R.string.oc_delete_no_access)) },
         confirmButton = { TextButton(onClick = {
             confirmDelete = false; saving = true
-            scope.launch { try { api.delete(unit.id); onSaved("${unit.name} dihapus") } catch (e: ApiError) { fail(e); saving = false } }
-        }) { Text("Hapus", color = c.danger, fontWeight = FontWeight.Bold) } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Batal") } },
+            scope.launch { try { api.delete(unit.id); onSaved(res.getString(R.string.oc_deleted, unit.name)) } catch (e: ApiError) { fail(e); saving = false } }
+        }) { Text(stringResource(R.string.delete), color = c.danger, fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -371,7 +374,7 @@ private fun TitleRow(api: OrgChartApi, person: OrgPerson, unitId: String, leader
         saving = true
         scope.launch {
             try { api.setTitle(person.userId, unitId, next.ifEmpty { null }); saved = next }
-            catch (e: ApiError) { onError("Gagal menyimpan jabatan: " + ((e as? ApiError.Http)?.serverMessage ?: e.describe(res))); v = saved }
+            catch (e: ApiError) { onError(res.getString(R.string.oc_title_failed, (e as? ApiError.Http)?.serverMessage ?: e.describe(res))); v = saved }
             saving = false
         }
     }
@@ -381,16 +384,16 @@ private fun TitleRow(api: OrgChartApi, person: OrgPerson, unitId: String, leader
             Text(person.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(ROLE_SUB[person.role] ?: person.role, fontSize = 11.sp, color = c.mutedFg)
         }
-        OutlinedTextField(v, { v = it.take(40) }, singleLine = true, enabled = !saving, placeholder = { Text("Jabatan", fontSize = 12.sp) },
+        OutlinedTextField(v, { v = it.take(40) }, singleLine = true, enabled = !saving, placeholder = { Text(stringResource(R.string.oc_job_title), fontSize = 12.sp) },
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { saveTitle() }),
             modifier = Modifier.width(110.dp).onFocusChanged { if (!it.isFocused) saveTitle() })
         if (!person.isBoD && leaders.isNotEmpty()) Box {
             TextButton(onClick = { menu = true }, enabled = !saving) {
-                Text(leaders.firstOrNull { it.userId == under }?.label?.split(" ")?.first() ?: "— di bawah —", fontSize = 12.sp, maxLines = 1)
+                Text(leaders.firstOrNull { it.userId == under }?.label?.split(" ")?.first() ?: stringResource(R.string.oc_under_none), fontSize = 12.sp, maxLines = 1)
             }
             DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem({ Text("— di bawah —") }, { menu = false; setUnder(api, person, unitId, null, scope, res, onError) { under = null } })
+                DropdownMenuItem({ Text(stringResource(R.string.oc_under_none)) }, { menu = false; setUnder(api, person, unitId, null, scope, res, onError) { under = null } })
                 leaders.forEach { l -> DropdownMenuItem({ Text(l.label) }, { menu = false; setUnder(api, person, unitId, l.userId, scope, res, onError) { under = l.userId } }) }
             }
         }
@@ -400,7 +403,7 @@ private fun setUnder(api: OrgChartApi, person: OrgPerson, unitId: String, to: St
                      res: android.content.res.Resources, onError: (String) -> Unit, done: () -> Unit) {
     scope.launch {
         try { api.setReportsTo(person.userId, unitId, to); done() }
-        catch (e: ApiError) { onError("Gagal menyimpan atasan: " + ((e as? ApiError.Http)?.serverMessage ?: e.describe(res))) }
+        catch (e: ApiError) { onError(res.getString(R.string.oc_lead_failed, (e as? ApiError.Http)?.serverMessage ?: e.describe(res))) }
     }
 }
 
@@ -419,17 +422,17 @@ private fun ParentPicker(tree: OrgTree, value: String?, excluded: Set<String>, o
     val shown = if (needle.isEmpty()) rows else rows.filter { (u, _) -> tree.pathOf(u).lowercase().contains(needle) }
     SheetFrame(onClose, header = {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text("Cari IP, divisi, atau grup…") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
-            TextButton(onClick = onClose) { Text("Tutup") }
+            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.oc_search_units)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+            TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
         }
     }, footer = {}) {
         Column {
-            if (needle.isEmpty()) PickRow(value == null, 0, "Paling atas", "tanpa induk", { Icon(Icons.Filled.VerticalAlignTop, null, tint = c.mutedFg, modifier = Modifier.size(22.dp)) }) { onPick(null) }
+            if (needle.isEmpty()) PickRow(value == null, 0, stringResource(R.string.oc_top), stringResource(R.string.oc_no_parent), { Icon(Icons.Filled.VerticalAlignTop, null, tint = c.mutedFg, modifier = Modifier.size(22.dp)) }) { onPick(null) }
             shown.forEach { (u, depth) ->
                 PickRow(value == u.id, if (needle.isEmpty()) depth else 0, u.name,
-                    if (needle.isNotEmpty()) tree.parentTrail(u).ifEmpty { null } else if (u.isGroup) "grup" else null, { KindTile(u.kind, u.logoUrl, 22) }) { onPick(u.id) }
+                    if (needle.isNotEmpty()) tree.parentTrail(u).ifEmpty { null } else if (u.isGroup) stringResource(R.string.oc_group_word) else null, { KindTile(u.kind, u.logoUrl, 22) }) { onPick(u.id) }
             }
-            if (shown.isEmpty()) Text("Nggak ada yang cocok.", fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(12.dp))
+            if (shown.isEmpty()) Text(stringResource(R.string.oc_no_match), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(12.dp))
         }
     }
 }
@@ -469,6 +472,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
             busy = false
         }
     }
+    val who = person.name ?: res.getString(R.string.oc_person)
     val canBeUnder = !person.isBoD
     val leaderRows = if (!canBeUnder) emptyList() else tree.people.filter { it.userId != person.userId && it.isLead }
         .flatMap { p -> p.unitIds.mapNotNull { uid -> tree.byId[uid]?.takeIf { !it.isGroup }?.let { Triple(p, it, p.titles[uid]) } } }
@@ -482,22 +486,22 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(person.name, person.avatar, 32.dp); Spacer(Modifier.width(10.dp))
                 Text(person.label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f))
-                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Tutup") }
+                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
             }
-            Text("Taruh di bawah seseorang, atau centang IP/Team-nya. Tidak mengubah akses project.", fontSize = 11.sp, color = c.mutedFg)
-            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text("Cari nama, jabatan, atau IP/Team…") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), keyboardOptions = AdminKeyboard.Done)
+            Text(stringResource(R.string.oc_person_hint), fontSize = 11.sp, color = c.mutedFg)
+            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.oc_search_people)) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), keyboardOptions = AdminKeyboard.Done)
         }
     }, footer = {
-        Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Selesai") }
+        Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.oc_done)) }
     }) {
         problem?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger) }
         if (canBeUnder) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            FieldLabel("Di bawah siapa")
+            FieldLabel(stringResource(R.string.oc_under_whom))
             current.forEach { (uid, u, l) ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.violet.copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sekarang di bawah: ${l.name ?: l.label} · ${u.name}", fontSize = 12.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 2)
-                    TextButton(enabled = !busy, onClick = { run("${person.name ?: "Orang"} tidak lagi di bawah siapa pun", { api.setReportsTo(person.userId, uid, null) }) { reportsTo = reportsTo - uid } }) {
-                        Text("Lepas", color = c.danger, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.oc_now_under, l.name ?: l.label, u.name), fontSize = 12.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 2)
+                    TextButton(enabled = !busy, onClick = { run(res.getString(R.string.oc_t_free, who), { api.setReportsTo(person.userId, uid, null) }) { reportsTo = reportsTo - uid } }) {
+                        Text(stringResource(R.string.oc_release), color = c.danger, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -506,7 +510,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (on) c.violet.copy(alpha = 0.1f) else Color.Transparent)
                     .clickable(enabled = !busy && !on) {
                         // "Di bawah siapa": into the leader's card first if needed, then under the leader.
-                        run("${person.name ?: "Orang"} di bawah ${l.name ?: "atasannya"}", {
+                        run(res.getString(R.string.oc_t_under, who, l.name ?: res.getString(R.string.oc_their_lead)), {
                             if (u.id !in unitIds) api.addMember(person.userId, u.id)
                             api.setReportsTo(person.userId, u.id, l.userId)
                         }) { unitIds = unitIds + u.id; reportsTo = reportsTo + (u.id to l.userId) }
@@ -516,19 +520,19 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
                         Text(l.label + (t?.let { " — $it" } ?: ""), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(u.name, fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
                     }
-                    if (on) Text("sekarang", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
+                    if (on) Text(stringResource(R.string.oc_now), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
                 }
             }
-            if (leaderRows.isEmpty()) Text(if (needle.isNotEmpty()) "Nggak ada yang cocok." else "Belum ada BoD atau Manager di kartu mana pun.", fontSize = 12.sp, color = c.mutedFg)
+            if (leaderRows.isEmpty()) Text(stringResource(if (needle.isNotEmpty()) R.string.oc_no_match else R.string.oc_no_leaders), fontSize = 12.sp, color = c.mutedFg)
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            FieldLabel("IP/Team")
+            FieldLabel(stringResource(R.string.oc_units))
             unitRows.forEach { (u, path) ->
                 val on = u.id in unitIds
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (on) c.violet.copy(alpha = 0.08f) else Color.Transparent)
                     .clickable(enabled = !busy) {
-                        if (on) run("${person.name ?: "Orang"} dilepas dari ${u.name}", { api.removeMember(person.userId, u.id) }) { unitIds = unitIds - u.id }
-                        else run("${person.name ?: "Orang"} + ${u.name}", { api.addMember(person.userId, u.id) }) { unitIds = unitIds + u.id }
+                        if (on) run(res.getString(R.string.oc_t_removed, who, u.name), { api.removeMember(person.userId, u.id) }) { unitIds = unitIds - u.id }
+                        else run(res.getString(R.string.oc_t_added, who, u.name), { api.addMember(person.userId, u.id) }) { unitIds = unitIds + u.id }
                     }.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(on, null, enabled = !busy)
                     KindTile(u.kind, u.logoUrl, 24); Spacer(Modifier.width(8.dp))
@@ -539,7 +543,7 @@ fun PersonSheet(tree: OrgTree, api: OrgChartApi, person: OrgPerson, onChanged: (
                     }
                 }
             }
-            if (unitRows.isEmpty()) Text(if (tree.units.isEmpty()) "Belum ada IP/Team. Tambahkan dulu." else "Nggak ada yang cocok.", fontSize = 12.sp, color = c.mutedFg)
+            if (unitRows.isEmpty()) Text(stringResource(if (tree.units.isEmpty()) R.string.oc_no_units else R.string.oc_no_match), fontSize = 12.sp, color = c.mutedFg)
         }
     }
 }

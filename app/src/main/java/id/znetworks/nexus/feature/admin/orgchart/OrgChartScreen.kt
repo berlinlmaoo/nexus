@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.admin.orgchart
 
+import id.znetworks.nexus.R
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.graphics.BitmapFactory
 import androidx.compose.animation.core.Animatable
@@ -146,17 +149,17 @@ fun OrgChartScreen(onBack: () -> Unit) {
         var fitRequest by remember { mutableIntStateOf(0) }
 
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali") }
-            Text("Bagan IP & Divisi", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
-            if (tree != null) IconButton(onClick = { fitRequest++ }) { Icon(Icons.Filled.FitScreen, "Pas layar") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.oc_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
+            if (tree != null) IconButton(onClick = { fitRequest++ }) { Icon(Icons.Filled.FitScreen, stringResource(R.string.oc_fit)) }
             if (tree != null && canEdit) TextButton(onClick = { adding = focusId ?: tree.roots.singleOrNull()?.id; addingOpen = true }) {
-                Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Tambah", fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.oc_add), fontWeight = FontWeight.SemiBold)
             }
         }
         if (tree == null) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 if (error == null) CircularProgressIndicator()
-                else Text("Bagan tidak bisa dimuat — butuh akses BoD.\n${error.orEmpty()}", color = c.mutedFg, textAlign = TextAlign.Center, fontSize = 13.sp)
+                else Text(stringResource(R.string.oc_load_failed) + "\n" + error.orEmpty(), color = c.mutedFg, textAlign = TextAlign.Center, fontSize = 13.sp)
             }
             return@Column
         }
@@ -164,11 +167,11 @@ fun OrgChartScreen(onBack: () -> Unit) {
         // Stats strip.
         Row(Modifier.fillMaxWidth().background(c.card).horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Stat("${d!!.stats.units}", "IP/Team")
-            if (d.stats.groups > 0) Stat("${d.stats.groups}", "grup")
-            Stat("${d.stats.placed} / ${d.stats.people}", "orang sudah ditaruh")
-            Stat("${unplaced.size}", "belum ditaruh", if (unplaced.isEmpty()) c.success else c.warning)
-            if (!canEdit) Text("Hanya baca", fontSize = 11.sp, color = c.mutedFg)
+            Stat("${d!!.stats.units}", stringResource(R.string.oc_stat_units))
+            if (d.stats.groups > 0) Stat("${d.stats.groups}", stringResource(R.string.oc_stat_groups))
+            Stat("${d.stats.placed} / ${d.stats.people}", stringResource(R.string.oc_stat_placed))
+            Stat("${unplaced.size}", stringResource(R.string.oc_stat_unplaced), if (unplaced.isEmpty()) c.success else c.warning)
+            if (!canEdit) Text(stringResource(R.string.oc_read_only), fontSize = 11.sp, color = c.mutedFg)
         }
         // View chips: Ringkas, Lengkap, then one per card right under the top.
         val activeTop = remember(focusId, tree) {
@@ -183,8 +186,8 @@ fun OrgChartScreen(onBack: () -> Unit) {
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            ViewChip("Ringkas", mode == ChartMode.RINGKAS) { setView("ringkas") }
-            ViewChip("Lengkap", mode == ChartMode.LENGKAP) { setView("lengkap") }
+            ViewChip(stringResource(R.string.oc_view_summary), mode == ChartMode.RINGKAS) { setView("ringkas") }
+            ViewChip(stringResource(R.string.oc_view_full), mode == ChartMode.LENGKAP) { setView("lengkap") }
             if (tree.topUnits.isNotEmpty()) Box(Modifier.width(1.dp).height(16.dp).background(c.border))
             tree.topUnits.forEach { u -> ViewChip(u.name, activeTop == u.id, logo = if (u.kind == "IP") u.logoUrl else null) { setView("u:${u.id}") } }
         }
@@ -209,10 +212,10 @@ fun OrgChartScreen(onBack: () -> Unit) {
 
         if (tree.units.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Belum ada IP/Team", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
-                Text("Mulai dari IP paling atas, misalnya Z Networks atau PATS Group. Setelah itu tambahkan divisi dan team di bawahnya, pasang logonya, lalu seret orang ke team-nya.",
+                Text(stringResource(R.string.oc_empty_title), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
+                Text(stringResource(R.string.oc_empty_body),
                     fontSize = 13.sp, color = c.mutedFg, textAlign = TextAlign.Center)
-                if (canEdit) TextButton(onClick = { adding = null; addingOpen = true }) { Text("Tambah IP pertama", fontWeight = FontWeight.Bold) }
+                if (canEdit) TextButton(onClick = { adding = null; addingOpen = true }) { Text(stringResource(R.string.oc_empty_add), fontWeight = FontWeight.Bold) }
             }
         } else {
             ChartCanvas(tree, mode, focusId, fitRequest, Modifier.weight(1f).fillMaxWidth(),
@@ -221,8 +224,8 @@ fun OrgChartScreen(onBack: () -> Unit) {
         }
         // "Belum ditaruh" under the canvas.
         Column(Modifier.fillMaxWidth().background(c.muted.copy(alpha = 0.4f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text("BELUM DITARUH · ${unplaced.size} orang", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = c.mutedFg)
-            if (unplaced.isEmpty()) Text("Kosong — semua orang sudah ada di suatu IP/Team.", fontSize = 12.sp, color = c.success)
+            Text(pluralStringResource(R.plurals.oc_unplaced_label, unplaced.size, unplaced.size), fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = c.mutedFg)
+            if (unplaced.isEmpty()) Text(stringResource(R.string.oc_unplaced_none), fontSize = 12.sp, color = c.success)
             else Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 unplaced.forEach { p ->
                     Row(Modifier.clip(RoundedCornerShape(10.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(10.dp))
@@ -369,7 +372,7 @@ internal fun ChartCanvas(tree: OrgTree, mode: ChartMode, focusId: String?, fitRe
                 for ((k, r) in l.rects) if (k.startsWith("c:") && tree.byId[k.substring(2)]?.isGroup == true) {
                     val n = tree.childUnits[k.substring(2)].orEmpty().size
                     Box(Modifier.offset(r.x.dp, r.y.dp).size(r.w.dp, r.h.dp).clip(RoundedCornerShape(18.dp)).background(groupFill).border(1.dp, groupLine, RoundedCornerShape(18.dp))) {
-                        if (n == 0) Text("Seret kartu ke sini", fontSize = 11.sp, color = c.mutedFg, textAlign = TextAlign.Center,
+                        if (n == 0) Text(stringResource(R.string.oc_drop_here), fontSize = 11.sp, color = c.mutedFg, textAlign = TextAlign.Center,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(LAYOUT.gEmpty.dp).wrapContentSize())
                     }
                 }
@@ -408,7 +411,7 @@ private fun Element(tree: OrgTree, mode: ChartMode, key: String, interactive: Bo
         else -> {
             val g = tree.groups[u.id] ?: return
             val kind = parts.drop(2).joinToString(":")
-            PeopleBox(u.id, key, kind, boxPeople(g, kind), boxTitle(g, kind, tree.people), if (interactive) onPerson else null, chipSink)
+            PeopleBox(u.id, key, kind, boxPeople(g, kind), boxLabelText(boxLabel(g, kind, tree.people)), if (interactive) onPerson else null, chipSink)
         }
     }
 }
@@ -436,7 +439,7 @@ private fun toneOf(t: CardTone): Tone {
     }
 }
 
-/** Kartu IP/Team: logo (IP only) + name (2 lines) + "n orang"; in Ringkas up to 4 leader faces (+n). */
+/** Kartu IP/Team: logo (IP only) + name (2 lines) + "n people"; in Ringkas up to 4 leader faces (+n). */
 @Composable
 private fun UnitCard(u: OrgUnit, info: OrgTree.CardInfo, onClick: (() -> Unit)?) {
     val t = toneOf(info.tone)
@@ -449,7 +452,7 @@ private fun UnitCard(u: OrgUnit, info: OrgTree.CardInfo, onClick: (() -> Unit)?)
         if (u.kind == "IP") { UnitLogo(u.logoUrl, u.name, if (root) 40 else 34, RoundedCornerShape(8.dp)); Spacer(Modifier.width(10.dp)) }
         Column(Modifier.weight(1f, fill = false)) {
             Text(u.name, fontSize = if (root) 14.sp else 13.sp, fontWeight = FontWeight.SemiBold, color = t.fg, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 16.sp)
-            Text(info.meta, fontSize = 10.5.sp, color = t.meta, lineHeight = 13.sp)
+            Text(cardMeta(info), fontSize = 10.5.sp, color = t.meta, lineHeight = 13.sp)
             if (info.faces.isNotEmpty()) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 info.faces.take(4).forEachIndexed { i, p ->
                     Box(Modifier.offset(x = (-6 * i).dp).clip(CircleShape).background(t.bg).padding(2.dp)) { Avatar(p.name, p.avatar, 20.dp) }
@@ -525,7 +528,7 @@ private fun PersonRow(p: OrgPerson, unitId: String, onPerson: ((OrgPerson) -> Un
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f, fill = false)) {
             Text(p.label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp)
-            Text(listOfNotNull(title, ROLE_SUB[p.role] ?: p.role, if (extra > 0) "+$extra IP/Team lain" else null).joinToString(" · "),
+            Text(listOfNotNull(title, ROLE_SUB[p.role] ?: p.role, if (extra > 0) pluralStringResource(R.plurals.oc_other_units, extra, extra) else null).joinToString(" · "),
                 fontSize = 10.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 12.sp)
         }
     }
@@ -563,4 +566,19 @@ internal fun UnitLogo(url: String?, name: String?, size: Int, shape: androidx.co
             Text(initialsOf(name), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
     }
+}
+
+/** "4 people · 7 parts" / "no one yet": the card's line in the app's language. */
+@Composable
+private fun cardMeta(info: OrgTree.CardInfo): String = listOfNotNull(
+    if (info.people > 0) pluralStringResource(R.plurals.oc_people_n, info.people, info.people) else stringResource(R.string.oc_nobody_yet),
+    if (info.parts > 0) pluralStringResource(R.plurals.oc_parts_n, info.parts, info.parts) else null,
+).joinToString(" · ")
+
+@Composable
+private fun boxLabelText(l: BoxLabel): String = when (l.kind) {
+    BoxLabel.Kind.BOD -> stringResource(R.string.oc_box_bod, l.n)
+    BoxLabel.Kind.MANAGER -> stringResource(R.string.oc_box_manager, l.n)
+    BoxLabel.Kind.STAFF -> pluralStringResource(R.plurals.oc_people_n, l.n, l.n)
+    BoxLabel.Kind.UNDER -> stringResource(R.string.oc_box_under, l.leaderFirstName ?: "?", l.n)
 }

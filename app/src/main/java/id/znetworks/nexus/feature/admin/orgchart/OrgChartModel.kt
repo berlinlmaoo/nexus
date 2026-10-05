@@ -110,13 +110,16 @@ fun boxPeople(g: Group, kind: String): List<OrgPerson> = when (kind) {
     "staff" -> g.staff
     else -> g.rt.firstOrNull { "rt:${it.first}" == kind }?.second ?: emptyList()
 }
-fun boxTitle(g: Group, kind: String, people: List<OrgPerson>): String {
+/** What a people box's label says, as data (the screen words it in the app's language): "BoD · 4",
+ *  "Manager · 1", "7 people", "Under Abraham · 1". */
+data class BoxLabel(val kind: Kind, val n: Int, val leaderFirstName: String? = null) { enum class Kind { BOD, MANAGER, STAFF, UNDER } }
+fun boxLabel(g: Group, kind: String, people: List<OrgPerson>): BoxLabel {
     val n = boxPeople(g, kind).size
     return when (kind) {
-        "bod" -> "BoD · $n"
-        "manager" -> "Manager · $n"
-        "staff" -> "$n orang"
-        else -> "Di bawah ${(people.firstOrNull { "rt:${it.userId}" == kind }?.name ?: "?").split(" ")[0]} · $n"
+        "bod" -> BoxLabel(BoxLabel.Kind.BOD, n)
+        "manager" -> BoxLabel(BoxLabel.Kind.MANAGER, n)
+        "staff" -> BoxLabel(BoxLabel.Kind.STAFF, n)
+        else -> BoxLabel(BoxLabel.Kind.UNDER, n, (people.firstOrNull { "rt:${it.userId}" == kind }?.name ?: "?").split(" ")[0])
     }
 }
 
@@ -241,8 +244,9 @@ class OrgTree(val data: OrgChartData) {
     /** "PT. The Z Networks › Framework Agency" — the path ABOVE a unit. */
     fun parentTrail(u: OrgUnit): String { val full = pathOf(u); val i = full.lastIndexOf(" › "); return if (i >= 0) full.substring(0, i) else "" }
 
-    class CardInfo(val tone: CardTone, val meta: String, val faces: List<OrgPerson>)
-    /** How a card looks: its tone by kind and level, the line under its name and, in Ringkas, the faces of its BoD/Manager. */
+    /** [people] on the card (in Ringkas: in its whole branch, each once) and, in Ringkas, [parts] below it; the screen words the line. */
+    class CardInfo(val tone: CardTone, val people: Int, val parts: Int, val faces: List<OrgPerson>)
+    /** How a card looks: its tone by kind and level, what the line under its name counts and, in Ringkas, the faces of its BoD/Manager. */
     fun cardInfo(u: OrgUnit, mode: ChartMode): CardInfo {
         val level = levelOf(u.id)
         val above = effParentOf(u.id)
@@ -253,10 +257,9 @@ class OrgTree(val data: OrgChartData) {
             val all = HashSet<String>()
             for (id in listOf(u.id) + below) for (p in membersOf[id].orEmpty()) all += p.userId
             val parts = below.count { byId[it]?.isGroup != true }
-            val meta = listOfNotNull(if (all.isNotEmpty()) "${all.size} orang" else "belum ada orang", if (parts > 0) "$parts bagian" else null).joinToString(" · ")
-            return CardInfo(tone, meta, own.filter { it.isLead })
+            return CardInfo(tone, all.size, parts, own.filter { it.isLead })
         }
-        return CardInfo(tone, if (own.isNotEmpty()) "${own.size} orang" else "belum ada orang", emptyList())
+        return CardInfo(tone, own.size, 0, emptyList())
     }
 }
 

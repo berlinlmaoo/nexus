@@ -141,8 +141,8 @@ class OrgChartLayoutTest {
         val l = layoutChart(tree, ChartMode.RINGKAS, null, sizes, chips)
         val cards = l.rects.keys.filter { it.startsWith("c:") }.map { tree.byId.getValue(it.substring(2)) }.filterNot { it.isGroup }.map { it.name }.toSet()
         assertEquals(setOf("PT. The Z Networks") + tree.topUnits.map { it.name }, cards)
-        val frameworkMeta = tree.cardInfo(data.units.first { it.name == "Framework Agency" }, ChartMode.RINGKAS).meta
-        assertTrue(frameworkMeta, Regex("""\d+ orang · \d+ bagian""").matches(frameworkMeta))
+        val fa = tree.cardInfo(data.units.first { it.name == "Framework Agency" }, ChartMode.RINGKAS)
+        assertTrue(fa.people > 0 && fa.parts > 0)
     }
 
     @Test fun lengkapPutsSavedCardsExactlyThere() {

@@ -159,8 +159,8 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.AccountTree, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Bagan IP & Divisi", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                        Text(if (isBoD) "IP, divisi & team · tambah, ubah, taruh orang" else "IP, divisi & team · hanya baca", fontSize = 12.sp, color = c.mutedFg)
+                        Text(stringResource(R.string.oc_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        Text(stringResource(if (isBoD) R.string.oc_entry_sub_edit else R.string.oc_entry_sub_read), fontSize = 12.sp, color = c.mutedFg)
                     }
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
                 }

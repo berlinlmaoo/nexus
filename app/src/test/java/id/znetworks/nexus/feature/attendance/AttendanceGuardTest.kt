@@ -194,4 +194,18 @@ class AttendanceGuardTest {
         val code = api.lines().filterNot { it.trimStart().startsWith("*") || it.trimStart().startsWith("//") }.joinToString("\n")
         assertFalse(Regex("layoutX|layoutY|boxLayout|org-chart/layout").containsMatchIn(code))
     }
+
+    @Test fun orgChartTextComesFromResources() {
+        // Berlin 5 Oct: every text in English AND Indonesian. The org chart's words live in strings.xml
+        // (values = English, values-in = Indonesian); only data (unit and people names) is shown as is.
+        val files = sources.filterKeys { it.parentFile.name == "orgchart" }
+        assertTrue(files.size >= 3)
+        files.forEach { (f, src) ->
+            val code = src.lines().filterNot { it.trimStart().startsWith("*") || it.trimStart().startsWith("//") || it.trimStart().startsWith("/**") }.joinToString("\n")
+            val literal = Regex("""(Text|FieldLabel|onSaved|onError|run)\("[^"$]*[A-Za-z]{3}""").find(code)
+            assertTrue("${f.name}: ${literal?.value}", literal == null)
+            val indonesian = Regex(""""[^"\n]*\b(orang|bagian|Tambah|Hapus|Simpan|Batal|belum|di bawah|Lepas|Tutup|Ganti)\b[^"\n]*"""").find(code)
+            assertTrue("${f.name}: ${indonesian?.value}", indonesian == null)
+        }
+    }
 }
