@@ -122,6 +122,8 @@ struct AdminView: View {
         var t: [(String, String)] = [("Users", "users"), ("Absensi", "attendance"),
                                      ("Audit", "audit"), ("Quests", "quests")]
         if viewer.canAnnounce {
+            // Same gate as the web tab: BoD and One Above All, who are also the only ones who may change it.
+            t.append((T("Bagan IP & Divisi"), "org"))
             t.append((T("Announcements"), "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
             if RemoteConfig.shared.fakeGpsReview { t.append((T("Absen Monitor"), "suspects")) }
@@ -182,6 +184,7 @@ struct AdminView: View {
                 case "attendance": AttendanceAdminSection(workspaceId: workspaceId)
                 case "audit": AdminAuditSection()
                 case "quests": AdminQuestsSection(workspaceId: workspaceId)
+                case "org": AdminOrgChartSection()
                 case "announcements": AdminAnnouncementsSection()
                 case "extra-dayoff": AdminExtraDayOffSection()
                 case "suspects": AdminSuspectSection()
