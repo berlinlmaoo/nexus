@@ -187,4 +187,11 @@ class AttendanceGuardTest {
         }
         assertEquals(sortedSetOf("HomeScreen.kt", "ThreadsScreen.kt", "WhatsNew.kt"), filesMatching(Regex("""ModalBottomSheet\(""")))
     }
+
+    @Test fun orgChartNeverWritesPositions() {
+        // Spec 5 Oct 2026: layoutX/Y, boxLayout and POST …/layout are the web's; the phone reads them only.
+        val api = sources.entries.first { it.key.name == "OrgChartApi.kt" }.value
+        val code = api.lines().filterNot { it.trimStart().startsWith("*") || it.trimStart().startsWith("//") }.joinToString("\n")
+        assertFalse(Regex("layoutX|layoutY|boxLayout|org-chart/layout").containsMatchIn(code))
+    }
 }

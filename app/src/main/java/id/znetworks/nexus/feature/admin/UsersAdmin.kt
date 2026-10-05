@@ -112,7 +112,7 @@ object UsersLogic {
 /** Control Room › Users: the roster (A–Z), role counts as filters, search, add people, approval chart. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Unit) {
+fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Unit, onOpenOrgChart: () -> Unit = {}) {
     val api = adminApi()
     val c = Nx.colors
     val res = LocalContext.current.resources
@@ -149,6 +149,18 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                         Text(stringResource(R.string.ad_chart), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                         Text(if (unplaced == 0) stringResource(R.string.ad_chart_all_placed) else stringResource(R.string.ad_chart_unplaced, unplaced),
                             fontSize = 12.sp, color = if (unplaced == 0) c.mutedFg else c.warning)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
+                }
+            }
+            // Bagan IP & Divisi (5 Oct 2026, replaces Teams): everyone here can read it; BoD / OAA edit it.
+            item {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp)).clickable(onClick = onOpenOrgChart).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.AccountTree, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Bagan IP & Divisi", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        Text(if (isBoD) "IP, divisi & team · tambah, ubah, taruh orang" else "IP, divisi & team · hanya baca", fontSize = 12.sp, color = c.mutedFg)
                     }
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
                 }

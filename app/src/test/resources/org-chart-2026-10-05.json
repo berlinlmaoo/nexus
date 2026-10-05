@@ -1,0 +1,929 @@
+{
+ "workspaceId": "cmmroq7dk0001vewe92nk1g0w",
+ "units": [
+  {
+   "id": "ou8c57f9ec8bbc9d96eabfdd1",
+   "name": "Geneziz",
+   "kind": "IP",
+   "logoUrl": null,
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 0,
+   "leadUserId": null,
+   "layoutX": 3040,
+   "layoutY": 296,
+   "boxLayout": null
+  },
+  {
+   "id": "ou7c9cc71ca650c4e0c003f95",
+   "name": "Strategist",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "position": 0,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou29b80cb5b6a94b9d74989b3",
+   "name": "Pink Baddies",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790769379247-0d00856f579a.png",
+   "parentId": "cmuqpx0cn000801mrrda3c65k",
+   "position": 0,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou02458d48df555b0d61edea1",
+   "name": "PT. The Z Networks",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790765774911-773e3ff68b5a.png",
+   "parentId": null,
+   "position": 0,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": {
+    "rt:cmq503ajo004w01qk07lqcity": {
+     "x": 2280,
+     "y": 288
+    }
+   }
+  },
+  {
+   "id": "cmuqpx0cn000801mrrda3c65k",
+   "name": "Community",
+   "kind": "GROUP",
+   "logoUrl": null,
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "position": 0,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqq9u4e001l01mrn26adgjl",
+   "name": "Event",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "position": 0,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou2b718beaa10345fc21b9ae2",
+   "name": "Z Foundation",
+   "kind": "IP",
+   "logoUrl": null,
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 1,
+   "leadUserId": null,
+   "layoutX": 3392,
+   "layoutY": 296,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqqalgd001o01mrdnghpqcn",
+   "name": "Digital Services",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "position": 1,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "oub7186507c81bf7f984bb416",
+   "name": "Finance & Tech",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 2,
+   "leadUserId": "cmnzxse5y005k01qh56f3vaag",
+   "layoutX": 2616,
+   "layoutY": 296,
+   "boxLayout": null
+  },
+  {
+   "id": "oud586f38af44e4329821ef21",
+   "name": "Project Management",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "position": 2,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ouda117084994807e15c72c9a",
+   "name": "PATS Entertainment",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790769246300-d6c21fa2f570.png",
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "position": 2,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqqbytc001r01mrm0dm3zc8",
+   "name": "Production House",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "position": 2,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou47f297a5be7b0f6fbbae754",
+   "name": "Framework Agency",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790765889123-24078d6d7f0c.png",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 3,
+   "leadUserId": "cmo7c6q8i001408p80c3qcfvb",
+   "layoutX": 1920,
+   "layoutY": 744,
+   "boxLayout": null
+  },
+  {
+   "id": "ou396ea68f26c1bb98b84087c",
+   "name": "Creative",
+   "kind": "GROUP",
+   "logoUrl": null,
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "position": 3,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou24e50eb91aa5d1de071550f",
+   "name": "PATS University",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790769227878-5906bd3094e0.png",
+   "parentId": "cmuqpx0cn000801mrrda3c65k",
+   "position": 3,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqqc7ro001s01mruwaq50yd",
+   "name": "KOL Management",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "position": 3,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou6cd7c41336011d50e8dcfd2",
+   "name": "PATS",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790765788467-ca82210127f8.png",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 4,
+   "leadUserId": null,
+   "layoutX": 4136,
+   "layoutY": 744,
+   "boxLayout": null
+  },
+  {
+   "id": "cmunzttnm000001pbm4at4sth",
+   "name": "PATS X",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790766060077-6308e539dd66.png",
+   "parentId": "cmuqpx0ae000601mr74ui6hxp",
+   "position": 4,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqpx0ae000601mr74ui6hxp",
+   "name": "Outlet",
+   "kind": "GROUP",
+   "logoUrl": null,
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "position": 4,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqqed05001z01mrlii7qx3u",
+   "name": "Multimedia",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "position": 4,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "oub8dd7a8dcff40cafcafed09",
+   "name": "INTOO",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790765795137-fdbd2a8fbc21.png",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 5,
+   "leadUserId": null,
+   "layoutX": 5392,
+   "layoutY": 744,
+   "boxLayout": null
+  },
+  {
+   "id": "cmunzu20h000101pbwdik48ih",
+   "name": "PATS BSD",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790766066979-f65f2a4e081f.png",
+   "parentId": "cmuqpx0ae000601mr74ui6hxp",
+   "position": 5,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuqufsl3003y01t7zvkf392w",
+   "name": "Business",
+   "kind": "DIVISION",
+   "logoUrl": null,
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "position": 5,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "ou8f27050812d85e33c43cef9",
+   "name": "Suwara",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790765818024-5821e5cfa903.png",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "position": 6,
+   "leadUserId": null,
+   "layoutX": 5960,
+   "layoutY": 744,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuo08aix000801p593ezxuzd",
+   "name": "PATS Archive",
+   "kind": "IP",
+   "logoUrl": "/api/files/attachments/org-units/1790769271853-c041676da8b5.png",
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "position": 6,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  },
+  {
+   "id": "cmuo2410d002j01qx2lia7dpq",
+   "name": "Raven Society",
+   "kind": "IP",
+   "logoUrl": null,
+   "parentId": "cmuqpx0cn000801mrrda3c65k",
+   "position": 7,
+   "leadUserId": null,
+   "layoutX": null,
+   "layoutY": null,
+   "boxLayout": null
+  }
+ ],
+ "people": [
+  {
+   "userId": "cmohdsdip001d08rww527eavc",
+   "name": "Abimanyugm",
+   "email": "person-ab77e2b3@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmunzttnm000001pbm4at4sth"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq503ajo004w01qk07lqcity",
+   "name": "Abraham Andrew",
+   "email": "person-ee89e0fa@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "CEO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cms4q6qfo06u101p79yyszkne",
+   "name": "Andi NJ",
+   "email": "person-fe80564a@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuo2410d002j01qx2lia7dpq"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmu6kh1h4026701qt3k1ynziz",
+   "name": "Angela Merici",
+   "email": "person-490dedf3@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqbytc001r01mrm0dm3zc8"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq7vrl3n012301pb6pnoz5bf",
+   "name": "Arindryo Laatstiko Jati",
+   "email": "person-a096b4fd@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqq9u4e001l01mrn26adgjl"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnzyt85500cm01qh4f75su3d",
+   "name": "Ariq Darmawan",
+   "email": "person-902b5bb9@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ou24e50eb91aa5d1de071550f"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmul23bi906q201qlzgmvga3u",
+   "name": "Ashley Keishara Adrinfisol",
+   "email": "person-c2c2164e@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmt8tzlze00pj01nld1l2s3lj",
+   "name": "Azra",
+   "email": "person-ae5d62c6@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnhcpw37000301n3g3nq8ff1",
+   "name": "Bagas Putro",
+   "email": "person-6a32b2c5@example.invalid",
+   "avatar": null,
+   "role": "ONE_ABOVE_ALL",
+   "unitIds": [
+    "ou8c57f9ec8bbc9d96eabfdd1",
+    "oub7186507c81bf7f984bb416",
+    "ou2b718beaa10345fc21b9ae2"
+   ],
+   "titles": {
+    "oub7186507c81bf7f984bb416": "CTO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrafqmh002201rq54pywgm7",
+   "name": "Bayemsore",
+   "email": "person-b6a20d35@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmsr652tx02zl01t7gz0ddo81",
+   "name": "Dadio Emerald",
+   "email": "person-8efe9918@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrb0skr000u01o7aln3jkp6",
+   "name": "Daniel Afrizal",
+   "email": "person-d0e20fb0@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq4yiwsc009w01mw62fq4bhw",
+   "name": "Dava Erlangga",
+   "email": "person-163ba706@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "oud586f38af44e4329821ef21"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmrt2ybcr009b01uov6t09t2a",
+   "name": "Dimas Damarjati",
+   "email": "person-578627f8@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqufsl3003y01t7zvkf392w"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnr9lfd3000701rq5ev4pkfv",
+   "name": "Fortunatus Narendra",
+   "email": "person-d1099259@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnzxse5y005k01qh56f3vaag",
+   "name": "Geraldo Valentino",
+   "email": "person-ebb7c1bd@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1",
+    "oub7186507c81bf7f984bb416"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "CFO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnyc18mu001901m98iug9d37",
+   "name": "Gerro",
+   "email": "person-de203cd8@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou47f297a5be7b0f6fbbae754"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmotv4wdi000f08o5evtzwh3n",
+   "name": "Hary Ade Saputra",
+   "email": "person-5ed90b7a@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo1jb89b005t01pap8zd3yru",
+   "name": "Haykal",
+   "email": "person-9a6581ef@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo7c6q8i001408p80c3qcfvb",
+   "name": "Henryca Aprillyana",
+   "email": "person-cd309583@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2",
+    "oub8dd7a8dcff40cafcafed09",
+    "ou8f27050812d85e33c43cef9",
+    "ou02458d48df555b0d61edea1",
+    "ou47f297a5be7b0f6fbbae754"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "CMO",
+    "ou47f297a5be7b0f6fbbae754": "CMO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmtk0dn6v01yw01vutu795cqi",
+   "name": "Irvandes Hasri Ilham Maulana",
+   "email": "person-1138e016@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo004p4b000801nuwkfkuwh1",
+   "name": "Jovan",
+   "email": "person-7f26fbc8@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnhhsu5d000801pmgdjxtqhw",
+   "name": "Mey",
+   "email": "person-aa0f0ada@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1"
+   ],
+   "titles": {},
+   "reportsTo": {
+    "ou02458d48df555b0d61edea1": "cmq503ajo004w01qk07lqcity"
+   }
+  },
+  {
+   "userId": "cmnspps28000t01rzkur3xvye",
+   "name": "Mimiw",
+   "email": "person-9c028ce2@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2",
+    "oub8dd7a8dcff40cafcafed09",
+    "ou8f27050812d85e33c43cef9",
+    "ou02458d48df555b0d61edea1"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "COO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmtgx6a4d000101ozaxaaov6b",
+   "name": "Mohamad Okta Firdaus",
+   "email": "person-a54a4105@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnhhsznj000c01pmw6n01dsg",
+   "name": "Mory",
+   "email": "person-a3a58fc6@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou7c9cc71ca650c4e0c003f95"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmolbdlwp000v08nn3hntesy2",
+   "name": "Muchammad Farchan Febriananto",
+   "email": "person-c517bea6@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou7c9cc71ca650c4e0c003f95"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnr9n43p000j01rqplv66s4w",
+   "name": "Muhamad Febriansyah",
+   "email": "person-62b83ecf@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmta457or023f01nlz454i2oa",
+   "name": "Muhammad Alvar Pratama",
+   "email": "person-d3a7e4e6@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmu2c2a9s001b01pqbb41hrno",
+   "name": "Muhammad Kevandra",
+   "email": "person-fd977b49@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou8c57f9ec8bbc9d96eabfdd1",
+    "ou2b718beaa10345fc21b9ae2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrahzds002o01rquodi1oie",
+   "name": "Muhammad Omar Karim",
+   "email": "person-dcaac460@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrdwjw2000001rynkblrbaj",
+   "name": "Muhammad Ramdhani",
+   "email": "person-ee364d9d@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmumjzr4t000601mp78sa1c66",
+   "name": "Nabiel Mochammad Haykal",
+   "email": "person-6eb24aff@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "titles": {
+    "oub7186507c81bf7f984bb416": "Legal Intern"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo02cajs001001l833e2xalh",
+   "name": "Pasya Dimayanti",
+   "email": "person-0e23bc50@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou29b80cb5b6a94b9d74989b3"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmqp0f9v5000601phpfuqyl1p",
+   "name": "Queen Lourdes Purba Tambak",
+   "email": "person-0c64d9fa@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmunzttnm000001pbm4at4sth",
+    "cmunzu20h000101pbwdik48ih"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo091s86002001l80q49ax2l",
+   "name": "Raditya Irawan",
+   "email": "person-d8169b9d@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmunzu20h000101pbwdik48ih"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnsprzv5001801rzxwljcblg",
+   "name": "Radja Aqsal",
+   "email": "person-f0697fb4@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuo08aix000801p593ezxuzd"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmok1zwln006e08s0g4r5g84b",
+   "name": "Rafdil",
+   "email": "person-b6f4e33a@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ouda117084994807e15c72c9a"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmspw8dhf012601t7jxzpohs2",
+   "name": "Rifqi Ahmad Reza",
+   "email": "person-9e06f0b5@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqq9u4e001l01mrn26adgjl"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cms4q6v8b06u701p7178g72bw",
+   "name": "Rifqi Syarif",
+   "email": "person-b072a7e2@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuo2410d002j01qx2lia7dpq"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo00wa4s001a01mxaqosilgl",
+   "name": "Ryan Shakeel",
+   "email": "person-36db309e@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnzzbnpf000001mztvmjaj0p",
+   "name": "Sifal ",
+   "email": "person-e586c9db@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmpicyzbx000z08k5ikx5is6z",
+   "name": "Violet Vianca Dhia",
+   "email": "person-e7645e99@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "cmuqqalgd001o01mrdnghpqcn"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrecace000901qjzpil8xcx",
+   "name": "WILLIAM ERSAN",
+   "email": "person-69c1be29@example.invalid",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmotvx6tr000308rpmuk39vrv",
+   "name": "Yudia Ainani",
+   "email": "person-1c3f2bd9@example.invalid",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq0zg47j001e01nzy9o3o0is",
+   "name": "Zaki Mahmuda",
+   "email": "person-aa27ed25@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmul354wa002701pn4nr9vpbd",
+   "name": "beltsazar christopher",
+   "email": "person-545178ab@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmok49nfg000s08s0xp7nlyt1",
+   "name": "randyyy",
+   "email": "person-8ef0a861@example.invalid",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou29b80cb5b6a94b9d74989b3"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  }
+ ],
+ "stats": {
+  "units": 23,
+  "groups": 3,
+  "people": 48,
+  "placed": 46
+ }
+}

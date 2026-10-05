@@ -54,6 +54,26 @@ class UiPreviewActivity : ComponentActivity() {
                         "always" -> id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = {}, onReady = {})
                         "range" -> id.znetworks.nexus.feature.attendance.requests.LeaveRangeDialog(java.time.LocalDate.now().plusDays(1), java.time.LocalDate.now().plusDays(4),
                             java.time.LocalDate.now(), onPick = { _, _ -> }, onDismiss = {})
+                        "org-edit", "org-person" -> {
+                            val tree = androidx.compose.runtime.remember {
+                                id.znetworks.nexus.feature.admin.orgchart.OrgTree(id.znetworks.nexus.core.net.NexusJson.decodeFromString(
+                                    id.znetworks.nexus.feature.admin.orgchart.OrgChartData.serializer(), assets.open("org-chart-2026-10-05.json").bufferedReader().readText()))
+                            }
+                            val api = id.znetworks.nexus.feature.admin.orgchart.OrgChartApi((application as id.znetworks.nexus.NexusApplication).container.api)
+                            val fa = tree.units.first { it.name == "Finance & Tech" }
+                            if (screen == "org-edit") id.znetworks.nexus.feature.admin.orgchart.UnitSheet(tree, api, fa, fa.parentId, {}, {}, {}, {})
+                            else id.znetworks.nexus.feature.admin.orgchart.PersonSheet(tree, api, tree.people.first { it.name?.startsWith("Mey") == true }, {}, {})
+                        }
+                        "org", "org-pats", "org-full" -> {
+                            val tree = androidx.compose.runtime.remember {
+                                id.znetworks.nexus.feature.admin.orgchart.OrgTree(id.znetworks.nexus.core.net.NexusJson.decodeFromString(
+                                    id.znetworks.nexus.feature.admin.orgchart.OrgChartData.serializer(), assets.open("org-chart-2026-10-05.json").bufferedReader().readText()))
+                            }
+                            val pats = tree.units.first { it.name == "PATS" }.id
+                            val mode = when (screen) { "org-pats" -> id.znetworks.nexus.feature.admin.orgchart.ChartMode.FOKUS; "org-full" -> id.znetworks.nexus.feature.admin.orgchart.ChartMode.LENGKAP; else -> id.znetworks.nexus.feature.admin.orgchart.ChartMode.RINGKAS }
+                            id.znetworks.nexus.feature.admin.orgchart.ChartCanvas(tree, mode, if (screen == "org-pats") pats else null, 0,
+                                androidx.compose.ui.Modifier.fillMaxSize(), onCard = {}, onPerson = {})
+                        }
                         "pdf" -> id.znetworks.nexus.ui.components.PdfPages(samplePdf()) {}
                         else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {})
                     }

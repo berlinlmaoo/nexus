@@ -79,6 +79,8 @@ class AdminNav(
     val openAudit: (String) -> Unit = {},
     val openMemberAttendance: (String) -> Unit = {},
     val openOffices: () -> Unit = {},
+    /** Bagan IP & Divisi (replaced the Teams screen, 5 Oct 2026). */
+    val openOrgChart: () -> Unit = {},
 )
 
 @Composable
@@ -109,7 +111,7 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
         HorizontalDivider(color = c.border)
         Box(Modifier.weight(1f)) {
             when (tab) {
-                "users" -> UsersTab(viewer.isBoD, nav.openUser, nav.openChart)
+                "users" -> UsersTab(viewer.isBoD, nav.openUser, nav.openChart, nav.openOrgChart)
                 "attendance" -> AttendanceAdminTab(viewer.isBoD, nav.openMemberAttendance, nav.openOffices)
                 "audit" -> AuditTab(nav.openAudit)
                 "quests" -> QuestsTab()

@@ -38,7 +38,7 @@ import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
 import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
-import id.znetworks.nexus.feature.admin.TeamDetailScreen
+import id.znetworks.nexus.feature.admin.orgchart.OrgChartScreen
 import id.znetworks.nexus.feature.projects.FolderCalendarScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
@@ -349,14 +349,16 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
             composable("admin") {
                 ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
-                    openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") },
+                    openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") }, openOrgChart = { nav.navigate("org-chart") },
                     openProfile = { nav.navigate("profile/$it") }, openWeb = { openWeb(context, it) }, openAudit = { nav.navigate("audit/$it") },
                     openMemberAttendance = { nav.navigate("admin-att/$it") }, openOffices = { nav.navigate("admin-offices") },
                 ))
             }
             composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }) }
             composable("folder/{id}") { e -> FolderCalendarScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
-            composable("admin-team/{id}") { e -> TeamDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
+            // Teams are gone (deleted on the server 30 Sep 2026): a team link opens the Bagan IP & Divisi that replaced them.
+            composable("admin-team/{id}") { OrgChartScreen(onBack = { nav.popBackStack() }) }
+            composable("org-chart") { OrgChartScreen(onBack = { nav.popBackStack() }) }
             composable("admin-att/{id}") { e -> MemberAttendanceAdminScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenReflections = { nav.navigate("reflections/$it") }) }
             composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
             composable("reflections/{id}") { e -> ReflectionsScreen(e.arguments?.getString("id"), onBack = { nav.popBackStack() }) }
