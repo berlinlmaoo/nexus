@@ -333,7 +333,8 @@ export function OrgChart() {
     for (const r of rects.values()) { width = Math.max(width, r.x + r.w); height = Math.max(height, r.y + r.h); }
     for (const l of lines) for (const p of l.pts) { width = Math.max(width, p.x); height = Math.max(height, p.y); }
     const lifted = new Set(dragKey ? items.find((i) => i.id === dragKey)?.keys ?? [] : []);
-    return { base, rects, lines, lifted, width: width + LAYOUT.margin, height: height + LAYOUT.margin };
+    const clash = coveredBy(rects, lifted, isFrame);
+    return { base, rects, lines, lifted, clash, width: width + LAYOUT.margin, height: height + LAYOUT.margin };
   }, [measured, tree, units, unitsById, temp, dragKey, mode, focusId, shift]);
   useLayoutEffect(() => {
     if (!layout || Date.now() > fitUntil.current) return;
@@ -579,7 +580,12 @@ export function OrgChart() {
     const items = manualItems(units, inGroup, tree.depthOf, layout.base, { ...temp, [d.key]: want }, null, true, along, isUnder(unitsById));
     const pos = applyManual(layout.base.rects, items).resolved.get(d.key) ?? want;
     setTemp((m) => ({ ...m, [d.key]: pos }));
-    if (pos.x !== want.x || pos.y !== want.y) toast("Digeser ke tempat kosong terdekat", { description: "Tempat itu sudah terisi kartu atau kotak lain." });
+    const landed = applyManual(layout.base.rects, items).rects;
+    const covered = coveredBy(landed, new Set(items.find((i) => i.id === d.key)?.keys ?? [d.key]), (k) => k.startsWith("c:") && unitsById.get(k.slice(2))?.kind === "GROUP");
+    if (covered.size > 0) {
+      const names = [...new Set([...covered].map((k) => unitsById.get(k.split(":")[1])?.name).filter(Boolean))];
+      toast.warning(`Menimpa ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}`, { description: "Posisinya tetap disimpan. Geser sedikit biar nggak numpuk — yang ketimpa ditandai merah saat menyeret." });
+    }
     let saves: Array<Promise<unknown>>;
     if (t === "c") {
       // Its own placed cards and boxes keep their place relative to it: they stay with it on screen
@@ -756,6 +762,8 @@ export function OrgChart() {
                       const u = unitsById.get(id);
                       if (!u) return null;
                       const lift = layout.lifted.has(key) ? 40 : 0;
+                      // While dragging: what the moving block would cover, and the block itself, in red.
+                      const hit = !!dragKey && !dropCard && (layout.clash.has(key) || (layout.clash.size > 0 && layout.lifted.has(key) && !key.startsWith("t:")));
                       if (t === "t") {
                         return (
                           <div key={key} data-oc-key={key} className="oc-group-title pointer-events-none absolute" style={{ left: r.x, top: r.y, zIndex: 6 + lift }}>
@@ -770,7 +778,7 @@ export function OrgChart() {
                           <div key={key} data-oc-key={key} {...dragHandlers(key)} role="button" tabIndex={0} aria-label={`Grup ${u.name}, ${n} isi`}
                             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEditing(u); } }}
                             title="Klik untuk mengubah · seret untuk memindah (isinya ikut) · jatuhkan kartu di sini = masuk grup"
-                            className={cn("oc-group absolute cursor-grab touch-none active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary", dropCard === u.id && "ring-2 ring-primary ring-offset-2")}
+                            className={cn("oc-group absolute cursor-grab touch-none active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary", dropCard === u.id && "ring-2 ring-primary ring-offset-2", hit && "ring-2 ring-rose-500")}
                             style={{ left: r.x, top: r.y, width: r.w, height: r.h, zIndex: 1 + Math.min(3, groupDepth(u.id)) + lift }}>
                             {n === 0 && <div className="oc-group-empty" style={{ height: LAYOUT.gEmpty }}>Seret kartu ke sini</div>}
                           </div>
@@ -779,7 +787,7 @@ export function OrgChart() {
                       const style = { left: r.x, top: r.y, width: r.w, zIndex: (t === "c" ? 11 : 10) + lift };
                       if (t === "c") {
                         return (
-                          <div key={key} data-oc-key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("group/card absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2")} style={style}>
+                          <div key={key} data-oc-key={key} {...dragHandlers(key)} {...dropProps(u.id, u.id)} className={cn("group/card absolute cursor-grab touch-none rounded-xl active:cursor-grabbing", (dropCard === u.id || overId === u.id) && "ring-2 ring-primary ring-offset-2", hit && "ring-2 ring-rose-500 ring-offset-2")} style={style}>
                             <UnitCard u={u} busy={busy} {...cardInfo(u)} dragging={dragKey === key} onKeyOpen={() => setEditing(u)} />
                             {!dragKey && !busy && (
                               <button type="button" data-oc-add="" onClick={(e) => { e.stopPropagation(); setAdding({ parentId: u.id }); }} aria-label={`Tambah di bawah ${u.name}`} title={`Tambah di bawah ${u.name}`}
@@ -795,7 +803,7 @@ export function OrgChart() {
                       // Inside a group, and outside Lengkap, everything is laid out automatically: the box is not moved on its own.
                       const locked = inGroup(id) || mode !== "lengkap";
                       return (
-                        <div key={key} data-oc-key={key} {...(locked ? {} : dragHandlers(key))} className={cn("absolute", !locked && "cursor-grab touch-none active:cursor-grabbing")} style={style}>
+                        <div key={key} data-oc-key={key} {...(locked ? {} : dragHandlers(key))} className={cn("absolute rounded-xl", !locked && "cursor-grab touch-none active:cursor-grabbing", hit && "ring-2 ring-rose-500")} style={style}>
                           <PeopleBox unitId={id} kind={kind} list={boxPeople(g, kind)} title={boxTitle(g, kind, people)} personProps={personProps} chipDrop={chipDrop} />
                         </div>
                       );
@@ -983,6 +991,18 @@ function boxKinds(g: Group): string[] {
 }
 
 type Shift = { id: string; dx: number; dy: number };
+/** Elements outside `mine` that the elements of `mine` lie on (4px apart counts). Group frames are
+ *  skipped: a card can sit inside one, and dropping onto one is a move into the group. */
+function coveredBy(rects: Map<string, Rect>, mine: Set<string>, isFrame: (key: string) => boolean): Set<string> {
+  const out = new Set<string>();
+  if (mine.size === 0) return out;
+  const moving = [...mine].filter((k) => !k.startsWith("t:")).map((k) => rects.get(k)).filter((r): r is Rect => !!r);
+  for (const [k, r] of rects) {
+    if (mine.has(k) || k.startsWith("t:") || isFrame(k)) continue;
+    if (moving.some((m) => m.x < r.x + r.w + 4 && r.x < m.x + m.w + 4 && m.y < r.y + r.h + 4 && r.y < m.y + m.h + 4)) out.add(k);
+  }
+  return out;
+}
 /** Is `id` somewhere below `above`? */
 const isUnder = (byId: Map<string, OrgUnit>) => (id: string, above: string): boolean => {
   const seen = new Set<string>();
@@ -996,8 +1016,9 @@ const isUnder = (byId: Map<string, OrgUnit>) => (id: string, above: string): boo
 /**
  * Manual positions in the order they are applied: cards outside groups, shallow first (a card takes its
  * whole subtree along; a deeper card with a position of its own then moves again), then people boxes.
- * `temp` holds positions not saved yet. Each one is pushed to the nearest free place when it lands on
- * something — except the one being dragged, which follows the pointer until it is dropped. While a card
+ * `temp` holds positions not saved yet. Every one stays exactly where it was put (owner, 5 Oct 2026:
+ * "moved to the nearest free place" kept throwing Finance & Tech off the level it was dropped on); what
+ * it would cover is shown in red while dragging instead. While a card
  * is being moved (`shift`), the cards and boxes inside it that have places of their own move the same
  * distance, as one block with it.
  */
@@ -1013,7 +1034,7 @@ function manualItems(units: OrgUnit[], inGroup: (id: string) => boolean, depthOf
     let pos = temp[key] ?? (useSaved && !grouped && u.layoutX != null && u.layoutY != null ? { x: u.layoutX, y: u.layoutY } : null);
     const cardAlong = !temp[key] && !!pos && carried(u.id, false);
     if (pos && cardAlong) pos = { x: pos.x + shift!.dx, y: pos.y + shift!.dy };
-    if (pos) cards.push({ id: key, keys: base.subtree.get(u.id) ?? [key], anchor: key, pos, resolve: key !== dragKey && !cardAlong, depth: depthOf(u.id) });
+    if (pos) cards.push({ id: key, keys: base.subtree.get(u.id) ?? [key], anchor: key, pos, resolve: false, depth: depthOf(u.id) });
     if (grouped || u.kind === "GROUP") continue;
     const prefix = `b:${u.id}:`;
     const kinds = new Set([...(useSaved ? Object.keys(u.boxLayout ?? {}) : []), ...Object.keys(temp).filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length))]);
@@ -1022,7 +1043,7 @@ function manualItems(units: OrgUnit[], inGroup: (id: string) => boolean, depthOf
       let p = temp[bk] ?? (useSaved ? u.boxLayout?.[kind] ?? undefined : undefined);
       const boxAlong = !temp[bk] && !!p && carried(u.id, true);
       if (p && boxAlong) p = { x: p.x + shift!.dx, y: p.y + shift!.dy };
-      if (p && base.rects.has(bk)) boxes.push({ id: bk, keys: [bk], anchor: bk, pos: p, resolve: bk !== dragKey && !boxAlong });
+      if (p && base.rects.has(bk)) boxes.push({ id: bk, keys: [bk], anchor: bk, pos: p, resolve: false });
     }
   }
   cards.sort((a, b) => a.depth - b.depth);
