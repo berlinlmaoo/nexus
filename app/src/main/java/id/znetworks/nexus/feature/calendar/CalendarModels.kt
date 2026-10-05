@@ -62,7 +62,7 @@ data class CalPerson(
     val unitIds: List<String> = emptyList(),
     /** The cards their tasks go to. */
     val homeUnitIds: List<String> = emptyList(),
-    val titles: Map<String, String> = emptyMap(),
+    // No job titles in the calendar (revised 5 Oct evening): the server no longer sends `titles`.
     val reportsTo: Map<String, String> = emptyMap(),
 )
 
@@ -91,8 +91,19 @@ data class CalStructure(
 @Serializable data class CalParent(val id: String, val title: String = "")
 @Serializable data class CalPlacement(val unitId: String, val userIds: List<String> = emptyList())
 
+/** Why a task sits where it does (revised 5 Oct evening). Unknown values read as [PIC]. */
+enum class PlacedBy {
+    /** Under the Bagan cards of its PICs. */
+    PIC,
+    /** None of its PICs is in the Bagan (or it has none): under its PROJECT's division, the out-of-Bagan PICs as userIds (maybe none). */
+    PROJECT;
+    companion object { fun of(raw: String?) = if (raw == "project") PROJECT else PIC }
+}
+
 /**
- * One task on the calendar. A masked row (private project, staff viewer) has no id, title, project,
+ * One task on the calendar. There is no "No PIC yet" section and no "Abandoned" list (revised 5 Oct
+ * evening): a task without a PIC in the Bagan sits under its project's division, and one overdue for
+ * longer than `rules.overdueWindowDays` stays on its date (drawn grey until it is done). A masked row (private project, staff viewer) has no id, title, project,
  * priority, parent or linked projects and a stable [key] starting with "x_"; who and when stay. It is
  * shown as "Internal task · <division>" and is never openable.
  */
@@ -117,8 +128,10 @@ data class CalItem(
     val linkedProjectIds: List<String> = emptyList(),
     val parent: CalParent? = null,
     val assigneeIds: List<String> = emptyList(),
-    /** The Bagan cards of its PICs. Empty with empty [unplacedIds] = no PIC yet. */
+    /** The Bagan cards of its PICs — or, when [placement] is PROJECT, its project's division. */
     val placements: List<CalPlacement> = emptyList(),
+    /** "pic" | "project": see [placement]. */
+    private val placedBy: String? = null,
     /** PICs not in the Bagan ("Not in the chart yet"). */
     val unplacedIds: List<String> = emptyList(),
     val canEdit: Boolean = false,
@@ -127,7 +140,7 @@ data class CalItem(
 ) {
     /** A masked row cannot be opened; an unmasked one opens (read-only when ![canEdit]). */
     val openable get() = !masked && id != null
-    val hasNoPic get() = placements.isEmpty() && unplacedIds.isEmpty()
+    val placement get() = PlacedBy.of(placedBy)
 }
 
 @Serializable data class CalRules(val overdueWindowDays: Int = 14, val urgentDays: Int = 3)
@@ -225,5 +238,5 @@ object CalDays {
         val due = item.due?.let { runCatching { Instant.parse(it) }.getOrNull() }
         return if (due != null && now != null) due.isBefore(now) else item.day < today
     }
-    // "Abandoned" (overdue past rules.overdueWindowDays) is a client rule: it comes with the screen's golden files.
+    // No "Abandoned" list: past rules.overdueWindowDays a task stays on its date, drawn grey (a screen rule, later).
 }

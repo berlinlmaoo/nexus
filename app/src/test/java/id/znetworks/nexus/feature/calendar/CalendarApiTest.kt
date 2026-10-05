@@ -18,12 +18,16 @@ import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import java.time.Instant
+import kotlinx.serialization.builtins.serializer
 
 /**
  * The Calendar's API + model layer against the server's golden files (handoff/calendar/golden =
  * nexus src/lib/calendar/fixtures/golden, 5 Oct 2026). The golden items are the `items` arrays; the
  * response envelopes around them follow SPEC-server.md.
  */
+/** golden/project-divisions.json: project id → its division (and why). */
+@kotlinx.serialization.Serializable private data class Pd(val unitId: String, val why: String? = null)
+
 class CalendarApiTest {
     private fun res(name: String) = javaClass.classLoader!!.getResource("calendar/$name")!!.readText()
 
@@ -88,12 +92,39 @@ class CalendarApiTest {
         // Per unique task, per section (never adding sub-sections up).
         fun inSection(name: String) = day.count { it.placements.any { p -> structure.sectionOf(p.unitId)?.name == name } }
         fun inUnit(name: String) = day.count { it.placements.any { p -> structure.unitById[p.unitId]?.name == name } }
-        assertEquals(4, inSection("Framework Agency")); assertEquals(1, inSection("PATS")); assertEquals(1, inSection("Suwara"))
+        assertEquals(4, inSection("Framework Agency")); assertEquals(4, inSection("PATS")); assertEquals(1, inSection("Suwara"))
         assertEquals(1, inUnit("Project Management")); assertEquals(1, inUnit("Event")); assertEquals(3, inUnit("Multimedia"))
-        assertEquals(1, day.count { it.unplacedIds.isNotEmpty() })
-        assertEquals(3, day.count { it.hasNoPic })
+        // 3 of PATS' 4 are there through their project, in PATS Entertainment.
+        val byProject = day.filter { it.placement == PlacedBy.PROJECT }
+        assertEquals(3, byProject.size)
+        assertTrue(byProject.all { it.placements.single().let { p -> structure.unitById[p.unitId]?.name == "PATS Entertainment" } })
+        // Fortunatus is flagged as not in the chart.
+        val fortunatus = "cmnr9lfd3000701rq5ev4pkfv"
+        // A company member with no card in the Bagan.
+        assertEquals(1, day.count { fortunatus in it.unplacedIds }); assertTrue(structure.personById.getValue(fortunatus).homeUnitIds.isEmpty())
         assertEquals(1, day.count { it.noStatus })
         assertEquals(items("2026-09-18", "bod").items.map { it.key }, items("2026-09-18", "staff").items.map { it.key })
+    }
+
+    @Test fun projectPlacedTasksSitUnderTheirProjectsDivision() {
+        val divisions = NexusJson.decodeFromString(kotlinx.serialization.builtins.MapSerializer(String.serializer(), Pd.serializer()),
+            res("project-divisions.json"))
+        val all = listOf("2026-09-18", "2026-10-03").flatMap { d -> listOf("bod", "staff").flatMap { items(d, it).items } }
+        val byProject = all.filter { it.placement == PlacedBy.PROJECT }
+        assertTrue(byProject.isNotEmpty())
+        for (it in byProject) {
+            val project = it.project ?: continue // masked: no project to check against
+            assertEquals(divisions.getValue(project.id).unitId, it.placements.single().unitId)
+            // Its userIds are only PICs who are not in the Bagan (often none).
+            assertTrue(it.placements.single().userIds.all { u -> structure.personById[u]?.homeUnitIds.isNullOrEmpty() })
+        }
+        // Every item says how it was placed, and every placement is a real card.
+        assertTrue(all.all { i -> i.placements.all { structure.unitById.containsKey(it.unitId) } })
+        assertEquals(PlacedBy.PIC, PlacedBy.of("something-new"))
+    }
+
+    @Test fun structureHasNoTitles() {
+        assertTrue(!res("structure.json").contains("\"titles\""))
     }
 
     @Test fun sectionsOn3OctInBaganOrder() {

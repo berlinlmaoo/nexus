@@ -1757,7 +1757,5 @@
     <string name="calendar_masked">Tugas internal</string>
     <string name="calendar_masked_in">Tugas internal · %1$s</string>
     <string name="calendar_not_in_chart">Belum di bagan</string>
-    <string name="calendar_no_pic">Belum ada PIC</string>
-    <string name="calendar_abandoned">Terbengkalai</string>
     <string name="calendar_someday">Suatu hari</string>
 </resources>

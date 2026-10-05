@@ -1763,7 +1763,5 @@
     <string name="calendar_masked">Internal task</string>
     <string name="calendar_masked_in">Internal task · %1$s</string>
     <string name="calendar_not_in_chart">Not in the chart yet</string>
-    <string name="calendar_no_pic">No PIC yet</string>
-    <string name="calendar_abandoned">Abandoned</string>
     <string name="calendar_someday">Someday</string>
 </resources>
