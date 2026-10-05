@@ -6,12 +6,13 @@ import { auth } from "@/lib/auth"
 import { setAppSetting } from "@/lib/app-setting"
 import { isAdminOrOrgBodPlus, ORG_WORKSPACE_ID } from "@/lib/org"
 import { normalizeCalendarSettings, privacyOf, type CalendarSettings } from "@/lib/calendar/core"
-import { CALENDAR_SETTING_KEY, getCalendarSettings } from "@/lib/calendar/server"
+import { CALENDAR_SETTING_KEY, getCalendarSettings, loadProjectUnits, loadStructure } from "@/lib/calendar/server"
 
 /**
  * GET/PATCH /api/admin/calendar-settings — the Calendar's AppSetting "calendar": which projects are
- * private (staff outside them see "Tugas internal", decision 1), the rollout audience and the overdue
- * window. BoD / One Above All / system admin only. Takes effect on the next request, no deploy.
+ * private (staff outside them see "Tugas internal", decision 1), which division a project or folder
+ * belongs to (for tasks none of whose PICs is in the Bagan, decision 4), the rollout audience and the
+ * overdue window. BoD / One Above All / system admin only. Takes effect on the next request, no deploy.
  */
 
 async function guard(): Promise<NextResponse | null> {
@@ -23,14 +24,27 @@ async function guard(): Promise<NextResponse | null> {
 }
 
 async function payload(settings: CalendarSettings) {
-  const projects = await prisma.project.findMany({
-    where: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } },
-    select: { id: true, name: true, color: true },
-    orderBy: { name: "asc" },
-  })
+  const [projects, folders, s] = await Promise.all([
+    prisma.project.findMany({
+      where: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } },
+      select: { id: true, name: true, color: true, folderId: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.projectFolder.findMany({ where: { workspaceId: ORG_WORKSPACE_ID }, select: { id: true, name: true, parentFolderId: true }, orderBy: { name: "asc" } }),
+    loadStructure(),
+  ])
+  const division = await loadProjectUnits(s, settings)
   return {
     settings,
-    projects: projects.map((p) => ({ ...p, private: privacyOf(settings, p) !== null, privateBy: privacyOf(settings, p) })),
+    units: s.units.filter((u) => u.kind !== "GROUP").map((u) => ({ id: u.id, name: u.name, depth: u.depth })),
+    folders: folders.map((f) => ({ ...f, unitId: settings.folderUnits[f.id] ?? null })),
+    projects: projects.map((p) => ({
+      ...p,
+      private: privacyOf(settings, p) !== null,
+      privateBy: privacyOf(settings, p),
+      unitId: division.get(p.id)?.unitId ?? null,
+      unitBy: division.get(p.id)?.why ?? null,
+    })),
   }
 }
 
@@ -80,8 +94,21 @@ export async function PATCH(req: NextRequest) {
     if (listed.some((id) => !okProjects.has(id) && !before.has(id))) return NextResponse.json({ error: "Ada proyek yang bukan milik workspace perusahaan." }, { status: 400 })
     const okUsers = new Set(next.audienceUserIds.length === 0 ? [] : (await prisma.workspaceMember.findMany({ where: { workspaceId: ORG_WORKSPACE_ID, userId: { in: next.audienceUserIds } }, select: { userId: true } })).map((m) => m.userId))
     if (next.audienceUserIds.some((id) => !okUsers.has(id) && !before.has(id))) return NextResponse.json({ error: "Ada penguji yang bukan anggota workspace perusahaan." }, { status: 400 })
+    // Division mapping: a key may be a folder/project that has since gone (dropped quietly); a value
+    // must be a card of the Bagan (not a group).
+    const [folderIds, projectIds, cardIds] = await Promise.all([
+      prisma.projectFolder.findMany({ where: { workspaceId: ORG_WORKSPACE_ID, id: { in: Object.keys(next.folderUnits) } }, select: { id: true } }),
+      prisma.project.findMany({ where: { workspaceId: ORG_WORKSPACE_ID, id: { in: Object.keys(next.projectUnits) } }, select: { id: true } }),
+      prisma.orgUnit.findMany({ where: { workspaceId: ORG_WORKSPACE_ID, kind: { not: "GROUP" } }, select: { id: true } }),
+    ])
+    const cards = new Set(cardIds.map((u) => u.id))
+    const badUnit = [...Object.values(next.folderUnits), ...Object.values(next.projectUnits)].find((u) => !cards.has(u))
+    if (badUnit) return NextResponse.json({ error: "Divisi tujuan harus kartu di Bagan (bukan grup)." }, { status: 400 })
+    const keepKeys = (m: Record<string, string>, ok: Set<string>) => Object.fromEntries(Object.entries(m).filter(([k]) => ok.has(k)))
     next = {
       ...next,
+      folderUnits: keepKeys(next.folderUnits, new Set(folderIds.map((f) => f.id))),
+      projectUnits: keepKeys(next.projectUnits, new Set(projectIds.map((p) => p.id))),
       privateProjectIds: next.privateProjectIds.filter((id) => okProjects.has(id)),
       notPrivateProjectIds: next.notPrivateProjectIds.filter((id) => okProjects.has(id)),
       audienceUserIds: next.audienceUserIds.filter((id) => okUsers.has(id)),

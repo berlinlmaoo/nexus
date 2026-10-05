@@ -3,12 +3,15 @@
  * every endpoint under /api/calendar/. No database and no imports, so the golden tests run this file
  * with plain node (core.test.mjs) and the iOS/Android ports can be checked against the same output.
  *
- * What the owner decided (plan "Rencana Kalender NEXUS", section 8):
+ * What the owner decided (plan "Rencana Kalender NEXUS", section 8; the rules in force are listed,
+ * numbered, in its section 10 — change both together):
  *   1. Everyone sees every task, except tasks of PRIVATE projects (Legal + Finance by default) for staff
  *      who are not in those projects: they get the row without title or id ("Tugas internal").
+ *   2. The Bagan is readable by everyone for the calendar, without job titles.
  *   3. Entries of the "… Master Calendar" projects stay TASKS — there is no event kind.
- *   5. A task sits under the Bagan cards of the people doing it (its PICs), not under its project:
- *      tasks and projects have no division, people do.
+ *   4/5. A task sits under the Bagan cards of the people doing it (its PICs), not under its project.
+ *      A task none of whose PICs is in the Bagan (or with no PIC at all) goes to its PROJECT's division:
+ *      the project's folder tree mirrors the Bagan (PATS Group™ › PATS Archive, SUWARA GROUP, …).
  * The Bagan grants nothing: the calendar only uses it to group.
  */
 
@@ -111,10 +114,15 @@ export type CalendarSettings = {
   overdueWindowDays: number
   /** "Mendesak" = due within this many days counting today (2 = today and tomorrow). */
   urgentDays: number
+  /** Project folder id → Bagan unit id, for tasks without a PIC in the Bagan (its subfolders and projects follow). */
+  folderUnits: Record<string, string>
+  /** Project id → Bagan unit id, beats the folder. */
+  projectUnits: Record<string, string>
 }
 
 export const CALENDAR_SETTINGS_DEFAULTS: CalendarSettings = {
-  audience: "bod",
+  // Owner, 5 Oct 2026 (decision 14): open to everyone at once.
+  audience: "all",
   audienceUserIds: [],
   visibility: "all_except_private",
   privateProjectIds: [],
@@ -122,6 +130,8 @@ export const CALENDAR_SETTINGS_DEFAULTS: CalendarSettings = {
   privateNamePrefixes: ["finance", "legal"],
   overdueWindowDays: 14,
   urgentDays: 2,
+  folderUnits: {},
+  projectUnits: {},
 }
 
 const VISIBILITIES: readonly string[] = ["all", "all_except_private", "masked_foreign", "projects"]
@@ -130,6 +140,11 @@ const AUDIENCES: readonly string[] = ["bod", "managers", "all"]
 function idList(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null
   return Array.from(new Set(v.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 64))).slice(0, 500)
+}
+function idMap(v: unknown): Record<string, string> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null
+  const ok = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length <= 64
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter((e): e is [string, string] => ok(e[0]) && ok(e[1])).slice(0, 500))
 }
 function intIn(v: unknown, lo: number, hi: number): number | null {
   return typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi ? v : null
@@ -150,6 +165,8 @@ export function normalizeCalendarSettings(raw: unknown, base: CalendarSettings =
     privateNamePrefixes: prefixes ?? base.privateNamePrefixes,
     overdueWindowDays: intIn(r.overdueWindowDays, 1, 90) ?? base.overdueWindowDays,
     urgentDays: intIn(r.urgentDays, 1, 7) ?? base.urgentDays,
+    folderUnits: idMap(r.folderUnits) ?? base.folderUnits,
+    projectUnits: idMap(r.projectUnits) ?? base.projectUnits,
   }
 }
 
@@ -207,7 +224,7 @@ export type CalPerson = {
   unitIds: string[]
   /** Where their tasks go: the cards they sit in, minus a card when they also sit in a card below it. */
   homeUnitIds: string[]
-  titles: Record<string, string>
+  /** "di bawah" per card: { unitId: leaderUserId }. Job titles are NOT sent (owner, decision 2). */
   reportsTo: Record<string, string>
 }
 
@@ -339,11 +356,9 @@ export function buildStructure(unitRows: OrgUnitRow[], personRows: OrgPersonRow[
     })
 
   const unitsOf = new Map<string, string[]>()
-  const titles = new Map<string, Record<string, string>>()
   const reports = new Map<string, Record<string, string>>()
   for (const l of links) {
     unitsOf.set(l.userId, [...(unitsOf.get(l.userId) ?? []), l.unitId])
-    if (l.title) titles.set(l.userId, { ...(titles.get(l.userId) ?? {}), [l.unitId]: l.title })
     if (l.reportsToUserId) reports.set(l.userId, { ...(reports.get(l.userId) ?? {}), [l.unitId]: l.reportsToUserId })
   }
   const homeOf = (unitIds: string[]): string[] => {
@@ -362,11 +377,56 @@ export function buildStructure(unitRows: OrgUnitRow[], personRows: OrgPersonRow[
       return {
         userId: p.userId, name: p.name, avatar: p.avatar, role: p.role,
         unitIds, homeUnitIds: homeOf(unitIds),
-        titles: titles.get(p.userId) ?? {},
         reportsTo: reports.get(p.userId) ?? {},
       }
     }),
   }
+}
+
+// ── A project's division (for tasks without a PIC in the Bagan) ─────────────────────────────────────
+
+export type ProjectRow = { id: string; name: string; folderId: string | null }
+export type FolderRow = { id: string; name: string; parentFolderId: string | null }
+/** Why a project landed where it did: set by hand, a folder set by hand, a folder or the project named like a card, or the top. */
+export type ProjectUnitWhy = "project" | "folder" | "folder-name" | "project-name" | "top"
+
+const normName = (s: string) => s.toLowerCase().replace(/[™®©]/g, "").replace(/\bgroup\b/g, "").replace(/\s+/g, " ").trim()
+
+/**
+ * The Bagan card a project belongs to. In order: the project set by hand; then its folders from the
+ * deepest up — a folder set by hand, or a folder named like a card ("PATS Group™" → PATS, "INTOO GROUP"
+ * → INTOO, "Framework" → Framework Agency, "PATS Nightlife" → PATS); then the project's own name
+ * ("PATS Archive: Master Calendar" → PATS Archive); else the top card. Groups never receive tasks.
+ */
+export function projectUnits(projects: ProjectRow[], folders: FolderRow[], units: CalUnit[], s: CalendarSettings): Map<string, { unitId: string; why: ProjectUnitWhy }> {
+  const cards = units.filter((u) => u.kind !== "GROUP")
+  const exists = new Set(cards.map((u) => u.id))
+  const top = [...units].sort((a, b) => a.rank - b.rank).find((u) => u.parentId === null && u.kind !== "GROUP")
+  const named = cards.map((u) => ({ id: u.id, n: normName(u.name) })).filter((u) => u.n.length > 0).sort((a, b) => b.n.length - a.n.length)
+  const folderMatch = (name: string) => {
+    const f = normName(name)
+    if (!f) return null
+    return (named.find((u) => u.n === f) ?? named.find((u) => f.startsWith(`${u.n} `) || u.n.startsWith(`${f} `)))?.id ?? null
+  }
+  const projectMatch = (name: string) => {
+    const p = normName(name)
+    return named.find((u) => p === u.n || (p.startsWith(u.n) && /^[\s:\-–—|/(]/.test(p.slice(u.n.length))))?.id ?? null
+  }
+  const folderById = new Map(folders.map((f) => [f.id, f]))
+  const out = new Map<string, { unitId: string; why: ProjectUnitWhy }>()
+  for (const p of projects) {
+    const set = (unitId: string | null | undefined, why: ProjectUnitWhy) => (unitId && exists.has(unitId) ? (out.set(p.id, { unitId, why }), true) : false)
+    if (set(s.projectUnits[p.id], "project")) continue
+    let placed = false
+    const seen = new Set<string>()
+    for (let f = p.folderId ? folderById.get(p.folderId) : undefined; f && !seen.has(f.id); f = f.parentFolderId ? folderById.get(f.parentFolderId) : undefined) {
+      seen.add(f.id)
+      if (set(s.folderUnits[f.id], "folder") || set(folderMatch(f.name), "folder-name")) { placed = true; break }
+    }
+    if (placed || set(projectMatch(p.name), "project-name")) continue
+    if (top) out.set(p.id, { unitId: top.id, why: "top" })
+  }
+  return out
 }
 
 /** A unit and every unit below it. */
@@ -434,6 +494,8 @@ export type CalItem = {
   parent: { id: string; title: string } | null
   assigneeIds: string[]
   placements: { unitId: string; userIds: string[] }[]
+  /** "pic" = under the cards of its PICs; "project" = none of its PICs is in the Bagan (or it has none), so under its project's division. */
+  placedBy: "pic" | "project"
   unplacedIds: string[]
   canEdit: boolean
   /** Send as projectContextId on PATCH /api/tasks/:id — the project that lets this viewer edit (home, or a linked one). */
@@ -446,6 +508,8 @@ export type ItemContext = {
   /** userId → home units, in Bagan order. */
   homeUnitsOf: Map<string, string[]>
   unitRank: Map<string, number>
+  /** Project id → its division (projectUnits). */
+  projectUnitOf: Map<string, string>
   maskKey: (taskId: string) => string
 }
 
@@ -476,6 +540,13 @@ export function buildItem(row: TaskRow, ctx: ItemContext): CalItem | null {
     const homes = ctx.homeUnitsOf.get(userId) ?? []
     if (homes.length === 0) unplaced.push(userId)
     for (const unitId of homes) byUnit.set(unitId, [...(byUnit.get(unitId) ?? []), userId])
+  }
+  // Nobody of its PICs in the Bagan (or no PIC at all): the task goes to its project's division, with
+  // the PICs who are not in the Bagan named there (owner, decision 4: no "Belum ada PIC" corner).
+  const placedBy: "pic" | "project" = byUnit.size > 0 ? "pic" : "project"
+  if (byUnit.size === 0) {
+    const unitId = ctx.projectUnitOf.get(row.project.id)
+    if (unitId) byUnit.set(unitId, [...unplaced])
   }
   const placements = [...byUnit.entries()]
     .sort((a, b) => (ctx.unitRank.get(a[0]) ?? 0) - (ctx.unitRank.get(b[0]) ?? 0))
@@ -511,6 +582,7 @@ export function buildItem(row: TaskRow, ctx: ItemContext): CalItem | null {
     parent: parentVisible && row.parent ? { id: row.parent.id, title: row.parent.title } : null,
     assigneeIds: row.assigneeIds,
     placements,
+    placedBy,
     unplacedIds: unplaced,
     canEdit: editProjectId !== null,
     editProjectId,

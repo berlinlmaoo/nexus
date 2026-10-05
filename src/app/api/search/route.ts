@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { isWorkspaceManagerRole } from "@/lib/rbac"
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,16 +20,34 @@ export async function GET(request: NextRequest) {
     // Multi-tenancy: a user may only search within workspaces they belong to. Without this every
     // query below was global — leaking tasks/docs/comments across tenants and (via the user query)
     // enabling full email enumeration of the whole instance.
-    const wsIds = (
-      await prisma.workspaceMember.findMany({
-        where: { userId: session.user.id },
-        select: { workspaceId: true },
-      })
-    ).map((m) => m.workspaceId)
+    const me = session.user.id
+    const [memberships, user] = await Promise.all([
+      prisma.workspaceMember.findMany({ where: { userId: me }, select: { workspaceId: true, role: true } }),
+      prisma.user.findUnique({ where: { id: me }, select: { role: true } }),
+    ])
+    const wsIds = memberships.map((m) => m.workspaceId)
     if (wsIds.length === 0) {
       return NextResponse.json({ tasks: [], projects: [], comments: [], docs: [], members: [], goals: [], forms: [], sprints: [] })
     }
     const inWorkspace = { in: wsIds }
+
+    // Projects the searcher may find things in (owner, 5 Oct 2026: "a task that shows up is only one
+    // inside a project they are in"): every project of a workspace where they are Manager / BoD / One
+    // Above All (they lead every project there) or system admin; otherwise only projects they are a
+    // member of. Their own tasks (assignee or creator) are found wherever they are.
+    const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => isWorkspaceManagerRole(m.role)).map((m) => m.workspaceId)
+    const visibleProject = {
+      workspaceId: inWorkspace,
+      OR: [{ workspaceId: { in: fullWs.length ? fullWs : ["__none__"] } }, { members: { some: { userId: me } } }],
+    }
+    const visibleTask = {
+      OR: [
+        { taskList: { project: visibleProject } },
+        { taskProjects: { some: { project: visibleProject } } },
+        { assignees: { some: { userId: me } } },
+        { creatorId: me },
+      ],
+    }
 
     // Optional filters
     const projectId = request.nextUrl.searchParams.get("projectId")
@@ -40,9 +59,9 @@ export async function GET(request: NextRequest) {
     // Build task filters (scoped to the searcher's workspaces via taskList.project)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const taskWhere: any = {
-      OR: [
-        { title: { contains: query, mode: "insensitive" } },
-        { description: { contains: query, mode: "insensitive" } },
+      AND: [
+        { OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] },
+        visibleTask,
       ],
       taskList: { project: { workspaceId: inWorkspace, ...(projectId ? { id: projectId } : {}) } },
     }
@@ -63,6 +82,7 @@ export async function GET(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const projectWhere: any = {
       workspaceId: inWorkspace,
+      AND: [{ OR: visibleProject.OR }],
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
@@ -89,7 +109,7 @@ export async function GET(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sprintWhere: any = {
       name: { contains: query, mode: "insensitive" },
-      project: { workspaceId: inWorkspace, ...(projectId ? { id: projectId } : {}) },
+      project: { ...visibleProject, ...(projectId ? { id: projectId } : {}) },
     }
     if (status) {
       sprintWhere.status = status
@@ -98,7 +118,7 @@ export async function GET(request: NextRequest) {
     // Form filter (scoped via project.workspaceId)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formWhere: any = {
-      project: { workspaceId: inWorkspace, ...(projectId ? { id: projectId } : {}) },
+      project: { ...visibleProject, ...(projectId ? { id: projectId } : {}) },
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
@@ -126,7 +146,7 @@ export async function GET(request: NextRequest) {
       prisma.comment.findMany({
         where: {
           content: { contains: query, mode: "insensitive" },
-          task: { taskList: { project: { workspaceId: inWorkspace } } },
+          task: { taskList: { project: { workspaceId: inWorkspace } }, ...visibleTask },
         },
         select: {
           id: true,
@@ -139,7 +159,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.doc.findMany({
         where: {
-          project: { workspaceId: inWorkspace },
+          project: visibleProject,
           OR: [
             { title: { contains: query, mode: "insensitive" } },
             { contentText: { contains: query, mode: "insensitive" } },
