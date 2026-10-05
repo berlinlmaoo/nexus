@@ -28,8 +28,12 @@ import kotlinx.serialization.Serializable
     val requireAlwaysLocation: Boolean? = null,
     val blockSignOutDuringWorkday: Boolean? = null,
     val fakeGpsReview: Boolean? = null,
+    /** The Calendar menu (master calendar); who gets data is decided per person on the server. */
+    val calendar: Boolean? = null,
+    /** The Calendar widgets. */
+    val calendarWidgets: Boolean? = null,
 )
-@Serializable data class ConfigValues(val outsideHourAlertMinutes: Int? = null)
+@Serializable data class ConfigValues(val outsideHourAlertMinutes: Int? = null, val calendarPollSeconds: Int? = null)
 @Serializable data class ConfigBanner(val id: String, val tone: String? = null, val title: String = "", val message: String = "", val link: String? = null)
 @Serializable data class ConfigBody(
     val flags: ConfigFlags? = null,
@@ -43,6 +47,10 @@ import kotlinx.serialization.Serializable
     val fakeGpsReview get() = flags?.fakeGpsReview ?: true
     /** Minutes outside the office before the local "time left" alert (UPDATES §10). */
     val outsideHourAlertMinutes get() = values?.outsideHourAlertMinutes?.takeIf { it in 1..600 } ?: 60
+    val calendar get() = flags?.calendar ?: true
+    val calendarWidgets get() = flags?.calendarWidgets ?: true
+    /** How often the Calendar polls while it is on screen (with If-None-Match). */
+    val calendarPollSeconds get() = values?.calendarPollSeconds?.takeIf { it in 10..3600 } ?: 60
 
     /**
      * The server's sentence for [key] in [lang] ("en" / "id"), else its English one when it has none

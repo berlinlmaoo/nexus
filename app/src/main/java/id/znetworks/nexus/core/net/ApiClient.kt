@@ -235,6 +235,36 @@ class ApiClient(
         }
     }
 
+    /** A GET answered 200 (with its ETag) or 304 "unchanged since [etag]". */
+    sealed interface Conditional<out T> {
+        data class Fresh<T>(val value: T, val etag: String?) : Conditional<T>
+        data object NotModified : Conditional<Nothing>
+    }
+
+    /**
+     * GET with `If-None-Match: [etag]` (the Calendar routes, spec 5 Oct 2026): 304 is "unchanged" and
+     * keeps what the caller holds; anything else goes through the same cookie, LAN route and 401/426
+     * handling as [send].
+     */
+    suspend fun <T> getConditional(path: String, serializer: KSerializer<T>, etag: String?): Conditional<T> {
+        val session = sessionProvider()
+        val target = url(path)
+        val request = Request.Builder().url(target).get().apply {
+            if (!etag.isNullOrBlank()) header("If-None-Match", etag)
+            if (session != null && mayCarrySession(target.host)) header("Cookie", "${session.cookieName}=${session.token}")
+        }.build()
+        val response = try { http.newCall(request).await() } catch (e: IOException) { throw ApiError.Transport(e) }
+        response.use { res ->
+            if (res.code == 304) return Conditional.NotModified
+            val raw = try { res.body.string() } catch (e: IOException) { throw ApiError.Transport(e) }
+            if (res.isSuccessful) {
+                val value = try { json.decodeFromString(serializer, raw.ifBlank { "{}" }) } catch (e: Exception) { throw ApiError.Decoding(e) }
+                return Conditional.Fresh(value, res.header("ETag"))
+            }
+            throw classify(res.code, raw, session)
+        }
+    }
+
     /**
      * Like [send] but hands back the raw 2xx body (GIDEON's `text/event-stream`), through the same
      * headers, cookie, LAN route and 426/401 handling. [readTimeoutMs]: a long answer is not a stall.

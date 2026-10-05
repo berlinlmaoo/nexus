@@ -1,0 +1,1044 @@
+{
+ "units": [
+  {
+   "id": "ou02458d48df555b0d61edea1",
+   "name": "PT. The Z Networks",
+   "kind": "IP",
+   "parentId": null,
+   "rank": 0,
+   "depth": 0,
+   "sectionId": "ou02458d48df555b0d61edea1",
+   "color": "#0f2742",
+   "colorDark": "#9fb6d6",
+   "logoUrl": "/logo/ou02458d48df555b0d61edea1",
+   "leadUserId": null
+  },
+  {
+   "id": "oub7186507c81bf7f984bb416",
+   "name": "Finance & Tech",
+   "kind": "DIVISION",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 1,
+   "depth": 1,
+   "sectionId": "oub7186507c81bf7f984bb416",
+   "color": "#0B6FB8",
+   "colorDark": "#5AA9E6",
+   "logoUrl": null,
+   "leadUserId": "cmnzxse5y005k01qh56f3vaag"
+  },
+  {
+   "id": "ou47f297a5be7b0f6fbbae754",
+   "name": "Framework Agency",
+   "kind": "IP",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 2,
+   "depth": 1,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#B35A00",
+   "colorDark": "#FF9A4D",
+   "logoUrl": "/logo/ou47f297a5be7b0f6fbbae754",
+   "leadUserId": "cmo7c6q8i001408p80c3qcfvb"
+  },
+  {
+   "id": "ou7c9cc71ca650c4e0c003f95",
+   "name": "Strategist",
+   "kind": "DIVISION",
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "rank": 3,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#0B6FB8",
+   "colorDark": "#5AA9E6",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "oud586f38af44e4329821ef21",
+   "name": "Project Management",
+   "kind": "DIVISION",
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "rank": 4,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#00805E",
+   "colorDark": "#3CCB9E",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "ou396ea68f26c1bb98b84087c",
+   "name": "Creative",
+   "kind": "GROUP",
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "rank": 5,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#B03A86",
+   "colorDark": "#E39BC4",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqq9u4e001l01mrn26adgjl",
+   "name": "Event",
+   "kind": "DIVISION",
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "rank": 6,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#B03A86",
+   "colorDark": "#E39BC4",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqqalgd001o01mrdnghpqcn",
+   "name": "Digital Services",
+   "kind": "DIVISION",
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "rank": 7,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#8A6D00",
+   "colorDark": "#E0B43A",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqqbytc001r01mrm0dm3zc8",
+   "name": "Production House",
+   "kind": "DIVISION",
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "rank": 8,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#5B4BD6",
+   "colorDark": "#A08BFF",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqqc7ro001s01mruwaq50yd",
+   "name": "KOL Management",
+   "kind": "DIVISION",
+   "parentId": "ou396ea68f26c1bb98b84087c",
+   "rank": 9,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#00838F",
+   "colorDark": "#4DD0D9",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqqed05001z01mrlii7qx3u",
+   "name": "Multimedia",
+   "kind": "DIVISION",
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "rank": 10,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#8D5B3B",
+   "colorDark": "#D2A27A",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqufsl3003y01t7zvkf392w",
+   "name": "Business",
+   "kind": "DIVISION",
+   "parentId": "ou47f297a5be7b0f6fbbae754",
+   "rank": 11,
+   "depth": 2,
+   "sectionId": "ou47f297a5be7b0f6fbbae754",
+   "color": "#4A7A1E",
+   "colorDark": "#9BD86A",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "ou8c57f9ec8bbc9d96eabfdd1",
+   "name": "Geneziz",
+   "kind": "IP",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 12,
+   "depth": 1,
+   "sectionId": "ou8c57f9ec8bbc9d96eabfdd1",
+   "color": "#00805E",
+   "colorDark": "#3CCB9E",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "ou2b718beaa10345fc21b9ae2",
+   "name": "Z Foundation",
+   "kind": "IP",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 13,
+   "depth": 1,
+   "sectionId": "ou2b718beaa10345fc21b9ae2",
+   "color": "#B03A86",
+   "colorDark": "#E39BC4",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "ou6cd7c41336011d50e8dcfd2",
+   "name": "PATS",
+   "kind": "IP",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 14,
+   "depth": 1,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#8A6D00",
+   "colorDark": "#E0B43A",
+   "logoUrl": "/logo/ou6cd7c41336011d50e8dcfd2",
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqpx0cn000801mrrda3c65k",
+   "name": "Community",
+   "kind": "GROUP",
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "rank": 15,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#0B6FB8",
+   "colorDark": "#5AA9E6",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "ou29b80cb5b6a94b9d74989b3",
+   "name": "Pink Baddies",
+   "kind": "IP",
+   "parentId": "cmuqpx0cn000801mrrda3c65k",
+   "rank": 16,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#0B6FB8",
+   "colorDark": "#5AA9E6",
+   "logoUrl": "/logo/ou29b80cb5b6a94b9d74989b3",
+   "leadUserId": null
+  },
+  {
+   "id": "ou24e50eb91aa5d1de071550f",
+   "name": "PATS University",
+   "kind": "IP",
+   "parentId": "cmuqpx0cn000801mrrda3c65k",
+   "rank": 17,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#B35A00",
+   "colorDark": "#FF9A4D",
+   "logoUrl": "/logo/ou24e50eb91aa5d1de071550f",
+   "leadUserId": null
+  },
+  {
+   "id": "cmuo2410d002j01qx2lia7dpq",
+   "name": "Raven Society",
+   "kind": "IP",
+   "parentId": "cmuqpx0cn000801mrrda3c65k",
+   "rank": 18,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#00805E",
+   "colorDark": "#3CCB9E",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmuqpx0ae000601mr74ui6hxp",
+   "name": "Outlet",
+   "kind": "GROUP",
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "rank": 19,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#B03A86",
+   "colorDark": "#E39BC4",
+   "logoUrl": null,
+   "leadUserId": null
+  },
+  {
+   "id": "cmunzttnm000001pbm4at4sth",
+   "name": "PATS X",
+   "kind": "IP",
+   "parentId": "cmuqpx0ae000601mr74ui6hxp",
+   "rank": 20,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#B03A86",
+   "colorDark": "#E39BC4",
+   "logoUrl": "/logo/cmunzttnm000001pbm4at4sth",
+   "leadUserId": null
+  },
+  {
+   "id": "cmunzu20h000101pbwdik48ih",
+   "name": "PATS BSD",
+   "kind": "IP",
+   "parentId": "cmuqpx0ae000601mr74ui6hxp",
+   "rank": 21,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#5B4BD6",
+   "colorDark": "#A08BFF",
+   "logoUrl": "/logo/cmunzu20h000101pbwdik48ih",
+   "leadUserId": null
+  },
+  {
+   "id": "ouda117084994807e15c72c9a",
+   "name": "PATS Entertainment",
+   "kind": "IP",
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "rank": 22,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#00838F",
+   "colorDark": "#4DD0D9",
+   "logoUrl": "/logo/ouda117084994807e15c72c9a",
+   "leadUserId": null
+  },
+  {
+   "id": "cmuo08aix000801p593ezxuzd",
+   "name": "PATS Archive",
+   "kind": "IP",
+   "parentId": "ou6cd7c41336011d50e8dcfd2",
+   "rank": 23,
+   "depth": 2,
+   "sectionId": "ou6cd7c41336011d50e8dcfd2",
+   "color": "#8D5B3B",
+   "colorDark": "#D2A27A",
+   "logoUrl": "/logo/cmuo08aix000801p593ezxuzd",
+   "leadUserId": null
+  },
+  {
+   "id": "oub8dd7a8dcff40cafcafed09",
+   "name": "INTOO",
+   "kind": "IP",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 24,
+   "depth": 1,
+   "sectionId": "oub8dd7a8dcff40cafcafed09",
+   "color": "#5B4BD6",
+   "colorDark": "#A08BFF",
+   "logoUrl": "/logo/oub8dd7a8dcff40cafcafed09",
+   "leadUserId": null
+  },
+  {
+   "id": "ou8f27050812d85e33c43cef9",
+   "name": "Suwara",
+   "kind": "IP",
+   "parentId": "ou02458d48df555b0d61edea1",
+   "rank": 25,
+   "depth": 1,
+   "sectionId": "ou8f27050812d85e33c43cef9",
+   "color": "#00838F",
+   "colorDark": "#4DD0D9",
+   "logoUrl": "/logo/ou8f27050812d85e33c43cef9",
+   "leadUserId": null
+  }
+ ],
+ "people": [
+  {
+   "userId": "cmohdsdip001d08rww527eavc",
+   "name": "Abimanyugm",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmunzttnm000001pbm4at4sth"
+   ],
+   "homeUnitIds": [
+    "cmunzttnm000001pbm4at4sth"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq503ajo004w01qk07lqcity",
+   "name": "Abraham Andrew",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1"
+   ],
+   "homeUnitIds": [
+    "ou02458d48df555b0d61edea1"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "CEO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cms4q6qfo06u101p79yyszkne",
+   "name": "Andi NJ",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuo2410d002j01qx2lia7dpq"
+   ],
+   "homeUnitIds": [
+    "cmuo2410d002j01qx2lia7dpq"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmu6kh1h4026701qt3k1ynziz",
+   "name": "Angela Merici",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqbytc001r01mrm0dm3zc8"
+   ],
+   "homeUnitIds": [
+    "cmuqqbytc001r01mrm0dm3zc8"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq7vrl3n012301pb6pnoz5bf",
+   "name": "Arindryo Laatstiko Jati",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqq9u4e001l01mrn26adgjl"
+   ],
+   "homeUnitIds": [
+    "cmuqq9u4e001l01mrn26adgjl"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnzyt85500cm01qh4f75su3d",
+   "name": "Ariq Darmawan",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ou24e50eb91aa5d1de071550f"
+   ],
+   "homeUnitIds": [
+    "ou24e50eb91aa5d1de071550f"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmul23bi906q201qlzgmvga3u",
+   "name": "Ashley Keishara Adrinfisol",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "homeUnitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmt8tzlze00pj01nld1l2s3lj",
+   "name": "Azra",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnhcpw37000301n3g3nq8ff1",
+   "name": "Bagas Putro",
+   "avatar": null,
+   "role": "ONE_ABOVE_ALL",
+   "unitIds": [
+    "ou8c57f9ec8bbc9d96eabfdd1",
+    "oub7186507c81bf7f984bb416",
+    "ou2b718beaa10345fc21b9ae2"
+   ],
+   "homeUnitIds": [
+    "oub7186507c81bf7f984bb416",
+    "ou8c57f9ec8bbc9d96eabfdd1",
+    "ou2b718beaa10345fc21b9ae2"
+   ],
+   "titles": {
+    "oub7186507c81bf7f984bb416": "CTO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrafqmh002201rq54pywgm7",
+   "name": "Bayemsore",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "homeUnitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmsr652tx02zl01t7gz0ddo81",
+   "name": "Dadio Emerald",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "homeUnitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrb0skr000u01o7aln3jkp6",
+   "name": "Daniel Afrizal",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq4yiwsc009w01mw62fq4bhw",
+   "name": "Dava Erlangga",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "oud586f38af44e4329821ef21"
+   ],
+   "homeUnitIds": [
+    "oud586f38af44e4329821ef21"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmrt2ybcr009b01uov6t09t2a",
+   "name": "Dimas Damarjati",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqufsl3003y01t7zvkf392w"
+   ],
+   "homeUnitIds": [
+    "cmuqufsl3003y01t7zvkf392w"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnr9lfd3000701rq5ev4pkfv",
+   "name": "Fortunatus Narendra",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [],
+   "homeUnitIds": [],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnzxse5y005k01qh56f3vaag",
+   "name": "Geraldo Valentino",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1",
+    "oub7186507c81bf7f984bb416"
+   ],
+   "homeUnitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "CFO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnyc18mu001901m98iug9d37",
+   "name": "Gerro",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou47f297a5be7b0f6fbbae754"
+   ],
+   "homeUnitIds": [
+    "ou47f297a5be7b0f6fbbae754"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmotv4wdi000f08o5evtzwh3n",
+   "name": "Hary Ade Saputra",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo1jb89b005t01pap8zd3yru",
+   "name": "Haykal",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "homeUnitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo7c6q8i001408p80c3qcfvb",
+   "name": "Henryca Aprillyana",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1",
+    "ou6cd7c41336011d50e8dcfd2",
+    "oub8dd7a8dcff40cafcafed09",
+    "ou8f27050812d85e33c43cef9",
+    "ou47f297a5be7b0f6fbbae754"
+   ],
+   "homeUnitIds": [
+    "ou47f297a5be7b0f6fbbae754",
+    "ou6cd7c41336011d50e8dcfd2",
+    "oub8dd7a8dcff40cafcafed09",
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "CMO",
+    "ou47f297a5be7b0f6fbbae754": "CMO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmtk0dn6v01yw01vutu795cqi",
+   "name": "Irvandes Hasri Ilham Maulana",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo004p4b000801nuwkfkuwh1",
+   "name": "Jovan",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnhhsu5d000801pmgdjxtqhw",
+   "name": "Mey",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou02458d48df555b0d61edea1"
+   ],
+   "homeUnitIds": [
+    "ou02458d48df555b0d61edea1"
+   ],
+   "titles": {},
+   "reportsTo": {
+    "ou02458d48df555b0d61edea1": "cmq503ajo004w01qk07lqcity"
+   }
+  },
+  {
+   "userId": "cmnspps28000t01rzkur3xvye",
+   "name": "Mimiw",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2",
+    "oub8dd7a8dcff40cafcafed09",
+    "ou8f27050812d85e33c43cef9",
+    "ou02458d48df555b0d61edea1"
+   ],
+   "homeUnitIds": [
+    "ou6cd7c41336011d50e8dcfd2",
+    "oub8dd7a8dcff40cafcafed09",
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {
+    "ou02458d48df555b0d61edea1": "COO"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmtgx6a4d000101ozaxaaov6b",
+   "name": "Mohamad Okta Firdaus",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnhhsznj000c01pmw6n01dsg",
+   "name": "Mory",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou7c9cc71ca650c4e0c003f95"
+   ],
+   "homeUnitIds": [
+    "ou7c9cc71ca650c4e0c003f95"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmolbdlwp000v08nn3hntesy2",
+   "name": "Muchammad Farchan Febriananto",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou7c9cc71ca650c4e0c003f95"
+   ],
+   "homeUnitIds": [
+    "ou7c9cc71ca650c4e0c003f95"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnr9n43p000j01rqplv66s4w",
+   "name": "Muhamad Febriansyah",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [],
+   "homeUnitIds": [],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmta457or023f01nlz454i2oa",
+   "name": "Muhammad Alvar Pratama",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "homeUnitIds": [
+    "ou8f27050812d85e33c43cef9"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmu2c2a9s001b01pqbb41hrno",
+   "name": "Muhammad Kevandra",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou8c57f9ec8bbc9d96eabfdd1",
+    "ou2b718beaa10345fc21b9ae2"
+   ],
+   "homeUnitIds": [
+    "ou8c57f9ec8bbc9d96eabfdd1",
+    "ou2b718beaa10345fc21b9ae2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrahzds002o01rquodi1oie",
+   "name": "Muhammad Omar Karim",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "homeUnitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrdwjw2000001rynkblrbaj",
+   "name": "Muhammad Ramdhani",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmumjzr4t000601mp78sa1c66",
+   "name": "Nabiel Mochammad Haykal",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "homeUnitIds": [
+    "oub7186507c81bf7f984bb416"
+   ],
+   "titles": {
+    "oub7186507c81bf7f984bb416": "Legal Intern"
+   },
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo02cajs001001l833e2xalh",
+   "name": "Pasya Dimayanti",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou29b80cb5b6a94b9d74989b3"
+   ],
+   "homeUnitIds": [
+    "ou29b80cb5b6a94b9d74989b3"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmqp0f9v5000601phpfuqyl1p",
+   "name": "Queen Lourdes Purba Tambak",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmunzttnm000001pbm4at4sth",
+    "cmunzu20h000101pbwdik48ih"
+   ],
+   "homeUnitIds": [
+    "cmunzttnm000001pbm4at4sth",
+    "cmunzu20h000101pbwdik48ih"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo091s86002001l80q49ax2l",
+   "name": "Raditya Irawan",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmunzu20h000101pbwdik48ih"
+   ],
+   "homeUnitIds": [
+    "cmunzu20h000101pbwdik48ih"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnsprzv5001801rzxwljcblg",
+   "name": "Radja Aqsal",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuo08aix000801p593ezxuzd"
+   ],
+   "homeUnitIds": [
+    "cmuo08aix000801p593ezxuzd"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmok1zwln006e08s0g4r5g84b",
+   "name": "Rafdil",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ouda117084994807e15c72c9a"
+   ],
+   "homeUnitIds": [
+    "ouda117084994807e15c72c9a"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmspw8dhf012601t7jxzpohs2",
+   "name": "Rifqi Ahmad Reza",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuqq9u4e001l01mrn26adgjl"
+   ],
+   "homeUnitIds": [
+    "cmuqq9u4e001l01mrn26adgjl"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cms4q6v8b06u701p7178g72bw",
+   "name": "Rifqi Syarif",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "cmuo2410d002j01qx2lia7dpq"
+   ],
+   "homeUnitIds": [
+    "cmuo2410d002j01qx2lia7dpq"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmo00wa4s001a01mxaqosilgl",
+   "name": "Ryan Shakeel",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "homeUnitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnzzbnpf000001mztvmjaj0p",
+   "name": "Sifal ",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "homeUnitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmpicyzbx000z08k5ikx5is6z",
+   "name": "Violet Vianca Dhia",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "cmuqqalgd001o01mrdnghpqcn"
+   ],
+   "homeUnitIds": [
+    "cmuqqalgd001o01mrdnghpqcn"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmnrecace000901qjzpil8xcx",
+   "name": "WILLIAM ERSAN",
+   "avatar": null,
+   "role": "MANAGER",
+   "unitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "homeUnitIds": [
+    "cmuqqed05001z01mrlii7qx3u"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmotvx6tr000308rpmuk39vrv",
+   "name": "Yudia Ainani",
+   "avatar": null,
+   "role": "BOD",
+   "unitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "homeUnitIds": [
+    "ou6cd7c41336011d50e8dcfd2"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmq0zg47j001e01nzy9o3o0is",
+   "name": "Zaki Mahmuda",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "homeUnitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmul354wa002701pn4nr9vpbd",
+   "name": "beltsazar christopher",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "homeUnitIds": [
+    "oub8dd7a8dcff40cafcafed09"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  },
+  {
+   "userId": "cmok49nfg000s08s0xp7nlyt1",
+   "name": "randyyy",
+   "avatar": null,
+   "role": "STAFF",
+   "unitIds": [
+    "ou29b80cb5b6a94b9d74989b3"
+   ],
+   "homeUnitIds": [
+    "ou29b80cb5b6a94b9d74989b3"
+   ],
+   "titles": {},
+   "reportsTo": {}
+  }
+ ]
+}

@@ -1746,4 +1746,18 @@
         <item quantity="one">%d sub-IP/Team naik ke induknya. </item>
         <item quantity="other">%d sub-IP/Team naik ke induknya. </item>
     </plurals>
+    <string name="calendar_title">Kalender</string>
+    <string name="calendar_none_title">Gabung ke workspace perusahaanmu</string>
+    <string name="calendar_none_body">Kalender menampilkan tugas semua orang di perusahaanmu, dikelompokkan menurut Bagan IP &amp; Divisi. Masukkan kode workspace untuk bergabung.</string>
+    <string name="calendar_none_action">Masukkan kode workspace</string>
+    <string name="calendar_off_title">Kalender segera hadir</string>
+    <string name="calendar_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di Tugas Saya.</string>
+    <string name="calendar_empty_title">Tidak ada tenggat di bulan ini</string>
+    <string name="calendar_empty_body">Tugas yang punya tenggat muncul di sini sebagai titik. Pilih bulan lain, atau beri tenggat pada tugas.</string>
+    <string name="calendar_masked">Tugas internal</string>
+    <string name="calendar_masked_in">Tugas internal · %1$s</string>
+    <string name="calendar_not_in_chart">Belum di bagan</string>
+    <string name="calendar_no_pic">Belum ada PIC</string>
+    <string name="calendar_abandoned">Terbengkalai</string>
+    <string name="calendar_someday">Suatu hari</string>
 </resources>

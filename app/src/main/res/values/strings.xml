@@ -1752,4 +1752,18 @@
         <item quantity="one">%d sub-unit moves up to its parent. </item>
         <item quantity="other">%d sub-units move up to its parent. </item>
     </plurals>
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_none_title">Join your company\'s workspace</string>
+    <string name="calendar_none_body">The Calendar shows the tasks of everyone in your company, grouped by the IP &amp; Division Chart. Enter your workspace code to join it.</string>
+    <string name="calendar_none_action">Enter workspace code</string>
+    <string name="calendar_off_title">The Calendar is on its way</string>
+    <string name="calendar_off_body">It opens for BoD and Managers first, then for everyone. Your own tasks are still in My Tasks.</string>
+    <string name="calendar_empty_title">Nothing due in this month</string>
+    <string name="calendar_empty_body">Tasks with a due date show up here as dots. Pick another month, or add a due date to a task.</string>
+    <string name="calendar_masked">Internal task</string>
+    <string name="calendar_masked_in">Internal task · %1$s</string>
+    <string name="calendar_not_in_chart">Not in the chart yet</string>
+    <string name="calendar_no_pic">No PIC yet</string>
+    <string name="calendar_abandoned">Abandoned</string>
+    <string name="calendar_someday">Someday</string>
 </resources>

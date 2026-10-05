@@ -100,6 +100,8 @@ class AppContainer(private val context: Context) {
         id.znetworks.nexus.core.offline.DiskFiles.init(context.cacheDir)
         id.znetworks.nexus.core.offline.OfflineSync(context, this)
     }
+    /** Master Calendar API (ETag-aware); its held responses are forgotten at sign-out. */
+    val calendar = id.znetworks.nexus.feature.calendar.CalendarApi(api)
     val shortcuts = id.znetworks.nexus.feature.home.ProjectShortcuts(context, { sessionStore.current?.userId }, ProjectPins(api), appScope)
     val uploads = id.znetworks.nexus.core.net.Uploads(context, api)
     val announcements = AnnouncementHost(InboxApi(api))
@@ -154,6 +156,7 @@ class AppContainer(private val context: Context) {
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
+                calendar.clear()
                 // With the old cookie, before anything else forgets the session (API.md §1.3).
                 val pushGone = push.unregister(session)
                 // Logout revokes the token on the server too (Berlin, 29 Sep; iOS f068bbf): fire and forget,
