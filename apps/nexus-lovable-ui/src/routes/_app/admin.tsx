@@ -856,11 +856,11 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
             </Card>
 
             {/* ── bawah, melebar ── */}
-            <Card title="Tim & project" hint={canManageTeams ? "Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu. Klik nama tim buat ngatur timnya." : undefined} className="md:col-span-2">
+            <Card title="Tim & project" hint={canManageTeams ? "Tim sudah diganti Bagan IP & Divisi (tab Bagan). Akses project diatur per orang di sini." : undefined} className="md:col-span-2">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><UsersIcon className="h-3.5 w-3.5" /> Tim · {teamCount}</div>
-                  {!membershipsLoading && teamCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Belum masuk tim mana pun.</div>}
+                  {!membershipsLoading && teamCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Tim sudah diganti Bagan IP &amp; Divisi.</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(memberships?.teams ?? []).map((tm) => {
                       // Project yang orang ini dapat GARA-GARA tim ini — dipakai untuk memberi tahu
@@ -881,7 +881,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                         </span>
                       );
                     })}
-                    {canManageTeams && <TeamAddPicker teams={allTeams} already={new Set((memberships?.teams ?? []).map((t) => t.id))} pending={teamPending} onPick={onTeamAdd} onCreated={onTeamCreated} />}
+                    {/* No "+ tim": teams were replaced by the Bagan (30 Sep 2026) and POST /api/teams answers 410. */}
                   </div>
                 </div>
                 <div>

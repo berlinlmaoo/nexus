@@ -206,13 +206,27 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/** 410 with a sentence the app shows as it is, in the language the device asks for. */
+function teamsRetired(req: NextRequest) {
+  const id = (req.headers.get('accept-language') ?? '').toLowerCase().startsWith('id')
+  return NextResponse.json({
+    error: id ? 'Tim sudah diganti Bagan IP & Divisi di Control Room.' : 'Teams were replaced by the IP & Division Chart in Control Room.',
+    code: 'TEAMS_RETIRED',
+  }, { status: 410 })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     const user = session?.user
     if (!user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
+
+    // Teams were replaced by the Bagan IP & Divisi (owner, 30 Sep 2026): creating a team or a division
+    // answers 410 (also through the default at the bottom). Actions on an existing team fail because
+    // none exists. GET /api/teams stays (an empty list) for the apps that still have the old screens.
+    if (!body?.action || body.action === 'create-division') return teamsRetired(req)
 
     // Handle link/unlink project actions
     if (body.action === 'link-project') {
@@ -715,88 +729,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ updated: true, divisionId })
     }
 
-    // Default: create team
-    const { name, color } = body
-    if (!name) return NextResponse.json({ error: 'Team name is required' }, { status: 400 })
-    const isSystemAdmin = await isSystemAdminUser(user.id)
-
-    const membership = await prisma.workspaceMember.findFirst({
-      where: { userId: user.id }
-    })
-
-    if (!isSystemAdmin && (!membership || (membership.role !== 'BOD' && membership.role !== 'MANAGER' && membership.role !== 'ONE_ABOVE_ALL'))) {
-      return NextResponse.json({ error: 'Only workspace owners/admins can create teams' }, { status: 403 })
-    }
-
-    if (!membership) {
-      const primaryWorkspaceDefaults = getPrimaryWorkspaceDefaults()
-      const workspace = await prisma.workspace.upsert({
-        where: { slug: primaryWorkspaceDefaults.slug },
-        update: {},
-        create: primaryWorkspaceDefaults,
-        select: { id: true }
-      })
-
-      await prisma.workspaceMember.upsert({
-        where: {
-          userId_workspaceId: {
-            userId: user.id,
-            workspaceId: workspace.id,
-          },
-        },
-        update: {},
-        create: {
-          userId: user.id,
-          workspaceId: workspace.id,
-          role: 'STAFF',
-        },
-      })
-
-      const team = await prisma.team.create({
-        data: {
-          name,
-          color: color || '#18181B',
-          workspaceId: workspace.id,
-          members: { create: { userId: user.id, isAttendancePrimary: false } }
-        },
-        include: {
-          members: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },
-          projects: { include: { project: { select: { id: true, name: true, color: true, icon: true, status: true } } } }
-        }
-      })
-      logAudit({ action: "create", entityType: "team", entityId: team.id, entityName: name, userId: user.id, request: req })
-      return NextResponse.json(team, { status: 201 })
-    }
-
-    const existingTeam = await prisma.team.findFirst({
-      where: {
-        workspaceId: membership.workspaceId,
-        name: {
-          equals: name.trim(),
-          mode: 'insensitive',
-        },
-      },
-      select: { id: true },
-    })
-
-    if (existingTeam) {
-      return NextResponse.json({ error: 'A team with this name already exists in the workspace' }, { status: 409 })
-    }
-
-    const team = await prisma.team.create({
-      data: {
-        name: name.trim(),
-        color: color || '#18181B',
-        workspaceId: membership.workspaceId,
-        members: { create: { userId: user.id, isAttendancePrimary: false } }
-      },
-      include: {
-        members: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },
-        projects: { include: { project: { select: { id: true, name: true, color: true, icon: true, status: true } } } }
-      }
-    })
-    logAudit({ action: "create", entityType: "team", entityId: team.id, entityName: name, userId: user.id, request: req })
-    return NextResponse.json(team, { status: 201 })
+    // Default (no action, or one this route does not know): teams are retired — it never creates one.
+    return teamsRetired(req)
   } catch (error) {
     console.error('Teams POST error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

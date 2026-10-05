@@ -1,0 +1,410 @@
+[
+ {
+  "key": "cmunxi0cb005u01nn3gc19rgx",
+  "id": "cmunxi0cb005u01nn3gc19rgx",
+  "masked": false,
+  "title": "Task 5051153d",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "TODO",
+  "done": false,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
+   "name": "PATS Entertainment: Master Calendar",
+   "color": "#ec4899"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmok1zwln006e08s0g4r5g84b"
+  ],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": [
+     "cmok1zwln006e08s0g4r5g84b"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmunxhdj2005b01nnxu80gjk9",
+  "id": "cmunxhdj2005b01nnxu80gjk9",
+  "masked": false,
+  "title": "Task 5fae94dd",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "TODO",
+  "done": false,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
+   "name": "PATS Entertainment: Master Calendar",
+   "color": "#ec4899"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmok1zwln006e08s0g4r5g84b"
+  ],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": [
+     "cmok1zwln006e08s0g4r5g84b"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmunxfdq0004b01nnwhjmcfau",
+  "id": "cmunxfdq0004b01nnwhjmcfau",
+  "masked": false,
+  "title": "Task 79551261",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "TODO",
+  "done": false,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
+   "name": "PATS Entertainment: Master Calendar",
+   "color": "#ec4899"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmok1zwln006e08s0g4r5g84b"
+  ],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": [
+     "cmok1zwln006e08s0g4r5g84b"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmunxgh96004t01nn2j5qzlp6",
+  "id": "cmunxgh96004t01nn2j5qzlp6",
+  "masked": false,
+  "title": "Task e613aaad",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "TODO",
+  "done": false,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmq5e3vaj00jp01p6yx6ne3w6",
+   "name": "PATS Entertainment: Master Calendar",
+   "color": "#ec4899"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmok1zwln006e08s0g4r5g84b"
+  ],
+  "placements": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "userIds": [
+     "cmok1zwln006e08s0g4r5g84b"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "x_h2a21yc29ydg",
+  "id": null,
+  "masked": true,
+  "title": null,
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "TODO",
+  "done": false,
+  "noStatus": false,
+  "priority": null,
+  "project": null,
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmo1jb89b005t01pap8zd3yru",
+   "cmnzxse5y005k01qh56f3vaag"
+  ],
+  "placements": [
+   {
+    "unitId": "oub7186507c81bf7f984bb416",
+    "userIds": [
+     "cmo1jb89b005t01pap8zd3yru",
+     "cmnzxse5y005k01qh56f3vaag"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "x_h2bzA5emFnOQ",
+  "id": null,
+  "masked": true,
+  "title": null,
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "TODO",
+  "done": false,
+  "noStatus": false,
+  "priority": null,
+  "project": null,
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmo1jb89b005t01pap8zd3yru",
+   "cmnzxse5y005k01qh56f3vaag"
+  ],
+  "placements": [
+   {
+    "unitId": "oub7186507c81bf7f984bb416",
+    "userIds": [
+     "cmo1jb89b005t01pap8zd3yru",
+     "cmnzxse5y005k01qh56f3vaag"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmuppgahr047t01qizvo8x5td",
+  "id": "cmuppgahr047t01qizvo8x5td",
+  "masked": false,
+  "title": "Task 31791ef7",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-02T17:00:00.000Z",
+  "status": "DONE",
+  "done": true,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmnrajtqm003g01rqn6cwqdu3",
+   "name": "Suwara Group",
+   "color": "#ef4444"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmnrafqmh002201rq54pywgm7",
+   "cmsr652tx02zl01t7gz0ddo81",
+   "cmta457or023f01nlz454i2oa"
+  ],
+  "placements": [
+   {
+    "unitId": "ou8f27050812d85e33c43cef9",
+    "userIds": [
+     "cmnrafqmh002201rq54pywgm7",
+     "cmsr652tx02zl01t7gz0ddo81",
+     "cmta457or023f01nlz454i2oa"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmuofioc800vm01qiqczbfgj7",
+  "id": "cmuofioc800vm01qiqczbfgj7",
+  "masked": false,
+  "title": "Task 455c516d",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "DONE",
+  "done": true,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cms7olf8w00n701n0py66vpnl",
+   "name": "FRAMEWORKZ : PATS GROUP TASK",
+   "color": "#7B2FBE"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmnrb0skr000u01o7aln3jkp6",
+   "cmnrdwjw2000001rynkblrbaj"
+  ],
+  "placements": [
+   {
+    "unitId": "cmuqqed05001z01mrlii7qx3u",
+    "userIds": [
+     "cmnrb0skr000u01o7aln3jkp6",
+     "cmnrdwjw2000001rynkblrbaj"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmunx4kld009q01nqndjkfyzg",
+  "id": "cmunx4kld009q01nqndjkfyzg",
+  "masked": false,
+  "title": "Task 73e8ed1a",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-02T17:00:00.000Z",
+  "status": "DONE",
+  "done": true,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmq5d8awg00cu01p62zhvbp4d",
+   "name": "PATS BSD: Master Calendar",
+   "color": "#a168be"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmotv4wdi000f08o5evtzwh3n"
+  ],
+  "placements": [
+   {
+    "unitId": "cmuqqed05001z01mrlii7qx3u",
+    "userIds": [
+     "cmotv4wdi000f08o5evtzwh3n"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "cmuppa96b046701qiff754acx",
+  "id": "cmuppa96b046701qiff754acx",
+  "masked": false,
+  "title": "Task f0e4288c",
+  "day": "2026-10-03",
+  "time": null,
+  "due": "2026-10-03T00:00:00.000Z",
+  "status": "DONE",
+  "done": true,
+  "noStatus": false,
+  "priority": "MEDIUM",
+  "project": {
+   "id": "cmnrajtqm003g01rqn6cwqdu3",
+   "name": "Suwara Group",
+   "color": "#ef4444"
+  },
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmnrafqmh002201rq54pywgm7",
+   "cmta457or023f01nlz454i2oa"
+  ],
+  "placements": [
+   {
+    "unitId": "ou8f27050812d85e33c43cef9",
+    "userIds": [
+     "cmnrafqmh002201rq54pywgm7",
+     "cmta457or023f01nlz454i2oa"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "x_djZnh2aW91Yg",
+  "id": null,
+  "masked": true,
+  "title": null,
+  "day": "2026-10-03",
+  "time": "16:00",
+  "due": "2026-10-03T09:00:00.000Z",
+  "status": "DONE",
+  "done": true,
+  "noStatus": false,
+  "priority": null,
+  "project": null,
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmnzxse5y005k01qh56f3vaag",
+   "cmo1jb89b005t01pap8zd3yru"
+  ],
+  "placements": [
+   {
+    "unitId": "oub7186507c81bf7f984bb416",
+    "userIds": [
+     "cmnzxse5y005k01qh56f3vaag",
+     "cmo1jb89b005t01pap8zd3yru"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ },
+ {
+  "key": "x_dwZ3g1NXMxOA",
+  "id": null,
+  "masked": true,
+  "title": null,
+  "day": "2026-10-03",
+  "time": "16:00",
+  "due": "2026-10-03T09:00:00.000Z",
+  "status": "DONE",
+  "done": true,
+  "noStatus": false,
+  "priority": null,
+  "project": null,
+  "linkedProjectIds": [],
+  "parent": null,
+  "assigneeIds": [
+   "cmo1jb89b005t01pap8zd3yru",
+   "cmnzxse5y005k01qh56f3vaag"
+  ],
+  "placements": [
+   {
+    "unitId": "oub7186507c81bf7f984bb416",
+    "userIds": [
+     "cmo1jb89b005t01pap8zd3yru",
+     "cmnzxse5y005k01qh56f3vaag"
+    ]
+   }
+  ],
+  "unplacedIds": [],
+  "canEdit": false,
+  "editProjectId": null
+ }
+]

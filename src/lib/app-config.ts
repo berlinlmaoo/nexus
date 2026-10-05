@@ -20,10 +20,16 @@ export type AppConfig = {
     blockSignOutDuringWorkday: boolean
     /** Control Room › Fake GPS tab. */
     fakeGpsReview: boolean
+    /** The Calendar menu (master calendar, /api/calendar/**). Who actually gets data is decided per person on the server (rollout audience). */
+    calendar: boolean
+    /** The Calendar widgets (Home Screen, Lock Screen) and the Apple Watch calendar. */
+    calendarWidgets: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
     outsideHourAlertMinutes: number
+    /** How often an open Calendar screen asks again (ETag makes an unchanged answer a 304). */
+    calendarPollSeconds: number
   }
   texts: Record<"en" | "id", Record<string, string>>
   /** One app-wide notice at the top of Home, or null. `id` changes → shown again to people who closed it. */
@@ -31,8 +37,8 @@ export type AppConfig = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true },
-  values: { outsideHourAlertMinutes: 60 },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true },
+  values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60 },
   texts: {
     en: {
       "location.always.title": "Turn on location “Always”",
@@ -40,6 +46,13 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
       "location.always.button": "Open Settings",
       "signout.blocked.title": "Check out first",
       "signout.blocked.body": "You're checked in, so your workday and live location are still running. You can't sign out until you check out — check out on the Attendance screen, then sign out.",
+      "calendar.none.title": "Join your company's workspace",
+      "calendar.none.body": "The Calendar shows the tasks of everyone in your company, grouped by the IP & Division Chart. Enter your workspace code to join it.",
+      "calendar.off.title": "The Calendar is on its way",
+      "calendar.off.body": "It opens for BoD and Managers first, then for everyone. Your own tasks are still in My Tasks.",
+      "calendar.empty.title": "Nothing due in this month",
+      "calendar.empty.body": "Tasks with a due date show up here as dots. Pick another month, or add a due date to a task.",
+      "calendar.masked": "Internal task",
     },
     id: {
       "location.always.title": "Nyalakan lokasi “Selalu”",
@@ -47,6 +60,13 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
       "location.always.button": "Buka Pengaturan",
       "signout.blocked.title": "Check out dulu",
       "signout.blocked.body": "Kamu sedang check in, jadi jam kerja dan lokasi live masih berjalan. Kamu tidak bisa keluar dari akun sebelum check out — check out dulu di layar Absensi, lalu keluar.",
+      "calendar.none.title": "Gabung ke workspace perusahaanmu",
+      "calendar.none.body": "Kalender menampilkan tugas semua orang di perusahaanmu, dikelompokkan menurut Bagan IP & Divisi. Masukkan kode workspace untuk bergabung.",
+      "calendar.off.title": "Kalender segera hadir",
+      "calendar.off.body": "Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di Tugas Saya.",
+      "calendar.empty.title": "Tidak ada tenggat di bulan ini",
+      "calendar.empty.body": "Tugas yang punya tenggat muncul di sini sebagai titik. Pilih bulan lain, atau beri tenggat pada tugas.",
+      "calendar.masked": "Tugas internal",
     },
   },
   banner: null,

@@ -1069,8 +1069,10 @@ export async function notifyBookingSoon(data: {
     type: "booking_soon",
     title: `${data.room} in ${data.minutes} min`,
     message: data.title,
-    // Doubles as the de-dupe key: one reminder per booking, forever.
-    link: `/master-calendar?booking=${data.bookingId}`,
+    // Doubles as the de-dupe key: one reminder per booking, forever (booking-reminder matches
+    // `link contains <id>`, so reminders sent with the old /master-calendar link still count). Room
+    // Booking is its own screen now; the Calendar no longer shows bookings.
+    link: `/room-booking?booking=${data.bookingId}`,
     push: prefs.statusUpdate,
   })
 }
