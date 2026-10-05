@@ -17,12 +17,12 @@ export const LAYOUT = {
   margin: 24,
   rootGap: 56,
   gapX: 28,
-  vOwn: 22,
-  bandMin: 52,
-  gPadX: 28,
-  gPadTop: 14,
-  gBand: 44,
-  gPadBottom: 24,
+  vOwn: 20,
+  bandMin: 48,
+  gPadX: 22,
+  gPadTop: 12,
+  gBand: 38,
+  gPadBottom: 20,
   gEmpty: 46,
   gMinW: 200,
   snap: 8,
@@ -389,6 +389,56 @@ function segmentClear(a: Pt, b: Pt, obstacles: Rect[]): boolean {
 }
 
 export const pathD = (pts: Pt[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x} ${p.y}`).join(" ");
+
+/** The same right-angled path with its bends rounded (radius r, smaller where a leg is short). */
+export function pathRounded(pts: Pt[], r = 8): string {
+  if (pts.length < 3) return pathD(pts);
+  let d = `M${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+    const l1 = Math.hypot(b.x - a.x, b.y - a.y), l2 = Math.hypot(c.x - b.x, c.y - b.y);
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    if (rr < 0.5) { d += ` L${b.x} ${b.y}`; continue; }
+    const p = { x: b.x + ((a.x - b.x) / l1) * rr, y: b.y + ((a.y - b.y) / l1) * rr };
+    const q = { x: b.x + ((c.x - b.x) / l2) * rr, y: b.y + ((c.y - b.y) / l2) * rr };
+    d += ` L${p.x} ${p.y} Q${b.x} ${b.y} ${q.x} ${q.y}`;
+  }
+  const z = pts[pts.length - 1];
+  return `${d} L${z.x} ${z.y}`;
+}
+
+/**
+ * Rows placed by hand are rarely exactly level (owner, 5 Oct 2026: PATS' business lines sat 8–40px
+ * apart). Siblings whose tops are within `tol` of each other, chained, are lined up on the highest of
+ * them, each one moving with its whole block — unless that would land it on something.
+ */
+export function alignRows(base: Map<string, Rect>, rows: string[][], blockOf: (key: string) => string[], tol = 28): Map<string, Rect> {
+  const rects = new Map(base);
+  for (const row of rows) {
+    const items = row
+      .map((k) => [k, rects.get(k)] as const)
+      .filter((x): x is readonly [string, Rect] => !!x[1])
+      .sort((a, b) => a[1].y - b[1].y);
+    for (let i = 0; i < items.length; ) {
+      let j = i;
+      while (j + 1 < items.length && items[j + 1][1].y - items[j][1].y <= tol) j++;
+      const target = items[i][1].y;
+      for (let k = i + 1; k <= j; k++) {
+        const [key, r] = items[k];
+        const dy = target - r.y;
+        if (!dy) continue;
+        const keys = new Set([key, ...blockOf(key).filter((x) => rects.has(x))]);
+        const moved = [...keys].map((x) => { const q = rects.get(x)!; return [x, { ...q, y: q.y + dy }] as const; });
+        const others: Rect[] = [];
+        for (const [x, q] of rects) if (!keys.has(x)) others.push(q);
+        if (moved.some(([, m]) => m.y < 0 || others.some((o) => overlaps(m, o, 4)))) continue;
+        for (const [x, m] of moved) rects.set(x, m);
+      }
+      i = j + 1;
+    }
+  }
+  return rects;
+}
 
 export type EdgeSpec = {
   /** Source element (a card, box or group title) — the line may start inside it. */
