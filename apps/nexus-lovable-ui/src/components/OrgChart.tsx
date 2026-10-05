@@ -972,8 +972,19 @@ function stackOf(id: string, g: Group): string[] {
 }
 /** Left to right under a card: sub-units led by one of its leaders (in the order of the leaders), the
  *  "di bawah" boxes and the other sub-units, with the staff box in the middle. Inside a group: its cards. */
+/** Groups side by side (owner, 5 Oct 2026: PATS Entertainment sat between Community and Outlet): every
+ *  group moves up next to the first one; the other cards keep their order around them. */
+function groupsTogether(list: OrgUnit[]): OrgUnit[] {
+  const first = list.findIndex((k) => k.kind === "GROUP");
+  if (first < 0) return list;
+  return [
+    ...list.slice(0, first).filter((k) => k.kind !== "GROUP"),
+    ...list.filter((k) => k.kind === "GROUP"),
+    ...list.slice(first).filter((k) => k.kind !== "GROUP"),
+  ];
+}
 function rowOf(u: OrgUnit, g: Group): string[] {
-  if (u.kind === "GROUP") return [...g.led, ...g.free].map((k) => `u:${k.id}`);
+  if (u.kind === "GROUP") return [...g.led, ...groupsTogether(g.free)].map((k) => `u:${k.id}`);
   // Led sub-units and "di bawah" boxes together, in the order of their leaders in the card's boxes, so
   // the lines from neighbouring leaders never cross (owner, 5 Oct 2026: Abraham's line to Mey crossed
   // Gerald's and Henryca's).
@@ -981,8 +992,15 @@ function rowOf(u: OrgUnit, g: Group): string[] {
     ...g.led.map((k) => ({ key: `u:${k.id}`, at: g.leaderIdx.get(k.leadUserId!) ?? 0, box: 0 })),
     ...g.rt.map(([id]) => ({ key: `b:${u.id}:rt:${id}`, at: g.leaderIdx.get(id) ?? 0, box: 1 })),
   ].sort((a, b) => a.at - b.at || a.box - b.box).map((x) => x.key);
-  const row = [...byLeader, ...g.free.map((k) => `u:${k.id}`)];
-  if (g.staff.length > 0) row.splice(Math.floor(row.length / 2), 0, `b:${u.id}:staff`);
+  const row = [...byLeader, ...groupsTogether(g.free).map((k) => `u:${k.id}`)];
+  if (g.staff.length > 0) {
+    // The staff box goes in the middle, but never between two groups.
+    const groupKeys = new Set(g.free.filter((k) => k.kind === "GROUP").map((k) => `u:${k.id}`));
+    const splits = (i: number) => i > 0 && i < row.length && groupKeys.has(row[i - 1]) && groupKeys.has(row[i]);
+    const mid = Math.floor(row.length / 2);
+    const at = [...Array(row.length + 1).keys()].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid) || a - b).find((i) => !splits(i)) ?? mid;
+    row.splice(at, 0, `b:${u.id}:staff`);
+  }
   return row;
 }
 /** The people boxes a card has. */
@@ -1128,7 +1146,8 @@ function buildEdges(units: OrgUnit[], groups: Map<string, Group>, effParentOf: (
       // it does not cut through the leaders' lines beside it; clear of the leaders' own drops.
       const xs = bus.map((k) => { const r = rects.get(k)!; return r.x + r.w / 2; });
       let x = u.kind === "GROUP" ? s.x : Math.min(src.x + src.w - 18, Math.max(src.x + 18, (Math.min(...xs) + Math.max(...xs)) / 2));
-      if (Math.abs(x - s.x) < 24) x = s.x;
+      // Only leader lines are a reason to leave the middle; without them it stays under the card.
+      if (led.length === 0 || Math.abs(x - s.x) < 24) x = s.x;
       else {
         // Off the middle it leaves through a gap between two people, never from under one of them —
         // a stem under Mimiw read as Mimiw leading every IP.
