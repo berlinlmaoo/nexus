@@ -440,6 +440,112 @@ export function alignRows(base: Map<string, Rect>, rows: string[][], blockOf: (k
   return rects;
 }
 
+/**
+ * Lines that run along each other are pulled apart (owner, 5 Oct 2026: lines 2–6px apart read as one
+ * smudge and nobody could tell which went where). A horizontal leg between two vertical ones is a track;
+ * the legs of one bundle (lines leaving the same point) at one height are one track and move together,
+ * and a bundle's tracks that nearly meet are merged into one. Tracks of different bundles that overlap
+ * and sit closer than `gap` are spread `gap` apart around their middle — each within the room its
+ * neighbouring vertical legs leave, never above `minY` (inside its own box) and never through a card.
+ * Moves `pts` in place.
+ */
+export function separateLines(
+  lines: Array<{ bundle: string; pts: Pt[]; minY: number }>,
+  blocked: (line: number, a: Pt, b: Pt) => boolean,
+  gap = 12,
+): void {
+  type Track = { bundle: string; y: number; legs: Array<{ li: number; i: number }>; x1: number; x2: number; lo: number; hi: number };
+  const M = 6;
+  const tracksNow = (): Track[] => {
+    const m = new Map<string, Track>();
+    lines.forEach((ln, li) => {
+      const p = ln.pts;
+      for (let i = 1; i + 2 < p.length; i++) {
+        if (Math.abs(p[i].y - p[i + 1].y) > 0.5) continue;
+        if (Math.abs(p[i - 1].x - p[i].x) > 0.5 || Math.abs(p[i + 1].x - p[i + 2].x) > 0.5) continue;
+        const y = p[i].y;
+        let lo = ln.minY, hi = Number.POSITIVE_INFINITY;
+        if (p[i - 1].y < y) lo = Math.max(lo, p[i - 1].y + M); else hi = Math.min(hi, p[i - 1].y - M);
+        if (p[i + 2].y > y) hi = Math.min(hi, p[i + 2].y - M); else lo = Math.max(lo, p[i + 2].y + M);
+        const x1 = Math.min(p[i].x, p[i + 1].x), x2 = Math.max(p[i].x, p[i + 1].x);
+        const key = `${ln.bundle}|${Math.round(y)}`;
+        const t = m.get(key);
+        if (t) { t.legs.push({ li, i }); t.x1 = Math.min(t.x1, x1); t.x2 = Math.max(t.x2, x2); t.lo = Math.max(t.lo, lo); t.hi = Math.min(t.hi, hi); }
+        else m.set(key, { bundle: ln.bundle, y, legs: [{ li, i }], x1, x2, lo, hi });
+      }
+    });
+    return [...m.values()];
+  };
+  const overlapX = (a: Track, b: Track) => Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
+  const canMove = (t: Track, ny: number) => {
+    if (ny < t.lo || ny > t.hi) return false;
+    for (const { li, i } of t.legs) {
+      const p = lines[li].pts;
+      const a = { x: p[i].x, y: ny }, b = { x: p[i + 1].x, y: ny };
+      if (blocked(li, a, b) || blocked(li, p[i - 1], a) || blocked(li, b, p[i + 2])) return false;
+    }
+    return true;
+  };
+  const move = (t: Track, ny: number) => {
+    for (const { li, i } of t.legs) { lines[li].pts[i].y = ny; lines[li].pts[i + 1].y = ny; }
+    t.y = ny;
+  };
+
+  // 1. One bundle, one height: legs of the same bundle that nearly meet join the busier one.
+  const byBundle = new Map<string, Track[]>();
+  for (const t of tracksNow()) byBundle.set(t.bundle, [...(byBundle.get(t.bundle) ?? []), t]);
+  for (const list of byBundle.values()) {
+    list.sort((a, b) => a.y - b.y);
+    for (let k = 1; k < list.length; k++) {
+      const a = list[k - 1], b = list[k];
+      if (b.y - a.y < gap && b.y - a.y > 0.5 && overlapX(a, b) > -gap) {
+        const [from, to] = b.legs.length > a.legs.length ? [a, b] : [b, a];
+        if (canMove(from, to.y)) move(from, to.y);
+      }
+    }
+  }
+
+  // 2. Different bundles: spread every cluster of too-close, overlapping tracks `gap` apart.
+  for (let round = 0; round < 3; round++) {
+    const ts = tracksNow();
+    const up = ts.map((_, i) => i);
+    const find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i])));
+    let any = false;
+    for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
+      if (ts[i].bundle !== ts[j].bundle && Math.abs(ts[i].y - ts[j].y) < gap - 0.5 && overlapX(ts[i], ts[j]) > 2) { up[find(i)] = find(j); any = true; }
+    }
+    if (!any) return;
+    const clusters = new Map<number, Track[]>();
+    ts.forEach((t, i) => clusters.set(find(i), [...(clusters.get(find(i)) ?? []), t]));
+    let moved = false;
+    for (const c of clusters.values()) {
+      if (c.length < 2) continue;
+      c.sort((a, b) => a.y - b.y || a.x1 - b.x1);
+      const mean = c.reduce((s, t) => s + t.y, 0) / c.length;
+      const want = c.map((_, k) => mean - (gap * (c.length - 1)) / 2 + k * gap);
+      for (let k = 0; k < c.length; k++) {
+        want[k] = Math.min(c[k].hi, Math.max(c[k].lo, want[k]));
+        if (k > 0) want[k] = Math.max(want[k], want[k - 1] + gap);
+      }
+      for (let k = c.length - 2; k >= 0; k--) want[k] = Math.max(c[k].lo, Math.min(want[k], want[k + 1] - gap));
+      for (let k = 0; k < c.length; k++) {
+        const ny = Math.round(want[k]);
+        if (Math.abs(ny - c[k].y) > 0.5 && canMove(c[k], ny)) { move(c[k], ny); moved = true; }
+      }
+    }
+    if (!moved) return;
+  }
+}
+
+/** Everything a line has to go round: all elements except its own two ends and the group frames it
+ *  starts or ends inside (a line has to cross those to get in). */
+export function obstaclesOf(e: { from: string; to: string; s: Pt; t: Pt }, rects: Map<string, Rect>, isFrame: (key: string) => boolean): Rect[] {
+  const inside = (r: Rect, p: Pt) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  const out: Rect[] = [];
+  for (const [k, r] of rects) if (k !== e.from && k !== e.to && !(isFrame(k) && (inside(r, e.s) || inside(r, e.t)))) out.push(r);
+  return out;
+}
+
 export type EdgeSpec = {
   /** Source element (a card, box or group title) — the line may start inside it. */
   from: string;
@@ -455,12 +561,15 @@ export type EdgeSpec = {
  * ends inside (a line has to cross those to get in).
  */
 export function routeAll(edges: EdgeSpec[], rects: Map<string, Rect>, isFrame: (key: string) => boolean, quick = false): Array<EdgeSpec & { pts: Pt[] }> {
-  const all = [...rects];
-  const inside = (r: Rect, p: Pt) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-  return edges.map((e) => {
-    const obstacles = quick
-      ? []
-      : all.filter(([k, r]) => k !== e.from && k !== e.to && !(isFrame(k) && (inside(r, e.s) || inside(r, e.t)))).map(([, r]) => r);
-    return { ...e, pts: route(e.s, e.t, obstacles, e.prefY, quick) };
-  });
+  const routed = edges.map((e) => ({ ...e, pts: route(e.s, e.t, quick ? [] : obstaclesOf(e, rects, isFrame), e.prefY, quick) }));
+  if (quick) return routed;
+  const obstacles = routed.map((e) => obstaclesOf(e, rects, isFrame));
+  separateLines(
+    routed.map((e) => {
+      const r = rects.get(e.from);
+      return { bundle: `${e.from}@${Math.round(e.s.x)},${Math.round(e.s.y)}`, pts: e.pts, minY: (r ? r.y + r.h : e.s.y) + 6 };
+    }),
+    (li, a, b) => obstacles[li].some((o) => segmentHits(a, b, o)),
+  );
+  return routed;
 }

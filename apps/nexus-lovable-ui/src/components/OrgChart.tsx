@@ -294,7 +294,7 @@ export function OrgChart() {
         return rowOf(u, groups.get(id)!);
       },
       // Room for one elbow per led sub-unit / "di bawah" box above the shared crossbar.
-      band: (id) => 46 + 6 * (groups.get(id)!.led.length + groups.get(id)!.rt.length),
+      band: (id) => 46 + 12 * (groups.get(id)!.led.length + groups.get(id)!.rt.length),
       size: sizeOf,
     });
     // Saved positions count in Lengkap only; elsewhere only the card being dragged leaves its place.
@@ -922,7 +922,14 @@ function stackOf(id: string, g: Group): string[] {
  *  "di bawah" boxes and the other sub-units, with the staff box in the middle. Inside a group: its cards. */
 function rowOf(u: OrgUnit, g: Group): string[] {
   if (u.kind === "GROUP") return [...g.led, ...g.free].map((k) => `u:${k.id}`);
-  const row = [...g.led.map((k) => `u:${k.id}`), ...g.rt.map(([id]) => `b:${u.id}:rt:${id}`), ...g.free.map((k) => `u:${k.id}`)];
+  // Led sub-units and "di bawah" boxes together, in the order of their leaders in the card's boxes, so
+  // the lines from neighbouring leaders never cross (owner, 5 Oct 2026: Abraham's line to Mey crossed
+  // Gerald's and Henryca's).
+  const byLeader = [
+    ...g.led.map((k) => ({ key: `u:${k.id}`, at: g.leaderIdx.get(k.leadUserId!) ?? 0, box: 0 })),
+    ...g.rt.map(([id]) => ({ key: `b:${u.id}:rt:${id}`, at: g.leaderIdx.get(id) ?? 0, box: 1 })),
+  ].sort((a, b) => a.at - b.at || a.box - b.box).map((x) => x.key);
+  const row = [...byLeader, ...g.free.map((k) => `u:${k.id}`)];
   if (g.staff.length > 0) row.splice(Math.floor(row.length / 2), 0, `b:${u.id}:staff`);
   return row;
 }
@@ -1017,19 +1024,39 @@ function buildEdges(units: OrgUnit[], groups: Map<string, Group>, effParentOf: (
     const src = rects.get(srcKey);
     if (!src) continue;
     const s = bottom(src);
-    const bus = [...(g.staff.length ? [`b:${u.id}:staff`] : []), ...g.free.map((k) => `c:${k.id}`)].filter((k) => rects.has(k));
-    const tops = bus.map((k) => rects.get(k)!.y).filter((y) => y > s.y + 8);
-    const busY = tops.length ? Math.min(...tops) - 18 : s.y + 14;
-    for (const k of bus) edges.push({ from: srcKey, to: k, s, t: top(rects.get(k)!), prefY: busY });
     // Led cards inside a group are led from the card above the group.
     const fromChip: Array<[string, string]> = [
       ...g.led.map((k): [string, string] => [`${u.kind === "GROUP" ? effParentOf(k.id) : u.id}:${k.leadUserId}`, `c:${k.id}`]),
       ...g.rt.map(([id]): [string, string] => [`${u.id}:${id}`, `b:${u.id}:rt:${id}`]),
     ];
-    fromChip.forEach(([chipKey, to], rank) => {
+    const led = fromChip.flatMap(([chipKey, to]) => {
       const c = chipAt(chipKey), r = rects.get(to);
-      if (c && r) edges.push({ from: c.box, to, s: bottom(c.r), t: top(r), prefY: s.y + 10 + 6 * rank });
+      return c && r ? [{ from: c.box, to, s: bottom(c.r), t: top(r) }] : [];
     });
+    // One 12px track per leader line, the one going farthest out highest, so neighbouring leaders'
+    // lines nest instead of crossing; left-going first, then right-going.
+    const out = [...led.filter((e) => e.t.x < e.s.x).sort((a, b) => a.t.x - b.t.x), ...led.filter((e) => e.t.x >= e.s.x).sort((a, b) => b.t.x - a.t.x)];
+    out.forEach((e, k) => edges.push({ ...e, prefY: s.y + 12 + 12 * k }));
+    const bus = [...(g.staff.length ? [`b:${u.id}:staff`] : []), ...g.free.map((k) => `c:${k.id}`)].filter((k) => rects.has(k));
+    if (bus.length) {
+      const tops = bus.map((k) => rects.get(k)!.y).filter((y) => y > s.y + 8);
+      const busY = tops.length ? Math.min(...tops) - 18 : s.y + 14;
+      // The crossbar's stem leaves the box above the middle of its own cards (still inside the box), so
+      // it does not cut through the leaders' lines beside it; clear of the leaders' own drops.
+      const xs = bus.map((k) => { const r = rects.get(k)!; return r.x + r.w / 2; });
+      let x = u.kind === "GROUP" ? s.x : Math.min(src.x + src.w - 18, Math.max(src.x + 18, (Math.min(...xs) + Math.max(...xs)) / 2));
+      if (Math.abs(x - s.x) < 24) x = s.x;
+      else {
+        // Off the middle it leaves through a gap between two people, never from under one of them —
+        // a stem under Mimiw read as Mimiw leading every IP.
+        const inBox = Object.keys(chips).filter((k) => chips[k].box === srcKey).map((k) => chipAt(k)!.r).sort((a, b) => a.x - b.x);
+        const gaps = inBox.slice(1).map((r, i) => (inBox[i].x + inBox[i].w + r.x) / 2);
+        if (gaps.length) x = gaps.reduce((best, g) => (Math.abs(g - x) < Math.abs(best - x) ? g : best), gaps[0]);
+      }
+      for (let k = 0; k < 6 && led.some((e) => Math.abs(e.s.x - x) < 10); k++) x = x + 12 <= src.x + src.w - 12 ? x + 12 : x - 12;
+      const stem = { x, y: s.y };
+      for (const k of bus) edges.push({ from: srcKey, to: k, s: stem, t: top(rects.get(k)!), prefY: busY });
+    }
   }
   return edges;
 }
