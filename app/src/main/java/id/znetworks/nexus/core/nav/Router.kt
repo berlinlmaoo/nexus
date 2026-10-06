@@ -36,7 +36,8 @@ sealed interface Target {
     data class Profile(val userId: String) : Target
     data class Folder(val id: String) : Target
     data object RoomBooking : Target
-    data object TeamCalendar : Target
+    /** The master Calendar (replaces Team Calendar): `/calendar?date=&view=&lens=&focus=&scope=&task=`. */
+    data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null) : Target
     /** Control Room (manager and above). */
     data object Admin : Target
     data class Announcement(val id: String) : Target
@@ -127,7 +128,9 @@ object Links {
             p == "/reports" -> Target.Reports(null)
             p == "/leaderboard" -> Target.Leaderboard
             p == "/room-booking" -> Target.RoomBooking
-            p == "/master-calendar" -> Target.TeamCalendar
+            p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"])
+            // The old page: a booking link goes to Room booking, anything else to the Calendar (web aa9ecdc).
+            p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])
             p == "/admin" -> Target.Admin
             Regex("^/reports/([^/]+)$").matches(p) -> Target.Reports(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))

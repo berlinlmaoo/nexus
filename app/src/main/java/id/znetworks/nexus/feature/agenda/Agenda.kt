@@ -80,10 +80,6 @@ import java.util.Locale
 @Serializable data class Booking(val id: String, val room: String = "", val title: String = "", val description: String? = null,
                                  val startsAt: String = "", val endsAt: String = "", val createdBy: Booker? = null)
 @Serializable data class Bookings(val bookings: List<Booking> = emptyList())
-@Serializable data class CalEvent(val id: String, val title: String = "", val startsAt: String = "", val endsAt: String? = null,
-                                  val isAllDay: Boolean? = null, val location: String? = null)
-@Serializable data class CalEvents(val events: List<CalEvent> = emptyList())
-@Serializable data class TeamLite(val id: String, val name: String = "")
 
 object AgendaLogic {
     private val zone = OfficeTime.ZONE
@@ -96,15 +92,11 @@ object AgendaLogic {
             .toList().sortedBy { it.first }.let { if (past) it.reversed() else it }.map { (d, l) -> d to l.sortedBy { it.startsAt } }
 
     /** Several teams' calendars, merged and de-duplicated by id. */
-    fun merge(lists: List<List<CalEvent>>) = lists.flatten().associateBy { it.id }.values.sortedBy { it.startsAt }
 }
 
 class AgendaApi(private val api: ApiClient) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     suspend fun bookings(from: Instant, to: Instant) = api.get("/api/room-bookings?rangeStart=${enc(from.toString())}&rangeEnd=${enc(to.toString())}", Bookings.serializer()).bookings
-    suspend fun teams() = api.get("/api/teams", ListSerializer(TeamLite.serializer()))
-    suspend fun calendar(teamId: String, from: Instant, to: Instant) =
-        api.get("/api/master-calendar?teamId=${enc(teamId)}&rangeStart=${enc(from.toString())}&rangeEnd=${enc(to.toString())}", CalEvents.serializer()).events
 }
 
 @Composable
@@ -171,82 +163,6 @@ fun RoomBookingScreen(onBack: () -> Unit) {
                     items.forEach { b -> item(key = b.id) { AgendaRow("${AgendaLogic.hhmm(b.startsAt)}–${AgendaLogic.hhmm(b.endsAt)}", b.title, b.room, b.createdBy?.name) } }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun TeamCalendarScreen(onBack: () -> Unit) {
-    val api = agendaApi()
-    val c = Nx.colors
-    val res = LocalContext.current.resources
-    var teams by remember { mutableStateOf<List<TeamLite>>(emptyList()) }
-    var teamId by rememberSaveable { mutableStateOf<String?>(null) }
-    var offset by rememberSaveable { mutableIntStateOf(0) }
-    var selected by rememberSaveable { mutableStateOf<Int?>(null) }
-    var events by remember { mutableStateOf<List<CalEvent>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var menu by remember { mutableStateOf(false) }
-    val month = YearMonth.from(OfficeTime.today()).plusMonths(offset.toLong())
-    LaunchedEffect(Unit) { teams = runCatching { api.teams() }.getOrDefault(emptyList()); if (teams.size == 1) teamId = teams[0].id }
-    LaunchedEffect(teams, teamId, offset) {
-        if (teams.isEmpty()) { events = emptyList(); return@LaunchedEffect }
-        val from = month.atDay(1).atStartOfDay(OfficeTime.ZONE).toInstant()
-        val to = month.plusMonths(1).atDay(1).atStartOfDay(OfficeTime.ZONE).toInstant()
-        // teamId is required by the server: "all teams" is one call per team, merged.
-        try { events = AgendaLogic.merge((teamId?.let { listOf(it) } ?: teams.map { it.id }).map { api.calendar(it, from, to) }); error = null }
-        catch (e: ApiError) { error = e.describe(res) }
-    }
-    val byDay = remember(events, month) {
-        events.orEmpty().mapNotNull { e -> AgendaLogic.zoned(e.startsAt)?.toLocalDate()?.takeIf { YearMonth.from(it) == month }?.let { it.dayOfMonth to e } }.groupBy({ it.first }, { it.second })
-    }
-    Column(Modifier.fillMaxSize().background(c.background)) {
-        Header(stringResource(R.string.home_q_calendar), onBack) {
-            if (teams.size > 1) Box {
-                TextButton(onClick = { menu = true }) { Text(teams.firstOrNull { it.id == teamId }?.name ?: stringResource(R.string.ag_all_teams), maxLines = 1) }
-                DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.ag_all_teams)) }, onClick = { menu = false; teamId = null })
-                    teams.forEach { t -> DropdownMenuItem(text = { Text(t.name) }, onClick = { menu = false; teamId = t.id }) }
-                }
-            }
-        }
-        if (events == null && error == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
-        if (error != null) { TabEmpty(Icons.Filled.CalendarMonth, error!!); return@Column }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
-                Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(month).replaceFirstChar(Char::titlecase), fontFamily = DisplayFont,
-                    fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                IconButton(onClick = { offset++; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
-            }
-            Row { DayOfWeek.entries.forEach { d -> Text(d.getDisplayName(TextStyle.SHORT, Locale.getDefault()), fontSize = 10.sp, color = c.mutedFg, modifier = Modifier.weight(1f), textAlign = TextAlign.Center) } }
-            val cells = List(month.atDay(1).dayOfWeek.value - 1) { null } + (1..month.lengthOfMonth()).toList()
-            cells.chunked(7).forEach { week ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    (0 until 7).forEach { i ->
-                        val day = week.getOrNull(i)
-                        Box(Modifier.weight(1f).height(44.dp)) {
-                            if (day != null) {
-                                val on = selected == day; val has = byDay[day].orEmpty().isNotEmpty()
-                                Column(Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(if (on) c.violet else if (has) c.violet.copy(alpha = 0.08f) else Color.Transparent)
-                                    .clickable { selected = day }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Text("$day", fontSize = 13.sp, color = if (on) Color.White else c.foreground, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
-                                    Box(Modifier.size(5.dp).background(if (!has) Color.Transparent else if (on) Color.White else c.violet, CircleShape))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            val sel = selected
-            if (sel == null) Text(stringResource(R.string.ag_pick_date), fontSize = 12.sp, color = c.mutedFg)
-            else {
-                Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()).format(month.atDay(sel)), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
-                val items = byDay[sel].orEmpty()
-                if (items.isEmpty()) Text(stringResource(R.string.ag_no_events), fontSize = 12.sp, color = c.mutedFg)
-                items.forEach { e -> AgendaRow(if (e.isAllDay == true) stringResource(R.string.ag_all_day) else AgendaLogic.hhmm(e.startsAt), e.title, null, e.location) }
-            }
-            Spacer(Modifier.size(16.dp))
         }
     }
 }

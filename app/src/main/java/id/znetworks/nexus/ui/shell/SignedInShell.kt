@@ -48,7 +48,7 @@ import id.znetworks.nexus.feature.admin.OfficesScreen
 import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
-import id.znetworks.nexus.feature.agenda.TeamCalendarScreen
+import id.znetworks.nexus.feature.calendar.CalendarScreen
 import id.znetworks.nexus.feature.people.LeaderboardScreen
 import id.znetworks.nexus.feature.people.MemberProfileScreen
 import id.znetworks.nexus.feature.reports.PersonReportScreen
@@ -217,7 +217,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
             is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/${enc(it)}/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
-            Target.TeamCalendar -> { container.router.consumed(t); nav.navigate("team-calendar") }
+            is Target.Calendar -> {
+                container.router.consumed(t)
+                nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task)) { launchSingleTop = true }
+            }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
@@ -297,7 +300,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenSettings = { goTab(Tab.MORE) },
                     // Quick actions built in the app open here; the rest on the web until built.
                     onOpenGideon = { nav.navigate("gideon") },
-                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar" -> nav.navigate("team-calendar"); else -> openWeb(context, it) } },
+                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar", "/calendar" -> nav.navigate("calendar"); else -> openWeb(context, it) } },
                 )
             }
             composable("account") {
@@ -345,7 +348,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("leaderboard") { LeaderboardScreen(onBack = { nav.popBackStack() }, onOpenPerson = { nav.navigate("profile/$it") }) }
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
-            composable("team-calendar") { TeamCalendarScreen(onBack = { nav.popBackStack() }) }
+            // The master Calendar; `team-calendar` stays as an alias for old links and shortcuts.
+            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}",
+                arguments = listOf("date", "view", "lens", "focus", "scope", "task").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
+                val a = e.arguments
+                CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") }, onOpenMyMission = { goTab(Tab.TASKS) },
+                    date = a?.getString("date"), view = a?.getString("view"), lens = a?.getString("lens"), focus = a?.getString("focus"), scope = a?.getString("scope"), task = a?.getString("task"))
+            }
+            composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") }, onOpenMyMission = { goTab(Tab.TASKS) }) }
             composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
             composable("admin") {
                 ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
@@ -461,6 +471,7 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
     val company = rememberIsCompany() == true
+    val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
     // Control Room is drawn for MANAGER and above only (the server re-checks every call).
     val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
     Column(Modifier.fillMaxSize().background(c.background)) {
@@ -472,7 +483,8 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
                 MoreItem(R.string.mt_messages, Icons.Filled.Forum, c.blue) { open("messages") },
                 if (company) MoreItem(R.string.mt_threads, Icons.Filled.ChatBubble, c.violetText) { open("threads") } else null,
                 MoreItem(R.string.mt_submissions, Icons.Filled.Inbox, c.warning) { open("submissions") },
-                MoreItem(R.string.mt_calendar, Icons.Filled.CalendarMonth, c.violetText) { open("team-calendar") },
+                // The master Calendar; the server's flags.calendar hides the entry.
+                if (calendarOn) MoreItem(R.string.mt_calendar, Icons.Filled.CalendarMonth, c.violetText) { open("calendar") } else null,
                 MoreItem(R.string.mt_rooms, Icons.Filled.MeetingRoom, c.coral) { open("rooms") },
             ))
             MoreSection(stringResource(R.string.more_sec_missions), listOf(
@@ -647,3 +659,9 @@ private fun TabLabel(text: String) = androidx.compose.foundation.text.BasicText(
     style = androidx.compose.material3.LocalTextStyle.current.copy(color = androidx.compose.material3.LocalContentColor.current),
     autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
 )
+
+/** `calendar?date=…`, with only the arguments that are set (each one encoded). */
+internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null): String {
+    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task).filter { it.second != null }
+    return if (args.isEmpty()) "calendar" else "calendar?" + args.joinToString("&") { (k, v) -> "$k=${android.net.Uri.encode(v)}" }
+}

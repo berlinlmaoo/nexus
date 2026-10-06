@@ -74,6 +74,11 @@ class UiPreviewActivity : ComponentActivity() {
                             id.znetworks.nexus.feature.admin.orgchart.ChartCanvas(tree, mode, if (screen == "org-pats") pats else null, 0,
                                 androidx.compose.ui.Modifier.fillMaxSize(), onCard = {}, onPerson = {})
                         }
+                        "cal-month", "cal-person", "cal-people", "cal-filters", "cal-tablet" -> {
+                            val vm: id.znetworks.nexus.feature.calendar.CalendarViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                            val st = androidx.compose.runtime.remember { calState(screen) }
+                            id.znetworks.nexus.feature.calendar.CalendarPreviewLayout(st, vm, tablet = screen == "cal-tablet", filters = screen == "cal-filters")
+                        }
                         "pdf" -> id.znetworks.nexus.ui.components.PdfPages(samplePdf()) {}
                         else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {})
                     }
@@ -105,5 +110,23 @@ class UiPreviewActivity : ComponentActivity() {
         }
         f.outputStream().use { doc.writeTo(it) }; doc.close()
         return f
+    }
+
+    /** A Calendar state from the server golden files (18 Sep: BoD; 3 Oct: staff, Finance masked), at 5 Oct 12:00 WIB. */
+    private fun calState(screen: String): id.znetworks.nexus.feature.calendar.CalState {
+        val j = id.znetworks.nexus.core.net.NexusJson
+        val structure0 = j.decodeFromString(id.znetworks.nexus.feature.calendar.CalStructure.serializer(),
+            assets.open("calendar/structure.json").bufferedReader().readText().trim().let { "{\"access\":\"all\",${it.substring(1)}" })
+        val gerald = structure0.people.first { it.name == "Geraldo Valentino" }
+        val structure = structure0.copy(me = id.znetworks.nexus.feature.calendar.CalMe(gerald.userId, gerald.role, gerald.homeUnitIds))
+        val sep = screen == "cal-person" || screen == "cal-people"
+        val file = if (sep) "items-2026-09-18.bod.json" else "items-2026-10-03.staff.json"
+        val day = if (sep) "2026-09-18" else "2026-10-03"
+        val body = """{"today":"2026-10-05","now":"2026-10-05T05:00:00.000Z","access":"all","structureVersion":null,"rules":{"overdueWindowDays":14,"urgentDays":3},
+            "items":${assets.open("calendar/$file").bufferedReader().readText()},"people":{},"holidays":[{"day":"2026-10-01","name":"Hari Kesaktian Pancasila"}],"truncated":false}"""
+        val items = j.decodeFromString(id.znetworks.nexus.feature.calendar.CalItems.serializer(), body)
+        return id.znetworks.nexus.feature.calendar.CalState(structure = structure, items = items, loading = false, day = day,
+            view = if (screen == "cal-people") id.znetworks.nexus.feature.calendar.CalView.PEOPLE else id.znetworks.nexus.feature.calendar.CalView.MONTH,
+            lens = if (screen == "cal-person") id.znetworks.nexus.feature.calendar.CalLens.PERSON else id.znetworks.nexus.feature.calendar.CalLens.DIVISION)
     }
 }

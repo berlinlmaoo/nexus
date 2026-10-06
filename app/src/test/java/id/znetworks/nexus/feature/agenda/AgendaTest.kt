@@ -13,9 +13,4 @@ class AgendaTest {
         assertEquals(LocalDate.of(2026, 9, 29), AgendaLogic.byDay(b, past = true).first().first)
         assertEquals("09:00", AgendaLogic.hhmm("2026-09-28T02:00:00Z"))
     }
-
-    @Test fun teamsMergeWithoutDuplicates() {
-        val m = AgendaLogic.merge(listOf(listOf(CalEvent("a", startsAt = "2026-09-02T00:00:00Z"), CalEvent("b", startsAt = "2026-09-01T00:00:00Z")), listOf(CalEvent("a", startsAt = "2026-09-02T00:00:00Z"))))
-        assertEquals(listOf("b", "a"), m.map { it.id })
-    }
 }

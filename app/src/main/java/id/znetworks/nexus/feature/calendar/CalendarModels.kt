@@ -172,6 +172,18 @@ data class CalItems(
     fun nowInstant(): Instant? = now?.let { runCatching { Instant.parse(it) }.getOrNull() }
 }
 
+/** `GET /api/calendar/task?id=` — `found` false for a task outside the company workspace or cancelled. */
+@Serializable
+data class CalTaskLookup(
+    val v: Int = 1,
+    private val access: String? = null,
+    val found: Boolean = false,
+    val masked: Boolean = false,
+    val canEdit: Boolean = false,
+    val editProjectId: String? = null,
+    val projectId: String? = null,
+) { val accessLevel get() = CalAccess.of(access) }
+
 /** One widget/Watch entry of `/api/calendar/glance`. */
 @Serializable
 data class GlanceEntry(

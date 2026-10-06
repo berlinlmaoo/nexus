@@ -73,4 +73,13 @@ class LinksTest {
         assertEquals(Target.ResetPassword("a@z.id", invited = true), Links.parse("/forgot-password?email=a@z.id&invited=1"))
         assertEquals(Target.ResetPassword("a@z.id", invited = false), Links.parse("/forgot-password?email=a@z.id"))
     }
+
+    // Calendar phase 3: /calendar carries the web's state; /master-calendar is the old page (booking → Room booking).
+    @Test fun calendarLinks() {
+        assertEquals(Target.Calendar("2026-10-03", null, "person", null, null, null), Links.parse("/calendar?date=2026-10-03&lens=person"))
+        assertEquals(Target.Calendar(task = "cmx1", view = "people"), Links.parse("https://nexus.znetworks.id/calendar?view=people&task=cmx1"))
+        assertEquals(Target.Calendar(), Links.parse("/calendar"))
+        assertEquals(Target.Calendar("2026-10-05"), Links.parse("/master-calendar?date=2026-10-05"))
+        assertEquals(Target.RoomBooking, Links.parse("/master-calendar?booking=b1"))
+    }
 }

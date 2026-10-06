@@ -502,7 +502,7 @@ fun MembershipEditor(userId: String, userName: String, ms: UserMemberships?, can
                     }
                 }
             }
-            if (canEdit) Chip("+ " + stringResource(R.string.tm_team_word), null) { dialog = "team" }
+            // No "+ Team": teams are retired (POST /api/teams answers 410 TEAMS_RETIRED); the Bagan IP & Divisi replaced them.
         }
         if (teams.isEmpty() && !canEdit) Text(stringResource(R.string.tm_no_team_yet), fontSize = 11.sp, color = c.mutedFg)
     }

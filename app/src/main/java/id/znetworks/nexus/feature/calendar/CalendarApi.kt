@@ -34,6 +34,13 @@ class CalendarApi(private val api: ApiClient) {
     /** The widgets' / Watch's compact snapshot. */
     suspend fun glance(scope: GlanceScope): Fetched<CalGlance> = fetch("/api/calendar/glance?scope=${scope.wire}", CalGlance.serializer())
 
+    /**
+     * One task by id, for a link to a task that is not in the loaded data: whether it exists for this
+     * caller, is masked (never opened), and whether it opens editable ([CalTaskLookup.canEdit] with
+     * editProjectId) or as a read-only preview.
+     */
+    suspend fun task(id: String): CalTaskLookup = api.get("/api/calendar/task?id=${enc(id)}", CalTaskLookup.serializer())
+
     /** Forget every held response (sign-out, another person). */
     fun clear() = held.clear()
 
