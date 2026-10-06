@@ -333,11 +333,11 @@ private fun Dot(c: Color) {
     Spacer(GlanceModifier.width(1.dp))
 }
 
-/** A bar with its title: done = faded ✓, overdue = red. */
+/** A bar with its title: dim = faded, ✓ only when ticked done (never a calendar-only project), overdue = red. */
 @Composable
 private fun Chip(lc: Context, bar: Bar, faded: Float, fontSize: Float = 7f, lines: Int = 1) {
     val c = tint(bar.color)
-    val text = (if (bar.dim) "✓ " else "") + title(lc, bar)
+    val text = (if (bar.done) "✓ " else "") + title(lc, bar)
     Row(GlanceModifier.fillMaxWidth().padding(bottom = 1.dp).cornerRadius(2.dp).background(cp(c.copy(alpha = if (bar.dim) 0.10f * faded else 0.22f * faded))),
         verticalAlignment = Alignment.CenterVertically) {
         Box(GlanceModifier.width(2.dp).height((fontSize * 1.5f * lines).dp).background(cp(if (bar.overdue == Overdue.RECENT) RED else c.copy(alpha = if (bar.dim) 0.4f else 1f)))) {}

@@ -128,6 +128,14 @@ class CalendarGlanceTest {
         assertEquals(Overdue.NONE, g.entryOverdue(item("a03"), "2026-10-20", "00:00", 14))
     }
 
+    @Test fun tickOnlyForDoneNotForCalendarOnlyProjects() {
+        val bars = CalendarGlance.monthView(me, mon, 9).cells.flatMap { it.bars.bars }
+        val a03 = bars.first { it.key == "a03" } // done
+        assertTrue(a03.dim); assertTrue(a03.done)
+        val a09 = bars.first { it.key == "a09" } // status-less project: faded, no ✓
+        assertTrue(a09.dim); assertFalse(a09.done)
+    }
+
     @Test fun comingUp() {
         assertEquals(listOf("a05", "a06", "a08", "a10"), keys(CalendarGlance.upcoming(me, mon, 4).rows))
         assertEquals(listOf("a06", "a08"), keys(CalendarGlance.upcoming(me, nows.getValue("mon-2359"), 2).rows))

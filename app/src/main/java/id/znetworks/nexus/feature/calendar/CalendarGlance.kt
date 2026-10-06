@@ -103,16 +103,20 @@ object CalendarGlance {
         }
     }
 
-    /** What a widget draws for one task. [id] and [title] are null when masked: the row opens the day. */
+    /**
+     * What a widget draws for one task. [id] and [title] are null when masked: the row opens the day.
+     * [dim] = done or a status-less project (drawn faded); [done] = ticked done only (the ✓ — a
+     * calendar-only project never gets one).
+     */
     @Serializable
     data class Bar(
         val key: String, val id: String?, val title: String?, val day: String?, val time: String?, val color: String,
-        val project: String?, val priority: String?, val dim: Boolean, val masked: Boolean, val overdue: Overdue,
+        val project: String?, val priority: String?, val dim: Boolean, val done: Boolean, val masked: Boolean, val overdue: Overdue,
     )
 
     private fun bar(e: GlanceEntry, day: String, hm: String, windowDays: Int) = Bar(
         key = entryKey(e), id = e.id, title = e.t, day = e.day, time = e.time, color = e.c, project = e.p, priority = e.prio,
-        dim = !entryOpen(e), masked = e.m, overdue = entryOverdue(e, day, hm, windowDays),
+        dim = !entryOpen(e), done = e.done && !e.ns, masked = e.m, overdue = entryOverdue(e, day, hm, windowDays),
     )
 
     // ── Days ──
