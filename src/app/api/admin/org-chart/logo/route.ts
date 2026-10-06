@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { randomBytes } from "crypto"
+import sharp from "sharp"
 import prisma from "@/lib/prisma"
 import { findUnit, orgChartGuard } from "@/lib/org-chart"
 
@@ -32,9 +33,22 @@ export async function POST(req: NextRequest) {
     if (!file || typeof file === "string") return NextResponse.json({ error: "Pilih file logonya." }, { status: 400 })
     if (file.size === 0) return NextResponse.json({ error: "File kosong." }, { status: 400 })
     if (file.size > MAX_SIZE) return NextResponse.json({ error: "Logo maksimal 2 MB." }, { status: 413 })
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const ext = sniff(buffer)
+    const raw = Buffer.from(await file.arrayBuffer())
+    const ext = sniff(raw)
     if (!ext) return NextResponse.json({ error: "Logo harus PNG, JPG, atau WebP." }, { status: 415 })
+    // A logo is drawn at 20-120 px, but uploads arrive at up to 9000 px: every screen that showed one
+    // decoded tens of megapixels (Impeccable audit, 6 Oct 2026). Kept within 1024 px, same format and
+    // alpha; the smaller of the two files is stored, so a photo-like PNG never grows.
+    let buffer: Buffer = raw
+    try {
+      const fitted = await sharp(raw)
+        .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+        .toFormat(ext === "jpg" ? "jpeg" : ext, ext === "png" ? { compressionLevel: 9 } : { quality: 88 })
+        .toBuffer()
+      if (fitted.length < raw.length) buffer = fitted
+    } catch {
+      // Not decodable by sharp although the signature matched: store it as it came.
+    }
 
     const dir = path.join(process.cwd(), "public", "uploads", "attachments", "org-units")
     await mkdir(dir, { recursive: true })
