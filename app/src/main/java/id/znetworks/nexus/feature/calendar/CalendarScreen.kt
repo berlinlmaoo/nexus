@@ -649,7 +649,9 @@ internal fun Choice(options: List<String>, selected: Int, modifier: Modifier = M
         options.forEachIndexed { i, label ->
             SegmentedButton(selected = i == selected, onClick = { onPick(i) }, enabled = enabled(i), colors = colors,
                 shape = SegmentedButtonDefaults.itemShape(i, options.size)) {
-                Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                // One line that shrinks at large font sizes rather than breaking a word ("Everyon/e") (audit 2 #6).
+                Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 14.sp, stepSize = 0.5.sp))
             }
         }
     }
@@ -726,7 +728,8 @@ internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, toda
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clearAndSetSemantics {}) {
             java.time.DayOfWeek.entries.forEach { w ->
-                Text(w.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(Locale.getDefault()), style = MicroLabel,
+                Text(w.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(Locale.getDefault()), style = MicroLabel, maxLines = 1, softWrap = false,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
                     color = if (w == java.time.DayOfWeek.SUNDAY) c.dangerText else c.mutedFg, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }

@@ -95,6 +95,14 @@ private fun quadrantTitle(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal
 /** Berlin: the names stay; "Mendesak" and "Suatu hari" carry a short note of what is in them. */
 private fun quadrantNote(q: Quadrant) = when (q) { Quadrant.ACT -> R.string.wcal_q_act_note; Quadrant.LATER -> R.string.wcal_q_later_note; else -> null }
 private fun quadrantEmpty(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal_q_do_empty; Quadrant.PLAN -> R.string.wcal_q_plan_empty; Quadrant.ACT -> R.string.wcal_q_act_empty; Quadrant.LATER -> R.string.wcal_q_later_empty }
+/**
+ * Widget text grows with the system font size up to 1.3×; a widget's cells and rows have a fixed size, so
+ * beyond that its grids stop being readable — larger text belongs to the app (audit 2 #6).
+ */
+@Volatile private var fontFactor = 1f
+private fun fs(sp: Float) = (sp * fontFactor).sp
+private const val WIDGET_MAX_FONT_SCALE = 1.3f
+
 /** Night colours for the task colours (WidgetHues), from the Calendar's cached structure of the person signed in. */
 @Volatile private var darkOf: Map<String, String> = emptyMap()
 /** A task colour as a day/night pair with the same alpha in both (audit 2 #10). */
@@ -197,6 +205,8 @@ abstract class CalendarWidget(private val kind: CalWidgetKind) : GlanceAppWidget
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrDefault(AppWidgetManager.INVALID_APPWIDGET_ID)
         val lc = CalendarWidgets.localized(context)
+        val scale = context.resources.configuration.fontScale.coerceAtLeast(1f)
+        fontFactor = minOf(scale, WIDGET_MAX_FONT_SCALE) / scale
         val data = dataFor(context, lc, CalendarWidgetPrefs.scope(context, appWidgetId))
         // The Bagan's dark colours, as the app shows them (audit 2 #10).
         val uid = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
@@ -323,10 +333,10 @@ private fun Root(lc: Context, kind: CalWidgetKind, data: WidgetData) {
     val base = widgetRoot().padding(10.dp)
     when (data) {
         is WidgetData.Message -> Column(base.clickable(open(lc, CalendarWidgetLinks.calendar(null))), verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.CenterHorizontally) {
-            kind.quadrant?.let { Text(lc.getString(quadrantTitle(it)), maxLines = 1, style = TextStyle(color = quadrantText(it), fontSize = 13.sp, fontWeight = FontWeight.Bold)); Spacer(GlanceModifier.height(6.dp)) }
-            Text("NEXUS", style = TextStyle(color = fg(), fontSize = 13.sp, fontWeight = FontWeight.Bold))
+            kind.quadrant?.let { Text(lc.getString(quadrantTitle(it)), maxLines = 1, style = TextStyle(color = quadrantText(it), fontSize = fs(13f), fontWeight = FontWeight.Bold)); Spacer(GlanceModifier.height(6.dp)) }
+            Text("NEXUS", style = TextStyle(color = fg(), fontSize = fs(13f), fontWeight = FontWeight.Bold))
             Spacer(GlanceModifier.height(4.dp))
-            Text(data.text, maxLines = 3, style = TextStyle(color = muted(), fontSize = 12.sp, textAlign = TextAlign.Center))
+            Text(data.text, maxLines = 3, style = TextStyle(color = muted(), fontSize = fs(12f), textAlign = TextAlign.Center))
         }
         is WidgetData.Ready -> Column(base) {
             Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
@@ -349,7 +359,7 @@ private fun Footer(lc: Context, d: WidgetData.Ready) {
     val text = scopeLabel(lc, d.saved.snapshot.scope) + " · " + if (d.stale) lc.getString(R.string.wcal_stale) else lc.getString(R.string.wcal_updated, time)
     // Not a link: a 10 sp line is no target (audit 2 #5); the header and the cells open the Calendar.
     Text(text, maxLines = 1, modifier = GlanceModifier.fillMaxWidth().padding(top = 4.dp),
-        style = TextStyle(color = if (d.stale) RED_TEXT else muted(), fontSize = 10.sp))
+        style = TextStyle(color = if (d.stale) RED_TEXT else muted(), fontSize = fs(10f)))
 }
 
 private enum class Detail { DOTS, BARS, TITLES }
@@ -367,8 +377,8 @@ private fun MonthWidget(lc: Context, d: WidgetData.Ready) {
     val m = CalendarGlance.monthView(d.saved.snapshot, d.nowMs, 2)
     Column(GlanceModifier.fillMaxSize()) {
         Row(GlanceModifier.fillMaxWidth().clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))), verticalAlignment = Alignment.CenterVertically) {
-            Text(monthTitle(lc, m.today), maxLines = 1, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = fg(), fontSize = 14.sp, fontWeight = FontWeight.Bold))
-            if (detail != Detail.DOTS) Text(lc.getString(R.string.wcal_year, m.year.day, m.year.percent), maxLines = 1, style = TextStyle(color = muted(), fontSize = 10.sp))
+            Text(monthTitle(lc, m.today), maxLines = 1, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = fg(), fontSize = fs(14f), fontWeight = FontWeight.Bold))
+            if (detail != Detail.DOTS) Text(lc.getString(R.string.wcal_year, m.year.day, m.year.percent), maxLines = 1, style = TextStyle(color = muted(), fontSize = fs(10f)))
         }
         Spacer(GlanceModifier.height(4.dp))
         // Dots: cells of ~23 dp are no targets (audit 2 #5): the whole grid is one, opening today in the Calendar.
@@ -388,7 +398,7 @@ private fun MonthGrid(lc: Context, m: CalendarGlance.MonthView, detail: Detail, 
     Column(modifier) {
         Row(GlanceModifier.fillMaxWidth()) {
             (0 until 7).forEach { k ->
-                Text(names[k], modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = if (k == 6) RED_TEXT else muted(), fontSize = 10.sp, textAlign = TextAlign.Center))
+                Text(names[k], maxLines = 1, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = if (k == 6) RED_TEXT else muted(), fontSize = fs(10f), textAlign = TextAlign.Center))
             }
         }
         (0 until 6).forEach { w ->
@@ -415,13 +425,13 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
         Row(verticalAlignment = Alignment.CenterVertically) {
             // One line, no fixed box: at large font sizes the number grows instead of wrapping; the disc only behind today (audit 2 #6).
             val number = b.day.takeLast(2).trimStart('0')
-            val style = TextStyle(color = numberColor, fontSize = 10.sp, fontWeight = if (b.today) FontWeight.Bold else FontWeight.Medium)
+            val style = TextStyle(color = numberColor, fontSize = fs(10f), fontWeight = if (b.today) FontWeight.Bold else FontWeight.Medium)
             if (b.today) Box(GlanceModifier.cornerRadius(if (compact) 7.dp else 9.dp).background(GlanceTheme.colors.primary).padding(horizontal = 3.dp, vertical = 1.dp)) {
                 Text(number, maxLines = 1, style = style)
             } else Text(number, maxLines = 1, style = style)
             if (b.overdue && detail != Detail.DOTS) Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(cp(RED))) {}
             // Bars mode has no room under the bars: "+N" sits beside the number.
-            if (detail != Detail.DOTS && b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = 10.sp))
+            if (detail != Detail.DOTS && b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = fs(10f)))
         }
         when (detail) {
             Detail.DOTS -> Row {
@@ -455,7 +465,7 @@ private fun Chip(lc: Context, bar: Bar, faded: Float, lines: Int = 1) {
         verticalAlignment = Alignment.CenterVertically) {
         Box(GlanceModifier.width(2.dp).height((14 * lines).dp).background(if (bar.overdue == Overdue.RECENT) cp(RED) else hue(bar.color, if (bar.dim) 0.4f else 1f))) {}
         Text(text, maxLines = lines, modifier = GlanceModifier.padding(start = 2.dp),
-            style = TextStyle(color = if (bar.dim) muted() else fg(), fontSize = 10.sp))
+            style = TextStyle(color = if (bar.dim) muted() else fg(), fontSize = fs(10f)))
     }
 }
 
@@ -469,19 +479,19 @@ private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
     val today = CalendarGlance.wibClock(d.nowMs).day
     Row(GlanceModifier.fillMaxSize()) {
         Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
-            Text(monthTitle(lc, m.today), maxLines = 1, modifier = GlanceModifier.clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))), style = TextStyle(color = fg(), fontSize = 12.sp, fontWeight = FontWeight.Bold))
+            Text(monthTitle(lc, m.today), maxLines = 1, modifier = GlanceModifier.clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))), style = TextStyle(color = fg(), fontSize = fs(12f), fontWeight = FontWeight.Bold))
             // The mini month is one target (its cells are far below 48 dp, audit 2 #5): today in the Calendar.
             MonthGrid(lc, m, Detail.DOTS, compact = true, scope = scope, cellTargets = false,
                 modifier = GlanceModifier.fillMaxWidth().defaultWeight().clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))))
         }
         Spacer(GlanceModifier.width(10.dp))
         Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
-            Text(lc.getString(R.string.wcal_coming_up), maxLines = 1, style = TextStyle(color = fg(), fontSize = 12.sp, fontWeight = FontWeight.Bold))
+            Text(lc.getString(R.string.wcal_coming_up), maxLines = 1, style = TextStyle(color = fg(), fontSize = fs(12f), fontWeight = FontWeight.Bold))
             Spacer(GlanceModifier.height(4.dp))
-            if (up.rows.isEmpty()) Text(lc.getString(R.string.wcal_nothing_up, scopeLabel(lc, scope)), style = TextStyle(color = muted(), fontSize = 12.sp))
+            if (up.rows.isEmpty()) Text(lc.getString(R.string.wcal_nothing_up, scopeLabel(lc, scope)), style = TextStyle(color = muted(), fontSize = fs(12f)))
             up.rows.forEach { b -> ListRow(lc, b, today, scope, showProject = false, compact = true) }
             if (up.more > 0) Text(lc.resources.getQuantityString(R.plurals.cal_more_n, up.more, up.more), maxLines = 1,
-                modifier = GlanceModifier.fillMaxWidth().padding(vertical = 8.dp).clickable(open(lc, CalendarWidgetLinks.day(today, scope))), style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Medium))
+                modifier = GlanceModifier.fillMaxWidth().padding(vertical = 8.dp).clickable(open(lc, CalendarWidgetLinks.day(today, scope))), style = TextStyle(color = GlanceTheme.colors.primary, fontSize = fs(11f), fontWeight = FontWeight.Medium))
         }
     }
 }
@@ -512,9 +522,9 @@ private fun WeekWidget(lc: Context, d: WidgetData.Ready) {
     val names = lc.resources.getStringArray(R.array.wcal_weekdays)
     Column(GlanceModifier.fillMaxSize()) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(lc.getString(R.string.wcal_week_name), maxLines = 1, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = fg(), fontSize = 13.sp, fontWeight = FontWeight.Bold))
+            Text(lc.getString(R.string.wcal_week_name), maxLines = 1, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = fg(), fontSize = fs(13f), fontWeight = FontWeight.Bold))
             val f = DateTimeFormatter.ofPattern("d MMM", locale(lc))
-            Text(f.format(LocalDate.parse(week.first().day)) + " – " + f.format(LocalDate.parse(week.last().day)), maxLines = 1, style = TextStyle(color = muted(), fontSize = 10.sp))
+            Text(f.format(LocalDate.parse(week.first().day)) + " – " + f.format(LocalDate.parse(week.last().day)), maxLines = 1, style = TextStyle(color = muted(), fontSize = fs(10f)))
         }
         Spacer(GlanceModifier.height(4.dp))
         Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
@@ -524,13 +534,13 @@ private fun WeekWidget(lc: Context, d: WidgetData.Ready) {
                     .semantics { contentDescription = dayDescription(lc, day) },
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     val red = day.sunday || day.holiday != null
-                    Text(names[k], maxLines = 1, style = TextStyle(color = if (red) RED_TEXT else muted(), fontSize = 10.sp))
+                    Text(names[k], maxLines = 1, style = TextStyle(color = if (red) RED_TEXT else muted(), fontSize = fs(10f)))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(day.day.takeLast(2).trimStart('0'), style = TextStyle(color = if (red) RED_TEXT else fg(), fontSize = 12.sp, fontWeight = FontWeight.Bold))
+                        Text(day.day.takeLast(2).trimStart('0'), style = TextStyle(color = if (red) RED_TEXT else fg(), fontSize = fs(12f), fontWeight = FontWeight.Bold))
                         if (day.overdue) Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(cp(RED))) {}
                     }
                     day.bars.forEach { Chip(lc, it, 1f, lines = 2) }
-                    if (day.more > 0) Text("+${day.more}", style = TextStyle(color = muted(), fontSize = 10.sp))
+                    if (day.more > 0) Text("+${day.more}", style = TextStyle(color = muted(), fontSize = fs(10f)))
                 }
             }
         }
@@ -555,15 +565,15 @@ private fun QuadrantWidget(lc: Context, d: WidgetData.Ready, q: Quadrant) {
                 Box(GlanceModifier.size(8.dp).cornerRadius(4.dp).background(cp(quadrantHue(q)))) {}
                 Spacer(GlanceModifier.width(6.dp))
                 // Two lines: "Penting dan mendesak" fits at 2×2 in Indonesian too (audit 2 #28).
-                Text(lc.getString(quadrantTitle(q)), maxLines = 2, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = quadrantText(q), fontSize = 13.sp, fontWeight = FontWeight.Bold))
-                Text(list.count.toString(), style = TextStyle(color = quadrantText(q), fontSize = 16.sp, fontWeight = FontWeight.Bold))
+                Text(lc.getString(quadrantTitle(q)), maxLines = 2, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = quadrantText(q), fontSize = fs(13f), fontWeight = FontWeight.Bold))
+                Text(list.count.toString(), style = TextStyle(color = quadrantText(q), fontSize = fs(16f), fontWeight = FontWeight.Bold))
             }
-            if (note != null) Text(lc.getString(note), maxLines = 1, style = TextStyle(color = muted(), fontSize = 10.sp))
+            if (note != null) Text(lc.getString(note), maxLines = 1, style = TextStyle(color = muted(), fontSize = fs(10f)))
         }
         // Empty is an outcome, with the scope it is about (audit #44).
-        if (list.rows.isEmpty()) Text(lc.getString(quadrantEmpty(q), scopeLabel(lc, scope)), maxLines = 3, style = TextStyle(color = muted(), fontSize = 12.sp))
+        if (list.rows.isEmpty()) Text(lc.getString(quadrantEmpty(q), scopeLabel(lc, scope)), maxLines = 3, style = TextStyle(color = muted(), fontSize = fs(12f)))
         list.rows.take(fit).forEach { ListRow(lc, it, today, scope, showProject = wide, compact = false) }
         if (list.count > fit) Text(lc.resources.getQuantityString(R.plurals.cal_more_n, list.count - fit, list.count - fit), maxLines = 1,
-            modifier = GlanceModifier.fillMaxWidth().padding(vertical = 8.dp).clickable(all), style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+            modifier = GlanceModifier.fillMaxWidth().padding(vertical = 8.dp).clickable(all), style = TextStyle(color = GlanceTheme.colors.primary, fontSize = fs(12f), fontWeight = FontWeight.Medium))
     }
 }

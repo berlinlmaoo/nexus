@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -82,9 +84,13 @@ class UiPreviewActivity : ComponentActivity() {
                             // The real shell puts an 80 dp NavigationBar under the Calendar on phones: keep that space here too (audit 2 #18).
                             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
                                 val phone = maxWidth < 600.dp
-                                androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-                                    Box(Modifier.weight(1f)) { id.znetworks.nexus.feature.calendar.CalendarPreviewLayout(st, vm, filters = screen == "cal-filters") }
-                                    if (phone) Box(Modifier.fillMaxWidth().height(80.dp).background(Nx.colors.card))
+                                // ...and an 80 dp NavigationRail beside it from 600 dp.
+                                androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+                                    if (!phone) Box(Modifier.fillMaxHeight().width(80.dp).background(Nx.colors.card))
+                                    androidx.compose.foundation.layout.Column(Modifier.weight(1f).fillMaxHeight()) {
+                                        Box(Modifier.weight(1f)) { id.znetworks.nexus.feature.calendar.CalendarPreviewLayout(st, vm, filters = screen == "cal-filters") }
+                                        if (phone) Box(Modifier.fillMaxWidth().height(80.dp).background(Nx.colors.card))
+                                    }
                                 }
                             }
                         }

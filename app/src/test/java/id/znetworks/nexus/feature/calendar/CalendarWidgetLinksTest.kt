@@ -60,6 +60,8 @@ class CalendarWidgetLinksTest {
         // Widget text is at least 10 sp (audit #14).
         val src = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/widget/CalendarWidgets.kt").readText()
         assertFalse(Regex("""fontSize = [0-9]\.sp""").containsMatchIn(src))
+        assertFalse(Regex("""fontSize = fs\([0-9]f\)""").containsMatchIn(src))
+        assertTrue("WIDGET_MAX_FONT_SCALE = 1.3f" in src)
         // Audit 2 #27: the system background element and radius; #6: day numbers never wrap.
         assertTrue("appWidgetBackground()" in src && "system_app_widget_background_radius" in src)
         assertFalse("GlanceModifier.size(circle)" in src)
