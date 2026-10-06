@@ -1,13 +1,14 @@
 import SwiftUI
 
 // The watch is always dark, so every colour here is the Calendar's dark one: a unit's `colorDark`,
-// and the web's dark tokens for the status glyphs (components/calendar/bits.tsx).
-private let wcalAccent = Color(red: 0x7B / 255, green: 0x68 / 255, blue: 0xEE / 255)
+// and the web's dark tokens for the status glyphs (components/calendar/bits.tsx). Today's violet and
+// overdue's red are the shared palette's (GlanceColor), so the wrist names today in the app's colour.
+private let wcalAccent = wcalColor(hex: GlanceColor.violetText.dark)
 private let wcalNeutral = wcalColor(hex: "#94A3B8")
 private let wcalOpen = wcalColor(hex: "#9FB0C8")
 private let wcalStale = wcalColor(hex: "#5D6878")
 private let wcalGreen = wcalColor(hex: "#10B981")
-private let wcalRed = wcalColor(hex: "#FB7185")
+private let wcalRed = wcalColor(hex: GlanceColor.red.dark)
 
 /// "#rrggbb" (also "#rgb" and "#rrggbbaa", alpha ignored) as the Calendar API sends unit colours.
 /// The phone's version lives in Theme.swift, which the watch does not compile (UIKit appearance).
@@ -34,12 +35,25 @@ private func wcalUnitColor(_ unitId: String, _ ix: CalIndex) -> Color {
 /// A WIB day ("YYYY-MM-DD") in the phone's language: "Mon 6" / "Sen 6". Formatted in UTC because
 /// `CalDays.date` is that day's UTC midnight, so the day can never shift through a time zone.
 private func wcalDayLabel(_ day: String, format: String) -> String {
+    let locale = WatchLang.locale
+    let key = locale.identifier + "|" + format
+    if let f = wcalFormatters[key] { return f.string(from: CalDays.date(day)) }
     let f = DateFormatter()
     f.calendar = Calendar(identifier: .gregorian)
-    f.locale = WatchLang.locale
+    f.locale = locale
     f.timeZone = TimeZone(identifier: "UTC")
     f.dateFormat = format
+    wcalFormatters[key] = f
     return f.string(from: CalDays.date(day))
+}
+
+/// The formatters `wcalDayLabel` made, one per language and format: every row used to set one up
+/// (impeccable audit, 6 Oct 2026). Read and written from the views' main thread only.
+private var wcalFormatters: [String: DateFormatter] = [:]
+
+/// "5 tasks" / "5 tugas", for VoiceOver.
+private func wcalTaskCount(_ n: Int) -> String {
+    n == 1 ? wt("1 task", "1 tugas") : wt("\(n) tasks", "\(n) tugas")
 }
 
 /// "19.00" in Indonesian, "19:00" in English (the server sends "HH:MM", WIB).
@@ -91,7 +105,10 @@ struct CalendarView: View {
                         Button { cycleScope() } label: {
                             Image(systemName: scopeIcon(effectiveScope))
                         }
-                        .accessibilityLabel(scopeLabel(effectiveScope))
+                        .accessibilityLabel(wt("Scope", "Cakupan"))
+                        .accessibilityValue(scopeLabel(effectiveScope))
+                        .accessibilityHint(wt("Switches between Mine, My division and Everyone",
+                                              "Beralih antara Saya, Divisi saya, dan Semua orang"))
                     }
                 }
             }
@@ -101,6 +118,9 @@ struct CalendarView: View {
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let now = WatchLang.isIndonesian
             if now != indonesian { indonesian = now }
+            // A complication's link (`nexus://calendar?scope=me`) saves its scope; follow it.
+            let saved = Self.savedScope()
+            if saved != scope { scope = saved }
         }
     }
 
@@ -212,6 +232,15 @@ struct CalendarView: View {
         CalScope(rawValue: UserDefaults.standard.string(forKey: scopeKey) ?? "") ?? .all
     }
 
+    /// A calendar complication's link names the scope it shows (`&scope=me|division|all`). Saved as
+    /// this page's scope, so the tap opens on the tasks the complication drew, not on whatever the
+    /// watch app last showed. Anything else is ignored.
+    static func adoptScope(from url: URL) {
+        let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "scope" }?.value
+        guard let scope = value.flatMap({ CalScope(rawValue: $0.lowercased()) }) else { return }
+        UserDefaults.standard.set(scope.rawValue, forKey: scopeKey)
+    }
+
     /// Mine → My division → Everyone → Mine. My division is skipped without a card in the Bagan.
     private func cycleScope() {
         let next: CalScope
@@ -228,7 +257,7 @@ struct CalendarView: View {
         switch s {
         case .me: return wt("Mine", "Saya")
         case .division: return wt("My division", "Divisi saya")
-        case .all: return wt("Everyone", "Semua")
+        case .all: return wt("Everyone", "Semua orang")
         }
     }
 
@@ -265,23 +294,32 @@ private struct WCalDayRow: View {
                 }
                 if cell.dots.count > 3 {
                     Text(verbatim: "+\(cell.dots.count - 3)")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 4)
             if cell.overdue {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(wcalRed)
-                    .accessibilityLabel(wt("Overdue", "Lewat tenggat"))
             }
             Text(verbatim: "\(cell.count)")
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(cell.count == 0 ? Color.secondary : Color.primary)
         }
         .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
+        // "Mon 6, 5 tasks, overdue" rather than "Mon 6, +2, Overdue, 5".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken)
+    }
+
+    private var spoken: String {
+        var parts = [wcalDayLabel(day, format: "EEEE d MMMM")]
+        if isToday { parts.insert(wt("Today", "Hari ini"), at: 0) }
+        parts.append(wcalTaskCount(cell.count))
+        if cell.overdue { parts.append(wt("overdue", "lewat tenggat")) }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -425,7 +463,7 @@ private struct WCalTaskRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let time = row.item.time {
                 Text(wcalTime(time))
-                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .font(.caption2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
         }

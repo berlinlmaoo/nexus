@@ -7,7 +7,12 @@ import AppIntents
 // its priority and due date put it in. Four widget kinds rather than one with a picker, so each sits
 // in the gallery under its own name and two can stand side by side.
 //
-// Small: the count and the top two. Medium: four. Large: eight, with the project under each title.
+// Small: the count and the top two. Medium: four. Large: eight, with the project under each title —
+// one fewer where a larger reading size or the smallest iPhones leave no room for the last.
+//
+// The names stay (owner's call), but "Urgent" is also a priority in the app, and this list holds the
+// other kind of urgent. So "Urgent" and "Someday" carry a line under the name saying what they hold,
+// and the gallery says it too.
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CalendarListDoWidget: Widget {
@@ -27,14 +32,14 @@ struct CalendarListPlanWidget: Widget {
 struct CalendarListActWidget: Widget {
     var body: some WidgetConfiguration {
         CalendarListConfiguration.make(.act, kind: "NEXUSCalendarListAct", name: "Urgent",
-                                       description: "Due now, normal priority: get them done.")
+                                       description: "Urgent, not high priority: due now, get them done.")
     }
 }
 
 struct CalendarListLaterWidget: Widget {
     var body: some WidgetConfiguration {
         CalendarListConfiguration.make(.later, kind: "NEXUSCalendarListLater", name: "Someday",
-                                       description: "Everything else, tasks without a date included.")
+                                       description: "Not urgent, not high priority: everything else, tasks without a date included.")
     }
 }
 
@@ -44,8 +49,9 @@ enum CalendarListConfiguration {
         AppIntentConfiguration(kind: kind, intent: CalendarScopeIntent.self,
                                provider: CalendarWidgetProvider()) { entry in
             CalendarQuadrantWidgetView(entry: entry, quadrant: quadrant)
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
                 .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(CalendarLink.root)
+                .widgetURL(CalendarLink.calendar(scope: entry.linkScope))
         }
         .configurationDisplayName(name)
         .description(description)
@@ -82,10 +88,15 @@ struct CalendarQuadrantWidgetView: View {
 
     var body: some View {
         if let snapshot = entry.snapshot {
-            CalendarQuadrantList(entry: entry,
-                                 list: CalendarGlance.quadrant(quadrant, snapshot, now: entry.date),
-                                 size: CalendarListSize(family),
-                                 full: mode == .fullColor)
+            let list: GlanceQuadrantList = CalendarGlance.quadrant(quadrant, snapshot, now: entry.date)
+            let size = CalendarListSize(family)
+            let full: Bool = mode == .fullColor
+            // As many rows as the size promises wherever they fit; one fewer where a larger reading
+            // size or the smallest iPhones leave no room for them. "+N more" counts the rest either way.
+            ViewThatFits(in: .vertical) {
+                CalendarQuadrantList(entry: entry, list: list, size: size, full: full)
+                CalendarQuadrantList(entry: entry, list: list, size: size, full: full, limit: size.limit - 1)
+            }
         } else {
             CalendarEmptyView(entry: entry)
         }
@@ -93,15 +104,23 @@ struct CalendarQuadrantWidgetView: View {
 }
 
 struct CalendarQuadrantList: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let entry: CalendarWidgetEntry
     let list: GlanceQuadrantList
     let size: CalendarListSize
     let full: Bool
+    /// Rows to show; the size's own number when nil.
+    var limit: Int? = nil
 
-    private var shown: [GlanceBar] { Array(list.rows.prefix(size.limit)) }
-    private var hidden: Int { max(0, list.count - size.limit) }
-    private var color: Color { full ? CalendarStyle.quadrant(list.quadrant) : Color.primary }
-    private var spacing: CGFloat { size == .small ? 5 : 3 }
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
+    private var rowLimit: Int { max(1, limit ?? size.limit) }
+    private var shown: [GlanceBar] { Array(list.rows.prefix(rowLimit)) }
+    private var hidden: Int { max(0, list.count - rowLimit) }
+    private var color: Color { full ? ink.quadrant(list.quadrant) : Color.primary }
+    /// "Urgent" and "Someday" say under their names what they hold.
+    private var note: String? { GlanceText.quadrantNote(list.quadrant) }
+    private var spacing: CGFloat { size == .small && note == nil ? 5 : 3 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
@@ -122,26 +141,43 @@ struct CalendarQuadrantList: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-                .widgetAccentable()
-            Text(GlanceText.quadrantName(list.quadrant))
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(color)
-                .lineLimit(size == .small ? 2 : 1)
-                .minimumScaleFactor(0.8)
-                .widgetAccentable()
-            if size != .small, let note = entry.scopeNote {
-                Text(note)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 5) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                        .widgetAccentable()
+                        .accessibilityHidden(true)
+                    Text(GlanceText.quadrantName(list.quadrant))
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(color)
+                        .lineLimit(size == .small ? 2 : 1)
+                        .minimumScaleFactor(0.8)
+                        .widgetAccentable()
+                    if size != .small, let scope = entry.scopeNote {
+                        Text(scope)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                if let note {
+                    // Under the name, not under the dot.
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .padding(.leading, 12)
+                }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
             Text(String(list.count))
                 .font(countFont)
                 .monospacedDigit()
+                .accessibilityLabel(GlanceText.taskCount(list.count))
         }
     }
 
@@ -152,7 +188,7 @@ struct CalendarQuadrantList: View {
         if size == .small {
             CalendarQuadrantRow(bar: bar, today: entry.today, stacked: true, showProject: false, full: full)
         } else {
-            Link(destination: CalendarLink.task(bar)) {
+            Link(destination: CalendarLink.task(bar, scope: entry.linkScope)) {
                 CalendarQuadrantRow(bar: bar, today: entry.today, stacked: size == .large, showProject: true, full: full)
             }
         }
@@ -162,17 +198,22 @@ struct CalendarQuadrantList: View {
 /// One task: a colour stripe, the title (with the overdue mark), when it is due and — where there is
 /// room — its project. Stacked on two lines in the small and large sizes, one line in the medium.
 struct CalendarQuadrantRow: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let bar: GlanceBar
     let today: String
     let stacked: Bool
     let showProject: Bool
     let full: Bool
 
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
+
     var body: some View {
         HStack(alignment: .center, spacing: 5) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(CalendarStyle.bar(bar, full: full))
-                .frame(width: 3, height: stacked ? 24 : 13)
+                .fill(ink.bar(bar, full: full))
+                .frame(width: 3, height: stacked ? 26 : 13)
+                .accessibilityHidden(true)
             if stacked {
                 twoLines
             } else {
@@ -181,13 +222,15 @@ struct CalendarQuadrantRow: View {
         }
         // A Link may tint its label like a button; the list's own colours win.
         .foregroundStyle(Color.primary)
+        // One element per task: "Overdue, Upload flyer, Tomorrow · 08:30, PATS x Brand".
+        .accessibilityElement(children: .combine)
     }
 
     private var titleLine: some View {
         HStack(spacing: 3) {
             CalendarOverdueMark(overdue: bar.overdue, full: full)
             Text(GlanceText.title(bar))
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .lineLimit(1)
                 .privacySensitive()
         }
@@ -197,7 +240,7 @@ struct CalendarQuadrantRow: View {
         VStack(alignment: .leading, spacing: 1) {
             titleLine
             Text(detail)
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(dueColor)
                 .lineLimit(1)
         }
@@ -209,13 +252,13 @@ struct CalendarQuadrantRow: View {
             Spacer(minLength: 4)
             if let name = project {
                 Text(name)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .frame(maxWidth: 80, alignment: .trailing)
             }
             Text(CalendarWords.due(bar, today: today))
-                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                .font(.caption2.weight(.medium).monospacedDigit())
                 .foregroundStyle(dueColor)
                 .lineLimit(1)
         }
@@ -231,5 +274,5 @@ struct CalendarQuadrantRow: View {
         return due + " · " + name
     }
 
-    private var dueColor: Color { bar.overdue == .recent && full ? CalendarStyle.red : Color.secondary }
+    private var dueColor: Color { bar.overdue == .recent && full ? ink.red : Color.secondary }
 }

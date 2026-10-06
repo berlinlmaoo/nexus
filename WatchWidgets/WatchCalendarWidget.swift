@@ -203,7 +203,7 @@ struct WatchCalendarWidget: Widget {
                                provider: WatchCalendarProvider()) { entry in
             WatchCalendarView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(URL(string: "nexus://calendar"))
+                .widgetURL(watchCalendarLink(WatchCalendarState(entry)))
         }
         .configurationDisplayName("Calendar")
         .description("What's due next, and how much is left today.")
@@ -218,7 +218,7 @@ struct WatchCalendarRingWidget: Widget {
                                provider: WatchCalendarRingProvider()) { entry in
             WatchCalendarCircularView(state: WatchCalendarState(entry), year: entry.year)
                 .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(URL(string: "nexus://calendar"))
+                .widgetURL(watchCalendarLink(WatchCalendarState(entry)))
         }
         .configurationDisplayName("Calendar progress")
         .description("Today's tasks done, or how far the year has gone.")
@@ -268,6 +268,16 @@ struct WatchCalendarState {
     var shownScope: GlanceScope {
         snapshot.flatMap { GlanceScope(rawValue: $0.scope) } ?? scope
     }
+}
+
+/// Where a tap goes: the Calendar, on the scope the complication shows (`nexus://calendar?scope=me`),
+/// so a "Mine" complication does not open on whatever the watch app last showed.
+func watchCalendarLink(_ state: WatchCalendarState) -> URL? {
+    var c = URLComponents()
+    c.scheme = "nexus"
+    c.host = "calendar"
+    c.queryItems = [URLQueryItem(name: "scope", value: state.shownScope.rawValue)]
+    return c.url ?? URL(string: "nexus://calendar")
 }
 
 /// "19:00" today; "Tomorrow 09:00" / "Thu 8" on another day.
@@ -398,6 +408,7 @@ struct WatchCalendarRow: View {
                 .privacySensitive()
         }
         .lineLimit(1)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -425,6 +436,7 @@ struct WatchCalendarCornerView: View {
             let open: Int = CalendarGlance.inline(s, now: state.now).openToday
             if ring.total > 0 {
                 count(open)
+                    .accessibilityLabel(openLabel(open, ring: ring))
                     .widgetLabel {
                         Gauge(value: Double(ring.done), in: 0...Double(ring.total)) {
                             Text(GlanceText.t("Today", "Hari ini"))
@@ -438,6 +450,7 @@ struct WatchCalendarCornerView: View {
                     }
             } else {
                 count(open)
+                    .accessibilityLabel(GlanceText.t("Nothing due today", "Tidak ada tugas hari ini"))
                     .widgetLabel {
                         Text(GlanceText.t("Nothing today", "Kosong hari ini"))
                     }
@@ -456,6 +469,12 @@ struct WatchCalendarCornerView: View {
         Text(verbatim: "\(n)")
             .font(.system(size: 22, weight: .semibold, design: .rounded).monospacedDigit())
             .widgetAccentable()
+    }
+
+    /// The bare number on the corner, spoken: "3 still to do today, 2 of 5 done".
+    private func openLabel(_ n: Int, ring: GlanceRing) -> String {
+        GlanceText.t("\(n) still to do today, \(ring.done) of \(ring.total) done",
+                     "\(n) belum selesai hari ini, \(ring.done) dari \(ring.total) selesai")
     }
 }
 
@@ -477,6 +496,9 @@ struct WatchCalendarCircularView: View {
             }
             .gaugeStyle(.accessoryCircularCapacity)
             .widgetAccentable()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(GlanceText.t("Year", "Tahun"))
+            .accessibilityValue(String(progress.percent) + "%")
         } else if let s = state.current {
             let ring: GlanceRing = CalendarGlance.todayRing(s, now: state.now)
             // An empty day: an empty ring and "0", rather than a range that starts and ends at zero.
@@ -489,6 +511,11 @@ struct WatchCalendarCircularView: View {
             }
             .gaugeStyle(.accessoryCircularCapacity)
             .widgetAccentable()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(GlanceText.t("Today's tasks", "Tugas hari ini"))
+            .accessibilityValue(ring.total == 0
+                                ? GlanceText.taskCount(0)
+                                : GlanceText.t("\(ring.done) of \(ring.total) done", "\(ring.done) dari \(ring.total) selesai"))
         } else {
             ZStack {
                 AccessoryWidgetBackground()

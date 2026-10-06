@@ -4,13 +4,15 @@ import SwiftUI
 // ─────────────────────────────────────────────────────────────────────────────
 // The small views more than one calendar widget draws: the footer, the empty states, a day number, and
 // a task as a bar. Plain stacks with fixed sizes — a widget is rendered once, ahead of time, and has no
-// second chance to fix a layout that measured itself wrong.
+// second chance to fix a layout that measured itself wrong. Words use text styles (they follow the
+// reading size, within the cap each widget sets); the marks inside a day cell keep fixed sizes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // MARK: - Footer and empty states
 
 /// The last line of a Home Screen widget: "+3 more" on the left when a list was cut short, and on the
-/// right when the snapshot was fetched — or, when it is behind or missing, what to do about it.
+/// right when the snapshot was fetched — or, when it is behind or missing, what to do about it. That
+/// second half is the widget's honesty line, so it never shrinks below the caption size.
 struct CalendarFooter: View {
     let entry: CalendarWidgetEntry
     var leading: String? = nil
@@ -24,16 +26,17 @@ struct CalendarFooter: View {
             Spacer(minLength: 4)
             if entry.freshness != .fresh {
                 Image(systemName: "arrow.clockwise")
+                    .accessibilityHidden(true)
             }
             Text(entry.footer)
                 .lineLimit(entry.freshness == .fresh ? 1 : 2)
-                .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.trailing)
                 .layoutPriority(1)
         }
-        .font(.system(size: 9))
+        .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(1)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -49,6 +52,7 @@ struct CalendarEmptyView: View {
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .widgetAccentable()
+                .accessibilityHidden(true)
             Text(entry.footer)
                 .font(.caption)
                 .multilineTextAlignment(.center)
@@ -76,6 +80,7 @@ struct CalendarAccessoryNotice: View {
         HStack(spacing: 4) {
             Image(systemName: CalendarEmptyView.symbol(entry.freshness))
                 .font(.system(size: 12, weight: .semibold))
+                .accessibilityHidden(true)
             Text(entry.footer)
                 .font(.system(size: 12, weight: .medium))
                 .lineLimit(2)
@@ -86,12 +91,16 @@ struct CalendarAccessoryNotice: View {
 
 // MARK: - Days
 
-/// A day number: on an accent disc for today, red on Sundays and public holidays.
+/// A day number: on a violet disc for today, red on Sundays and public holidays.
 struct CalendarDayBadge: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let day: GlanceDay
     let size: CGFloat
     let fontSize: CGFloat
     let full: Bool
+
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
 
     var body: some View {
         Text(GlanceText.dayNumber(day.day))
@@ -106,7 +115,7 @@ struct CalendarDayBadge: View {
 
     private var numberColor: Color {
         if day.today { return full ? Color.white : Color.primary }
-        if day.sunday || day.holiday != nil { return full ? CalendarStyle.red : Color.secondary }
+        if day.sunday || day.holiday != nil { return full ? ink.red : Color.secondary }
         return Color.primary
     }
 
@@ -114,7 +123,7 @@ struct CalendarDayBadge: View {
     @ViewBuilder private var disc: some View {
         if day.today {
             if full {
-                Circle().fill(CalendarStyle.accent)
+                Circle().fill(ink.todayDisc)
             } else {
                 Circle().stroke(Color.primary, lineWidth: 1.2).widgetAccentable()
             }
@@ -125,18 +134,24 @@ struct CalendarDayBadge: View {
 // MARK: - Tasks
 
 /// A thin bar with no words, for the large month's cells. Done (or in a calendar-only project) is
-/// faded with a small tick; overdue within the window gets a red outline.
+/// faded with a small tick; overdue within the window gets a red outline. Decoration to VoiceOver: the
+/// day cell around it says how many tasks there are and whether any is overdue.
 struct CalendarBarStrip: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let bar: GlanceBar
     let height: CGFloat
     let full: Bool
 
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
+
     var body: some View {
         Capsule()
-            .fill(CalendarStyle.bar(bar, full: full))
+            .fill(ink.bar(bar, full: full))
             .frame(height: height)
             .overlay(alignment: .leading) { tick }
             .overlay { outline }
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder private var tick: some View {
@@ -151,7 +166,7 @@ struct CalendarBarStrip: View {
 
     @ViewBuilder private var outline: some View {
         if bar.overdue == .recent {
-            Capsule().stroke(full ? CalendarStyle.red : Color.primary, lineWidth: 1)
+            Capsule().stroke(full ? ink.overdue : Color.primary, lineWidth: 1)
         }
     }
 }
@@ -160,16 +175,21 @@ struct CalendarBarStrip: View {
 /// iPad month. A tinted wash with a solid stripe rather than a solid fill, so the title stays readable
 /// on any project colour, in light and dark.
 struct CalendarTitledBar: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let bar: GlanceBar
     let height: CGFloat
     let fontSize: CGFloat
     let full: Bool
+
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
 
     var body: some View {
         HStack(spacing: 2) {
             if bar.done {
                 Image(systemName: "checkmark")
                     .font(.system(size: max(5, fontSize - 1), weight: .bold))
+                    .accessibilityLabel(GlanceText.doneLabel)
             }
             Text(GlanceText.title(bar))
                 .font(.system(size: fontSize, weight: .medium))
@@ -185,7 +205,7 @@ struct CalendarTitledBar: View {
         .opacity(bar.dim ? 0.7 : 1)
     }
 
-    private var tint: Color { CalendarStyle.bar(bar, full: full) }
+    private var tint: Color { ink.bar(bar, full: full) }
 
     private var wash: some View {
         ZStack(alignment: .leading) {
@@ -198,27 +218,33 @@ struct CalendarTitledBar: View {
 
     @ViewBuilder private var outline: some View {
         if bar.overdue == .recent {
-            RoundedRectangle(cornerRadius: 2).stroke(full ? CalendarStyle.red : Color.primary, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 2).stroke(full ? ink.overdue : Color.primary, lineWidth: 1)
         }
     }
 }
 
 /// The red mark on an overdue row: filled while it is within the window, a grey ring once it is older.
-/// Shapes as well as colours, so it still reads when iOS tints the widget.
+/// Shapes as well as colours, so it still reads when iOS tints the widget; VoiceOver says which.
 struct CalendarOverdueMark: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let overdue: GlanceOverdue
     let full: Bool
+
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
 
     var body: some View {
         switch overdue {
         case .recent:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(full ? CalendarStyle.red : Color.primary)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(full ? ink.overdue : Color.primary)
+                .accessibilityLabel(GlanceText.overdueLabel(.recent) ?? "")
         case .stale:
             Image(systemName: "exclamationmark.circle")
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(Color.secondary)
+                .accessibilityLabel(GlanceText.overdueLabel(.stale) ?? "")
         case .none:
             EmptyView()
         }

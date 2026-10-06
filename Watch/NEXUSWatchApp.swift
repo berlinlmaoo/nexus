@@ -3,7 +3,8 @@ import SwiftUI
 @main
 struct NEXUSWatchApp: App {
     @State private var auth = WatchAuth.shared
-    /// The page on screen. A calendar complication (`nexus://calendar`) turns to the Calendar.
+    /// The page on screen. A calendar complication (`nexus://calendar?scope=…`) turns to the Calendar,
+    /// on the complication's scope.
     @State private var page = 0
     @Environment(\.scenePhase) private var scenePhase
 
@@ -30,7 +31,10 @@ struct NEXUSWatchApp: App {
             // Every time the app comes to the front, the calendar complications get a fresh snapshot
             // (throttled inside, so raising the wrist twice in a minute fetches once).
             .onOpenURL { url in
-                if url.host == "calendar" { page = 1 }
+                guard url.host == "calendar" else { return }
+                // On the scope the complication shows (`&scope=`), then on the Calendar page.
+                CalendarView.adoptScope(from: url)
+                page = 1
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 if phase == .active {

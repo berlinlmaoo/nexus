@@ -30,8 +30,8 @@
 "Monday to Sunday at a glance." = "Senin sampai Minggu dalam sekali lihat.";
 "High priority and due now: do these first." = "Prioritas tinggi dan tenggatnya sudah dekat: kerjakan dulu.";
 "High priority, not due yet: plan them in." = "Prioritas tinggi, tenggat masih longgar: rencanakan.";
-"Due now, normal priority: get them done." = "Tenggat sudah dekat, prioritas biasa: segera bereskan.";
-"Everything else, tasks without a date included." = "Sisanya, termasuk tugas tanpa tenggat.";
+"Urgent, not high priority: due now, get them done." = "Mendesak, bukan prioritas tinggi: tenggat sudah dekat, segera bereskan.";
+"Not urgent, not high priority: everything else, tasks without a date included." = "Tidak mendesak, bukan prioritas tinggi: sisanya, termasuk tugas tanpa tenggat.";
 "Your next tasks and their times." = "Tugas berikutnya beserta jamnya.";
 "This week's tasks as dots." = "Tugas minggu ini sebagai titik.";
 "Today's tasks done, or the year so far." = "Tugas hari ini yang sudah selesai, atau tahun yang sudah berjalan.";
@@ -42,7 +42,7 @@
 "Whose tasks the widget shows." = "Tugas siapa yang ditampilkan widget ini.";
 "Mine" = "Saya";
 "My division" = "Divisi saya";
-"Everyone" = "Semua";
+"Everyone" = "Semua orang";
 
 /* Edit Widget: the ring */
 "Show" = "Tampilkan";

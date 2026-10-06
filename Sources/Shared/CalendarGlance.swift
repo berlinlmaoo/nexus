@@ -510,14 +510,13 @@ enum GlanceStore {
 enum GlanceText {
     static func t(_ en: String, _ id: String) -> String { GlanceStore.indonesian ? id : en }
 
+    /// One formatter per language and format, made once: a month widget asks for eight labels per
+    /// entry and a timeline renders dozens of entries, and a DateFormatter is expensive to set up.
+    private static let formatters = GlanceFormatterCache()
+
     private static func formatter(_ format: String) -> DateFormatter {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: GlanceStore.indonesian ? "id_ID" : "en_US")
-        // A day key is that day's UTC midnight (CalDays.date), so formatting in UTC can never shift it.
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = format
-        return f
+        let indonesian = GlanceStore.indonesian
+        return formatters.formatter(format, indonesian: indonesian)
     }
 
     /// "19.00" in Indonesian, "19:00" in English (the server sends "HH:MM", WIB).
@@ -532,8 +531,12 @@ enum GlanceText {
     static func weekdayDay(_ day: String) -> String { formatter("EEE d").string(from: CalDays.date(day)) }
     /// "Kam" / "Thu".
     static func weekdayShort(_ day: String) -> String { formatter("EEE").string(from: CalDays.date(day)) }
+    /// "Kamis" / "Thursday".
+    static func weekdayLong(_ day: String) -> String { formatter("EEEE").string(from: CalDays.date(day)) }
     /// One letter: "S" / "M".
     static func weekdayLetter(_ day: String) -> String { formatter("EEEEE").string(from: CalDays.date(day)) }
+    /// "Kamis 8 Oktober" / "Thursday 8 October": a day spelled out for VoiceOver.
+    static func dayLong(_ day: String) -> String { formatter("EEEE d MMMM").string(from: CalDays.date(day)) }
     /// "8".
     static func dayNumber(_ day: String) -> String { String(Int(day.suffix(2)) ?? 0) }
 
@@ -560,11 +563,23 @@ enum GlanceText {
         }
     }
 
+    /// The line under a list's name where the name alone misleads. "Urgent" is also a priority in the
+    /// app, and this list holds the other kind of urgent: due now, at normal priority — URGENT-priority
+    /// tasks sit in "Important & urgent". The owner kept the names; this line says what they mean.
+    static func quadrantNote(_ q: GlanceQuadrant) -> String? {
+        switch q {
+        case .act: return t("urgent, not high priority", "mendesak, bukan prioritas tinggi")
+        case .later: return t("not urgent, not high priority", "tidak mendesak, bukan prioritas tinggi")
+        case .doFirst, .plan: return nil
+        }
+    }
+
+    /// The app says "Semua orang" for Everyone; the widgets and the watch say the same.
     static func scopeName(_ s: GlanceScope) -> String {
         switch s {
         case .me: return t("Mine", "Saya")
         case .division: return t("My division", "Divisi saya")
-        case .all: return t("Everyone", "Semua")
+        case .all: return t("Everyone", "Semua orang")
         }
     }
 
@@ -585,10 +600,101 @@ enum GlanceText {
     static func more(_ n: Int, long: Bool = false) -> String {
         long ? t("+\(n) more", "+\(n) lagi") : "+\(n)"
     }
+
+    /// "+3" as VoiceOver should say it: "3 more" / "3 lagi".
+    static func moreSpoken(_ n: Int) -> String { t("\(n) more", "\(n) lagi") }
+
+    /// "1 task" / "3 tasks" / "no tasks".
+    static func taskCount(_ n: Int) -> String {
+        switch n {
+        case 0: return t("no tasks", "tidak ada tugas")
+        case 1: return t("1 task", "1 tugas")
+        default: return t("\(n) tasks", "\(n) tugas")
+        }
+    }
+
+    /// What VoiceOver says for one day of a widget's month or week, which draws its tasks as bars and
+    /// dots without words: "Today, Thursday 8 October, 3 tasks, some overdue". Outside the snapshot's
+    /// window the widget knows nothing about a day, so it names the day and claims nothing more.
+    static func dayLabel(_ d: GlanceDay) -> String {
+        var parts: [String] = []
+        if d.today { parts.append(t("Today", "Hari ini")) }
+        parts.append(dayLong(d.day))
+        if let holiday = d.holiday { parts.append(holiday) }
+        if d.covered {
+            parts.append(taskCount(d.count))
+            if d.overdue {
+                parts.append(d.count == 1 ? t("overdue", "lewat tenggat") : t("some overdue", "sebagian lewat tenggat"))
+            }
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// A row's mark, spoken: within the window, or overdue for longer (drawn grey).
+    static func overdueLabel(_ o: GlanceOverdue) -> String? {
+        switch o {
+        case .recent: return t("Overdue", "Lewat tenggat")
+        case .stale: return t("Long overdue", "Lama lewat tenggat")
+        case .none: return nil
+        }
+    }
+
+    /// A ticked task's check mark, spoken.
+    static var doneLabel: String { t("Done", "Selesai") }
+
+    /// One day of the attendance strip, spoken: "Monday, present" / "Senin, hadir". The tones and their
+    /// words are the app's (AttendanceSnapshot.DayDot, Localization.swift).
+    static func attendanceDay(_ dateKey: String, tone: String) -> String {
+        let word: String
+        switch tone {
+        case "P": word = t("present", "hadir")
+        case "L": word = t("late", "telat")
+        case "I": word = t("permit", "izin")
+        case "C": word = t("leave", "cuti")
+        case "S": word = t("sick", "sakit")
+        case "D": word = t("day off", "day off")
+        case "A": word = t("absent", "alpha")
+        default: word = t("nothing recorded", "belum ada catatan")
+        }
+        return weekdayLong(dateKey) + ", " + word
+    }
+
+    /// The whole strip in one sentence, so VoiceOver reads the week in one swipe rather than seven.
+    static func attendanceWeek(_ days: [(dateKey: String, tone: String)]) -> String {
+        t("Last \(days.count) days: ", "\(days.count) hari terakhir: ")
+            + days.map { attendanceDay($0.dateKey, tone: $0.tone) }.joined(separator: "; ")
+    }
 }
 
-/// "#rrggbb" (also "#rgb" and "#rrggbbaa", alpha ignored) → 0…1 components, for a SwiftUI Color.
+/// The formatters GlanceText hands out, one per language and format. Widgets and complications render
+/// off the main thread, so the map is behind a lock; formatting itself is thread-safe.
+final class GlanceFormatterCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var map: [String: DateFormatter] = [:]
+
+    func formatter(_ format: String, indonesian: Bool) -> DateFormatter {
+        let key = (indonesian ? "id|" : "en|") + format
+        lock.lock()
+        defer { lock.unlock() }
+        if let f = map[key] { return f }
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: indonesian ? "id_ID" : "en_US")
+        // A day key is that day's UTC midnight (CalDays.date), so formatting in UTC can never shift it.
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = format
+        map[key] = f
+        return f
+    }
+}
+
+/// "#rrggbb" (also "#rgb" and "#rrggbbaa", alpha ignored) → 0…1 components, for a SwiftUI Color — and
+/// the few colour rules a widget needs to stay readable in light and dark. Foundation only, like the
+/// rest of this file: the app, the widgets, the watch and its complications all compile it, so the
+/// palette below is the one place their colours can agree.
 enum GlanceColor {
+    typealias RGB = (r: Double, g: Double, b: Double)
+
     static func rgb(_ raw: String) -> (r: Double, g: Double, b: Double) {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("#") { s.removeFirst() }
@@ -596,5 +702,117 @@ enum GlanceColor {
         if s.count == 8 { s = String(s.prefix(6)) }
         guard s.count == 6, let v = UInt64(s, radix: 16) else { return (0.39, 0.45, 0.55) }
         return (Double((v >> 16) & 0xFF) / 255, Double((v >> 8) & 0xFF) / 255, Double(v & 0xFF) / 255)
+    }
+
+    // MARK: Palette
+
+    /// A colour as a light and a dark hex, picked by the appearance a widget is drawn in.
+    struct Pair: Sendable {
+        let light: String
+        let dark: String
+
+        func pick(dark isDark: Bool) -> String { isDark ? dark : light }
+    }
+
+    /// The app's violet as a fill under a white number (CalTone.accentFill, NX.violetFill): today's
+    /// disc everywhere a calendar draws one, so the app, the widgets and the watch agree on today.
+    static let violet = Pair(light: "#6247D6", dark: "#6F5AE6")
+    /// NX.violetText: violet words.
+    static let violetText = Pair(light: "#6247D6", dark: "#B3A6FF")
+    /// Sundays, public holidays and overdue dates as words.
+    static let red = Pair(light: "#BE123C", dark: "#FB7185")
+    /// The Calendar's overdue (CalTone.overdue): outlines and marks. Rose-700 in light, as the app has
+    /// it since the contrast fix; the same as `red`, kept apart because it is a mark, not a word.
+    static let overdue = Pair(light: "#BE123C", dark: "#FB7185")
+    /// "Important".
+    static let indigo = Pair(light: "#4338CA", dark: "#A5B4FC")
+    /// "Urgent", and attendance still being sent.
+    static let amber = Pair(light: "#92400E", dark: "#FBBF24")
+    /// NX.success: a finished day.
+    static let green = Pair(light: "#15803D", dark: "#34D399")
+    /// A task overdue for longer than the window: still on its date, but grey.
+    static let slate = Pair(light: "#64748B", dark: "#94A3B8")
+
+    /// What a widget is drawn on, roughly: the darker of the light greys and the lighter of the dark
+    /// greys iOS puts behind a `.fill.tertiary` widget. A colour that reads on these reads on the real one.
+    static let lightSurface: RGB = (0xE5 / 255.0, 0xE5 / 255.0, 0xEA / 255.0)
+    static let darkSurface: RGB = (0x2C / 255.0, 0x2C / 255.0, 0x2E / 255.0)
+    static let white: RGB = (1, 1, 1)
+
+    static func surface(dark: Bool) -> RGB { dark ? darkSurface : lightSurface }
+
+    // MARK: Contrast
+
+    /// WCAG relative luminance.
+    static func luminance(_ c: RGB) -> Double {
+        func channel(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+    }
+
+    /// WCAG contrast ratio, 1…21.
+    static func contrast(_ a: RGB, _ b: RGB) -> Double {
+        let la = luminance(a)
+        let lb = luminance(b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
+
+    /// `c` moved just far enough in lightness — lighter on a dark surface, darker on a light one — to
+    /// reach `ratio` against `surface`. Hue and saturation stay, so a project keeps its colour; one that
+    /// already reads comes back unchanged. A navy project (#0c1427) on a dark widget becomes a blue you
+    /// can see instead of a hole.
+    static func readable(_ c: RGB, on surface: RGB, ratio: Double) -> RGB {
+        if contrast(c, surface) >= ratio { return c }
+        let hsl = toHSL(c)
+        let target: Double = luminance(surface) < 0.18 ? 1 : 0
+        let far = fromHSL(h: hsl.h, s: hsl.s, l: target)
+        if contrast(far, surface) < ratio { return far }
+        var near = hsl.l
+        var reach = target
+        for _ in 0..<24 {
+            let mid = (near + reach) / 2
+            if contrast(fromHSL(h: hsl.h, s: hsl.s, l: mid), surface) >= ratio { reach = mid } else { near = mid }
+        }
+        return fromHSL(h: hsl.h, s: hsl.s, l: reach)
+    }
+
+    /// A "#rrggbb" made readable on a widget of that appearance: 3:1 for a bar or a dot (WCAG 1.4.11),
+    /// 4.5:1 for words.
+    static func readable(_ hex: String, dark: Bool, ratio: Double) -> RGB {
+        readable(rgb(hex), on: surface(dark: dark), ratio: ratio)
+    }
+
+    private static func toHSL(_ c: RGB) -> (h: Double, s: Double, l: Double) {
+        let hi = max(c.r, c.g, c.b)
+        let lo = min(c.r, c.g, c.b)
+        let l = (hi + lo) / 2
+        let d = hi - lo
+        if d == 0 { return (0, 0, l) }
+        let s = l > 0.5 ? d / (2 - hi - lo) : d / (hi + lo)
+        var h: Double
+        if hi == c.r {
+            h = (c.g - c.b) / d + (c.g < c.b ? 6 : 0)
+        } else if hi == c.g {
+            h = (c.b - c.r) / d + 2
+        } else {
+            h = (c.r - c.g) / d + 4
+        }
+        h /= 6
+        return (h, s, l)
+    }
+
+    private static func fromHSL(h: Double, s: Double, l: Double) -> RGB {
+        if s == 0 { return (l, l, l) }
+        let q = l < 0.5 ? l * (1 + s) : l + s - l * s
+        let p = 2 * l - q
+        func hue(_ tIn: Double) -> Double {
+            var t = tIn
+            if t < 0 { t += 1 }
+            if t > 1 { t -= 1 }
+            if t < 1.0 / 6 { return p + (q - p) * 6 * t }
+            if t < 1.0 / 2 { return q }
+            if t < 2.0 / 3 { return p + (q - p) * (2.0 / 3 - t) * 6 }
+            return p
+        }
+        return (hue(h + 1.0 / 3), hue(h), hue(h - 1.0 / 3))
     }
 }

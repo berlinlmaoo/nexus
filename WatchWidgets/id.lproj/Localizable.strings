@@ -13,7 +13,7 @@
 "Scope" = "Cakupan";
 "Mine" = "Saya";
 "My division" = "Divisi saya";
-"Everyone" = "Semua";
+"Everyone" = "Semua orang";
 "Show" = "Tampilkan";
 "Today" = "Hari ini";
 "Year" = "Tahun";
@@ -24,7 +24,7 @@
 "Everyone's tasks" = "Tugas semua orang";
 "Today · My tasks" = "Hari ini · Tugas saya";
 "Today · My division" = "Hari ini · Divisi saya";
-"Today · Everyone" = "Hari ini · Semua";
+"Today · Everyone" = "Hari ini · Semua orang";
 "Year progress" = "Progres tahun";
 
 /* Attendance complication (WatchAttendanceWidget.swift) */

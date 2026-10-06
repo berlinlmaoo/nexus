@@ -230,12 +230,22 @@ enum CalDays {
 
     /// An ISO-8601 instant from the server ("2026-10-05T03:00:00.000Z").
     static func instant(_ iso: String) -> Date? {
+        isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
+    }
+
+    // Made once, like `fmt` above: this runs for every timed task in every sort comparison and row,
+    // and setting a formatter up costs far more than parsing with it (impeccable audit, 6 Oct 2026).
+    private static let isoFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: iso) { return d }
+        return f
+    }()
+
+    private static let isoPlain: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
-        return f.date(from: iso)
-    }
+        return f
+    }()
 }
 
 // MARK: - Overdue

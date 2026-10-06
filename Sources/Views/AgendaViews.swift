@@ -155,38 +155,65 @@ struct AgendaRow: View {
 /// Replaces `.pickerStyle(.segmented)`, which since iOS 26 renders as Liquid Glass: translucent,
 /// reflecting whatever is behind it, and effectively unreadable on a light screen. This one is
 /// solid, uses the NX colour tokens, and moves its pill with matchedGeometryEffect.
+///
+/// It looks custom but behaves like the system control (impeccable audit, 6 Oct 2026). Each option
+/// is a real Button, so it takes the pointer's hover on iPad and Mac and keyboard focus, and its
+/// whole 44 pt row answers a tap (the old text-plus-tap-gesture was about 30 pt and invisible to
+/// VoiceOver as a control). VoiceOver is handed an actual segmented Picker through
+/// `accessibilityRepresentation`, so it hears "Month, selected, 1 of 2" instead of plain text.
 struct NXSegmented<T: Hashable>: View {
     @Binding var selection: T
     let options: [T]
     let label: (T) -> String
+    /// What the choice is about ("View", "Group by"), read by VoiceOver before the options. Last
+    /// and optional, so every existing call site keeps compiling unchanged.
+    var title: String? = nil
     @Namespace private var ns
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(options, id: \.self) { option in
-                let active = option == selection
-                Text(label(option))
-                    .font(NXFont.text(13, .semibold))
-                    .foregroundStyle(active ? NX.foreground : NX.mutedFg)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
-                    .background {
-                        if active {
-                            Capsule(style: .continuous)
-                                .fill(NX.card)
-                                .overlay(Capsule(style: .continuous).strokeBorder(NX.border))
-                                .matchedGeometryEffect(id: "nx.segment", in: ns)
-                        }
-                    }
-                    .contentShape(Capsule(style: .continuous))
-                    .onTapGesture {
-                        guard !active else { return }
-                        withAnimation(.snappy(duration: 0.22)) { selection = option }
-                    }
+                segment(option)
             }
         }
-        .padding(4)
+        // Inset sideways only: vertically the pill is inset inside each 44 pt button instead, so the
+        // track's own padding still takes taps.
+        .padding(.horizontal, 4)
         .background(NX.muted, in: Capsule(style: .continuous))
         .overlay(Capsule(style: .continuous).strokeBorder(NX.border.opacity(0.6)))
+        .accessibilityRepresentation {
+            Picker(title ?? "", selection: $selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(label(option)).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private func segment(_ option: T) -> some View {
+        let active = option == selection
+        return Button {
+            guard !active else { return }
+            withAnimation(.snappy(duration: 0.22)) { selection = option }
+        } label: {
+            Text(label(option))
+                .font(NXFont.text(13, .semibold))
+                .foregroundStyle(active ? NX.foreground : NX.mutedFg)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background {
+                    if active {
+                        Capsule(style: .continuous)
+                            .fill(NX.card)
+                            .overlay(Capsule(style: .continuous).strokeBorder(NX.border))
+                            .padding(.vertical, 4)
+                            .matchedGeometryEffect(id: "nx.segment", in: ns)
+                    }
+                }
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 }

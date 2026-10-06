@@ -42,8 +42,8 @@ struct CalendarNextView: View {
     static func link(_ entry: CalendarWidgetEntry) -> URL {
         guard let snapshot = entry.snapshot, entry.freshness == .fresh,
               let first = CalendarGlance.upcoming(snapshot, now: entry.date, limit: 1).rows.first
-        else { return CalendarLink.root }
-        return CalendarLink.task(first)
+        else { return CalendarLink.calendar(scope: entry.linkScope) }
+        return CalendarLink.task(first, scope: entry.linkScope)
     }
 }
 
@@ -56,6 +56,7 @@ struct CalendarNextRows: View {
         if rows.isEmpty {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle")
+                    .accessibilityHidden(true)
                 Text(CalendarWords.nothingComingUp)
                     .lineLimit(2)
             }
@@ -87,6 +88,7 @@ struct CalendarNextRow: View {
                 .lineLimit(1)
                 .privacySensitive()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -98,7 +100,7 @@ struct CalendarWeekStripWidget: Widget {
                                provider: CalendarWidgetProvider()) { entry in
             CalendarWeekStripView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(CalendarLink.day(entry.today))
+                .widgetURL(CalendarLink.day(entry.today, scope: entry.linkScope))
         }
         .configurationDisplayName("Week")
         .description("This week's tasks as dots.")
@@ -136,7 +138,8 @@ struct CalendarWeekStripView: View {
 }
 
 /// A weekday letter over 0–3 dots: one per task, filled while anything that day is still to do, hollow
-/// once all of it is done. Today's letter is cut out of a filled pill.
+/// once all of it is done. Today's letter is cut out of a filled pill. VoiceOver hears the day in
+/// words — "Today, Thursday 8 October, 3 tasks" — rather than a letter and some dots.
 struct CalendarStripDay: View {
     let day: GlanceDay
 
@@ -146,6 +149,8 @@ struct CalendarStripDay: View {
             dots
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GlanceText.dayLabel(day))
     }
 
     @ViewBuilder private var letter: some View {
@@ -197,7 +202,7 @@ struct CalendarRingWidget: Widget {
                                provider: CalendarRingProvider()) { entry in
             CalendarRingView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(CalendarLink.day(entry.today))
+                .widgetURL(CalendarLink.day(entry.today, scope: entry.linkScope))
         }
         .configurationDisplayName("Today")
         .description("Today's tasks done, or the year so far.")
@@ -240,6 +245,11 @@ struct CalendarTodayGauge: View {
         }
         .gaugeStyle(.accessoryCircularCapacity)
         .widgetAccentable()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GlanceText.t("Today's tasks", "Tugas hari ini"))
+        .accessibilityValue(ring.total == 0
+                            ? GlanceText.taskCount(0)
+                            : GlanceText.t("\(ring.done) of \(ring.total) done", "\(ring.done) dari \(ring.total) selesai"))
     }
 }
 
@@ -255,6 +265,9 @@ struct CalendarYearGauge: View {
         }
         .gaugeStyle(.accessoryCircularCapacity)
         .widgetAccentable()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GlanceText.t("Year", "Tahun"))
+        .accessibilityValue(CalendarWords.yearProgress(year))
     }
 }
 
@@ -266,7 +279,7 @@ struct CalendarInlineWidget: Widget {
                                provider: CalendarWidgetProvider()) { entry in
             CalendarInlineView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
-                .widgetURL(CalendarLink.day(entry.today))
+                .widgetURL(CalendarLink.day(entry.today, scope: entry.linkScope))
         }
         .configurationDisplayName("Calendar line")
         .description("Today's tasks in one line.")

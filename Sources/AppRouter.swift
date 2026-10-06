@@ -167,6 +167,11 @@ final class AppRouter {
     /// The task a calendar widget row was tapped on (`nexus://calendar?date=…&task=…`). CalendarView
     /// opens it the way its own rows open — editable, read-only or not at all — and clears it.
     var calendarTaskId: String?
+    /// Whose tasks the link came from: `&scope=me|division|all`, the scope the tapped widget is set
+    /// to. A "Mine" widget used to open the Calendar on Everyone, so the widget and the app told two
+    /// different stories about the same day. CalendarView claims it the way it claims the date (it
+    /// becomes the Calendar's own Show setting, on screen beside Month / People) and clears it.
+    var calendarScope: String?
 
     /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
     func open(_ target: NotificationTarget) {
@@ -261,10 +266,16 @@ final class AppRouter {
         // `nexus://calendar` is the Calendar's own name; `nexus://teamCalendar` (the screen's raw
         // value) keeps working for links written before 0.1.7. Either may name a day: `?date=YYYY-MM-DD`,
         // and a calendar widget's row a task as well: `&task=<id>` (an undated task: `?task=` alone).
+        // A widget link also says whose tasks it showed: `&scope=me|division|all`; anything else is
+        // ignored, so an older or hand-written link opens the Calendar as it was left.
         if name.lowercased() == "calendar" || name.lowercased() == "teamcalendar" {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
             let date = query?.first { $0.name == "date" }?.value
             if let task = query?.first(where: { $0.name == "task" })?.value, !task.isEmpty { calendarTaskId = task }
+            if let scope = query?.first(where: { $0.name == "scope" })?.value?.lowercased(),
+               ["me", "division", "all"].contains(scope) {
+                calendarScope = scope
+            }
             if let day = NotificationTarget.calendarDay(date) {
                 open(.calendarDay(day))
             } else if calendarOnScreen == nil {

@@ -30,8 +30,8 @@
 "Monday to Sunday at a glance." = "Monday to Sunday at a glance.";
 "High priority and due now: do these first." = "High priority and due now: do these first.";
 "High priority, not due yet: plan them in." = "High priority, not due yet: plan them in.";
-"Due now, normal priority: get them done." = "Due now, normal priority: get them done.";
-"Everything else, tasks without a date included." = "Everything else, tasks without a date included.";
+"Urgent, not high priority: due now, get them done." = "Urgent, not high priority: due now, get them done.";
+"Not urgent, not high priority: everything else, tasks without a date included." = "Not urgent, not high priority: everything else, tasks without a date included.";
 "Your next tasks and their times." = "Your next tasks and their times.";
 "This week's tasks as dots." = "This week's tasks as dots.";
 "Today's tasks done, or the year so far." = "Today's tasks done, or the year so far.";

@@ -25,6 +25,17 @@ extension Color {
         })
     }
 
+    /// The same, plus the values for Increase Contrast (Settings › Accessibility › Display & Text
+    /// Size). iOS's own colours deepen when it is on; tokens built from two hexes stayed exactly as
+    /// faint as before (impeccable audit, 6 Oct 2026).
+    init(light: UInt, dark: UInt, lightHC: UInt, darkHC: UInt) {
+        self.init(uiColor: UIColor { trait in
+            let high = trait.accessibilityContrast == .high
+            if trait.userInterfaceStyle == .dark { return UIColor(rgb: high ? darkHC : dark) }
+            return UIColor(rgb: high ? lightHC : light)
+        })
+    }
+
     /// Parse "#rrggbb" / "#rgb" strings (used for per-project/category colors from the API).
     init(hex raw: String) {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -91,9 +102,11 @@ enum NX {
     static let background  = Color(light: 0xf8f9fb, dark: 0x0d1017)
     static let card        = Color(light: 0xffffff, dark: 0x1c2130)
     static let foreground  = Color(light: 0x292d34, dark: 0xe8eaef)
-    static let mutedFg     = Color(light: 0x656d76, dark: 0xa6b0bd)
+    //   • Increase Contrast: secondary text goes a step further from the surface, and the border
+    //     becomes a line you can actually see (the Calendar's hairlines use the same values).
+    static let mutedFg     = Color(light: 0x656d76, dark: 0xa6b0bd, lightHC: 0x4b525a, darkHC: 0xc4cbd4)
     static let muted       = Color(light: 0xf1f3f6, dark: 0x252c3d)
-    static let border      = Color(light: 0xe6e8ec, dark: 0x333b52)
+    static let border      = Color(light: 0xe6e8ec, dark: 0x333b52, lightHC: 0x9aa1ab, darkHC: 0x6b7591)
     static let onyx        = Color(light: 0x202023, dark: 0xe8eaef)   // web --primary (high-contrast CTA/text)
 
     // The brand violet is TWO tokens because one colour cannot do both jobs: a fill needs to be
@@ -103,6 +116,9 @@ enum NX {
     static let violet      = Color(light: 0x7b68ee, dark: 0x6f5ae6)   // brand (--ring / --sidebar-primary)
     /// Brand as TEXT or ICON on a surface. Use this for type — never `violet`.
     static let violetText  = Color(light: 0x6247d6, dark: 0xb3a6ff)
+    /// Brand FILL under small white type (13 pt labels): white on `violet` is 4.15:1 in light mode,
+    /// under AA for text that size; this deeper shade is 6.2:1. Dark is `violet`'s own value.
+    static let violetFill  = Color(light: 0x6247d6, dark: 0x6f5ae6)
     static let blue        = Color(light: 0x0091ff, dark: 0x38a3ff)
     static let success     = Color(light: 0x16a34a, dark: 0x34d399)
     static let warning     = Color(light: 0xf59e0b, dark: 0xfbbf24)
@@ -158,7 +174,27 @@ extension View {
 
 enum ChipTone {
     case neutral, accent, success, warning, danger, info, coral
+
+    /// Text and icon colour. Like `NX.violet` / `NX.violetText`, a tone is two colours because one
+    /// cannot do both jobs: the bright fills read 1.9–3.3:1 as 11 pt type on their own 16% tint in
+    /// light mode, and the Calendar's "High" priority chip (amber on amber) all but vanished
+    /// (impeccable audit, 6 Oct 2026). Light text is now a deeper shade of the same hue, measured at
+    /// 4.9–6.4:1 on the tint over a card; dark mode keeps the fill, which already clears 4.5:1 there.
     var fg: Color {
+        switch self {
+        case .neutral: return ChipText.neutral
+        case .accent: return ChipText.accent
+        case .success: return ChipText.success
+        case .warning: return ChipText.warning
+        case .danger: return ChipText.danger
+        case .info: return ChipText.info
+        case .coral: return ChipText.coral
+        }
+    }
+    /// The chip's wash: the bright tone, unchanged, so every chip keeps its colour.
+    var bg: Color { chipFill.opacity(0.16) }
+
+    private var chipFill: Color {
         switch self {
         case .neutral: return NX.mutedFg
         case .accent: return NX.accentFg
@@ -169,7 +205,6 @@ enum ChipTone {
         case .coral: return NX.coral
         }
     }
-    var bg: Color { fg.opacity(0.16) }
 
     /// Stable colour for a free-text label (room name, category…) so the same string is always the
     /// same colour — without anyone maintaining a lookup table.
@@ -182,6 +217,17 @@ enum ChipTone {
         let seed = s.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
         return palette[seed % palette.count]
     }
+}
+
+/// ChipTone's text colours, built once (light = a deeper shade of the fill, dark = the fill itself).
+private enum ChipText {
+    static let neutral = Color(light: 0x5a626b, dark: 0xa6b0bd)
+    static let accent  = Color(light: 0x6247d6, dark: 0xbfb3ff)
+    static let success = Color(light: 0x14703a, dark: 0x34d399)
+    static let warning = Color(light: 0x92400e, dark: 0xfbbf24)
+    static let danger  = Color(light: 0xb91c1c, dark: 0xf87171)
+    static let info    = Color(light: 0x0369a1, dark: 0x38a3ff)
+    static let coral   = Color(light: 0xb13c10, dark: 0xff9d76)
 }
 
 struct NexusChip: View {

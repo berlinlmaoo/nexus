@@ -136,6 +136,13 @@ struct CalendarWidgetEntry: TimelineEntry {
         }
         return requested == .me ? nil : GlanceText.scopeName(requested)
     }
+
+    /// The scope a tap opens the Calendar on: what this widget shows. That is the server's answer, so
+    /// "My division" for somebody without a card in the Bagan opens on Mine, as the widget draws it.
+    var linkScope: GlanceScope {
+        if let answered = stored.flatMap({ GlanceScope(rawValue: $0.snapshot.scope) }) { return answered }
+        return requested
+    }
 }
 
 // MARK: - Timeline
@@ -255,66 +262,119 @@ enum CalendarSample {
 // MARK: - Links
 
 /// Where a tap goes. The Calendar opens on the day; with a task id it opens that task as well. A masked
-/// row carries no id on this side, so it can only ever open its day.
+/// row carries no id on this side, so it can only ever open its day. Every link names the widget's
+/// scope (`&scope=me|division|all`), so a "Mine" widget opens the Calendar on Mine rather than on
+/// whatever the app last showed.
 enum CalendarLink {
     static let root = URL(string: "nexus://calendar")!
 
-    static func day(_ day: String) -> URL {
-        make([URLQueryItem(name: "date", value: day)])
+    /// The Calendar itself, on today: `?scope=S`.
+    static func calendar(scope: GlanceScope) -> URL {
+        make([], scope: scope)
     }
 
-    /// Dated: `?date=D&task=ID`. Undated ("Someday"): `?task=ID`. Masked: `?date=D`, or the Calendar
-    /// itself when it has no date either.
-    static func task(_ bar: GlanceBar) -> URL {
+    /// `?date=D&scope=S`.
+    static func day(_ day: String, scope: GlanceScope) -> URL {
+        make([URLQueryItem(name: "date", value: day)], scope: scope)
+    }
+
+    /// Dated: `?date=D&task=ID&scope=S`. Undated ("Someday"): `?task=ID&scope=S`. Masked: `?date=D&scope=S`,
+    /// or the Calendar itself when it has no date either.
+    static func task(_ bar: GlanceBar, scope: GlanceScope) -> URL {
         var items: [URLQueryItem] = []
         if let day = bar.day { items.append(URLQueryItem(name: "date", value: day)) }
         if !bar.masked, let id = bar.id { items.append(URLQueryItem(name: "task", value: id)) }
-        return items.isEmpty ? root : make(items)
+        return make(items, scope: scope)
     }
 
-    private static func make(_ items: [URLQueryItem]) -> URL {
+    private static func make(_ items: [URLQueryItem], scope: GlanceScope) -> URL {
         var c = URLComponents()
         c.scheme = "nexus"
         c.host = "calendar"
-        c.queryItems = items
+        c.queryItems = items + [URLQueryItem(name: "scope", value: scope.rawValue)]
         return c.url ?? root
     }
 }
 
 // MARK: - Colours
 
-enum CalendarStyle {
-    static let accent = Color(red: 0x7B / 255, green: 0x68 / 255, blue: 0xEE / 255)
-    static let red = Color(red: 0xEF / 255, green: 0x44 / 255, blue: 0x44 / 255)
-    static let indigo = Color(red: 0x63 / 255, green: 0x66 / 255, blue: 0xF1 / 255)
-    static let amber = Color(red: 0xF5 / 255, green: 0x9E / 255, blue: 0x0B / 255)
-    static let grey = Color(red: 0x94 / 255, green: 0xA3 / 255, blue: 0xB8 / 255)
+/// The colours a calendar widget draws with, for the appearance it is drawn in. iOS draws a widget
+/// light and dark, with or without Increase Contrast, and a fixed hex reads in one of those at best, so
+/// every colour here is picked per appearance and checked against the widget's own background: words
+/// at 4.5:1 (7:1 with Increase Contrast), bars, dots and marks at 3:1 (4.5:1). A project's own colour
+/// keeps its hue and only moves in lightness when it would otherwise vanish.
+///
+/// Built in each view from its environment: `CalendarInk(scheme, contrast)`.
+struct CalendarInk {
+    let dark: Bool
+    let high: Bool
 
-    static func color(_ hex: String) -> Color {
-        let c = GlanceColor.rgb(hex)
-        return Color(red: c.r, green: c.g, blue: c.b)
+    init(_ scheme: ColorScheme, _ contrast: ColorSchemeContrast) {
+        dark = scheme == .dark
+        high = contrast == .increased
     }
 
-    static func quadrant(_ q: GlanceQuadrant) -> Color {
+    private var wordRatio: Double { high ? 7 : 4.5 }
+    private var markRatio: Double { high ? 4.5 : 3 }
+
+    static func color(_ c: GlanceColor.RGB) -> Color {
+        Color(red: c.r, green: c.g, blue: c.b)
+    }
+
+    private func word(_ pair: GlanceColor.Pair) -> Color {
+        Self.color(GlanceColor.readable(pair.pick(dark: dark), dark: dark, ratio: wordRatio))
+    }
+
+    private func mark(_ pair: GlanceColor.Pair) -> Color {
+        Self.color(GlanceColor.readable(pair.pick(dark: dark), dark: dark, ratio: markRatio))
+    }
+
+    /// Violet words: "Coming up", today's number in the week, the attendance headline at work.
+    var accent: Color { word(GlanceColor.violetText) }
+    /// Today's disc: the app's violet, visible on the widget and deep enough for the white number on
+    /// it. Where both cannot hold (Increase Contrast in dark), the number wins.
+    var todayDisc: Color {
+        let violet = GlanceColor.rgb(GlanceColor.violet.pick(dark: dark))
+        let seen = GlanceColor.readable(violet, on: GlanceColor.surface(dark: dark), ratio: markRatio)
+        return Self.color(GlanceColor.readable(seen, on: GlanceColor.white, ratio: wordRatio))
+    }
+    /// Today's column in the week: a wash of the same violet.
+    var todayWash: Color { mark(GlanceColor.violet).opacity(dark ? 0.24 : 0.14) }
+    /// Sundays, public holidays, an overdue due date.
+    var red: Color { word(GlanceColor.red) }
+    /// The outline round an overdue bar and the overdue mark on a row.
+    var overdue: Color { mark(GlanceColor.overdue) }
+    /// A task overdue for longer than the window.
+    var stale: Color { mark(GlanceColor.slate) }
+    var amber: Color { word(GlanceColor.amber) }
+    var green: Color { word(GlanceColor.green) }
+
+    /// A list's name and dot.
+    func quadrant(_ q: GlanceQuadrant) -> Color {
         switch q {
-        case .doFirst: return red
-        case .plan: return indigo
-        case .act: return amber
-        case .later: return grey
+        case .doFirst: return word(GlanceColor.red)
+        case .plan: return word(GlanceColor.indigo)
+        case .act: return word(GlanceColor.amber)
+        case .later: return Color.secondary
         }
+    }
+
+    /// A colour the server or the attendance board chose ("#rrggbb"), as a bar or a dot.
+    func task(_ hex: String) -> Color {
+        Self.color(GlanceColor.readable(hex, dark: dark, ratio: markRatio))
     }
 
     /// One task's colour. In the tinted modes iOS throws the hue away, so there open, done and overdue
     /// differ by opacity alone — the marks drawn on top (tick, outline) carry the rest.
-    static func bar(_ b: GlanceBar, full: Bool) -> Color {
+    func bar(_ b: GlanceBar, full: Bool) -> Color {
         if !full {
             if b.dim { return Color.primary.opacity(0.3) }
             return Color.primary.opacity(b.overdue == .recent ? 1 : 0.65)
         }
-        if b.dim { return color(b.color).opacity(0.35) }
+        if b.dim { return task(b.color).opacity(0.35) }
         // Overdue for longer than the window: it stays on its date, but grey — it is not news any more.
-        if b.overdue == .stale { return grey }
-        return color(b.color)
+        if b.overdue == .stale { return stale }
+        return task(b.color)
     }
 }
 

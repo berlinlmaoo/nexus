@@ -5,8 +5,8 @@ import SwiftUI
 ///
 /// Reads the snapshot the watch app writes into the shared container after it loads today — the
 /// same `AttendanceSnapshot` the phone's widgets read, written by a different app on a different
-/// device. Faces that render in full colour get the colours the board uses; faces that render in
-/// one tint get shapes instead, so a late day still reads as late.
+/// device. Every face gets shapes, so a late day reads as late in one tint and to someone who cannot
+/// tell green from amber; faces that render in full colour colour them as the board does.
 struct WatchAttendanceEntry: TimelineEntry {
     let date: Date
     let snapshot: AttendanceSnapshot?
@@ -114,22 +114,22 @@ struct WatchAttendanceView: View {
     }
 }
 
-/// Seven days in a row. In colour: the board's palette. In one tint: shapes — a filled dot is a
-/// full day, a half dot a late one, a ring an approved day off/leave/sick/permit, a cross an
-/// absence, a dotted ring nothing recorded.
+/// Seven days in a row, as shapes — a filled dot is a full day, a half dot a late one, a ring an
+/// approved day off/leave/sick/permit, a cross an absence, a dotted ring nothing recorded — in the
+/// board's colours where the face keeps colour. To VoiceOver, one sentence for the week.
 struct DotRow: View {
     let days: [AttendanceSnapshot.DayDot]
     let colour: Bool
     var body: some View {
         HStack(spacing: 4) {
             ForEach(days, id: \.dateKey) { d in
-                if colour {
-                    Circle().fill(toneColour(d.tone)).frame(width: 9, height: 9)
-                } else {
-                    Image(systemName: toneSymbol(d.tone)).font(.system(size: 9, weight: .semibold))
-                }
+                Image(systemName: toneSymbol(d.tone))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(colour ? toneColour(d.tone) : Color.primary)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GlanceText.attendanceWeek(days.map { (dateKey: $0.dateKey, tone: $0.tone) }))
     }
 }
 
@@ -151,6 +151,6 @@ func toneColour(_ t: String) -> Color {
     case "S":      return Color(red: 0.97, green: 0.55, blue: 0.20)
     case "D":      return Color(red: 0x7B / 255, green: 0x68 / 255, blue: 0xEE / 255)
     case "A":      return Color(red: 0.94, green: 0.33, blue: 0.40)
-    default:       return Color.secondary.opacity(0.3)
+    default:       return Color.secondary
     }
 }

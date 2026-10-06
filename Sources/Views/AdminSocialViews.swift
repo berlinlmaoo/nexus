@@ -165,7 +165,7 @@ struct EmptyState: View {
                 Button { action() } label: {
                     Group { if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) } }
                         .font(NXFont.text(13, .bold)).foregroundStyle(Color.white)
-                        .padding(.horizontal, 16).padding(.vertical, 9).background(tint, in: Capsule())
+                        .padding(.horizontal, 16).padding(.vertical, 9).background(actionFill, in: Capsule())
                 }
                 .buttonStyle(.plain).padding(.top, 6)
             }
@@ -173,4 +173,9 @@ struct EmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity)
         .padding(.vertical, compact ? 18 : 32).padding(.horizontal, 24)
     }
+
+    /// The pill under the white label. On the default tint it takes the deeper brand shade: white
+    /// 13 pt type on the brand violet itself is 4.15:1 in light mode, under AA (impeccable audit,
+    /// 6 Oct 2026). The icon above keeps the tint; a screen that passes its own tint keeps it here too.
+    private var actionFill: Color { tint == NX.violet ? NX.violetFill : tint }
 }

@@ -1,10 +1,6 @@
 import WidgetKit
 import SwiftUI
 
-private let nxViolet = Color(red: 0x7B / 255, green: 0x68 / 255, blue: 0xEE / 255)
-private let nxAmber = Color(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255)
-private let nxGreen = Color(red: 0x34 / 255, green: 0xD3 / 255, blue: 0x99 / 255)
-
 struct AttendanceEntry: TimelineEntry {
     let date: Date
     let snapshot: AttendanceSnapshot?
@@ -47,10 +43,18 @@ struct AttendanceWidget: Widget {
 
 /// Every word goes through GlanceText.t, so the widget speaks the language picked in the app (mirrored
 /// into the App Group) rather than the phone's: the extension does not compile Localization.swift.
+///
+/// Colours come from CalendarInk, per appearance: the headline's violet, green and amber are the app's
+/// text colours (NX.violetText and friends), readable on a light Home Screen as well as a dark one.
 struct AttendanceWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var mode
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let snapshot: AttendanceSnapshot?
     let glance: NexusGlance?
+
+    private var ink: CalendarInk { CalendarInk(scheme, contrast) }
 
     private var state: AttendanceSnapshot.State { snapshot?.state() ?? .stale }
     private var pending: Bool { snapshot?.isPending ?? false }
@@ -80,6 +84,8 @@ struct AttendanceWidgetView: View {
                             Image(systemName: toneSymbol(d.tone)).font(.system(size: 9, weight: .semibold))
                         }
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(weekLabel(days))
                 } else {
                     Text(detail).font(.caption2).lineLimit(1)
                 }
@@ -109,20 +115,20 @@ struct AttendanceWidgetView: View {
             VStack(alignment: .leading, spacing: 7) {
                 if let snapshot, snapshot.dateKey == AttendanceSnapshot.currentDateKey() {
                     if let inAt = snapshot.checkInAt {
-                        glanceRow("arrow.right.to.line", GlanceText.t("In \(inAt.formatted(date: .omitted, time: .shortened))", "Masuk \(inAt.formatted(date: .omitted, time: .shortened))"), nxGreen)
+                        glanceRow("arrow.right.to.line", GlanceText.t("In \(inAt.formatted(date: .omitted, time: .shortened))", "Masuk \(inAt.formatted(date: .omitted, time: .shortened))"), ink.green)
                     }
                     if let out = snapshot.checkOutAt {
-                        glanceRow("checkmark.circle.fill", GlanceText.t("Out \(out.formatted(date: .omitted, time: .shortened))", "Pulang \(out.formatted(date: .omitted, time: .shortened))"), nxGreen)
+                        glanceRow("checkmark.circle.fill", GlanceText.t("Out \(out.formatted(date: .omitted, time: .shortened))", "Pulang \(out.formatted(date: .omitted, time: .shortened))"), ink.green)
                     } else if let end = snapshot.expectedOutAt, snapshot.checkInAt != nil || snapshot.queuedSince != nil {
                         if end > entryDate {
                             HStack(spacing: 4) {
-                                Image(systemName: "hourglass").font(.caption2).foregroundStyle(nxViolet)
+                                Image(systemName: "hourglass").font(.caption2).foregroundStyle(ink.accent).accessibilityHidden(true)
                                 Text(timerInterval: entryDate...end, countsDown: true, showsHours: true)
                                     .font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.primary)
                                 Text(GlanceText.t("left", "lagi")).font(.caption2).foregroundStyle(.secondary)
                             }
                         } else {
-                            glanceRow("moon.zzz.fill", GlanceText.t("Past \(end.formatted(date: .omitted, time: .shortened)) · check out", "Lewat \(end.formatted(date: .omitted, time: .shortened)) · check out"), nxAmber)
+                            glanceRow("moon.zzz.fill", GlanceText.t("Past \(end.formatted(date: .omitted, time: .shortened)) · check out", "Lewat \(end.formatted(date: .omitted, time: .shortened)) · check out"), ink.amber)
                         }
                     } else if snapshot.checkInAt == nil {
                         glanceRow("circle.dashed", GlanceText.t("Not checked in", "Belum absen"), .secondary)
@@ -132,14 +138,26 @@ struct AttendanceWidgetView: View {
                 }
                 Spacer(minLength: 0)
                 if let days = snapshot?.recentDays, !days.isEmpty {
+                    // The Lock Screen's shapes here too, coloured where iOS keeps colour: a filled dot
+                    // is a full day, a half dot late, a ring an approved day off/leave/sick/permit, a
+                    // cross an absence, a dotted ring nothing. Colour alone vanished on a tinted or
+                    // clear Home Screen, and never reached anyone who cannot tell green from amber.
                     HStack(spacing: 4) {
                         ForEach(days, id: \.dateKey) { d in
                             VStack(spacing: 2) {
-                                Circle().fill(toneColor(d.tone)).frame(width: 10, height: 10)
-                                Text(GlanceText.weekdayLetter(d.dateKey)).font(.system(size: 8)).foregroundStyle(.secondary)
+                                Image(systemName: toneSymbol(d.tone))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(mode == .fullColor ? toneColor(d.tone) : Color.primary)
+                                    .frame(width: 13, height: 13)
+                                    .widgetAccentable()
+                                Text(GlanceText.weekdayLetter(d.dateKey))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(weekLabel(days))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,16 +176,22 @@ struct AttendanceWidgetView: View {
         }
     }
 
+    /// The board's colours, each moved just far enough in lightness to read on this appearance.
     private func toneColor(_ t: String) -> Color {
         switch t {
-        case "P", "I": return nxGreen
-        case "L":      return nxAmber
-        case "C":      return Color(red: 0.98, green: 0.80, blue: 0.20)
-        case "S":      return Color(red: 0.97, green: 0.55, blue: 0.20)
-        case "D":      return nxViolet
-        case "A":      return Color(red: 0.94, green: 0.33, blue: 0.40)
-        default:       return Color.secondary.opacity(0.25)
+        case "P", "I": return ink.task("#34D399")
+        case "L":      return ink.task("#FBBF24")
+        case "C":      return ink.task("#FACC33")
+        case "S":      return ink.task("#F78C33")
+        case "D":      return ink.task("#7B68EE")
+        case "A":      return ink.task("#F05466")
+        default:       return Color.secondary
         }
+    }
+
+    /// "Last 7 days: Monday, present; Tuesday, late; …" — the strip in one VoiceOver swipe.
+    private func weekLabel(_ days: [AttendanceSnapshot.DayDot]) -> String {
+        GlanceText.attendanceWeek(days.map { (dateKey: $0.dateKey, tone: $0.tone) })
     }
 
     private func glanceRow(_ symbol: String, _ text: String, _ color: Color) -> some View {
@@ -214,10 +238,10 @@ struct AttendanceWidgetView: View {
     }
 
     private var tint: Color {
-        if pending { return nxAmber }
+        if pending { return ink.amber }
         switch state {
-        case .working: return nxViolet
-        case .done: return nxGreen
+        case .working: return ink.accent
+        case .done: return ink.green
         case .notCheckedIn, .stale: return .secondary
         }
     }

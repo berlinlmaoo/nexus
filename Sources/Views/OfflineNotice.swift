@@ -20,11 +20,15 @@ struct OfflineNotice: View {
         .padding(.top, 2)
     }
 
+    /// In the app's language: "6 Okt, 14.00" in Indonesian, as the Calendar writes months and times,
+    /// not "6 Oct, 14:00" inside an Indonesian sentence (impeccable audit, 6 Oct 2026).
     static func stamp(_ d: Date) -> String {
+        let indonesian = AppLanguage.shared.lang == .id
+        let time = indonesian ? "HH.mm" : "HH:mm"
         let f = DateFormatter()
         f.timeZone = JakartaDay.calendar.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = JakartaDay.same(d, Date()) ? "HH:mm" : "d MMM, HH:mm"
+        f.locale = Locale(identifier: indonesian ? "id_ID" : "en_US_POSIX")
+        f.dateFormat = JakartaDay.same(d, Date()) ? time : "d MMM, " + time
         return f.string(from: d)
     }
 }
