@@ -378,7 +378,7 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
         !cell.inMonth -> muted()
         else -> fg()
     }
-    val circle = if (compact) 15.dp else 18.dp
+    val circle = if (compact) 13.dp else 18.dp
     val faded = if (cell.inMonth) 1f else 0.4f
     Column(GlanceModifier.defaultWeight().fillMaxHeight().padding(horizontal = 1.dp).clickable(open(lc, CalendarWidgetLinks.day(b.day, scope)))
         .semantics { contentDescription = dayDescription(lc, b) }, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -388,10 +388,10 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
             }
             if (b.overdue && detail != Detail.DOTS) Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(cp(RED))) {}
             // Bars mode has no room under the bars: "+N" sits beside the number.
-            if (detail == Detail.BARS && b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = 10.sp))
+            if (detail != Detail.DOTS && b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = 10.sp))
         }
         when (detail) {
-            Detail.DOTS -> Row(GlanceModifier.padding(top = 1.dp)) {
+            Detail.DOTS -> Row {
                 if (b.overdue) Dot(RED.copy(alpha = faded))
                 b.bars.take(if (b.overdue) 2 else 3).forEach { Dot(tint(it.color).copy(alpha = if (it.dim) 0.35f * faded else faded)) }
             }
@@ -403,7 +403,6 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
             }
             Detail.TITLES -> Column(GlanceModifier.fillMaxWidth().padding(top = 1.dp)) {
                 b.bars.forEach { bar -> Chip(lc, bar, faded) }
-                if (b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = 10.sp))
             }
         }
     }
@@ -433,7 +432,7 @@ private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
     val scope = d.saved.snapshot.scope
     val m = CalendarGlance.monthView(d.saved.snapshot, d.nowMs, 3)
     // Up to 4, as many as fit (~34 dp a row under the title, room kept for "+N").
-    val fit = ((LocalSize.current.height.value - 78) / 34).toInt().coerceIn(1, 4)
+    val fit = ((LocalSize.current.height.value - 80) / 36).toInt().coerceIn(1, 4)
     val up = CalendarGlance.upcoming(d.saved.snapshot, d.nowMs, fit)
     val today = CalendarGlance.wibClock(d.nowMs).day
     Row(GlanceModifier.fillMaxSize()) {
@@ -473,7 +472,10 @@ private fun ListRow(lc: Context, b: Bar, today: String, scope: String?, showProj
 @Composable
 private fun WeekWidget(lc: Context, d: WidgetData.Ready) {
     val scope = d.saved.snapshot.scope
-    val week = CalendarGlance.weekView(d.saved.snapshot, d.nowMs, 3)
+    // Up to 3 two-line chips a day, as many as the height holds (~30 dp each under ~92 dp of header,
+    // padding, footer and a "+N" line); the rest is counted in "+N".
+    val fit = ((LocalSize.current.height.value - 106) / 30).toInt().coerceIn(1, 3)
+    val week = CalendarGlance.weekView(d.saved.snapshot, d.nowMs, fit)
     val names = lc.resources.getStringArray(R.array.wcal_weekdays)
     Column(GlanceModifier.fillMaxSize()) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

@@ -53,6 +53,9 @@ class CalendarWidgetLinksTest {
         assertTrue("minResizeHeight=\"180dp\"" in info("month"))
         listOf("month", "month_upcoming", "week", "do", "plan", "act", "later").forEach {
             assertTrue(it, "updatePeriodMillis=\"0\"" in info(it))
+            // A real preview in the widget picker, in both languages (audit #42).
+            assertTrue(it, "android:previewImage=\"@drawable/cal_preview_$it\"" in info(it))
+            assertTrue(it, File(root, "app/src/main/res/drawable-nodpi/cal_preview_$it.png").isFile && File(root, "app/src/main/res/drawable-in-nodpi/cal_preview_$it.png").isFile)
         }
         // Widget text is at least 10 sp (audit #14).
         val src = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/widget/CalendarWidgets.kt").readText()
