@@ -183,6 +183,9 @@ private struct CalLogoTile<Fallback: View>: View {
     let fallback: Fallback
     @State private var image: UIImage? = nil
     @State private var light = false
+    /// The logo `image` belongs to. A row reused for another IP (the People list after a filter change)
+    /// must not keep showing the previous IP's logo while the new one loads.
+    @State private var imageURL: URL? = nil
 
     init(url: URL, size: CGFloat, @ViewBuilder fallback: () -> Fallback) {
         self.url = url
@@ -192,12 +195,13 @@ private struct CalLogoTile<Fallback: View>: View {
         if let hit = ImageLoader.memory.object(forKey: ImageLoader.cacheKey(url, ImageLoader.tilePixel) as NSURL) {
             _image = State(initialValue: hit)
             _light = State(initialValue: CalLogoTone.isLight(hit, url))
+            _imageURL = State(initialValue: url)
         }
     }
 
     var body: some View {
         Group {
-            if let image {
+            if let image, imageURL == url {
                 Image(uiImage: image).resizable().scaledToFit().padding(size > 20 ? 2 : 1)
                     .frame(width: size, height: size)
                     .background(light ? CalLogoTone.darkTile : Color.white,
@@ -207,9 +211,11 @@ private struct CalLogoTile<Fallback: View>: View {
             }
         }
         .task(id: url) {
-            guard image == nil, let img = await ImageLoader.shared.image(for: url) else { return }
+            if imageURL == url, image != nil { return }
+            guard let img = await ImageLoader.shared.image(for: url) else { return }
             light = CalLogoTone.isLight(img, url)
             image = img
+            imageURL = url
         }
     }
 }

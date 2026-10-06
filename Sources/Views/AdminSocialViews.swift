@@ -166,6 +166,8 @@ struct EmptyState: View {
                     Group { if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) } }
                         .font(NXFont.text(13, .bold)).foregroundStyle(Color.white)
                         .padding(.horizontal, 16).padding(.vertical, 9).background(actionFill, in: Capsule())
+                        // The pill stays compact; the place a finger can hit is the full 44 pt.
+                        .frame(minHeight: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).padding(.top, 6)
             }
