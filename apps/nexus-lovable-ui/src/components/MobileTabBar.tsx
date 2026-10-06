@@ -6,11 +6,12 @@ import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, Trophy,
   ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, ShieldAlert, Ticket, Sun, Moon,
- HardDrive,
+ HardDrive, Languages,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
 import { useTheme } from "@/lib/theme";
+import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 /* Primary destinations live in the floating bar; everything else lives in the
@@ -33,7 +34,7 @@ const moreGroups = [
       { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "My Submissions", url: "/submissions", icon: FileText },
-      { title: "Team Calendar", url: "/master-calendar", icon: Calendar },
+      { title: "Calendar", url: "/calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
@@ -190,6 +191,7 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
   const reduce = useReducedMotion();
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
   const { isDark, toggle: toggleTheme } = useTheme();
+  const { lang, setLang, t } = useLang();
   // Org role gates management-only nav (Control Room + Crew Hub) — hidden from Staff.
   const membersInfo = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data;
   const orgRole = membersInfo?.role;
@@ -285,7 +287,16 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
                 className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-background/40 px-3 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
               >
                 {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
-                <span className="flex-1 text-left">{isDark ? "Mode terang" : "Mode gelap"}</span>
+                <span className="flex-1 text-left">{isDark ? t("Light mode") : t("Dark mode")}</span>
+              </button>
+              {/* Language / Bahasa: flips the interface between Indonesian and English (lib/lang.ts). */}
+              <button
+                onClick={() => setLang(lang === "id" ? "en" : "id")}
+                className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-background/40 px-3 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+              >
+                <Languages className="h-[18px] w-[18px]" />
+                <span className="flex-1 text-left">{t("Language")}</span>
+                <span className="text-xs font-medium text-muted-foreground">{lang === "id" ? "Bahasa Indonesia" : "English"}</span>
               </button>
               <button
                 onClick={handleLogout}

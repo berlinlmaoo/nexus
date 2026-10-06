@@ -35,6 +35,7 @@ import { LEVELS, levelForXp } from "@/lib/levels";
 import { TierBadge } from "@/components/gamification/TierBadge";
 import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { monthGrid, sameMonth, shiftMonth } from "@/lib/calendar/core";
 
 export const Route = createFileRoute("/_app/dashboard")({
   // `quest` comes from the quest_claimable notification: "<questKey>:<periodKey>".
@@ -975,47 +976,48 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
 }
 
 /* ---------- right rail: calendar ---------- */
+// Days are WIB days ("YYYY-MM-DD" at UTC+7), the same day the server and /calendar put a due date on —
+// toISOString() alone is the UTC day, which moved anything due before 07:00 WIB to the day before.
+const WIB_MS = 7 * 3600_000;
+const wibDay = (ms: number) => new Date(ms + WIB_MS).toISOString().slice(0, 10);
+
 function CalendarCard() {
-  const [anchor, setAnchor] = useState(() => new Date());
+  const [anchor, setAnchor] = useState(() => wibDay(Date.now()));
   const tasks = useMyTasks();
-  // Days (in the visible month) that have at least one task due.
+  // Days that have at least one task due.
   const dueDays = useMemo(() => {
     const set = new Set<string>();
     for (const t of tasks.data ?? []) {
       if (!t.dueDate) continue;
-      const d = new Date(t.dueDate);
-      if (!Number.isNaN(d.getTime())) set.add(d.toISOString().slice(0, 10));
+      const ms = Date.parse(t.dueDate);
+      if (!Number.isNaN(ms)) set.add(wibDay(ms));
     }
     return set;
   }, [tasks.data]);
 
-  const year = anchor.getFullYear();
-  const month = anchor.getMonth();
-  const monthStart = new Date(year, month, 1);
-  const gridStart = new Date(monthStart);
-  gridStart.setDate(monthStart.getDate() - ((monthStart.getDay() + 6) % 7));
-  const days = Array.from({ length: 42 }, (_, i) => { const d = new Date(gridStart); d.setDate(gridStart.getDate() + i); return d; });
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const days = monthGrid(anchor);
+  const todayKey = wibDay(Date.now());
+  // The day strings are calendar dates, so format them in UTC to keep the month from shifting.
+  const monthLabel = new Date(`${anchor.slice(0, 8)}01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
   return (
-    <Section title="Calendar" action={<SeeAll to="/master-calendar" />}>
+    <Section title="Calendar" action={<SeeAll to="/calendar" />}>
       <div className="mb-3 flex items-center justify-center gap-3 text-sm font-medium">
-        <button onClick={() => setAnchor(new Date(year, month - 1, 1))} aria-label="Previous month" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronLeft className="h-4 w-4" /></button>
-        {anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-        <button onClick={() => setAnchor(new Date(year, month + 1, 1))} aria-label="Next month" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronRight className="h-4 w-4" /></button>
+        <button onClick={() => setAnchor((a) => shiftMonth(a, -1))} aria-label="Previous month" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronLeft className="h-4 w-4" /></button>
+        {monthLabel}
+        <button onClick={() => setAnchor((a) => shiftMonth(a, 1))} aria-label="Next month" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronRight className="h-4 w-4" /></button>
       </div>
       <div className="grid grid-cols-7 gap-y-1.5 text-center text-xs">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <span key={d} className="text-muted-foreground">{d.slice(0, 1)}</span>)}
-        {days.map((d) => {
-          const key = d.toISOString().slice(0, 10);
-          const inMonth = d.getMonth() === month;
+        {days.map((key) => {
+          const inMonth = sameMonth(key, anchor);
           const isToday = key === todayKey;
           const hasDue = dueDays.has(key);
           return (
-            <div key={key} className="relative mx-auto grid h-7 w-7 place-items-center">
-              <span className={cn("grid h-7 w-7 place-items-center rounded-full", isToday ? "bg-primary font-semibold text-primary-foreground" : !inMonth ? "text-muted-foreground/40" : "text-foreground/80 hover:bg-accent")}>{d.getDate()}</span>
+            <Link key={key} to="/calendar" search={{ date: key }} aria-label={key} className="relative mx-auto grid h-7 w-7 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <span className={cn("grid h-7 w-7 place-items-center rounded-full", isToday ? "bg-primary font-semibold text-primary-foreground" : !inMonth ? "text-muted-foreground/40" : "text-foreground/80 hover:bg-accent")}>{Number(key.slice(8, 10))}</span>
               {hasDue && !isToday && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary" />}
-            </div>
+            </Link>
           );
         })}
       </div>

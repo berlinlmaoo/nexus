@@ -39,9 +39,11 @@ import { Route as AppFormsRouteImport } from './routes/_app/forms'
 import { Route as AppDocsRouteImport } from './routes/_app/docs'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppComplaintsRouteImport } from './routes/_app/complaints'
+import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppAttendanceRouteImport } from './routes/_app/attendance'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
+import { Route as SsoAgentsStateRouteImport } from './routes/sso.agents.$state'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
 import { Route as AppReportsUserIdRouteImport } from './routes/_app/reports.$userId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
@@ -199,6 +201,11 @@ const AppComplaintsRoute = AppComplaintsRouteImport.update({
   path: '/complaints',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCalendarRoute = AppCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAttendanceRoute = AppAttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
@@ -213,6 +220,11 @@ const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
   getParentRoute: () => AppRoute,
+} as any)
+const SsoAgentsStateRoute = SsoAgentsStateRouteImport.update({
+  id: '/sso/agents/$state',
+  path: '/sso/agents/$state',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppTasksTaskIdRoute = AppTasksTaskIdRouteImport.update({
   id: '/tasks/$taskId',
@@ -259,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/admin': typeof AppAdminRoute
   '/attendance': typeof AppAttendanceRoute
+  '/calendar': typeof AppCalendarRoute
   '/complaints': typeof AppComplaintsRoute
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
@@ -290,6 +303,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
+  '/sso/agents/$state': typeof SsoAgentsStateRoute
   '/projects/': typeof AppProjectsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -299,6 +313,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/admin': typeof AppAdminRoute
   '/attendance': typeof AppAttendanceRoute
+  '/calendar': typeof AppCalendarRoute
   '/complaints': typeof AppComplaintsRoute
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
@@ -331,6 +346,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
+  '/sso/agents/$state': typeof SsoAgentsStateRoute
   '/projects': typeof AppProjectsIndexRoute
 }
 export interface FileRoutesById {
@@ -342,6 +358,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/attendance': typeof AppAttendanceRoute
+  '/_app/calendar': typeof AppCalendarRoute
   '/_app/complaints': typeof AppComplaintsRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/docs': typeof AppDocsRouteWithChildren
@@ -374,6 +391,7 @@ export interface FileRoutesById {
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/reports/$userId': typeof AppReportsUserIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
+  '/sso/agents/$state': typeof SsoAgentsStateRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
 }
 export interface FileRouteTypes {
@@ -386,6 +404,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin'
     | '/attendance'
+    | '/calendar'
     | '/complaints'
     | '/dashboard'
     | '/docs'
@@ -417,6 +436,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
+    | '/sso/agents/$state'
     | '/projects/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -426,6 +446,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin'
     | '/attendance'
+    | '/calendar'
     | '/complaints'
     | '/dashboard'
     | '/docs'
@@ -458,6 +479,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
+    | '/sso/agents/$state'
     | '/projects'
   id:
     | '__root__'
@@ -468,6 +490,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/_app/admin'
     | '/_app/attendance'
+    | '/_app/calendar'
     | '/_app/complaints'
     | '/_app/dashboard'
     | '/_app/docs'
@@ -500,6 +523,7 @@ export interface FileRouteTypes {
     | '/_app/projects/$projectId'
     | '/_app/reports/$userId'
     | '/_app/tasks/$taskId'
+    | '/sso/agents/$state'
     | '/_app/projects/'
   fileRoutesById: FileRoutesById
 }
@@ -515,6 +539,7 @@ export interface RootRouteChildren {
   RoomDisplayRoomRoute: typeof RoomDisplayRoomRoute
   SSlugRoute: typeof SSlugRoute
   VSlugRoute: typeof VSlugRoute
+  SsoAgentsStateRoute: typeof SsoAgentsStateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -729,6 +754,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppComplaintsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/calendar': {
+      id: '/_app/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AppCalendarRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/attendance': {
       id: '/_app/attendance'
       path: '/attendance'
@@ -749,6 +781,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/'
       preLoaderRoute: typeof AppProjectsIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/sso/agents/$state': {
+      id: '/sso/agents/$state'
+      path: '/sso/agents/$state'
+      fullPath: '/sso/agents/$state'
+      preLoaderRoute: typeof SsoAgentsStateRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/tasks/$taskId': {
       id: '/_app/tasks/$taskId'
@@ -840,6 +879,7 @@ const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAttendanceRoute: typeof AppAttendanceRoute
+  AppCalendarRoute: typeof AppCalendarRoute
   AppComplaintsRoute: typeof AppComplaintsRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDocsRoute: typeof AppDocsRouteWithChildren
@@ -869,6 +909,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppAttendanceRoute: AppAttendanceRoute,
+  AppCalendarRoute: AppCalendarRoute,
   AppComplaintsRoute: AppComplaintsRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDocsRoute: AppDocsRouteWithChildren,
@@ -909,6 +950,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomDisplayRoomRoute: RoomDisplayRoomRoute,
   SSlugRoute: SSlugRoute,
   VSlugRoute: VSlugRoute,
+  SsoAgentsStateRoute: SsoAgentsStateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

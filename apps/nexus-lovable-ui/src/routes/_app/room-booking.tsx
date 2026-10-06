@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/room-booking")({ component: RoomBooking });
+// `booking`: a room-booking notification (old links went through /master-calendar?booking=<id>) opens the
+// month that holds that booking, scrolls to it and highlights it for a moment.
+export const Route = createFileRoute("/_app/room-booking")({
+  validateSearch: (s: Record<string, unknown>): { booking?: string } => ({
+    booking: typeof s.booking === "string" && s.booking ? s.booking : undefined,
+  }),
+  component: RoomBooking,
+});
 
 const ROOM_STYLE: Record<string, { dot: string; chip: string }> = {
   "Ruang Meeting VIP": { dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
@@ -30,6 +37,7 @@ function RoomBooking() {
   const [viewMonth, setViewMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const [roomFilter, setRoomFilter] = useState<string>("");
   const [composer, setComposer] = useState<{ booking?: NexusRoomBooking; date?: string } | null>(null);
+  const { booking: targetId } = Route.useSearch();
 
   const rangeStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).toISOString();
   const rangeEnd = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0, 23, 59, 59).toISOString();
@@ -39,6 +47,31 @@ function RoomBooking() {
     queryFn: () => nexusApi.roomBookings(rangeStart, rangeEnd, roomFilter || undefined),
     retry: 1,
   });
+
+  // Deep link: find the booking's month. There is no GET-by-id, so look a few months either side of
+  // today once (notifications are about recent or upcoming bookings) and jump to the month it is in.
+  const locateQ = useQuery({
+    // Not under "room-bookings": saving a booking invalidates those, and a refetch here would yank the
+    // view back to the linked month.
+    queryKey: ["room-booking-locate", targetId],
+    enabled: !!targetId,
+    staleTime: Infinity,
+    retry: 1,
+    queryFn: async () => {
+      const n = new Date();
+      const from = new Date(n.getFullYear(), n.getMonth() - 6, 1).toISOString();
+      const to = new Date(n.getFullYear(), n.getMonth() + 7, 0, 23, 59, 59).toISOString();
+      const r = await nexusApi.roomBookings(from, to);
+      return r.bookings.find((b) => b.id === targetId) ?? null;
+    },
+  });
+  const located = locateQ.data;
+  useEffect(() => {
+    if (!located) return;
+    const d = new Date(located.startsAt);
+    setViewMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+  }, [located]);
+  const targetKey = located ? dayKey(new Date(located.startsAt)) : "";
 
   const todayKey = dayKey(new Date());
   // Only the current-month view hides elapsed days (so the agenda starts at today); navigating to a past
@@ -53,10 +86,27 @@ function RoomBooking() {
       map.get(k)!.push(b);
     }
     return Array.from(map.entries())
-      .filter(([k]) => !hidePast || k >= todayKey)
+      .filter(([k]) => !hidePast || k >= todayKey || k === targetKey)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, items]) => [k, items.sort((x, y) => new Date(x.startsAt).getTime() - new Date(y.startsAt).getTime())] as const);
-  }, [bookingsQ.data, hidePast, todayKey]);
+  }, [bookingsQ.data, hidePast, todayKey, targetKey]);
+
+  // Scroll the linked booking into view once it is on screen, then let the highlight fade.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!targetId || scrolledTo.current === targetId) return;
+    const el = document.getElementById(`booking-${targetId}`);
+    if (!el) return;
+    scrolledTo.current = targetId;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    setFlashId(targetId);
+  }, [targetId, agenda]);
+  useEffect(() => {
+    if (!flashId) return;
+    const timer = window.setTimeout(() => setFlashId(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [flashId]);
 
   const shiftMonth = (delta: number) => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
 
@@ -115,7 +165,7 @@ function RoomBooking() {
                     {items.map((b) => {
                       const s = roomStyle(b.room);
                       return (
-                        <button key={b.id} onClick={() => setComposer({ booking: b })} className="group flex w-full items-stretch gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop active:scale-[0.98] motion-reduce:transform-none">
+                        <button key={b.id} id={`booking-${b.id}`} onClick={() => setComposer({ booking: b })} className={cn("group flex w-full scroll-mt-24 items-stretch gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop active:scale-[0.98] motion-reduce:transform-none", flashId === b.id && "border-primary ring-2 ring-primary/40")}>
                           <span className="w-16 shrink-0 pt-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
                             {fmtTime(b.startsAt)}
                             <span className="block font-normal text-muted-foreground/70">{fmtTime(b.endsAt)}</span>
