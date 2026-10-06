@@ -50,6 +50,7 @@
       "project": "PATS x Brand",
       "priority": "URGENT",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "recent"
      }
@@ -90,6 +91,7 @@
       "project": "Operasional",
       "priority": "MEDIUM",
       "dim": true,
+      "done": true,
       "masked": false,
       "overdue": "none"
      }
@@ -143,6 +145,7 @@
       "project": "Finance",
       "priority": "HIGH",
       "dim": false,
+      "done": false,
       "masked": true,
       "overdue": "recent"
      },
@@ -156,6 +159,7 @@
       "project": "Framework Agency",
       "priority": "MEDIUM",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "recent"
      }
@@ -628,6 +632,7 @@
      "project": "Finance",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": true,
      "overdue": "recent"
     },
@@ -641,6 +646,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -654,6 +660,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     }
@@ -757,6 +764,7 @@
      "project": "Suwara Radio",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -770,6 +778,7 @@
      "project": "PATS x Brand",
      "priority": "URGENT",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -783,6 +792,7 @@
      "project": "Finance",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": true,
      "overdue": "recent"
     }
@@ -807,6 +817,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -820,6 +831,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     }

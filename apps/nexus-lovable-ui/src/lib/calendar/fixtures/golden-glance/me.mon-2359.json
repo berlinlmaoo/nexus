@@ -50,6 +50,7 @@
       "project": "PATS x Brand",
       "priority": "URGENT",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "recent"
      }
@@ -90,6 +91,7 @@
       "project": "Operasional",
       "priority": "MEDIUM",
       "dim": true,
+      "done": true,
       "masked": false,
       "overdue": "none"
      }
@@ -143,6 +145,7 @@
       "project": "Finance",
       "priority": "HIGH",
       "dim": false,
+      "done": false,
       "masked": true,
       "overdue": "recent"
      },
@@ -156,6 +159,7 @@
       "project": "Framework Agency",
       "priority": "MEDIUM",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "recent"
      }
@@ -183,6 +187,7 @@
       "project": "PATS x Brand",
       "priority": "HIGH",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      },
@@ -196,6 +201,7 @@
       "project": "Jadwal Siaran",
       "priority": "NONE",
       "dim": true,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -223,6 +229,7 @@
       "project": "Framework Agency",
       "priority": "LOW",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -250,6 +257,7 @@
       "project": "Operasional",
       "priority": "MEDIUM",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      },
@@ -263,6 +271,7 @@
       "project": "Framework Agency",
       "priority": "MEDIUM",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -368,6 +377,7 @@
       "project": "Operasional",
       "priority": "HIGH",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -551,6 +561,7 @@
       "project": "Suwara Radio",
       "priority": "MEDIUM",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -604,6 +615,7 @@
       "project": "Operasional",
       "priority": "HIGH",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -644,6 +656,7 @@
       "project": "Framework Agency",
       "priority": "MEDIUM",
       "dim": false,
+      "done": false,
       "masked": false,
       "overdue": "none"
      }
@@ -752,6 +765,7 @@
      "project": "Finance",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": true,
      "overdue": "recent"
     },
@@ -765,6 +779,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -778,6 +793,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }
@@ -804,6 +820,7 @@
      "project": "PATS x Brand",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -817,6 +834,7 @@
      "project": "Jadwal Siaran",
      "priority": "NONE",
      "dim": true,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }
@@ -843,6 +861,7 @@
      "project": "Framework Agency",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }
@@ -869,6 +888,7 @@
      "project": "Operasional",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -882,6 +902,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -895,6 +916,7 @@
      "project": "Operasional",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }
@@ -955,6 +977,7 @@
     "project": "Operasional",
     "priority": "LOW",
     "dim": false,
+    "done": false,
     "masked": false,
     "overdue": "none"
    },
@@ -968,6 +991,7 @@
     "project": "PATS x Brand",
     "priority": "HIGH",
     "dim": false,
+    "done": false,
     "masked": false,
     "overdue": "none"
    },
@@ -981,6 +1005,7 @@
     "project": "Framework Agency",
     "priority": "LOW",
     "dim": false,
+    "done": false,
     "masked": false,
     "overdue": "none"
    },
@@ -994,6 +1019,7 @@
     "project": "Operasional",
     "priority": "MEDIUM",
     "dim": false,
+    "done": false,
     "masked": false,
     "overdue": "none"
    }
@@ -1015,6 +1041,7 @@
      "project": "Suwara Radio",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -1028,6 +1055,7 @@
      "project": "PATS x Brand",
      "priority": "URGENT",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -1041,6 +1069,7 @@
      "project": "Finance",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": true,
      "overdue": "recent"
     },
@@ -1054,6 +1083,7 @@
      "project": "PATS x Brand",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1067,6 +1097,7 @@
      "project": "Framework Agency",
      "priority": "URGENT",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1080,6 +1111,7 @@
      "project": "Legal",
      "priority": "URGENT",
      "dim": false,
+     "done": false,
      "masked": true,
      "overdue": "none"
     }
@@ -1099,6 +1131,7 @@
      "project": "Operasional",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1112,6 +1145,7 @@
      "project": "Operasional",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1125,6 +1159,7 @@
      "project": "Operasional",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1138,6 +1173,7 @@
      "project": "Framework Agency",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }
@@ -1157,6 +1193,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "recent"
     },
@@ -1170,6 +1207,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }
@@ -1189,6 +1227,7 @@
      "project": "Framework Agency",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1202,6 +1241,7 @@
      "project": "Operasional",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1215,6 +1255,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1228,6 +1269,7 @@
      "project": "Operasional",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1241,6 +1283,7 @@
      "project": "Suwara Radio",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1254,6 +1297,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1267,6 +1311,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     },
@@ -1280,6 +1325,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "none"
     }

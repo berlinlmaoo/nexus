@@ -662,6 +662,7 @@
      "project": "PATS x Brand",
      "priority": "URGENT",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "stale"
     }
@@ -681,6 +682,7 @@
      "project": "Suwara Radio",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "stale"
     },
@@ -694,6 +696,7 @@
      "project": "Finance",
      "priority": "HIGH",
      "dim": false,
+     "done": false,
      "masked": true,
      "overdue": "stale"
     }
@@ -718,6 +721,7 @@
      "project": "Framework Agency",
      "priority": "MEDIUM",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "stale"
     },
@@ -731,6 +735,7 @@
      "project": "Operasional",
      "priority": "LOW",
      "dim": false,
+     "done": false,
      "masked": false,
      "overdue": "stale"
     }

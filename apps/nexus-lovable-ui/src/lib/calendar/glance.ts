@@ -168,6 +168,8 @@ export type Bar = {
   priority: string | null
   /** Done, or a status-less project: drawn dimmed. */
   dim: boolean
+  /** Ticked done (a status-less project never is): the ✓. */
+  done: boolean
   masked: boolean
   overdue: Overdue
 }
@@ -183,6 +185,7 @@ function bar(e: GlanceEntry, day: string, hm: string, windowDays: number): Bar {
     project: e.p,
     priority: e.prio,
     dim: !entryOpen(e),
+    done: e.done && !e.ns,
     masked: e.m,
     overdue: entryOverdue(e, day, hm, windowDays),
   }
