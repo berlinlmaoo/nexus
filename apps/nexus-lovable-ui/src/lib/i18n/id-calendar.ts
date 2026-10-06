@@ -2,7 +2,7 @@
 export const ID_CALENDAR: Record<string, string> = {
   // Control Room › Calendar (components/calendar/CalendarSettingsAdmin.tsx)
   "Calendar": "Kalender",
-  "Couldn't load the calendar settings.": "Pengaturan kalender nggak bisa dimuat.",
+  "Couldn't load the calendar settings.": "Pengaturan kalender tidak bisa dimuat.",
   "Private projects": "Proyek rahasia",
   "Staff outside these projects see their tasks as “Internal task”, without the title. BoD and Managers see everything.": "Staff di luar proyek ini melihat tugas-tugasnya sebagai “Tugas internal”, tanpa judul. BoD dan Manager melihat semuanya.",
   "Projects whose name starts with {names} are private automatically.": "Proyek yang namanya diawali {names} otomatis rahasia.",
@@ -15,8 +15,8 @@ export const ID_CALENDAR: Record<string, string> = {
   "{name} is now private": "{name} sekarang rahasia",
   "{name} is no longer private": "{name} tidak lagi rahasia",
   "Project divisions": "Divisi proyek",
-  "A task with no PIC, or none of whose PICs is in the Bagan, goes to its project's division. It is worked out from the project folders — set it by hand here when it's wrong. A folder set by hand also covers its subfolders.": "Tugas tanpa PIC, atau yang PIC-nya tidak ada satu pun di Bagan, masuk ke divisi proyeknya. Divisinya ditentukan dari folder proyek — atur manual di sini kalau salah. Folder yang diatur manual ikut berlaku untuk subfoldernya.",
-  "The Bagan has no cards yet, so there is no division to choose.": "Bagan belum punya kartu, jadi belum ada divisi yang bisa dipilih.",
+  "A task with no PIC, or none of whose PICs is in the IP & Division Chart, goes to its project's division. It is worked out from the project folders — set it by hand here when it's wrong. A folder set by hand also covers its subfolders.": "Tugas tanpa PIC, atau yang PIC-nya tidak ada satu pun di Bagan IP & Divisi, masuk ke divisi proyeknya. Divisinya ditentukan dari folder proyek — atur manual di sini kalau salah. Folder yang diatur manual ikut berlaku untuk subfoldernya.",
+  "The IP & Division Chart has no cards yet, so there is no division to choose.": "Bagan IP & Divisi belum punya kartu, jadi belum ada divisi yang bisa dipilih.",
   "Search folders and projects": "Cari folder dan proyek",
   "Collapse all": "Tutup semua",
   "Expand all": "Buka semua",
@@ -27,7 +27,7 @@ export const ID_CALENDAR: Record<string, string> = {
   "folder set by hand": "folder diatur manual",
   "from the folder name": "dari nama folder",
   "from the project name": "dari nama proyek",
-  "not found — goes to the top card": "nggak ketemu — masuk ke kartu puncak",
+  "not found — goes to the top card": "tidak ditemukan — masuk ke kartu puncak",
   "{name} now goes to {unit}": "{name} sekarang masuk ke {unit}",
   "{name} is automatic again": "{name} kembali otomatis",
   "{name} is automatic again ({unit})": "{name} kembali otomatis ({unit})",

@@ -9,6 +9,8 @@ import {
   type EdgeSpec, type ManualItem, type Placement, type Pt, type Rect, type Size,
 } from "@/lib/org-chart-layout";
 import { cn } from "@/lib/utils";
+import { initialsOf } from "@/components/Avatar";
+import { useLogoTone } from "@/lib/calendar/tone";
 import { t, tn, useLang } from "@/lib/lang";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -913,10 +915,6 @@ function ChipLogo({ u }: { u: OrgUnit }) {
 }
 const label = (p: OrgChartPerson) => p.name ?? p.email;
 const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
-function initialsOf(name?: string | null) {
-  if (!name) return "?";
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
-}
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{children}</div>;
 }
@@ -1173,44 +1171,6 @@ function offsetIn(el: HTMLElement, root: HTMLElement): { x: number; y: number } 
   let cur: HTMLElement | null = el;
   while (cur && cur !== root) { x += cur.offsetLeft; y += cur.offsetTop; cur = cur.offsetParent as HTMLElement | null; }
   return { x, y };
-}
-
-/**
- * Whether a logo is mostly light (white text on a transparent PNG) or dark, from its own pixels, so it
- * gets a background it can be read on: light logos on the card's dark blue, dark ones on white
- * (owner, 30 Sep 2026: a white logo vanished on the white tile). Cached per URL.
- */
-const logoTone = new Map<string, "light" | "dark">();
-function useLogoTone(url: string | null): "light" | "dark" | null {
-  const [tone, setTone] = useState<"light" | "dark" | null>(url ? logoTone.get(url) ?? null : null);
-  useEffect(() => {
-    if (!url) { setTone(null); return; }
-    const known = logoTone.get(url);
-    if (known) { setTone(known); return; }
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const c = document.createElement("canvas");
-        c.width = 32; c.height = 32;
-        const ctx = c.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, 32, 32);
-        const d = ctx.getImageData(0, 0, 32, 32).data;
-        let sum = 0, n = 0;
-        for (let i = 0; i < d.length; i += 4) {
-          const a = d[i + 3] / 255;
-          if (a < 0.2) continue;
-          sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
-          n++;
-        }
-        const t = n > 0 && sum / n > 0.72 ? "light" : "dark";
-        logoTone.set(url, t);
-        setTone(t);
-      } catch { /* unreadable pixels: keep the white tile */ }
-    };
-    img.src = url;
-  }, [url]);
-  return tone;
 }
 
 function UnitLogo({ u, size }: { u: OrgUnit; size: number }) {

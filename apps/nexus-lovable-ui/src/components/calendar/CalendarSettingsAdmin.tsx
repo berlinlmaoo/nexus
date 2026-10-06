@@ -37,8 +37,12 @@ type SaveVars = {
 const fold = (s: string) => s.toLocaleLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
 
-const NAVY_ICON = "grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#1e3a5f] text-white dark:bg-[#9fb6d6] dark:text-[#0f1b2d]";
-const INPUT = "w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-base outline-none transition placeholder:text-muted-foreground/70 focus:border-[#1e3a5f] focus:ring-2 focus:ring-[#1e3a5f]/15 sm:text-sm dark:focus:border-[#9fb6d6]";
+const NAVY_ICON = "grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-cal-accent text-cal-accent-foreground";
+// The border turns accent on focus (that is the visible focus, ≥3:1); the faint ring only softens it.
+const INPUT = "w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-base outline-none transition placeholder:text-muted-foreground focus:border-cal-accent focus:ring-2 focus:ring-cal-accent/15 sm:text-sm";
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cal-accent";
+/** The calendar's own "on": accent when checked, a track that keeps 3:1 against the card when not. */
+const SWITCH = "data-[state=checked]:bg-cal-accent data-[state=unchecked]:bg-control-border";
 const CARD = "min-w-0 space-y-4 rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5";
 
 export function CalendarSettingsAdmin() {
@@ -71,7 +75,7 @@ export function CalendarSettingsAdmin() {
         <div className="text-lg font-bold">{t("Couldn't load the calendar settings.")}</div>
         {q.error instanceof ApiError && lang === "id" && <p className="mt-2 text-sm text-muted-foreground">{q.error.message}</p>}
         <button type="button" onClick={() => q.refetch()} disabled={q.isFetching}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50">
+          className={cn("mt-4 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50 pointer-coarse:min-h-11", FOCUS)}>
           {q.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Try again")}
         </button>
       </div>
@@ -139,9 +143,9 @@ function PrivateProjects({ data, save }: { data: Payload; save: Save }) {
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search projects")} aria-label={t("Search projects")} className={INPUT} />
         </div>
         <button type="button" onClick={() => setOnlyPrivate((v) => !v)} aria-pressed={onlyPrivate}
-          className={cn("inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:self-auto",
-            onlyPrivate ? "border-[#1e3a5f] bg-[#1e3a5f] text-white dark:border-[#9fb6d6] dark:bg-[#9fb6d6] dark:text-[#0f1b2d]" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
-          <Lock className="h-3 w-3" /> {t("Private only ({n})", { n: privateCount })}
+          className={cn("inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-full border px-3 py-1.5 text-xs font-semibold transition sm:self-auto pointer-coarse:min-h-11", FOCUS,
+            onlyPrivate ? "border-cal-accent bg-cal-accent text-cal-accent-foreground" : "border-border bg-background text-muted-foreground hover:border-cal-accent/40 hover:text-foreground")}>
+          <Lock aria-hidden className="h-3 w-3" /> {t("Private only ({n})", { n: privateCount })}
         </button>
       </div>
 
@@ -163,14 +167,13 @@ function PrivateProjects({ data, save }: { data: Payload; save: Save }) {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium" title={p.name}>{p.name}</div>
                   {why && (
-                    <div className={cn("mt-0.5 inline-flex items-center gap-1 text-[11px]", p.private ? "font-semibold text-[#1e3a5f] dark:text-[#9fb6d6]" : "text-muted-foreground")}>
+                    <div className={cn("mt-0.5 inline-flex items-center gap-1 text-2xs", p.private ? "font-semibold text-cal-accent" : "text-muted-foreground")}>
                       {p.private && <Lock className="h-2.5 w-2.5" />} {why}
                     </div>
                   )}
                 </div>
                 {saving && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
-                <Switch checked={checked} onCheckedChange={(v) => toggle(p, v)} disabled={save.isPending} aria-label={p.name}
-                  className="data-[state=checked]:bg-[#1e3a5f] dark:data-[state=checked]:bg-[#9fb6d6]" />
+                <Switch checked={checked} onCheckedChange={(v) => toggle(p, v)} disabled={save.isPending} aria-label={p.name} className={SWITCH} />
               </li>
             );
           })}
@@ -305,9 +308,9 @@ function ProjectDivisions({ data, save }: { data: Payload; save: Save }) {
             <span className="truncate text-sm font-medium" title={p.name}>{p.name}</span>
             {busyRow === p.id && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[18px] text-[11px]">
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[18px] text-2xs">
             <span className={cn("max-w-full truncate rounded-md px-1.5 py-0.5 font-semibold",
-              p.unitId ? "bg-[#edf2f9] text-[#1e3a5f] dark:bg-[#1a2a41] dark:text-[#dce7f6]" : "bg-muted text-muted-foreground")}>
+              p.unitId ? "bg-cal-accent-soft text-cal-accent-soft-foreground" : "bg-muted text-muted-foreground")}>
               {unitName(p.unitId)}
             </span>
             {p.unitBy && <span className={cn(p.unitBy === "top" ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>{whyLabel(p.unitBy, t)}</span>}
@@ -352,13 +355,13 @@ function ProjectDivisions({ data, save }: { data: Payload; save: Save }) {
         <div className="min-w-0">
           <h2 className="font-display text-base font-bold tracking-tight">{t("Project divisions")}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {t("A task with no PIC, or none of whose PICs is in the Bagan, goes to its project's division. It is worked out from the project folders — set it by hand here when it's wrong. A folder set by hand also covers its subfolders.")}
+            {t("A task with no PIC, or none of whose PICs is in the IP & Division Chart, goes to its project's division. It is worked out from the project folders — set it by hand here when it's wrong. A folder set by hand also covers its subfolders.")}
           </p>
         </div>
       </div>
 
       {data.units.length === 0 && (
-        <p className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">{t("The Bagan has no cards yet, so there is no division to choose.")}</p>
+        <p className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">{t("The IP & Division Chart has no cards yet, so there is no division to choose.")}</p>
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -368,7 +371,7 @@ function ProjectDivisions({ data, save }: { data: Payload; save: Save }) {
         </div>
         {!hits && (
           <button type="button" onClick={() => setClosed(anyOpen ? new Set(allGroupIds) : new Set())}
-            className="inline-flex shrink-0 items-center justify-center gap-1 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#1e3a5f] transition hover:bg-accent sm:self-auto dark:text-[#9fb6d6]">
+            className={cn("inline-flex shrink-0 items-center justify-center gap-1 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold text-cal-accent transition hover:bg-accent sm:self-auto pointer-coarse:min-h-11", FOCUS)}>
             {anyOpen ? t("Collapse all") : t("Expand all")}
           </button>
         )}
@@ -421,11 +424,11 @@ function FolderToggle({ open, name, count, onClick, disabled, busy, muted }: { o
   const Icon = open ? FolderOpen : Folder;
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-expanded={open}
-      className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1 text-left transition hover:text-[#1e3a5f] disabled:cursor-default disabled:hover:text-inherit dark:hover:text-[#9fb6d6]">
+      className={cn("flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1 text-left transition hover:text-cal-accent disabled:cursor-default disabled:hover:text-inherit pointer-coarse:min-h-11", FOCUS)}>
       <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90", disabled && "opacity-0")} />
-      <Icon className={cn("h-4 w-4 shrink-0", muted ? "text-muted-foreground" : "text-[#1e3a5f] dark:text-[#9fb6d6]")} />
+      <Icon aria-hidden className={cn("h-4 w-4 shrink-0", muted ? "text-muted-foreground" : "text-cal-accent")} />
       <span className={cn("truncate text-sm font-semibold", muted && "text-muted-foreground")} title={name}>{name}</span>
-      <span className="shrink-0 text-[11px] font-medium text-muted-foreground">· {tn(count, "{n} project", "{n} projects")}</span>
+      <span className="shrink-0 text-2xs font-medium text-muted-foreground">· {tn(count, "{n} project", "{n} projects")}</span>
       {busy && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
     </button>
   );
@@ -437,7 +440,7 @@ function UnitSelect({ value, units, disabled, onChange, label }: { value: string
     <Select value={value ?? AUTO} onValueChange={(v) => { if (v !== (value ?? AUTO)) onChange(v === AUTO ? null : v); }} disabled={disabled}>
       <SelectTrigger aria-label={label}
         className={cn("h-9 w-full min-w-0 rounded-lg bg-background text-xs sm:w-56 sm:shrink-0",
-          value ? "border-[#1e3a5f]/50 font-semibold text-[#1e3a5f] dark:border-[#9fb6d6]/50 dark:text-[#9fb6d6]" : "text-muted-foreground")}>
+          value ? "border-cal-accent/50 font-semibold text-cal-accent" : "text-muted-foreground")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="max-h-72">
