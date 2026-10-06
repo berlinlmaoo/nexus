@@ -7,7 +7,7 @@ import { useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { SLATE, STATUS, statusTone } from "@/lib/calendar/tone";
-import { Face, FOCUS_PILL, fmtTime, PriorityChip } from "./bits";
+import { CAPS, Face, FOCUS_PILL, fmtTime, PriorityChip, TOUCH_ICON, TOUCH_ROW } from "./bits";
 
 /**
  * A task the viewer may read but not change (owner, 5 Oct 2026: someone outside the task's project can
@@ -15,7 +15,9 @@ import { Face, FOCUS_PILL, fmtTime, PriorityChip } from "./bits";
  * controls at all, so nothing can fail with "Forbidden" halfway through an edit.
  *
  * Built on the app's Radix dialog (focus trap, Escape, scroll lock), drawn as before: a full-screen sheet
- * on a phone, a centred card from `sm` up.
+ * on a phone, a centred card from `sm` up. Focus starts on Close. Loading is said in a status region
+ * that then reads out the task's title once it arrives (the dialog's name changes, which nobody hears);
+ * a failure is an alert, with Try again.
  */
 export function TaskPreview({ taskId, projectName, notMember, masked = false, onClose }: { taskId: string; projectName: string | null; notMember: boolean; masked?: boolean; onClose: () => void }) {
   const { t, lang, locale } = useLang();
@@ -32,6 +34,11 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
   const dueDay = wib ? wib.toISOString().slice(0, 10) : null;
   const project = task?.taskList?.project?.name ?? projectName;
   const linked = (task?.taskProjects ?? []).map((l) => l.project?.name).filter((n): n is string => !!n && n !== project);
+  const loading = !masked && q.isLoading;
+  const failed = !masked && q.isError;
+  // Read the title out only when the task arrived after the dialog opened; a cached task is already
+  // the dialog's name.
+  const [waited] = useState(() => loading);
   const statusLabel = (s?: string | null) => s === "DONE" ? t("Done") : s === "IN_PROGRESS" ? t("In progress") : s === "IN_REVIEW" ? t("In review") : s === "CANCELLED" ? t("Cancelled") : t("To do");
   const showTask = !masked && !!task;
 
@@ -46,15 +53,36 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
           onCloseAutoFocus={(e) => { e.preventDefault(); if (opener?.isConnected) opener.focus(); }}
           className="fixed z-[60] flex w-full flex-col overflow-hidden bg-card shadow-pop outline-none max-sm:inset-0 max-sm:h-[100dvh] sm:left-1/2 sm:top-1/2 sm:max-h-[92dvh] sm:w-[calc(100%-2rem)] sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border sm:border-border">
           {!showTask && <DialogTitle className="sr-only">{t("Task")}</DialogTitle>}
-          <div className="flex items-center gap-2 border-b border-border bg-amber-50 px-4 py-2.5 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          <div className="flex items-center gap-2 border-b border-border bg-cal-readonly px-4 py-2.5 text-xs text-cal-readonly-foreground">
             <Eye aria-hidden className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">{project && notMember ? t("Read only · you are not a member of {project}", { project }) : t("Read only")}</span>
-            <button ref={closeRef} type="button" onClick={onClose} aria-label={t("Close")} className={cn("grid size-8 place-items-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 pointer-coarse:size-11", FOCUS_PILL)}><X className="h-4 w-4" /></button>
+            <button ref={closeRef} type="button" onClick={onClose} aria-label={t("Close")} className={cn("grid size-8 place-items-center rounded-lg hover:bg-cal-readonly-foreground/10", TOUCH_ICON, FOCUS_PILL)}><X className="h-4 w-4" /></button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div aria-busy={loading || undefined} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             {masked && <div className="py-12 text-center text-sm text-muted-foreground">{t("This is an internal task of a private project. Only its members can open it.")}</div>}
-            {!masked && q.isLoading && <div className="grid place-items-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-            {!masked && q.isError && <div className="py-12 text-center text-sm text-muted-foreground">{t("This task could not be loaded.")}</div>}
+            {/* Always in the dialog, so what changes inside it is read out. */}
+            <div role="status" aria-live="polite">
+              {loading && (
+                <div className="grid place-items-center gap-2 py-16 text-muted-foreground">
+                  <Loader2 aria-hidden className="h-6 w-6 animate-spin motion-reduce:animate-none" />
+                  <span className="text-xs">{t("Loading task…")}</span>
+                </div>
+              )}
+              {waited && showTask && task && <span className="sr-only">{task.title}</span>}
+            </div>
+            {failed && (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                <p role="alert">{t("This task could not be loaded.")}</p>
+                {/* aria-disabled, not disabled: a focused button that turns disabled drops focus to the page.
+                    Once the task loads this button is gone, so focus goes back to Close. */}
+                <button type="button" aria-disabled={q.isFetching || undefined}
+                  onClick={() => { if (!q.isFetching) void q.refetch().then((r) => { if (r.isSuccess) closeRef.current?.focus(); }); }}
+                  className={cn("mt-3 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted aria-disabled:opacity-50", TOUCH_ROW, FOCUS_PILL)}>
+                  {q.isFetching && <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />}
+                  {t("Try again")}
+                </button>
+              </div>
+            )}
             {showTask && task && (
               <div className="space-y-5">
                 {task.parent && <div className="flex items-center gap-1 text-xs text-muted-foreground"><CornerDownRight aria-hidden className="h-3.5 w-3.5" />{t("from {task}", { task: task.parent.title })}</div>}
@@ -77,13 +105,13 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
                 </dl>
                 {task.description && (
                   <section>
-                    <h3 className="mb-1.5 text-2xs font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("Description")}</h3>
+                    <h3 className={cn("mb-1.5 text-muted-foreground", CAPS)}>{t("Description")}</h3>
                     <div className="whitespace-pre-wrap rounded-xl bg-muted/40 px-3 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]">{task.description}</div>
                   </section>
                 )}
                 {(task.subtasks ?? []).length > 0 && (
                   <section>
-                    <h3 className="mb-1.5 text-2xs font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("Subtasks")}</h3>
+                    <h3 className={cn("mb-1.5 text-muted-foreground", CAPS)}>{t("Subtasks")}</h3>
                     <ul className="space-y-1">
                       {(task.subtasks ?? []).map((s) => (
                         <li key={s.id} className={cn("flex items-center gap-2 text-sm", s.status === "DONE" && "text-muted-foreground line-through")}>
@@ -95,7 +123,7 @@ export function TaskPreview({ taskId, projectName, notMember, masked = false, on
                 )}
                 {(task.comments ?? []).length > 0 && (
                   <section>
-                    <h3 className="mb-1.5 text-2xs font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("Comments")}</h3>
+                    <h3 className={cn("mb-1.5 text-muted-foreground", CAPS)}>{t("Comments")}</h3>
                     <ul className="space-y-3">
                       {(task.comments ?? []).map((c) => (
                         <li key={c.id} className="flex gap-2.5">

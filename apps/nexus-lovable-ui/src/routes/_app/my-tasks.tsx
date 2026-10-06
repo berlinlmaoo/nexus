@@ -111,9 +111,9 @@ function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
           {update.isError && <span className="text-red-500">Update failed</span>}
         </div>
       </div>
-      <span className={`hidden sm:inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "Normal")}</span>
+      <span className={`hidden sm:inline-flex rounded-full px-2 py-0.5 text-2xs font-bold ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "Normal")}</span>
       <span className="hidden md:block text-xs text-muted-foreground w-24 text-right">{fmtDue(task.dueDate)}</span>
-      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{statusLabel(task.status)}</span>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-bold text-muted-foreground">{statusLabel(task.status)}</span>
       <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title={assignee?.name || "Unassigned"}>{initials(assignee?.name)}</div>
     </motion.div>
   );

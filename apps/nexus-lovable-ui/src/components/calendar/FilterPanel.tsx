@@ -3,24 +3,26 @@ import { Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { Switch } from "@/components/ui/switch";
-import type { CalFilters, CalIndex, CalItem, CalScope } from "@/lib/calendar/core";
-import { Face, FOCUS_PILL, FOCUS_ROW, UnitDot, type PeopleLookup } from "./bits";
+import type { CalFilters, CalIndex, CalItem } from "@/lib/calendar/core";
+import { SLATE } from "@/lib/calendar/tone";
+import { CAL_SWITCH, CAPS, Face, FOCUS_PILL, FOCUS_ROW, SWATCH_EDGE, TOUCH_ROW, UnitDot, type PeopleLookup } from "./bits";
 
 const PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const;
 /** Rows a list shows before "Show all": the panel is the only scroller, lists never scroll on their own. */
 const LIST_CAP = 8;
 
-const ROW = cn("flex w-full items-center gap-2 border-b border-border/60 py-1.5 text-left last:border-b-0 hover:bg-muted/60 pointer-coarse:min-h-11", FOCUS_ROW);
-const SWITCH = "data-[state=checked]:bg-cal-accent data-[state=unchecked]:bg-control-border";
+const ROW = cn("flex w-full items-center gap-2 border-b border-border/60 py-1.5 text-left last:border-b-0 hover:bg-muted/60", TOUCH_ROW, FOCUS_ROW);
 
 /**
  * Every filter of the Calendar. They all run in the browser over what is already loaded, and move the
  * dots, counts, legend, day panel and People view together. The server only decides what may be seen.
  * `onDone` (optional) adds a "Done" button that closes the popover or drawer around the panel.
+ * Show (Everyone / Mine / My division) is not here: it is a view, not a filter, so it lives in the page
+ * header on every screen size, the badge never counts it and Reset never changes it.
  */
-export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, people, myHomes }: {
+export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, people }: {
   filters: CalFilters; onChange: (f: CalFilters) => void; onReset: () => void; onDone?: () => void
-  ix: CalIndex; items: CalItem[]; people: PeopleLookup; myHomes: string[]
+  ix: CalIndex; items: CalItem[]; people: PeopleLookup
 }) {
   const { t, lang } = useLang();
   const [personQ, setPersonQ] = useState("");
@@ -50,27 +52,10 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
   const peopleShown = peopleIds.filter((id) => !pq || people(id).name.toLowerCase().includes(pq));
   const projectsShown = projects.filter((p) => !prq || p.name.toLowerCase().includes(prq));
 
-  const scopes: { id: CalScope; label: string; disabled?: boolean }[] = [
-    { id: "all", label: t("Everyone") },
-    { id: "me", label: t("Mine") },
-    { id: "division", label: t("My division"), disabled: myHomes.length === 0 },
-  ];
 
   return (
     // The panel renders in a portal (popover, drawer), outside the page's lang root.
     <div lang={lang} className="space-y-5">
-      <Block title={t("Show")}>
-        <div className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-background p-0.5">
-          {scopes.map((s) => (
-            <button key={s.id} type="button" disabled={s.disabled} aria-pressed={filters.scope === s.id} onClick={() => set({ scope: s.id })}
-              className={cn("rounded-md py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:min-h-11", FOCUS_PILL,
-                filters.scope === s.id ? "bg-cal-accent text-cal-accent-foreground" : "text-muted-foreground hover:bg-muted")}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-        {myHomes.length === 0 && <p className="mt-1.5 text-xs text-muted-foreground">{t("You are not in the chart yet, so \"My division\" is off.")}</p>}
-      </Block>
 
       <Block title={t("Divisions")} count={filters.units.length}>
         <div className="overflow-hidden rounded-xl border border-border">
@@ -81,7 +66,7 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
                 className={cn(ROW, "pr-3")} style={{ paddingLeft: 10 + u.depth * 14 }}>
                 <CheckBox on={on} />
                 <UnitDot unit={u} size={8} />
-                <span className={cn("min-w-0 flex-1 truncate", u.kind === "GROUP" ? "text-2xs font-bold uppercase tracking-[0.08em] text-muted-foreground" : "text-sm font-medium")}>{u.name}</span>
+                <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", u.kind === "GROUP" ? cn(CAPS, SLATE.text) : "text-sm font-medium")}>{u.name}</span>
               </button>
             );
           })}
@@ -99,7 +84,7 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
               <button key={id} type="button" role="checkbox" aria-checked={on} onClick={() => set({ people: flip(filters.people, id) })} className={cn(ROW, "px-2.5")}>
                 <CheckBox on={on} />
                 <Face name={p.name} avatar={p.avatar} size={20} />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                <span className="min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]">{p.name}</span>
               </button>
             );
           })}
@@ -116,8 +101,8 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
             return (
               <button key={p.id} type="button" role="checkbox" aria-checked={on} onClick={() => set({ projects: flip(filters.projects, p.id) })} className={cn(ROW, "px-2.5")}>
                 <CheckBox on={on} />
-                <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: p.color }} />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", SWATCH_EDGE)} style={{ background: p.color }} />
+                <span className="min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]">{p.name}</span>
               </button>
             );
           })}
@@ -132,7 +117,7 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
             const on = filters.priorities.includes(p);
             return (
               <button key={p} type="button" aria-pressed={on} onClick={() => set({ priorities: flip(filters.priorities, p) })}
-                className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors pointer-coarse:min-h-11", FOCUS_PILL, on ? "border-cal-accent bg-cal-accent text-cal-accent-foreground" : "border-border text-muted-foreground hover:border-cal-accent/40 hover:text-foreground")}>
+                className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors", TOUCH_ROW, FOCUS_PILL, on ? "border-cal-accent bg-cal-accent text-cal-accent-foreground" : "border-border text-muted-foreground hover:border-cal-accent/40 hover:text-foreground")}>
                 {priorityLabel(p, t)}
               </button>
             );
@@ -141,23 +126,24 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
       </Block>
 
       <div className="space-y-2 rounded-xl border border-border p-3">
-        <label className="flex items-center justify-between gap-3 text-sm font-medium pointer-coarse:min-h-11">
+        <label className={cn("flex items-center justify-between gap-3 text-sm font-medium", TOUCH_ROW)}>
           {t("Hide done tasks")}
-          <Switch checked={filters.hideDone} onCheckedChange={(v) => set({ hideDone: v })} className={SWITCH} />
+          <Switch checked={filters.hideDone} onCheckedChange={(v) => set({ hideDone: v })} className={CAL_SWITCH} />
         </label>
-        <label className="flex items-center justify-between gap-3 text-sm font-medium pointer-coarse:min-h-11">
+        <label className={cn("flex items-center justify-between gap-3 text-sm font-medium", TOUCH_ROW)}>
           {t("Only overdue")}
-          <Switch checked={filters.overdueOnly} onCheckedChange={(v) => set({ overdueOnly: v })} className={SWITCH} />
+          <Switch checked={filters.overdueOnly} onCheckedChange={(v) => set({ overdueOnly: v })} className={CAL_SWITCH} />
         </label>
       </div>
 
       {/* Stays at the bottom of the popover / drawer while the lists scroll under it. Both give the panel
           1rem of side padding (hence -mx-4); the popover also pads its bottom by 1rem, which a sticky box
-          stops short of, so there it sticks 1rem lower. The drawer's surface is the page background. */}
+          stops short of, so there it sticks 1rem lower. The drawer's surface is the page background.
+          Reset clears the filters only: Show is a view and stays as it is (the page's reset keeps it). */}
       <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border bg-popover px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 [[data-radix-popper-content-wrapper]_&]:-bottom-4 [[data-vaul-drawer]_&]:bg-background">
-        <button type="button" onClick={onReset} className={cn("min-h-9 flex-1 rounded-xl border border-border py-2 text-sm font-semibold hover:bg-muted pointer-coarse:min-h-11", FOCUS_PILL)}>{t("Reset filters")}</button>
+        <button type="button" onClick={onReset} className={cn("min-h-9 flex-1 rounded-xl border border-border py-2 text-sm font-semibold hover:bg-muted", TOUCH_ROW, FOCUS_PILL)}>{t("Reset filters")}</button>
         {onDone && (
-          <button type="button" onClick={onDone} className={cn("min-h-9 flex-1 rounded-xl bg-cal-accent py-2 text-sm font-semibold text-cal-accent-foreground hover:bg-cal-accent/90 pointer-coarse:min-h-11", FOCUS_PILL)}>{t("Done")}</button>
+          <button type="button" onClick={onDone} className={cn("min-h-9 flex-1 rounded-xl bg-cal-accent py-2 text-sm font-semibold text-cal-accent-foreground hover:bg-cal-accent/90", TOUCH_ROW, FOCUS_PILL)}>{t("Done")}</button>
         )}
       </div>
     </div>
@@ -173,7 +159,7 @@ function Block({ title, count, children }: { title: string; count?: number; chil
   const id = useId();
   return (
     <div role="group" aria-labelledby={id}>
-      <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
+      <div className={cn("mb-1.5 flex items-center gap-1.5 text-muted-foreground", CAPS)}>
         <span id={id}>{title}</span>
         {!!count && <span aria-hidden className="rounded-full bg-cal-accent px-1.5 text-2xs text-cal-accent-foreground">{count}</span>}
       </div>
@@ -188,7 +174,7 @@ function MoreToggle({ total, open, onClick }: { total: number; open: boolean; on
   if (total <= LIST_CAP) return null;
   return (
     <button type="button" onClick={onClick} aria-expanded={open}
-      className={cn("mt-1 min-h-8 rounded-lg px-2 text-xs font-semibold text-cal-accent hover:bg-muted pointer-coarse:min-h-11", FOCUS_PILL)}>
+      className={cn("mt-1 min-h-8 rounded-lg px-2 text-xs font-semibold text-cal-accent hover:bg-muted", TOUCH_ROW, FOCUS_PILL)}>
       {open ? t("Show less") : t("Show all ({n})", { n: total })}
     </button>
   );

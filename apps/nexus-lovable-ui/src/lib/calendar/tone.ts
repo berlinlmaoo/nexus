@@ -40,11 +40,14 @@ export function priorityTone(priority?: string | null): string {
 
 // ── Status ─────────────────────────────────────────────────────────────────────────────────────────
 
-/** The slate of an open task (its ring, the "no status" diamond); also the label of a group ribbon. */
+/**
+ * The slate of an open task (its ring, the "no status" diamond); also the label of a group ribbon and
+ * the dot of a task placed nowhere. The token (--cal-todo in styles.css) carries both themes.
+ */
 export const SLATE = {
-  text: "text-[#5a6b83] dark:text-[#9fb0c8]",
-  border: "border-[#5a6b83] dark:border-[#9fb0c8]",
-  bg: "bg-[#5a6b83] dark:bg-[#9fb0c8]",
+  text: "text-cal-todo",
+  border: "border-cal-todo",
+  bg: "bg-cal-todo",
 } as const;
 
 export const STATUS = {
@@ -59,9 +62,12 @@ export const STATUS = {
    * against the card (the old light grey ring was 2.5:1, and 1.9:1 once the row was faded).
    */
   staleRing: "border-dashed border-control-border",
-  /** "Overdue" as text: 5.7:1 on the rose rail, 6.3:1 on the dark card. */
-  overdueText: "text-rose-700 dark:text-rose-400",
-  overdueIcon: "text-rose-600 dark:text-rose-400",
+  /**
+   * "Overdue" as text and as its icon: the one overdue red (--cal-overdue), the same as the overdue rail,
+   * the grid's overdue bar and a holiday's red, in both themes.
+   */
+  overdueText: "text-cal-overdue",
+  overdueIcon: "text-cal-overdue",
 } as const;
 
 /** Background + text classes for a task status chip (task preview). */
