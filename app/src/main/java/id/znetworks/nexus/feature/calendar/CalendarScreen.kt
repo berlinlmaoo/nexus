@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +41,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -55,6 +58,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.IconButton
@@ -64,6 +69,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
@@ -124,6 +130,9 @@ import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.runtime.snapshotFlow
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -189,6 +198,8 @@ sealed interface PanelRow {
     data class Task(override val key: String, val item: CalItem, val unitId: String?, val person: String?, val depth: Int, val cardUnit: String?, val last: Boolean) : PanelRow
     data class End(override val key: String, val cardUnit: String?) : PanelRow
     data class UnplacedHead(override val key: String, val count: Int) : PanelRow
+    /** Consecutive masked rows of one place, as one line: "4 internal tasks · Haykal, Geraldo" (audit 2 #26). */
+    data class MaskedGroup(override val key: String, val items: List<CalItem>, val unitId: String?, val depth: Int, val cardUnit: String?) : PanelRow
 }
 
 /** The selected day: its tree, the rail, and the panel rows for the lens. */
@@ -251,6 +262,23 @@ class CalDay(val data: CalData, day: String, lens: CalLens, collapsed: Set<Strin
             }
             out += PanelRow.End("e:unplaced", "unplaced")
         }
+        return group(out)
+    }
+
+    /** Runs of 2+ masked task rows in the same place become one MaskedGroup. */
+    private fun group(rows: List<PanelRow>): List<PanelRow> {
+        val out = mutableListOf<PanelRow>()
+        var run = mutableListOf<PanelRow.Task>()
+        fun flush() {
+            if (run.size >= 2) out += PanelRow.MaskedGroup("m:" + run.first().key, run.map { it.item }, run.first().unitId, run.first().depth, run.first().cardUnit)
+            else out += run
+            run = mutableListOf()
+        }
+        for (r in rows) {
+            val same = r is PanelRow.Task && r.item.masked && run.firstOrNull()?.let { it.unitId == r.unitId && it.person == r.person && it.cardUnit == r.cardUnit } != false
+            if (same) run += r as PanelRow.Task else { flush(); out += r }
+        }
+        flush()
         return out
     }
 }
@@ -285,7 +313,10 @@ internal fun rememberDerived(s: CalState, dark: Boolean): CalDerived? {
     val index = remember(structure, dark) { CalIndex(structure, dark) }
     val data = remember(index, s.items, s.itemsRange, s.overdue, s.filters, s.focusId, s.range, s.view, s.day.substring(0, 7), s.day == s.today) { CalData(index, s) }
     val day = remember(data, s.day, s.lens, s.collapsed) { CalDay(data, s.day, s.lens, s.collapsed) }
-    return CalDerived(s, index, data, day)
+    // The same handle while nothing it exposes changed: polls, opening a task or a refresh flag skip every row (audit 2 #21).
+    return remember(index, data, day, s.filters, s.day, s.view, s.lens, s.collapsed, s.offline, s.loadedAt, s.rangeError, s.divisionFallback, s.railAll, s.hintSeen) {
+        CalDerived(s, index, data, day)
+    }
 }
 
 /** Window size classes (audit #11): compact < 600, medium 600–839, expanded ≥ 840 (and tall enough for two panes). */
@@ -331,10 +362,10 @@ fun CalendarScreen(
         }
     }
     CalendarContent(s, vm, onBack, onOpenMyMission)
-    when (opening) {
-        CalOpen.Masked, CalOpen.NotFound -> MessageDialog(opening == CalOpen.Masked) { vm.opened() }
-        else -> {}
-    }
+    // A task that no longer exists: a dialog that says so, no connection icon (audit 2 #25).
+    if (opening == CalOpen.Gone) AlertDialog(onDismissRequest = { vm.opened() },
+        text = { Text(stringResource(R.string.cal_task_gone)) },
+        confirmButton = { TextButton(onClick = { vm.opened() }) { Text(stringResource(R.string.cal_close)) } })
 }
 
 /** The screen for a state: shared by the live screen and the debug preview. */
@@ -347,6 +378,17 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
     val snackbar = remember { SnackbarHostState() }
     val failedText = s.loadedAt?.let { stringResource(R.string.cal_refresh_failed, loadedClock(it)) }
     LaunchedEffect(s.refreshFailures) { if (s.refreshFailures > 0 && failedText != null) snackbar.showSnackbar(failedText) }
+    // Masked: the reason, once, in a snackbar — not a dialog (audit 2 #26). Offline: the reason with Retry (audit 2 #25).
+    val maskedNote = stringResource(R.string.cal_masked_note)
+    val offlineNote = stringResource(R.string.cal_task_offline)
+    val retry = stringResource(R.string.try_again)
+    LaunchedEffect(s.opening) {
+        when (val o = s.opening) {
+            CalOpen.Masked -> { vm.opened(); snackbar.showSnackbar(maskedNote, withDismissAction = true) }
+            is CalOpen.Offline -> { vm.opened(); if (snackbar.showSnackbar(offlineNote, actionLabel = retry, withDismissAction = true) == SnackbarResult.ActionPerformed) vm.openById(o.taskId) }
+            else -> {}
+        }
+    }
     val d = rememberDerived(s, dark)
     // Back zooms out before it leaves the Calendar (audit #32).
     BackHandler(enabled = !filtersOpen && d != null && !d.atTop) { vm.focus(d?.ix?.ancestors(d.focus)?.firstOrNull()) }
@@ -354,13 +396,20 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
     // Icons and text default to the theme's foreground (no Surface here): visible in dark mode too.
     CompositionLocalProvider(LocalContentColor provides c.foreground) {
     BoxWithConstraints(Modifier.fillMaxSize().background(c.background)) {
+        val shortHeight = maxHeight < 480.dp
         val layout = when {
-            maxWidth >= 840.dp && maxHeight >= 480.dp -> CalLayout.EXPANDED
+            maxWidth >= 840.dp && !shortHeight -> CalLayout.EXPANDED
+            // A phone on its side: height is the scarce axis, so grid | day side by side (audit 2 #7).
+            maxWidth >= 600.dp && shortHeight -> CalLayout.EXPANDED
             maxWidth >= 600.dp -> CalLayout.MEDIUM
             else -> CalLayout.COMPACT
         }
-        val shortHeight = maxHeight < 480.dp
-        val panelWidth = (maxWidth * 0.4f).coerceIn(360.dp, 420.dp)
+        // Expanded shows two panes; a third (grid | day | filters) only from 1200 dp (M3 large), otherwise
+        // the filters take the day pane's place (audit 2 #1). Widths come from what is actually left.
+        val threePanes = layout == CalLayout.EXPANDED && filtersOpen && maxWidth >= 1200.dp
+        val filtersWidth = 400.dp
+        val calendarWidth = if (filtersOpen && layout == CalLayout.EXPANDED) maxWidth - filtersWidth - 1.dp else maxWidth
+        val panelWidth = (calendarWidth * 0.4f).coerceIn(320.dp, 420.dp)
         Row(Modifier.fillMaxSize()) {
             // Filters replace the screen on compact and medium; a side panel when expanded (audit #12, #24).
             if (!filtersOpen || layout == CalLayout.EXPANDED) Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -377,7 +426,7 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
                         @OptIn(ExperimentalMaterial3Api::class)
                         PullToRefreshBox(isRefreshing = s.refreshing, onRefresh = { vm.refresh(pulled = true) }, modifier = Modifier.fillMaxSize()) {
                             if (s.view == CalView.PEOPLE) PeopleView(d, vm, tablet = layout != CalLayout.COMPACT, onFilters = { filtersOpen = true })
-                            else if (layout == CalLayout.EXPANDED) TwoPane(d, vm, panelWidth)
+                            else if (layout == CalLayout.EXPANDED) TwoPane(d, vm, panelWidth, showDay = !filtersOpen || threePanes, shortHeight = shortHeight)
                             else OnePane(d, vm, medium = layout == CalLayout.MEDIUM, shortHeight = shortHeight)
                         }
                     }
@@ -385,7 +434,7 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
             }
             if (filtersOpen && d != null) {
                 if (layout == CalLayout.EXPANDED) VerticalDivider(color = c.border)
-                FiltersScreen(d, vm, if (layout == CalLayout.EXPANDED) Modifier.width(420.dp).fillMaxHeight() else Modifier.fillMaxSize()) { filtersOpen = false }
+                FiltersScreen(d, vm, if (layout == CalLayout.EXPANDED) Modifier.width(filtersWidth).fillMaxHeight() else Modifier.fillMaxSize()) { filtersOpen = false }
             }
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
@@ -413,44 +462,71 @@ private fun Header(d: CalDerived?, onBack: () -> Unit, onToday: () -> Unit, onFi
     }
 }
 
-/** Compact and medium: one list. A tap on a day scrolls its tasks into view (audit #29). */
+/**
+ * After the person asks for a day (cell, Today, day arrows) — and once on the first open on today — bring
+ * the day header into view, then move focus to it so its live region announces the day (audit 2 #3, #12).
+ */
+@Composable
+private fun RevealDay(d: CalDerived, list: LazyListState, head: Int, focus: FocusRequester, animate: Boolean) {
+    var firstOpenDone by rememberSaveable { mutableStateOf(false) }
+    suspend fun reveal() {
+        if (animate) list.animateScrollToItem(head) else list.scrollToItem(head)
+        withTimeoutOrNull(1_000) { snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.key == "dayhead" } }.first { it } }
+        runCatching { focus.requestFocus() }
+    }
+    LaunchedEffect(d.s.dayRequests) { if (d.s.dayRequests > 0) reveal() }
+    LaunchedEffect(d.ready) {
+        if (d.ready && !firstOpenDone) { firstOpenDone = true; if (d.s.day == d.s.today) { list.scrollToItem(head) } }
+    }
+}
+
+/** Compact and medium: one list; medium caps it at 680 dp so day cells still get titles (audit 2 #20). */
 @Composable
 private fun OnePane(d: CalDerived, vm: CalendarViewModel, medium: Boolean, shortHeight: Boolean) {
     val list = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val head = remember(d.data, shortHeight) { 3 + (if (shortHeight) 0 else 1) + noticeKeys(d.data).size }
+    val dayFocus = remember { FocusRequester() }
+    val showHint = !shortHeight
+    val head = remember(d.data, showHint, d.filterCount) { 4 + (if (showHint) 1 else 0) + noticeKeys(d.data).size }
+    RevealDay(d, list, head, dayFocus, animate = true)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(Modifier.fillMaxHeight().then(if (medium) Modifier.widthIn(max = 640.dp) else Modifier.fillMaxWidth()), state = list,
+        LazyColumn(Modifier.fillMaxHeight().then(if (medium) Modifier.widthIn(max = 680.dp) else Modifier.fillMaxWidth()), state = list,
             contentPadding = PaddingValues(bottom = 24.dp)) {
             item(key = "controls") { Controls(d, vm) }
+            item(key = "active") { ActiveFilters(d, vm) }
             item(key = "legend") { Legend(d, vm) }
-            item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 12.dp)) { day ->
-                vm.selectDay(day); scope.launch { list.animateScrollToItem(head) } } }
-            if (!shortHeight) item(key = "hint") { LegendHint() }
+            item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 12.dp)) { vm.selectDay(it, reveal = true) } }
+            if (showHint) item(key = "hint") { LegendHint(d.s.hintSeen) }
             monthNotices(d, vm)
-            dayPanel(d, vm)
+            dayPanel(d, vm, dayFocus)
         }
     }
 }
 
-/** Expanded: grid | day list. Each pane is its own traversal group; picking a day moves focus to the list (audit #8). */
+/**
+ * Expanded: grid | day list. Each pane is its own traversal group; picking a day shows the day list from
+ * its top and moves focus there (audit #8, audit 2 #3). With filters open below 1200 dp the day pane gives
+ * its place to the filters (audit 2 #1).
+ */
 @Composable
-private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp) {
+private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp, showDay: Boolean, shortHeight: Boolean) {
     val c = Nx.colors
     val dayFocus = remember { FocusRequester() }
-    var picked by remember { mutableStateOf(0) }
-    LaunchedEffect(picked) { if (picked > 0) runCatching { dayFocus.requestFocus() } }
+    val panel = rememberLazyListState()
+    RevealDay(d, panel, 0, dayFocus, animate = false)
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f).fillMaxHeight().semantics { isTraversalGroup = true }, contentPadding = PaddingValues(bottom = 24.dp)) {
             item(key = "controls") { Controls(d, vm) }
+            item(key = "active") { ActiveFilters(d, vm) }
             item(key = "legend") { Legend(d, vm) }
-            item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 16.dp)) { vm.selectDay(it); picked++ } }
-            item(key = "hint") { LegendHint() }
+            item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 16.dp)) { vm.selectDay(it, reveal = true) } }
+            if (!shortHeight) item(key = "hint") { LegendHint(d.s.hintSeen) }
             monthNotices(d, vm)
         }
-        VerticalDivider(color = c.border)
-        LazyColumn(Modifier.width(panelWidth).fillMaxHeight().semantics { isTraversalGroup = true }, contentPadding = PaddingValues(bottom = 24.dp)) {
-            dayPanel(d, vm, dayFocus)
+        if (showDay) {
+            VerticalDivider(color = c.border)
+            LazyColumn(Modifier.width(panelWidth).fillMaxHeight().semantics { isTraversalGroup = true }, state = panel, contentPadding = PaddingValues(bottom = 24.dp)) {
+                dayPanel(d, vm, dayFocus)
+            }
         }
     }
 }
@@ -464,15 +540,6 @@ private fun Skeleton() {
         Box(Modifier.fillMaxWidth().height(300.dp).clip(RoundedCornerShape(16.dp)).background(c.muted))
         repeat(3) { Box(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(14.dp)).background(c.muted)) }
     }
-}
-
-/** A masked task (lock) or one that could not be loaded (cloud off): an M3 dialog with the reason (audit #45). */
-@Composable
-internal fun MessageDialog(masked: Boolean, onClose: () -> Unit) {
-    AlertDialog(onDismissRequest = onClose,
-        icon = { Icon(if (masked) Icons.Filled.Lock else Icons.Filled.CloudOff, null) },
-        text = { Text(stringResource(if (masked) R.string.cal_masked_note else R.string.cal_task_failed)) },
-        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.cal_close)) } })
 }
 
 // ── header ─────────────────────────────────────────────────────────────────────────────────────
@@ -493,7 +560,10 @@ internal fun clock(time: String): String = if (Locale.getDefault().language in s
 /** "14.05" / "14:05": when the data on screen was loaded, WIB. */
 internal fun loadedClock(ms: Long): String = java.time.Instant.ofEpochMilli(ms).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE).let { clock("%02d:%02d".format(it.hour, it.minute)) }
 
-/** ‹ period ›, then Month | People and the scope — Everyone · Mine · My division — one tap away (audit #31, #33). */
+/**
+ * One row: ‹ period › and the Month | People switch (icons, labelled for TalkBack); then the scope —
+ * Everyone · Mine · My division — shown once (contract 2). Fewer rows above the grid (audit 2 #12).
+ */
 @Composable
 internal fun Controls(d: CalDerived, vm: CalendarViewModel) {
     val c = Nx.colors
@@ -502,21 +572,67 @@ internal fun Controls(d: CalDerived, vm: CalendarViewModel) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.shiftMonth(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (people) R.string.cal_prev_week else R.string.cal_prev_month)) }
-            Column(Modifier.weight(1f, fill = false)) {
+            Column(Modifier.weight(1f)) {
                 Text(if (people) weekLabel(s.day) else monthLabel(s.day), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
                 // Not confirmed by the server right now: say how old it is (audit #21).
                 if (s.offline && s.loadedAt != null) Text(stringResource(R.string.cal_updated_offline, loadedClock(s.loadedAt)), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
             }
             IconButton(onClick = { vm.shiftMonth(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(if (people) R.string.cal_next_week else R.string.cal_next_month)) }
+            val colors = SegmentedButtonDefaults.colors(activeContainerColor = c.segmentActive, activeContentColor = c.foreground, activeBorderColor = c.violetText,
+                inactiveContainerColor = Color.Transparent, inactiveContentColor = c.foreground, inactiveBorderColor = c.boundary)
+            SingleChoiceSegmentedButtonRow {
+                listOf(Triple(CalView.MONTH, Icons.Filled.CalendarMonth, R.string.cal_month), Triple(CalView.PEOPLE, Icons.Filled.People, R.string.cal_people)).forEachIndexed { i, (v, icon, label) ->
+                    val name = stringResource(label)
+                    SegmentedButton(selected = s.view == v, onClick = { vm.setView(v) }, colors = colors, shape = SegmentedButtonDefaults.itemShape(i, 2),
+                        icon = {}, modifier = Modifier.semantics { contentDescription = name }) {
+                        Icon(icon, null, Modifier.size(20.dp))
+                    }
+                }
+            }
         }
-        Choice(listOf(stringResource(R.string.cal_month), stringResource(R.string.cal_people)), if (people) 1 else 0) { vm.setView(if (it == 1) CalView.PEOPLE else CalView.MONTH) }
         // The scope, shown once (contract 2). "My division" without a Bagan card is Mine with a note (contract 3).
         Choice(listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division)), s.filters.scope.ordinal) {
             vm.setScope(CalendarCore.Scope.entries[it], inChart = d.index.inChart)
         }
         if (s.divisionFallback) Text(stringResource(R.string.cal_not_in_chart_scope), fontSize = 12.sp, color = c.mutedFg)
     }
+}
+
+/**
+ * The filters in force, each removable with its × — always visible, even for a person or project with no
+ * task in the range on screen (audit 2 #16). The scope is not here (contract 2).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ActiveFilters(d: CalDerived, vm: CalendarViewModel) {
+    val f = d.s.filters
+    if (d.filterCount == 0) return
+    val chips = activeFilterChips(d)
+    FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        chips.forEach { (label, remove) ->
+            val removeLabel = stringResource(R.string.cal_remove_filter, label)
+            InputChip(selected = true, onClick = { vm.setFilters(remove(f)) }, label = { Text(label, maxLines = 1) },
+                trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(InputChipDefaults.IconSize)) },
+                modifier = Modifier.semantics { contentDescription = removeLabel })
+        }
+    }
+}
+
+/** Every active filter as (label, how to remove it). Names for ids not in the range come from the Bagan, else a generic word. */
+@Composable
+internal fun activeFilterChips(d: CalDerived): List<Pair<String, (CalendarCore.Filters) -> CalendarCore.Filters>> {
+    val f = d.s.filters
+    val projects = (d.s.items?.items.orEmpty() + d.s.overdue).mapNotNull { it.project }.associate { it.id to it.name }
+    val out = mutableListOf<Pair<String, (CalendarCore.Filters) -> CalendarCore.Filters>>()
+    f.units.forEach { id -> out += (d.ix.byId[id]?.name ?: stringResource(R.string.cal_other)) to { x -> x.copy(units = x.units - id) } }
+    f.people.forEach { id -> out += (d.name(id) ?: stringResource(R.string.cal_former_member)) to { x -> x.copy(people = x.people - id) } }
+    f.projects.forEach { id -> out += (projects[id] ?: stringResource(R.string.cal_project_elsewhere)) to { x -> x.copy(projects = x.projects - id) } }
+    val prio = mapOf("URGENT" to R.string.cal_prio_urgent, "HIGH" to R.string.cal_prio_high, "MEDIUM" to R.string.cal_prio_medium, "LOW" to R.string.cal_prio_low, "NONE" to R.string.cal_prio_none)
+    f.priorities.forEach { k -> out += stringResource(prio[k] ?: R.string.cal_prio_medium) to { x -> x.copy(priorities = x.priorities - k) } }
+    if (f.hideDone) out += stringResource(R.string.cal_hide_done) to { x -> x.copy(hideDone = false) }
+    if (f.overdueOnly) out += stringResource(R.string.cal_only_overdue) to { x -> x.copy(overdueOnly = false) }
+    return out
 }
 
 /**
@@ -584,9 +700,9 @@ internal fun Legend(d: CalDerived, vm: CalendarViewModel) {
     }
 }
 
-/** The dot key, and the hint that names above zoom in. */
+/** The dot key, always (contract 5: the grid's code stays readable); the focus hint until focus has been used once (audit 2 #12). */
 @Composable
-private fun LegendHint() {
+private fun LegendHint(hintSeen: Boolean) {
     val c = Nx.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).clearAndSetSemantics {}, verticalAlignment = Alignment.CenterVertically) {
@@ -594,7 +710,7 @@ private fun LegendHint() {
             Box(Modifier.size(6.dp).clip(CircleShape).border(1.dp, c.foreground, CircleShape)); Text(" " + stringResource(R.string.cal_legend_done) + "   ", fontSize = 12.sp, color = c.mutedFg)
             Box(Modifier.width(10.dp).height(2.dp).background(c.danger)); Text(" " + stringResource(R.string.cal_legend_overdue), fontSize = 12.sp, color = c.mutedFg)
         }
-        Text(stringResource(R.string.cal_legend_hint), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
+        if (!hintSeen) Text(stringResource(R.string.cal_legend_hint), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -650,12 +766,15 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
         .semantics(mergeDescendants = true) { contentDescription = description; this.selected = selected }
         .clickable(onClickLabel = showLabel, role = Role.Button) { onPick(day) }.padding(vertical = 5.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(26.dp).clip(CircleShape).background(if (isToday) c.navy else Color.Transparent).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
-            Text(LocalDate.parse(day).dayOfMonth.toString(), fontSize = 14.sp, fontWeight = if (isToday || selected) FontWeight.Bold else FontWeight.Medium,
+        Box(Modifier.sizeIn(minWidth = 26.dp, minHeight = 26.dp).clip(CircleShape).background(if (isToday) c.navy else Color.Transparent).padding(horizontal = 3.dp)
+            .clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+            Text(LocalDate.parse(day).dayOfMonth.toString(), maxLines = 1, softWrap = false,
+                style = UiTextStyle(fontSize = 14.sp, lineHeight = 14.sp, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)),
+                fontWeight = if (isToday || selected) FontWeight.Bold else FontWeight.Medium,
                 color = when {
                     isToday -> c.onNavy
                     // Sundays red like holidays, as on the widgets (audit #46).
-                    holiday != null || sunday -> if (inMonth) c.dangerText else c.dangerText.copy(alpha = 0.6f)
+                    holiday != null || sunday -> if (inMonth) c.dangerText else c.dangerText.copy(alpha = 0.8f)
                     !inMonth -> c.mutedFg
                     else -> c.foreground
                 })
@@ -790,8 +909,8 @@ private fun DayHeader(d: CalDerived, vm: CalendarViewModel, focus: FocusRequeste
                 }
                 d.holidays[s.day]?.let { Text(it, fontSize = 12.sp, color = c.dangerText) }
             }
-            IconButton(onClick = { vm.selectDay(CalendarCore.addDays(s.day, -1)) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cal_prev_day)) }
-            IconButton(onClick = { vm.selectDay(CalendarCore.addDays(s.day, 1)) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cal_next_day)) }
+            IconButton(onClick = { vm.selectDay(CalendarCore.addDays(s.day, -1), reveal = true) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cal_prev_day)) }
+            IconButton(onClick = { vm.selectDay(CalendarCore.addDays(s.day, 1), reveal = true) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cal_next_day)) }
         }
         Choice(listOf(stringResource(R.string.cal_by_division), stringResource(R.string.cal_by_person)), if (s.lens == CalLens.PERSON) 1 else 0) {
             vm.setLens(if (it == 1) CalLens.PERSON else CalLens.DIVISION)
@@ -799,27 +918,27 @@ private fun DayHeader(d: CalDerived, vm: CalendarViewModel, focus: FocusRequeste
     }
 }
 
-/** Today's overdue (≤ 14 days): a header, the first three, "Show all" — each row an item. */
+/** Today's overdue (≤ 14 days): a header, the first three or all, "Show all/less" — every row its own lazy item (audit 2 #22). */
 private fun LazyListScope.overdueRail(d: CalDerived, vm: CalendarViewModel) {
+    val rows = if (d.s.railAll) d.rail else d.rail.take(3)
     item(key = "rail") {
         val c = Nx.colors
         Text(stringResource(R.string.cal_overdue_n, d.rail.size).uppercase(Locale.getDefault()), style = MicroLabel, color = c.dangerText,
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                 .background(c.danger.copy(alpha = 0.06f)).padding(start = 12.dp, end = 12.dp, top = 12.dp).semantics { heading() })
     }
-    item(key = "railrows") { RailRows(d, vm) }
-}
-
-@Composable
-private fun RailRows(d: CalDerived, vm: CalendarViewModel) {
-    val c = Nx.colors
-    var all by rememberSaveable { mutableStateOf(false) }
-    val list = if (all) d.rail else d.rail.take(3)
-    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 6.dp).clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
-        .background(c.danger.copy(alpha = 0.06f)).padding(horizontal = 12.dp)) {
-        // A rail rarely holds more than a few rows; "Show all" is capped so one frame never builds hundreds (audit #19).
-        list.take(50).forEach { TaskRow(d, it, null, vm, showDay = true, inCard = false) }
-        if (d.rail.size > 3) TextButton(onClick = { all = !all }) { Text(stringResource(if (all) R.string.cal_show_less else R.string.cal_show_all)) }
+    items(rows, key = { "r:" + it.key }, contentType = { "railrow" }) { i ->
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).background(Nx.colors.danger.copy(alpha = 0.06f)).padding(horizontal = 12.dp)) {
+            TaskRow(d, i, null, vm, showDay = true, inCard = false)
+        }
+    }
+    item(key = "railend") {
+        val c = Nx.colors
+        Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 6.dp).clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+            .background(c.danger.copy(alpha = 0.06f)).padding(horizontal = 4.dp)) {
+            if (d.rail.size > 3) TextButton(onClick = { vm.toggleRail() }) { Text(stringResource(if (d.s.railAll) R.string.cal_show_less else R.string.cal_show_all)) }
+            else Spacer(Modifier.height(8.dp))
+        }
     }
 }
 
@@ -844,6 +963,9 @@ private fun PanelRowView(d: CalDerived, vm: CalendarViewModel, r: PanelRow) {
         }
         is PanelRow.Person -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).cardPiece(d, r.cardUnit, top = false, bottom = false)) {
             PersonHead(d, r, Modifier.padding(start = (16 + 12 * r.depth).dp, end = 16.dp, top = 8.dp))
+        }
+        is PanelRow.MaskedGroup -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).cardPiece(d, r.cardUnit, top = false, bottom = false)) {
+            Box(Modifier.padding(start = (16 + 12 * r.depth).dp, end = 12.dp)) { MaskedGroupRow(d, vm, r) }
         }
         is PanelRow.Task -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).cardPiece(d, r.cardUnit, top = false, bottom = false)) {
             Box(Modifier.padding(start = (16 + 12 * r.depth).dp, end = 12.dp)) { TaskRow(d, r.item, r.unitId, vm, person = r.person, inCard = r.cardUnit != null && r.cardUnit != "unplaced") }
@@ -1018,6 +1140,24 @@ internal fun TaskRow(d: CalDerived, i: CalItem, unitId: String?, vm: CalendarVie
     }
 }
 
+/** "4 internal tasks · 09.00, 13.00 · Haykal, Geraldo Valentino": one line for a run of masked rows; a tap says why. */
+@Composable
+private fun MaskedGroupRow(d: CalDerived, vm: CalendarViewModel, r: PanelRow.MaskedGroup) {
+    val c = Nx.colors
+    val people = r.items.flatMap { i -> i.placements.firstOrNull { it.unitId == r.unitId }?.userIds.orEmpty() }.distinct().mapNotNull { d.name(it) }
+    val times = r.items.mapNotNull { it.time }.distinct().map { clock(it) }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = stringResource(R.string.cal_why_locked)) { vm.open(r.items.first()) }
+        .heightIn(min = 48.dp).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.padding(top = 1.dp)) { TaskGlyph(d, r.items.first()) }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(pluralStringResource(R.plurals.cal_internal_n, r.items.size, r.items.size), fontSize = 14.sp, color = c.mutedFg)
+            val sub = listOfNotNull(times.takeIf { it.isNotEmpty() }?.joinToString(", "), people.takeIf { it.isNotEmpty() }?.joinToString(", ")).joinToString(" · ")
+            if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = c.mutedFg)
+        }
+    }
+}
+
 /** The people at this unit, then "with Name (Unit)" for the ones placed elsewhere and the ones not in the chart — wrapping, never clipped. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1046,6 +1186,6 @@ private fun PeopleLine(d: CalDerived, i: CalItem, unitId: String?, person: Strin
 
 /** The Calendar's layout for a given state, without loading (debug screenshots from the golden files). */
 @Composable
-internal fun CalendarPreviewLayout(s: CalState, vm: CalendarViewModel, tablet: Boolean, filters: Boolean = false) {
+internal fun CalendarPreviewLayout(s: CalState, vm: CalendarViewModel, filters: Boolean = false) {
     CalendarContent(s, vm, onBack = {}, onOpenMyMission = {}, filtersInitially = filters)
 }

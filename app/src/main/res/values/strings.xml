@@ -1954,4 +1954,12 @@
         <item quantity="one">Focus on %1$s, %2$d task</item>
         <item quantity="other">Focus on %1$s, %2$d tasks</item>
     </plurals>
+    <string name="cal_task_gone">This task was deleted, or moved where you can’t see it.</string>
+    <string name="cal_task_offline">You’re offline. The task opens when you’re back online.</string>
+    <string name="cal_remove_filter">Remove filter %1$s</string>
+    <string name="cal_project_elsewhere">A project with no task here</string>
+    <plurals name="cal_internal_n">
+        <item quantity="one">%d internal task</item>
+        <item quantity="other">%d internal tasks</item>
+    </plurals>
 </resources>

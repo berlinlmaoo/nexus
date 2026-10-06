@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -77,7 +79,14 @@ class UiPreviewActivity : ComponentActivity() {
                         "cal-month", "cal-person", "cal-people", "cal-filters", "cal-tablet", "cal-loading", "cal-failed" -> {
                             val vm: id.znetworks.nexus.feature.calendar.CalendarViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
                             val st = androidx.compose.runtime.remember { calState(screen) }
-                            id.znetworks.nexus.feature.calendar.CalendarPreviewLayout(st, vm, tablet = screen == "cal-tablet", filters = screen == "cal-filters")
+                            // The real shell puts an 80 dp NavigationBar under the Calendar on phones: keep that space here too (audit 2 #18).
+                            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                                val phone = maxWidth < 600.dp
+                                androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+                                    Box(Modifier.weight(1f)) { id.znetworks.nexus.feature.calendar.CalendarPreviewLayout(st, vm, filters = screen == "cal-filters") }
+                                    if (phone) Box(Modifier.fillMaxWidth().height(80.dp).background(Nx.colors.card))
+                                }
+                            }
                         }
                         "pdf" -> id.znetworks.nexus.ui.components.PdfPages(samplePdf()) {}
                         else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {})

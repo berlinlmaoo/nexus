@@ -1948,4 +1948,12 @@
         <item quantity="one">Fokus ke %1$s, %2$d tugas</item>
         <item quantity="other">Fokus ke %1$s, %2$d tugas</item>
     </plurals>
+    <string name="cal_task_gone">Tugas ini sudah dihapus, atau dipindah ke tempat yang tidak bisa kamu lihat.</string>
+    <string name="cal_task_offline">Kamu sedang offline. Tugas terbuka saat kamu online lagi.</string>
+    <string name="cal_remove_filter">Hapus filter %1$s</string>
+    <string name="cal_project_elsewhere">Proyek tanpa tugas di sini</string>
+    <plurals name="cal_internal_n">
+        <item quantity="one">%d tugas internal</item>
+        <item quantity="other">%d tugas internal</item>
+    </plurals>
 </resources>
