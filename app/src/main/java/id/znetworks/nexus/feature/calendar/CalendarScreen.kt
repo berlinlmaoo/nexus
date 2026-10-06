@@ -38,6 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ExpandLess
@@ -51,7 +52,8 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
@@ -127,6 +129,9 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
+/** The one style for uppercase micro-labels in the Calendar (audit 2, contract 6). */
+internal val MicroLabel = UiTextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+
 // ── Derived data, split by what it depends on (audit #18) ───────────────────────────────────────
 
 /** The Bagan, indexed once per structure; division colours parsed once. */
@@ -168,7 +173,8 @@ class CalData(val index: CalIndex, val s: CalState) {
     val grid = CalendarCore.monthGrid(s.day)
     val cells: Map<String, CalendarCore.DayCell> = grid.associateWith { CalendarCore.dayCell(it, byDay[it].orEmpty(), ix, focus, s.today, s.nowMs, s.windowDays) }
     val overdueByDay: Map<String, Int> = byDay.mapValues { (_, l) -> l.count { CalendarCore.overdueState(it, s.today, s.nowMs, s.windowDays) == CalendarCore.Overdue.RECENT } }
-    val filterCount = CalendarCore.activeFilterCount(s.filters)
+    /** Filters only: the scope (Everyone / Mine / My division) is a view, never counted (contract 2). */
+    val filterCount = CalendarCore.activeFilterCount(s.filters.copy(scope = CalendarCore.Scope.ALL))
     val monthShown = shown.count { CalendarCore.sameMonth(it.day, s.day) }
     private val filteredOverdue by lazy { CalendarCore.underFocus(CalendarCore.filterItems(s.overdue, s.filters, ctx), ix, focus) }
     fun rail(dayItems: List<CalItem>) = if (s.day == s.today) CalendarCore.overdueRail(filteredOverdue, dayItems, s.today, s.nowMs, s.windowDays) else emptyList()
@@ -364,9 +370,9 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
                     d == null -> EmptyState(Icons.Filled.Refresh, stringResource(R.string.cal_load_failed), stringResource(R.string.cal_check_connection),
                         stringResource(R.string.try_again), { vm.refresh() }, Modifier.fillMaxSize())
                     s.access == CalAccess.NONE -> EmptyState(Icons.Filled.CalendarMonth, stringResource(R.string.cal_none_title), stringResource(R.string.cal_none_body),
-                        stringResource(R.string.cal_open_my_mission), onOpenMyMission, Modifier.fillMaxSize())
+                        stringResource(R.string.cal_open_my_tasks), onOpenMyMission, Modifier.fillMaxSize())
                     s.access == CalAccess.OFF -> EmptyState(Icons.Filled.CalendarMonth, stringResource(R.string.cal_off_title), stringResource(R.string.cal_off_body),
-                        stringResource(R.string.cal_open_my_mission), onOpenMyMission, Modifier.fillMaxSize())
+                        stringResource(R.string.cal_open_my_tasks), onOpenMyMission, Modifier.fillMaxSize())
                     else -> {
                         @OptIn(ExperimentalMaterial3Api::class)
                         PullToRefreshBox(isRefreshing = s.refreshing, onRefresh = { vm.refresh(pulled = true) }, modifier = Modifier.fillMaxSize()) {
@@ -505,8 +511,11 @@ internal fun Controls(d: CalDerived, vm: CalendarViewModel) {
             IconButton(onClick = { vm.shiftMonth(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(if (people) R.string.cal_next_week else R.string.cal_next_month)) }
         }
         Choice(listOf(stringResource(R.string.cal_month), stringResource(R.string.cal_people)), if (people) 1 else 0) { vm.setView(if (it == 1) CalView.PEOPLE else CalView.MONTH) }
-        Choice(listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division)), s.filters.scope.ordinal,
-            enabled = { it != CalendarCore.Scope.DIVISION.ordinal || d.index.inChart }) { vm.setScope(CalendarCore.Scope.entries[it]) }
+        // The scope, shown once (contract 2). "My division" without a Bagan card is Mine with a note (contract 3).
+        Choice(listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division)), s.filters.scope.ordinal) {
+            vm.setScope(CalendarCore.Scope.entries[it], inChart = d.index.inChart)
+        }
+        if (s.divisionFallback) Text(stringResource(R.string.cal_not_in_chart_scope), fontSize = 12.sp, color = c.mutedFg)
     }
 }
 
@@ -539,34 +548,37 @@ internal fun Legend(d: CalDerived, vm: CalendarViewModel) {
     val c = Nx.colors
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         if (!d.atTop) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.focus(null) }) { Text(stringResource(R.string.cal_all), fontSize = 13.sp) }
+            TextButton(onClick = { vm.focus(null) }) { Text(stringResource(R.string.cal_all_divisions)) }
             (d.ix.ancestors(d.focus).reversed().drop(1) + d.focus).forEach { id ->
-                Text("›", fontSize = 13.sp, color = c.mutedFg)
+                Text("›", color = c.mutedFg, modifier = Modifier.clearAndSetSemantics {})
                 val u = d.ix.byId[id]
                 TextButton(onClick = { vm.focus(id) }, enabled = id != d.focus) {
-                    Text(u?.name ?: "", fontSize = 13.sp, fontWeight = if (id == d.focus) FontWeight.Bold else FontWeight.Medium, color = if (id == d.focus) c.foreground else c.violetText)
+                    Text(u?.name ?: "", fontWeight = if (id == d.focus) FontWeight.Bold else FontWeight.Medium, color = if (id == d.focus) c.foreground else c.violetText)
                 }
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             d.legend.forEach { l ->
                 val u = d.ix.byId[l.unitId]
-                val zoom = u != null && d.ix.children[u.id].orEmpty().isNotEmpty()
+                val focusable = u != null && d.ix.children[u.id].orEmpty().isNotEmpty()
                 val on = l.unitId in d.s.filters.units
                 val name = u?.name ?: stringResource(R.string.cal_other)
-                val label = if (zoom) stringResource(R.string.cal_zoom_into, name) else stringResource(R.string.cal_filter_by, name)
-                FilterChip(
-                    selected = on && !zoom,
-                    onClick = {
-                        if (u == null) return@FilterChip
-                        if (zoom) vm.focus(u.id)
-                        else vm.setFilters(d.s.filters.copy(units = if (on) d.s.filters.units - u.id else d.s.filters.units + u.id))
-                    },
-                    label = { Text("$name  ${l.count}", maxLines = 1, fontSize = 13.sp) },
-                    leadingIcon = { Box(Modifier.size(8.dp).clip(CircleShape).background(d.color(l.unitId))) },
-                    trailingIcon = if (zoom) ({ Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null,
-                    modifier = Modifier.semantics { contentDescription = "$label, ${l.count}" },
-                )
+                if (focusable) {
+                    // Focus (not a filter): a button chip with the focus icon (contract 1, audit 2 #14).
+                    val spoken = pluralStringResource(R.plurals.cal_focus_on_n, l.count, name, l.count)
+                    AssistChip(onClick = { vm.focus(u!!.id) },
+                        label = { Text("$name  ${l.count}", maxLines = 1) },
+                        leadingIcon = { Box(Modifier.size(8.dp).clip(CircleShape).background(d.color(l.unitId))) },
+                        trailingIcon = { Icon(Icons.Filled.CenterFocusStrong, null, Modifier.size(AssistChipDefaults.IconSize)) },
+                        modifier = Modifier.semantics { contentDescription = spoken })
+                } else {
+                    val spoken = stringResource(R.string.cal_filter_by, name) + ", " + pluralStringResource(R.plurals.cal_tasks_n, l.count, l.count)
+                    FilterChip(selected = on,
+                        onClick = { if (u != null) vm.setFilters(d.s.filters.copy(units = if (on) d.s.filters.units - u.id else d.s.filters.units + u.id)) },
+                        label = { Text("$name  ${l.count}", maxLines = 1) },
+                        leadingIcon = { Box(Modifier.size(8.dp).clip(CircleShape).background(d.color(l.unitId))) },
+                        modifier = Modifier.semantics { contentDescription = spoken })
+                }
             }
         }
     }
@@ -598,7 +610,7 @@ internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, toda
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clearAndSetSemantics {}) {
             java.time.DayOfWeek.entries.forEach { w ->
-                Text(w.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                Text(w.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(Locale.getDefault()), style = MicroLabel,
                     color = if (w == java.time.DayOfWeek.SUNDAY) c.dangerText else c.mutedFg, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }
@@ -705,7 +717,7 @@ internal fun LazyListScope.monthNotices(d: CalDerived, vm: CalendarViewModel) {
             "emptymonth" -> item(key = k) {
                 Notice(stringResource(R.string.cal_empty_month, monthLabel(s.day)), if (!CalendarCore.sameMonth(s.day, s.today)) stringResource(R.string.cal_go_this_month) else null) { vm.today() }
             }
-            "nomatch" -> item(key = k) { Notice(stringResource(R.string.cal_no_match_month), stringResource(R.string.cal_reset_filters)) { vm.setFilters(CalendarCore.NO_FILTERS) } }
+            "nomatch" -> item(key = k) { Notice(stringResource(R.string.cal_no_match_month), stringResource(R.string.cal_reset_filters)) { vm.resetFilters() } }
         }
     }
 }
@@ -742,7 +754,7 @@ internal fun LazyListScope.dayPanel(d: CalDerived, vm: CalendarViewModel, headFo
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(if (hidden) R.string.cal_no_match_day else R.string.cal_no_tasks_day), fontWeight = FontWeight.SemiBold, color = Nx.colors.foreground, textAlign = TextAlign.Center)
                 Text(stringResource(if (hidden) R.string.cal_filters_hiding else R.string.cal_nobody_due), fontSize = 12.sp, color = Nx.colors.mutedFg, textAlign = TextAlign.Center)
-                if (hidden) TextButton(onClick = { vm.setFilters(CalendarCore.NO_FILTERS) }) { Text(stringResource(R.string.cal_reset_filters)) }
+                if (hidden) TextButton(onClick = { vm.resetFilters() }) { Text(stringResource(R.string.cal_reset_filters)) }
                 else if (s.day != s.today) TextButton(onClick = { vm.today() }) { Text(stringResource(R.string.cal_back_today)) }
             }
         }
@@ -791,7 +803,7 @@ private fun DayHeader(d: CalDerived, vm: CalendarViewModel, focus: FocusRequeste
 private fun LazyListScope.overdueRail(d: CalDerived, vm: CalendarViewModel) {
     item(key = "rail") {
         val c = Nx.colors
-        Text(stringResource(R.string.cal_overdue_n, d.rail.size).uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = c.dangerText,
+        Text(stringResource(R.string.cal_overdue_n, d.rail.size).uppercase(Locale.getDefault()), style = MicroLabel, color = c.dangerText,
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                 .background(c.danger.copy(alpha = 0.06f)).padding(start = 12.dp, end = 12.dp, top = 12.dp).semantics { heading() })
     }
@@ -818,11 +830,10 @@ private fun PanelRowView(d: CalDerived, vm: CalendarViewModel, r: PanelRow) {
     when (r) {
         is PanelRow.Card -> CardHeader(d, vm, r)
         is PanelRow.End -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(12.dp).cardPiece(d, r.cardUnit, top = false, bottom = true)) {}
-        is PanelRow.UnplacedHead -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-            letterSpacing = 0.8.sp, color = c.mutedFg,
+        is PanelRow.UnplacedHead -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), style = MicroLabel, color = c.mutedFg,
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp).cardPiece(d, "unplaced", top = true, bottom = false).padding(16.dp).semantics { heading() })
         is PanelRow.Sub -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).cardPiece(d, r.cardUnit, top = false, bottom = false)) {
-            if (r.unit.isGroup) Text("${r.unit.name.uppercase(Locale.getDefault())} · ${r.count}", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = c.mutedFg,
+            if (r.unit.isGroup) Text("${r.unit.name.uppercase(Locale.getDefault())} · ${r.count}", style = MicroLabel, color = c.mutedFg,
                 modifier = Modifier.padding(start = (16 + 12 * r.depth).dp, end = 16.dp, top = 10.dp, bottom = 2.dp).semantics { heading() })
             else Row(Modifier.padding(start = (16 + 12 * r.depth).dp, end = 16.dp, top = 10.dp).semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(3.dp).height(14.dp).background(d.color(r.unit.id)))
@@ -875,7 +886,7 @@ private fun CardHeader(d: CalDerived, vm: CalendarViewModel, r: PanelRow.Card) {
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Text(n.unit.name.uppercase(Locale.getDefault()), fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = c.foreground, modifier = Modifier.weight(1f),
+            Text(n.unit.name.uppercase(Locale.getDefault()), style = MicroLabel, color = c.foreground, modifier = Modifier.weight(1f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (r.mine) Text(stringResource(R.string.cal_you).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.onNavy,
                 modifier = Modifier.padding(end = 6.dp).clip(CircleShape).background(c.navy).padding(horizontal = 7.dp, vertical = 2.dp))

@@ -1776,8 +1776,6 @@
     <string name="cal_my_division">My division</string>
     <string name="cal_filters">Filters</string>
     <string name="cal_reset">Reset</string>
-    <string name="cal_all">All</string>
-    <string name="cal_zoom_into">Zoom into %1$s</string>
     <string name="cal_filter_by">Filter by %1$s</string>
     <string name="cal_other">Other</string>
     <string name="cal_times_wib">Times in WIB</string>
@@ -1787,8 +1785,8 @@
     <string name="cal_none_title">This calendar is for members of the company</string>
     <string name="cal_none_body">You are in a personal workspace. Ask a BoD or Manager to add you to the company\'s workspace; the Calendar then shows the tasks of everyone there.</string>
     <string name="cal_off_title">The Calendar is on its way</string>
-    <string name="cal_off_body">It opens for BoD and Managers first, then for everyone. Your own tasks are still in My Mission.</string>
-    <string name="cal_open_my_mission">Open My Mission</string>
+    <string name="cal_off_body">It opens for BoD and Managers first, then for everyone. Your own tasks are still in the Tasks tab.</string>
+    <string name="cal_open_my_tasks">Open my tasks</string>
     <string name="cal_empty_month">Nothing has a due date in %1$s yet.</string>
     <string name="cal_go_this_month">Go to this month</string>
     <string name="cal_no_match_month">Nothing matches the filters this month.</string>
@@ -1797,7 +1795,7 @@
     <string name="cal_legend_open">has tasks to do</string>
     <string name="cal_legend_done">done or no status</string>
     <string name="cal_legend_overdue">overdue</string>
-    <string name="cal_legend_hint">Dots follow the IP &amp; Division Chart. Tap a name above to zoom in.</string>
+    <string name="cal_legend_hint">Dots follow the IP &amp; Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.</string>
     <string name="cal_today">Today</string>
     <string name="cal_tomorrow">Tomorrow</string>
     <string name="cal_yesterday">Yesterday</string>
@@ -1819,7 +1817,7 @@
     <string name="cal_also_in">also in %1$s</string>
     <string name="cal_not_in_chart_lower">not in the chart</string>
     <string name="cal_show">Show</string>
-    <string name="cal_not_in_chart_scope">You are not in the chart yet, so \"My division\" is off.</string>
+    <string name="cal_not_in_chart_scope">You are not in the chart yet, so \"My division\" shows your own tasks.</string>
     <string name="cal_divisions">Divisions</string>
     <string name="cal_search_people">Search people…</string>
     <string name="cal_nobody_month">Nobody has a task this month.</string>
@@ -1950,4 +1948,10 @@
         <item>Mo</item><item>Tu</item><item>We</item><item>Th</item><item>Fr</item><item>Sa</item><item>Su</item>
     </string-array>
     <string name="calq_title_note">Tap a task to open it in the Calendar.</string>
+    <string name="cal_all_divisions">All divisions</string>
+    <string name="cal_focus_on">Focus on %1$s</string>
+    <plurals name="cal_focus_on_n">
+        <item quantity="one">Focus on %1$s, %2$d task</item>
+        <item quantity="other">Focus on %1$s, %2$d tasks</item>
+    </plurals>
 </resources>

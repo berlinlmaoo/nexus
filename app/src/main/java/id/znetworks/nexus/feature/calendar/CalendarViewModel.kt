@@ -64,6 +64,8 @@ data class CalState(
     val rangeError: String? = null,
     /** Bumped when a refresh of data already on screen fails: one snackbar each time. */
     val refreshFailures: Int = 0,
+    /** "My division" was asked for by someone without a Bagan card: shown as Mine, with the note (contract 3). */
+    val divisionFallback: Boolean = false,
 ) {
     /** [items] belongs to the range on screen; otherwise it is loading or failed, never "empty". */
     val current get() = items != null && itemsRange == range
@@ -171,9 +173,11 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
                 view = if (view == "people") CalView.PEOPLE else if (view != null) CalView.MONTH else s.view,
                 lens = if (lens == "person") CalLens.PERSON else if (lens != null) CalLens.DIVISION else s.lens,
                 focusId = focus ?: s.focusId,
+                divisionFallback = if (scope != null) scope == "division" && s.structure?.me?.homeUnitIds?.isEmpty() == true else s.divisionFallback,
                 filters = when (scope) {
                     "me" -> s.filters.copy(scope = CalendarCore.Scope.ME)
-                    "division" -> s.filters.copy(scope = CalendarCore.Scope.DIVISION)
+                    // Without a Bagan card this becomes Mine with the note (settleScope, contract 3).
+                    "division" -> s.filters.copy(scope = if (s.structure?.me?.homeUnitIds?.isEmpty() == true) CalendarCore.Scope.ME else CalendarCore.Scope.DIVISION)
                     // A widget on "Everyone" opens everyone (audit #33).
                     "all" -> s.filters.copy(scope = CalendarCore.Scope.ALL)
                     else -> s.filters
@@ -196,7 +200,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
             if (uid != null && !_state.value.current) {
                 val st = if (_state.value.structure == null) withContext(Dispatchers.IO) { cache.structure(uid) } else null
                 val it = withContext(Dispatchers.IO) { cache.items(uid, asked) }
-                if (st != null) structureFromDisk = true
+                if (st != null) { structureFromDisk = true; settleScope(st.value) }
                 if (st != null || it != null) _state.update { s ->
                     val take = it != null && !s.current && s.range == asked
                     s.copy(structure = s.structure ?: st?.value,
@@ -219,6 +223,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
                     if (items.structureVersion != null && items.structureVersion != structure.version) structure = api.structure().value
                     failedSinceSuccess = false
                     val now = System.currentTimeMillis()
+                    settleScope(structure)
                     _state.update { it.copy(structure = structure, items = items, loading = false, refreshing = false, error = null,
                         itemsRange = asked, loadedAt = now, offline = false, rangeError = null,
                         overdue = if (items.accessLevel.hasData) it.overdue else emptyList()) }
@@ -260,7 +265,18 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
     fun setLens(l: CalLens) { _state.update { it.copy(lens = l) }; keep() }
     fun focus(unitId: String?) { _state.update { it.copy(focusId = unitId) }; keep() }
     fun setFilters(f: CalendarCore.Filters) { _state.update { it.copy(filters = f) }; save() }
-    fun setScope(scope: CalendarCore.Scope) = setFilters(_state.value.filters.copy(scope = scope))
+    /** Reset clears the filters, never the scope: the scope is a view, not a filter (contract 2). */
+    fun resetFilters() = setFilters(CalendarCore.NO_FILTERS.copy(scope = _state.value.filters.scope))
+    /** "My division" without a Bagan card is Mine plus a note; a disabled scope is never saved (contract 3). */
+    fun setScope(scope: CalendarCore.Scope, inChart: Boolean = true) {
+        val fallback = scope == CalendarCore.Scope.DIVISION && !inChart
+        _state.update { it.copy(filters = it.filters.copy(scope = if (fallback) CalendarCore.Scope.ME else scope), divisionFallback = fallback) }
+        save()
+    }
+    /** Once the structure is known: a "My division" saved or linked earlier, for someone with no card, becomes Mine. */
+    private fun settleScope(structure: CalStructure) {
+        if (_state.value.filters.scope == CalendarCore.Scope.DIVISION && structure.me?.homeUnitIds.orEmpty().isEmpty()) setScope(CalendarCore.Scope.DIVISION, inChart = false)
+    }
     fun toggleCollapsed(unitId: String) { _state.update { it.copy(collapsed = if (unitId in it.collapsed) it.collapsed - unitId else it.collapsed + unitId) }; save() }
 
     /**

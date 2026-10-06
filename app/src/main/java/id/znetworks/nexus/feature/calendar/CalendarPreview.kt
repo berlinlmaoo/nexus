@@ -166,7 +166,7 @@ private fun Fact(label: String, value: @Composable () -> Unit) {
 @Composable
 private fun Block(label: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = Nx.colors.mutedFg)
+        Text(label.uppercase(Locale.getDefault()), style = MicroLabel, color = Nx.colors.mutedFg)
         content()
     }
 }

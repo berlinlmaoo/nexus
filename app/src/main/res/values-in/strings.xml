@@ -1770,8 +1770,6 @@
     <string name="cal_my_division">Divisi saya</string>
     <string name="cal_filters">Filter</string>
     <string name="cal_reset">Reset</string>
-    <string name="cal_all">Semua</string>
-    <string name="cal_zoom_into">Perbesar ke %1$s</string>
     <string name="cal_filter_by">Filter %1$s</string>
     <string name="cal_other">Lainnya</string>
     <string name="cal_times_wib">Jam dalam WIB</string>
@@ -1781,8 +1779,8 @@
     <string name="cal_none_title">Kalender ini khusus anggota perusahaan</string>
     <string name="cal_none_body">Kamu sedang di workspace pribadi. Minta BoD atau Manager menambahkanmu ke workspace perusahaan; setelah itu Kalender menampilkan tugas semua orang di sana.</string>
     <string name="cal_off_title">Kalender segera hadir</string>
-    <string name="cal_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di My Mission.</string>
-    <string name="cal_open_my_mission">Buka My Mission</string>
+    <string name="cal_off_body">Dibuka untuk BoD dan Manager dulu, lalu untuk semua. Tugasmu sendiri tetap ada di tab Tugas.</string>
+    <string name="cal_open_my_tasks">Buka tugasku</string>
     <string name="cal_empty_month">Belum ada tugas bertenggat di %1$s.</string>
     <string name="cal_go_this_month">Ke bulan ini</string>
     <string name="cal_no_match_month">Tidak ada yang cocok dengan filter di bulan ini.</string>
@@ -1791,7 +1789,7 @@
     <string name="cal_legend_open">ada tugas yang belum selesai</string>
     <string name="cal_legend_done">selesai / tanpa status</string>
     <string name="cal_legend_overdue">lewat tenggat</string>
-    <string name="cal_legend_hint">Titik mengikuti Bagan IP &amp; Divisi. Ketuk nama di atas untuk memperbesar.</string>
+    <string name="cal_legend_hint">Titik mengikuti Bagan IP &amp; Divisi. Nama berikon fokus memfokuskan kalender ke divisi itu; nama lain memfilternya.</string>
     <string name="cal_today">Hari ini</string>
     <string name="cal_tomorrow">Besok</string>
     <string name="cal_yesterday">Kemarin</string>
@@ -1813,7 +1811,7 @@
     <string name="cal_also_in">juga di %1$s</string>
     <string name="cal_not_in_chart_lower">belum di bagan</string>
     <string name="cal_show">Tampilkan</string>
-    <string name="cal_not_in_chart_scope">Kamu belum ditaruh di bagan, jadi \"Divisi saya\" tidak aktif.</string>
+    <string name="cal_not_in_chart_scope">Kamu belum ada di Bagan, jadi \"Divisi saya\" menampilkan tugasmu sendiri.</string>
     <string name="cal_divisions">Divisi</string>
     <string name="cal_search_people">Cari orang…</string>
     <string name="cal_nobody_month">Belum ada yang punya tugas di bulan ini.</string>
@@ -1877,7 +1875,7 @@
     </plurals>
     <!-- Calendar widgets (phase 4) -->
     <string name="wcal_month_name">Kalender Bulan</string>
-    <string name="wcal_month_desc">Sebulan dengan tugasmu; perbesar untuk garis dan judul.</string>
+    <string name="wcal_month_desc">Sebulan dengan tugasmu; besarkan widget untuk garis dan judul.</string>
     <string name="wcal_month_up_name">Bulan + Tidak lama lagi</string>
     <string name="wcal_month_up_desc">Bulan kecil dan empat tugas berikutnya.</string>
     <string name="wcal_week_name">Minggu Ini</string>
@@ -1944,4 +1942,10 @@
         <item>Sn</item><item>Sl</item><item>Rb</item><item>Km</item><item>Jm</item><item>Sb</item><item>Mg</item>
     </string-array>
     <string name="calq_title_note">Ketuk tugas untuk membukanya di Kalender.</string>
+    <string name="cal_all_divisions">Semua divisi</string>
+    <string name="cal_focus_on">Fokus ke %1$s</string>
+    <plurals name="cal_focus_on_n">
+        <item quantity="one">Fokus ke %1$s, %2$d tugas</item>
+        <item quantity="other">Fokus ke %1$s, %2$d tugas</item>
+    </plurals>
 </resources>

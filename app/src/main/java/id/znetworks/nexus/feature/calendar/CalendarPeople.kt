@@ -76,7 +76,7 @@ internal fun PeopleView(d: CalDerived, vm: CalendarViewModel, tablet: Boolean, o
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.cal_nobody_week), fontWeight = FontWeight.SemiBold, color = c.foreground)
                 Text(stringResource(if (d.filterCount > 0) R.string.cal_filters_hiding else R.string.cal_pick_week), fontSize = 12.sp, color = c.mutedFg)
-                if (d.filterCount > 0) TextButton(onClick = { vm.setFilters(CalendarCore.NO_FILTERS) }) { Text(stringResource(R.string.cal_reset_filters)) }
+                if (d.filterCount > 0) TextButton(onClick = { vm.resetFilters() }) { Text(stringResource(R.string.cal_reset_filters)) }
                 else if (CalendarCore.mondayOf(s.today) != monday) TextButton(onClick = { vm.today() }) { Text(stringResource(R.string.cal_go_this_week)) }
             }
         }
@@ -100,12 +100,11 @@ private fun UnitHeader(d: CalDerived, r: WeekRow) {
         when (r) {
             is WeekRow.Unit -> {
                 if (!r.unit.isGroup) { Box(Modifier.width(3.dp).height(16.dp).background(d.color(r.unit.id))); Spacer(Modifier.width(8.dp)) }
-                Text(r.unit.name.uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp,
+                Text(r.unit.name.uppercase(Locale.getDefault()), style = MicroLabel,
                     color = if (r.unit.isGroup) c.mutedFg else c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 CountPill(r.count)
             }
-            is WeekRow.Unplaced -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+            is WeekRow.Unplaced -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), style = MicroLabel, color = c.mutedFg, modifier = Modifier.weight(1f))
             else -> {}
         }
     }

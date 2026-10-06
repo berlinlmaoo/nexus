@@ -60,7 +60,8 @@ import java.util.Locale
 
 /**
  * Filters, in the screen itself (a side panel when expanded) — not a dialog, so it is edge-to-edge
- * with no scrim (audit #12, #24). Who (My division disabled when not in the chart), divisions, people
+ * with no scrim (audit #12, #24). The scope (Everyone / Mine / My division) is not here: it is a view,
+ * shown once on the screen, and Reset leaves it alone (contract 2). Divisions, people
  * and projects (searchable, from the range on screen), priority, hide done, only overdue. Changes apply
  * live, so the top-left is a back arrow and the bottom button shows what you get (audit #39). Every
  * row is a ≥ 48 dp toggle with its role and state (audit #2, #10). One LazyColumn (audit #19).
@@ -85,17 +86,10 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
             IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(stringResource(R.string.cal_filters), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
                 modifier = Modifier.weight(1f).semantics { heading() })
-            TextButton(onClick = { set(CalendarCore.NO_FILTERS) }, enabled = d.filterCount > 0) { Text(stringResource(R.string.cal_reset)) }
+            TextButton(onClick = { vm.resetFilters() }, enabled = d.filterCount > 0) { Text(stringResource(R.string.cal_reset)) }
         }
         HorizontalDivider(color = c.border)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
-            item(key = "show") {
-                Section(stringResource(R.string.cal_show)) {
-                    Choice(listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division)), f.scope.ordinal,
-                        enabled = { it != CalendarCore.Scope.DIVISION.ordinal || d.index.inChart }) { set(f.copy(scope = CalendarCore.Scope.entries[it])) }
-                    if (!d.index.inChart) Text(stringResource(R.string.cal_not_in_chart_scope), fontSize = 12.sp, color = c.mutedFg)
-                }
-            }
             item(key = "divh") { Header(stringResource(R.string.cal_divisions)) }
             items(d.ix.units, key = { "u:${it.id}" }) { u ->
                 val on = u.id in f.units
@@ -158,7 +152,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
 
 @Composable
 private fun Header(title: String) {
-    Text(title.uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = Nx.colors.mutedFg,
+    Text(title.uppercase(Locale.getDefault()), style = MicroLabel, color = Nx.colors.mutedFg,
         modifier = Modifier.padding(top = 18.dp, bottom = 6.dp).semantics { heading() })
 }
 

@@ -89,4 +89,37 @@ class CalendarAuditTest {
         assertTrue("emptymonth" in noticeKeys(CalData(CalIndex(empty.structure!!, false), empty)))
         assertNotNull(empty.items)
     }
+
+    // ── Round 2, the cross-platform contract (AUDIT2-CONTRACT.md) ──
+
+    private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "app/src/main").isDirectory }
+    private fun strings(dir: String) = File(root, "app/src/main/res/$dir/strings.xml").readText()
+
+    @Test fun scopeIsAViewNotAFilter() {
+        val s = state("2026-09-18", "items-2026-09-18.bod.json")
+        val mine = s.copy(filters = CalendarCore.NO_FILTERS.copy(scope = CalendarCore.Scope.ME))
+        assertEquals(0, CalData(CalIndex(mine.structure!!, false), mine).filterCount)
+        val both = s.copy(filters = CalendarCore.NO_FILTERS.copy(scope = CalendarCore.Scope.ME, hideDone = true))
+        assertEquals(1, CalData(CalIndex(both.structure!!, false), both).filterCount)
+        // The Filters screen does not show the scope a second time; Reset goes through resetFilters (keeps it).
+        val filters = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarFilters.kt").readText()
+        assertFalse("cal_everyone" in filters)
+        assertTrue("vm.resetFilters()" in filters)
+        assertFalse(File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar").listFiles()!!.filter { it.isFile }.any { "NO_FILTERS)" in it.readText() && it.name != "CalendarViewModel.kt" })
+    }
+
+    @Test fun focusNotZoom() {
+        for (dir in listOf("values", "values-in")) {
+            val cal = Regex("""<(string|plurals) name="(w?cal_[a-z_0-9]+)"[^>]*>(.*?)</\1>""", RegexOption.DOT_MATCHES_ALL).findAll(strings(dir)).toList()
+            cal.forEach { m -> assertFalse("${m.groupValues[2]} in $dir", Regex("(?i)zoom|perbesar").containsMatchIn(m.groupValues[3])) }
+            val names = cal.map { it.groupValues[2] }
+            assertEquals("no duplicate keys in $dir", names.size, names.toSet().size)
+            assertTrue("cal_all_divisions" in names && "cal_focus_on" in names && "cal_focus_on_n" in names)
+            assertFalse("cal_zoom_into" in names || "cal_all" in names)
+        }
+        assertTrue("Focus on %1\$s" in strings("values") && "Fokus ke %1\$s" in strings("values-in"))
+        assertTrue(">All divisions<" in strings("values") && ">Semua divisi<" in strings("values-in"))
+        assertTrue("A name with the focus icon focuses the calendar on that division; any other name filters it." in strings("values"))
+        assertTrue("Nama berikon fokus memfokuskan kalender ke divisi itu; nama lain memfilternya." in strings("values-in"))
+    }
 }
