@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { initialsOf } from "@/components/Avatar";
 import { useLogoTone } from "@/lib/calendar/tone";
-import { t, tn, useLang } from "@/lib/lang";
+import { t, tn, useDocumentLang, useLang } from "@/lib/lang";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -46,6 +46,8 @@ const snap = (v: number) => Math.max(0, Math.round(v / LAYOUT.snap) * LAYOUT.sna
 export function OrgChart() {
   const qc = useQueryClient();
   const { t, tn, lang } = useLang();
+  // Its dialogs portal to <body>, outside the lang root below: they are read in the Bagan's language too.
+  useDocumentLang(lang);
   const chart = useQuery({ queryKey: ["nexus", "org-chart"], queryFn: nexusApi.orgChart, retry: false });
   const [drag, setDrag] = useState<Drag>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -795,7 +797,7 @@ export function OrgChart() {
                             <UnitCard u={u} busy={busy} {...cardInfo(u)} dragging={dragKey === key} onKeyOpen={() => setEditing(u)} />
                             {!dragKey && !busy && (
                               <button type="button" data-oc-add="" onClick={(e) => { e.stopPropagation(); setAdding({ parentId: u.id }); }} aria-label={t("Add under {name}", { name: u.name })} title={t("Add under {name}", { name: u.name })}
-                                className="absolute -bottom-3 left-1/2 z-10 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:border-[#1e3a5f] hover:text-[#1e3a5f] focus-visible:opacity-100 group-hover/card:opacity-100 dark:hover:border-[#9fb6d6] dark:hover:text-[#9fb6d6]">
+                                className="absolute -bottom-3 left-1/2 z-10 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:border-cal-accent hover:text-cal-accent focus-visible:opacity-100 group-hover/card:opacity-100">
                                 <Plus className="h-3.5 w-3.5" />
                               </button>
                             )}
@@ -902,7 +904,7 @@ function ViewChip({ active, onClick, title, children }: { active: boolean; onCli
   return (
     <button type="button" role="tab" aria-selected={active} onClick={onClick} title={title}
       className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition",
-        active ? "border-[#1e3a5f] bg-[#1e3a5f] text-white dark:border-[#9fb6d6] dark:bg-[#9fb6d6] dark:text-[#0f1b2d]" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
+        active ? "border-cal-accent bg-cal-accent text-cal-accent-foreground" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
       {children}
     </button>
   );
@@ -1188,11 +1190,11 @@ type CardTone = "root" | "ip" | "division" | "sub";
 const CARD_TONE: Record<CardTone, string> = {
   root: "bg-[#0f2742] text-white shadow-[0_1px_2px_rgba(15,39,66,.3),0_8px_20px_-8px_rgba(15,39,66,.5)]",
   ip: "bg-[#1e3a5f] text-white shadow-[0_1px_2px_rgba(15,39,66,.25),0_6px_14px_-8px_rgba(15,39,66,.45)]",
-  division: "border border-[#c6d4e7] bg-[#edf2f9] text-[#15304f] shadow-[0_1px_2px_rgba(15,39,66,.06)] dark:border-[#2e4565] dark:bg-[#1a2a41] dark:text-[#dce7f6]",
+  division: "border border-cal-line bg-cal-accent-soft text-[#15304f] shadow-[0_1px_2px_rgba(15,39,66,.06)] dark:text-[#dce7f6]",
   sub: "border border-[#d8e0eb] bg-white text-[#22344d] shadow-[0_1px_2px_rgba(15,39,66,.05)] dark:border-[#2b3547] dark:bg-[#151b26] dark:text-[#d4dce8]",
 };
 const FACE_RING: Record<CardTone, string> = {
-  root: "ring-[#0f2742]", ip: "ring-[#1e3a5f]", division: "ring-[#edf2f9] dark:ring-[#1a2a41]", sub: "ring-white dark:ring-[#151b26]",
+  root: "ring-[#0f2742]", ip: "ring-[#1e3a5f]", division: "ring-cal-accent-soft", sub: "ring-white dark:ring-[#151b26]",
 };
 
 /** Kartu IP/Team: logo (IP saja) + nama + jumlah orang. Diseret oleh kanvas; klik = ubah. */
@@ -1218,7 +1220,7 @@ function UnitCard({ u, busy, tone, meta, faces = [], dragging, onKeyOpen }: { u:
             <span className="mt-1.5 flex items-center">
               {faces.slice(0, 4).map((p, i) => (p.avatar
                 ? <img key={p.userId} src={p.avatar} alt="" title={label(p)} className={cn("h-5 w-5 shrink-0 rounded-full object-cover ring-2", FACE_RING[tone], i > 0 && "-ml-1.5")} />
-                : <span key={p.userId} title={label(p)} className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-bold ring-2", onDark ? "bg-white/20" : "bg-[#1e3a5f]/10 text-[#1e3a5f]", FACE_RING[tone], i > 0 && "-ml-1.5")}>{initialsOf(p.name)}</span>))}
+                : <span key={p.userId} title={label(p)} className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-bold ring-2", onDark ? "bg-white/20" : "bg-cal-accent/10 text-cal-accent", FACE_RING[tone], i > 0 && "-ml-1.5")}>{initialsOf(p.name)}</span>))}
               {faces.length > 4 && <span className={cn("ml-1 text-[10px] font-semibold", onDark ? "text-white/70" : "text-[#5a6b83]")}>+{faces.length - 4}</span>}
             </span>
           )}
@@ -1292,7 +1294,7 @@ function KindTile({ kind, logoUrl, size = 28 }: { kind: OrgUnit["kind"]; logoUrl
   const Icon = KIND_ICON[kind];
   return (
     <span style={{ width: size, height: size }} className={cn("grid shrink-0 place-items-center rounded-lg",
-      kind === "IP" ? "bg-[#1e3a5f] text-white" : kind === "DIVISION" ? "bg-[#edf2f9] text-[#1e3a5f] dark:bg-[#1a2a41] dark:text-[#dce7f6]" : "bg-muted text-muted-foreground")}>
+      kind === "IP" ? "bg-[#1e3a5f] text-white" : kind === "DIVISION" ? "bg-cal-accent-soft text-cal-accent-soft-foreground" : "bg-muted text-muted-foreground")}>
       <Icon className="h-[55%] w-[55%]" />
     </span>
   );
@@ -1359,12 +1361,12 @@ function ParentPicker({ units, value, excluded, onChange }: { units: OrgUnit[]; 
           <span className="block truncate text-sm font-semibold">{current ? current.name : t("Top level")}</span>
           <span className="block truncate text-[11px] text-muted-foreground">{current ? parentTrail(current, byId) || t("top level") : t("no parent")}</span>
         </span>
-        <span className="shrink-0 text-xs font-semibold text-[#1e3a5f] dark:text-[#9fb6d6]">{t("Change")}</span>
+        <span className="shrink-0 text-xs font-semibold text-cal-accent">{t("Change")}</span>
       </button>
     );
   }
   return (
-    <div className="overflow-hidden rounded-xl border border-[#1e3a5f]/40 bg-background dark:border-[#9fb6d6]/40">
+    <div className="overflow-hidden rounded-xl border border-cal-accent/40 bg-background">
       <div className="relative border-b border-border">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); setQ(""); } }}
@@ -1389,13 +1391,13 @@ function ParentPicker({ units, value, excluded, onChange }: { units: OrgUnit[]; 
 function PickRow({ selected, onClick, depth, icon, label, sub }: { selected: boolean; onClick: () => void; depth: number; icon: React.ReactNode; label: string; sub?: string }) {
   return (
     <button type="button" onClick={onClick} style={{ paddingLeft: 8 + depth * 18 }}
-      className={cn("flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-sm transition hover:bg-accent", selected && "bg-[#1e3a5f]/[0.07] font-semibold dark:bg-[#9fb6d6]/10")}>
+      className={cn("flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-sm transition hover:bg-accent", selected && "bg-cal-accent/[0.07] font-semibold dark:bg-cal-accent/10")}>
       {icon}
       <span className="min-w-0 flex-1">
         <span className="block truncate">{label}</span>
         {sub && <span className="block truncate text-[11px] font-normal text-muted-foreground">{sub}</span>}
       </span>
-      {selected && <Check className="h-4 w-4 shrink-0 text-[#1e3a5f] dark:text-[#9fb6d6]" />}
+      {selected && <Check className="h-4 w-4 shrink-0 text-cal-accent" />}
     </button>
   );
 }
@@ -1527,7 +1529,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
             <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{subtitle}</div>
           </div>
           {onFocus && (
-            <button type="button" onClick={onFocus} title={t("Show only this part, arranged automatically")} className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e3a5f] hover:bg-accent dark:text-[#9fb6d6]">
+            <button type="button" onClick={onFocus} title={t("Show only this part, arranged automatically")} className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-cal-accent hover:bg-accent">
               <Focus className="h-3.5 w-3.5" /> {t("See inside")}
             </button>
           )}
@@ -1541,7 +1543,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
               {(["IP", "DIVISION", "GROUP"] as const).map((k) => (
                 <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
                   className={cn("flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition sm:flex-col sm:items-start sm:gap-1.5",
-                    kind === k ? "border-[#1e3a5f] bg-[#1e3a5f]/[0.06] ring-1 ring-[#1e3a5f] dark:border-[#9fb6d6] dark:bg-[#9fb6d6]/10 dark:ring-[#9fb6d6]" : "border-border hover:border-[#1e3a5f]/40")}>
+                    kind === k ? "border-cal-accent bg-cal-accent/[0.06] ring-1 ring-cal-accent dark:bg-cal-accent/10" : "border-border hover:border-[#1e3a5f]/40")}>
                   <KindTile kind={k} size={26} />
                   <span className="min-w-0">
                     <span className="block text-[13px] font-semibold leading-tight">{kindTitle(k)}</span>
@@ -1564,7 +1566,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
             <FieldLabel>{t("Name")}</FieldLabel>
             <input autoFocus={!unit} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); }} maxLength={80}
               placeholder={t("e.g. {name}", { name: kind === "IP" ? "PATS" : kind === "GROUP" ? "Creative" : "Multimedia" })}
-              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-[#1e3a5f] focus:ring-2 focus:ring-[#1e3a5f]/15 dark:focus:border-[#9fb6d6]" />
+              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-cal-accent focus:ring-2 focus:ring-[#1e3a5f]/15" />
           </section>
 
           {kind === "IP" && (
@@ -1631,7 +1633,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
             </button>
           )}
           {unit && onAddChild && (
-            <button type="button" onClick={onAddChild} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-[#1e3a5f] hover:bg-accent dark:text-[#9fb6d6]">
+            <button type="button" onClick={onAddChild} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-cal-accent hover:bg-accent">
               <Plus className="h-3.5 w-3.5" /> {unit.kind === "GROUP" ? t("Add to this group") : t("Add under it")}
             </button>
           )}
@@ -1668,7 +1670,7 @@ function LeadChip({ on, onClick, children }: { on: boolean; onClick: () => void;
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onClick}
       className={cn("inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition",
-        on ? "border-[#1e3a5f] bg-[#1e3a5f]/[0.07] ring-1 ring-[#1e3a5f] dark:border-[#9fb6d6] dark:bg-[#9fb6d6]/10 dark:ring-[#9fb6d6]" : "border-border hover:border-[#1e3a5f]/40")}>
+        on ? "border-cal-accent bg-cal-accent/[0.07] ring-1 ring-cal-accent dark:bg-cal-accent/10" : "border-border hover:border-[#1e3a5f]/40")}>
       {children}
     </button>
   );
@@ -1809,7 +1811,7 @@ function TitleRow({ person, unitId, leaders }: { person: OrgChartPerson; unitId:
       </span>
       <input value={v} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         maxLength={40} placeholder={t("Job title")} disabled={saving} aria-label={t("{name}'s job title", { name: label(person) })}
-        className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-[#1e3a5f] disabled:opacity-60 dark:focus:border-[#9fb6d6]" />
+        className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-cal-accent disabled:opacity-60" />
       {person.role !== "BOD" && person.role !== "ONE_ABOVE_ALL" && leaders.length > 0 && (
         <select value={person.reportsTo?.[unitId] ?? ""} disabled={saving} onChange={(e) => saveReportsTo(e.target.value || null)} title={t("Under whom")} aria-label={t("{name}'s leader", { name: label(person) })}
           className="w-28 rounded-lg border border-border bg-background px-1.5 py-1.5 text-xs outline-none focus:border-[#1e3a5f] disabled:opacity-60">

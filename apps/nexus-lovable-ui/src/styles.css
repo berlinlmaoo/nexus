@@ -52,6 +52,13 @@
   --color-cal-accent-soft: var(--cal-accent-soft);
   --color-cal-accent-soft-foreground: var(--cal-accent-soft-foreground);
   --color-cal-line: var(--cal-line);
+  /* The calendar's state colours, one per meaning on every screen (grid, day panel, People, preview):
+     overdue and public holidays share one red, the read-only banner is amber, an open task is slate. */
+  --color-cal-overdue: var(--cal-overdue);
+  --color-cal-holiday: var(--cal-holiday);
+  --color-cal-readonly: var(--cal-readonly);
+  --color-cal-readonly-foreground: var(--cal-readonly-foreground);
+  --color-cal-todo: var(--cal-todo);
   /* Outline of an unchecked checkbox / switch track: ≥3:1 on card, unlike --border / --input. */
   --color-control-border: var(--control-border);
   /* Dims the page behind a modal; darker in dark mode instead of a light haze. */
@@ -104,6 +111,12 @@
   --cal-accent-soft: #edf2f9;
   --cal-accent-soft-foreground: #1e3a5f;
   --cal-line: #c6d4e7;
+  /* Text-safe on the card and on its own 6% tint: 6.3:1 on white. */
+  --cal-overdue: #be123c;
+  --cal-holiday: #be123c;
+  --cal-readonly: #fffbeb;
+  --cal-readonly-foreground: #78350f;
+  --cal-todo: #5a6b83;
   --control-border: #878e98;
   --scrim: rgb(15 23 42 / 0.4);
   color-scheme: light;
@@ -149,6 +162,12 @@
   --cal-accent-soft: #1a2a41;
   --cal-accent-soft-foreground: #dce7f6;
   --cal-line: #2e4565;
+  /* 6.2:1 on the card. */
+  --cal-overdue: #fb7185;
+  --cal-holiday: #fb7185;
+  --cal-readonly: rgb(245 158 11 / 0.1);
+  --cal-readonly-foreground: #fde68a;
+  --cal-todo: #9fb0c8;
   --control-border: #6b7381;
   --scrim: rgb(0 0 0 / 0.6);
   color-scheme: dark;
@@ -166,6 +185,58 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+  }
+  /* Inside the Calendar, a control that brings no focus style of its own (the shared EmptyAction) shows
+     the calendar's: a 2px outline in its accent. A focus-visible utility on a control still wins. */
+  :is([data-cal-root], [data-cal-surface]) :is(a[href], button, summary):focus-visible {
+    outline: 2px solid var(--cal-accent);
+    outline-offset: 2px;
+  }
+}
+
+/* The Calendar's keyboard focus is its accent (the Bagan navy). Controls that take their focus colour
+   from the ring token (the shared Switch) follow it on the page and on its popover, drawer and dialogs
+   (data-cal-surface, portaled outside the page). */
+[data-cal-root],
+[data-cal-surface] {
+  --ring: var(--cal-accent);
+}
+
+/* Overlays under "reduce motion": tooltips, popovers, dialogs and sheets fade, but no longer zoom or
+   slide (tw-animate's enter / exit keyframes read these variables). Unlayered, so it wins over the
+   zoom-in / slide-in utilities on the same element. The phone drawer (vaul, which injects its own
+   styles later, hence !important) fades in place instead of sliding up the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .reduce-motion-fade {
+    --tw-enter-opacity: 0;
+    --tw-enter-scale: 1;
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-enter-rotate: 0;
+    --tw-exit-opacity: 0;
+    --tw-exit-scale: 1;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+    --tw-exit-rotate: 0;
+  }
+  [data-vaul-drawer][data-state="open"] {
+    animation-name: reduce-fade-in !important;
+  }
+  [data-vaul-drawer][data-state="closed"] {
+    animation-name: reduce-fade-out !important;
+  }
+  [data-vaul-drawer] {
+    transition: none !important;
+  }
+}
+@keyframes reduce-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes reduce-fade-out {
+  to {
+    opacity: 0;
   }
 }
 

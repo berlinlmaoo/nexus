@@ -178,9 +178,23 @@ export type CalFilters = {
 }
 export const NO_FILTERS: CalFilters = { scope: "all", units: [], people: [], projects: [], priorities: [], hideDone: false, overdueOnly: false }
 
+/** Everything that narrows the list, the scope included. */
 export function activeFilterCount(f: CalFilters): number {
   return (f.scope !== "all" ? 1 : 0) + (f.units.length ? 1 : 0) + (f.people.length ? 1 : 0) + (f.projects.length ? 1 : 0)
     + (f.priorities.length ? 1 : 0) + (f.hideDone ? 1 : 0) + (f.overdueOnly ? 1 : 0)
+}
+
+/**
+ * The count on the Filters button. Everyone / Mine / My division is the view's scope, not a filter
+ * (owner, round 2): it has its own switch and is never counted here.
+ */
+export function filterCount(f: CalFilters): number {
+  return activeFilterCount({ ...f, scope: "all" })
+}
+
+/** "Reset filters": every filter off, the scope kept as it is. */
+export function clearFilters(f: CalFilters): CalFilters {
+  return { ...NO_FILTERS, scope: f.scope }
 }
 
 export type FilterContext = { ix: CalIndex; meId: string | null; myHomes: string[]; today: string; nowMs: number; windowDays: number }
