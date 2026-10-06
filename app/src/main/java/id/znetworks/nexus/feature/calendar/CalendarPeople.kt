@@ -1,15 +1,17 @@
 package id.znetworks.nexus.feature.calendar
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,18 +20,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,93 +53,115 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * People view (the week of the selected day, CalendarCore.weekRows): phone = per division › person with
- * up to 3 tasks ("Thu 8 · title") and "+N more"; tablet = the week table (name + 7 day columns, 2 chips
- * per cell + "+N"). Tapping a day goes to Month on that day with the person lens.
+ * People view (the week of the selected day, CalendarCore.weekRows, remembered — audit #18). Phone: each
+ * division is a sticky header, people are one flat card each (no card-in-card stairs, audit #35), a task
+ * line opens the task (audit #34), "+N more" opens the rest in place, the person header goes to Month on
+ * their first day. Tablet: the week table, rows ≥ 48 dp, every day cell named (audit #7).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun PeopleView(d: CalDerived, vm: CalendarViewModel, tablet: Boolean, onFilters: () -> Unit) {
     val c = Nx.colors
     val s = d.s
     val monday = CalendarCore.mondayOf(s.day)
-    val rows = CalendarCore.weekRows(d.shown, d.ix, d.focus, monday, s.today, s.nowMs, s.windowDays)
+    val rows = remember(d.data, monday) { CalendarCore.weekRows(d.shown, d.ix, d.focus, monday, s.today, s.nowMs, s.windowDays) }
     fun goDay(day: String) { vm.setLens(CalLens.PERSON); vm.setView(CalView.MONTH); vm.selectDay(day) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Controls(d, vm, onFilters) }
-        item { Legend(d, vm) }
+        item(key = "controls") { Controls(d, vm) }
+        item(key = "legend") { Legend(d, vm) }
         // Not loaded (or failed) for this week: a bar or the reason, never "nobody this week".
-        if (!d.ready) item { RangeStatus(d, vm) }
-        else if (rows.isEmpty()) item {
+        if (!d.ready) item(key = "status") { RangeStatus(d, vm) }
+        else if (rows.isEmpty()) item(key = "empty") {
+            // Why it is empty, and the way out (audit #44).
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.cal_nobody_week), fontWeight = FontWeight.SemiBold, color = c.foreground)
-                Text(stringResource(R.string.cal_pick_week), fontSize = 12.sp, color = c.mutedFg)
+                Text(stringResource(if (d.filterCount > 0) R.string.cal_filters_hiding else R.string.cal_pick_week), fontSize = 12.sp, color = c.mutedFg)
+                if (d.filterCount > 0) TextButton(onClick = { vm.setFilters(CalendarCore.NO_FILTERS) }) { Text(stringResource(R.string.cal_reset_filters)) }
+                else if (CalendarCore.mondayOf(s.today) != monday) TextButton(onClick = { vm.today() }) { Text(stringResource(R.string.cal_go_this_week)) }
             }
         }
-        if (tablet && rows.isNotEmpty()) item { WeekHeader(monday, s.today) }
-        items(rows, key = { r -> when (r) { is WeekRow.Unit -> "u:${r.unit.id}"; is WeekRow.Unplaced -> "unplaced"; is WeekRow.Person -> "p:${r.unitId}:${r.userId}"; is WeekRow.Loose -> "l:${r.unitId}" } }) { r ->
-            if (tablet) TableRow(d, vm, r, monday, ::goDay) else PhoneRow(d, vm, r, monday, ::goDay)
+        if (tablet && rows.isNotEmpty()) item(key = "weekhead") { WeekHeader(monday, s.today) }
+        rows.forEach { r ->
+            val key = when (r) { is WeekRow.Unit -> "u:${r.unit.id}"; is WeekRow.Unplaced -> "unplaced"; is WeekRow.Person -> "p:${r.unitId}:${r.userId}"; is WeekRow.Loose -> "l:${r.unitId}" }
+            when (r) {
+                is WeekRow.Unit, is WeekRow.Unplaced -> stickyHeader(key = key) { UnitHeader(d, r) }
+                else -> item(key = key) { if (tablet) TableRow(d, vm, r, monday, ::goDay) else PhoneRow(d, vm, r, key, ::goDay) }
+            }
+        }
+    }
+}
+
+/** A division (or "Not in the chart yet") as a sticky section header: colour bar, name, count. */
+@Composable
+private fun UnitHeader(d: CalDerived, r: WeekRow) {
+    val c = Nx.colors
+    Row(Modifier.fillMaxWidth().background(c.background).padding(horizontal = 16.dp, vertical = 10.dp).semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically) {
+        when (r) {
+            is WeekRow.Unit -> {
+                if (!r.unit.isGroup) { Box(Modifier.width(3.dp).height(16.dp).background(d.color(r.unit.id))); Spacer(Modifier.width(8.dp)) }
+                Text(r.unit.name.uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp,
+                    color = if (r.unit.isGroup) c.mutedFg else c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                CountPill(r.count)
+            }
+            is WeekRow.Unplaced -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+            else -> {}
         }
     }
 }
 
 @Composable
-private fun UnitHeader(d: CalDerived, r: WeekRow.Unit) {
+private fun PhoneRow(d: CalDerived, vm: CalendarViewModel, r: WeekRow, key: String, goDay: (String) -> Unit) {
     val c = Nx.colors
-    if (r.unit.isGroup) {
-        Text("${r.unit.name.uppercase(Locale.getDefault())} · ${r.count}", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = c.mutedFg,
-            modifier = Modifier.padding(start = (16 + 12 * r.depth).dp, top = 10.dp, bottom = 4.dp))
-        return
-    }
-    Row(Modifier.fillMaxWidth().padding(start = (12 + 12 * r.depth).dp, end = 12.dp, top = 8.dp).clip(RoundedCornerShape(12.dp)).background(c.card)
-        .border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(3.dp).height(16.dp).background(d.color(r.unit.id)))
-        Spacer(Modifier.width(8.dp))
-        Text(r.unit.name.uppercase(Locale.getDefault()), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        CountPill(r.count)
+    val (days, userId, unitId) = when (r) { is WeekRow.Person -> Triple(r.days, r.userId, r.unitId); is WeekRow.Loose -> Triple(r.days, null, r.unitId); else -> return }
+    val flat = days.flatten()
+    var open by rememberSaveable(key) { mutableStateOf(false) }
+    val showLabel = stringResource(R.string.cal_show_in_month)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.card)
+        .border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+        // The header goes to Month on this person's first day with a task, lens "person".
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = flat.isNotEmpty(), onClickLabel = showLabel) { flat.firstOrNull()?.let { goDay(it.day) } },
+            verticalAlignment = Alignment.CenterVertically) {
+            if (userId != null) { Initials(d.name(userId), d.color(unitId), 26); Spacer(Modifier.width(8.dp)) }
+            Text(if (userId != null) d.name(userId) ?: stringResource(R.string.cal_former_member) else stringResource(R.string.cal_without_person),
+                fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (userId != null && userId == d.me?.userId) Text(stringResource(R.string.cal_you), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.onNavy,
+                modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50)).background(c.navy).padding(horizontal = 7.dp, vertical = 1.dp))
+            // The week at a glance: a square per day, darker with more tasks (decorative; the count says it).
+            Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                days.forEach { list -> Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(if (list.isEmpty()) c.muted else d.color(unitId).copy(alpha = (0.35f + 0.2f * list.size).coerceAtMost(1f)))) }
+            }
+            Spacer(Modifier.width(6.dp)); CountPill(flat.size)
+        }
+        (if (open) flat else flat.take(3)).forEach { i -> WeekTaskLine(d, vm, i) }
+        if (flat.size > 3) TextButton(onClick = { open = !open }) {
+            Text(if (open) stringResource(R.string.cal_show_less) else pluralStringResource(R.plurals.cal_more_n, flat.size - 3, flat.size - 3), fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
+/** "Thu 8 · title": opens the task like the Month rows do (masked: says why). */
 @Composable
-private fun PhoneRow(d: CalDerived, vm: CalendarViewModel, r: WeekRow, monday: String, goDay: (String) -> Unit) {
+private fun WeekTaskLine(d: CalDerived, vm: CalendarViewModel, i: CalItem) {
     val c = Nx.colors
-    when (r) {
-        is WeekRow.Unit -> UnitHeader(d, r)
-        is WeekRow.Unplaced -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold,
-            letterSpacing = 0.8.sp, color = c.mutedFg, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 4.dp))
-        is WeekRow.Person, is WeekRow.Loose -> {
-            val (days, userId, unitId) = when (r) { is WeekRow.Person -> Triple(r.days, r.userId, r.unitId); is WeekRow.Loose -> Triple(r.days, null, r.unitId); else -> error("") }
-            val flat = days.flatten()
-            Column(Modifier.fillMaxWidth().padding(start = (12 + 12 * r.depth).dp, end = 12.dp, top = 6.dp).clip(RoundedCornerShape(12.dp)).background(c.card)
-                .border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (userId != null) { Initials(d.name(userId), d.color(unitId), 26); Spacer(Modifier.width(8.dp)) }
-                    Text(if (userId != null) d.name(userId) ?: stringResource(R.string.cal_former_member) else stringResource(R.string.cal_without_person),
-                        fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    // The week at a glance: a square per day, darker with more tasks.
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        days.forEach { list -> Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(if (list.isEmpty()) c.muted else d.color(unitId).copy(alpha = (0.35f + 0.2f * list.size).coerceAtMost(1f)))) }
-                    }
-                    Spacer(Modifier.width(6.dp)); CountPill(flat.size)
-                }
-                flat.take(3).forEach { i ->
-                    Row(Modifier.fillMaxWidth().clickable { goDay(i.day) }.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        TaskGlyph(d, i, 14); Spacer(Modifier.width(6.dp))
-                        Text(shortDay(i.day) + " · ", fontSize = 12.sp, color = c.mutedFg)
-                        Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null)
-                    }
-                }
-                if (flat.size > 3) Text(pluralStringResource(R.plurals.cal_more_n, flat.size - 3, flat.size - 3), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    color = c.violetText, modifier = Modifier.padding(top = 6.dp).clickable { goDay(flat[3].day) })
-            }
-        }
+    val editable = i.canEdit && i.editProjectId != null && i.editProjectId == i.project?.id
+    val action = stringResource(when { i.masked -> R.string.cal_why_locked; editable -> R.string.cal_open_task; else -> R.string.cal_open_read_only })
+    val status = statusWords(d, i)
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { stateDescription = status }.clickable(onClickLabel = action) { vm.open(i) },
+        verticalAlignment = Alignment.CenterVertically) {
+        TaskGlyph(d, i, 14); Spacer(Modifier.width(6.dp))
+        Text(shortDay(i.day) + " · ", fontSize = 12.sp, color = c.mutedFg)
+        Text(if (i.masked) d.sectionName(i)?.let { stringResource(R.string.cal_internal_in, it) } ?: stringResource(R.string.cal_internal) else i.title.orEmpty(),
+            fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null)
     }
 }
 
 @Composable
 private fun WeekHeader(monday: String, today: String) {
     val c = Nx.colors
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clearAndSetSemantics {}) {
         Text(stringResource(R.string.cal_person).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.width(180.dp))
         (0 until 7).forEach { k ->
             val day = CalendarCore.addDays(monday, k)
@@ -140,36 +172,35 @@ private fun WeekHeader(monday: String, today: String) {
     HorizontalDivider(color = c.border)
 }
 
+/** Tablet week table row: ≥ 48 dp, cells fill the row height and say their day and count; empty days are not buttons. */
 @Composable
 private fun TableRow(d: CalDerived, vm: CalendarViewModel, r: WeekRow, monday: String, goDay: (String) -> Unit) {
     val c = Nx.colors
-    when (r) {
-        is WeekRow.Unit -> UnitHeader(d, r)
-        is WeekRow.Unplaced -> Text(stringResource(R.string.cal_not_in_chart_n, r.count).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold,
-            color = c.mutedFg, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
-        is WeekRow.Person, is WeekRow.Loose -> {
-            val (days, userId, unitId) = when (r) { is WeekRow.Person -> Triple(r.days, r.userId, r.unitId); is WeekRow.Loose -> Triple(r.days, null, r.unitId); else -> error("") }
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp)) {
-                Row(Modifier.width(180.dp).padding(start = (12 * r.depth).dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (userId != null) { Initials(d.name(userId), d.color(unitId), 22); Spacer(Modifier.width(6.dp)) }
-                    Text(if (userId != null) d.name(userId) ?: stringResource(R.string.cal_former_member) else stringResource(R.string.cal_without_person),
-                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (userId == null) c.mutedFg else c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                days.forEachIndexed { k, list ->
-                    val day = CalendarCore.addDays(monday, k)
-                    Column(Modifier.weight(1f).clickable { goDay(day) }.padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        list.take(2).forEach { i ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                TaskGlyph(d, i, 12); Spacer(Modifier.width(4.dp))
-                                Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null)
-                            }
-                        }
-                        if (list.size > 2) Text(pluralStringResource(R.plurals.cal_more_n, list.size - 2, list.size - 2), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
+    val (days, userId, unitId) = when (r) { is WeekRow.Person -> Triple(r.days, r.userId, r.unitId); is WeekRow.Loose -> Triple(r.days, null, r.unitId); else -> return }
+    val showLabel = stringResource(R.string.cal_show_in_month)
+    val noTasks = stringResource(R.string.cal_no_tasks)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 48.dp).padding(horizontal = 12.dp)) {
+        Row(Modifier.width(180.dp).fillMaxHeight().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
+            if (userId != null) { Initials(d.name(userId), d.color(unitId), 22); Spacer(Modifier.width(6.dp)) }
+            Text(if (userId != null) d.name(userId) ?: stringResource(R.string.cal_former_member) else stringResource(R.string.cal_without_person),
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (userId == null) c.mutedFg else c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        days.forEachIndexed { k, list ->
+            val day = CalendarCore.addDays(monday, k)
+            val described = longDay(day) + ", " + if (list.isEmpty()) noTasks else pluralStringResource(R.plurals.cal_tasks_n, list.size, list.size)
+            Column(Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = described }
+                .then(if (list.isNotEmpty()) Modifier.clickable(onClickLabel = showLabel) { goDay(day) } else Modifier).padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                list.take(2).forEach { i ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.open(i) }) {
+                        TaskGlyph(d, i, 12); Spacer(Modifier.width(4.dp))
+                        Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null)
                     }
                 }
+                if (list.size > 2) Text(pluralStringResource(R.plurals.cal_more_n, list.size - 2, list.size - 2), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
             }
-            HorizontalDivider(color = c.border.copy(alpha = 0.6f))
         }
     }
+    HorizontalDivider(color = c.border.copy(alpha = 0.6f))
 }

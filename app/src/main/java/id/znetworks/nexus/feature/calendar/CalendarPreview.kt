@@ -1,6 +1,5 @@
 package id.znetworks.nexus.feature.calendar
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -20,7 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,10 +41,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import id.znetworks.nexus.ui.components.EmptyState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.time.OfficeTime
@@ -64,33 +67,40 @@ internal fun dueText(iso: String?): String? {
 }
 
 /**
- * A task the viewer cannot edit (not a member of its project), read only and full screen: title,
- * status, due (WIB), priority, project, people, description, subtasks, comments, under the banner
- * "Read only · you are not a member of <project>". Masked rows never get here.
+ * A task the viewer cannot edit (not a member of its project), read only — its own route
+ * (`task-preview/{id}`), so it opens and goes back like the editable task screen (audit #38): back arrow,
+ * title, a theme-aware "Read only · you are not a member of <project>" banner, then status, due (WIB),
+ * priority, project, people, description, subtasks, comments. Failure offers Try again. Text is capped
+ * at a readable width on tablets (audit #12). Masked rows never get here.
  */
 @Composable
-internal fun TaskPreview(taskId: String, projectName: String?, onClose: () -> Unit) {
+fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) {
     val c = Nx.colors
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val api = remember { TaskApi(container.api, container.uploads) }
     var task by remember(taskId) { mutableStateOf<TaskDetail?>(null) }
     var failed by remember(taskId) { mutableStateOf(false) }
-    LaunchedEffect(taskId) { runCatching { api.task(taskId).value }.onSuccess { task = it }.onFailure { failed = true } }
-    BackHandler(onBack = onClose)
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(c.background).safeDrawingPadding()) {
-            val project = projectName ?: task?.taskList?.project?.name
-            Row(Modifier.fillMaxWidth().background(Color(0xFFFFF7E0)).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Visibility, null, tint = Color(0xFF8A5A00), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                Text(project?.let { stringResource(R.string.cal_read_only_of, it) } ?: stringResource(R.string.cal_read_only), fontSize = 13.sp, color = Color(0xFF8A5A00), modifier = Modifier.weight(1f))
-                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.cal_close), tint = Color(0xFF8A5A00)) }
-            }
-            val t = task
+    var attempt by remember(taskId) { mutableStateOf(0) }
+    LaunchedEffect(taskId, attempt) { failed = false; runCatching { api.task(taskId).value }.onSuccess { task = it }.onFailure { failed = true } }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.cal_task), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
+                modifier = Modifier.weight(1f).semantics { heading() })
+        }
+        val project = projectName ?: task?.taskList?.project?.name
+        Row(Modifier.fillMaxWidth().background(c.warningBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Visibility, null, tint = c.warningFg, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+            Text(project?.let { stringResource(R.string.cal_read_only_of, it) } ?: stringResource(R.string.cal_read_only), fontSize = 13.sp, color = c.warningFg, modifier = Modifier.weight(1f))
+        }
+        val t = task
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             when {
                 t == null && !failed -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                t == null -> Text(stringResource(R.string.cal_task_failed), color = c.mutedFg, modifier = Modifier.padding(20.dp))
-                else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(t.title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground)
+                t == null -> EmptyState(Icons.Filled.CloudOff, stringResource(R.string.cal_task_failed), stringResource(R.string.cal_check_connection),
+                    stringResource(R.string.try_again), { attempt++ }, Modifier.fillMaxSize())
+                else -> Column(Modifier.widthIn(max = 640.dp).fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(t.title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground, modifier = Modifier.semantics { heading() })
                     Fact(stringResource(R.string.cal_status)) {
                         Text(statusLabel(t.status), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
                             modifier = Modifier.clip(CircleShape).background(c.muted).padding(horizontal = 10.dp, vertical = 2.dp))
@@ -101,15 +111,17 @@ internal fun TaskPreview(taskId: String, projectName: String?, onClose: () -> Un
                     Fact(stringResource(R.string.cal_people)) {
                         val names = t.assignees.mapNotNull { it.user?.name }
                         if (names.isEmpty()) Text(stringResource(R.string.cal_nobody_yet), fontSize = 14.sp, color = c.mutedFg)
-                        else Column { names.forEach { n -> Row(verticalAlignment = Alignment.CenterVertically) { Initials(n, Color(0xFF1E3A5F), 20); Spacer(Modifier.width(6.dp)); Text(n, fontSize = 14.sp, color = c.foreground) } } }
+                        else Column { names.forEach { n -> Row(verticalAlignment = Alignment.CenterVertically) { Initials(n, c.navy, 20); Spacer(Modifier.width(6.dp)); Text(n, fontSize = 14.sp, color = c.foreground) } } }
                     }
                     if (t.descriptionText.isNotBlank()) Block(stringResource(R.string.cal_description)) {
                         Text(t.descriptionText, fontSize = 14.sp, color = c.foreground, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(12.dp))
                     }
                     if (t.subtasks.isNotEmpty()) Block(stringResource(R.string.cal_subtasks)) {
+                        val done = doneWord; val todo = todoWord
                         t.subtasks.forEach { st ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                                if (st.isDone) Box(Modifier.size(16.dp).clip(CircleShape).background(c.success), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(11.dp)) }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp).semantics(mergeDescendants = true) {
+                                stateDescription = if (st.isDone) done else todo }) {
+                                if (st.isDone) Box(Modifier.size(16.dp).clip(CircleShape).background(c.success), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Check, null, tint = c.onSuccess, modifier = Modifier.size(11.dp)) }
                                 else Box(Modifier.size(16.dp).clip(CircleShape).border(1.5.dp, c.mutedFg, CircleShape))
                                 Spacer(Modifier.width(8.dp))
                                 Text(st.title, fontSize = 14.sp, color = if (st.isDone) c.mutedFg else c.foreground, textDecoration = if (st.isDone) TextDecoration.LineThrough else null)
@@ -132,6 +144,9 @@ internal fun TaskPreview(taskId: String, projectName: String?, onClose: () -> Un
         }
     }
 }
+
+private val doneWord @Composable get() = stringResource(R.string.cal_status_done)
+private val todoWord @Composable get() = stringResource(R.string.cal_status_todo)
 
 /** "4 Okt, 15.12" in WIB. */
 private fun commentTime(iso: String?): String? = iso?.let { runCatching { Instant.parse(it).atZone(OfficeTime.ZONE) }.getOrNull() }?.let { z ->

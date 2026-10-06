@@ -1917,4 +1917,28 @@
     <string name="wcal_cfg_hint">Whose tasks this widget shows.</string>
     <string name="wcal_cfg_division_hint">Shows your own tasks while you’re not on a card in the org chart.</string>
     <string name="wcal_cfg_save">Save</string>
+    <string name="cal_updated_offline">Updated %s · offline</string>
+    <string name="cal_no_tasks">no tasks</string>
+    <string name="cal_show_tasks">Show tasks</string>
+    <string name="cal_collapsed">Collapsed</string>
+    <string name="cal_expanded">Expanded</string>
+    <string name="cal_expand">Expand</string>
+    <string name="cal_collapse">Collapse</string>
+    <string name="cal_why_locked">Why it’s locked</string>
+    <string name="cal_open_task">Open task</string>
+    <string name="cal_open_read_only">Open read-only</string>
+    <string name="cal_show_in_month">Show in month</string>
+    <string name="cal_go_this_week">Go to this week</string>
+    <plurals name="cal_filters_on">
+        <item quantity="one">Filters, %d on</item>
+        <item quantity="other">Filters, %d on</item>
+    </plurals>
+    <plurals name="cal_overdue_count">
+        <item quantity="one">%d overdue</item>
+        <item quantity="other">%d overdue</item>
+    </plurals>
+    <plurals name="cal_show_n_tasks">
+        <item quantity="one">Show %d task</item>
+        <item quantity="other">Show %d tasks</item>
+    </plurals>
 </resources>

@@ -49,6 +49,7 @@ import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.calendar.CalendarScreen
+import id.znetworks.nexus.feature.calendar.TaskPreviewScreen
 import id.znetworks.nexus.feature.people.LeaderboardScreen
 import id.znetworks.nexus.feature.people.MemberProfileScreen
 import id.znetworks.nexus.feature.reports.PersonReportScreen
@@ -356,9 +357,15 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 val a = e.arguments
                 CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
                     date = a?.getString("date"), view = a?.getString("view"), lens = a?.getString("lens"), focus = a?.getString("focus"), scope = a?.getString("scope"), task = a?.getString("task"),
-                    nonce = a?.getString("n"))
+                    nonce = a?.getString("n"),
+                    onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } })
             }
-            composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) }) }
+            composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
+                onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } }) }
+            // A task the viewer may read but not edit: a destination like the task screen (audit #38).
+            composable("task-preview/{id}?project={project}", arguments = listOf(androidx.navigation.navArgument("project") { nullable = true; defaultValue = null })) { e ->
+                TaskPreviewScreen(e.arguments?.getString("id").orEmpty(), e.arguments?.getString("project")?.takeIf { it.isNotEmpty() }) { nav.popBackStack() }
+            }
             composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
             composable("admin") {
                 ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(

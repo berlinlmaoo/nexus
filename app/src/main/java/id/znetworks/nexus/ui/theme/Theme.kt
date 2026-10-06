@@ -35,6 +35,17 @@ data class NxColors(
     val accentFg: Color,
     val coral: Color,
     val cream: Color,
+    /** Brand navy (Calendar, Bagan): selection, today. Light navy on dark surfaces, as the Bagan does. */
+    val navy: Color = Color(0xFF1E3A5F),
+    /** Text and icons on [navy]. */
+    val onNavy: Color = Color.White,
+    /** [danger] as TEXT: AA (≥ 4.5:1) on cards and tints. Keep [danger] for bars, dots and fills. */
+    val dangerText: Color = Color(0xFFB91C1C),
+    /** Notice banners (read-only, warnings): container and its text. */
+    val warningBg: Color = Color(0xFFFFF7E0),
+    val warningFg: Color = Color(0xFF8A5A00),
+    /** Ink on [success] fills (the done tick). */
+    val onSuccess: Color = Color.White,
 )
 
 val NxLight = NxColors(
@@ -44,6 +55,8 @@ val NxLight = NxColors(
     blue = Color(0xFF0091FF), success = Color(0xFF16A34A), warning = Color(0xFFF59E0B),
     danger = Color(0xFFEF4444), accentBg = Color(0xFFF1EEFE), accentFg = Color(0xFF6750CF),
     coral = Color(0xFFFF7F50), cream = Color(0xFFFDFCFB),
+    navy = Color(0xFF1E3A5F), onNavy = Color.White, dangerText = Color(0xFFB91C1C),
+    warningBg = Color(0xFFFFF7E0), warningFg = Color(0xFF8A5A00), onSuccess = Color.White,
 )
 
 val NxDark = NxColors(
@@ -53,6 +66,8 @@ val NxDark = NxColors(
     blue = Color(0xFF38A3FF), success = Color(0xFF34D399), warning = Color(0xFFFBBF24),
     danger = Color(0xFFF87171), accentBg = Color(0xFF2C2551), accentFg = Color(0xFFBFB3FF),
     coral = Color(0xFFFF9D76), cream = Color(0xFF0D1017),
+    navy = Color(0xFF9FB6D6), onNavy = Color(0xFF0F1B2D), dangerText = Color(0xFFF87171),
+    warningBg = Color(0xFF3A2E10), warningFg = Color(0xFFFBBF24), onSuccess = Color(0xFF0D1017),
 )
 
 val LocalNx = staticCompositionLocalOf { NxLight }
@@ -85,12 +100,20 @@ private fun NexusThemeOf(nx: NxColors, dark: Boolean, content: @Composable () ->
             primary = nx.violet, onPrimary = Color.White, background = nx.background, onBackground = nx.foreground,
             surface = nx.card, onSurface = nx.foreground, surfaceVariant = nx.muted, onSurfaceVariant = nx.mutedFg,
             outline = nx.border, error = nx.danger, secondaryContainer = nx.accentBg, onSecondaryContainer = nx.accentFg,
+            // The tiers M3 components draw on (dialogs, menus, the pull-to-refresh disc, switch tracks):
+            // NEXUS greys, not the baseline purple.
+            primaryContainer = nx.accentBg, onPrimaryContainer = nx.accentFg, inverseSurface = nx.onyx, inverseOnSurface = nx.card,
+            surfaceContainerLowest = nx.background, surfaceContainerLow = Color(0xFF151A26), surfaceContainer = nx.card,
+            surfaceContainerHigh = Color(0xFF222838), surfaceContainerHighest = nx.muted, outlineVariant = nx.border,
         )
     } else {
         lightColorScheme(
             primary = nx.violet, onPrimary = Color.White, background = nx.background, onBackground = nx.foreground,
             surface = nx.card, onSurface = nx.foreground, surfaceVariant = nx.muted, onSurfaceVariant = nx.mutedFg,
             outline = nx.border, error = nx.danger, secondaryContainer = nx.accentBg, onSecondaryContainer = nx.accentFg,
+            primaryContainer = nx.accentBg, onPrimaryContainer = nx.accentFg, inverseSurface = nx.onyx, inverseOnSurface = nx.card,
+            surfaceContainerLowest = nx.card, surfaceContainerLow = nx.background, surfaceContainer = Color(0xFFF4F5F8),
+            surfaceContainerHigh = nx.muted, surfaceContainerHighest = Color(0xFFE9EBEF), outlineVariant = nx.border,
         )
     }
     CompositionLocalProvider(LocalNx provides nx) {

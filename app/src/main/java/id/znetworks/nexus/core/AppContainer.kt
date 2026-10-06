@@ -49,7 +49,7 @@ import id.znetworks.nexus.feature.calendar.widget.CalendarWidgets
  * revisit when the feature count makes wiring by hand error-prone.
  */
 /** Cache folders holding one person's files, emptied at sign-out (FileProvider paths "shared", "evidence"). */
-object SignOutFiles { val dirs = listOf("shared", "evidence") }
+object SignOutFiles { val dirs = listOf("shared", "evidence", "calendar") }
 
 class AppContainer(private val context: Context) {
     val identity = ClientIdentity.current()

@@ -147,7 +147,9 @@ class AttendanceGuardTest {
         // except the offline copy, which OfflineSync wipes itself.
         val paths = File(root.parentFile, "res/xml").listFiles().orEmpty().filter { it.name.contains("path") }.joinToString { it.readText() }
         val shared = Regex("""cache-path name="[^"]+" path="([^"/]+)/"""").findAll(paths).map { it.groupValues[1] }.toSet() - "offline"
-        assertEquals(shared, id.znetworks.nexus.core.SignOutFiles.dirs.toSet())
+        assertTrue(id.znetworks.nexus.core.SignOutFiles.dirs.toSet().containsAll(shared))
+        // The Calendar's disk cache (audit #21) holds another person's tasks: it goes too.
+        assertTrue("calendar" in id.znetworks.nexus.core.SignOutFiles.dirs)
         val container = sources.entries.first { it.key.name == "AppContainer.kt" }.value
         assertTrue(container.contains("SignOutFiles.dirs.forEach { File(context.cacheDir, it).deleteRecursively() }"))
     }

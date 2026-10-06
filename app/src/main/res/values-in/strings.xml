@@ -1911,4 +1911,28 @@
     <string name="wcal_cfg_hint">Tugas siapa yang ditampilkan widget ini.</string>
     <string name="wcal_cfg_division_hint">Menampilkan tugasmu sendiri selama kamu belum ada di kartu Bagan.</string>
     <string name="wcal_cfg_save">Simpan</string>
+    <string name="cal_updated_offline">Diperbarui %s · offline</string>
+    <string name="cal_no_tasks">tidak ada tugas</string>
+    <string name="cal_show_tasks">Tampilkan tugas</string>
+    <string name="cal_collapsed">Tertutup</string>
+    <string name="cal_expanded">Terbuka</string>
+    <string name="cal_expand">Buka</string>
+    <string name="cal_collapse">Tutup</string>
+    <string name="cal_why_locked">Kenapa terkunci</string>
+    <string name="cal_open_task">Buka tugas</string>
+    <string name="cal_open_read_only">Buka hanya-baca</string>
+    <string name="cal_show_in_month">Lihat di bulan</string>
+    <string name="cal_go_this_week">Ke minggu ini</string>
+    <plurals name="cal_filters_on">
+        <item quantity="one">Filter, %d aktif</item>
+        <item quantity="other">Filter, %d aktif</item>
+    </plurals>
+    <plurals name="cal_overdue_count">
+        <item quantity="one">%d lewat tenggat</item>
+        <item quantity="other">%d lewat tenggat</item>
+    </plurals>
+    <plurals name="cal_show_n_tasks">
+        <item quantity="one">Tampilkan %d tugas</item>
+        <item quantity="other">Tampilkan %d tugas</item>
+    </plurals>
 </resources>
