@@ -1061,6 +1061,23 @@ export function buildFixtures(profile, world, media) {
       },
     })
     add({
+      id: "cal-task-masked", title: "GET /api/calendar/task?id=<Finance task> as staff → masked, not editable", as: "a", kind: "compat",
+      needs: noCal,
+      request: () => ({ method: "GET", path: `/api/calendar/task?id=${encodeURIComponent(CT.finance?.id ?? "none")}` }),
+      expect: {
+        status: 200,
+        check: (j) => firstError(
+          need(j?.found === true && j?.masked === true && j?.canEdit === false && j?.editProjectId === null, `found/masked/canEdit ${JSON.stringify(j)}`),
+          need(!JSON.stringify(j).includes(CT.finance?.title ?? "\u0000"), "the Finance title is in the body"),
+        ),
+      },
+    })
+    add({
+      id: "cal-task-bad-id", title: "GET /api/calendar/task?id=<garbage> → 400 BAD_ID", as: "a", kind: "policy",
+      request: () => ({ method: "GET", path: "/api/calendar/task?id=a%20b" }),
+      expect: { status: 400, code: "BAD_ID" },
+    })
+    add({
       id: "cal-overdue", title: "GET /api/calendar/overdue → the open task from 3 days ago", as: "a", kind: "compat",
       needs: noCal,
       request: () => ({ method: "GET", path: "/api/calendar/overdue" }),

@@ -97,6 +97,7 @@ export const ID_CALENDAR_PAGE: Record<string, string> = {
   "Task": "Tugas",
   "Read only · you are not a member of {project}": "Hanya-baca · kamu bukan anggota proyek {project}",
   "Read only": "Hanya-baca",
+  "This is an internal task of a private project. Only its members can open it.": "Ini tugas internal dari proyek rahasia. Hanya anggotanya yang bisa membukanya.",
   "This task could not be loaded.": "Tugas ini tidak bisa dimuat.",
   "from {task}": "dari {task}",
   "Status": "Status",
