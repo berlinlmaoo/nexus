@@ -45,6 +45,8 @@ struct AttendanceWidget: Widget {
     }
 }
 
+/// Every word goes through GlanceText.t, so the widget speaks the language picked in the app (mirrored
+/// into the App Group) rather than the phone's: the extension does not compile Localization.swift.
 struct AttendanceWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: AttendanceSnapshot?
@@ -107,26 +109,26 @@ struct AttendanceWidgetView: View {
             VStack(alignment: .leading, spacing: 7) {
                 if let snapshot, snapshot.dateKey == AttendanceSnapshot.currentDateKey() {
                     if let inAt = snapshot.checkInAt {
-                        glanceRow("arrow.right.to.line", "In \(inAt.formatted(date: .omitted, time: .shortened))", nxGreen)
+                        glanceRow("arrow.right.to.line", GlanceText.t("In \(inAt.formatted(date: .omitted, time: .shortened))", "Masuk \(inAt.formatted(date: .omitted, time: .shortened))"), nxGreen)
                     }
                     if let out = snapshot.checkOutAt {
-                        glanceRow("checkmark.circle.fill", "Out \(out.formatted(date: .omitted, time: .shortened))", nxGreen)
+                        glanceRow("checkmark.circle.fill", GlanceText.t("Out \(out.formatted(date: .omitted, time: .shortened))", "Pulang \(out.formatted(date: .omitted, time: .shortened))"), nxGreen)
                     } else if let end = snapshot.expectedOutAt, snapshot.checkInAt != nil || snapshot.queuedSince != nil {
                         if end > entryDate {
                             HStack(spacing: 4) {
                                 Image(systemName: "hourglass").font(.caption2).foregroundStyle(nxViolet)
                                 Text(timerInterval: entryDate...end, countsDown: true, showsHours: true)
                                     .font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.primary)
-                                Text("left").font(.caption2).foregroundStyle(.secondary)
+                                Text(GlanceText.t("left", "lagi")).font(.caption2).foregroundStyle(.secondary)
                             }
                         } else {
-                            glanceRow("moon.zzz.fill", "Past \(end.formatted(date: .omitted, time: .shortened)) · check out", nxAmber)
+                            glanceRow("moon.zzz.fill", GlanceText.t("Past \(end.formatted(date: .omitted, time: .shortened)) · check out", "Lewat \(end.formatted(date: .omitted, time: .shortened)) · check out"), nxAmber)
                         }
                     } else if snapshot.checkInAt == nil {
-                        glanceRow("circle.dashed", "Not checked in", .secondary)
+                        glanceRow("circle.dashed", GlanceText.t("Not checked in", "Belum absen"), .secondary)
                     }
                 } else {
-                    glanceRow("arrow.clockwise", "Open NEXUS to refresh", .secondary)
+                    glanceRow("arrow.clockwise", GlanceText.t("Open NEXUS to refresh", "Buka NEXUS untuk memperbarui"), .secondary)
                 }
                 Spacer(minLength: 0)
                 if let days = snapshot?.recentDays, !days.isEmpty {
@@ -134,7 +136,7 @@ struct AttendanceWidgetView: View {
                         ForEach(days, id: \.dateKey) { d in
                             VStack(spacing: 2) {
                                 Circle().fill(toneColor(d.tone)).frame(width: 10, height: 10)
-                                Text(weekdayLetter(d.dateKey)).font(.system(size: 8)).foregroundStyle(.secondary)
+                                Text(GlanceText.weekdayLetter(d.dateKey)).font(.system(size: 8)).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -166,13 +168,6 @@ struct AttendanceWidgetView: View {
         case "A":      return Color(red: 0.94, green: 0.33, blue: 0.40)
         default:       return Color.secondary.opacity(0.25)
         }
-    }
-
-    private func weekdayLetter(_ key: String) -> String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.locale = Locale(identifier: "en_US_POSIX")
-        guard let d = f.date(from: key) else { return "" }
-        let w = DateFormatter(); w.dateFormat = "EEEEE"; w.timeZone = f.timeZone
-        return w.string(from: d)
     }
 
     private func glanceRow(_ symbol: String, _ text: String, _ color: Color) -> some View {
@@ -238,39 +233,41 @@ struct AttendanceWidgetView: View {
     }
 
     private var headline: String {
-        if pending { return "Sending" }
+        if pending { return GlanceText.t("Sending", "Mengirim") }
         switch state {
-        case .working: return snapshot?.officeName ?? "Working"
-        case .done: return "Done"
-        case .notCheckedIn: return "Not checked in"
+        case .working: return snapshot?.officeName ?? GlanceText.t("Working", "Bekerja")
+        case .done: return GlanceText.t("Done", "Selesai")
+        case .notCheckedIn: return GlanceText.t("Not checked in", "Belum absen")
         case .stale: return "NEXUS"
         }
     }
 
     private var detail: String {
         if let snapshot, snapshot.isPending {
-            return snapshot.pendingCount == 1 ? "1 tap still to send" : "\(snapshot.pendingCount) taps still to send"
+            return snapshot.pendingCount == 1
+                ? GlanceText.t("1 tap still to send", "1 ketukan belum terkirim")
+                : GlanceText.t("\(snapshot.pendingCount) taps still to send", "\(snapshot.pendingCount) ketukan belum terkirim")
         }
         switch state {
         case .working:
             if let out = snapshot?.expectedOutAt {
-                return "Until \(out.formatted(date: .omitted, time: .shortened))"
+                return GlanceText.t("Until \(out.formatted(date: .omitted, time: .shortened))", "Sampai \(out.formatted(date: .omitted, time: .shortened))")
             }
-            return "Checked in"
-        case .done: return "Checked out"
-        case .notCheckedIn: return "Tap to check in"
+            return GlanceText.t("Checked in", "Sudah check in")
+        case .done: return GlanceText.t("Checked out", "Sudah check out")
+        case .notCheckedIn: return GlanceText.t("Tap to check in", "Ketuk untuk absen")
         // Never claims a state it cannot know. A widget only refreshes while the app runs, so
         // yesterday's answer must not be presented as today's.
-        case .stale: return "Open NEXUS to refresh"
+        case .stale: return GlanceText.t("Open NEXUS to refresh", "Buka NEXUS untuk memperbarui")
         }
     }
 
     private var inlineText: String {
         switch state {
-        case .working: return pending ? "Sending" : (snapshot?.officeName ?? "Working")
-        case .done: return "Checked out"
-        case .notCheckedIn: return "Not checked in"
-        case .stale: return "Open NEXUS"
+        case .working: return pending ? GlanceText.t("Sending", "Mengirim") : (snapshot?.officeName ?? GlanceText.t("Working", "Bekerja"))
+        case .done: return GlanceText.t("Checked out", "Sudah check out")
+        case .notCheckedIn: return GlanceText.t("Not checked in", "Belum absen")
+        case .stale: return GlanceText.t("Open NEXUS", "Buka NEXUS")
         }
     }
 }

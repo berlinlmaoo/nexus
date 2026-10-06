@@ -150,6 +150,8 @@ targets:
       # The snapshot the complication draws — the same type the phone's widgets read.
       - path: Sources/Shared/AttendanceSnapshot.swift
       - path: Sources/Shared/CalendarCore.swift
+      # The calendar complications' snapshot: the watch fetches /api/calendar/glance and saves it.
+      - path: Sources/Shared/CalendarGlance.swift
     dependencies:
       # The watch-face complication rides inside the watch app.
       - target: NEXUSWatchWidgets
@@ -180,6 +182,9 @@ targets:
         excludes:
           - Info.plist
       - path: Sources/Shared/AttendanceSnapshot.swift
+      # The calendar complications draw the saved snapshot with the web's rules (CalendarGlance, days via CalendarCore).
+      - path: Sources/Shared/CalendarCore.swift
+      - path: Sources/Shared/CalendarGlance.swift
     settings:
       base:
         INFOPLIST_FILE: WatchWidgets/Info.plist

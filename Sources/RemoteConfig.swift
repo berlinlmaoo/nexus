@@ -84,5 +84,7 @@ final class RemoteConfig {
         guard fresh != body else { return }
         body = fresh
         UserDefaults.standard.set(data, forKey: Self.key)
+        // The watch reads the calendar widgets' switch from the phone's context.
+        PhoneSessionBridge.shared.republish()
     }
 }

@@ -97,7 +97,7 @@ struct CalendarView: View {
             }
         }
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable { await load(pulled: true) }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             let now = WatchLang.isIndonesian
             if now != indonesian { indonesian = now }
@@ -164,7 +164,8 @@ struct CalendarView: View {
         }
     }
 
-    private func load() async {
+    /// `pulled`: a pull to refresh, which also refreshes the complications past their throttle.
+    private func load(pulled: Bool = false) async {
         guard let session = auth.session else { return }
         error = nil
         let from = AttendanceSnapshot.currentDateKey()
@@ -186,6 +187,9 @@ struct CalendarView: View {
             ix = blocked == nil ? CalIndex(units: structure.units, people: structure.people) : nil
             items = blocked == nil ? response.items : []
             windowDays = response.rules?.overdueWindowDays ?? 14
+            // The week just loaded, so the server is reachable: let the complications catch up too.
+            // Not awaited — the list must not wait on three more requests.
+            Task { @MainActor in await WatchCalendarGlance.refresh(force: pulled) }
         } catch {
             self.error = message(for: error)
         }

@@ -88,6 +88,8 @@ enum AttendancePresence {
         // level. Erased here rather than in its own writer so there is ONE place that has to be
         // right about logging out, which is the only way it stays right.
         NexusGlance.clear()
+        // And the calendar widgets' snapshots — every scope.
+        CalendarWidgetPresence.stop()
         WidgetCenter.shared.reloadAllTimelines()
         LiveActivityController.stop()
     }

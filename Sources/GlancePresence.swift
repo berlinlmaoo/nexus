@@ -40,6 +40,7 @@ enum GlancePresence {
         )
         glance.save()
         WidgetCenter.shared.reloadAllTimelines()
+        Task { await CalendarWidgetPresence.refresh() }
     }
 
     /// Logging out erases it, for the same reason attendance is erased: a widget outlives the

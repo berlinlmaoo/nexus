@@ -88,27 +88,27 @@ struct WatchAttendanceView: View {
     }
     private var headline: String {
         switch state {
-        case .working: return snapshot?.officeName ?? "Working"
-        case .done: return "Done"
-        case .notCheckedIn: return "Not checked in"
+        case .working: return snapshot?.officeName ?? GlanceText.t("Working", "Bekerja")
+        case .done: return GlanceText.t("Done", "Selesai")
+        case .notCheckedIn: return GlanceText.t("Not checked in", "Belum absen")
         case .stale: return "NEXUS"
         }
     }
     private var detail: String {
         switch state {
         case .working:
-            if let out = snapshot?.expectedOutAt { return "Until \(out.formatted(date: .omitted, time: .shortened))" }
-            return "Checked in"
-        case .done: return "Checked out"
-        case .notCheckedIn: return "Check in on iPhone"
-        case .stale: return "Open NEXUS to refresh"
+            if let out = snapshot?.expectedOutAt { return GlanceText.t("Until \(out.formatted(date: .omitted, time: .shortened))", "Sampai \(out.formatted(date: .omitted, time: .shortened))") }
+            return GlanceText.t("Checked in", "Sudah absen masuk")
+        case .done: return GlanceText.t("Checked out", "Sudah absen pulang")
+        case .notCheckedIn: return GlanceText.t("Check in on iPhone", "Absen lewat iPhone")
+        case .stale: return GlanceText.t("Open NEXUS to refresh", "Buka NEXUS untuk memperbarui")
         }
     }
     private var inlineText: String {
         switch state {
-        case .working(let since): return "Working since \(since.formatted(date: .omitted, time: .shortened))"
-        case .done(let at): return "Done \(at.formatted(date: .omitted, time: .shortened))"
-        case .notCheckedIn: return "Not checked in"
+        case .working(let since): return GlanceText.t("Working since \(since.formatted(date: .omitted, time: .shortened))", "Bekerja sejak \(since.formatted(date: .omitted, time: .shortened))")
+        case .done(let at): return GlanceText.t("Done \(at.formatted(date: .omitted, time: .shortened))", "Selesai \(at.formatted(date: .omitted, time: .shortened))")
+        case .notCheckedIn: return GlanceText.t("Not checked in", "Belum absen")
         case .stale: return "NEXUS"
         }
     }

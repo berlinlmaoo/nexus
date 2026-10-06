@@ -32,6 +32,12 @@ extension APIClient {
         return try await calRun("/api/calendar/task?id=\(safe)", as: CalTaskAccess.self, cache: nil)
     }
 
+    /// One scope's widget snapshot (CalendarWidgetPresence saves it into the App Group). Not cached
+    /// here: the App Group copy is the offline copy.
+    func calendarGlance(scope: GlanceScope) async throws -> GlanceSnapshot {
+        try await calRun("/api/calendar/glance?scope=\(scope.rawValue)", as: GlanceSnapshot.self, cache: nil)
+    }
+
     static func calStructureKey(_ userId: String) -> String { "cal-structure-\(userId)" }
     static func calOverdueKey(_ userId: String) -> String { "cal-overdue-\(userId)" }
     static func calItemsKey(_ userId: String, from: String, to: String) -> String { "cal-items-\(userId)-\(from)-\(to)" }

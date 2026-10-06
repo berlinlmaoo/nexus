@@ -93,6 +93,8 @@ enum BackgroundRefresh {
                 await OfflineSync.shared.waitForMedia()
             } else {
                 await OfflineSync.shared.syncData(userId: userId)
+                // The calendar widgets: the one moment they can catch up while nobody opens the app.
+                await CalendarWidgetPresence.refresh(force: true)
             }
         }
 

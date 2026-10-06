@@ -1,7 +1,8 @@
 import Foundation
 
 /// The calls the watch makes. Deliberately not a port of the phone's APIClient — the watch reads
-/// status, answers approvals and shows the Calendar's week, and nothing else belongs here.
+/// status, answers approvals, shows the Calendar's week and feeds its complications, and nothing
+/// else belongs here.
 enum WatchAPI {
     enum Failure: LocalizedError {
         case offline
@@ -47,6 +48,13 @@ enum WatchAPI {
     /// Tasks due on the WIB days `from`…`to`, both inclusive ("YYYY-MM-DD", at most 62 days).
     static func calendarItems(_ session: Session, from: String, to: String) async throws -> CalItemsResponse {
         try await get("/api/calendar/items?from=\(from)&to=\(to)", session: session, as: CalItemsResponse.self)
+    }
+
+    /// What the calendar complications draw, for one scope. Like the two above, someone without the
+    /// Calendar still gets 200, with `access` "none" or "off" and no tasks — saved as it is, so the
+    /// face can say so.
+    static func calendarGlance(_ session: Session, scope: GlanceScope) async throws -> GlanceSnapshot {
+        try await get("/api/calendar/glance?scope=\(scope.rawValue)", session: session, as: GlanceSnapshot.self)
     }
 
     /// Approve or reject. Every guard that matters lives on the server — the role check, and the

@@ -6,5 +6,7 @@ import SwiftUI
 struct NEXUSWatchWidgetsBundle: WidgetBundle {
     var body: some Widget {
         WatchAttendanceWidget()
+        WatchCalendarWidget()
+        WatchCalendarRingWidget()
     }
 }

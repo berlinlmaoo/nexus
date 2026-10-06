@@ -18,6 +18,7 @@ final class PhoneSessionBridge: NSObject, WCSessionDelegate {
     /// Application context rather than a message: the watch only ever wants the LATEST session, and
     /// a queued backlog of messages would just replay tokens that are already dead. The context also
     /// survives the watch being out of range or switched off — it is delivered when it next wakes.
+    @MainActor
     func publish(_ session: Session?) {
         guard WCSession.isSupported() else { return }
         let connectivity = WCSession.default
@@ -32,12 +33,15 @@ final class PhoneSessionBridge: NSObject, WCSessionDelegate {
         try? connectivity.updateApplicationContext([
             "session": payload,
             "lang": AppLanguage.shared.lang.rawValue,
+            // The server's switch for the calendar widgets: the watch empties its complications too.
+            "calendarWidgets": RemoteConfig.shared.calendar && RemoteConfig.shared.calendarWidgets,
         ])
     }
 
     /// Sends the context again after something in it other than the session changed — the
     /// language. The Keychain is where the session lives (the same source activation publishes
     /// from), so this re-sends exactly what the watch already has, plus the new language.
+    @MainActor
     func republish() {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         publish(Keychain.load())

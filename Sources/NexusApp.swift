@@ -71,6 +71,9 @@ struct NexusApp: App {
                                 // the trail without the Attendance screen having to be opened.
                                 await WorkLocationTracker.shared.reconcileFromServer()
                                 await ProjectShortcuts.shared.syncPins()
+                                // A fresh sign-in: the calendar widgets get this person's tasks now,
+                                // not at the next throttled refresh.
+                                await CalendarWidgetPresence.refresh(force: true)
                             }
                         }
                         .onChange(of: scenePhase) { _, phase in
@@ -91,6 +94,7 @@ struct NexusApp: App {
                             // else fetches it on a plain return to the app, and a check-in made on
                             // the web (or a check-out) must start or stop the tracker all the same.
                             Task { await WorkLocationTracker.shared.reconcileFromServer() }
+                            Task { await CalendarWidgetPresence.refresh() }
                         }
                         // The "why NEXUS wants Always location" sheet, on a host of its own so it
                         // never shares a view with another `.sheet`.

@@ -29,6 +29,8 @@ enum WatchPresence {
     /// Signing out on the phone signs the watch out; the face must not keep showing that person.
     static func clear() {
         AttendanceSnapshot.clear()
+        // The calendar complications too: that person's tasks leave the face with them.
+        WatchCalendarGlance.forget()
         WidgetCenter.shared.reloadAllTimelines()
     }
 

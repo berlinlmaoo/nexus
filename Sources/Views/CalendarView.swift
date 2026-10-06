@@ -107,9 +107,11 @@ struct CalendarView: View {
             active = phase == .active
             if phase == .active { now = Date(); Task { await refreshAll(silent: true) } }
         }
-        .onAppear { router.calendarOnScreen = instance; claimRouterDate() }
-        .onDisappear { if router.calendarOnScreen == instance { router.calendarOnScreen = nil } }
+        .onAppear { router.calendarOnScreen = instance; claimRouterDate(); claimRouterTask() }
+        // Covered by the task it opened, this Calendar is still the one a link should land on.
+        .onDisappear { if router.calendarOnScreen == instance, openTaskId == nil { router.calendarOnScreen = nil } }
         .onChange(of: router.calendarDate) { _, _ in if router.calendarOnScreen == instance { claimRouterDate() } }
+        .onChange(of: router.calendarTaskId) { _, _ in if router.calendarOnScreen == instance { claimRouterTask() } }
         .onChange(of: today) { old, new in if selected == old { selected = new } }
         .sheet(item: $sheet) { s in
             switch s {
@@ -119,7 +121,12 @@ struct CalendarView: View {
                 CalTaskPreview(taskId: id, projectName: project, notMember: notMember, masked: masked)
             }
         }
-        .navigationDestination(item: $openTaskId) { id in TaskDetailView(taskId: id) }
+        .navigationDestination(item: $openTaskId) { id in
+            TaskDetailView(taskId: id)
+                .id(id)
+                // Gone some other way than Back (a tab switch, a deeper push): links stop landing here.
+                .onDisappear { if openTaskId != nil, router.calendarOnScreen == instance { router.calendarOnScreen = nil } }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -483,10 +490,43 @@ struct CalendarView: View {
         }
     }
 
+    /// A calendar widget row (`nexus://calendar?…&task=<id>`) opens its task once, the way a row here
+    /// would. Usually it is not in what is loaded yet (cold start, another month, an undated task), so
+    /// the server says how it may be opened; masked or gone → the day alone.
+    private func claimRouterTask() {
+        guard let id = router.calendarTaskId else { return }
+        router.calendarTaskId = nil
+        // Whatever is open on top gives way first; the new one opens after the pop has finished — a
+        // pop and a push in one update are not reliable in a NavigationStack.
+        let covered = openTaskId != nil || sheet != nil
+        openTaskId = nil
+        sheet = nil
+        let loaded = items?.items.first(where: { $0.taskId == id })
+        Task { @MainActor in
+            if covered { try? await Task.sleep(for: .milliseconds(450)) }
+            if let loaded {
+                openItem(loaded)
+                return
+            }
+            guard let access = try? await APIClient.shared.calendarTask(id: id), access.found, !access.masked else { return }
+            if access.canEdit && access.editProjectId == access.projectId {
+                openTaskId = id
+            } else {
+                sheet = .preview(taskId: id, project: nil, notMember: true, masked: false)
+            }
+        }
+    }
+
     /// A link to /calendar?date=… (notification, deep link) picks the day once.
     private func claimRouterDate() {
         guard let day = router.calendarDate else { return }
         router.calendarDate = nil
+        // A day link while a task is open on top: back to the Calendar. When the link names a task as
+        // well, claimRouterTask clears the cover itself and waits for the pop before opening.
+        if router.calendarTaskId == nil {
+            openTaskId = nil
+            sheet = nil
+        }
         if day.count == 10, CalDays.key(CalDays.date(day)) == day { mode = .month; selected = day }
     }
 
@@ -541,6 +581,8 @@ struct CalendarView: View {
             error = nil
             savedAt = nil
             if let v = fresh.structureVersion, v != structure?.version { await loadStructure() }
+            // The widgets ride along (throttled inside), so what the Home Screen shows follows this screen.
+            Task { await CalendarWidgetPresence.refresh() }
         } catch APIError.unauthorized {
             auth.logout()
         } catch _ where Task.isCancelled || r != range {

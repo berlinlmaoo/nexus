@@ -44,7 +44,11 @@ final class AppLanguage {
     private static let key = "nexus.language"
 
     var lang: AppLang {
-        didSet { UserDefaults.standard.set(lang.rawValue, forKey: Self.key) }
+        didSet {
+            UserDefaults.standard.set(lang.rawValue, forKey: Self.key)
+            // The calendar widgets read the language from the App Group, not from here.
+            Task { @MainActor in CalendarWidgetPresence.languageChanged() }
+        }
     }
 
     private init() {

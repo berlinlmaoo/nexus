@@ -164,6 +164,9 @@ final class AppRouter {
     /// The CalendarView instance on screen right now (it writes this in onAppear / onDisappear), so a
     /// date link makes the open Calendar jump instead of pushing a second one that opens on today.
     var calendarOnScreen: UUID?
+    /// The task a calendar widget row was tapped on (`nexus://calendar?date=…&task=…`). CalendarView
+    /// opens it the way its own rows open — editable, read-only or not at all — and clears it.
+    var calendarTaskId: String?
 
     /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
     func open(_ target: NotificationTarget) {
@@ -256,10 +259,17 @@ final class AppRouter {
             return
         }
         // `nexus://calendar` is the Calendar's own name; `nexus://teamCalendar` (the screen's raw
-        // value) keeps working for links written before 0.1.7. Either may name a day: `?date=YYYY-MM-DD`.
+        // value) keeps working for links written before 0.1.7. Either may name a day: `?date=YYYY-MM-DD`,
+        // and a calendar widget's row a task as well: `&task=<id>` (an undated task: `?task=` alone).
         if name.lowercased() == "calendar" || name.lowercased() == "teamcalendar" {
-            let date = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "date" }?.value
-            if let day = NotificationTarget.calendarDay(date) { open(.calendarDay(day)) } else { go(.teamCalendar) }
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+            let date = query?.first { $0.name == "date" }?.value
+            if let task = query?.first(where: { $0.name == "task" })?.value, !task.isEmpty { calendarTaskId = task }
+            if let day = NotificationTarget.calendarDay(date) {
+                open(.calendarDay(day))
+            } else if calendarOnScreen == nil {
+                go(.teamCalendar)
+            }
             return
         }
         guard let screen = NXScreen(rawValue: name) else { return }
