@@ -60,6 +60,10 @@ struct CalendarView: View {
     private var access: String? { structure?.access ?? items?.access }
     private var range: (from: String, to: String) { CalDays.gridRange(selected) }
     private var rangeKey: String { "\(range.from)|\(range.to)" }
+    /// The tasks on screen belong to the month on screen. Not so while another month is on its way
+    /// (a silent load keeps the last one up) or after it failed — and "No tasks" would then be a
+    /// confident wrong answer about a month nobody has seen yet.
+    private var rangeLoaded: Bool { items?.from == range.from && items?.to == range.to }
     private var month: String { String(selected.prefix(7)) }
 
     private var filters: CalFilters {
@@ -332,7 +336,9 @@ struct CalendarView: View {
                         }
                     }
                     if let holiday { Text(holiday).font(NXFont.text(12, .semibold)).foregroundStyle(CalTone.overdue) }
-                    Text(tree.total > 0 ? "\(CalFormat.tasks(tree.total)) · \(CalFormat.people(tree.people))" : T("No tasks"))
+                    Text(tree.total > 0 ? "\(CalFormat.tasks(tree.total)) · \(CalFormat.people(tree.people))"
+                         : !rangeLoaded ? (error != nil && !fetching ? T("Couldn't load this") : T("Loading…"))
+                         : T("No tasks"))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 0)
@@ -348,7 +354,9 @@ struct CalendarView: View {
             NXSegmented(selection: Binding(get: { lensByPerson }, set: { lensRaw = $0 ? "person" : "division" }),
                         options: [false, true], label: { $0 ? T("By person") : T("By division") })
             if !rail.isEmpty { overdueRail(rail) }
-            if tree.total == 0 {
+            if tree.total == 0 && !rangeLoaded {
+                notLoaded
+            } else if tree.total == 0 {
                 let filtered = filters.activeCount > 0
                 let monthEmpty = !fetching && !(items?.items ?? []).contains { $0.day.hasPrefix(month) }
                 let emptyAction: (() -> Void)? = filtered ? resetFilters : (selected != today ? goToday : nil)
@@ -411,9 +419,26 @@ struct CalendarView: View {
         n.items.count + n.children.reduce(0) { $0 + placementsShown($1) }
     }
 
+    /// The month on screen has not arrived: loading, or the reason it failed and a way to try again.
+    @ViewBuilder private var notLoaded: some View {
+        if let error, !fetching {
+            ErrorState(message: error, icon: "calendar", retry: retryNow)
+        } else {
+            SkeletonList(count: 3)
+        }
+    }
+
     // MARK: People
 
-    private var peopleArea: some View {
+    @ViewBuilder private var peopleArea: some View {
+        if rangeLoaded {
+            peopleWeek
+        } else {
+            notLoaded
+        }
+    }
+
+    private var peopleWeek: some View {
         let monday = CalDays.mondayOf(selected)
         let days = (0..<7).map { CalDays.addDays(monday, $0) }
         let rows = CalendarCore.weekRows(visible, ix, focus: focus, monday: monday, today: today, now: now, windowDays: windowDays)
