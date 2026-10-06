@@ -1,3 +1,6 @@
+import { getLang } from "@/lib/lang";
+import type { CalItem, CalItemsResponse, CalRules, CalStructure } from "@/lib/calendar/core";
+
 export type NexusUser = {
   id: string;
   name?: string | null;
@@ -1651,12 +1654,40 @@ export type NexusSuspectList = {
   items: NexusSuspectItem[]
 };
 
+// --- Calendar ---
+export type CalOverdueResponse = {
+  v: number; tz: string; today: string; now: string; access: CalStructure["access"]
+  structureVersion: string | null; rules: CalRules | null; items: CalItem[]
+  people: Record<string, { name: string | null; avatar: string | null }>; truncated: boolean
+};
+/** AppSetting "calendar" (server lib/calendar/core.ts CalendarSettings). */
+export type CalendarSettings = {
+  audience: "bod" | "managers" | "all"; audienceUserIds: string[]
+  visibility: "all" | "all_except_private" | "masked_foreign" | "projects"
+  privateProjectIds: string[]; notPrivateProjectIds: string[]; privateNamePrefixes: string[]
+  overdueWindowDays: number; urgentDays: number
+  folderUnits: Record<string, string>; projectUnits: Record<string, string>
+};
+export type CalendarSettingsPayload = {
+  settings: CalendarSettings
+  units: { id: string; name: string; depth: number }[]
+  folders: { id: string; name: string; parentFolderId: string | null; unitId: string | null }[]
+  projects: {
+    id: string; name: string; color: string; folderId: string | null
+    private: boolean; privateBy: "list" | "prefix" | null
+    unitId: string | null; unitBy: "project" | "folder" | "folder-name" | "project-name" | "top" | null
+  }[]
+};
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     credentials: "include",
     headers: {
       Accept: "application/json",
+      // The interface language (lib/lang.ts). Only some routes read it (api/teams); most server error
+      // text is Indonesian, so a bilingual screen must not show error.message as-is in English.
+      "Accept-Language": getLang(),
       // Who is calling. The attendance-request route reads it to decide which rules this caller
       // can actually obey — see clientCanObeyRequestPolicy.
       "X-Nexus-Client": "web/1",
@@ -2730,6 +2761,12 @@ export const nexusApi = {
   updateCalendar: (calendarId: string, payload: { name?: string; color?: string | null; projectIds?: string[]; roomSources?: string[]; position?: number }) => apiFetch<{ calendar: NexusCalendar }>(`/api/calendars/${calendarId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteCalendar: (calendarId: string) => apiFetch<{ success?: boolean }>(`/api/calendars/${calendarId}`, { method: "DELETE" }),
   calendarTasks: (projectIds: string[], rangeStart: string, rangeEnd: string, rooms: string[] = []) => apiFetch<{ tasks: CalendarTaskItem[]; bookings?: CalendarBookingItem[] }>(`/api/calendar-tasks?projectIds=${encodeURIComponent(projectIds.join(","))}&rooms=${encodeURIComponent(rooms.join(","))}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
+  // --- Calendar (master calendar, /api/calendar/**; rules in lib/calendar/core.ts) ---
+  calendarStructure: () => apiFetch<CalStructure>("/api/calendar/structure"),
+  calendarItems: (from: string, to: string) => apiFetch<CalItemsResponse>(`/api/calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  calendarOverdue: () => apiFetch<CalOverdueResponse>("/api/calendar/overdue"),
+  calendarSettings: () => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings"),
+  updateCalendarSettings: (body: Partial<CalendarSettings> | { projectId: string; private: boolean }) => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings", { method: "PATCH", body: JSON.stringify(body) }),
   // --- Room bookings ---
   roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[] }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
   createRoomBooking: (payload: RoomBookingPayload) => apiFetch<{ booking: NexusRoomBooking }>("/api/room-bookings", { method: "POST", body: JSON.stringify(payload) }),

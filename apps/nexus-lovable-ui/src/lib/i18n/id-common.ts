@@ -1,0 +1,27 @@
+/** English → Indonesian for words shared by several screens (see lib/lang.ts). Keys must be unique across all id-*.ts files. */
+export const ID_COMMON: Record<string, string> = {
+  "Language": "Bahasa",
+  "English": "English",
+  "Indonesian": "Bahasa Indonesia",
+  "Try again": "Coba lagi",
+  "Close": "Tutup",
+  "Cancel": "Batal",
+  "Save": "Simpan",
+  "Delete": "Hapus",
+  "Add": "Tambah",
+  "Search": "Cari",
+  "Today": "Hari ini",
+  "Loading…": "Memuat…",
+  "Nothing matches.": "Nggak ada yang cocok.",
+  "Couldn't save.": "Gagal menyimpan.",
+  // Appearance: theme and language switches (sidebar, More sheet, Settings › Appearance)
+  "Appearance": "Tampilan",
+  "How NEXUS looks on this device.": "Tampilan NEXUS di perangkat ini.",
+  "Theme": "Tema",
+  "Light": "Terang",
+  "Dark": "Gelap",
+  "Light mode": "Mode terang",
+  "Dark mode": "Mode gelap",
+  "Toggle theme": "Ganti tema",
+  "Not every screen is translated yet; those keep their current text.": "Belum semua layar diterjemahkan; yang belum tetap memakai teks yang sekarang.",
+}

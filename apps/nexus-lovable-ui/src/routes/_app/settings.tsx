@@ -2,10 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { fmtDate, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign, Sun, Moon, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
+import { useTheme, type Theme } from "@/lib/theme";
+import { useLang, type Lang } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
 
@@ -40,11 +42,12 @@ function Settings() {
           {active === "members" && <WorkspaceMembersSection />}
           {active === "notifications" && <NotificationsSection />}
           {active === "security" && <SecuritySection />}
+          {active === "appearance" && <AppearanceSection />}
           {active === "automation" && <AutomationSection />}
           {active === "webhooks" && <WebhooksSection />}
           {active === "mcp" && <McpTokensSection />}
           {active === "whatsapp" && <WhatsAppLinkCard />}
-          {!["profile","members","notifications","security","automation","webhooks","mcp","whatsapp"].includes(active) && (
+          {!["profile","members","notifications","security","appearance","automation","webhooks","mcp","whatsapp"].includes(active) && (
             <div className="rounded-xl border border-border bg-card p-8 shadow-soft text-center text-muted-foreground text-sm">
               {sections.find((s) => s.id === active)?.label} settings — coming soon.
             </div>
@@ -869,6 +872,54 @@ function McpTokensSection() {
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Theme and interface language — both per browser (localStorage), like the toggles in the sidebar and
+// the More sheet. Language names are shown in their own language, so each is findable whatever is on.
+function AppearanceSection() {
+  const { theme, setTheme } = useTheme();
+  const { lang, setLang, t } = useLang();
+  const themes: Array<{ id: Theme; label: string; icon: typeof Sun }> = [
+    { id: "light", label: t("Light"), icon: Sun },
+    { id: "dark", label: t("Dark"), icon: Moon },
+  ];
+  const langs: Array<{ id: Lang; label: string }> = [
+    { id: "id", label: "Bahasa Indonesia" },
+    { id: "en", label: "English" },
+  ];
+  const choice = (on: boolean) => cn(
+    "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition",
+    on ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-accent text-muted-foreground",
+  );
+  return (
+    <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-6">
+      <div>
+        <h2 className="font-semibold">{t("Appearance")}</h2>
+        <p className="text-xs text-muted-foreground">{t("How NEXUS looks on this device.")}</p>
+      </div>
+      <div className="space-y-2">
+        <div className="text-sm font-medium">{t("Theme")}</div>
+        <div className="flex gap-2">
+          {themes.map((o) => (
+            <button key={o.id} type="button" aria-pressed={theme === o.id} onClick={() => setTheme(o.id)} className={choice(theme === o.id)}>
+              <o.icon className="h-4 w-4" /> {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium"><Languages className="h-4 w-4 text-muted-foreground" /> {t("Language")}</div>
+        <div className="flex gap-2">
+          {langs.map((o) => (
+            <button key={o.id} type="button" aria-pressed={lang === o.id} lang={o.id} onClick={() => setLang(o.id)} className={choice(lang === o.id)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{t("Not every screen is translated yet; those keep their current text.")}</p>
       </div>
     </div>
   );

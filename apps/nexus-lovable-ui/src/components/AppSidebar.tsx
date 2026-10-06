@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
   Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, Ticket, Sun, Moon,
- HardDrive,
+ HardDrive, Languages,
 } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -18,6 +18,7 @@ import { ProjectRowMenu, FolderRowMenu, type SidebarActions } from "@/components
 import { canMoveInto } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
 import { useTheme } from "@/lib/theme";
+import { useLang } from "@/lib/lang";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +33,7 @@ const groups = [
       { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "My Submissions", url: "/submissions", icon: FileText },
-      { title: "Team Calendar", url: "/master-calendar", icon: Calendar },
+      { title: "Calendar", url: "/calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
@@ -118,6 +119,7 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const { isDark, toggle: toggleTheme } = useTheme();
+  const { lang, setLang, t } = useLang();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const profileQuery = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
@@ -535,11 +537,21 @@ export function AppSidebar() {
           </div>
           <button
             onClick={toggleTheme}
-            aria-label="Toggle theme"
-            title={isDark ? "Light mode" : "Dark mode"}
+            aria-label={t("Toggle theme")}
+            title={isDark ? t("Light mode") : t("Dark mode")}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+          {/* Language / Bahasa: flips the interface between Indonesian and English (lib/lang.ts). */}
+          <button
+            onClick={() => setLang(lang === "id" ? "en" : "id")}
+            aria-label={t("Language")}
+            title={t("Language")}
+            className="flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+          >
+            <Languages className="h-3.5 w-3.5" />
+            <span className="text-[10px] font-bold tabular-nums">{lang === "id" ? "ID" : "EN"}</span>
           </button>
           <button
             onClick={handleLogout}
