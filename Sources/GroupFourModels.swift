@@ -13,17 +13,6 @@ struct RoomBooking: Decodable, Identifiable, Sendable {
 }
 struct RoomBookingsResponse: Decodable, Sendable { let bookings: [RoomBooking]? }
 
-// MARK: Team Calendar
-struct CalendarEvent: Decodable, Identifiable, Sendable {
-    let id: String
-    let title: String
-    let startsAt: String
-    let endsAt: String?
-    let isAllDay: Bool?
-    let location: String?
-}
-struct CalendarResponse: Decodable, Sendable { let events: [CalendarEvent]? }
-
 // MARK: Admin (Control Room) — roster + org roles from /api/workspaces/members
 struct WorkspaceRoster: Decodable, Sendable {
     let role: String?
@@ -104,8 +93,24 @@ enum AgendaRange {
         let f = ISO8601DateFormatter()
         return (f.string(from: Date().addingTimeInterval(-Double(days) * 86400)), f.string(from: Date()))
     }
-    /// "yyyy-MM-dd" day key from an ISO timestamp (Asia/Jakarta).
-    static func dayKey(_ iso: String) -> String { String(iso.prefix(10)) }
+    /// "yyyy-MM-dd" day key from an ISO timestamp, as the day it is in Asia/Jakarta.
+    ///
+    /// This used to be the first ten characters, which is the UTC day: anything from 17:00Z on
+    /// (00:00–06:59 WIB) landed on the day before. A date-only value stored at 00:00Z is 07:00 WIB on
+    /// the same day, so it keeps its day either way. Text that is not an ISO instant (already a bare
+    /// "yyyy-MM-dd") falls back to its first ten characters, as before.
+    static func dayKey(_ iso: String) -> String {
+        guard let d = ProjDate.parse(iso) else { return String(iso.prefix(10)) }
+        return wibDay.string(from: d)
+    }
+    private static let wibDay: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
     static func dayLabel(_ key: String) -> String {
         let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"
         guard let d = inF.date(from: key) else { return key }

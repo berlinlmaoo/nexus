@@ -66,6 +66,12 @@ final class WatchConnectivityBridge: NSObject, WCSessionDelegate {
     }
 
     private func handle(_ context: [String: Any]) {
+        // The phone's language rides in the same context as the session. A phone build from before
+        // it was sent has no "lang": keep whatever is stored. Written on the main actor so the
+        // defaults-changed notification the Calendar tab listens for arrives on the main thread.
+        if let lang = context["lang"] as? String, lang == "en" || lang == "id" {
+            Task { @MainActor in UserDefaults.standard.set(lang, forKey: WatchLang.key) }
+        }
         guard let data = context["session"] as? Data else { return }
         // Empty means "signed out" — an explicit value, so a logout is distinguishable from the
         // phone simply not having said anything yet.

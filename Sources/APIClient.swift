@@ -1100,15 +1100,6 @@ struct APIClient {
         let path = "/api/room-bookings?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: RoomBookingsResponse.self)).bookings ?? []
     }
-    /// `teamId` is REQUIRED — the route answers 400 without it. A previous version made it optional
-    /// on the assumption the endpoint would fall back to the whole workspace; it does not, so
-    /// "All teams" returned `Server error (400)` on every load. The web has always sent it:
-    /// `masterCalendar:(e,t,n)=>/api/master-calendar?teamId=${e}&rangeStart=${t}&rangeEnd=${n}`.
-    /// Callers that want every team ask for each team and merge — see TeamCalendarView.loadEvents.
-    func masterCalendar(teamId: String, start: String, end: String) async throws -> [CalendarEvent] {
-        let path = "/api/master-calendar?teamId=\(enc(teamId))&rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
-        return (try await run(makeRequest(path), decode: CalendarResponse.self)).events ?? []
-    }
     /// `includeRegistered` = ikut membawa akun yang belum masuk workspace mana pun (Control Room
     /// memakainya untuk tombol "Masukkan"). Server menolak diam-diam untuk yang bukan Manager+:
     /// field-nya sekadar tidak ada.

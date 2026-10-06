@@ -19,6 +19,8 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     // Phone tab roots
     case dashboard, tasks, inbox, projects
     // Home Base
+    // `teamCalendar` is the Calendar (0.1.7). The case keeps its old name because its raw value is
+    // what `nexus://teamCalendar` resolves against, and links written before the rename must still open.
     case messages, threads, submissions, teamCalendar, roomBooking
     // Missions
     case leaderboard, reports
@@ -40,7 +42,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .messages:     return T("Messages")
         case .threads:      return T("Threads")
         case .submissions:  return T("My Submissions")
-        case .teamCalendar: return T("Team Calendar")
+        case .teamCalendar: return T("Calendar")
         case .roomBooking:  return T("Room Booking")
         case .leaderboard:  return T("Leaderboard")
         case .reports:      return T("Reports")
@@ -146,7 +148,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .messages:     MessagesView(providesOwnStack: true)
         case .threads:      ThreadsView()
         case .submissions:  SubmissionsView()
-        case .teamCalendar: TeamCalendarView()
+        case .teamCalendar: CalendarView()
         case .roomBooking:  RoomBookingView()
         case .leaderboard:  LeaderboardView()
         case .reports:      ReportsView()
@@ -266,10 +268,14 @@ struct SidebarRoot: View {
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
 
-    /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace.
+    /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace,
+    /// and the Calendar while the server's `flags.calendar` holds it back.
     private var navGroups: [(title: String?, screens: [NXScreen])] {
-        NXScreen.groups.map { g in
-            (g.title, g.screens.filter { ($0 != .vault && $0 != .threads) || viewer.isCompanyMember })
+        let calendarOn = RemoteConfig.shared.calendar
+        return NXScreen.groups.map { g in
+            (g.title, g.screens.filter {
+                (($0 != .vault && $0 != .threads) || viewer.isCompanyMember) && ($0 != .teamCalendar || calendarOn)
+            })
         }
     }
 

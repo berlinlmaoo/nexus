@@ -1,0 +1,418 @@
+{
+ "cell": {
+  "day": "2026-10-03",
+  "count": 12,
+  "dots": [
+   {
+    "unitId": "oub7186507c81bf7f984bb416",
+    "filled": true,
+    "count": 4
+   },
+   {
+    "unitId": "ou47f297a5be7b0f6fbbae754",
+    "filled": false,
+    "count": 2
+   },
+   {
+    "unitId": "ou6cd7c41336011d50e8dcfd2",
+    "filled": true,
+    "count": 4
+   },
+   {
+    "unitId": "ou8f27050812d85e33c43cef9",
+    "filled": false,
+    "count": 2
+   }
+  ],
+  "overdue": true
+ },
+ "legend": [
+  {
+   "unitId": "oub7186507c81bf7f984bb416",
+   "count": 4
+  },
+  {
+   "unitId": "ou47f297a5be7b0f6fbbae754",
+   "count": 2
+  },
+  {
+   "unitId": "ou6cd7c41336011d50e8dcfd2",
+   "count": 4
+  },
+  {
+   "unitId": "ou8f27050812d85e33c43cef9",
+   "count": 2
+  }
+ ],
+ "tree": {
+  "total": 12,
+  "people": 9,
+  "unplaced": [],
+  "root": {
+   "unit": "PT. The Z Networks",
+   "count": 12,
+   "items": [],
+   "loose": [],
+   "people": [],
+   "children": [
+    {
+     "unit": "Finance & Tech",
+     "count": 4,
+     "items": [
+      "x_h2a21yc29ydg",
+      "x_h2bzA5emFnOQ",
+      "x_djZnh2aW91Yg",
+      "x_dwZ3g1NXMxOA"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmnzxse5y005k01qh56f3vaag",
+       "items": [
+        "x_h2a21yc29ydg",
+        "x_h2bzA5emFnOQ",
+        "x_djZnh2aW91Yg",
+        "x_dwZ3g1NXMxOA"
+       ]
+      },
+      {
+       "userId": "cmo1jb89b005t01pap8zd3yru",
+       "items": [
+        "x_h2a21yc29ydg",
+        "x_h2bzA5emFnOQ",
+        "x_djZnh2aW91Yg",
+        "x_dwZ3g1NXMxOA"
+       ]
+      }
+     ],
+     "children": []
+    },
+    {
+     "unit": "Framework Agency",
+     "count": 2,
+     "items": [],
+     "loose": [],
+     "people": [],
+     "children": [
+      {
+       "unit": "Multimedia",
+       "count": 2,
+       "items": [
+        "cmuofioc800vm01qiqczbfgj7",
+        "cmunx4kld009q01nqndjkfyzg"
+       ],
+       "loose": [],
+       "people": [
+        {
+         "userId": "cmnrb0skr000u01o7aln3jkp6",
+         "items": [
+          "cmuofioc800vm01qiqczbfgj7"
+         ]
+        },
+        {
+         "userId": "cmotv4wdi000f08o5evtzwh3n",
+         "items": [
+          "cmunx4kld009q01nqndjkfyzg"
+         ]
+        },
+        {
+         "userId": "cmnrdwjw2000001rynkblrbaj",
+         "items": [
+          "cmuofioc800vm01qiqczbfgj7"
+         ]
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "unit": "PATS",
+     "count": 4,
+     "items": [],
+     "loose": [],
+     "people": [],
+     "children": [
+      {
+       "unit": "PATS Entertainment",
+       "count": 4,
+       "items": [
+        "cmunxi0cb005u01nn3gc19rgx",
+        "cmunxhdj2005b01nnxu80gjk9",
+        "cmunxfdq0004b01nnwhjmcfau",
+        "cmunxgh96004t01nn2j5qzlp6"
+       ],
+       "loose": [],
+       "people": [
+        {
+         "userId": "cmok1zwln006e08s0g4r5g84b",
+         "items": [
+          "cmunxi0cb005u01nn3gc19rgx",
+          "cmunxhdj2005b01nnxu80gjk9",
+          "cmunxfdq0004b01nnwhjmcfau",
+          "cmunxgh96004t01nn2j5qzlp6"
+         ]
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "unit": "Suwara",
+     "count": 2,
+     "items": [
+      "cmuppgahr047t01qizvo8x5td",
+      "cmuppa96b046701qiff754acx"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmta457or023f01nlz454i2oa",
+       "items": [
+        "cmuppgahr047t01qizvo8x5td",
+        "cmuppa96b046701qiff754acx"
+       ]
+      },
+      {
+       "userId": "cmnrafqmh002201rq54pywgm7",
+       "items": [
+        "cmuppgahr047t01qizvo8x5td",
+        "cmuppa96b046701qiff754acx"
+       ]
+      },
+      {
+       "userId": "cmsr652tx02zl01t7gz0ddo81",
+       "items": [
+        "cmuppgahr047t01qizvo8x5td"
+       ]
+      }
+     ],
+     "children": []
+    }
+   ]
+  }
+ },
+ "week": [
+  {
+   "kind": "unit",
+   "unit": "PT. The Z Networks",
+   "depth": 0,
+   "count": 12
+  },
+  {
+   "kind": "unit",
+   "unit": "Finance & Tech",
+   "depth": 1,
+   "count": 4
+  },
+  {
+   "kind": "person",
+   "unitId": "oub7186507c81bf7f984bb416",
+   "userId": "cmnzxse5y005k01qh56f3vaag",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "x_h2a21yc29ydg",
+     "x_h2bzA5emFnOQ",
+     "x_djZnh2aW91Yg",
+     "x_dwZ3g1NXMxOA"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "oub7186507c81bf7f984bb416",
+   "userId": "cmo1jb89b005t01pap8zd3yru",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "x_h2a21yc29ydg",
+     "x_h2bzA5emFnOQ",
+     "x_djZnh2aW91Yg",
+     "x_dwZ3g1NXMxOA"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "unit",
+   "unit": "Framework Agency",
+   "depth": 1,
+   "count": 2
+  },
+  {
+   "kind": "unit",
+   "unit": "Multimedia",
+   "depth": 2,
+   "count": 2
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmnrb0skr000u01o7aln3jkp6",
+   "depth": 3,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuofioc800vm01qiqczbfgj7"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmotv4wdi000f08o5evtzwh3n",
+   "depth": 3,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmunx4kld009q01nqndjkfyzg"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "cmuqqed05001z01mrlii7qx3u",
+   "userId": "cmnrdwjw2000001rynkblrbaj",
+   "depth": 3,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuofioc800vm01qiqczbfgj7"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "unit",
+   "unit": "PATS",
+   "depth": 1,
+   "count": 4
+  },
+  {
+   "kind": "unit",
+   "unit": "PATS Entertainment",
+   "depth": 2,
+   "count": 4
+  },
+  {
+   "kind": "person",
+   "unitId": "ouda117084994807e15c72c9a",
+   "userId": "cmok1zwln006e08s0g4r5g84b",
+   "depth": 3,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmunxi0cb005u01nn3gc19rgx",
+     "cmunxhdj2005b01nnxu80gjk9",
+     "cmunxfdq0004b01nnwhjmcfau",
+     "cmunxgh96004t01nn2j5qzlp6"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "unit",
+   "unit": "Suwara",
+   "depth": 1,
+   "count": 2
+  },
+  {
+   "kind": "person",
+   "unitId": "ou8f27050812d85e33c43cef9",
+   "userId": "cmta457or023f01nlz454i2oa",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuppgahr047t01qizvo8x5td",
+     "cmuppa96b046701qiff754acx"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "ou8f27050812d85e33c43cef9",
+   "userId": "cmnrafqmh002201rq54pywgm7",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuppgahr047t01qizvo8x5td",
+     "cmuppa96b046701qiff754acx"
+    ],
+    []
+   ]
+  },
+  {
+   "kind": "person",
+   "unitId": "ou8f27050812d85e33c43cef9",
+   "userId": "cmsr652tx02zl01t7gz0ddo81",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmuppgahr047t01qizvo8x5td"
+    ],
+    []
+   ]
+  }
+ ],
+ "overdue": {
+  "cmunxi0cb005u01nn3gc19rgx": "recent",
+  "cmunxhdj2005b01nnxu80gjk9": "recent",
+  "cmunxfdq0004b01nnwhjmcfau": "recent",
+  "cmunxgh96004t01nn2j5qzlp6": "recent",
+  "x_h2a21yc29ydg": "recent",
+  "x_h2bzA5emFnOQ": "recent",
+  "cmuppgahr047t01qizvo8x5td": "none",
+  "cmuofioc800vm01qiqczbfgj7": "none",
+  "cmunx4kld009q01nqndjkfyzg": "none",
+  "cmuppa96b046701qiff754acx": "none",
+  "x_djZnh2aW91Yg": "none",
+  "x_dwZ3g1NXMxOA": "none"
+ }
+}

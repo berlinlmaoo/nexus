@@ -161,7 +161,9 @@ struct MoreView: View {
                                     MoreTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
                                 }
                                 MoreTile(T("My Submissions"), "tray.full.fill", NX.warning) { SubmissionsView() }
-                                MoreTile(T("Team Calendar"), "calendar", NX.violetText) { TeamCalendarView() }
+                                if RemoteConfig.shared.calendar {
+                                    MoreTile(T("Calendar"), "calendar", NX.violetText) { CalendarView() }
+                                }
                                 MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
                             }
                         }

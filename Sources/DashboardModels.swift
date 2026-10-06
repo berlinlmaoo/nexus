@@ -276,6 +276,9 @@ enum NotificationTarget: Hashable {
     /// `/attendance?permit=today` — the "outside the office" pushes (1h30 reminder, 2h warning)
     /// and their "File a permit" action: today's permit composer, already filled in.
     case permitToday
+    /// The Calendar opened on one WIB day — `/calendar?date=YYYY-MM-DD` (also on `/master-calendar`
+    /// and `/team-calendar`). The router leaves the day in `AppRouter.calendarDate` for the screen.
+    case calendarDay(String)
 
     /// The screen that owns the record, for the router to walk to before the screen claims it.
     var hostScreen: NXScreen? {
@@ -287,6 +290,7 @@ enum NotificationTarget: Hashable {
         case .announcement:                      return .dashboard
         case .post:                              return .threads
         case .submission:                        return .submissions
+        case .calendarDay:                       return .teamCalendar
         case .task, .project:                    return nil
         }
     }
@@ -337,7 +341,13 @@ enum NotificationTarget: Hashable {
         case "submissions":
             if let id = Self.queryValue("id", in: path) { self = .submission(id) } else { self = .screen(.submissions) }
         case "room-booking":            self = .screen(.roomBooking)
-        case "master-calendar":         self = .screen(.teamCalendar)
+        // The Calendar (0.1.7) under its web name and both old ones. `/master-calendar?booking=<id>` is
+        // the room-booking reminder (booking_soon), written when bookings lived on the Team Calendar;
+        // the Calendar holds tasks only, so that one opens Room Booking.
+        case "calendar", "team-calendar", "master-calendar":
+            if head == "master-calendar", Self.queryValue("booking", in: path) != nil { self = .screen(.roomBooking) }
+            else if let day = Self.calendarDay(Self.queryValue("date", in: path)) { self = .calendarDay(day) }
+            else { self = .screen(.teamCalendar) }
         case "complaints":
             if let id = Self.queryValue("id", in: path) { self = .complaint(id) } else { self = .screen(.tickets) }
         case "settings":                self = .screen(.settings)
@@ -346,6 +356,13 @@ enum NotificationTarget: Hashable {
             if let id = Self.queryValue("announcement", in: path) { self = .announcement(id) } else { self = .screen(.dashboard) }
         default:                        return nil
         }
+    }
+
+    /// `raw` when it is a real "YYYY-MM-DD" day, else nil. Round-tripped through the formatter so
+    /// "2026-02-30", "2026-2-3" or a full ISO instant are refused rather than opened on some other day.
+    static func calendarDay(_ raw: String?) -> String? {
+        guard let raw, raw.count == 10 else { return nil }
+        return CalDays.key(CalDays.date(raw)) == raw ? raw : nil
     }
 
     /// One value out of a link's query string.

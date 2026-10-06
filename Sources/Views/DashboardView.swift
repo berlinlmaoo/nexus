@@ -1003,7 +1003,9 @@ if !XpRules.tiers.isEmpty {
             quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
             quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
             quickTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
-            quickTile(T("Team Calendar"), "calendar", NX.violetText) { TeamCalendarView() }
+            if RemoteConfig.shared.calendar {
+                quickTile(T("Calendar"), "calendar", NX.violetText) { CalendarView() }
+            }
         }
     }
 
@@ -1070,9 +1072,9 @@ if !XpRules.tiers.isEmpty {
                 Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(tint)
                     .frame(width: 44, height: 44)
                     .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                // Two lines and a fixed height: "Room Booking" and "Team Calendar" wrap at this
-                // width, and a row of tiles where one is taller than its neighbours reads as a
-                // mistake rather than as a longer word.
+                // Two lines and a fixed height: "Room Booking" wraps at this width, and a row of
+                // tiles where one is taller than its neighbours reads as a mistake rather than as a
+                // longer word.
                 Text(title).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                     .lineLimit(2).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)

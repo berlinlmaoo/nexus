@@ -26,7 +26,21 @@ final class PhoneSessionBridge: NSObject, WCSessionDelegate {
         // Empty data is an explicit "signed out", which a missing key could not express: the watch
         // has to be able to tell a logout apart from the phone simply not having spoken yet.
         let payload = session.flatMap { try? JSONEncoder().encode($0) } ?? Data()
-        try? connectivity.updateApplicationContext(["session": payload])
+        // The language goes in the SAME dictionary: updateApplicationContext replaces the whole
+        // context, so a separate call for it would wipe the session (and the next session update
+        // would wipe the language). The watch's Calendar shows its copy in this language.
+        try? connectivity.updateApplicationContext([
+            "session": payload,
+            "lang": AppLanguage.shared.lang.rawValue,
+        ])
+    }
+
+    /// Sends the context again after something in it other than the session changed — the
+    /// language. The Keychain is where the session lives (the same source activation publishes
+    /// from), so this re-sends exactly what the watch already has, plus the new language.
+    func republish() {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        publish(Keychain.load())
     }
 
     // MARK: - WCSessionDelegate

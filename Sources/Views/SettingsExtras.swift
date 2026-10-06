@@ -185,7 +185,11 @@ struct LanguageCard: View {
             Text(T("Applies immediately across the whole app."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             ForEach(AppLang.allCases) { l in
-                Button { store.lang = l } label: {
+                Button {
+                    store.lang = l
+                    // The watch follows the phone's language; it only learns it from the context.
+                    PhoneSessionBridge.shared.republish()
+                } label: {
                     HStack(spacing: 10) {
                         Text(l.flag).font(.system(size: 20))
                         Text(l.label).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)

@@ -1,7 +1,7 @@
 import Foundation
 
-/// The three calls the watch makes. Deliberately not a port of the phone's APIClient — the watch
-/// reads status and answers approvals, and nothing else belongs here.
+/// The calls the watch makes. Deliberately not a port of the phone's APIClient — the watch reads
+/// status, answers approvals and shows the Calendar's week, and nothing else belongs here.
 enum WatchAPI {
     enum Failure: LocalizedError {
         case offline
@@ -36,6 +36,17 @@ enum WatchAPI {
         let response = try await get("/api/attendance/requests?scope=workspace",
                                      session: session, as: AttendanceRequestsResponse.self)
         return response.requests.filter { ($0.status ?? "").uppercased() == "PENDING" }
+    }
+
+    /// The Bagan as the Calendar groups by it. A person outside the company or outside the rollout
+    /// still gets 200, with `access` "none" or "off" and no units.
+    static func calendarStructure(_ session: Session) async throws -> CalStructure {
+        try await get("/api/calendar/structure", session: session, as: CalStructure.self)
+    }
+
+    /// Tasks due on the WIB days `from`…`to`, both inclusive ("YYYY-MM-DD", at most 62 days).
+    static func calendarItems(_ session: Session, from: String, to: String) async throws -> CalItemsResponse {
+        try await get("/api/calendar/items?from=\(from)&to=\(to)", session: session, as: CalItemsResponse.self)
     }
 
     /// Approve or reject. Every guard that matters lives on the server — the role check, and the

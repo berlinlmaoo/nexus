@@ -16,9 +16,15 @@ final class RemoteConfig {
         var requireAlwaysLocation: Bool?
         var blockSignOutDuringWorkday: Bool?
         var fakeGpsReview: Bool?
+        /// The Calendar's menu entries (0.1.7). Off hides them; a link to the Calendar still opens it.
+        var calendar: Bool?
+        /// The Calendar widgets and Watch complication (0.1.7).
+        var calendarWidgets: Bool?
     }
     struct Values: Codable, Equatable, Sendable {
         var outsideHourAlertMinutes: Int?
+        /// How often the Calendar refetches while it is on screen, in seconds.
+        var calendarPollSeconds: Int?
     }
     struct Banner: Codable, Equatable, Sendable {
         let id: String
@@ -50,6 +56,10 @@ final class RemoteConfig {
     var requireAlwaysLocation: Bool { body.flags?.requireAlwaysLocation ?? true }
     var blockSignOutDuringWorkday: Bool { body.flags?.blockSignOutDuringWorkday ?? true }
     var fakeGpsReview: Bool { body.flags?.fakeGpsReview ?? true }
+    var calendar: Bool { body.flags?.calendar ?? true }
+    var calendarWidgets: Bool { body.flags?.calendarWidgets ?? true }
+    /// Floored at 15 s: a 0 (or a typo) from the server must not turn the Calendar's poll into a busy loop.
+    var calendarPollSeconds: Int { max(15, body.values?.calendarPollSeconds ?? 60) }
     var banner: Banner? { body.banner }
 
     /// The server's sentence for `key` in the app's language, else its English one, else `fallback`

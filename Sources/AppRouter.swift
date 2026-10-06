@@ -92,7 +92,7 @@ final class AppRouter {
     /// Whether Home is showing its own root, or has something pushed on top of it.
     ///
     /// `tab` and `sidebarScreen` only answer half the question. Home is a tab AND a NavigationStack,
-    /// and Messages, Attendance, Leaderboard, Room Booking, Threads and Team Calendar are all
+    /// and Messages, Attendance, Leaderboard, Room Booking, Threads and the Calendar are all
     /// pushed INTO that stack by the quick-action tiles — so the tab never changes, and a launcher
     /// that reads only the tab rides along on top of a chat composer's own buttons.
     ///
@@ -156,6 +156,15 @@ final class AppRouter {
     /// and a push tap has no such stack in hand.
     var detail: NXDetailRequest?
 
+    /// The WIB day ("YYYY-MM-DD") a link asked the Calendar to open on: `/calendar?date=…` from a
+    /// notification, or `nexus://calendar?date=…`. CalendarView reads it, jumps to that day and
+    /// clears it. Held rather than fired, for the same reasons as `focus`: a link tapped on a cold
+    /// start arrives before the screen exists, and the screen may already be on top when it does.
+    var calendarDate: String?
+    /// The CalendarView instance on screen right now (it writes this in onAppear / onDisappear), so a
+    /// date link makes the open Calendar jump instead of pushing a second one that opens on today.
+    var calendarOnScreen: UUID?
+
     /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
     func open(_ target: NotificationTarget) {
         switch target {
@@ -166,6 +175,9 @@ final class AppRouter {
         case .attendanceRequest, .offsiteCheckout, .permitToday, .complaint, .conversation, .announcement, .post:
             focus = target
             if let screen = target.hostScreen { go(screen) }
+        case .calendarDay(let day):
+            calendarDate = day
+            if calendarOnScreen == nil { go(.teamCalendar) }
         }
     }
 
@@ -241,6 +253,13 @@ final class AppRouter {
         if name.lowercased() == "attendance",
            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "permit" && $0.value == "today" }) == true {
             open(.permitToday)
+            return
+        }
+        // `nexus://calendar` is the Calendar's own name; `nexus://teamCalendar` (the screen's raw
+        // value) keeps working for links written before 0.1.7. Either may name a day: `?date=YYYY-MM-DD`.
+        if name.lowercased() == "calendar" || name.lowercased() == "teamcalendar" {
+            let date = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "date" }?.value
+            if let day = NotificationTarget.calendarDay(date) { open(.calendarDay(day)) } else { go(.teamCalendar) }
             return
         }
         guard let screen = NXScreen(rawValue: name) else { return }
