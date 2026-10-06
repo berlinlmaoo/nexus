@@ -21,6 +21,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
@@ -93,7 +94,9 @@ private fun Content(s: AttendanceSnapshot?) {
     val context = LocalContext.current
     val open = Intent(Intent.ACTION_VIEW, Uri.parse("nexus://attendance")).setPackage(context.packageName)
     val medium = LocalSize.current.width >= AttendanceWidget.MEDIUM.width
-    Box(GlanceModifier.fillMaxSize().background(ColorProvider(Color(0xFF1B1B22))).cornerRadius(20.dp).padding(12.dp).clickable(actionStartActivity(open))) {
+    // The launcher's own corner radius on Android 12+, like the calendar widgets (Calendar audit 2 #27).
+    val corner = if (android.os.Build.VERSION.SDK_INT >= 31) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier.cornerRadius(20.dp)
+    Box(GlanceModifier.fillMaxSize().appWidgetBackground().background(ColorProvider(Color(0xFF1B1B22))).then(corner).padding(12.dp).clickable(actionStartActivity(open))) {
         if (medium) Row(GlanceModifier.fillMaxSize()) {
             Small(s, GlanceModifier.defaultWeight().fillMaxHeight())
             Spacer(GlanceModifier.width(12.dp))

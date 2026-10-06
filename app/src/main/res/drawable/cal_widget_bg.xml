@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Calendar widgets below Android 12, where Glance cannot clip corners: the rounded surface itself. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/cal_widget_surface" />
+    <corners android:radius="16dp" />
+</shape>

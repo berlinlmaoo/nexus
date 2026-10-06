@@ -1894,7 +1894,7 @@
     <string name="wcal_q_plan_desc">High priority, not due yet.</string>
     <string name="wcal_q_act_desc">Urgent, not high priority: due today or tomorrow, or overdue.</string>
     <string name="wcal_q_later_desc">Not urgent, not high priority, tasks without a due date included.</string>
-    <string name="wcal_year">Day %1$d · %2$d%%</string>
+    <string name="wcal_year">Day %1$d of the year · %2$d%%</string>
     <string name="wcal_updated">Updated %s</string>
     <string name="wcal_stale">Open NEXUS to refresh</string>
     <string name="wcal_signed_out">Open NEXUS to sign in</string>

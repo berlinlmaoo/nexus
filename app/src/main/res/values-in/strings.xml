@@ -1888,7 +1888,7 @@
     <string name="wcal_q_plan_desc">Prioritas tinggi, belum dekat tenggat.</string>
     <string name="wcal_q_act_desc">Mendesak, bukan prioritas tinggi: tenggat hari ini atau besok, atau lewat tenggat.</string>
     <string name="wcal_q_later_desc">Tidak mendesak, bukan prioritas tinggi, termasuk tugas tanpa tenggat.</string>
-    <string name="wcal_year">Hari ke-%1$d · %2$d%%</string>
+    <string name="wcal_year">Hari ke-%1$d tahun ini · %2$d%%</string>
     <string name="wcal_updated">Diperbarui %s</string>
     <string name="wcal_stale">Buka NEXUS untuk memperbarui</string>
     <string name="wcal_signed_out">Buka NEXUS untuk masuk</string>
