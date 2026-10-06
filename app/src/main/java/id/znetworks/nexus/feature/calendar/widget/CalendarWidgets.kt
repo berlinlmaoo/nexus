@@ -101,6 +101,8 @@ private fun quadrantEmpty(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal
  */
 @Volatile private var fontFactor = 1f
 private fun fs(sp: Float) = (sp * fontFactor).sp
+/** The font scale the widget text is actually drawn at (system scale, capped): row heights grow with it. */
+@Volatile private var fontScaleUsed = 1f
 private const val WIDGET_MAX_FONT_SCALE = 1.3f
 
 /** Night colours for the task colours (WidgetHues), from the Calendar's cached structure of the person signed in. */
@@ -207,6 +209,7 @@ abstract class CalendarWidget(private val kind: CalWidgetKind) : GlanceAppWidget
         val lc = CalendarWidgets.localized(context)
         val scale = context.resources.configuration.fontScale.coerceAtLeast(1f)
         fontFactor = minOf(scale, WIDGET_MAX_FONT_SCALE) / scale
+        fontScaleUsed = minOf(scale, WIDGET_MAX_FONT_SCALE)
         val data = dataFor(context, lc, CalendarWidgetPrefs.scope(context, appWidgetId))
         // The Bagan's dark colours, as the app shows them (audit 2 #10).
         val uid = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
@@ -474,7 +477,7 @@ private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
     val scope = d.saved.snapshot.scope
     val m = CalendarGlance.monthView(d.saved.snapshot, d.nowMs, 3)
     // Up to 4, as many as fit (~36 dp a row under the title, room kept for a full-width "+N" target).
-    val fit = ((LocalSize.current.height.value - 96) / 36).toInt().coerceIn(1, 4)
+    val fit = ((LocalSize.current.height.value - 96 * fontScaleUsed) / (36 * fontScaleUsed)).toInt().coerceIn(1, 4)
     val up = CalendarGlance.upcoming(d.saved.snapshot, d.nowMs, fit)
     val today = CalendarGlance.wibClock(d.nowMs).day
     Row(GlanceModifier.fillMaxSize()) {
@@ -504,10 +507,10 @@ private fun ListRow(lc: Context, b: Bar, today: String, scope: String?, showProj
         Box(GlanceModifier.width(3.dp).height(if (compact) 26.dp else 30.dp).cornerRadius(2.dp).background(if (b.overdue == Overdue.RECENT) cp(RED) else hue(b.color))) {}
         Spacer(GlanceModifier.width(6.dp))
         Column(GlanceModifier.defaultWeight()) {
-            Text(title(lc, b), maxLines = 1, style = TextStyle(color = fg(), fontSize = if (compact) 11.sp else 13.sp, fontWeight = FontWeight.Medium))
+            Text(title(lc, b), maxLines = 1, style = TextStyle(color = fg(), fontSize = if (compact) fs(11f) else fs(13f), fontWeight = FontWeight.Medium))
             // A masked row never names its project (decision 1).
             val sub = listOfNotNull(dueText(lc, b, today), b.project?.takeIf { showProject && !b.masked }).joinToString(" · ")
-            Text(sub, maxLines = 1, style = TextStyle(color = if (b.overdue == Overdue.RECENT) RED_TEXT else muted(), fontSize = if (compact) 10.sp else 11.sp))
+            Text(sub, maxLines = 1, style = TextStyle(color = if (b.overdue == Overdue.RECENT) RED_TEXT else muted(), fontSize = if (compact) fs(10f) else fs(11f)))
         }
     }
 }
@@ -517,7 +520,7 @@ private fun WeekWidget(lc: Context, d: WidgetData.Ready) {
     val scope = d.saved.snapshot.scope
     // Up to 3 two-line chips a day, as many as the height holds (~30 dp each under ~92 dp of header,
     // padding, footer and a "+N" line); the rest is counted in "+N".
-    val fit = ((LocalSize.current.height.value - 106) / 30).toInt().coerceIn(1, 3)
+    val fit = ((LocalSize.current.height.value - 106 * fontScaleUsed) / (30 * fontScaleUsed)).toInt().coerceIn(1, 3)
     val week = CalendarGlance.weekView(d.saved.snapshot, d.nowMs, fit)
     val names = lc.resources.getStringArray(R.array.wcal_weekdays)
     Column(GlanceModifier.fillMaxSize()) {
@@ -555,7 +558,7 @@ private fun QuadrantWidget(lc: Context, d: WidgetData.Ready, q: Quadrant) {
     val today = CalendarGlance.wibClock(d.nowMs).day
     val note = quadrantNote(q)
     // Rows of ~40 dp under the header (+ the note), padding, footer and a "+N" line.
-    val fit = ((size.height.value - 104 - (if (note != null) 14 else 0)) / 40).toInt().coerceIn(1, 8)
+    val fit = ((size.height.value - (104 + (if (note != null) 14 else 0)) * fontScaleUsed) / (40 * fontScaleUsed)).toInt().coerceIn(1, 8)
     val wide = size.width >= 220.dp
     val all = open(lc, CalendarWidgetLinks.quadrant(q, scope))
     Column(GlanceModifier.fillMaxSize()) {
