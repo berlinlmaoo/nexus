@@ -3,5 +3,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity android:name=".debug.UiPreviewActivity" android:exported="true" android:theme="@style/Theme.Nexus" />
+        <activity android:name=".debug.WidgetPreviewActivity" android:exported="true" android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
     </application>
 </manifest>

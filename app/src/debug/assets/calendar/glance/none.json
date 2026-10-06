@@ -1,0 +1,17 @@
+{
+ "v": 1,
+ "tz": "Asia/Jakarta",
+ "userId": "u_staff",
+ "access": "none",
+ "today": "2026-10-05",
+ "now": "2026-10-05T04:00:00.000Z",
+ "from": null,
+ "to": null,
+ "rules": null,
+ "holidays": [],
+ "truncated": false,
+ "scope": "me",
+ "requestedScope": "me",
+ "items": [],
+ "undated": []
+}

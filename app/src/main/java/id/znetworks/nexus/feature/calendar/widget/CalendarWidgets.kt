@@ -264,7 +264,7 @@ private fun MonthWidget(lc: Context, d: WidgetData.Ready) {
             Text(lc.getString(R.string.wcal_year, m.year.day, m.year.percent), maxLines = 1, style = TextStyle(color = muted(), fontSize = 10.sp))
         }
         Spacer(GlanceModifier.height(4.dp))
-        MonthGrid(lc, m, detail, compact = false, modifier = GlanceModifier.fillMaxWidth().defaultWeight())
+        MonthGrid(lc, m, detail, compact = detail == Detail.DOTS, modifier = GlanceModifier.fillMaxWidth().defaultWeight())
     }
 }
 
@@ -298,13 +298,15 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
         !cell.inMonth -> cp(Color(0xFF9CA3AF).copy(alpha = 0.6f))
         else -> fg()
     }
-    val circle = if (compact) 14.dp else 18.dp
+    val circle = if (compact) 13.dp else 18.dp
     Column(GlanceModifier.defaultWeight().fillMaxHeight().padding(horizontal = 1.dp).clickable(dayAction(lc, b.day)), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(GlanceModifier.size(circle).cornerRadius(circle / 2).background(if (b.today) GlanceTheme.colors.primary else cp(Color.Transparent)), contentAlignment = Alignment.Center) {
                 Text(b.day.takeLast(2).trimStart('0'), style = TextStyle(color = numberColor, fontSize = if (compact) 8.sp else 10.sp, fontWeight = if (b.today) FontWeight.Bold else FontWeight.Medium))
             }
             if (b.overdue && detail != Detail.DOTS) Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(cp(RED))) {}
+            // Bars mode has no room under the bars: "+N" sits beside the number.
+            if (detail == Detail.BARS && b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = 7.sp))
         }
         val faded = if (cell.inMonth) 1f else 0.4f
         when (detail) {
@@ -317,7 +319,6 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
                     Box(GlanceModifier.fillMaxWidth().height(4.dp).cornerRadius(2.dp).background(cp(tint(bar.color).copy(alpha = if (bar.dim) 0.3f * faded else faded)))) {}
                     Spacer(GlanceModifier.height(2.dp))
                 }
-                if (b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = 7.sp))
             }
             Detail.TITLES -> Column(GlanceModifier.fillMaxWidth().padding(top = 1.dp)) {
                 b.bars.forEach { bar -> Chip(lc, bar, faded) }
@@ -349,7 +350,9 @@ private fun Chip(lc: Context, bar: Bar, faded: Float, fontSize: Float = 7f, line
 @Composable
 private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
     val m = CalendarGlance.monthView(d.saved.snapshot, d.nowMs, 3)
-    val up = CalendarGlance.upcoming(d.saved.snapshot, d.nowMs, 4)
+    // Up to 4, as many as fit (~32 dp a row under the title, room kept for "+N").
+    val fit = ((LocalSize.current.height.value - 74) / 32).toInt().coerceIn(1, 4)
+    val up = CalendarGlance.upcoming(d.saved.snapshot, d.nowMs, fit)
     Row(GlanceModifier.fillMaxSize()) {
         Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
             Text(monthTitle(lc, m.today), maxLines = 1, modifier = GlanceModifier.clickable(dayAction(lc, m.today)), style = TextStyle(color = fg(), fontSize = 11.sp, fontWeight = FontWeight.Bold))
@@ -417,8 +420,8 @@ private fun QuadrantWidget(lc: Context, d: WidgetData.Ready, q: Quadrant) {
     val size = LocalSize.current
     val list = CalendarGlance.quadrants(d.saved.snapshot, d.nowMs).first { it.quadrant == q }
     val today = CalendarGlance.wibClock(d.nowMs).day
-    // 2×2 shows 2, 4×2 about 3, taller ones up to 8 (rows of ~38 dp under a ~30 dp header).
-    val fit = ((size.height.value - 58) / 38).toInt().coerceIn(1, 8)
+    // 2×2 shows 2, taller ones up to 8: rows of ~38 dp under a ~30 dp header, padding, footer and a "+N" line.
+    val fit = ((size.height.value - 84) / 38).toInt().coerceIn(1, 8)
     val wide = size.width >= 220.dp
     Column(GlanceModifier.fillMaxSize()) {
         Row(GlanceModifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
