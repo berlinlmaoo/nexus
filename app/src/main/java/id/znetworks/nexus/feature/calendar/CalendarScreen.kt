@@ -510,14 +510,21 @@ internal fun Controls(d: CalDerived, vm: CalendarViewModel) {
     }
 }
 
-/** An M3 single-choice segmented button row: role and selected state for TalkBack, 48 dp targets (audit #3). */
+/**
+ * An M3 single-choice segmented button row: role and selected state for TalkBack, 48 dp targets (audit #3).
+ * The selected segment shows M3's check and a container apart from the surface with a violet border, so the
+ * state is not carried by colour alone (audit 2 #9). Labels use the M3 style and may wrap at large font sizes.
+ */
 @Composable
 internal fun Choice(options: List<String>, selected: Int, modifier: Modifier = Modifier.fillMaxWidth(), enabled: (Int) -> Boolean = { true }, onPick: (Int) -> Unit) {
+    val c = Nx.colors
+    val colors = SegmentedButtonDefaults.colors(activeContainerColor = c.segmentActive, activeContentColor = c.foreground, activeBorderColor = c.violetText,
+        inactiveContainerColor = Color.Transparent, inactiveContentColor = c.foreground, inactiveBorderColor = c.boundary)
     SingleChoiceSegmentedButtonRow(modifier) {
         options.forEachIndexed { i, label ->
-            SegmentedButton(selected = i == selected, onClick = { onPick(i) }, enabled = enabled(i),
-                shape = SegmentedButtonDefaults.itemShape(i, options.size), icon = {}) {
-                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+            SegmentedButton(selected = i == selected, onClick = { onPick(i) }, enabled = enabled(i), colors = colors,
+                shape = SegmentedButtonDefaults.itemShape(i, options.size)) {
+                Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             }
         }
     }
@@ -910,7 +917,7 @@ private fun PersonHead(d: CalDerived, r: PanelRow.Person, modifier: Modifier) {
 @Composable
 internal fun Initials(name: String?, color: Color, size: Int) {
     val text = name?.trim()?.split(Regex("\\s+"))?.take(2)?.joinToString("") { it.take(1).uppercase() }?.ifEmpty { "?" } ?: "?"
-    val ink = if (color.luminance() > 0.35f) Color(0xFF0F1B2D) else Color.White
+    val ink = if (color.luminance() > 0.35f) Nx.colors.inkOnLight else Color.White
     val fs = (size * 0.36).sp
     Box(Modifier.size(size.dp).clip(CircleShape).background(color).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
         // The line box is the font size, centred and trimmed, so the letters sit in the middle at any font scale (audit #15).

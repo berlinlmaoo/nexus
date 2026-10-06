@@ -55,6 +55,8 @@ import id.znetworks.nexus.feature.calendar.CalendarGlance.Freshness
 import id.znetworks.nexus.feature.calendar.CalendarGlance.Overdue
 import id.znetworks.nexus.feature.calendar.CalendarGlance.Quadrant
 import id.znetworks.nexus.feature.calendar.GlanceScope
+import id.znetworks.nexus.ui.theme.NxDark
+import id.znetworks.nexus.ui.theme.NxLight
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -92,24 +94,28 @@ private fun quadrantNote(q: Quadrant) = when (q) { Quadrant.ACT -> R.string.wcal
 private fun quadrantEmpty(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal_q_do_empty; Quadrant.PLAN -> R.string.wcal_q_plan_empty; Quadrant.ACT -> R.string.wcal_q_act_empty; Quadrant.LATER -> R.string.wcal_q_later_empty }
 private fun tint(hex: String): Color = runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(Color(0xFF64748B))
 
-/** NEXUS colours for Android 8–11, where there is no Material You (audit #26). Android 12+ keeps the wallpaper colours. */
+/**
+ * NEXUS colours for Android 8–11, where there is no Material You (audit #26), built from the app's own
+ * tokens so a palette change reaches the widgets too (audit 2 #23). Android 12+ keeps the wallpaper colours.
+ */
 private val NexusWidgetColors: ColorProviders by lazy {
-    fun p(day: Long, night: Long) = DayNight(day = Color(day), night = Color(night))
+    val l = NxLight; val d = NxDark
+    fun p(day: Color, night: Color) = DayNight(day = day, night = night)
     colorProviders(
-        primary = p(0xFF1E3A5F, 0xFF9FB6D6), onPrimary = p(0xFFFFFFFF, 0xFF0F1B2D),
-        primaryContainer = p(0xFFF1EEFE, 0xFF2C2551), onPrimaryContainer = p(0xFF6750CF, 0xFFBFB3FF),
-        secondary = p(0xFF6247D6, 0xFFB3A6FF), onSecondary = p(0xFFFFFFFF, 0xFF0D1017),
-        secondaryContainer = p(0xFFE8EDF5, 0xFF252C3D), onSecondaryContainer = p(0xFF292D34, 0xFFE8EAEF),
-        tertiary = p(0xFF0091FF, 0xFF38A3FF), onTertiary = p(0xFFFFFFFF, 0xFF0D1017),
-        tertiaryContainer = p(0xFFE0F2FE, 0xFF1E2A40), onTertiaryContainer = p(0xFF0B4A7A, 0xFFBFE3FF),
-        error = p(0xFFB91C1C, 0xFFF87171), errorContainer = p(0xFFFEE2E2, 0xFF3B1414),
-        onError = p(0xFFFFFFFF, 0xFF0D1017), onErrorContainer = p(0xFF7F1D1D, 0xFFFECACA),
-        background = p(0xFFF8F9FB, 0xFF0D1017), onBackground = p(0xFF292D34, 0xFFE8EAEF),
-        surface = p(0xFFFFFFFF, 0xFF1C2130), onSurface = p(0xFF292D34, 0xFFE8EAEF),
-        surfaceVariant = p(0xFFF1F3F6, 0xFF252C3D), onSurfaceVariant = p(0xFF656D76, 0xFFA6B0BD),
-        outline = p(0xFFE6E8EC, 0xFF333B52), inverseOnSurface = p(0xFFFFFFFF, 0xFF1C2130),
-        inverseSurface = p(0xFF202023, 0xFFE8EAEF), inversePrimary = p(0xFF9FB6D6, 0xFF1E3A5F),
-        widgetBackground = p(0xFFFFFFFF, 0xFF1C2130),
+        primary = p(l.navy, d.navy), onPrimary = p(l.onNavy, d.onNavy),
+        primaryContainer = p(l.accentBg, d.accentBg), onPrimaryContainer = p(l.accentFg, d.accentFg),
+        secondary = p(l.violetText, d.violetText), onSecondary = p(Color.White, d.background),
+        secondaryContainer = p(l.muted, d.muted), onSecondaryContainer = p(l.foreground, d.foreground),
+        tertiary = p(l.blue, d.blue), onTertiary = p(Color.White, d.background),
+        tertiaryContainer = p(l.accentBg, d.accentBg), onTertiaryContainer = p(l.accentFg, d.accentFg),
+        error = p(l.dangerText, d.dangerText), errorContainer = p(l.warningBg, d.warningBg),
+        onError = p(l.onDanger, d.onDanger), onErrorContainer = p(l.warningFg, d.warningFg),
+        background = p(l.background, d.background), onBackground = p(l.foreground, d.foreground),
+        surface = p(l.card, d.card), onSurface = p(l.foreground, d.foreground),
+        surfaceVariant = p(l.muted, d.muted), onSurfaceVariant = p(l.mutedFg, d.mutedFg),
+        outline = p(l.boundary, d.boundary), inverseOnSurface = p(l.card, d.card),
+        inverseSurface = p(l.onyx, d.onyx), inversePrimary = p(d.navy, l.navy),
+        widgetBackground = p(l.card, d.card),
     )
 }
 

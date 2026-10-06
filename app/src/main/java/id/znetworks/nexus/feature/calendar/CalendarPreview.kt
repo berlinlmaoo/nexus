@@ -132,7 +132,7 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
                     if (t.comments.isNotEmpty()) Block(stringResource(R.string.cal_comments)) {
                         t.comments.forEach { cm ->
                             Row(Modifier.padding(vertical = 4.dp)) {
-                                Initials(cm.user?.name, Color(0xFF5B4BD6), 24); Spacer(Modifier.width(8.dp))
+                                Initials(cm.user?.name, c.navy, 24); Spacer(Modifier.width(8.dp))
                                 Column {
                                     Text(listOfNotNull(cm.user?.name, commentTime(cm.createdAt)).joinToString(" · "), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                     Text(cm.content, fontSize = 14.sp, color = c.foreground)

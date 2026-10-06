@@ -59,7 +59,8 @@ fun EmptyState(
         Button(
             onClick = onAction,
             shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = c.violet, contentColor = Color.White),
+            // The M3 primary role (violetText + its on-colour): AA in both themes, unlike the violet fill (audit 2 #2).
+            colors = ButtonDefaults.buttonColors(),
         ) {
             Text(actionLabel, fontFamily = DisplayFont, fontWeight = FontWeight.Bold)
         }
