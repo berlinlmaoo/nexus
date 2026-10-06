@@ -1,5 +1,6 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { ID_CALENDAR } from "@/lib/i18n/id-calendar";
+import { ID_CALENDAR_EXTRA } from "@/lib/i18n/id-calendar-extra";
 import { ID_CALENDAR_PAGE } from "@/lib/i18n/id-calendar-page";
 import { ID_COMMON } from "@/lib/i18n/id-common";
 import { ID_ORGCHART } from "@/lib/i18n/id-orgchart";
@@ -18,7 +19,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA };
 
 function read(): Lang {
   try {
@@ -29,8 +30,10 @@ function read(): Lang {
 }
 
 let current: Lang = typeof window === "undefined" ? "id" : read();
-// <html lang> stays as index.html sets it: most screens are not translated yet. A translated screen
-// sets lang={lang} on its own root (Calendar, Bagan).
+// <html lang> stays as index.html sets it ("en"): most screens are not translated yet. A translated
+// screen sets lang={lang} on its own root (Calendar, Bagan) and calls useDocumentLang(lang) while it is
+// mounted, so popovers, drawers, tooltips and dialogs (portaled to <body>, outside that root) are read
+// in the right language too.
 
 export function getLang(): Lang {
   return current;
@@ -70,14 +73,47 @@ function subscribe(f: () => void) {
   return () => listeners.delete(f);
 }
 
+export type LangApi = {
+  lang: Lang
+  setLang: (l: Lang) => void
+  locale: string
+  t: (en: string, vars?: Record<string, string | number>) => string
+  tn: (n: number, one: string, many: string, vars?: Record<string, string | number>) => string
+};
+
+// One object per language, shared by every component: `t` keeps its identity between renders, so a
+// useCallback/useMemo/memo() that depends on it only re-runs when the language actually changes.
+const apis = new Map<Lang, LangApi>();
+function apiOf(lang: Lang): LangApi {
+  let api = apis.get(lang);
+  if (!api) {
+    api = {
+      lang,
+      setLang,
+      locale: localeOf(lang),
+      t: (en, vars) => t(en, vars, lang),
+      tn: (n, one, many, vars) => tn(n, one, many, vars, lang),
+    };
+    apis.set(lang, api);
+  }
+  return api;
+}
+
 /** The current language; re-renders the component when it changes. */
-export function useLang() {
+export function useLang(): LangApi {
   const lang = useSyncExternalStore(subscribe, () => current, () => "id" as Lang);
-  return {
-    lang,
-    setLang,
-    locale: localeOf(lang),
-    t: (en: string, vars?: Record<string, string | number>) => t(en, vars, lang),
-    tn: (n: number, one: string, many: string, vars?: Record<string, string | number>) => tn(n, one, many, vars, lang),
-  };
+  return apiOf(lang);
+}
+
+/**
+ * While the calling screen is mounted, <html lang> follows the interface language, so content portaled
+ * to <body> is announced in the right language. The previous value comes back on unmount.
+ */
+export function useDocumentLang(lang: Lang) {
+  useEffect(() => {
+    const html = document.documentElement;
+    const before = html.lang;
+    html.lang = lang;
+    return () => { html.lang = before; };
+  }, [lang]);
 }

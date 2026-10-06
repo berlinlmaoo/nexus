@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { nexusApi } from "@/lib/nexus-api";
 import { CalendarPage, type CalSearch } from "@/components/calendar/CalendarPage";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -42,6 +43,22 @@ export const Route = createFileRoute("/_app/calendar")({
       overdue: str(s.overdue) === "1" ? "1" : undefined,
       task: task && ID.test(task) ? task : undefined,
     };
+  },
+  // Start the calendar's three requests while the page's own code is still downloading (and, with
+  // intent preloading, when the link is hovered). Not awaited: the page draws its skeleton and the
+  // queries pick these results up. Keys and options must match CalendarPage's useQuery calls. The grid
+  // maths come in dynamically so the calendar's core stays out of the app's entry chunk (the API client
+  // is in it already).
+  loaderDeps: ({ search }) => ({ date: search.date }),
+  loader: ({ context, deps }) => {
+    const qc = context.queryClient;
+    void import("@/lib/calendar/core").then(({ gridRange }) => {
+      // Today in WIB (UTC+7), as components/calendar/bits.wibToday.
+      const r = gridRange(deps.date ?? new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10));
+      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "structure"], queryFn: nexusApi.calendarStructure, staleTime: 5 * 60_000 });
+      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "items", r.from, r.to], queryFn: () => nexusApi.calendarItems(r.from, r.to), staleTime: 60_000 });
+      void qc.prefetchQuery({ queryKey: ["nexus", "calendar-tasks", "overdue"], queryFn: nexusApi.calendarOverdue, staleTime: 60_000 });
+    }).catch(() => { /* the page fetches for itself */ });
   },
   component: CalendarRoute,
 });
