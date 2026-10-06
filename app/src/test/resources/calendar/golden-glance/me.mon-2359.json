@@ -1,0 +1,1311 @@
+{
+ "freshness": "fresh",
+ "month": {
+  "month": "2026-10",
+  "today": "2026-10-05",
+  "year": {
+   "day": 278,
+   "days": 365,
+   "percent": 76
+  },
+  "cells": [
+   {
+    "day": "2026-09-28",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-09-29",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-09-30",
+    "count": 1,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a02",
+      "id": "a02",
+      "title": "Revisi deck PATS",
+      "day": "2026-09-30",
+      "time": "15:00",
+      "color": "#F97316",
+      "project": "PATS x Brand",
+      "priority": "URGENT",
+      "dim": false,
+      "masked": false,
+      "overdue": "recent"
+     }
+    ],
+    "more": 0,
+    "overdue": true,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-10-01",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-02",
+    "count": 1,
+    "open": 0,
+    "bars": [
+     {
+      "key": "a03",
+      "id": "a03",
+      "title": "Laporan mingguan",
+      "day": "2026-10-02",
+      "time": null,
+      "color": "#10B981",
+      "project": "Operasional",
+      "priority": "MEDIUM",
+      "dim": true,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-03",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-04",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": true,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-05",
+    "count": 4,
+    "open": 3,
+    "bars": [
+     {
+      "key": "x_m1",
+      "id": null,
+      "title": null,
+      "day": "2026-10-05",
+      "time": "09:00",
+      "color": "#64748b",
+      "project": "Finance",
+      "priority": "HIGH",
+      "dim": false,
+      "masked": true,
+      "overdue": "recent"
+     },
+     {
+      "key": "a05",
+      "id": "a05",
+      "title": "Shooting konten Multimedia",
+      "day": "2026-10-05",
+      "time": "19:00",
+      "color": "#7B68EE",
+      "project": "Framework Agency",
+      "priority": "MEDIUM",
+      "dim": false,
+      "masked": false,
+      "overdue": "recent"
+     }
+    ],
+    "more": 2,
+    "overdue": true,
+    "today": true,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-06",
+    "count": 2,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a08",
+      "id": "a08",
+      "title": "Upload flyer PATS x",
+      "day": "2026-10-06",
+      "time": "08:30",
+      "color": "#F97316",
+      "project": "PATS x Brand",
+      "priority": "HIGH",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     },
+     {
+      "key": "a09",
+      "id": "a09",
+      "title": "Siaran Suwara",
+      "day": "2026-10-06",
+      "time": null,
+      "color": "#0EA5E9",
+      "project": "Jadwal Siaran",
+      "priority": "NONE",
+      "dim": true,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-07",
+    "count": 1,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a10",
+      "id": "a10",
+      "title": "Desain thumbnail",
+      "day": "2026-10-07",
+      "time": "13:00",
+      "color": "#7B68EE",
+      "project": "Framework Agency",
+      "priority": "LOW",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-08",
+    "count": 4,
+    "open": 4,
+    "bars": [
+     {
+      "key": "a13",
+      "id": "a13",
+      "title": "Cek kontrak",
+      "day": "2026-10-08",
+      "time": "16:00",
+      "color": "#10B981",
+      "project": "Operasional",
+      "priority": "MEDIUM",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     },
+     {
+      "key": "a14",
+      "id": "a14",
+      "title": "edit video recap",
+      "day": "2026-10-08",
+      "time": "16:00",
+      "color": "#7B68EE",
+      "project": "Framework Agency",
+      "priority": "MEDIUM",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 2,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-09",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-10",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-11",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": true,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-12",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-13",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-14",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-15",
+    "count": 1,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a15",
+      "id": "a15",
+      "title": "Rekap absensi",
+      "day": "2026-10-15",
+      "time": null,
+      "color": "#10B981",
+      "project": "Operasional",
+      "priority": "HIGH",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-16",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-17",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-18",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": true,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-19",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-20",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-21",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-22",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-23",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-24",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-25",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": true,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-26",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-27",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-28",
+    "count": 1,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a16",
+      "id": "a16",
+      "title": "Post Hari Sumpah Pemuda",
+      "day": "2026-10-28",
+      "time": "07:00",
+      "color": "#0EA5E9",
+      "project": "Suwara Radio",
+      "priority": "MEDIUM",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": "Cuti bersama (uji)",
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-29",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-30",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-10-31",
+    "count": 1,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a17",
+      "id": "a17",
+      "title": "Closing bulan",
+      "day": "2026-10-31",
+      "time": "23:30",
+      "color": "#10B981",
+      "project": "Operasional",
+      "priority": "HIGH",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": true
+   },
+   {
+    "day": "2026-11-01",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": true,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-02",
+    "count": 1,
+    "open": 1,
+    "bars": [
+     {
+      "key": "a18",
+      "id": "a18",
+      "title": "Kickoff November",
+      "day": "2026-11-02",
+      "time": "09:00",
+      "color": "#7B68EE",
+      "project": "Framework Agency",
+      "priority": "MEDIUM",
+      "dim": false,
+      "masked": false,
+      "overdue": "none"
+     }
+    ],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-03",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-04",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-05",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-06",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-07",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": false,
+    "covered": true,
+    "inMonth": false
+   },
+   {
+    "day": "2026-11-08",
+    "count": 0,
+    "open": 0,
+    "bars": [],
+    "more": 0,
+    "overdue": false,
+    "today": false,
+    "holiday": null,
+    "sunday": true,
+    "covered": true,
+    "inMonth": false
+   }
+  ]
+ },
+ "week": [
+  {
+   "day": "2026-10-05",
+   "count": 4,
+   "open": 3,
+   "bars": [
+    {
+     "key": "x_m1",
+     "id": null,
+     "title": null,
+     "day": "2026-10-05",
+     "time": "09:00",
+     "color": "#64748b",
+     "project": "Finance",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": true,
+     "overdue": "recent"
+    },
+    {
+     "key": "a05",
+     "id": "a05",
+     "title": "Shooting konten Multimedia",
+     "day": "2026-10-05",
+     "time": "19:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "recent"
+    },
+    {
+     "key": "a06",
+     "id": "a06",
+     "title": "Kirim invoice",
+     "day": "2026-10-05",
+     "time": null,
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "LOW",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    }
+   ],
+   "more": 1,
+   "overdue": true,
+   "today": true,
+   "holiday": null,
+   "sunday": false,
+   "covered": true
+  },
+  {
+   "day": "2026-10-06",
+   "count": 2,
+   "open": 1,
+   "bars": [
+    {
+     "key": "a08",
+     "id": "a08",
+     "title": "Upload flyer PATS x",
+     "day": "2026-10-06",
+     "time": "08:30",
+     "color": "#F97316",
+     "project": "PATS x Brand",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a09",
+     "id": "a09",
+     "title": "Siaran Suwara",
+     "day": "2026-10-06",
+     "time": null,
+     "color": "#0EA5E9",
+     "project": "Jadwal Siaran",
+     "priority": "NONE",
+     "dim": true,
+     "masked": false,
+     "overdue": "none"
+    }
+   ],
+   "more": 0,
+   "overdue": false,
+   "today": false,
+   "holiday": null,
+   "sunday": false,
+   "covered": true
+  },
+  {
+   "day": "2026-10-07",
+   "count": 1,
+   "open": 1,
+   "bars": [
+    {
+     "key": "a10",
+     "id": "a10",
+     "title": "Desain thumbnail",
+     "day": "2026-10-07",
+     "time": "13:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "LOW",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    }
+   ],
+   "more": 0,
+   "overdue": false,
+   "today": false,
+   "holiday": null,
+   "sunday": false,
+   "covered": true
+  },
+  {
+   "day": "2026-10-08",
+   "count": 4,
+   "open": 4,
+   "bars": [
+    {
+     "key": "a13",
+     "id": "a13",
+     "title": "Cek kontrak",
+     "day": "2026-10-08",
+     "time": "16:00",
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a14",
+     "id": "a14",
+     "title": "edit video recap",
+     "day": "2026-10-08",
+     "time": "16:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a12",
+     "id": "a12",
+     "title": "Evaluasi KPI",
+     "day": "2026-10-08",
+     "time": "16:00",
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    }
+   ],
+   "more": 1,
+   "overdue": false,
+   "today": false,
+   "holiday": null,
+   "sunday": false,
+   "covered": true
+  },
+  {
+   "day": "2026-10-09",
+   "count": 0,
+   "open": 0,
+   "bars": [],
+   "more": 0,
+   "overdue": false,
+   "today": false,
+   "holiday": null,
+   "sunday": false,
+   "covered": true
+  },
+  {
+   "day": "2026-10-10",
+   "count": 0,
+   "open": 0,
+   "bars": [],
+   "more": 0,
+   "overdue": false,
+   "today": false,
+   "holiday": null,
+   "sunday": false,
+   "covered": true
+  },
+  {
+   "day": "2026-10-11",
+   "count": 0,
+   "open": 0,
+   "bars": [],
+   "more": 0,
+   "overdue": false,
+   "today": false,
+   "holiday": null,
+   "sunday": true,
+   "covered": true
+  }
+ ],
+ "upcoming": {
+  "rows": [
+   {
+    "key": "a06",
+    "id": "a06",
+    "title": "Kirim invoice",
+    "day": "2026-10-05",
+    "time": null,
+    "color": "#10B981",
+    "project": "Operasional",
+    "priority": "LOW",
+    "dim": false,
+    "masked": false,
+    "overdue": "none"
+   },
+   {
+    "key": "a08",
+    "id": "a08",
+    "title": "Upload flyer PATS x",
+    "day": "2026-10-06",
+    "time": "08:30",
+    "color": "#F97316",
+    "project": "PATS x Brand",
+    "priority": "HIGH",
+    "dim": false,
+    "masked": false,
+    "overdue": "none"
+   },
+   {
+    "key": "a10",
+    "id": "a10",
+    "title": "Desain thumbnail",
+    "day": "2026-10-07",
+    "time": "13:00",
+    "color": "#7B68EE",
+    "project": "Framework Agency",
+    "priority": "LOW",
+    "dim": false,
+    "masked": false,
+    "overdue": "none"
+   },
+   {
+    "key": "a13",
+    "id": "a13",
+    "title": "Cek kontrak",
+    "day": "2026-10-08",
+    "time": "16:00",
+    "color": "#10B981",
+    "project": "Operasional",
+    "priority": "MEDIUM",
+    "dim": false,
+    "masked": false,
+    "overdue": "none"
+   }
+  ],
+  "more": 9
+ },
+ "quadrants": [
+  {
+   "quadrant": "do",
+   "count": 6,
+   "rows": [
+    {
+     "key": "a01",
+     "id": "a01",
+     "title": "Brief klien Suwara",
+     "day": "2026-09-22",
+     "time": null,
+     "color": "#0EA5E9",
+     "project": "Suwara Radio",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "recent"
+    },
+    {
+     "key": "a02",
+     "id": "a02",
+     "title": "Revisi deck PATS",
+     "day": "2026-09-30",
+     "time": "15:00",
+     "color": "#F97316",
+     "project": "PATS x Brand",
+     "priority": "URGENT",
+     "dim": false,
+     "masked": false,
+     "overdue": "recent"
+    },
+    {
+     "key": "x_m1",
+     "id": null,
+     "title": null,
+     "day": "2026-10-05",
+     "time": "09:00",
+     "color": "#64748b",
+     "project": "Finance",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": true,
+     "overdue": "recent"
+    },
+    {
+     "key": "a08",
+     "id": "a08",
+     "title": "Upload flyer PATS x",
+     "day": "2026-10-06",
+     "time": "08:30",
+     "color": "#F97316",
+     "project": "PATS x Brand",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a11",
+     "id": "a11",
+     "title": "Persiapan event",
+     "day": "2026-10-08",
+     "time": null,
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "URGENT",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "x_m2",
+     "id": null,
+     "title": null,
+     "day": null,
+     "time": null,
+     "color": "#64748b",
+     "project": "Legal",
+     "priority": "URGENT",
+     "dim": false,
+     "masked": true,
+     "overdue": "none"
+    }
+   ]
+  },
+  {
+   "quadrant": "plan",
+   "count": 4,
+   "rows": [
+    {
+     "key": "a15",
+     "id": "a15",
+     "title": "Rekap absensi",
+     "day": "2026-10-15",
+     "time": null,
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a17",
+     "id": "a17",
+     "title": "Closing bulan",
+     "day": "2026-10-31",
+     "time": "23:30",
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a20",
+     "id": "a20",
+     "title": "Laporan akhir tahun",
+     "day": "2026-12-01",
+     "time": null,
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "u1",
+     "id": "u1",
+     "title": "Riset kompetitor",
+     "day": null,
+     "time": null,
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "HIGH",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    }
+   ]
+  },
+  {
+   "quadrant": "act",
+   "count": 2,
+   "rows": [
+    {
+     "key": "a05",
+     "id": "a05",
+     "title": "Shooting konten Multimedia",
+     "day": "2026-10-05",
+     "time": "19:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "recent"
+    },
+    {
+     "key": "a06",
+     "id": "a06",
+     "title": "Kirim invoice",
+     "day": "2026-10-05",
+     "time": null,
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "LOW",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    }
+   ]
+  },
+  {
+   "quadrant": "later",
+   "count": 8,
+   "rows": [
+    {
+     "key": "a10",
+     "id": "a10",
+     "title": "Desain thumbnail",
+     "day": "2026-10-07",
+     "time": "13:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "LOW",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a13",
+     "id": "a13",
+     "title": "Cek kontrak",
+     "day": "2026-10-08",
+     "time": "16:00",
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a14",
+     "id": "a14",
+     "title": "edit video recap",
+     "day": "2026-10-08",
+     "time": "16:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a12",
+     "id": "a12",
+     "title": "Evaluasi KPI",
+     "day": "2026-10-08",
+     "time": "16:00",
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a16",
+     "id": "a16",
+     "title": "Post Hari Sumpah Pemuda",
+     "day": "2026-10-28",
+     "time": "07:00",
+     "color": "#0EA5E9",
+     "project": "Suwara Radio",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a18",
+     "id": "a18",
+     "title": "Kickoff November",
+     "day": "2026-11-02",
+     "time": "09:00",
+     "color": "#7B68EE",
+     "project": "Framework Agency",
+     "priority": "MEDIUM",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "a19",
+     "id": "a19",
+     "title": "Audit Q4",
+     "day": "2026-11-20",
+     "time": null,
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "LOW",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    },
+    {
+     "key": "u2",
+     "id": "u2",
+     "title": "Rapikan arsip",
+     "day": null,
+     "time": null,
+     "color": "#10B981",
+     "project": "Operasional",
+     "priority": "LOW",
+     "dim": false,
+     "masked": false,
+     "overdue": "none"
+    }
+   ]
+  }
+ ],
+ "ring": {
+  "done": 1,
+  "total": 4
+ },
+ "inline": {
+  "openToday": 3,
+  "next": {
+   "day": "2026-10-05",
+   "time": null
+  }
+ },
+ "year": {
+  "day": 278,
+  "days": 365,
+  "percent": 76
+ },
+ "redraw": [
+  "2026-10-05T17:00:00.000Z",
+  "2026-10-06T01:31:00.000Z",
+  "2026-10-06T17:00:00.000Z",
+  "2026-10-07T04:00:00.001Z"
+ ]
+}
