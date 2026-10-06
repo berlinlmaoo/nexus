@@ -366,9 +366,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
                 onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } }) }
             composable("calendar-list?q={q}&scope={scope}", arguments = listOf("q", "scope").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
-                CalendarQuadrantScreen(e.arguments?.getString("q"), e.arguments?.getString("scope"), onBack = { nav.popBackStack() }) { day, task, scope ->
-                    nav.navigate(calendarRoute(date = day, task = task, scope = scope, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
-                }
+                CalendarQuadrantScreen(e.arguments?.getString("q"), e.arguments?.getString("scope"), onBack = { nav.popBackStack() },
+                    onOpenDay = { day, scope -> nav.navigate(calendarRoute(date = day, scope = scope, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true } },
+                    onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } },
+                    onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } })
             }
             // A task the viewer may read but not edit: a destination like the task screen (audit #38).
             composable("task-preview/{id}?project={project}", arguments = listOf(androidx.navigation.navArgument("project") { nullable = true; defaultValue = null })) { e ->

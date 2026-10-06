@@ -122,4 +122,30 @@ class CalendarAuditTest {
         assertTrue("A name with the focus icon focuses the calendar on that division; any other name filters it." in strings("values"))
         assertTrue("Nama berikon fokus memfokuskan kalender ke divisi itu; nama lain memfilternya." in strings("values-in"))
     }
+
+    @Test fun maskedRunsBecomeOneRow() {
+        // 3 Oct, staff: Finance & Tech holds four internal tasks in a row (cal-month-light-2.png).
+        val d = day(state("2026-10-03", "items-2026-10-03.staff.json"))
+        val groups = d.rows.filterIsInstance<PanelRow.MaskedGroup>()
+        assertTrue(groups.isNotEmpty())
+        assertTrue(groups.all { g -> g.items.size >= 2 && g.items.all { it.masked } })
+        // No masked task is lost or shown twice.
+        val masked = d.dayItems.count { it.masked }
+        val shown = groups.sumOf { it.items.size } + d.rows.filterIsInstance<PanelRow.Task>().count { it.item.masked }
+        assertTrue(shown >= masked)
+        assertEquals(d.rows.size, d.rows.map { it.key }.toSet().size)
+    }
+
+    @Test fun peopleHeadersOnlyWherePeopleAre() {
+        val s = state("2026-09-18", "items-2026-09-18.bod.json")
+        val data = CalData(CalIndex(s.structure!!, false), s)
+        val rows = CalendarCore.weekRows(data.shown, data.ix, data.focus, CalendarCore.mondayOf(s.day), s.today, s.nowMs, s.windowDays)
+        val visible = visibleRows(rows)
+        assertTrue(visible.size < rows.size)
+        visible.forEachIndexed { i, r ->
+            if (r is CalendarCore.WeekRow.Unit) assertTrue(visible.getOrNull(i + 1).let { it is CalendarCore.WeekRow.Person || it is CalendarCore.WeekRow.Loose })
+        }
+        // Every person row is kept.
+        assertEquals(rows.count { it is CalendarCore.WeekRow.Person }, visible.count { it is CalendarCore.WeekRow.Person })
+    }
 }

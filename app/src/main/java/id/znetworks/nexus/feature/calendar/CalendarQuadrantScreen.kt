@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,11 +62,13 @@ import java.util.Locale
 /**
  * The whole list behind a quadrant widget (audit #40: "+N more" used to lead nowhere, and these lists
  * live in widgets alone — decision 7). Route `calendar-list?q=do|plan|act|later&scope=me|division|all`,
- * from `nexus://calendar?view=quadrant&q=&scope=`. Same snapshot and rules as the widget (CalendarGlance);
- * a task opens in the Calendar like a widget row does.
+ * from `nexus://calendar?view=quadrant&q=&scope=`. Same snapshot and rules as the widget (CalendarGlance):
+ * it starts from the snapshot the widget drew (so it works offline) and refreshes in place. A task opens
+ * directly (task screen or read-only preview), so Back comes back here (audit 2 #17).
  */
 @Composable
-fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpen: (day: String?, taskId: String?, scope: String) -> Unit) {
+fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpenDay: (day: String?, scope: String) -> Unit,
+                           onOpenTask: (String) -> Unit, onOpenPreview: (String, String?) -> Unit) {
     val c = Nx.colors
     val quadrant = Quadrant.of(q) ?: Quadrant.DO
     val glanceScope = GlanceScope.entries.firstOrNull { it.wire == scope } ?: GlanceScope.ME
@@ -68,11 +76,35 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
     var snapshot by remember { mutableStateOf<CalGlance?>(null) }
     var failed by remember { mutableStateOf(false) }
     var attempt by remember { mutableStateOf(0) }
-    LaunchedEffect(attempt) { failed = false; runCatching { container.calendar.glance(glanceScope).value }.onSuccess { snapshot = it }.onFailure { failed = true } }
+    val snackbar = remember { SnackbarHostState() }
+    val scopeRef = rememberCoroutineScope()
+    val gone = stringResource(R.string.cal_task_gone)
+    val offline = stringResource(R.string.cal_task_offline)
+    LaunchedEffect(attempt) {
+        failed = false
+        if (snapshot == null) snapshot = container.calendarSnapshots.load(glanceScope)?.snapshot
+        runCatching { container.calendar.glance(glanceScope).value }.onSuccess { snapshot = it }.onFailure { failed = snapshot == null }
+    }
+    /** Edit → task screen, else the read-only preview; masked → its day; gone/offline → said in a snackbar. */
+    fun open(b: CalendarGlance.Bar) {
+        val id = b.id
+        if (b.masked || id == null) { onOpenDay(b.day, glanceScope.wire); return }
+        scopeRef.launch {
+            val r = runCatching { container.calendar.task(id) }.getOrNull()
+            when {
+                r == null -> snackbar.showSnackbar(offline)
+                !r.found -> snackbar.showSnackbar(gone)
+                r.masked -> onOpenDay(b.day, glanceScope.wire)
+                r.canEdit && r.editProjectId != null && r.editProjectId == r.projectId -> onOpenTask(id)
+                else -> onOpenPreview(id, b.project)
+            }
+        }
+    }
     val title = stringResource(when (quadrant) { Quadrant.DO -> R.string.wcal_q_do; Quadrant.PLAN -> R.string.wcal_q_plan; Quadrant.ACT -> R.string.wcal_q_act; Quadrant.LATER -> R.string.wcal_q_later })
     val note = when (quadrant) { Quadrant.ACT -> R.string.wcal_q_act_note; Quadrant.LATER -> R.string.wcal_q_later_note; else -> null }
     val scopeLabel = stringResource(when (glanceScope) { GlanceScope.DIVISION -> R.string.wcal_scope_division; GlanceScope.ALL -> R.string.wcal_scope_all; else -> R.string.wcal_scope_me })
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides c.foreground) {
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -90,14 +122,17 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
                 val now = System.currentTimeMillis()
                 val list = CalendarGlance.quadrants(s, now).first { it.quadrant == quadrant }
                 val today = CalendarGlance.wibClock(now).day
-                if (list.rows.isEmpty()) Text(stringResource(when (quadrant) { Quadrant.DO -> R.string.wcal_q_do_empty; Quadrant.PLAN -> R.string.wcal_q_plan_empty; Quadrant.ACT -> R.string.wcal_q_act_empty; Quadrant.LATER -> R.string.wcal_q_later_empty }, scopeLabel),
-                    fontSize = 14.sp, color = c.mutedFg, modifier = Modifier.padding(20.dp))
+                if (list.rows.isEmpty()) EmptyState(Icons.Filled.TaskAlt,
+                    stringResource(when (quadrant) { Quadrant.DO -> R.string.wcal_q_do_empty; Quadrant.PLAN -> R.string.wcal_q_plan_empty; Quadrant.ACT -> R.string.wcal_q_act_empty; Quadrant.LATER -> R.string.wcal_q_later_empty }, scopeLabel),
+                    stringResource(R.string.calq_empty_next), stringResource(R.string.calq_open_calendar), { onOpenDay(null, glanceScope.wire) }, Modifier.fillMaxSize())
                 else LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     item { Text(stringResource(R.string.calq_title_note), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
-                    items(list.rows, key = { it.key }) { b -> QuadrantRow(b, today) { onOpen(b.day, if (b.masked) null else b.id, glanceScope.wire) } }
+                    items(list.rows, key = { it.key }) { b -> QuadrantRow(b, today) { open(b) } }
                 }
             }
         }
+    }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
     }
 }

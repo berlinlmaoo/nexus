@@ -1956,4 +1956,7 @@
         <item quantity="one">%d tugas internal</item>
         <item quantity="other">%d tugas internal</item>
     </plurals>
+    <string name="cal_lists_loading">Memuat orang dan proyek di rentang ini…</string>
+    <string name="calq_empty_next">Tugasmu ada di Kalender, hari per hari.</string>
+    <string name="calq_open_calendar">Buka Kalender</string>
 </resources>

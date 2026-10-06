@@ -1962,4 +1962,7 @@
         <item quantity="one">%d internal task</item>
         <item quantity="other">%d internal tasks</item>
     </plurals>
+    <string name="cal_lists_loading">Loading the people and projects of this range…</string>
+    <string name="calq_empty_next">Your tasks are in the Calendar, day by day.</string>
+    <string name="calq_open_calendar">Open Calendar</string>
 </resources>

@@ -64,7 +64,7 @@ internal fun PeopleView(d: CalDerived, vm: CalendarViewModel, tablet: Boolean, o
     val c = Nx.colors
     val s = d.s
     val monday = CalendarCore.mondayOf(s.day)
-    val rows = remember(d.data, monday) { CalendarCore.weekRows(d.shown, d.ix, d.focus, monday, s.today, s.nowMs, s.windowDays) }
+    val rows = remember(d.data, monday) { visibleRows(CalendarCore.weekRows(d.shown, d.ix, d.focus, monday, s.today, s.nowMs, s.windowDays)) }
     fun goDay(day: String) { vm.setLens(CalLens.PERSON); vm.setView(CalView.MONTH); vm.selectDay(day) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item(key = "controls") { Controls(d, vm) }
@@ -84,23 +84,40 @@ internal fun PeopleView(d: CalDerived, vm: CalendarViewModel, tablet: Boolean, o
         rows.forEach { r ->
             val key = when (r) { is WeekRow.Unit -> "u:${r.unit.id}"; is WeekRow.Unplaced -> "unplaced"; is WeekRow.Person -> "p:${r.unitId}:${r.userId}"; is WeekRow.Loose -> "l:${r.unitId}" }
             when (r) {
-                is WeekRow.Unit, is WeekRow.Unplaced -> stickyHeader(key = key) { UnitHeader(d, r) }
+                is WeekRow.Unit, is WeekRow.Unplaced -> stickyHeader(key = key) { UnitHeader(d, r, pathOf(d, r)) }
                 else -> item(key = key) { if (tablet) TableRow(d, vm, r, monday, ::goDay) else PhoneRow(d, vm, r, key, ::goDay) }
             }
         }
     }
 }
 
-/** A division (or "Not in the chart yet") as a sticky section header: colour bar, name, count. */
+/**
+ * Only unit headers that hold people (or tasks without a person) directly: a chain of empty headers
+ * ("PT. THE Z NETWORKS", "FRAMEWORK AGENCY", "PROJECT MANAGEMENT") becomes one header with the path
+ * (audit 2 #12).
+ */
+internal fun visibleRows(rows: List<WeekRow>): List<WeekRow> = rows.filterIndexed { i, r ->
+    r !is WeekRow.Unit || rows.getOrNull(i + 1).let { it is WeekRow.Person || it is WeekRow.Loose }
+}
+
+/** "Framework Agency › Project Management": the unit's line under the focus (groups left out). */
+private fun pathOf(d: CalDerived, r: WeekRow): String? {
+    if (r !is WeekRow.Unit) return null
+    val up = d.ix.ancestors(r.unit.id).reversed()
+    val below = up.dropWhile { it != d.focus }.drop(1).mapNotNull { d.ix.byId[it] }.filter { !it.isGroup }.map { it.name }
+    return (below + r.unit.name).joinToString(" › ")
+}
+
+/** A division (or "Not in the chart yet") as a sticky section header: colour bar, path, count. */
 @Composable
-private fun UnitHeader(d: CalDerived, r: WeekRow) {
+private fun UnitHeader(d: CalDerived, r: WeekRow, path: String?) {
     val c = Nx.colors
     Row(Modifier.fillMaxWidth().background(c.background).padding(horizontal = 16.dp, vertical = 10.dp).semantics(mergeDescendants = true) { heading() },
         verticalAlignment = Alignment.CenterVertically) {
         when (r) {
             is WeekRow.Unit -> {
                 if (!r.unit.isGroup) { Box(Modifier.width(3.dp).height(16.dp).background(d.color(r.unit.id))); Spacer(Modifier.width(8.dp)) }
-                Text(r.unit.name.uppercase(Locale.getDefault()), style = MicroLabel,
+                Text((path ?: r.unit.name).uppercase(Locale.getDefault()), style = MicroLabel,
                     color = if (r.unit.isGroup) c.mutedFg else c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 CountPill(r.count)
             }
@@ -191,7 +208,12 @@ private fun TableRow(d: CalDerived, vm: CalendarViewModel, r: WeekRow, monday: S
                 .then(if (list.isNotEmpty()) Modifier.clickable(onClickLabel = showLabel) { goDay(day) } else Modifier).padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 list.take(2).forEach { i ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.open(i) }) {
+                    // A 48 dp line with its status and action for TalkBack, as on the phone (audit 2 #4).
+                    val editable = i.canEdit && i.editProjectId != null && i.editProjectId == i.project?.id
+                    val action = stringResource(when { i.masked -> R.string.cal_why_locked; editable -> R.string.cal_open_task; else -> R.string.cal_open_read_only })
+                    val status = statusWords(d, i)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .semantics { stateDescription = status }.clickable(onClickLabel = action) { vm.open(i) }) {
                         TaskGlyph(d, i, 12); Spacer(Modifier.width(4.dp))
                         Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null)

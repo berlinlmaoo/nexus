@@ -534,18 +534,29 @@ private fun PersonRow(p: OrgPerson, unitId: String, onPerson: ((OrgPerson) -> Un
     }
 }
 
-/** Logos: mostly-light ones (white text PNG) on #0f1b2d, the others on white; initials when there is none. */
-private val logoCache = HashMap<String, Pair<ImageBitmap, Boolean>>()
+/**
+ * Logos: mostly-light ones (white text PNG) on #0f1b2d, the others on white; initials when there is none.
+ * Decoded down to at most [LOGO_MAX_PX] (an upload may be 2 MB / 2000 px), kept in a 4 MB LRU that is safe
+ * to touch from the IO decode and the main thread (Calendar audit 2 #11).
+ */
+private const val LOGO_MAX_PX = 256
+private val logoCache = object : android.util.LruCache<String, Pair<ImageBitmap, Boolean>>(4 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: Pair<ImageBitmap, Boolean>) = value.first.width * value.first.height * 4
+}
 @Composable
 internal fun UnitLogo(url: String?, name: String?, size: Int, shape: androidx.compose.ui.graphics.Shape, fallback: (@Composable () -> Unit)? = null) {
     val api = (LocalContext.current.applicationContext as NexusApplication).container.api
-    var img by remember(url) { mutableStateOf(url?.let(logoCache::get)) }
+    var img by remember(url) { mutableStateOf(url?.let { logoCache.get(it) }) }
     LaunchedEffect(url) {
         if (url == null || img != null) return@LaunchedEffect
         img = withContext(Dispatchers.IO) {
             runCatching {
                 val bytes = api.bytes(url)
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= LOGO_MAX_PX) sample *= 2
+                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return@runCatching null
                 val small = android.graphics.Bitmap.createScaledBitmap(bmp, 32, 32, true)
                 var sum = 0.0; var n = 0
                 for (x in 0 until 32) for (y in 0 until 32) {
@@ -553,7 +564,7 @@ internal fun UnitLogo(url: String?, name: String?, size: Int, shape: androidx.co
                     if (android.graphics.Color.alpha(px) / 255.0 < 0.2) continue
                     sum += (0.2126 * android.graphics.Color.red(px) + 0.7152 * android.graphics.Color.green(px) + 0.0722 * android.graphics.Color.blue(px)) / 255.0; n++
                 }
-                (bmp.asImageBitmap() to (n > 0 && sum / n > 0.72)).also { logoCache[url] = it }
+                (bmp.asImageBitmap() to (n > 0 && sum / n > 0.72)).also { logoCache.put(url, it) }
             }.getOrNull()
         }
     }

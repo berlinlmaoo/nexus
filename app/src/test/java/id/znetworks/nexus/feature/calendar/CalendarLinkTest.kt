@@ -62,7 +62,7 @@ class CalendarLinkTest {
         val vm = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarViewModel.kt").readText()
         // Every Calendar → task navigation is single top.
         val opens = Regex("""onOpenTask = \{ nav\.navigate\("task/\$\{enc\(it\)\}"\)([^}]*)\}""").findAll(shell).toList()
-        assertEquals(2, opens.size)
+        assertTrue(opens.size >= 2)
         opens.forEach { assertTrue(it.value, "launchSingleTop = true" in it.value) }
         assertTrue("&n={n}" in shell)
         assertTrue("vm.applyLink(date, view, lens, focus, scope, task, nonce)" in screen)

@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -75,11 +77,17 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
     var qPeople by rememberSaveable { mutableStateOf("") }
     var qProjects by rememberSaveable { mutableStateOf("") }
     BackHandler(onBack = onClose)
+    // Selected people and projects stay listed (pinned first) even with no task in the range, so each can be
+    // cleared on its own; the rest come from the range on screen (audit 2 #16).
     val ids = d.all.flatMap { it.assigneeIds }.distinct()
-    val people = ids.map { it to (d.name(it) ?: "") }.filter { qPeople.isBlank() || it.second.contains(qPeople.trim(), true) }
-        .sortedWith { a, b -> CalendarCore.localeCompare(a.second, b.second) }
+    val pinnedPeople = f.people.filter { it !in ids }
+    val people = (pinnedPeople + ids).map { it to (d.name(it) ?: "") }.filter { it.first in f.people || qPeople.isBlank() || it.second.contains(qPeople.trim(), true) }
+        .sortedWith(compareBy<Pair<String, String>> { it.first !in f.people }.thenComparator { a, b -> CalendarCore.localeCompare(a.second, b.second) })
     val projects = d.all.mapNotNull { it.project }.distinctBy { it.id }
-    val shownProjects = projects.filter { qProjects.isBlank() || it.name.contains(qProjects.trim(), true) }.sortedWith { a, b -> CalendarCore.localeCompare(a.name, b.name) }
+    val elsewhere = stringResource(R.string.cal_project_elsewhere)
+    val pinnedProjects = f.projects.filter { id -> projects.none { it.id == id } }.map { CalProject(id = it, name = elsewhere) }
+    val shownProjects = (pinnedProjects + projects).filter { it.id in f.projects || qProjects.isBlank() || it.name.contains(qProjects.trim(), true) }
+        .sortedWith(compareBy<CalProject> { it.id !in f.projects }.thenComparator { a, b -> CalendarCore.localeCompare(a.name, b.name) })
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides c.foreground) {
     Column(modifier.background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -90,6 +98,8 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
         }
         HorizontalDivider(color = c.border)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
+            // What is on, removable one by one.
+            if (d.filterCount > 0) item(key = "active") { Box(Modifier.padding(bottom = 8.dp)) { ActiveFilters(d, vm) } }
             item(key = "divh") { Header(stringResource(R.string.cal_divisions)) }
             items(d.ix.units, key = { "u:${it.id}" }) { u ->
                 val on = u.id in f.units
@@ -103,7 +113,8 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
                 Header(stringResource(R.string.cal_people))
                 OutlinedTextField(qPeople, { qPeople = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_people)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
-                if (ids.isEmpty()) Text(stringResource(R.string.cal_nobody_month), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                if (!d.ready) Text(stringResource(R.string.cal_lists_loading), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                else if (ids.isEmpty()) Text(stringResource(R.string.cal_nobody_month), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
             }
             items(people, key = { "p:${it.first}" }) { (id, name) ->
                 val on = id in f.people
@@ -116,7 +127,8 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
                 Header(stringResource(R.string.cal_projects))
                 OutlinedTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
-                if (projects.isEmpty()) Text(stringResource(R.string.cal_no_project_month), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                if (!d.ready) Text(stringResource(R.string.cal_lists_loading), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                else if (projects.isEmpty()) Text(stringResource(R.string.cal_no_project_month), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
             }
             items(shownProjects, key = { "j:${it.id}" }) { p ->
                 val on = p.id in f.projects
@@ -143,7 +155,8 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
         }
         // The live result, and the way back to it.
         val n = d.shown.count { if (d.s.view == CalView.MONTH) CalendarCore.sameMonth(it.day, d.s.day) else true }
-        Button(onClick = onClose, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).height(52.dp)) {
+        // Typing in a search field (keyboard up): the list keeps the room, the button waits (audit 2 #7).
+        if (!WindowInsets.isImeVisible) Button(onClick = onClose, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).height(52.dp)) {
             Text(pluralStringResource(R.plurals.cal_show_n_tasks, n, n))
         }
     }
