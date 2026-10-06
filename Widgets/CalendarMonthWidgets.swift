@@ -136,7 +136,10 @@ struct CalendarMonthCell: View {
         Link(destination: CalendarLink.day(day.day, scope: scope)) {
             VStack(alignment: wide ? .leading : .center, spacing: wide ? 1 : 2) {
                 number
-                bars
+                // Another month's day: its number in the secondary colour at full strength (the badge
+                // does that), only its bars faded — the whole cell at 35% was 2.4:1 on the light
+                // widget, the treatment the app's own grid already dropped.
+                bars.opacity(day.inMonth ? 1 : 0.35)
             }
             .padding(.horizontal, wide ? 2 : 1.5)
             .padding(.top, 1)
@@ -146,7 +149,6 @@ struct CalendarMonthCell: View {
             .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
             .clipped()
             .contentShape(Rectangle())
-            .opacity(day.inMonth ? 1 : 0.35)
             // A Link may tint its label like a button; the calendar's own colours win.
             .foregroundStyle(Color.primary)
         }
@@ -314,7 +316,8 @@ struct CalendarMiniWeek: View {
 }
 
 /// One day: its number and up to three dots. To VoiceOver, the day in words; the days of the
-/// neighbouring months, drawn faint, are left out.
+/// neighbouring months are left out. Those draw their number in the secondary colour at full strength
+/// and only their dots faded (the whole cell at 30% was 2.1:1 on the light widget).
 struct CalendarMiniCell: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
@@ -327,10 +330,9 @@ struct CalendarMiniCell: View {
     var body: some View {
         VStack(spacing: 1) {
             CalendarDayBadge(day: day, size: metrics.badge, fontSize: metrics.number, full: full)
-            dots
+            dots.opacity(day.inMonth ? 1 : 0.35)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .opacity(day.inMonth ? 1 : 0.3)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(GlanceText.dayLabel(day))
         .accessibilityHidden(!day.inMonth)

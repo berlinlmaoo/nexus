@@ -65,6 +65,15 @@ struct NXDetailRequest: Identifiable, Hashable {
     }
 }
 
+/// The Calendar as it stands, carried over when the window crosses the size class: the day it shows,
+/// Month or People, the division it is focused on, and the task open on top of it.
+struct CalendarCarry: Equatable {
+    var day: String
+    var people: Bool
+    var focusId: String?
+    var taskId: String?
+}
+
 /// Where the app should go, when the instruction comes from outside the screen you are standing on.
 ///
 /// Siri, a Shortcut, a tap on the Live Activity, a tap on a widget and a tap on a notification all
@@ -172,6 +181,16 @@ final class AppRouter {
     /// different stories about the same day. CalendarView claims it the way it claims the date (it
     /// becomes the Calendar's own Show setting, on screen beside Month / People) and clears it.
     var calendarScope: String?
+    /// The Calendar on screen as it stands, written by it as it changes. Read only when the window
+    /// crosses the size class (`carryAcrossShapes`).
+    var calendarState: CalendarCarry?
+    /// Left by a size-class crossing with the Calendar on screen, for the Calendar the other shape
+    /// builds; it claims it once, and only within a few seconds of `calendarCarryAt`.
+    var calendarCarry: CalendarCarry?
+    var calendarCarryAt: Date?
+    /// When the Calendar last left the screen. The shape being swapped out takes the Calendar with it,
+    /// and its onDisappear may run before AdaptiveRoot hears of the swap: a moment ago still counts.
+    var calendarLeftAt: Date?
 
     /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
     func open(_ target: NotificationTarget) {
@@ -230,6 +249,44 @@ final class AppRouter {
             morePush = screen
         }
         sidebarRequest = screen
+    }
+
+    /// The window crossed the size class — Split View, Slide Over, a narrow Stage Manager tile, an
+    /// iPhone Plus or Max turned sideways — and AdaptiveRoot is rebuilding the app in its other shape.
+    /// Both shapes start from nothing, so the person landed on Home: out of the Calendar and off the
+    /// day they were on, once going into Split View and again coming out (impeccable re-audit, 7 Oct
+    /// 2026). The new shape is told where they were instead, and a Calendar on screen leaves its day,
+    /// view, focus and open task for the one the new shape builds.
+    func carryAcrossShapes(toSidebar: Bool) {
+        let screen = toSidebar ? phoneScreen : sidebarScreen
+        if screen == .teamCalendar, let state = calendarState {
+            calendarCarry = state
+            calendarCarryAt = Date()
+        }
+        if toSidebar {
+            sidebarRequest = screen
+        } else if let root = tabRoot(for: screen) {
+            tab = root
+            morePush = nil
+        } else {
+            tab = .more
+            morePush = screen
+        }
+    }
+
+    /// The screen the tab bar is showing, as far as the router can tell: the Calendar wherever it was
+    /// pushed (More, or Home's tiles), a launcher screen a request pushed, or the tab itself. The More
+    /// launcher has no place in the sidebar, so Home stands in for it.
+    private var phoneScreen: NXScreen {
+        if calendarOnScreen != nil { return .teamCalendar }
+        if let left = calendarLeftAt, Date().timeIntervalSince(left) < 1 { return .teamCalendar }
+        switch tab {
+        case .dashboard: return .dashboard
+        case .tasks:     return .tasks
+        case .inbox:     return .inbox
+        case .projects:  return .projects
+        case .more:      return morePush ?? .dashboard
+        }
     }
 
     /// Everything that arrives from outside the app comes through here.

@@ -18,6 +18,16 @@ enum CalendarWidgetPresence {
     private static var generation = 0
     /// Coming back to the app every few seconds must not mean three requests each time.
     private static let minGap: TimeInterval = 5 * 60
+    /// An answer the same as the one saved is neither saved nor redrawn — unless the saved one is this
+    /// old: then it is saved again, so a widget's "Updated 14:05" does not fall hours behind.
+    private static let resaveAfter: TimeInterval = 2 * 3600
+    /// Every calendar widget and Lock Screen accessory (Widgets/CalendarWidgetKit.swift's two bundles).
+    /// A calendar kind added there belongs here too, or it only redraws on its own schedule.
+    private static let calendarKinds = [
+        "NEXUSCalendarMonth", "NEXUSCalendarUpcoming", "NEXUSCalendarWeek",
+        "NEXUSCalendarListDo", "NEXUSCalendarListPlan", "NEXUSCalendarListAct", "NEXUSCalendarListLater",
+        "NEXUSCalendarNext", "NEXUSCalendarWeekStrip", "NEXUSCalendarRing", "NEXUSCalendarInline",
+    ]
 
     /// When the app comes to the front, after sign-in, after the Calendar or the dashboard loads, and
     /// from the background refresh. Throttled unless `force`. A failed request keeps the last answer —
@@ -38,7 +48,7 @@ enum CalendarWidgetPresence {
             // showing whatever they had last.
             if GlanceScope.allCases.contains(where: { GlanceStore.load($0) != nil }) {
                 GlanceStore.clear()
-                WidgetCenter.shared.reloadAllTimelines()
+                reloadCalendarWidgets()
             }
             return
         }
@@ -53,11 +63,24 @@ enum CalendarWidgetPresence {
             // Signed out (or into another account) while the request was in flight: never save
             // somebody's tasks under the next person's widgets.
             guard generation == gen, Keychain.load()?.userId == userId, snapshot.userId == userId else { continue }
+            // Nothing new: nothing to save or redraw. Every answer used to count as a change, and
+            // reloaded every widget the app has — the attendance one included — from the background
+            // refresh too, where WidgetKit budgets reloads (impeccable re-audit, 7 Oct 2026).
+            if let saved = GlanceStore.load(scope), saved.userId == userId, saved.snapshot == snapshot,
+               Date().timeIntervalSince(saved.savedAt) < resaveAfter {
+                continue
+            }
             GlanceStore.save(snapshot, scope: scope)
             changed = true
         }
-        if changed { WidgetCenter.shared.reloadAllTimelines() }
+        if changed { reloadCalendarWidgets() }
         #endif
+    }
+
+    /// The calendar's own widgets only: the attendance and dashboard widgets share WidgetKit's daily
+    /// reload budget, and a calendar answer has nothing new for them.
+    private static func reloadCalendarWidgets() {
+        for kind in calendarKinds { WidgetCenter.shared.reloadTimelines(ofKind: kind) }
     }
 
     /// The widgets speak the app's language, which lives in the app's own defaults — out of the

@@ -353,6 +353,10 @@ enum CalScope: String, Codable, Sendable {
 }
 
 struct CalFilters: Codable, Hashable, Sendable {
+    /// Whose tasks: Everyone, Mine or My division. A VIEW of the calendar, not a filter, on every
+    /// platform (owner, 7 Oct 2026): `activeCount` leaves it out and `cleared()` keeps it. Counted, a
+    /// "1" on the funnel pointed at a filter nobody could find, and "Reset filters" quietly turned
+    /// Mine back into everybody's tasks.
     var scope: CalScope = .all
     var units: [String] = []
     var people: [String] = []
@@ -361,9 +365,17 @@ struct CalFilters: Codable, Hashable, Sendable {
     var hideDone = false
     var overdueOnly = false
 
+    /// The filters at work — divisions, people, projects, priorities and the two switches. Never the scope.
     var activeCount: Int {
-        (scope != .all ? 1 : 0) + (units.isEmpty ? 0 : 1) + (people.isEmpty ? 0 : 1) + (projects.isEmpty ? 0 : 1)
+        (units.isEmpty ? 0 : 1) + (people.isEmpty ? 0 : 1) + (projects.isEmpty ? 0 : 1)
             + (priorities.isEmpty ? 0 : 1) + (hideDone ? 1 : 0) + (overdueOnly ? 1 : 0)
+    }
+
+    /// "Reset filters": every filter off, the scope as it was.
+    func cleared() -> CalFilters {
+        var f = CalFilters()
+        f.scope = scope
+        return f
     }
 }
 

@@ -115,15 +115,23 @@ enum NX {
     /// Brand FILL: buttons, selected pills, progress bars, dots. White text on this clears AA.
     static let violet      = Color(light: 0x7b68ee, dark: 0x6f5ae6)   // brand (--ring / --sidebar-primary)
     /// Brand as TEXT or ICON on a surface. Use this for type — never `violet`.
-    static let violetText  = Color(light: 0x6247d6, dark: 0xb3a6ff)
+    ///
+    /// The violets that carry type have Increase Contrast values, the ones the Calendar's own accent
+    /// already had: with it on, half the accent strengthened and half stayed put, two violets side by
+    /// side, and TODAY, the scope and the filter chips never reached 7:1 (impeccable re-audit, 7 Oct
+    /// 2026). Measured with them on: text 9.0:1 on white and 10.4:1 on the dark card, 7.3:1 / 8.3:1
+    /// on `accentBg`; white on `violetFill` 9.0:1 / 6.5:1. The normal values are unchanged.
+    static let violetText  = Color(light: 0x6247d6, dark: 0xb3a6ff, lightHC: 0x4a2fb0, darkHC: 0xd2caff)
     /// Brand FILL under small white type (13 pt labels): white on `violet` is 4.15:1 in light mode,
     /// under AA for text that size; this deeper shade is 6.2:1. Dark is `violet`'s own value.
-    static let violetFill  = Color(light: 0x6247d6, dark: 0x6f5ae6)
+    static let violetFill  = Color(light: 0x6247d6, dark: 0x6f5ae6, lightHC: 0x4a2fb0, darkHC: 0x5a44d4)
     static let blue        = Color(light: 0x0091ff, dark: 0x38a3ff)
     static let success     = Color(light: 0x16a34a, dark: 0x34d399)
     static let warning     = Color(light: 0xf59e0b, dark: 0xfbbf24)
     static let danger      = Color(light: 0xef4444, dark: 0xf87171)
-    static let accentBg    = Color(light: 0xf1eefe, dark: 0x2c2551)
+    /// The accent's wash under `violetText` (chips, badges). A shade deeper under Increase Contrast, so
+    /// a chip's edge shows against the card too.
+    static let accentBg    = Color(light: 0xf1eefe, dark: 0x2c2551, lightHC: 0xe9e4fd, darkHC: 0x332a63)
     static let accentFg    = Color(light: 0x6750cf, dark: 0xbfb3ff)
     static let coral       = Color(light: 0xff7f50, dark: 0xff9d76)   // "Secure Uplink Ready" pill
     static let cream       = Color(light: 0xfdfcfb, dark: 0x0d1017)   // login background

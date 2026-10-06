@@ -484,7 +484,8 @@ struct AvatarView: View {
         ZStack {
             Circle().fill(NX.accentBg)
             if let resolved {
-                CachedImage(url: resolved) { img in img.resizable().scaledToFill() } placeholder: { initialText }
+                // A face stays a face under Smart Invert.
+                CachedImage(url: resolved) { img in img.resizable().scaledToFill().accessibilityIgnoresInvertColors() } placeholder: { initialText }
                     .clipShape(Circle())
             } else { initialText }
         }

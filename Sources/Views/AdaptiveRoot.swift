@@ -219,14 +219,31 @@ enum NXSelection: Hashable {
 }
 
 /// Picks the shape. Regular width means iPad (any orientation) and, later, a Mac window.
+///
+/// The two shapes share no state: crossing the size class (Split View, Slide Over, a narrow Stage
+/// Manager tile) builds the other one from nothing. The router tells the new one where the person
+/// was, so they stay on that screen — and the Calendar on its day — instead of landing on Home.
 struct AdaptiveRoot: View {
     @Environment(\.horizontalSizeClass) private var hSize
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        if hSize == .regular {
-            SidebarRoot()
-        } else {
-            TabRoot()
+        Group {
+            if hSize == .regular {
+                SidebarRoot()
+            } else {
+                TabRoot()
+            }
+        }
+        .onChange(of: hSize) { old, new in
+            guard let old, let new, old != new else { return }
+            router.carryAcrossShapes(toSidebar: new == .regular)
+        }
+        // A sidebar request made while the tab bar is mounted has nobody to answer it; left lying
+        // there, it would be answered the next time the window grows, over wherever the person has
+        // gone since. (The sidebar clears the tab bar's pending push the same way.)
+        .onChange(of: router.sidebarRequest) { _, requested in
+            if requested != nil, hSize != .regular { router.sidebarRequest = nil }
         }
     }
 }
@@ -410,10 +427,22 @@ struct SidebarRoot: View {
         // is answered. Held as state it would keep dragging the sidebar back to attendance every
         // time this view redrew, and no amount of tapping elsewhere would stick.
         .task { await viewer.loadIfNeeded() }
+        // A request made before this shape existed: the screen the tab bar was showing when the window
+        // grew past compact (AppRouter.carryAcrossShapes), or a link that arrived on a cold start.
+        .onAppear {
+            if let requested = router.sidebarRequest {
+                selection = .screen(requested)
+                router.sidebarRequest = nil
+                router.morePush = nil
+            }
+        }
+        // `go` also leaves a push for the phone's More tab, which is not mounted here: cleared with the
+        // request, or the tab bar would open on it the next time the window narrows.
         .onChange(of: router.sidebarRequest) { _, requested in
             guard let requested else { return }
             selection = .screen(requested)
             router.sidebarRequest = nil
+            router.morePush = nil
         }
         // Publish where the sidebar is standing, so the floating GIDEON launcher — drawn above the
         // whole app, outside this layout — can tell Home from everything else. A project shortcut

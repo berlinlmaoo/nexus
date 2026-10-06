@@ -43,23 +43,57 @@ struct CalendarView: View {
     @State private var mode: Mode = .month
     @State private var focusId: String?
     @State private var sheet: CalSheet?
-    @State private var openTaskId: String?
+    /// The task a row opened on this Calendar's own stack (see CalPush).
+    @State private var pushedTask: CalPush?
     @State private var now = Date()
     @State private var active = true
-    /// The width this screen was given, measured: it, not the size class alone, decides the panes.
+    /// The width this screen was given, measured in 8 pt steps: it, not the size class alone, decides
+    /// the panes.
     @State private var layoutWidth: CGFloat?
     /// Bumped to bring the picked day's list into view on iPhone; `revealedDay` is the last one done.
     @State private var revealDay = 0
     @State private var revealedDay = 0
+    /// How the next of those scrolls (see `Reveal`).
+    @State private var revealKind: Reveal = .day
     @State private var railOpen = false
+    /// The first appearance has been dealt with. Coming back from a task this Calendar opened is an
+    /// appearance too, and must not scroll anything.
+    @State private var appeared = false
+    /// "My division" was asked for (a widget, a link, the setting kept from before) by someone without
+    /// a card in the Bagan, and the Calendar shows Mine instead; the header says why until the scope
+    /// is changed.
+    @State private var divisionFellBack = false
     @AccessibilityFocusState private var dayHeaderFocused: Bool
+    /// Where VoiceOver goes when the element it was on disappears under it: the chip that focused the
+    /// calendar on a division, a filter chip that was removed (impeccable re-audit, 7 Oct 2026).
+    @AccessibilityFocusState private var a11yTarget: A11yTarget?
     @AppStorage("nexus.calendar.lens") private var lensRaw = "division"
     @AppStorage("nexus.calendar.filters") private var filtersJSON = ""
     @AppStorage("nexus.calendar.collapsed") private var collapsedJSON = "[]"
+    /// The day panel beside the grid holds the text people read, so it widens with their text size
+    /// (the grid itself stops growing at AX1). 320 pt at the default size.
+    @ScaledMetric(relativeTo: .body) private var panelScaled: CGFloat = 320
 
     enum Mode: Hashable { case month, people }
 
-    /// The one sheet of this screen (one `.sheet(item:)` per view — two make buttons dead).
+    /// What a row opens on the Calendar's own stack: the full task screen when the task can be edited
+    /// through its home project, the read-only preview otherwise. Both are pushed, so identical rows
+    /// open the same way; the preview used to rise as a sheet while its neighbour slid in, and only the
+    /// tap told which one a row was (impeccable re-audit, 7 Oct 2026).
+    enum CalPush: Hashable {
+        case edit(id: String)
+        case read(id: String, project: String?)
+
+        var taskId: String {
+            switch self {
+            case .edit(let id): return id
+            case .read(let id, _): return id
+            }
+        }
+    }
+
+    /// The one sheet of this screen (one `.sheet(item:)` per view — two make buttons dead). The task
+    /// preview is a sheet only for a masked row: there is nothing to read, only why.
     enum CalSheet: Identifiable {
         case filters
         case preview(taskId: String, project: String?, notMember: Bool, masked: Bool)
@@ -74,13 +108,51 @@ struct CalendarView: View {
     /// A filter shown as a removable chip under the header.
     private enum ChipFilter: CaseIterable { case units, people, projects, priorities, hideDone, overdueOnly }
 
+    /// VoiceOver's landing places when the legend or the filter chips change under it.
+    private enum A11yTarget: Hashable {
+        /// The breadcrumb's last item: the division the calendar is focused on now.
+        case crumb
+        /// A legend chip, by unit.
+        case unitChip(String)
+        /// An active filter's chip.
+        case filterChip(ChipFilter)
+        /// The Filters button in the bar.
+        case filtersButton
+    }
+
+    /// `day`: the day's heading to the top of the screen (a day picked on the grid, a link). `peek`:
+    /// only far enough for the heading and its first tasks to show, with most of the month still above
+    /// them (Today). `opening`: the same as the Calendar opens, at once rather than animated — it
+    /// happens while the screen slides in, and a scroll on top of that would be motion for nothing.
+    private enum Reveal { case day, peek, opening }
+
+    /// Why an empty day is empty, and the one button that undoes it.
+    private struct EmptyCopy {
+        let icon: String
+        let title: String
+        let subtitle: String
+        let actionTitle: String?
+        let action: (() -> Void)?
+    }
+
     private static let dayAnchor = "calendar.day"
+    /// The day's heading row (the peek scrolls to it).
+    private static let headAnchor = "calendar.day.head"
+    /// The top of the day panel beside the grid.
+    private static let panelTop = "calendar.panel.top"
+    /// Where the peek leaves the day's heading: two fifths of the way down the screen.
+    private static let peekPoint = UnitPoint(x: 0.5, y: 0.4)
 
     // MARK: Derived
 
     private var uid: String { auth.session?.userId ?? "anon" }
     private var today: String { CalDays.wibToday(now) }
     private var focus: String { (focusId.flatMap { ix.byId[$0] != nil ? $0 : nil }) ?? ix.top?.id ?? "" }
+    /// The division the calendar is focused on, when it is not the whole chart.
+    private var focusUnit: CalUnit? {
+        guard let top = ix.top, focus != top.id else { return nil }
+        return ix.byId[focus]
+    }
     private var windowDays: Int { items?.rules?.overdueWindowDays ?? 14 }
     private var myHomes: [String] { structure?.me?.homeUnitIds ?? [] }
     private var access: String? { structure?.access ?? items?.access }
@@ -94,16 +166,34 @@ struct CalendarView: View {
     private var failedHere: Bool { error != nil && errorKey == rangeKey }
     private var month: String { String(selected.prefix(7)) }
 
+    /// What a size-class swap carries over to the Calendar the other shape builds (AppRouter).
+    private var carry: CalendarCarry {
+        CalendarCarry(day: selected, people: mode == .people, focusId: focusId, taskId: pushedTask?.taskId)
+    }
+
     // MARK: Layout
 
     /// The measured width, or a stand-in from the size class for the frame before it is measured.
     private var width: CGFloat { layoutWidth ?? (hSize == .regular ? 1024 : 390) }
+    /// The day panel beside the grid: 320 / 360 pt at the default text size, wider at larger ones, at
+    /// most 45% of the window. It used to stay 320 / 360 at every size, so the text people read was
+    /// squeezed into a column narrower than any iPhone while the capped grid took the rest (impeccable
+    /// re-audit, 7 Oct 2026).
+    private var panelWidth: CGFloat {
+        let base: CGFloat = width >= 900 ? 360 : 320
+        let grown = max(base, base * panelScaled / 320)
+        return min(grown, (width * 0.45).rounded(.down))
+    }
     /// The grid beside the day list only when both fit. A regular size class alone is also a
     /// half-screen Mac window or a Stage Manager tile, where the side-by-side grid shrank to 18–26 pt
-    /// cells with day numbers over their counts (impeccable audit, 6 Oct 2026); below 760 pt the
-    /// screen stacks like the phone, the layout that works at every width.
-    private var twoPane: Bool { hSize == .regular && mode == .month && width >= 760 }
-    private var panelWidth: CGFloat { width >= 900 ? 360 : 320 }
+    /// cells with day numbers over their counts (impeccable audit, 6 Oct 2026); below 760 pt — or when
+    /// a panel widened for large text would leave the grid under 56 pt a column — the screen stacks
+    /// like the phone, the layout that works at every width.
+    private var twoPane: Bool {
+        guard hSize == .regular, mode == .month, width >= 760 else { return false }
+        let column: CGFloat = (width - panelWidth - 41) / 7
+        return column >= 56
+    }
     /// What the header and the month grid get across (the pane's padding taken off).
     private var gridWidth: CGFloat { twoPane ? width - panelWidth - 1 - 40 : width - 32 }
     /// The tall cell (count, four dots, holiday name) needs about 56 pt a column.
@@ -187,6 +277,104 @@ struct CalendarView: View {
         return memo.cells
     }
 
+    // The rest used to be worked out in body on every pass — a day tap, a poll tick, every frame of a
+    // Mac window being resized (impeccable re-audit, 7 Oct 2026). Each is now kept until one of the
+    // things it is made from changes, like `visible` above.
+
+    /// The 42 days of the month on screen.
+    private var monthDays: [String] {
+        if memo.monthDaysKey != month {
+            memo.monthDays = CalDays.monthGrid(selected)
+            memo.monthDaysKey = month
+        }
+        return memo.monthDays
+    }
+
+    /// The loaded range's holidays by day, and whether anything at all is due in the month on screen.
+    private var monthFacts: (holidays: [String: String], hasTasks: Bool) {
+        let key = "\(itemsRev)|\(month)"
+        if memo.factsKey != key {
+            memo.holidays = Dictionary((items?.holidays ?? []).map { ($0.day, $0.name) }, uniquingKeysWith: { a, _ in a })
+            memo.monthHasTasks = (items?.items ?? []).contains { $0.day.hasPrefix(month) }
+            memo.factsKey = key
+        }
+        return (memo.holidays, memo.monthHasTasks)
+    }
+
+    /// The legend's chips for the month on screen, at the focus level. None for a month that has not
+    /// arrived (the overlap with the last one is partial).
+    private var legendEntries: [CalLegendEntry] {
+        guard rangeLoaded else { return [] }
+        let key = "\(visibleKey)|\(month)"
+        if memo.legendKey != key {
+            let shown = visible.filter { $0.day.hasPrefix(month) }
+            memo.legend = CalendarCore.legend(shown, ix, focus: focus)
+            memo.monthVisibleCount = shown.count
+            memo.legendKey = key
+        }
+        return memo.legend
+    }
+
+    /// Unique tasks shown in the month on screen (after the scope, the filters and the focus).
+    private var monthVisibleCount: Int {
+        _ = legendEntries
+        return memo.monthVisibleCount
+    }
+
+    /// The selected day's tree.
+    private var dayTree: CalDayTree {
+        let key = "\(visibleKey)|\(selected)"
+        if memo.treeKey != key {
+            memo.tree = CalendarCore.dayTree(visibleByDay[selected] ?? [], ix, focus: focus, today: today, now: now, windowDays: windowDays)
+            memo.treeKey = key
+        }
+        return memo.tree
+    }
+
+    /// Today's overdue rail (empty on any other day).
+    private var railItems: [CalItem] {
+        guard selected == today else { return [] }
+        let key = "\(visibleKey)|\(overdueRev)"
+        if memo.railKey != key {
+            let shown = CalendarCore.underFocus(CalendarCore.filterItems(overdue?.items ?? [], filters, context), ix, focus: focus)
+            memo.rail = CalendarCore.overdueRail(shown, todays: visibleByDay[today] ?? [], today: today, now: now, windowDays: windowDays)
+            memo.railKey = key
+        }
+        return memo.rail
+    }
+
+    /// The People week of the selected day.
+    private var weekRows: [CalWeekRow] {
+        let monday = CalDays.mondayOf(selected)
+        let key = "\(visibleKey)|\(monday)"
+        if memo.weekKey != key {
+            memo.weekRows = CalendarCore.weekRows(visible, ix, focus: focus, monday: monday, today: today, now: now, windowDays: windowDays)
+            memo.weekKey = key
+        }
+        return memo.weekRows
+    }
+
+    /// The viewer's cards and everything below them; `mineOrAbove` adds every card above them, so a
+    /// section reads "You" when it holds one of them.
+    private var mineUnits: Set<String> {
+        updateMine()
+        return memo.mine
+    }
+    private var mineOrAbove: Set<String> {
+        updateMine()
+        return memo.mineOrAbove
+    }
+    private func updateMine() {
+        let key = "\(ixRev)|\(myHomes.joined(separator: ","))"
+        guard memo.mineKey != key else { return }
+        let mine = ix.subtree(myHomes)
+        var above = mine
+        for home in myHomes { above.formUnion(ix.ancestors(home)) }
+        memo.mine = mine
+        memo.mineOrAbove = above
+        memo.mineKey = key
+    }
+
     // MARK: Body
 
     var body: some View {
@@ -196,7 +384,11 @@ struct CalendarView: View {
                 .background {
                     GeometryReader { g in
                         Color.clear.onChange(of: g.size.width, initial: true) { _, w in
-                            if layoutWidth != w { layoutWidth = w }
+                            // In 8 pt steps: a Mac or Stage Manager window being dragged used to rebuild
+                            // the whole screen on every frame of the drag (impeccable re-audit, 7 Oct
+                            // 2026), and only the 760 / 820 / 900 pt and 56 pt-a-column steps matter.
+                            let stepped = (w / 8).rounded(.down) * 8
+                            if layoutWidth != stepped { layoutWidth = stepped }
                         }
                     }
                 }
@@ -205,6 +397,7 @@ struct CalendarView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .background { shortcuts }
+        .publishesCalendarMenu(menuActions)
         .task { await firstLoad() }
         .task(id: rangeKey) { await loadItems(silent: items != nil) }
         .task { await pollLoop() }
@@ -212,13 +405,21 @@ struct CalendarView: View {
             active = phase == .active
             if phase == .active { now = Date(); Task { await backgroundRefresh() } }
         }
-        .onAppear { router.calendarOnScreen = instance; claimRouterDate(); claimRouterTask(); claimRouterScope() }
+        .onAppear { appear() }
         // Covered by the task it opened, this Calendar is still the one a link should land on.
-        .onDisappear { if router.calendarOnScreen == instance, openTaskId == nil { router.calendarOnScreen = nil } }
+        .onDisappear {
+            if router.calendarOnScreen == instance, pushedTask == nil {
+                router.calendarOnScreen = nil
+                router.calendarLeftAt = Date()
+            }
+        }
         .onChange(of: router.calendarDate) { _, _ in if router.calendarOnScreen == instance { claimRouterDate() } }
         .onChange(of: router.calendarTaskId) { _, _ in if router.calendarOnScreen == instance { claimRouterTask() } }
         .onChange(of: router.calendarScope) { _, _ in if router.calendarOnScreen == instance { claimRouterScope() } }
         .onChange(of: today) { old, new in if selected == old { selected = new } }
+        .onChange(of: carry) { _, state in if router.calendarOnScreen == instance { router.calendarState = state } }
+        // A size-class swap that left its carry after this Calendar had already appeared.
+        .onChange(of: router.calendarCarryAt) { _, _ in if router.calendarOnScreen == instance { _ = claimCarry() } }
         .sheet(item: $sheet) { s in
             switch s {
             case .filters:
@@ -227,11 +428,22 @@ struct CalendarView: View {
                 CalTaskPreview(taskId: id, projectName: project, notMember: notMember, masked: masked)
             }
         }
-        .navigationDestination(item: $openTaskId) { id in
-            TaskDetailView(taskId: id)
-                .id(id)
-                // Gone some other way than Back (a tab switch, a deeper push): links stop landing here.
-                .onDisappear { if openTaskId != nil, router.calendarOnScreen == instance { router.calendarOnScreen = nil } }
+        .navigationDestination(item: $pushedTask) { push in
+            Group {
+                switch push {
+                case .edit(let id):
+                    TaskDetailView(taskId: id).id(id)
+                case let .read(id, project):
+                    CalTaskPreview(taskId: id, projectName: project, notMember: true, masked: false, pushed: true).id(id)
+                }
+            }
+            // Gone some other way than Back (a tab switch, a deeper push): links stop landing here.
+            .onDisappear {
+                if pushedTask != nil, router.calendarOnScreen == instance {
+                    router.calendarOnScreen = nil
+                    router.calendarLeftAt = Date()
+                }
+            }
         }
     }
 
@@ -243,7 +455,13 @@ struct CalendarView: View {
             EmptyState(icon: "calendar", title: T("The Calendar is on its way"),
                        subtitle: T("It opens for BoD and Managers first, then for everyone. Your own tasks are still in Tasks."))
         } else if loading && items == nil {
-            ScrollView { SkeletonList(count: 6).padding(16) }
+            // Shapes only, so VoiceOver found nothing but the title and Filters on a cold start: one
+            // element that says what is happening (impeccable re-audit, 7 Oct 2026).
+            ScrollView {
+                SkeletonList(count: 6).padding(16)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(T("Loading…"))
+            }
         } else if let error, items == nil || structure == nil {
             ErrorState(message: error, icon: "calendar") { Task { await refreshAll(silent: false) } }
         } else if twoPane {
@@ -254,9 +472,17 @@ struct CalendarView: View {
                 }
                 .refreshable { await refreshAll(silent: true) }
                 Divider().overlay(NX.border)
-                ScrollView { dayPanel.padding(14) }
-                    .frame(width: panelWidth)
+                ScrollViewReader { panel in
+                    ScrollView {
+                        dayPanel.padding(14).id(Self.panelTop)
+                    }
                     .refreshable { await refreshAll(silent: true) }
+                    // Another day starts at its heading. The panel used to keep the last day's scroll,
+                    // so the new date, its count and its first divisions sat above the visible part
+                    // (impeccable re-audit, 7 Oct 2026). At once, not animated: it is a new page.
+                    .onChange(of: selected) { _, _ in panel.scrollTo(Self.panelTop, anchor: .top) }
+                }
+                .frame(width: panelWidth)
             }
         } else {
             ScrollViewReader { proxy in
@@ -280,10 +506,12 @@ struct CalendarView: View {
                     guard revealDay != revealedDay else { return }
                     revealedDay = revealDay
                     try? await Task.sleep(for: .milliseconds(60))
-                    if reduceMotion {
-                        proxy.scrollTo(Self.dayAnchor, anchor: .top)
+                    let target: String = revealKind == .day ? Self.dayAnchor : Self.headAnchor
+                    let anchor: UnitPoint = revealKind == .day ? .top : Self.peekPoint
+                    if reduceMotion || revealKind == .opening {
+                        proxy.scrollTo(target, anchor: anchor)
                     } else {
-                        withAnimation(.snappy(duration: 0.35)) { proxy.scrollTo(Self.dayAnchor, anchor: .top) }
+                        withAnimation(.snappy(duration: 0.35)) { proxy.scrollTo(target, anchor: anchor) }
                     }
                 }
             }
@@ -296,6 +524,7 @@ struct CalendarView: View {
         VStack(alignment: .leading, spacing: 6) {
             monthRow
             switchRow
+            if divisionFellBack { chartNote }
             legendRow
             if !chipFilters(filters).isEmpty { activeFilterRow }
             if let savedAt { OfflineNotice(savedAt: savedAt) }
@@ -322,28 +551,35 @@ struct CalendarView: View {
     }
 
     private var monthTitle: some View {
-        Text(title).font(NXFont.display(17, .bold)).monospacedDigit().foregroundStyle(NX.foreground)
+        Text(title).font(NXFont.display(CalType.size(17), .bold)).monospacedDigit().foregroundStyle(NX.foreground)
             .lineLimit(2).minimumScaleFactor(0.8)
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// The whole 44 pt square takes the tap, not only the glyph.
+    /// The whole 44 pt square takes the tap, not only the glyph. On the Mac, a tooltip names it and its
+    /// shortcut: there is no ⌘ overlay there.
     private func stepButton(_ n: Int) -> some View {
-        Button { step(n) } label: {
+        let name = n < 0 ? (mode == .people ? T("Previous week") : T("Previous month"))
+                         : (mode == .people ? T("Next week") : T("Next month"))
+        return Button { step(n) } label: {
             Image(systemName: n < 0 ? "chevron.left" : "chevron.right")
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(NX.foreground)
-        .accessibilityLabel(n < 0 ? (mode == .people ? T("Previous week") : T("Previous month"))
-                                  : (mode == .people ? T("Next week") : T("Next month")))
+        .accessibilityLabel(name)
+        .macHelp(n < 0 ? "\(name) (⌘←)" : "\(name) (⌘→)")
     }
 
     /// The pill is drawn inside the button, and the button is 44 pt tall: its edge takes the tap too.
+    /// On iPhone it also brings today's first tasks up under the month, as opening the Calendar does.
     private var todayButton: some View {
-        Button { select(today) } label: {
-            Text(T("Today")).font(NXFont.text(13, .semibold))
+        Button {
+            select(today)
+            peek()
+        } label: {
+            Text(T("Today")).font(NXFont.text(CalType.size(13), .semibold))
                 .padding(.horizontal, 14).frame(minHeight: 30)
                 .background(NX.card, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
                 .frame(minHeight: 44)
@@ -364,7 +600,8 @@ struct CalendarView: View {
     /// Month / People, and whose tasks: on screen, one tap, the way the web header has it. "Mine"
     /// used to live only in the Filters sheet behind an unlabelled funnel (impeccable audit, 6 Oct
     /// 2026). Two switches where there is room; on a phone the scope is a menu beside the view switch,
-    /// so the grid does not move further down.
+    /// so the grid does not move further down. Whose tasks is a VIEW, like Month / People, not a
+    /// filter: it is drawn like the view switch and never counts as one.
     @ViewBuilder private var switchRow: some View {
         if headerWide {
             HStack(spacing: 10) {
@@ -390,9 +627,10 @@ struct CalendarView: View {
         NXSegmented(selection: $mode, options: [Mode.month, .people], label: { $0 == .month ? T("Month") : T("People") }, title: T("View"))
     }
 
+    /// The same neutral capsule whichever scope is on, like the view switch beside it. Its violet
+    /// "on" look made Mine read as a filter at work (impeccable re-audit, 7 Oct 2026).
     private var scopeMenu: some View {
         let scope = filters.scope
-        let scoped = scope != .all
         return Menu {
             Picker(T("Show"), selection: scopeBinding) {
                 ForEach(scopeOptions, id: \.self) { s in
@@ -401,21 +639,29 @@ struct CalendarView: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: scopeIcon(scope)).font(.system(size: 12, weight: .semibold))
-                Text(scopeLabel(scope)).font(NXFont.text(13, .semibold)).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
+                Image(systemName: scopeIcon(scope)).font(.system(size: CalType.size(12), weight: .semibold))
+                Text(scopeLabel(scope)).font(NXFont.text(CalType.size(13), .semibold)).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: CalType.size(10), weight: .semibold))
                     .foregroundStyle(NX.mutedFg)
             }
-            .foregroundStyle(scoped ? NX.violetText : NX.foreground)
+            .foregroundStyle(NX.foreground)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(scoped ? NX.accentBg : NX.muted, in: Capsule(style: .continuous))
-            .overlay(Capsule(style: .continuous).strokeBorder(scoped ? NX.violetText.opacity(0.35) : NX.border.opacity(0.6)))
+            .background(NX.muted, in: Capsule(style: .continuous))
+            .overlay(Capsule(style: .continuous).strokeBorder(NX.border.opacity(0.6)))
             .contentShape(Capsule(style: .continuous))
         }
         .fixedSize()
         .accessibilityLabel(T("Show"))
         .accessibilityValue(scopeLabel(scope))
+    }
+
+    /// Why Mine is on when "My division" was asked for.
+    private var chartNote: some View {
+        Label(T("You are not in the chart yet, so \"My division\" is off."), systemImage: "info.circle")
+            .font(NXFont.text(CalType.size(12)))
+            .foregroundStyle(NX.mutedFg)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// "My division" only for someone placed in the chart (or already set to it).
@@ -432,20 +678,25 @@ struct CalendarView: View {
     }
 
     private var scopeBinding: Binding<CalScope> {
-        Binding(get: { filters.scope }, set: { s in
-            guard s != filters.scope else { return }
-            var f = filters
-            f.scope = s
-            filtersBinding.wrappedValue = f
-        })
+        Binding(get: { filters.scope }, set: { s in setScope(s) })
     }
 
-    /// Zoom path, then one chip per unit at the focus level (tap = zoom in, or filter a leaf unit).
-    /// The two kinds look different now: a chevron where the tap goes deeper, a check where a filter
-    /// is on — they used to be identical and only the VoiceOver hint told them apart.
+    /// Whose tasks, changed by the person (the switch, an empty state's "Show everyone").
+    private func setScope(_ s: CalScope) {
+        divisionFellBack = false
+        guard s != filters.scope else { return }
+        var f = filters
+        f.scope = s
+        filtersBinding.wrappedValue = f
+    }
+
+    private func showEveryone() { setScope(.all) }
+
+    /// The focus path, then one chip per unit at the focus level (tap = focus the calendar on it, or
+    /// filter by a unit with nothing below it). The two kinds look different: the focus mark where the
+    /// tap narrows the calendar to that division, a check where a filter is on.
     private var legendRow: some View {
-        // No counts for a month that has not arrived (the overlap with the last one is partial).
-        let entries = rangeLoaded ? CalendarCore.legend(visible.filter { $0.day.hasPrefix(month) }, ix, focus: focus) : []
+        let entries = legendEntries
         let picked = Set(filters.units)
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -453,19 +704,24 @@ struct CalendarView: View {
                     let path = Array(ix.ancestors(focus).reversed()) + [focus]
                     ForEach(Array(path.enumerated()), id: \.offset) { i, id in
                         if i > 0 {
-                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                            Image(systemName: "chevron.right").font(.system(size: CalType.size(9), weight: .bold)).foregroundStyle(NX.mutedFg)
                                 .accessibilityHidden(true)
                         }
-                        let name = i == 0 ? T("All") : (ix.byId[id]?.name ?? "")
+                        let name = i == 0 ? T("All divisions") : (ix.byId[id]?.name ?? "")
                         if i == path.count - 1 {
-                            // Where you are: a marker, not a button.
-                            Text(name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                                .padding(.horizontal, 10).frame(minHeight: 28)
-                                .background(NX.accentBg, in: Capsule())
+                            // Where you are: plain text, a marker. It used to be the violet capsule of
+                            // the filter chips and the banner buttons, and was tapped as one.
+                            Text(name).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.foreground)
+                                .lineLimit(1)
+                                .padding(.horizontal, 6)
                                 .frame(minHeight: 44)
+                                .accessibilityValue(rangeLoaded ? CalFormat.tasks(monthVisibleCount) : "")
+                                .accessibilityAddTraits(.isSelected)
+                                .accessibilityFocused($a11yTarget, equals: .crumb)
                         } else {
-                            Button { focusId = (id == top.id) ? nil : id } label: {
-                                Text(name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            let child = path[i + 1]
+                            Button { climb(to: id, from: child, top: top.id) } label: {
+                                Text(name).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.mutedFg)
                                     .padding(.horizontal, 8)
                                     .frame(minHeight: 44)
                                     .contentShape(Rectangle())
@@ -483,11 +739,18 @@ struct CalendarView: View {
 
     private func legendChip(_ e: CalLegendEntry, on: Bool) -> some View {
         let unit = ix.byId[e.unitId]
-        let zoomable = unit != nil && e.unitId != focus && !(ix.children[e.unitId] ?? []).isEmpty
+        let focusable = unit != nil && e.unitId != focus && !(ix.children[e.unitId] ?? []).isEmpty
         let name = e.unitId == "other" ? T("Other") : (unit?.name ?? "")
-        let spoken = "\(name), \(CalFormat.tasks(e.count))"
+        let count = CalFormat.tasks(e.count)
+        let spoken = focusable ? "\(String(format: T("Focus on %@"), name)), \(count)" : "\(name), \(count)"
+        let hint = focusable ? "" : String(format: T("Filter by %@"), name)
         return Button {
-            if zoomable { focusId = e.unitId } else {
+            if focusable {
+                focusId = e.unitId
+                // The chip VoiceOver was on is gone (the legend is now the division's own cards):
+                // land on the breadcrumb, which names the division and its count.
+                moveVoiceOver(to: .crumb)
+            } else {
                 var f = filters
                 if let i = f.units.firstIndex(of: e.unitId) { f.units.remove(at: i) } else { f.units.append(e.unitId) }
                 filtersBinding.wrappedValue = f
@@ -495,26 +758,63 @@ struct CalendarView: View {
         } label: {
             HStack(spacing: 6) {
                 Circle().fill(calUnitColor(unit)).frame(width: 8, height: 8)
-                Text(name).font(NXFont.text(12, .semibold)).lineLimit(1)
-                Text("\(e.count)").font(NXFont.text(12)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                Text(name).font(NXFont.text(CalType.size(12), .semibold)).lineLimit(1)
+                Text("\(e.count)").font(NXFont.text(CalType.size(12))).monospacedDigit().foregroundStyle(NX.mutedFg)
                 if on {
-                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.violetText)
+                    Image(systemName: "checkmark").font(.system(size: CalType.size(10), weight: .bold)).foregroundStyle(NX.violetText)
                 }
-                if zoomable {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                if focusable {
+                    // The focus mark, as on the web and Android: this name narrows the calendar to
+                    // that division; a name without it filters.
+                    Image(systemName: "scope").font(.system(size: CalType.size(11), weight: .semibold)).foregroundStyle(NX.mutedFg)
                 }
             }
             .padding(.horizontal, 10).frame(minHeight: 30)
-            .background(on ? NX.accentBg : NX.card, in: Capsule())
-            .overlay(Capsule().strokeBorder(on ? NX.violetText.opacity(0.6) : NX.border))
+            // On: an outline and the check, not the filled capsule of the filter tokens and buttons.
+            .background(NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(on ? NX.violetText : NX.border, lineWidth: on ? 1.5 : 1))
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(NX.foreground)
         .accessibilityLabel(spoken)
-        .accessibilityHint(zoomable ? String(format: T("Zoom into %@"), name) : String(format: T("Filter by %@"), name))
+        .accessibilityHint(hint)
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityFocused($a11yTarget, equals: .unitChip(e.unitId))
+    }
+
+    /// Back up the focus path (a breadcrumb). VoiceOver lands on the level it arrived at; at the top,
+    /// where the breadcrumb goes away, on the chip of the division it came back from.
+    private func climb(to id: String, from child: String, top: String) {
+        let toTop = id == top
+        focusId = toTop ? nil : id
+        guard voiceOver else { return }
+        if toTop {
+            a11yTarget = nil
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                if legendEntries.contains(where: { $0.unitId == child }) {
+                    a11yTarget = .unitChip(child)
+                } else {
+                    AccessibilityNotification.Announcement(T("All divisions")).post()
+                }
+            }
+        } else {
+            moveVoiceOver(to: .crumb)
+        }
+    }
+
+    private func leaveFocus() { focusId = nil }
+
+    /// VoiceOver onto `target` once the change that removed the element it was on has been drawn.
+    private func moveVoiceOver(to target: A11yTarget) {
+        guard voiceOver else { return }
+        a11yTarget = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            a11yTarget = target
+        }
     }
 
     // MARK: Active filters
@@ -556,9 +856,24 @@ struct CalendarView: View {
         filtersBinding.wrappedValue = f
     }
 
+    /// One filter off. VoiceOver moves to the chip that takes its place, or to Filters once none is
+    /// left: the chip it was on is gone.
+    private func removeFilter(_ c: ChipFilter, from shown: [ChipFilter]) {
+        let rest = shown.filter { $0 != c }
+        let at = shown.firstIndex(of: c) ?? 0
+        withAnimation(.snappy(duration: 0.2)) { clearFilter(c) }
+        let target: A11yTarget
+        if rest.isEmpty {
+            target = .filtersButton
+        } else {
+            target = .filterChip(rest[min(at, rest.count - 1)])
+        }
+        moveVoiceOver(to: target)
+    }
+
     /// The filters at work, each with an ✕. A number on the funnel was all that said yesterday's
     /// "Only overdue" was still hiding everyone else's tasks today (impeccable audit, 6 Oct 2026).
-    /// The scope is not repeated here: it has its own switch above.
+    /// The scope is not here: it is a view, with its own switch above, and Reset leaves it alone.
     private var activeFilterRow: some View {
         let f = filters
         let shown = chipFilters(f)
@@ -566,12 +881,12 @@ struct CalendarView: View {
             HStack(spacing: 6) {
                 ForEach(shown, id: \.self) { c in
                     let text = chipLabel(c, f)
-                    Button { withAnimation(.snappy(duration: 0.2)) { clearFilter(c) } } label: {
+                    Button { removeFilter(c, from: shown) } label: {
                         HStack(spacing: 5) {
                             Text(text).lineLimit(1)
-                            Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
+                            Image(systemName: "xmark").font(.system(size: CalType.size(9), weight: .bold)).accessibilityHidden(true)
                         }
-                        .font(NXFont.text(12, .semibold))
+                        .font(NXFont.text(CalType.size(12), .semibold))
                         .foregroundStyle(NX.violetText)
                         .padding(.horizontal, 10).frame(minHeight: 30)
                         .background(NX.accentBg, in: Capsule())
@@ -581,10 +896,14 @@ struct CalendarView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(text)
                     .accessibilityHint(T("Removes this filter"))
+                    .accessibilityFocused($a11yTarget, equals: .filterChip(c))
                 }
                 if shown.count > 1 {
-                    Button { withAnimation(.snappy(duration: 0.2)) { resetFilters() } } label: {
-                        Text(T("Reset filters")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { resetFilters() }
+                        moveVoiceOver(to: .filtersButton)
+                    } label: {
+                        Text(T("Reset filters")).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.mutedFg)
                             .padding(.horizontal, 8)
                             .frame(minHeight: 44)
                             .contentShape(Rectangle())
@@ -599,11 +918,11 @@ struct CalendarView: View {
 
     private var gridArea: some View {
         let loaded = rangeLoaded
-        let days = CalDays.monthGrid(selected)
+        let days = monthDays
         let cells = monthCells(days)
-        let holidays = Dictionary((items?.holidays ?? []).map { ($0.day, $0.name) }, uniquingKeysWith: { a, _ in a })
+        let facts = monthFacts
         let monthName = CalFormat.day(month + "-01", "MMMMyyyy")
-        let monthHasTasks = (items?.items ?? []).contains { $0.day.hasPrefix(month) }
+        let shownThisMonth = loaded ? monthVisibleCount : 0
         // Only a load the person is waiting for dims the grid. The poll used to drop it to 60% for
         // every round trip, a blink a minute while someone was reading it.
         let dimmed = fetching && (!loaded || reloading)
@@ -614,28 +933,49 @@ struct CalendarView: View {
                 if failedHere {
                     banner(String(format: T("Couldn't load %@."), monthName), action: (T("Try again"), retryNow))
                 }
-            } else if !monthHasTasks {
+            } else if !facts.hasTasks {
                 let goAction: (String, () -> Void)? = month != String(today.prefix(7)) ? (T("Go to this month"), goToday) : nil
                 banner(String(format: T("Nothing has a due date in %@ yet."), monthName), action: goAction)
-            } else if filters.activeCount > 0 && !visible.contains(where: { $0.day.hasPrefix(month) }) {
-                banner(T("Nothing matches the filters this month."), action: (T("Reset filters"), resetFilters))
+            } else if shownThisMonth == 0 {
+                emptyMonthBanner
             }
-            CalMonthGrid(days: days, month: month, cells: cells, selected: selected, today: today, holidays: holidays, ix: ix, wide: wideCells,
+            CalMonthGrid(days: days, month: month, cells: cells, selected: selected, today: today, holidays: facts.holidays, ix: ix, wide: wideCells,
                          loaded: loaded) { select($0, reveal: true) }
                 // Apple's Calendar month stops growing at the first accessibility size too: past it the
                 // fixed-height cells overflow into the next week. The day list below scales fully.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .opacity(dimmed ? 0.6 : 1)
                 .animation(.easeOut(duration: 0.15), value: dimmed)
-            HStack(spacing: 14) {
-                legendKey(filled: true, T("has tasks to do"))
-                legendKey(filled: false, T("done or no status"))
-                HStack(spacing: 5) { Capsule().fill(CalTone.overdue).frame(width: 14, height: 2); Text(T("overdue")) }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 14) {
+                    legendKey(filled: true, T("has tasks to do"))
+                    legendKey(filled: false, T("done or no status"))
+                    HStack(spacing: 5) { Capsule().fill(CalTone.overdue).frame(width: 14, height: 2); Text(T("overdue")) }
+                }
+                if !legendEntries.isEmpty {
+                    Text(T("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it."))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
             if loaded, items?.truncated == true {
                 banner(T("This month has more tasks than the calendar can show at once."), action: nil)
             }
+        }
+    }
+
+    /// Nothing shown this month although something is due in it: said in the words of what narrows
+    /// the calendar, with the one action that undoes it. The filters first, then the focus, then
+    /// whose tasks — the scope used to be called a filter here, and Reset turned it off.
+    @ViewBuilder private var emptyMonthBanner: some View {
+        if filters.activeCount > 0 {
+            banner(T("Nothing matches the filters this month."), action: (T("Reset filters"), resetFilters))
+        } else if let unit = focusUnit {
+            banner(String(format: T("Nothing in %@ this month."), unit.name), action: (T("All divisions"), leaveFocus))
+        } else if filters.scope == .me {
+            banner(T("You have nothing due this month."), action: (T("Show everyone"), showEveryone))
+        } else if filters.scope == .division {
+            banner(T("Nothing due in your division this month."), action: (T("Show everyone"), showEveryone))
         }
     }
 
@@ -647,21 +987,20 @@ struct CalendarView: View {
         }
     }
 
-    /// The action is the app's tint (violet, like the empty states below it) and its button is the
-    /// banner's full 44 pt height, so the banner keeps its size.
+    /// The action is a system bordered button in the app's tint: it looked exactly like the filter
+    /// tokens beside it (and like the breadcrumb), so "Go to this month" read as a filter (impeccable
+    /// re-audit, 7 Oct 2026). The banner keeps its 44 pt height.
     private func banner(_ text: String, action: (String, () -> Void)?) -> some View {
         HStack(spacing: 8) {
-            Text(text).font(NXFont.text(12.5)).foregroundStyle(NX.mutedFg)
+            Text(text).font(NXFont.text(CalType.size(12.5))).foregroundStyle(NX.mutedFg)
             Spacer(minLength: 0)
             if let action {
-                Button(action: action.1) {
-                    Text(action.0).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                        .padding(.horizontal, 12).frame(minHeight: 30)
-                        .background(NX.accentBg, in: Capsule())
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                Button(action.0, action: action.1)
+                    .font(NXFont.text(CalType.size(12), .semibold))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(NX.violetText)
+                    .frame(minHeight: 44)
             }
         }
         .padding(.horizontal, 10)
@@ -673,16 +1012,14 @@ struct CalendarView: View {
     // MARK: Day
 
     private var dayPanel: some View {
-        let dayItems = visibleByDay[selected] ?? []
-        let tree = CalendarCore.dayTree(dayItems, ix, focus: focus, today: today, now: now, windowDays: windowDays)
-        let rail = selected == today
-            ? CalendarCore.overdueRail(CalendarCore.underFocus(CalendarCore.filterItems(overdue?.items ?? [], filters, context), ix, focus: focus),
-                                       todays: dayItems, today: today, now: now, windowDays: windowDays)
-            : []
-        let ctx = CalRowContext(ix: ix, people: people, today: today, now: now, windowDays: windowDays, lensByPerson: lensByPerson, onOpen: openItem)
-        let mine = ix.subtree(myHomes)
+        let tree = dayTree
+        let rail = railItems
+        let ctx = CalRowContext(ix: ix, people: people, today: today, now: now, windowDays: windowDays, lensByPerson: lensByPerson, onOpen: openItem,
+                                meId: structure?.me?.userId ?? auth.session?.userId)
+        let mine = mineUnits
+        let above = mineOrAbove
         let rel = CalDays.dayDiff(today, selected)
-        let holiday = items?.holidays.first { $0.day == selected }?.name
+        let holiday = monthFacts.holidays[selected]
         let folded = collapsed
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 8) {
@@ -693,23 +1030,14 @@ struct CalendarView: View {
                     dayStepButton(1)
                 }
             }
+            .id(Self.headAnchor)
             NXSegmented(selection: Binding(get: { lensByPerson }, set: { lensRaw = $0 ? "person" : "division" }),
                         options: [false, true], label: { $0 ? T("By person") : T("By division") }, title: T("Group by"))
             if !rail.isEmpty { overdueRail(rail) }
             if tree.total == 0 && !rangeLoaded {
                 notLoaded
             } else if tree.total == 0 {
-                let filtered = filters.activeCount > 0
-                let monthEmpty = !(items?.items ?? []).contains { $0.day.hasPrefix(month) }
-                let emptyAction: (() -> Void)? = filtered ? resetFilters : (selected != today ? goToday : nil)
-                EmptyState(icon: filtered ? "line.3.horizontal.decrease.circle" : "calendar",
-                           title: filtered ? T("Nothing matches the filters on this day") : T("No tasks on this day"),
-                           subtitle: filtered ? T("Filters are hiding the rest. Reset them to see everything.") : (monthEmpty ? T("Nothing has a due date this month yet.") : T("Nobody has a task due on this date.")),
-                           tint: CalTone.accentFill,
-                           actionTitle: filtered ? T("Reset filters") : (selected != today ? T("Back to today") : nil),
-                           actionIcon: nil,
-                           action: emptyAction,
-                           compact: true)
+                dayEmpty
             } else if let root = tree.root {
                 VStack(spacing: 10) {
                     if !root.items.isEmpty || !root.people.isEmpty {
@@ -717,13 +1045,14 @@ struct CalendarView: View {
                         CalSectionCard(node: root, own: true, mine: mine.contains(root.unit.id), collapsed: folded.contains(key), toggle: { toggleCollapse(key) }, ctx: ctx)
                     }
                     ForEach(root.children) { node in
-                        let isMine = !ix.subtree([node.unit.id]).isDisjoint(with: mine)
-                        CalSectionCard(node: node, own: false, mine: isMine, collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
+                        CalSectionCard(node: node, own: false, mine: above.contains(node.unit.id), collapsed: folded.contains(node.unit.id), toggle: { toggleCollapse(node.unit.id) }, ctx: ctx)
                     }
                     if lensByPerson && !tree.unplaced.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
-                            SectionLabel(String(format: T("Not in the chart yet · %d"), tree.unplaced.count))
-                            ForEach(tree.unplaced, id: \.userId) { p in
+                            Text(String(format: T("Not in the chart yet · %d"), tree.unplaced.count).uppercased()).calCaps()
+                                .foregroundStyle(NX.mutedFg)
+                                .accessibilityAddTraits(.isHeader)
+                            ForEach(viewerFirst(tree.unplaced), id: \.userId) { p in
                                 CalPersonBlock(row: p, unitId: nil, ix: ix, people: people, today: today, now: now, windowDays: windowDays, onOpen: openItem)
                             }
                         }
@@ -731,10 +1060,67 @@ struct CalendarView: View {
                     }
                     if placementsShown(root) > tree.total {
                         Text(String(format: T("A task can show under several divisions. Total: %d unique tasks."), tree.total))
-                            .font(NXFont.text(11.5)).foregroundStyle(NX.mutedFg)
+                            .font(NXFont.text(CalType.size(11.5))).foregroundStyle(NX.mutedFg)
                     }
                 }
             }
+        }
+    }
+
+    /// The viewer's own row first; everyone else keeps the order the rules gave them.
+    private func viewerFirst(_ rows: [CalPersonRow]) -> [CalPersonRow] {
+        guard let me = auth.session?.userId, let at = rows.firstIndex(where: { $0.userId == me }), at > 0 else { return rows }
+        var out = rows
+        out.insert(out.remove(at: at), at: 0)
+        return out
+    }
+
+    /// An empty day, in the words of what narrows it.
+    @ViewBuilder private var dayEmpty: some View {
+        let copy = emptyDay
+        EmptyState(icon: copy.icon, title: copy.title, subtitle: copy.subtitle, tint: CalTone.accentFill,
+                   actionTitle: copy.actionTitle, actionIcon: nil, action: copy.action, compact: true)
+    }
+
+    /// The filters, the focus or whose tasks, and the button that undoes exactly that one. "Reset
+    /// filters" used to answer all three, said a filter was hiding tasks while Mine was on, and threw
+    /// Mine away (impeccable re-audit, 7 Oct 2026).
+    private var emptyDay: EmptyCopy {
+        if filters.activeCount > 0 {
+            return EmptyCopy(icon: "line.3.horizontal.decrease.circle", title: T("Nothing matches the filters on this day"),
+                             subtitle: T("Filters are hiding the rest. Reset them to see everything."),
+                             actionTitle: T("Reset filters"), action: { resetFilters(); refocusDay() })
+        }
+        if let unit = focusUnit {
+            return EmptyCopy(icon: "scope", title: String(format: T("Nothing in %@ on this day"), unit.name),
+                             subtitle: T("Other divisions are outside the focus."),
+                             actionTitle: T("All divisions"), action: { leaveFocus(); refocusDay() })
+        }
+        switch filters.scope {
+        case .me:
+            return EmptyCopy(icon: "person", title: T("You have nothing due on this day"),
+                             subtitle: T("Only your own tasks are shown."),
+                             actionTitle: T("Show everyone"), action: { showEveryone(); refocusDay() })
+        case .division:
+            return EmptyCopy(icon: "person.2", title: T("Nothing due in your division on this day"),
+                             subtitle: T("Only your division's tasks are shown."),
+                             actionTitle: T("Show everyone"), action: { showEveryone(); refocusDay() })
+        case .all:
+            let back: (() -> Void)? = selected != today ? goToday : nil
+            return EmptyCopy(icon: "calendar", title: T("No tasks on this day"),
+                             subtitle: monthFacts.hasTasks ? T("Nobody has a task due on this date.") : T("Nothing has a due date this month yet."),
+                             actionTitle: selected != today ? T("Back to today") : nil, action: back)
+        }
+    }
+
+    /// VoiceOver to the day's heading (which now says how many tasks there are) once the list behind
+    /// an empty state's button has come back.
+    private func refocusDay() {
+        guard voiceOver else { return }
+        dayHeaderFocused = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            dayHeaderFocused = true
         }
     }
 
@@ -744,20 +1130,20 @@ struct CalendarView: View {
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
-                Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(16), .bold)).foregroundStyle(NX.foreground)
                 if rel == 0 || rel == 1 || rel == -1 {
                     // The app's violet, as "today" is everywhere else (grid, widgets, Watch).
-                    Text((rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : T("Yesterday")).uppercased())
-                        .font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
+                    Text((rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : T("Yesterday")).uppercased()).calCaps()
+                        .foregroundStyle(NX.violetText)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 5))
                 }
             }
-            if let holiday { Text(holiday).font(NXFont.text(12, .semibold)).foregroundStyle(CalTone.overdue) }
+            if let holiday { Text(holiday).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue) }
             Text(tree.total > 0 ? "\(CalFormat.tasks(tree.total)) · \(CalFormat.people(tree.people))"
                  : !rangeLoaded ? (failedHere ? T("Couldn't load this") : T("Loading…"))
                  : T("No tasks"))
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .font(NXFont.text(CalType.size(12))).foregroundStyle(NX.mutedFg)
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -765,20 +1151,22 @@ struct CalendarView: View {
     }
 
     private func dayStepButton(_ n: Int) -> some View {
-        Button { select(CalDays.addDays(selected, n)) } label: {
+        let name = n < 0 ? T("Previous day") : T("Next day")
+        return Button { select(CalDays.addDays(selected, n)) } label: {
             Image(systemName: n < 0 ? "chevron.left" : "chevron.right")
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(NX.foreground)
-        .accessibilityLabel(n < 0 ? T("Previous day") : T("Next day"))
+        .accessibilityLabel(name)
+        .macHelp(n < 0 ? "\(name) (⌥←)" : "\(name) (⌥→)")
     }
 
     private func overdueRail(_ rail: [CalItem]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(String(format: T("Overdue · %d"), rail.count).uppercased())
-                .font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(CalTone.overdue)
+            Text(String(format: T("Overdue · %d"), rail.count).uppercased()).calCaps()
+                .foregroundStyle(CalTone.overdue)
                 .padding(.horizontal, 10).padding(.top, 8)
                 .accessibilityAddTraits(.isHeader)
             ForEach(rail.prefix(railOpen ? rail.count : 2)) { item in
@@ -788,7 +1176,7 @@ struct CalendarView: View {
             if rail.count > 2 {
                 Button { railOpen.toggle() } label: {
                     Text(railOpen ? T("Show less") : T("Show all"))
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(CalTone.overdue)
+                        .font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue)
                         .padding(.horizontal, 10)
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         .contentShape(Rectangle())
@@ -823,15 +1211,16 @@ struct CalendarView: View {
         }
     }
 
+    /// No `.id(monday)` any more: it threw the whole week away and built it again on every ‹ › step
+    /// (impeccable re-audit, 7 Oct 2026). The rows are kept per week in `memo`.
     private var peopleWeek: some View {
         let monday = CalDays.mondayOf(selected)
         let days = (0..<7).map { CalDays.addDays(monday, $0) }
-        let rows = CalendarCore.weekRows(visible, ix, focus: focus, monday: monday, today: today, now: now, windowDays: windowDays)
         let thisWeek: (() -> Void)? = days.contains(today) ? nil : goToday
-        return CalPeopleWeek(rows: rows, days: days, today: today, now: now, windowDays: windowDays, ix: ix, people: people, wide: peopleTable,
+        return CalPeopleWeek(rows: weekRows, days: days, today: today, now: now, windowDays: windowDays, ix: ix, people: people, wide: peopleTable,
                              onOpenDay: { d in mode = .month; lensRaw = "person"; select(d, reveal: true) }, onOpen: openItem,
-                             filtered: filters.activeCount > 0, onResetFilters: resetFilters, onThisWeek: thisWeek)
-            .id(monday)
+                             filtered: filters.activeCount > 0, onResetFilters: resetFilters, onThisWeek: thisWeek,
+                             focusName: focusUnit?.name, onAllDivisions: leaveFocus, scope: filters.scope, onShowEveryone: showEveryone)
     }
 
     // MARK: Toolbar and keyboard
@@ -841,20 +1230,25 @@ struct CalendarView: View {
             ToolbarItem(placement: .principal) { barTitle }
         }
         ToolbarItem(placement: .topBarTrailing) {
+            // Filters only: whose tasks (Everyone / Mine / My division) is a view and has no say in
+            // the count.
+            let count = filters.activeCount
             Button { sheet = .filters } label: {
                 HStack(spacing: 3) {
-                    Image(systemName: filters.activeCount > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                    if filters.activeCount > 0 {
-                        Text("\(filters.activeCount)")
-                            .font(NXFont.text(11, .bold)).monospacedDigit()
+                    Image(systemName: count > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(NXFont.text(CalType.size(11), .bold)).monospacedDigit()
                             .foregroundStyle(NX.violetText)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(NX.accentBg, in: Capsule())
                     }
                 }
             }
-            .accessibilityLabel(filters.activeCount > 0 ? "\(T("Filters")) (\(filters.activeCount))" : T("Filters"))
+            .accessibilityLabel(count > 0 ? "\(T("Filters")) (\(count))" : T("Filters"))
+            .accessibilityFocused($a11yTarget, equals: .filtersButton)
             .keyboardShortcut("f", modifiers: .command)
+            .macHelp("\(T("Filters")) (⌘F)")
         }
     }
 
@@ -862,8 +1256,8 @@ struct CalendarView: View {
     /// still says which day this is.
     private var barTitle: some View {
         VStack(spacing: 0) {
-            Text(T("Calendar")).font(.system(size: 17, weight: .bold)).foregroundStyle(NX.foreground)
-            Text(CalFormat.day(selected, "EEEdMMM")).font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg)
+            Text(T("Calendar")).font(.system(size: CalType.size(17), weight: .bold)).foregroundStyle(NX.foreground)
+            Text(CalFormat.day(selected, "EEEdMMM")).font(NXFont.text(CalType.size(11), .medium)).foregroundStyle(NX.mutedFg)
         }
         .lineLimit(1)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -872,7 +1266,8 @@ struct CalendarView: View {
     }
 
     /// iPad / Mac keyboard: ⌘T today, ⌘←/⌘→ month (week in People), ⌥←/⌥→ day, ⌘1/⌘2 lens, ⌘R reload.
-    /// Hidden buttons, so they show in the ⌘ overlay without crowding the toolbar.
+    /// Hidden buttons, so they show in the ⌘ overlay without crowding the toolbar. The Mac has no
+    /// overlay: there the same commands are a Calendar menu in the menu bar (CalendarMenuCommands).
     private var shortcuts: some View {
         Group {
             Button(T("Today")) { select(today) }.keyboardShortcut("t", modifiers: .command)
@@ -888,6 +1283,20 @@ struct CalendarView: View {
         .accessibilityHidden(true)
     }
 
+    /// The Mac menu bar's handle on this Calendar. Off while a task or a sheet covers it, so the
+    /// arrows are not taken from a text field up there.
+    private var menuActions: CalendarMenuActions {
+        CalendarMenuActions(
+            enabled: pushedTask == nil && sheet == nil,
+            people: mode == .people,
+            today: { select(today) },
+            step: { n in step(n) },
+            stepDay: { n in select(CalDays.addDays(selected, n)) },
+            lens: { byPerson in lensRaw = byPerson ? "person" : "division" },
+            reload: { reloadNow() },
+            filters: { sheet = .filters })
+    }
+
     // MARK: Actions
 
     /// `reveal`: the day was picked on the grid (or by a link, or from the People week), so its list is
@@ -897,13 +1306,25 @@ struct CalendarView: View {
     private func select(_ day: String, reveal: Bool = false) {
         let changed = day != selected
         withAnimation(.snappy(duration: 0.2)) { selected = day }
-        if reveal && !twoPane && mode == .month { revealDay += 1 }
+        if reveal && !twoPane && mode == .month {
+            revealKind = .day
+            revealDay += 1
+        }
         guard voiceOver else { return }
         if reveal {
             dayHeaderFocused = true
         } else if changed {
             announce(day)
         }
+    }
+
+    /// On iPhone, today's heading and its first tasks into view with most of the month still above
+    /// them. Opening the Calendar used to show no task at all at the default text size: the header,
+    /// the month and its key filled the screen (impeccable re-audit, 7 Oct 2026).
+    private func peek(opening: Bool = false) {
+        guard !twoPane, mode == .month else { return }
+        revealKind = opening ? .opening : .peek
+        revealDay += 1
     }
 
     private func announce(_ day: String) {
@@ -922,7 +1343,8 @@ struct CalendarView: View {
             reloading = false
         }
     }
-    private func resetFilters() { filtersBinding.wrappedValue = CalFilters() }
+    /// Every filter off; whose tasks stays as it is (it is a view, not a filter).
+    private func resetFilters() { filtersBinding.wrappedValue = filters.cleared() }
 
     private func step(_ n: Int) {
         select(mode == .people ? CalDays.addDays(selected, 7 * n) : CalDays.shiftMonth(selected, n))
@@ -934,9 +1356,9 @@ struct CalendarView: View {
         collapsedJSON = (try? String(data: JSONEncoder().encode(Array(set).sorted()), encoding: .utf8)) ?? "[]"
     }
 
-    /// Editable through its home project → the full task screen; otherwise read-only. A masked row
-    /// opens the reason it cannot be read (a private project, members only) rather than ignoring the
-    /// tap; nothing about the task is fetched.
+    /// Editable through its home project → the full task screen; otherwise the read-only preview,
+    /// pushed the same way (CalPush). A masked row opens the reason it cannot be read (a private
+    /// project, members only) rather than ignoring the tap; nothing about the task is fetched.
     private func openItem(_ item: CalItem) {
         if item.masked {
             sheet = .preview(taskId: item.key, project: nil, notMember: true, masked: true)
@@ -944,22 +1366,55 @@ struct CalendarView: View {
         }
         guard let id = item.taskId else { return }
         if item.canEdit && item.editProjectId == item.project?.id {
-            openTaskId = id
+            pushedTask = .edit(id: id)
         } else {
-            sheet = .preview(taskId: id, project: item.project?.name, notMember: true, masked: false)
+            pushedTask = .read(id: id, project: item.project?.name)
         }
+    }
+
+    /// Every appearance: the links waiting for this Calendar. The first one also takes back the day a
+    /// size-class swap left behind, or — opening on today — brings today's first tasks into view.
+    private func appear() {
+        router.calendarOnScreen = instance
+        let first = !appeared
+        appeared = true
+        let carried = first && claimCarry()
+        claimRouterDate()
+        claimRouterTask()
+        claimRouterScope()
+        router.calendarState = carry
+        if first && !carried && revealDay == 0 && mode == .month && selected == today { peek(opening: true) }
+    }
+
+    /// The window crossed the size class with a Calendar on screen, and the app was rebuilt in its
+    /// other shape around this one: the day, Month or People, the focus and an open task come back as
+    /// they were. They used to start over on today (impeccable re-audit, 7 Oct 2026). A carry nobody
+    /// claimed within a few seconds is stale, and not applied to a Calendar opened later by hand.
+    private func claimCarry() -> Bool {
+        guard let c = router.calendarCarry else { return false }
+        router.calendarCarry = nil
+        guard let at = router.calendarCarryAt, Date().timeIntervalSince(at) < 5 else { return false }
+        selected = c.day
+        mode = c.people ? .people : .month
+        focusId = c.focusId
+        // Opened the way a widget's task opens (claimRouterTask, right after this).
+        if let task = c.taskId, router.calendarTaskId == nil { router.calendarTaskId = task }
+        return true
     }
 
     /// A calendar widget row (`nexus://calendar?…&task=<id>`) opens its task once, the way a row here
     /// would. Usually it is not in what is loaded yet (cold start, another month, an undated task), so
-    /// the server says how it may be opened; masked or gone → the day alone.
+    /// the server says how it may be opened. Every outcome answers the tap: a task that is gone or
+    /// cannot be reached opens the preview, which says which ("This task no longer exists", "Can't
+    /// reach NEXUS right now" with Try again), and a masked one says it belongs to a private project.
+    /// A failed lookup used to end in silence (impeccable re-audit, 7 Oct 2026).
     private func claimRouterTask() {
         guard let id = router.calendarTaskId else { return }
         router.calendarTaskId = nil
         // Whatever is open on top gives way first; the new one opens after the pop has finished — a
         // pop and a push in one update are not reliable in a NavigationStack.
-        let covered = openTaskId != nil || sheet != nil
-        openTaskId = nil
+        let covered = pushedTask != nil || sheet != nil
+        pushedTask = nil
         sheet = nil
         let loaded = items?.items.first(where: { $0.taskId == id })
         Task { @MainActor in
@@ -968,11 +1423,22 @@ struct CalendarView: View {
                 openItem(loaded)
                 return
             }
-            guard let access = try? await APIClient.shared.calendarTask(id: id), access.found, !access.masked else { return }
-            if access.canEdit && access.editProjectId == access.projectId {
-                openTaskId = id
+            let access: CalTaskAccess
+            do {
+                access = try await APIClient.shared.calendarTask(id: id)
+            } catch APIError.unauthorized {
+                auth.logout()
+                return
+            } catch {
+                pushedTask = .read(id: id, project: nil)
+                return
+            }
+            if access.masked {
+                sheet = .preview(taskId: id, project: nil, notMember: true, masked: true)
+            } else if access.found && access.canEdit && access.editProjectId == access.projectId {
+                pushedTask = .edit(id: id)
             } else {
-                sheet = .preview(taskId: id, project: nil, notMember: true, masked: false)
+                pushedTask = .read(id: id, project: nil)
             }
         }
     }
@@ -985,7 +1451,7 @@ struct CalendarView: View {
         // A day link while a task is open on top: back to the Calendar. When the link names a task as
         // well, claimRouterTask clears the cover itself and waits for the pop before opening.
         if router.calendarTaskId == nil {
-            openTaskId = nil
+            pushedTask = nil
             sheet = nil
         }
         if day.count == 10, CalDays.key(CalDays.date(day)) == day {
@@ -1001,12 +1467,19 @@ struct CalendarView: View {
         router.calendarScope = nil
         guard var scope = CalScope(rawValue: raw) else { return }
         // "My division" for someone without a card in the Bagan would filter out every task: Mine, as
-        // the widget itself draws it. Only once the Bagan is in; before that nobody has a card.
-        if scope == .division, structure != nil, myHomes.isEmpty { scope = .me }
-        guard scope != filters.scope else { return }
-        var f = filters
-        f.scope = scope
-        filtersBinding.wrappedValue = f
+        // the widget itself draws it, with the note saying why. Only once the Bagan is in; before that
+        // nobody has a card, and `setStructure` makes the same call when it arrives.
+        var fellBack = false
+        if scope == .division, structure != nil, myHomes.isEmpty {
+            scope = .me
+            fellBack = true
+        }
+        if scope != filters.scope {
+            var f = filters
+            f.scope = scope
+            filtersBinding.wrappedValue = f
+        }
+        divisionFellBack = fellBack
     }
 
     // MARK: Loading
@@ -1050,16 +1523,42 @@ struct CalendarView: View {
         structure = s
         ix = CalIndex(units: s.units, people: s.people)
         ixRev += 1
+        // "My division" kept from before (or from a link that came before the Bagan) for someone with
+        // no card in it would hide every task: Mine instead, with the note under the switch.
+        if filters.scope == .division, s.me?.homeUnitIds.isEmpty ?? true {
+            var f = filters
+            f.scope = .me
+            filtersBinding.wrappedValue = f
+            divisionFellBack = true
+        }
     }
 
+    /// A poll that found nothing new changes nothing: the same answer used to replace the month and
+    /// redraw every row once a minute (impeccable re-audit, 7 Oct 2026). `now` is not compared — the
+    /// server's clock moves on every answer.
     private func setItems(_ r: CalItemsResponse) {
+        if let old = items, Self.sameItems(old, r) { return }
         items = r
         itemsRev += 1
     }
 
     private func setOverdue(_ r: CalOverdueResponse) {
+        if let old = overdue, Self.sameOverdue(old, r) { return }
         overdue = r
         overdueRev += 1
+    }
+
+    private static func sameItems(_ a: CalItemsResponse, _ b: CalItemsResponse) -> Bool {
+        guard a.v == b.v, a.from == b.from, a.to == b.to, a.today == b.today, a.access == b.access else { return false }
+        guard a.structureVersion == b.structureVersion, a.rules == b.rules, a.truncated == b.truncated else { return false }
+        guard a.holidays == b.holidays, a.people == b.people else { return false }
+        return a.items == b.items
+    }
+
+    private static func sameOverdue(_ a: CalOverdueResponse, _ b: CalOverdueResponse) -> Bool {
+        guard a.v == b.v, a.today == b.today, a.access == b.access, a.structureVersion == b.structureVersion else { return false }
+        guard a.rules == b.rules, a.truncated == b.truncated, a.people == b.people else { return false }
+        return a.items == b.items
     }
 
     private func loadStructure() async {
@@ -1130,14 +1629,17 @@ struct CalendarView: View {
         do { setOverdue(try await APIClient.shared.calendarOverdue(userId: uid)) } catch { /* the rail just stays empty */ }
     }
 
-    /// Ask again every `calendarPollSeconds` while the screen is up and the app is in front.
+    /// Ask again every `calendarPollSeconds` while the screen is up and the app is in front. The clock
+    /// moves after the answers are in, not before them, so a tick redraws once — and only because a
+    /// timed task may have turned overdue — instead of up to three times.
     private func pollLoop() async {
         while !Task.isCancelled {
             let seconds = RemoteConfig.shared.calendarPollSeconds
             try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
             if Task.isCancelled { return }
+            guard active else { continue }
+            await backgroundRefresh()
             now = Date()
-            if active { await backgroundRefresh() }
         }
     }
 }
@@ -1158,4 +1660,121 @@ private final class CalendarDerived {
     var byDay: [String: [CalItem]] = [:]
     var cellsKey: String?
     var cells: [String: CalDayCell] = [:]
+    var monthDaysKey: String?
+    var monthDays: [String] = []
+    var factsKey: String?
+    var holidays: [String: String] = [:]
+    var monthHasTasks = false
+    var legendKey: String?
+    var legend: [CalLegendEntry] = []
+    var monthVisibleCount = 0
+    var treeKey: String?
+    var tree = CalDayTree(root: nil, total: 0, people: 0, unplaced: [])
+    var railKey: String?
+    var rail: [CalItem] = []
+    var weekKey: String?
+    var weekRows: [CalWeekRow] = []
+    var mineKey: String?
+    var mine: Set<String> = []
+    var mineOrAbove: Set<String> = []
+}
+
+// MARK: - Mac menu bar
+
+/// What the Calendar on screen can do from the Mac's menu bar (CalendarMenuCommands), handed up by
+/// the Calendar as a scene value.
+struct CalendarMenuActions {
+    /// False while a task or a sheet covers the Calendar.
+    let enabled: Bool
+    /// The People week: the steps move by weeks.
+    let people: Bool
+    let today: () -> Void
+    let step: (Int) -> Void
+    let stepDay: (Int) -> Void
+    let lens: (Bool) -> Void
+    let reload: () -> Void
+    let filters: () -> Void
+}
+
+private struct CalendarMenuKey: FocusedValueKey {
+    typealias Value = CalendarMenuActions
+}
+
+extension FocusedValues {
+    /// The Calendar on screen, for the Mac's Calendar menu; nil anywhere else.
+    var calendarMenu: CalendarMenuActions? {
+        get { self[CalendarMenuKey.self] }
+        set { self[CalendarMenuKey.self] = newValue }
+    }
+}
+
+/// Mac: the Calendar's keyboard commands as a Calendar menu in the menu bar, each with its shortcut,
+/// for the Calendar on screen and greyed out anywhere else. On the iPad they show in the ⌘ overlay;
+/// the Mac has none, so there they could not be discovered (impeccable re-audit, 7 Oct 2026).
+struct CalendarMenuCommands: Commands {
+    @FocusedValue(\.calendarMenu) private var calendar
+
+    private var on: Bool { calendar?.enabled == true }
+    private var people: Bool { calendar?.people == true }
+
+    var body: some Commands {
+        CommandMenu(T("Calendar")) {
+            Section {
+                Button(T("Today")) { calendar?.today() }
+                    .keyboardShortcut("t", modifiers: .command)
+                    .disabled(!on)
+            }
+            Section {
+                Button(people ? T("Previous week") : T("Previous month")) { calendar?.step(-1) }
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
+                    .disabled(!on)
+                Button(people ? T("Next week") : T("Next month")) { calendar?.step(1) }
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                    .disabled(!on)
+                Button(T("Previous day")) { calendar?.stepDay(-1) }
+                    .keyboardShortcut(.leftArrow, modifiers: .option)
+                    .disabled(!on)
+                Button(T("Next day")) { calendar?.stepDay(1) }
+                    .keyboardShortcut(.rightArrow, modifiers: .option)
+                    .disabled(!on)
+            }
+            Section {
+                Button(T("By division")) { calendar?.lens(false) }
+                    .keyboardShortcut("1", modifiers: .command)
+                    .disabled(!on)
+                Button(T("By person")) { calendar?.lens(true) }
+                    .keyboardShortcut("2", modifiers: .command)
+                    .disabled(!on)
+            }
+            Section {
+                Button(T("Filters") + "…") { calendar?.filters() }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .disabled(!on)
+                Button(T("Reload")) { calendar?.reload() }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(!on)
+            }
+        }
+    }
+}
+
+private extension View {
+    /// Mac: hands the Calendar menu its actions. Elsewhere the ⌘ overlay already lists the shortcuts.
+    func publishesCalendarMenu(_ actions: CalendarMenuActions) -> some View {
+        #if targetEnvironment(macCatalyst)
+        return focusedSceneValue(\.calendarMenu, actions)
+        #else
+        return self
+        #endif
+    }
+
+    /// Mac: a tooltip for an icon-only control, with its shortcut. Not on iPhone or iPad, where `help`
+    /// becomes the VoiceOver hint and would only repeat the label.
+    func macHelp(_ text: String) -> some View {
+        #if targetEnvironment(macCatalyst)
+        return help(text)
+        #else
+        return self
+        #endif
+    }
 }

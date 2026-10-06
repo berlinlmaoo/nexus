@@ -110,6 +110,15 @@ struct NexusApp: App {
             .task { await versionGate.checkPolicy(force: true) }
             .task { await RemoteConfig.shared.refresh(force: true) }
         }
+        #if targetEnvironment(macCatalyst)
+        .commands {
+            // The Calendar's keyboard commands, in a Calendar menu of the menu bar (CalendarView.swift).
+            CalendarMenuCommands()
+            // ⌘T is Today there, as in Apple's Calendar. The Mac's stock Format › Font menu claims it for
+            // Show Fonts, which nothing in this app uses (no text in it can be styled).
+            CommandGroup(replacing: .textFormatting) { }
+        }
+        #endif
     }
 
     /// Global navigation/tab chrome — match the web: rounded display title, NEXUS background.

@@ -9,6 +9,7 @@ import UIKit
 //
 // Layout follows what is proven on device here: plain VStack/HStack (no lazy grid inside a two-way
 // scroll, no offsets, no reading the scroll position) — the month is LeaveRangeCalendar's structure.
+// The one lazy stack is the People week's list, inside the screen's single vertical scroll.
 // The filters are a plain grouped List, like every other settings-shaped sheet in the app.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -27,25 +28,19 @@ extension Color {
     }
 }
 
-/// The Calendar's colours, light and dark, each with an Increase Contrast value.
+/// The Calendar's colours, light and dark, with an Increase Contrast value where one exists.
 ///
-/// The accent is the app's violet: today, the selection, toggles, badges and every call to action,
-/// so a tint means "tappable" here exactly as on every other screen, the widgets and the watch. The
-/// Bagan's navy had become a second accent on this one screen (impeccable audit, 6 Oct 2026); it
-/// stays the Bagan's own, for the group ribbons.
+/// The accent IS the app's violet (NX.violetText / NX.violetFill): today, the selection, toggles,
+/// badges and every call to action, so a tint means "tappable" here exactly as on every other screen,
+/// the widgets and the watch. It used to be a copy of those values with its own high-contrast pair,
+/// so with Increase Contrast on the Calendar drew two different violets side by side (impeccable
+/// re-audit, 7 Oct 2026). The Bagan's navy stays the Bagan's own: the group ribbons and the tile
+/// behind a light logo.
 enum CalTone {
-    /// The accent as TEXT, ICON or RING on a surface (NX.violetText's values); it is also a fill
-    /// under `onAccent`. 6.2:1 on white, 7.5:1 on the dark card.
-    static let accent = tone(light: 0x6247d6, dark: 0xb3a6ff, lightHigh: 0x4a2fb0, darkHigh: 0xd2caff)
-    /// Text on an `accent` fill.
-    static let onAccent = tone(light: 0xffffff, dark: 0x17123a, lightHigh: 0xffffff, darkHigh: 0x0b0820)
-    /// The accent as a FILL under white text (today's disc, the "You" badge, empty-state buttons):
-    /// 6.2:1 light, 4.9:1 dark. NX.violet itself is 4.15:1 under white, under AA for small type.
-    static let accentFill = tone(light: 0x6247d6, dark: 0x6f5ae6, lightHigh: 0x4a2fb0, darkHigh: 0x5a44d4)
-    /// Older call sites still say navy. They get the accent, which does both of navy's jobs (a fill
-    /// under `onNavy`, type on a surface) in both appearances.
-    static let navy = accent
-    static let onNavy = onAccent
+    /// The accent as TEXT, ICON or RING on a surface.
+    static let accent = NX.violetText
+    /// The accent as a FILL under white text (today's disc, empty-state buttons).
+    static let accentFill = NX.violetFill
     static let unknown = Color(light: 0x75839A, dark: 0x94A3B8)
     /// Overdue, as type and as marks. Light is rose-700: rose-600 (#e11d48) read 4.0:1 as the
     /// rail's 11 pt heading on its own wash; this is 5.3:1 there.
@@ -92,14 +87,51 @@ func calProjectColor(_ raw: String) -> Color {
     return Color(uiColor: UIColor { trait in trait.userInterfaceStyle == .dark ? dark : light })
 }
 
+// MARK: - Type
+
+/// The Calendar's point sizes. The Mac build is the iPad app drawn at 77%, where an 11 pt count came
+/// out at about 8.5 pt, under the Mac's 10 pt floor (impeccable re-audit, 7 Oct 2026). There a size is
+/// raised by the same factor, to the nearest half point, so it lands where the iPad has it; on iPhone
+/// and iPad it is the size as written. Used for type, for the symbols set in a line of type, and for
+/// the month cell that has to hold them.
+enum CalType {
+    static func size(_ pt: CGFloat) -> CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return (pt / 0.77 * 2).rounded() / 2
+        #else
+        return pt
+        #endif
+    }
+}
+
+/// The Calendar's one uppercase label, SectionLabel's own style (11 pt bold, tracked 0.5): the weekday
+/// row, division and group names, "Not in the chart yet", the People table's headings and the "You"
+/// tag — in the month, the day and the People week alike. They used five sizes and trackings between
+/// them, so the same division name changed when switching Month and People. Colour stays per label.
+enum CalCaps {
+    static var font: Font { NXFont.text(CalType.size(11), .bold) }
+    static let tracking: CGFloat = 0.5
+}
+
+extension Text {
+    /// Set as the Calendar's uppercase label (CalCaps); the words come upper-cased.
+    func calCaps() -> Text { font(CalCaps.font).tracking(CalCaps.tracking) }
+}
+
 enum CalFormat {
     private static var cache: [String: DateFormatter] = [:]
+    /// Days already formatted. The grid asks for the same 42 VoiceOver labels on every pass, and the
+    /// People week for each card's days — each a parse and a format. Keyed by language, template and
+    /// day; emptied when it grows past a few thousand.
+    private static var labels: [String: String] = [:]
 
     private static var isID: Bool { AppLanguage.shared.lang == .id }
 
     /// A WIB day string through a localized template, never shifted by the device's time zone.
     static func day(_ day: String, _ template: String) -> String {
         let key = "\(isID)|\(template)"
+        let labelKey = key + "|" + day
+        if let hit = labels[labelKey] { return hit }
         let f: DateFormatter
         if let hit = cache[key] {
             f = hit
@@ -110,7 +142,10 @@ enum CalFormat {
             f.setLocalizedDateFormatFromTemplate(template)
             cache[key] = f
         }
-        return f.string(from: CalDays.date(day))
+        let text = f.string(from: CalDays.date(day))
+        if labels.count > 4000 { labels.removeAll(keepingCapacity: true) }
+        labels[labelKey] = text
+        return text
     }
 
     /// "19.00" in Indonesian, "19:00" in English.
@@ -119,10 +154,15 @@ enum CalFormat {
         return isID ? t.replacingOccurrences(of: ":", with: ".") : t
     }
 
-    /// Monday…Sunday, short.
+    /// Monday…Sunday, short; worked out once per language.
     static func weekdays() -> [String] {
-        (0..<7).map { day(CalDays.addDays("2026-10-05", $0), "EEE") }
+        let id = isID
+        if let hit = weekdayNames[id] { return hit }
+        let names = (0..<7).map { day(CalDays.addDays("2026-10-05", $0), "EEE") }
+        weekdayNames[id] = names
+        return names
     }
+    private static var weekdayNames: [Bool: [String]] = [:]
 
     /// "1 task" / "%d tasks".
     static func tasks(_ n: Int) -> String { n == 1 ? T("1 task") : String(format: T("%d tasks"), n) }
@@ -140,12 +180,17 @@ func calJoin(_ parts: String?...) -> String {
     parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
 }
 
-// MARK: - Unit mark, status glyph, priority, "You"
+// MARK: - Unit mark, avatar, status glyph, priority, "You"
 
 /// An IP's logo on a tile picked from the logo itself, or the unit's initial on its own colour.
+///
+/// The tile grows with the reader's text size, up to twice its size, so a name set three times
+/// larger does not dwarf it; the initial is sized from the tile, not from the text size, so it never
+/// spills out of it (at AX5 it used to be three times the tile).
 struct CalUnitMark: View {
     let unit: CalUnit
     var size: CGFloat = 22
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     private var logoURL: URL? {
         guard unit.kind == "IP", let raw = unit.logoUrl, !raw.isEmpty else { return nil }
@@ -154,23 +199,24 @@ struct CalUnitMark: View {
 
     var body: some View {
         let tint = calUnitColor(unit)
+        let side = size * min(max(scale, 1), 2)
         Group {
             if let logoURL {
-                CalLogoTile(url: logoURL, size: size) { initial(tint) }
+                CalLogoTile(url: logoURL, size: side) { initial(tint, side) }
             } else {
-                initial(tint)
+                initial(tint, side)
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: side, height: side)
         .accessibilityHidden(true)
     }
 
-    private func initial(_ tint: Color) -> some View {
+    private func initial(_ tint: Color, _ side: CGFloat) -> some View {
         Text(String(unit.name.first.map { String($0) } ?? "·").uppercased())
-            .font(NXFont.text(size * 0.45, .bold))
+            .font(.custom("Inter", fixedSize: side * 0.45).weight(.bold))
             .foregroundStyle(tint)
-            .frame(width: size, height: size)
-            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .frame(width: side, height: side)
+            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: side / 4, style: .continuous))
     }
 }
 
@@ -205,7 +251,10 @@ private struct CalLogoTile<Fallback: View>: View {
                 Image(uiImage: image).resizable().scaledToFit().padding(size > 20 ? 2 : 1)
                     .frame(width: size, height: size)
                     .background(light ? CalLogoTone.darkTile : Color.white,
-                                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
+                    // Smart Invert leaves a logo, and the tile picked for it, as they are: inverted,
+                    // a white logo on its navy tile became a dark logo on a black one.
+                    .accessibilityIgnoresInvertColors()
             } else {
                 fallback
             }
@@ -259,7 +308,79 @@ private enum CalLogoTone {
     }
 }
 
-/// ○ to do, ✓ done, ! overdue (red within the window, grey after it), ◆ project without status.
+/// A face in the Calendar: AvatarView's look, decoded at the size the Calendar draws it.
+///
+/// Every face here is 18–26 pt, and the app's 300 px tile is about 17 times the pixels of a 24 pt
+/// circle at 3× — some 16 MB of bitmaps for one "Everyone" week of the People view (impeccable
+/// re-audit, 7 Oct 2026). One 96 px decode (3× of 32 pt) serves every size here. A 300 px tile some
+/// other screen already decoded is used as it is: that costs nothing more, and it paints at once.
+private struct CalAvatar: View {
+    let url: String?
+    let initial: String
+    let size: CGFloat
+    @State private var image: UIImage? = nil
+    /// The picture `image` belongs to, so a row reused for someone else never shows the last face.
+    @State private var imageURL: URL? = nil
+
+    private static let pixels: CGFloat = 96
+
+    init(url: String?, initial: String, size: CGFloat) {
+        self.url = url
+        self.initial = initial
+        self.size = size
+        ImageDiskCache.prewarm()
+        if let resolved = Self.resolve(url), let hit = Self.decoded(resolved) {
+            _image = State(initialValue: hit)
+            _imageURL = State(initialValue: resolved)
+        }
+    }
+
+    private static func resolve(_ raw: String?) -> URL? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return URL(string: raw.hasPrefix("http") ? raw : Config.baseURL.absoluteString + raw)
+    }
+
+    /// This face already decoded: at the Calendar's size, or as another screen's tile.
+    private static func decoded(_ url: URL) -> UIImage? {
+        ImageLoader.memory.object(forKey: ImageLoader.cacheKey(url, pixels) as NSURL)
+            ?? ImageLoader.memory.object(forKey: ImageLoader.cacheKey(url, ImageLoader.tilePixel) as NSURL)
+    }
+
+    var body: some View {
+        let resolved = Self.resolve(url)
+        ZStack {
+            Circle().fill(NX.accentBg)
+            if let image, let resolved, imageURL == resolved {
+                Image(uiImage: image).resizable().scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                    // A face stays a face under Smart Invert.
+                    .accessibilityIgnoresInvertColors()
+            } else {
+                // Sized from the circle, not the text size: at the accessibility sizes Inter at body
+                // scale outgrew the circle.
+                Text(initial).font(.custom("Inter", fixedSize: size * 0.36).weight(.bold)).foregroundStyle(NX.violetText)
+            }
+        }
+        .frame(width: size, height: size)
+        .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
+        .task(id: resolved) {
+            guard let resolved else { return }
+            if imageURL == resolved, image != nil { return }
+            if let hit = Self.decoded(resolved) {
+                image = hit
+                imageURL = resolved
+                return
+            }
+            guard let img = await ImageLoader.shared.image(for: resolved, maxPixel: Self.pixels) else { return }
+            image = img
+            imageURL = resolved
+        }
+    }
+}
+
+/// ○ to do, ✓ done, ! overdue within the window (red), a dashed ring once it is older, ◆ project
+/// without status.
 struct CalStatusGlyph: View {
     let item: CalItem
     let today: String
@@ -278,13 +399,34 @@ struct CalStatusGlyph: View {
                 Image(systemName: "diamond.fill").resizable().scaleEffect(0.5).foregroundStyle(NX.mutedFg)
             } else if od == .recent {
                 Image(systemName: "exclamationmark.circle.fill").resizable().foregroundStyle(CalTone.overdue)
+            } else if od == .stale {
+                // Overdue past the window: no longer red news, but not a plain to-do either. It was the
+                // to-do ring at 70% (2.9:1, under the 3:1 a mark needs) and VoiceOver called it "To do";
+                // now a dashed ring at full strength (5.3:1), spoken as what it is.
+                Circle().strokeBorder(NX.mutedFg, style: StrokeStyle(lineWidth: 2, dash: dash))
             } else {
-                // Stale = overdue past the window: quieter than a fresh one, still 3:1 on the card.
-                Circle().strokeBorder(od == .stale ? NX.mutedFg.opacity(0.7) : NX.mutedFg, lineWidth: 2)
+                Circle().strokeBorder(NX.mutedFg, lineWidth: 2)
             }
         }
         .frame(width: size, height: size)
-        .accessibilityLabel(item.done ? T("Done") : item.noStatus ? T("No status") : od == .recent ? T("Overdue") : T("To do"))
+        .accessibilityLabel(spoken(od))
+    }
+
+    /// Even dashes all the way round, at any size.
+    private var dash: [CGFloat] {
+        let round = CGFloat.pi * max(size - 2, 1)
+        let step = round / (size >= 14 ? 8 : 6)
+        return [step * 0.6, step * 0.4]
+    }
+
+    private func spoken(_ od: CalOverdue) -> String {
+        if item.done { return T("Done") }
+        if item.noStatus { return T("No status") }
+        switch od {
+        case .recent: return T("Overdue")
+        case .stale: return String(format: T("Overdue for more than %d days"), windowDays)
+        case .none: return T("To do")
+        }
     }
 }
 
@@ -299,13 +441,15 @@ struct CalPriorityChip: View {
     }
 }
 
-/// The viewer's own card, person or row: "YOU" on the accent.
+/// The viewer's own card, person or row: "YOU" as a tag in the Calendar's uppercase label, the form
+/// TODAY has beside the date. It was a solid violet block — the form of a button here — and beside
+/// the Bagan's own violet (INTOO, Production House, PATS BSD) it was one more patch of the same colour.
 private struct CalYouBadge: View {
     var body: some View {
-        Text(T("You").uppercased()).font(NXFont.text(11, .bold))
-            .foregroundStyle(Color.white)
+        Text(T("You").uppercased()).calCaps()
+            .foregroundStyle(CalTone.accent)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(CalTone.accentFill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
@@ -352,8 +496,7 @@ private struct CalMonthGridBody: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(0..<7, id: \.self) { i in
-                    Text(names[i].uppercased())
-                        .font(NXFont.text(11, .bold)).tracking(0.4)
+                    Text(names[i].uppercased()).calCaps()
                         .foregroundStyle(NX.mutedFg)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
@@ -388,7 +531,8 @@ private struct CalMonthGridBody: View {
         let shown = Array(dots.prefix(maxDots))
         // Another month's days used to be the whole cell at 38% (2.2:1); muted type reads at 5:1.
         let numberColor: Color = isToday ? Color.white : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : NX.foreground)
-        let discSize = min(disc, g.wide ? 40 : 34)
+        // The disc and the row height follow the type on the Mac (CalType), or the number outgrows them.
+        let discSize = CalType.size(min(disc, g.wide ? 40 : 34))
         let unitName: (CalDot) -> String = { dot in dot.unitId == "other" ? T("Other") : (g.ix.byId[dot.unitId]?.name ?? "") }
         return Button {
             Haptics.tap()
@@ -397,7 +541,7 @@ private struct CalMonthGridBody: View {
             VStack(spacing: 3) {
                 HStack(alignment: .top, spacing: 0) {
                     Text("\(Int(day.suffix(2)) ?? 0)")
-                        .font(NXFont.text(13, inMonth ? .semibold : .regular)).monospacedDigit()
+                        .font(NXFont.text(CalType.size(13), inMonth ? .semibold : .regular)).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .foregroundStyle(numberColor)
                         .frame(minWidth: discSize, minHeight: discSize)
@@ -405,7 +549,7 @@ private struct CalMonthGridBody: View {
                     if g.wide {
                         Spacer(minLength: 0)
                         if let cell, cell.count > 0 {
-                            Text("\(cell.count)").font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                            Text("\(cell.count)").font(NXFont.text(CalType.size(11), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                                 .lineLimit(1)
                         }
                     }
@@ -416,7 +560,7 @@ private struct CalMonthGridBody: View {
                         .frame(maxWidth: .infinity, alignment: g.wide ? .leading : .center)
                 }
                 if g.wide, let holiday {
-                    Text(holiday).font(NXFont.text(11, .medium)).foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
+                    Text(holiday).font(NXFont.text(CalType.size(11), .medium)).foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer(minLength: 0)
@@ -429,7 +573,7 @@ private struct CalMonthGridBody: View {
                             .frame(width: 6, height: 6)
                     }
                     if dots.count > shown.count {
-                        Text("+\(dots.count - shown.count)").font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
+                        Text("+\(dots.count - shown.count)").font(NXFont.text(CalType.size(11), .bold)).foregroundStyle(NX.mutedFg)
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
                 }
@@ -437,9 +581,18 @@ private struct CalMonthGridBody: View {
             }
             .padding(g.wide ? 7 : 4)
             .frame(maxWidth: .infinity)
-            .frame(height: g.wide ? wideHeight : phoneHeight)
+            .frame(height: CalType.size(g.wide ? wideHeight : phoneHeight))
             .background(weekend ? NX.muted.opacity(0.3) : Color.clear)
-            .overlay { if isSel { Rectangle().strokeBorder(CalTone.accent, lineWidth: 2) } }
+            // The picked day is a ring set inside the cell: a shape no division mark has. It used to be
+            // the cell's edge drawn violet, which only its colour told apart from the dots of the
+            // Bagan's violet divisions (INTOO, Production House, PATS BSD) inside it.
+            .overlay {
+                if isSel {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(CalTone.accent, lineWidth: 2)
+                        .padding(2)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -503,6 +656,9 @@ struct CalPeople {
 /// "with …". A masked row says "Internal task · <division>": it is never fetched, but a tap still
 /// goes to `onOpen`, which shows why it cannot be opened (the row used to be disabled, a tap that
 /// did nothing). A row with no task behind it says why in place. The viewer is "You" among the people.
+///
+/// A task that opens read-only says so before the tap: a quiet eye after its title, and "Read only"
+/// to VoiceOver. Editable and read-only rows used to look the same, and only the tap told them apart.
 struct CalItemRow: View {
     let item: CalItem
     let unitId: String?
@@ -521,6 +677,8 @@ struct CalItemRow: View {
     var body: some View {
         let od = CalendarCore.overdueState(item, today: today, now: now, windowDays: windowDays)
         let openable = !item.masked && item.taskId != nil
+        // The rule CalendarView.openItem follows: editable only through the task's home project.
+        let readOnly = openable && !(item.canEdit && item.editProjectId == item.project?.id)
         Button {
             if openable || item.masked {
                 onOpen(item)
@@ -529,17 +687,18 @@ struct CalItemRow: View {
             }
         } label: {
             HStack(alignment: .top, spacing: 10) {
-                CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays, size: compact ? 14 : 16, state: od)
+                CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays,
+                               size: CalType.size(compact ? 14 : 16), state: od)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top, spacing: 8) {
                         if item.masked {
                             Label(maskedTitle, systemImage: "lock.fill")
-                                .font(NXFont.text(13).italic()).foregroundStyle(NX.mutedFg).lineLimit(1)
+                                .font(NXFont.text(CalType.size(13)).italic()).foregroundStyle(NX.mutedFg).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         } else {
                             Text(item.title ?? "")
-                                .font(NXFont.text(compact ? 12.5 : 13.5, .medium))
+                                .font(NXFont.text(CalType.size(compact ? 12.5 : 13.5), .medium))
                                 .foregroundStyle(item.done || od == .stale ? NX.mutedFg : NX.foreground)
                                 .strikethrough(item.done, color: NX.mutedFg)
                                 .lineLimit(compact ? 1 : 2)
@@ -547,15 +706,22 @@ struct CalItemRow: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         if let note = trailingNote {
-                            Text(note).font(NXFont.text(11)).foregroundStyle(CalTone.overdue)
+                            Text(note).font(NXFont.text(CalType.size(11))).foregroundStyle(CalTone.overdue)
                         }
                         if item.time != nil {
-                            Text(CalFormat.time(item.time)).font(NXFont.text(11.5, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                            Text(CalFormat.time(item.time)).font(NXFont.text(CalType.size(11.5), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                        }
+                        if readOnly {
+                            Image(systemName: "eye")
+                                .font(NXFont.text(CalType.size(11), .semibold))
+                                .foregroundStyle(NX.mutedFg)
+                                .padding(.top, 1)
+                                .accessibilityHidden(true)
                         }
                     }
                     if !openable && explained {
                         Text(closedReason)
-                            .font(NXFont.text(11.5)).foregroundStyle(NX.mutedFg)
+                            .font(NXFont.text(CalType.size(11.5))).foregroundStyle(NX.mutedFg)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if !compact { meta(od) }
@@ -568,7 +734,7 @@ struct CalItemRow: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
-        .accessibilityHint(openable ? "" : closedReason)
+        .accessibilityHint(readOnly ? T("Read only") : (openable ? "" : closedReason))
     }
 
     private var maskedTitle: String {
@@ -587,27 +753,30 @@ struct CalItemRow: View {
         id == auth.session?.userId ? T("You") : people.name(id)
     }
 
+    /// The overdue words are for the eye: VoiceOver already heard them from the status mark, once.
     @ViewBuilder private func meta(_ od: CalOverdue) -> some View {
         HStack(spacing: 6) {
             if let p = item.project {
                 RoundedRectangle(cornerRadius: 2).fill(calProjectColor(p.color)).frame(width: 8, height: 8)
                     .accessibilityHidden(true)
-                Text(p.name).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text(p.name).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
                 if !item.linkedProjectIds.isEmpty {
-                    Text(String(format: T("+%d project"), item.linkedProjectIds.count)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(String(format: T("+%d project"), item.linkedProjectIds.count)).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
                 }
             }
             CalPriorityChip(priority: item.priority)
             if od == .recent {
-                Text(T("Overdue")).font(NXFont.text(11, .semibold)).foregroundStyle(CalTone.overdue)
+                Text(T("Overdue")).font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(CalTone.overdue)
+                    .accessibilityHidden(true)
             }
         }
         if od == .stale {
-            Text(String(format: T("Overdue for more than %d days"), windowDays)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            Text(String(format: T("Overdue for more than %d days"), windowDays)).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
+                .accessibilityHidden(true)
         }
         if let parent = item.parent {
             Label(String(format: T("from %@"), parent.title), systemImage: "arrow.turn.down.right")
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
     }
 
@@ -624,18 +793,18 @@ struct CalItemRow: View {
                 HStack(spacing: 6) {
                     HStack(spacing: -6) {
                         ForEach(here.prefix(3), id: \.self) { id in
-                            AvatarView(url: people.avatar(id), initial: calInitials(people.name(id)), size: 18)
+                            CalAvatar(url: people.avatar(id), initial: calInitials(people.name(id)), size: 18)
                                 .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                         }
                     }
                     .accessibilityHidden(true)
                     Text(here.map { who($0) }.joined(separator: ", "))
-                        .font(NXFont.text(11.5, .semibold)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1)
+                        .font(NXFont.text(CalType.size(11.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.9)).lineLimit(1)
                 }
             }
             if !others.isEmpty {
                 Text(here.isEmpty ? othersText : "\(T("with")) \(othersText)")
-                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                    .font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
         }
     }
@@ -652,6 +821,7 @@ struct CalPersonBlock: View {
     let windowDays: Int
     let onOpen: (CalItem) -> Void
     @Environment(AuthStore.self) private var auth
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let also = (ix.person[row.userId]?.homeUnitIds ?? []).filter { $0 != unitId }.compactMap { ix.byId[$0]?.name }
@@ -660,28 +830,12 @@ struct CalPersonBlock: View {
         let alsoText: String? = also.isEmpty ? nil : String(format: T("also in %@"), also.joined(separator: ", "))
         let outside = also.isEmpty && !people.inChart(row.userId)
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                AvatarView(url: people.avatar(row.userId), initial: calInitials(name), size: 26)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text(name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        if isMe { CalYouBadge() }
-                    }
-                    if let alsoText {
-                        Text(alsoText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                    } else if outside {
-                        Text(T("not in the chart")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                    }
-                }
-                Spacer(minLength: 0)
-                Text("\(row.items.count)").font(NXFont.text(11.5, .bold)).monospacedDigit()
-                    .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
-            }
-            .padding(.horizontal, 8).padding(.vertical, 6)
-            // One header for VoiceOver: who, whether it is you, how many, where else.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(calJoin(name, isMe ? T("You") : nil, CalFormat.tasks(row.items.count), alsoText, outside ? T("not in the chart") : nil))
-            .accessibilityAddTraits(.isHeader)
+            header(name: name, isMe: isMe, alsoText: alsoText, outside: outside)
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                // One header for VoiceOver: who, whether it is you, how many, where else.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(calJoin(name, isMe ? T("You") : nil, CalFormat.tasks(row.items.count), alsoText, outside ? T("not in the chart") : nil))
+                .accessibilityAddTraits(.isHeader)
             VStack(spacing: 0) {
                 ForEach(row.items) { item in
                     CalItemRow(item: item, unitId: unitId, ix: ix, people: people, today: today, now: now, windowDays: windowDays, showPeople: false, onOpen: onOpen)
@@ -689,6 +843,52 @@ struct CalPersonBlock: View {
             }
             .padding(.leading, 18)
             .overlay(alignment: .leading) { Rectangle().fill(NX.border).frame(width: 1).padding(.leading, 20) }
+        }
+    }
+
+    /// Face, name, "You" and the count on one line; at the accessibility sizes the name has a line of
+    /// its own (up to three), with "You" and the count under it — squeezed beside them it came down to
+    /// a few letters.
+    @ViewBuilder private func header(name: String, isMe: Bool, alsoText: String?, outside: Bool) -> some View {
+        let face = CalAvatar(url: people.avatar(row.userId), initial: calInitials(name), size: 26)
+        let title = Text(name).font(NXFont.text(CalType.size(13), .semibold)).foregroundStyle(NX.foreground)
+        let number = Text("\(row.items.count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+            .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 8) {
+                    face
+                    title.lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 6) {
+                    if isMe { CalYouBadge() }
+                    number
+                }
+                placeNote(alsoText: alsoText, outside: outside, lines: 3)
+            }
+        } else {
+            HStack(spacing: 8) {
+                face
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        title.lineLimit(1)
+                        if isMe { CalYouBadge() }
+                    }
+                    placeNote(alsoText: alsoText, outside: outside, lines: 1)
+                }
+                Spacer(minLength: 0)
+                number
+            }
+        }
+    }
+
+    /// "also in …", or "not in the chart".
+    @ViewBuilder private func placeNote(alsoText: String?, outside: Bool, lines: Int) -> some View {
+        if let alsoText {
+            Text(alsoText).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(lines)
+        } else if outside {
+            Text(T("not in the chart")).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg)
         }
     }
 }
@@ -703,6 +903,9 @@ struct CalRowContext {
     let windowDays: Int
     let lensByPerson: Bool
     let onOpen: (CalItem) -> Void
+    /// The viewer: their own block goes first in each card of the "by person" lens. Without it, the
+    /// signed-in user is asked.
+    var meId: String? = nil
 }
 
 /// A card right under the focus (Finance & Tech, Framework Agency, …), or the focus itself for the
@@ -714,27 +917,18 @@ struct CalSectionCard: View {
     let collapsed: Bool
     let toggle: () -> Void
     let ctx: CalRowContext
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let tint = calUnitColor(node.unit)
         let count = own ? Set(node.items.map(\.key) + node.people.flatMap { $0.items.map(\.key) }).count : node.count
         VStack(alignment: .leading, spacing: 0) {
             Button(action: toggle) {
-                HStack(spacing: 10) {
-                    CalUnitMark(unit: node.unit, size: 24)
-                    Text(node.unit.name.uppercased()).font(NXFont.text(12, .bold)).tracking(0.6)
-                        .foregroundStyle(NX.foreground).lineLimit(1)
-                    Spacer(minLength: 4)
-                    if mine { CalYouBadge() }
-                    Text("\(count)").font(NXFont.text(11.5, .bold)).monospacedDigit()
-                        .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
-                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                        .rotationEffect(.degrees(collapsed ? -90 : 0))
-                }
-                .padding(.horizontal, 12).padding(.vertical, 11)
-                .frame(minHeight: 44)
-                .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
-                .contentShape(Rectangle())
+                header(count)
+                    .padding(.horizontal, 12).padding(.vertical, 11)
+                    .frame(minHeight: 44)
+                    .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .hoverEffect(.highlight)
@@ -753,6 +947,41 @@ struct CalSectionCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
     }
+
+    /// Mark, name, "You", count, chevron. At the accessibility sizes the name has the first line to
+    /// itself (up to three lines) and the rest goes under it: on one line, at AX5, "FINANCE & TECH"
+    /// came down to about four letters beside a "You" badge.
+    @ViewBuilder private func header(_ count: Int) -> some View {
+        let name = Text(node.unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground)
+        let number = Text("\(count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+            .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+        let chevron = Image(systemName: "chevron.down").font(.system(size: CalType.size(11), weight: .semibold)).foregroundStyle(NX.mutedFg)
+            .rotationEffect(.degrees(collapsed ? -90 : 0))
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
+                    CalUnitMark(unit: node.unit, size: 24)
+                    name.lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 8) {
+                    if mine { CalYouBadge() }
+                    number
+                    Spacer(minLength: 4)
+                    chevron
+                }
+            }
+        } else {
+            HStack(spacing: 10) {
+                CalUnitMark(unit: node.unit, size: 24)
+                name.lineLimit(1)
+                Spacer(minLength: 4)
+                if mine { CalYouBadge() }
+                number
+                chevron
+            }
+        }
+    }
 }
 
 /// What a unit holds for the day: its tasks (by division) or its people (by person), then its sub-cards.
@@ -760,11 +989,12 @@ struct CalNodeBody: View {
     let node: CalTreeNode
     let includeChildren: Bool
     let ctx: CalRowContext
+    @Environment(AuthStore.self) private var auth
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if ctx.lensByPerson {
-                ForEach(node.people, id: \.userId) { p in
+                ForEach(meFirst(node.people), id: \.userId) { p in
                     CalPersonBlock(row: p, unitId: node.unit.id, ix: ctx.ix, people: ctx.people, today: ctx.today, now: ctx.now, windowDays: ctx.windowDays, onOpen: ctx.onOpen)
                 }
                 ForEach(node.loose) { item in
@@ -783,18 +1013,28 @@ struct CalNodeBody: View {
             }
         }
     }
+
+    /// The viewer's own block first in the card, everyone else in the Bagan's order. On screen only:
+    /// CalendarCore, and the golden files the web and Android share with it, keep the Bagan order.
+    private func meFirst(_ rows: [CalPersonRow]) -> [CalPersonRow] {
+        guard let me = ctx.meId ?? auth.session?.userId,
+              let at = rows.firstIndex(where: { $0.userId == me }), at > 0 else { return rows }
+        var out = rows
+        out.insert(out.remove(at: at), at: 0)
+        return out
+    }
 }
 
 /// A sub-card inside a section, or a group drawn as a thin ribbon ("CREATIVE · 1") around its cards.
 struct CalSubNode: View {
     let node: CalTreeNode
     let ctx: CalRowContext
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         if node.unit.isGroup {
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(node.unit.name.uppercased()) · \(node.count)")
-                    .font(NXFont.text(11, .bold)).tracking(0.8).foregroundStyle(NX.mutedFg)
+                Text("\(node.unit.name.uppercased()) · \(node.count)").calCaps().foregroundStyle(NX.mutedFg)
                     .padding(.horizontal, 8).padding(.top, 6)
                     .accessibilityLabel(calJoin(node.unit.name, CalFormat.tasks(node.count)))
                     .accessibilityAddTraits(.isHeader)
@@ -805,12 +1045,17 @@ struct CalSubNode: View {
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(CalTone.groupLine, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
             .padding(.horizontal, 4).padding(.top, 8)
         } else {
+            // At the accessibility sizes the name wraps (up to three lines) instead of being cut.
+            let large = typeSize.isAccessibilitySize
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
+                HStack(alignment: large ? VerticalAlignment.top : .center, spacing: 8) {
                     RoundedRectangle(cornerRadius: 1.5).fill(calUnitColor(node.unit)).frame(width: 3, height: 14)
-                    Text(node.unit.name).font(NXFont.text(12.5, .semibold)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(1)
+                        .padding(.top, large ? 4 : 0)
+                    Text(node.unit.name).font(NXFont.text(CalType.size(12.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.85))
+                        .lineLimit(large ? 3 : 1)
+                        .fixedSize(horizontal: false, vertical: large)
                     Spacer(minLength: 0)
-                    Text("\(node.count)").font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                    Text("\(node.count)").font(NXFont.text(CalType.size(11), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                 }
                 .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 2)
                 .accessibilityElement(children: .ignore)
@@ -824,6 +1069,14 @@ struct CalSubNode: View {
 }
 
 // MARK: - Week "People"
+
+/// One row of the week, with an identity that outlives the week: the same person under the same card
+/// is the same row next week, so stepping a week updates the cards in place instead of rebuilding
+/// every one (and reloading every face).
+private struct CalWeekLine: Identifiable {
+    let id: String
+    let row: CalWeekRow
+}
 
 /// One week: a row per person under their Bagan card, a column per day. Phone = list (card › person ›
 /// up to three tasks with the day in front); iPad/Mac = a table that fits the width (no sideways
@@ -844,79 +1097,160 @@ struct CalPeopleWeek: View {
     var onResetFilters: (() -> Void)? = nil
     /// Another week than this one: an empty week offers the way back.
     var onThisWeek: (() -> Void)? = nil
+    /// The division the calendar is focused on (nil = all of them): an empty week then says it is that
+    /// division's week that is empty, and offers all divisions back.
+    var focusName: String? = nil
+    var onAllDivisions: (() -> Void)? = nil
+    /// Whose tasks are shown. Mine and My division are a view, not a filter: an empty week says whose
+    /// week is empty, and offers everyone's.
+    var scope: CalScope = .all
+    var onShowEveryone: (() -> Void)? = nil
     @State private var expanded: Set<String> = []
     @Environment(AuthStore.self) private var auth
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var dayLabelWidth: CGFloat = 52
     @ScaledMetric(relativeTo: .body) private var nameColumn: CGFloat = 180
     @ScaledMetric(relativeTo: .body) private var dayColumn: CGFloat = 90
+    @ScaledMetric(relativeTo: .body) private var headerDisc: CGFloat = 20
 
     var body: some View {
-        if rows.isEmpty {
-            emptyWeek
-        } else if wide {
-            // Regular width is not room enough by itself: Split View, Stage Manager and a Mac window
-            // beside another one are regular too. The table needs its name column and seven readable
-            // days; anything narrower gets the phone's list.
-            ViewThatFits(in: .horizontal) {
-                table.frame(minWidth: tableWidth, idealWidth: tableWidth, maxWidth: .infinity)
-                list
+        // One container whatever is showing, so the week's reset below always runs.
+        VStack(alignment: .leading, spacing: 0) {
+            if rows.isEmpty {
+                emptyWeek
+            } else if wide {
+                // Regular width is not room enough by itself: Split View, Stage Manager and a Mac window
+                // beside another one are regular too. The table needs its name column and seven readable
+                // days; anything narrower gets the phone's list.
+                ViewThatFits(in: .horizontal) {
+                    table.frame(minWidth: tableWidth, idealWidth: tableWidth, maxWidth: .infinity)
+                    list(lazy: false)
+                }
+            } else {
+                list(lazy: true)
             }
-        } else {
-            list
         }
+        // The cards unfolded belong to the week they were unfolded in.
+        .onChange(of: days) { _, _ in expanded = [] }
     }
 
     private var tableWidth: CGFloat { nameColumn + 12 + 7 * dayColumn }
 
+    /// The rows with their identities, the viewer first among the people of each card. On screen only:
+    /// CalendarCore keeps the Bagan order the web and Android share.
+    private var lines: [CalWeekLine] {
+        let me = auth.session?.userId
+        var out: [CalWeekLine] = []
+        out.reserveCapacity(rows.count)
+        var i = 0
+        while i < rows.count {
+            guard let first = Self.person(rows[i]) else {
+                out.append(CalWeekLine(id: Self.key(rows[i]), row: rows[i]))
+                i += 1
+                continue
+            }
+            // The people of one card come one after another.
+            var run: [CalWeekRow] = []
+            while i < rows.count, let p = Self.person(rows[i]), p.unitId == first.unitId {
+                run.append(rows[i])
+                i += 1
+            }
+            if let me, let at = run.firstIndex(where: { Self.person($0)?.userId == me }), at > 0 {
+                run.insert(run.remove(at: at), at: 0)
+            }
+            out.append(contentsOf: run.map { CalWeekLine(id: Self.key($0), row: $0) })
+        }
+        return out
+    }
+
+    private static func person(_ row: CalWeekRow) -> (unitId: String?, userId: String)? {
+        if case let .person(unitId, userId, _, _) = row { return (unitId, userId) }
+        return nil
+    }
+
+    /// Unique within a week: a unit once, a person once per card, the card's "without a person" once.
+    private static func key(_ row: CalWeekRow) -> String {
+        switch row {
+        case let .unit(unit, _, _): return "u|\(unit.id)"
+        case .unplaced: return "x"
+        case let .person(unitId, userId, _, _): return "p|\(unitId ?? "-")|\(userId)"
+        case let .loose(unitId, _, _): return "l|\(unitId)"
+        }
+    }
+
+    /// Why the week is empty, most specific first: the focus on one division, the filters, whose tasks
+    /// are shown, then the week itself.
     @ViewBuilder private var emptyWeek: some View {
-        let thisWeek = days.contains(today)
-        if filtered, let onResetFilters {
-            EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nobody has a task this week"),
+        if let focusName {
+            EmptyState(icon: "scope", title: String(format: T("Nothing in %@ this week"), focusName),
+                       tint: CalTone.accentFill,
+                       actionTitle: onAllDivisions == nil ? nil : T("All divisions"), actionIcon: nil, action: onAllDivisions,
+                       compact: true)
+        } else if filtered, let onResetFilters {
+            EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing matches the filters this week"),
                        subtitle: T("Filters are hiding the rest. Reset them to see everything."),
                        tint: CalTone.accentFill, actionTitle: T("Reset filters"), actionIcon: nil, action: onResetFilters, compact: true)
-        } else if !thisWeek, let onThisWeek {
-            EmptyState(icon: "person.2", title: T("Nobody has a task this week"), subtitle: T("Pick another week, or reset the filters."),
+        } else if scope != .all {
+            let mine = scope == .me
+            EmptyState(icon: mine ? "person" : "person.2",
+                       title: mine ? T("You have nothing due this week") : T("Nothing due in your division this week"),
+                       subtitle: T("Pick another week."), tint: CalTone.accentFill,
+                       actionTitle: onShowEveryone == nil ? nil : T("Show everyone"), actionIcon: nil, action: onShowEveryone,
+                       compact: true)
+        } else if !days.contains(today), let onThisWeek {
+            EmptyState(icon: "person.2", title: T("Nobody has a task this week"), subtitle: T("Pick another week."),
                        tint: CalTone.accentFill, actionTitle: T("This week"), actionIcon: nil, action: onThisWeek, compact: true)
         } else {
-            EmptyState(icon: "person.2", title: T("Nobody has a task this week"), subtitle: T("Pick another week, or reset the filters."),
+            EmptyState(icon: "person.2", title: T("Nobody has a task this week"), subtitle: T("Pick another week."),
                        tint: CalTone.accentFill, compact: true)
         }
     }
 
-    private var list: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                switch row {
-                case let .unit(unit, depth, count):
-                    if unit.isGroup {
-                        Text("\(unit.name.uppercased()) · \(count)").font(NXFont.text(11, .bold)).tracking(0.8).foregroundStyle(NX.mutedFg)
-                            .padding(.leading, CGFloat(depth) * 10 + 4).padding(.top, 4)
-                            .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
-                            .accessibilityAddTraits(.isHeader)
-                    } else {
-                        HStack(spacing: 8) {
-                            CalUnitMark(unit: unit, size: 20)
-                            Text(unit.name.uppercased()).font(NXFont.text(11.5, .bold)).tracking(0.5).lineLimit(1)
-                            Spacer(minLength: 0)
-                            Text("\(count)").font(NXFont.text(11.5, .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 8)
-                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(alignment: .leading) { Rectangle().fill(calUnitColor(unit)).frame(width: 3).clipShape(RoundedRectangle(cornerRadius: 1.5)) }
-                        .padding(.leading, CGFloat(depth) * 10)
-                        .accessibilityElement(children: .ignore)
+    /// The phone's list builds its cards as they scroll into view (an "Everyone" week is about 46
+    /// people under 20 cards); beside the table, where ViewThatFits measures it, it stays a plain stack.
+    @ViewBuilder private func list(lazy: Bool) -> some View {
+        let shown = lines
+        if lazy {
+            LazyVStack(alignment: .leading, spacing: 8) { listRows(shown) }
+        } else {
+            VStack(alignment: .leading, spacing: 8) { listRows(shown) }
+        }
+    }
+
+    private func listRows(_ shown: [CalWeekLine]) -> some View {
+        let large = typeSize.isAccessibilitySize
+        return ForEach(shown) { line in
+            switch line.row {
+            case let .unit(unit, depth, count):
+                if unit.isGroup {
+                    Text("\(unit.name.uppercased()) · \(count)").calCaps().foregroundStyle(NX.mutedFg)
+                        .padding(.leading, CGFloat(depth) * 10 + 4).padding(.top, 4)
                         .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
                         .accessibilityAddTraits(.isHeader)
+                } else {
+                    HStack(alignment: large ? VerticalAlignment.top : .center, spacing: 8) {
+                        CalUnitMark(unit: unit, size: 20)
+                        Text(unit.name.uppercased()).calCaps()
+                            .lineLimit(large ? 3 : 1)
+                            .fixedSize(horizontal: false, vertical: large)
+                        Spacer(minLength: 0)
+                        Text("\(count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                     }
-                case let .unplaced(_, count):
-                    Text(String(format: T("Not in the chart yet · %d"), count).uppercased()).font(NXFont.text(11, .bold)).tracking(0.8).foregroundStyle(NX.mutedFg).padding(.top, 4)
-                        .accessibilityAddTraits(.isHeader)
-                case let .person(unitId, userId, depth, perDay):
-                    personCard(key: "p|\(unitId ?? "-")|\(userId)", userId: userId, depth: depth, perDay: perDay)
-                case let .loose(unitId, depth, perDay):
-                    personCard(key: "l|\(unitId)", userId: nil, depth: depth, perDay: perDay)
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(alignment: .leading) { Rectangle().fill(calUnitColor(unit)).frame(width: 3).clipShape(RoundedRectangle(cornerRadius: 1.5)) }
+                    .padding(.leading, CGFloat(depth) * 10)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
+                    .accessibilityAddTraits(.isHeader)
                 }
+            case let .unplaced(_, count):
+                Text(String(format: T("Not in the chart yet · %d"), count).uppercased()).calCaps().foregroundStyle(NX.mutedFg).padding(.top, 4)
+                    .accessibilityAddTraits(.isHeader)
+            case let .person(_, userId, depth, perDay):
+                personCard(key: line.id, userId: userId, depth: depth, perDay: perDay)
+            case let .loose(_, depth, perDay):
+                personCard(key: line.id, userId: nil, depth: depth, perDay: perDay)
             }
         }
     }
@@ -928,21 +1262,11 @@ struct CalPeopleWeek: View {
         let unfolded = expanded.contains(key)
         let shown = unfolded ? entries : Array(entries.prefix(3))
         return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                if let name, let userId {
-                    AvatarView(url: people.avatar(userId), initial: calInitials(name), size: 24)
-                }
-                Text(name ?? T("Tasks without a person")).font(NXFont.text(13, name == nil ? .regular : .semibold))
-                    .italic(name == nil).foregroundStyle(name == nil ? NX.mutedFg : NX.foreground).lineLimit(1)
-                if isMe { CalYouBadge() }
-                Spacer(minLength: 0)
-                heatStrip(perDay)
-                Text("\(entries.count)").font(NXFont.text(11.5, .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
-            }
-            // The strip, in words: who, how many, and on which days.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(weekLabel(name: name, isMe: isMe, total: entries.count, perDay: perDay))
-            .accessibilityAddTraits(.isHeader)
+            cardHeader(name: name, userId: userId, isMe: isMe, total: entries.count, perDay: perDay)
+                // The strip, in words: who, how many, and on which days.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(weekLabel(name: name, isMe: isMe, total: entries.count, perDay: perDay))
+                .accessibilityAddTraits(.isHeader)
             ForEach(Array(shown.enumerated()), id: \.offset) { _, e in
                 entryRow(e.day, e.item)
             }
@@ -951,7 +1275,7 @@ struct CalPeopleWeek: View {
                     if unfolded { expanded.remove(key) } else { expanded.insert(key) }
                 } label: {
                     Text(unfolded ? T("Show less") : String(format: T("+%d more"), entries.count - 3))
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(CalTone.accent)
+                        .font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.accent)
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         .padding(.leading, 6)
                         .contentShape(Rectangle())
@@ -966,10 +1290,46 @@ struct CalPeopleWeek: View {
         .padding(.leading, CGFloat(depth) * 10)
     }
 
+    /// Face, name, "You", the week's strip and the count. At the accessibility sizes the name has a
+    /// line of its own (up to three) with "You" and the count under it, and the strip is left out:
+    /// VoiceOver already hears the days, and beside it the name came down to four letters.
+    @ViewBuilder private func cardHeader(name: String?, userId: String?, isMe: Bool, total: Int, perDay: [[CalItem]]) -> some View {
+        let title = Text(name ?? T("Tasks without a person")).font(NXFont.text(CalType.size(13), name == nil ? .regular : .semibold))
+            .italic(name == nil).foregroundStyle(name == nil ? NX.mutedFg : NX.foreground)
+        let number = Text("\(total)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 8) {
+                    if let name, let userId {
+                        CalAvatar(url: people.avatar(userId), initial: calInitials(name), size: 24)
+                    }
+                    title.lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 6) {
+                    if isMe { CalYouBadge() }
+                    Spacer(minLength: 0)
+                    number
+                }
+            }
+        } else {
+            HStack(spacing: 8) {
+                if let name, let userId {
+                    CalAvatar(url: people.avatar(userId), initial: calInitials(name), size: 24)
+                }
+                title.lineLimit(1)
+                if isMe { CalYouBadge() }
+                Spacer(minLength: 0)
+                heatStrip(perDay)
+                number
+            }
+        }
+    }
+
     /// The day in front of a task; above it at the accessibility text sizes, where a fixed column
     /// would squeeze the task to a few letters.
     @ViewBuilder private func entryRow(_ day: String, _ item: CalItem) -> some View {
-        let label = Text(CalFormat.day(day, "EEEd")).font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+        let label = Text(CalFormat.day(day, "EEEd")).font(NXFont.text(CalType.size(11), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
         let row = CalItemRow(item: item, unitId: nil, ix: ix, people: people, today: today, now: now, windowDays: windowDays,
                              showPeople: false, compact: true, onOpen: onOpen)
         if typeSize.isAccessibilitySize {
@@ -1013,19 +1373,28 @@ struct CalPeopleWeek: View {
 
     private var table: some View {
         let names = CalFormat.weekdays()
+        let shown = lines
         return VStack(spacing: 0) {
             HStack(spacing: 0) {
-                Text(T("Person").uppercased()).font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
+                Text(T("Person").uppercased()).calCaps().foregroundStyle(NX.mutedFg)
                     .frame(width: nameColumn, alignment: .leading).padding(.leading, 12)
                 ForEach(0..<7, id: \.self) { i in
                     let isToday = days[i] == today
                     Button { onOpenDay(days[i]) } label: {
-                        Text("\(names[i].uppercased()) \(Int(days[i].suffix(2)) ?? 0)")
-                            .font(NXFont.text(11, .bold)).foregroundStyle(isToday ? CalTone.accent : NX.mutedFg)
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .padding(.leading, 6)
-                            .contentShape(Rectangle())
+                        HStack(spacing: 4) {
+                            Text(names[i].uppercased()).calCaps()
+                                .foregroundStyle(isToday ? NX.foreground : NX.mutedFg)
+                            // Today is the month grid's own mark — the number on the violet disc — so it
+                            // is told by its shape, not by a violet the Bagan's divisions also wear.
+                            Text("\(Int(days[i].suffix(2)) ?? 0)").calCaps().monospacedDigit()
+                                .foregroundStyle(isToday ? Color.white : NX.mutedFg)
+                                .frame(minWidth: CalType.size(headerDisc), minHeight: CalType.size(headerDisc))
+                                .background { if isToday { Circle().fill(CalTone.accentFill) } }
+                        }
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .padding(.leading, 6)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
@@ -1033,8 +1402,8 @@ struct CalPeopleWeek: View {
                 }
             }
             .background(NX.muted.opacity(0.6))
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                tableRow(row)
+            ForEach(shown) { line in
+                tableRow(line.row)
                 Divider().overlay(CalTone.hairline)
             }
         }
@@ -1048,9 +1417,9 @@ struct CalPeopleWeek: View {
         case let .unit(unit, depth, count):
             HStack(spacing: 8) {
                 if !unit.isGroup { RoundedRectangle(cornerRadius: 1.5).fill(calUnitColor(unit)).frame(width: 3, height: 14) }
-                Text(unit.name.uppercased()).font(NXFont.text(unit.isGroup ? 11 : 11.5, .bold)).tracking(0.5)
+                Text(unit.name.uppercased()).calCaps()
                     .foregroundStyle(unit.isGroup ? NX.mutedFg : NX.foreground)
-                Text("\(count)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                Text("\(count)").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
                 Spacer(minLength: 0)
             }
             .padding(.leading, 12 + CGFloat(depth) * 14).padding(.vertical, 6)
@@ -1059,7 +1428,7 @@ struct CalPeopleWeek: View {
             .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
             .accessibilityAddTraits(.isHeader)
         case let .unplaced(_, count):
-            Text(String(format: T("Not in the chart yet · %d"), count).uppercased()).font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
+            Text(String(format: T("Not in the chart yet · %d"), count).uppercased()).calCaps().foregroundStyle(NX.mutedFg)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12).padding(.vertical, 6)
                 .accessibilityAddTraits(.isHeader)
         case let .person(_, userId, depth, perDay):
@@ -1076,9 +1445,9 @@ struct CalPeopleWeek: View {
         return HStack(alignment: .top, spacing: 0) {
             HStack(spacing: 6) {
                 if let name, let userId {
-                    AvatarView(url: people.avatar(userId), initial: calInitials(name), size: 20).accessibilityHidden(true)
+                    CalAvatar(url: people.avatar(userId), initial: calInitials(name), size: 20).accessibilityHidden(true)
                 }
-                Text(who).font(NXFont.text(12, name == nil ? .regular : .semibold))
+                Text(who).font(NXFont.text(CalType.size(12), name == nil ? .regular : .semibold))
                     .italic(name == nil).foregroundStyle(name == nil ? NX.mutedFg : NX.foreground).lineLimit(1)
                 if isMe { CalYouBadge() }
             }
@@ -1100,16 +1469,16 @@ struct CalPeopleWeek: View {
         let cell = VStack(alignment: .leading, spacing: 2) {
             ForEach(items.prefix(2)) { item in
                 HStack(spacing: 4) {
-                    CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays, size: 11)
+                    CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays, size: CalType.size(11))
                     Text(item.masked ? T("Internal task") : (item.title ?? ""))
-                        .font(NXFont.text(11)).lineLimit(1)
+                        .font(NXFont.text(CalType.size(11))).lineLimit(1)
                         .foregroundStyle(item.masked || item.done ? NX.mutedFg : NX.foreground)
                         .strikethrough(item.done, color: NX.mutedFg)
                 }
             }
             if items.count > 2 {
                 Text(String(format: T("+%d more"), items.count - 2))
-                    .font(NXFont.text(11, .semibold)).foregroundStyle(CalTone.accent)
+                    .font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(CalTone.accent)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
@@ -1147,15 +1516,21 @@ struct CalPeopleWeek: View {
 /// Every filter of the Calendar; they run on what is loaded and move the dots, counts, legend, day
 /// and People view together. The server only decides what may be seen.
 ///
-/// A grouped List like the app's other settings-shaped sheets: the scope and the priorities as
-/// checkmark rows, the two switches, and divisions / people / projects each on a searchable page of
-/// their own. Reset sits in the toolbar, not under 50 rows.
+/// A grouped List like the app's other settings-shaped sheets: the two switches, divisions / people /
+/// projects each on a searchable page of their own, and the priorities as checkmark rows. Reset sits
+/// in the toolbar, not under 50 rows.
+///
+/// Whose tasks (Everyone / Mine / My division) is a view, not a filter: the Calendar's header shows
+/// it on every screen size, so it is not repeated here unless asked for (`showsScope`), and Reset
+/// leaves it as it is.
 struct CalFilterSheet: View {
     @Binding var filters: CalFilters
     let ix: CalIndex
     let items: [CalItem]
     let people: CalPeople
     let myHomes: [String]
+    /// Also offer Everyone / Mine / My division here, for a screen whose header does not show them.
+    var showsScope = false
     @Environment(\.dismiss) private var dismiss
 
     private static let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -1170,22 +1545,31 @@ struct CalFilterSheet: View {
         return seen.values.sorted { CalendarCore.nameOrder($0.name, $1.name) }
     }
 
+    /// No filter at all, on the scope that is on now.
+    private var cleared: CalFilters {
+        var f = CalFilters()
+        f.scope = filters.scope
+        return f
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    scopeRow(.all, T("Everyone"))
-                    scopeRow(.me, T("Mine"))
-                    scopeRow(.division, T("My division"))
-                } header: {
-                    Text(T("Show"))
-                } footer: {
-                    if myHomes.isEmpty { Text(T("You are not in the chart yet, so \"My division\" is off.")) }
+                if showsScope {
+                    Section {
+                        scopeRow(.all, T("Everyone"))
+                        scopeRow(.me, T("Mine"))
+                        scopeRow(.division, T("My division"))
+                    } header: {
+                        Text(T("Show"))
+                    } footer: {
+                        if myHomes.isEmpty { Text(T("You are not in the chart yet, so \"My division\" is off.")) }
+                    }
                 }
                 Section {
-                    Toggle(isOn: $filters.hideDone) { Text(T("Hide done tasks")).font(NXFont.text(15)).foregroundStyle(NX.foreground) }
+                    Toggle(isOn: $filters.hideDone) { Text(T("Hide done tasks")).font(NXFont.text(CalType.size(15))).foregroundStyle(NX.foreground) }
                         .tint(NX.violetText)
-                    Toggle(isOn: $filters.overdueOnly) { Text(T("Only overdue")).font(NXFont.text(15)).foregroundStyle(NX.foreground) }
+                    Toggle(isOn: $filters.overdueOnly) { Text(T("Only overdue")).font(NXFont.text(CalType.size(15))).foregroundStyle(NX.foreground) }
                         .tint(NX.violetText)
                 }
                 Section {
@@ -1202,7 +1586,7 @@ struct CalFilterSheet: View {
                 Section(T("Priority")) {
                     ForEach(Self.priorities, id: \.self) { p in
                         CalCheckRow(on: filters.priorities.contains(p), action: { toggle(&filters.priorities, p) },
-                                    label: Text(priorityLabel(p)).font(NXFont.text(15)))
+                                    label: Text(priorityLabel(p)).font(NXFont.text(CalType.size(15))))
                     }
                 }
             }
@@ -1210,8 +1594,8 @@ struct CalFilterSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(T("Reset filters"), role: .destructive) { filters = CalFilters() }
-                        .disabled(filters.activeCount == 0)
+                    Button(T("Reset filters"), role: .destructive) { filters = cleared }
+                        .disabled(filters == cleared)
                 }
                 ToolbarItem(placement: .confirmationAction) { Button(T("Done")) { dismiss() } }
             }
@@ -1222,15 +1606,15 @@ struct CalFilterSheet: View {
     private func scopeRow(_ scope: CalScope, _ title: String) -> some View {
         let unavailable = scope == .division && myHomes.isEmpty
         return CalCheckRow(on: filters.scope == scope, action: { filters.scope = scope },
-                           label: Text(title).font(NXFont.text(15)).foregroundStyle(unavailable ? NX.mutedFg : NX.foreground))
+                           label: Text(title).font(NXFont.text(CalType.size(15))).foregroundStyle(unavailable ? NX.mutedFg : NX.foreground))
             .disabled(unavailable)
     }
 
     private func linkLabel(_ title: String, _ value: String) -> some View {
         HStack(spacing: 8) {
-            Text(title).font(NXFont.text(15)).foregroundStyle(NX.foreground)
+            Text(title).font(NXFont.text(CalType.size(15))).foregroundStyle(NX.foreground)
             Spacer(minLength: 8)
-            Text(value).font(NXFont.text(15)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Text(value).font(NXFont.text(CalType.size(15))).foregroundStyle(NX.mutedFg).lineLimit(1)
         }
     }
 
@@ -1288,7 +1672,7 @@ private struct CalCheckRow<RowLabel: View>: View {
                 label
                 Spacer(minLength: 8)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: CalType.size(15), weight: .semibold))
                     .foregroundStyle(CalTone.accent)
                     .opacity(on ? 1 : 0)
                     .accessibilityHidden(true)
@@ -1312,7 +1696,7 @@ private struct CalFilterOption: Identifiable {
     let name: String
     let mark: Mark
     var indent = 0
-    /// A Bagan group (CREATIVE): small capitals, as everywhere else.
+    /// A Bagan group (CREATIVE): the Calendar's uppercase label, as everywhere else.
     var heading = false
 }
 
@@ -1333,9 +1717,9 @@ private struct CalFilterPickList: View {
     var body: some View {
         List {
             if options.isEmpty {
-                if let empty { Text(empty).font(NXFont.text(14)).foregroundStyle(NX.mutedFg) }
+                if let empty { Text(empty).font(NXFont.text(CalType.size(14))).foregroundStyle(NX.mutedFg) }
             } else if shown.isEmpty {
-                Text(String(format: T("Nothing matches “%@”."), query)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                Text(String(format: T("Nothing matches “%@”."), query)).font(NXFont.text(CalType.size(14))).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(shown) { o in
                     CalCheckRow(on: selection.contains(o.id), action: { toggle(o.id) }, label: optionLabel(o))
@@ -1359,16 +1743,20 @@ private struct CalFilterPickList: View {
                 case .dot(let c):
                     Circle().fill(c).frame(width: 10, height: 10)
                 case .avatar(let url):
-                    AvatarView(url: url, initial: calInitials(o.name), size: 26)
+                    CalAvatar(url: url, initial: calInitials(o.name), size: 26)
                 case .swatch(let c):
                     RoundedRectangle(cornerRadius: 3).fill(c).frame(width: 12, height: 12)
                 }
             }
             .accessibilityHidden(true)
-            Text(o.heading ? o.name.uppercased() : o.name)
-                .font(o.heading ? NXFont.text(12, .bold) : NXFont.text(15))
-                .foregroundStyle(o.heading ? NX.mutedFg : NX.foreground)
-                .lineLimit(1)
+            Group {
+                if o.heading {
+                    Text(o.name.uppercased()).calCaps().foregroundStyle(NX.mutedFg)
+                } else {
+                    Text(o.name).font(NXFont.text(CalType.size(15))).foregroundStyle(NX.foreground)
+                }
+            }
+            .lineLimit(1)
         }
         // The Bagan's nesting, while browsing; a search result stands on its own.
         .padding(.leading, query.isEmpty ? CGFloat(o.indent) * 12 : 0)
@@ -1383,12 +1771,16 @@ private struct CalFilterPickList: View {
 
 /// A task the viewer may read but not change (owner, 5 Oct 2026: someone outside the task's project
 /// can open it and see its details, not edit it). The same GET /api/tasks/:id as the full screen, no
-/// controls at all. A task of a private project the viewer is not in is never fetched.
+/// controls at all. A task of a private project the viewer is not in is never fetched: the sheet is
+/// then "Internal task" and says who can open it — never "Read only" over a task nobody may read.
 struct CalTaskPreview: View {
     let taskId: String
     let projectName: String?
     let notMember: Bool
     let masked: Bool
+    /// Pushed onto the Calendar's own stack, like the full task screen (its bar and Back), rather than
+    /// shown as a sheet with a bar and Close of its own.
+    var pushed = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var labelWidth: CGFloat = 90
@@ -1405,37 +1797,53 @@ struct CalTaskPreview: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Label(projectName != nil && notMember ? String(format: T("Read only · you are not a member of %@"), projectName ?? "") : T("Read only"), systemImage: "eye")
-                        .font(NXFont.text(12.5)).foregroundStyle(Color(light: 0x92400e, dark: 0xfcd34d))
-                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(light: 0xfffbeb, dark: 0x3a2a0a), in: RoundedRectangle(cornerRadius: 12))
-                    if masked {
-                        EmptyState(icon: "lock", title: T("Internal task"),
-                                   subtitle: T("This is an internal task of a private project. Only its members can open it."),
-                                   tint: CalTone.accentFill, compact: true)
-                    } else if let task {
-                        content(task)
-                    } else if let failure {
-                        failureView(failure)
-                    } else {
-                        SkeletonList(count: 3)
-                    }
-                }
-                .padding(16)
+        if pushed {
+            page
+        } else {
+            NavigationStack {
+                page.toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
             }
-            .background(NX.background.ignoresSafeArea())
-            // "Task" stays "Task" in Indonesian elsewhere in the app; this sheet says tugas like its rows.
-            .navigationTitle(T("Task details"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
         }
+    }
+
+    private var page: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Only above a task there is to read: not over a private project's task, nor over
+                // one that is gone or no longer allowed (the reason below says what happened).
+                if !masked && failure == nil {
+                    Label(readOnlyNote, systemImage: "eye")
+                        .font(NXFont.text(CalType.size(12.5))).foregroundStyle(ChipTone.warning.fg)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(ChipTone.warning.bg, in: RoundedRectangle(cornerRadius: 12))
+                }
+                if masked {
+                    EmptyState(icon: "lock", title: T("Members only"),
+                               subtitle: T("This is an internal task of a private project. Only its members can open it."),
+                               tint: CalTone.accentFill, compact: true)
+                } else if let task {
+                    content(task)
+                } else if let failure {
+                    failureView(failure)
+                } else {
+                    SkeletonList(count: 3)
+                }
+            }
+            .padding(16)
+        }
+        .background(NX.background.ignoresSafeArea())
+        // "Task" stays "Task" in Indonesian elsewhere in the app; this screen says tugas like its rows.
+        .navigationTitle(masked ? T("Internal task") : T("Task details"))
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             guard !masked, task == nil else { return }
             await load()
         }
+    }
+
+    private var readOnlyNote: String {
+        guard let projectName, notMember else { return T("Read only") }
+        return String(format: T("Read only · you are not a member of %@"), projectName)
     }
 
     private func load() async {
@@ -1471,9 +1879,9 @@ struct CalTaskPreview: View {
     @ViewBuilder private func content(_ t: TaskDetail) -> some View {
         if let parent = t.parent {
             Label(String(format: T("from %@"), parent.title ?? ""), systemImage: "arrow.turn.down.right")
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .font(NXFont.text(CalType.size(12))).foregroundStyle(NX.mutedFg)
         }
-        Text(t.title).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
+        Text(t.title).font(NXFont.display(CalType.size(20), .bold)).foregroundStyle(NX.foreground)
             .accessibilityAddTraits(.isHeader)
         VStack(alignment: .leading, spacing: 8) {
             field(T("Status"), statusLabel(t.status))
@@ -1483,11 +1891,11 @@ struct CalTaskPreview: View {
             fieldRow(T("People")) {
                 VStack(alignment: .leading, spacing: 4) {
                     let users = (t.assignees ?? []).compactMap(\.user)
-                    if users.isEmpty { Text(T("Nobody yet")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+                    if users.isEmpty { Text(T("Nobody yet")).font(NXFont.text(CalType.size(13))).foregroundStyle(NX.mutedFg) }
                     ForEach(Array(users.enumerated()), id: \.offset) { _, u in
                         HStack(spacing: 6) {
-                            AvatarView(url: u.avatar, initial: calInitials(u.name ?? "?"), size: 20).accessibilityHidden(true)
-                            Text(u.name ?? "?").font(NXFont.text(13))
+                            CalAvatar(url: u.avatar, initial: calInitials(u.name ?? "?"), size: 20).accessibilityHidden(true)
+                            Text(u.name ?? "?").font(NXFont.text(CalType.size(13)))
                         }
                     }
                 }
@@ -1499,7 +1907,7 @@ struct CalTaskPreview: View {
         if !description.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(T("Description")).accessibilityAddTraits(.isHeader)
-                Text(description).font(NXFont.text(13.5)).foregroundStyle(NX.foreground).frame(maxWidth: .infinity, alignment: .leading)
+                Text(description).font(NXFont.text(CalType.size(13.5))).foregroundStyle(NX.foreground).frame(maxWidth: .infinity, alignment: .leading)
                     .nexusCard(padding: 14, radius: 16)
             }
         }
@@ -1511,7 +1919,7 @@ struct CalTaskPreview: View {
                         HStack(spacing: 8) {
                             Image(systemName: s.isDone ? "checkmark.circle.fill" : "circle").foregroundStyle(s.isDone ? NX.success : NX.mutedFg)
                                 .accessibilityLabel(s.isDone ? T("Done") : T("To do"))
-                            Text(s.title ?? "").font(NXFont.text(13.5)).strikethrough(s.isDone, color: NX.mutedFg)
+                            Text(s.title ?? "").font(NXFont.text(CalType.size(13.5))).strikethrough(s.isDone, color: NX.mutedFg)
                                 .foregroundStyle(s.isDone ? NX.mutedFg : NX.foreground)
                         }
                         .accessibilityElement(children: .combine)
@@ -1527,10 +1935,10 @@ struct CalTaskPreview: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(comments) { c in
                         HStack(alignment: .top, spacing: 8) {
-                            AvatarView(url: c.user?.avatar, initial: calInitials(c.user?.name ?? "?"), size: 24).accessibilityHidden(true)
+                            CalAvatar(url: c.user?.avatar, initial: calInitials(c.user?.name ?? "?"), size: 24).accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(c.user?.name ?? "?").font(NXFont.text(12, .semibold))
-                                Text(blockText(c.content)).font(NXFont.text(13.5)).foregroundStyle(NX.foreground)
+                                Text(c.user?.name ?? "?").font(NXFont.text(CalType.size(12), .semibold))
+                                Text(blockText(c.content)).font(NXFont.text(CalType.size(13.5))).foregroundStyle(NX.foreground)
                             }
                         }
                         .accessibilityElement(children: .combine)
@@ -1543,7 +1951,7 @@ struct CalTaskPreview: View {
     }
 
     private func field(_ label: String, _ value: String) -> some View {
-        fieldRow(label) { Text(value).font(NXFont.text(13)).foregroundStyle(NX.foreground) }
+        fieldRow(label) { Text(value).font(NXFont.text(CalType.size(13))).foregroundStyle(NX.foreground) }
     }
 
     /// A label and its value side by side; at the accessibility text sizes the label goes above,
@@ -1551,14 +1959,14 @@ struct CalTaskPreview: View {
     @ViewBuilder private func fieldRow<V: View>(_ label: String, @ViewBuilder value: () -> V) -> some View {
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(label).font(NXFont.text(CalType.size(13))).foregroundStyle(NX.mutedFg)
                 value()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
         } else {
             HStack(alignment: .top, spacing: 10) {
-                Text(label).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).frame(width: labelWidth, alignment: .leading)
+                Text(label).font(NXFont.text(CalType.size(13))).foregroundStyle(NX.mutedFg).frame(width: labelWidth, alignment: .leading)
                 value()
                 Spacer(minLength: 0)
             }

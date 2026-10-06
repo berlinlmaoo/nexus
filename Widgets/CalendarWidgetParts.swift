@@ -91,7 +91,8 @@ struct CalendarAccessoryNotice: View {
 
 // MARK: - Days
 
-/// A day number: on a violet disc for today, red on Sundays and public holidays.
+/// A day number: on a violet disc for today, red on Sundays and public holidays, the secondary colour
+/// for the days of the months around this one — at full strength, never faded.
 struct CalendarDayBadge: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
@@ -111,10 +112,11 @@ struct CalendarDayBadge: View {
             .background { disc }
     }
 
-    private var weight: Font.Weight { day.today ? .bold : .medium }
+    private var weight: Font.Weight { day.today ? .bold : day.inMonth ? .medium : .regular }
 
     private var numberColor: Color {
         if day.today { return full ? Color.white : Color.primary }
+        if !day.inMonth { return Color.secondary }
         if day.sunday || day.holiday != nil { return full ? ink.red : Color.secondary }
         return Color.primary
     }
