@@ -1880,4 +1880,40 @@
         <item quantity="one">+%d project</item>
         <item quantity="other">+%d projects</item>
     </plurals>
+    <!-- Calendar widgets (phase 4) -->
+    <string name="wcal_month_name">Calendar · Month</string>
+    <string name="wcal_month_desc">The month with your tasks; resize for bars and titles.</string>
+    <string name="wcal_month_up_name">Month + Coming up</string>
+    <string name="wcal_month_up_desc">A small month and the next four tasks.</string>
+    <string name="wcal_week_name">This Week</string>
+    <string name="wcal_week_desc">Monday to Sunday, up to three tasks a day.</string>
+    <string name="wcal_q_do">Important and urgent</string>
+    <string name="wcal_q_plan">Important</string>
+    <string name="wcal_q_act">Urgent</string>
+    <string name="wcal_q_later">Someday</string>
+    <string name="wcal_q_do_desc">Urgent or high priority, due today or tomorrow, or overdue.</string>
+    <string name="wcal_q_plan_desc">High priority, not due yet.</string>
+    <string name="wcal_q_act_desc">Due today or tomorrow, or overdue, at normal priority.</string>
+    <string name="wcal_q_later_desc">Everything else, tasks without a due date included.</string>
+    <string name="wcal_year">Day %1$d · %2$d%%</string>
+    <string name="wcal_updated">Updated %s</string>
+    <string name="wcal_stale">Open NEXUS to refresh</string>
+    <string name="wcal_signed_out">Open NEXUS to sign in</string>
+    <string name="wcal_no_calendar">The calendar isn’t on for your account yet</string>
+    <string name="wcal_open_nexus">Open NEXUS</string>
+    <string name="wcal_coming_up">Coming up</string>
+    <string name="wcal_nothing_up">Nothing coming up</string>
+    <string name="wcal_q_empty">Nothing here</string>
+    <string name="wcal_today">Today</string>
+    <string name="wcal_today_at">Today %s</string>
+    <string name="wcal_tomorrow">Tomorrow</string>
+    <string name="wcal_tomorrow_at">Tomorrow %s</string>
+    <string name="wcal_no_due">No due date</string>
+    <string name="wcal_scope_me">Me</string>
+    <string name="wcal_scope_division">My division</string>
+    <string name="wcal_scope_all">Everyone</string>
+    <string name="wcal_cfg_title">Widget scope</string>
+    <string name="wcal_cfg_hint">Whose tasks this widget shows.</string>
+    <string name="wcal_cfg_division_hint">Shows your own tasks while you’re not on a card in the org chart.</string>
+    <string name="wcal_cfg_save">Save</string>
 </resources>

@@ -1874,4 +1874,40 @@
         <item quantity="one">+%d proyek</item>
         <item quantity="other">+%d proyek</item>
     </plurals>
+    <!-- Calendar widgets (phase 4) -->
+    <string name="wcal_month_name">Kalender Bulan</string>
+    <string name="wcal_month_desc">Sebulan dengan tugasmu; perbesar untuk garis dan judul.</string>
+    <string name="wcal_month_up_name">Bulan + Tidak lama lagi</string>
+    <string name="wcal_month_up_desc">Bulan kecil dan empat tugas berikutnya.</string>
+    <string name="wcal_week_name">Minggu Ini</string>
+    <string name="wcal_week_desc">Senin sampai Minggu, sampai tiga tugas per hari.</string>
+    <string name="wcal_q_do">Penting dan mendesak</string>
+    <string name="wcal_q_plan">Penting</string>
+    <string name="wcal_q_act">Mendesak</string>
+    <string name="wcal_q_later">Suatu hari</string>
+    <string name="wcal_q_do_desc">Prioritas mendesak atau tinggi, tenggat hari ini atau besok, atau lewat tenggat.</string>
+    <string name="wcal_q_plan_desc">Prioritas tinggi, belum dekat tenggat.</string>
+    <string name="wcal_q_act_desc">Tenggat hari ini atau besok, atau lewat tenggat, prioritas biasa.</string>
+    <string name="wcal_q_later_desc">Sisanya, termasuk tugas tanpa tenggat.</string>
+    <string name="wcal_year">Hari ke-%1$d · %2$d%%</string>
+    <string name="wcal_updated">Diperbarui %s</string>
+    <string name="wcal_stale">Buka NEXUS untuk memperbarui</string>
+    <string name="wcal_signed_out">Buka NEXUS untuk masuk</string>
+    <string name="wcal_no_calendar">Kalender belum aktif untuk akunmu</string>
+    <string name="wcal_open_nexus">Buka NEXUS</string>
+    <string name="wcal_coming_up">Tidak lama lagi</string>
+    <string name="wcal_nothing_up">Belum ada yang mendekat</string>
+    <string name="wcal_q_empty">Kosong</string>
+    <string name="wcal_today">Hari ini</string>
+    <string name="wcal_today_at">Hari ini %s</string>
+    <string name="wcal_tomorrow">Besok</string>
+    <string name="wcal_tomorrow_at">Besok %s</string>
+    <string name="wcal_no_due">Tanpa tenggat</string>
+    <string name="wcal_scope_me">Saya</string>
+    <string name="wcal_scope_division">Divisi saya</string>
+    <string name="wcal_scope_all">Semua</string>
+    <string name="wcal_cfg_title">Cakupan widget</string>
+    <string name="wcal_cfg_hint">Tugas siapa yang ditampilkan widget ini.</string>
+    <string name="wcal_cfg_division_hint">Menampilkan tugasmu sendiri selama kamu belum ada di kartu Bagan.</string>
+    <string name="wcal_cfg_save">Simpan</string>
 </resources>

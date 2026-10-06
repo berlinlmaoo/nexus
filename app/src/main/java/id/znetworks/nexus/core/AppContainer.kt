@@ -40,6 +40,9 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.io.File
+import id.znetworks.nexus.feature.calendar.widget.CalendarSnapshots
+import id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork
+import id.znetworks.nexus.feature.calendar.widget.CalendarWidgets
 
 /**
  * Manual dependency graph. Small enough that a DI framework would add build time and no safety;
@@ -102,6 +105,15 @@ class AppContainer(private val context: Context) {
     }
     /** Master Calendar API (ETag-aware); its held responses are forgotten at sign-out. */
     val calendar = id.znetworks.nexus.feature.calendar.CalendarApi(api)
+    /** The calendar widgets' three glance snapshots (phase 4); deleted on sign-out and when the server turns widgets off. */
+    val calendarSnapshots = CalendarSnapshots(File(context.filesDir, "calendar-glance"),
+        fetch = { calendar.glance(it).value },
+        currentUserId = { sessionStore.current?.userId },
+        widgetsOn = { remoteConfig.current.calendarWidgets },
+        changed = { runCatching { CalendarWidgets.updateAll(context) }; CalendarWidgetWork.scheduleRedraw(context) })
+
+    /** Foreground, the Calendar screen loading, a widget placed: at most every 5 minutes unless [force]. */
+    fun refreshCalendarWidgets(force: Boolean = false) { appScope.launch { calendarSnapshots.refresh(force) } }
     val shortcuts = id.znetworks.nexus.feature.home.ProjectShortcuts(context, { sessionStore.current?.userId }, ProjectPins(api), appScope)
     val uploads = id.znetworks.nexus.core.net.Uploads(context, api)
     val announcements = AnnouncementHost(InboxApi(api))
@@ -153,10 +165,17 @@ class AppContainer(private val context: Context) {
                 offline.syncAll()
                 // Pins made on the web or another device, and this phone's old local ones sent up once.
                 appScope.launch { shortcuts.syncPins() }
+                // The calendar widgets: this person's snapshots now, then hourly.
+                CalendarWidgetWork.schedulePeriodic(context)
+                refreshCalendarWidgets(force = true)
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
                 calendar.clear()
+                // No previous person's tasks may survive on a widget (expired or deliberate alike).
+                calendarSnapshots.wipe()
+                CalendarWidgetWork.cancel(context)
+                appScope.launch { calendarSnapshots.clear() }
                 // With the old cookie, before anything else forgets the session (API.md §1.3).
                 val pushGone = push.unregister(session)
                 // Logout revokes the token on the server too (Berlin, 29 Sep; iOS f068bbf): fire and forget,
@@ -198,6 +217,15 @@ class AppContainer(private val context: Context) {
     val remoteConfig = id.znetworks.nexus.core.config.RemoteConfig(context, fetch = {
         api.get("/api/app/config?platform=android", id.znetworks.nexus.core.config.ConfigBody.serializer(), authed = false, callTimeoutMs = 8_000)
     })
+
+    init {
+        // flags.calendarWidgets off → snapshots deleted, widgets say "Open NEXUS"; back on → fetched again.
+        appScope.launch {
+            remoteConfig.body.map { it.calendarWidgets }.distinctUntilChanged().drop(1).collect { on ->
+                if (on) refreshCalendarWidgets(force = true) else calendarSnapshots.clear()
+            }
+        }
+    }
 
     /** The person's own logout is held now: a workday runs and the server's flag says to hold it. */
     fun signOutBlocked(): Boolean = remoteConfig.current.blockSignOutDuringWorkday && workdayOpen()

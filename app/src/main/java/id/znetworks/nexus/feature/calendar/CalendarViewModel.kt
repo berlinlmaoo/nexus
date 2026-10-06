@@ -122,6 +122,8 @@ class CalendarViewModel(app: Application) : AndroidViewModel(app) {
                 // The rail shows only on today: overdue within the window, from /overdue.
                 val overdue = if (items.accessLevel.hasData) runCatching { api.overdue().value.items }.getOrDefault(_state.value.overdue) else emptyList()
                 _state.update { it.copy(structure = structure, items = items, overdue = overdue, loading = false, refreshing = false, error = null) }
+                // What the screen just saw, the widgets see too (throttled to 5 min).
+                c.refreshCalendarWidgets()
             } catch (e: ApiError) {
                 // A failed poll keeps what is on screen; only an empty screen shows the error.
                 _state.update { it.copy(loading = false, refreshing = false, error = if (it.items == null) e.describe(res) else null) }

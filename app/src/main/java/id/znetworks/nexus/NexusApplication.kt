@@ -22,7 +22,7 @@ class NexusApplication : Application() {
         WorkTrailService.ensureChannel(this)
         PushManager.ensureChannels(this)
         // Every launch re-registers, as iOS does on every activation: tokens rotate.
-        if (container.sessionStore.current != null) { container.push.register(); container.offline.schedule() }
+        if (container.sessionStore.current != null) { container.push.register(); container.offline.schedule(); id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork.schedulePeriodic(this) }
         // Queued taps go out on app start after sign-in, and on every foreground (REQ-ATT-13).
         container.flushQueueSoon()
         // Version policy: forced at launch, then at most every 30 min on foreground (REQ-ATT-41).
@@ -36,6 +36,8 @@ class NexusApplication : Application() {
                 container.appScope.launch { container.remoteConfig.refresh() }
                 // Pinned projects follow the web and the other devices (iOS 286cada); launch counts as a return too.
                 if (container.sessionStore.current != null) container.appScope.launch { container.shortcuts.syncPins() }
+                // Calendar widgets catch up with whatever changed while the app was away (throttled to 5 min).
+                if (container.sessionStore.current != null) container.refreshCalendarWidgets()
                 container.appScope.launch {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.

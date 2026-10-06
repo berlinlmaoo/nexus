@@ -121,5 +121,91 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/attendance_widget_info" />
         </receiver>
+        <!-- Calendar widgets (phase 4): Month, Month + Coming up, This Week, the four lists; each picks a scope. -->
+        <activity
+            android:name=".feature.calendar.widget.CalendarWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Nexus">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name=".feature.calendar.widget.CalMonthWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_month_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_month_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.calendar.widget.CalMonthUpcomingWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_month_up_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_month_upcoming_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.calendar.widget.CalWeekWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_week_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_week_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.calendar.widget.CalDoWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_q_do">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_do_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.calendar.widget.CalPlanWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_q_plan">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_plan_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.calendar.widget.CalActWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_q_act">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_act_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.calendar.widget.CalLaterWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wcal_q_later">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cal_later_widget_info" />
+        </receiver>
     </application>
 </manifest>

@@ -32,5 +32,7 @@ object AppLanguage {
     fun choose(context: Context, tag: String) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, tag).apply()
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+        // The calendar widgets speak the app's language, not the phone's.
+        id.znetworks.nexus.feature.calendar.widget.CalendarWidgetWork.redrawNow(context)
     }
 }
