@@ -2765,6 +2765,8 @@ export const nexusApi = {
   calendarStructure: () => apiFetch<CalStructure>("/api/calendar/structure"),
   calendarItems: (from: string, to: string) => apiFetch<CalItemsResponse>(`/api/calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   calendarOverdue: () => apiFetch<CalOverdueResponse>("/api/calendar/overdue"),
+  /** How the Calendar may open one task it has not loaded (shared link, another month). */
+  calendarTask: (id: string) => apiFetch<{ v: number; access: string; found: boolean; masked: boolean; canEdit: boolean; editProjectId: string | null; projectId: string | null }>(`/api/calendar/task?id=${encodeURIComponent(id)}`),
   calendarSettings: () => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings"),
   updateCalendarSettings: (body: Partial<CalendarSettings> | { projectId: string; private: boolean }) => apiFetch<CalendarSettingsPayload>("/api/admin/calendar-settings", { method: "PATCH", body: JSON.stringify(body) }),
   // --- Room bookings ---

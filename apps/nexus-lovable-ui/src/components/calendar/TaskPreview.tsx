@@ -12,9 +12,10 @@ import { Face, fmtTime, PriorityChip } from "./bits";
  * open it and see its details, not edit it). Same data as the full panel (GET /api/tasks/:id), no
  * controls at all, so nothing can fail with "Forbidden" halfway through an edit.
  */
-export function TaskPreview({ taskId, projectName, notMember, onClose }: { taskId: string; projectName: string | null; notMember: boolean; onClose: () => void }) {
+export function TaskPreview({ taskId, projectName, notMember, masked = false, onClose }: { taskId: string; projectName: string | null; notMember: boolean; masked?: boolean; onClose: () => void }) {
   const { t, lang, locale } = useLang();
-  const q = useQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId), retry: false, staleTime: 30_000 });
+  // A task of a private project the viewer is not in is never fetched (owner, decision 1).
+  const q = useQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId), retry: false, staleTime: 30_000, enabled: !masked });
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -58,9 +59,10 @@ export function TaskPreview({ taskId, projectName, notMember, onClose }: { taskI
           <button ref={closeRef} type="button" onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {q.isLoading && <div className="grid place-items-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-          {q.isError && <div className="py-12 text-center text-sm text-muted-foreground">{t("This task could not be loaded.")}</div>}
-          {task && (
+          {masked && <div className="py-12 text-center text-sm text-muted-foreground">{t("This is an internal task of a private project. Only its members can open it.")}</div>}
+          {!masked && q.isLoading && <div className="grid place-items-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+          {!masked && q.isError && <div className="py-12 text-center text-sm text-muted-foreground">{t("This task could not be loaded.")}</div>}
+          {!masked && task && (
             <div className="space-y-5">
               {task.parent && <div className="flex items-center gap-1 text-[12px] text-muted-foreground"><CornerDownRight className="h-3.5 w-3.5" />{t("from {task}", { task: task.parent.title })}</div>}
               <h2 className="font-display text-xl font-bold leading-snug tracking-tight [overflow-wrap:anywhere]">{task.title}</h2>

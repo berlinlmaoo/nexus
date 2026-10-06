@@ -196,6 +196,15 @@ export async function loadUndatedRows(assigneeId: string | null, take: number): 
   return found.map((t) => toRow(t, new Date(0)))
 }
 
+/** One task of the company workspace by id (any due date, or none), or null. */
+export async function loadTaskRowById(id: string): Promise<TaskRow | null> {
+  const t = await prisma.task.findFirst({
+    where: { id, status: { not: "CANCELLED" }, taskList: { project: { workspaceId: ORG_WORKSPACE_ID } } },
+    select: TASK_SELECT,
+  })
+  return t ? toRow(t, t.dueDate ?? new Date(0)) : null
+}
+
 /**
  * The id a masked row is known by: stable (a client can key its list on it) and not reversible to the
  * task id, so a masked row cannot be opened.

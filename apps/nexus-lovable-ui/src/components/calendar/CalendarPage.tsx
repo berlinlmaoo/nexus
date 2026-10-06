@@ -152,10 +152,20 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const keptItem = useRef<CalItem | null>(null);
   if (foundItem) keptItem.current = foundItem;
   const openItem = foundItem ?? (keptItem.current?.id === search.task ? keptItem.current : null);
-  const deciding = !!search.task && !openItem && (itemsQ.isLoading || overdueQ.isLoading);
+  // A task that is not in what is loaded (a shared link, another month): ask the server how it may open.
+  const lookupQ = useQuery({
+    queryKey: ["nexus", "calendar-tasks", "task", search.task],
+    queryFn: () => nexusApi.calendarTask(search.task!),
+    enabled: !!search.task && !openItem && !itemsQ.isLoading && !overdueQ.isLoading,
+    staleTime: 60_000, retry: false,
+  });
+  const deciding = !!search.task && !openItem && (itemsQ.isLoading || overdueQ.isLoading || lookupQ.isLoading);
   // The full panel saves against the task's home project; editing through a linked project would be
   // refused there, so that case opens read-only too.
-  const editable = !!openItem && openItem.canEdit && openItem.editProjectId === openItem.project?.id;
+  const editable = openItem
+    ? openItem.canEdit && openItem.editProjectId === openItem.project?.id
+    : !!lookupQ.data?.canEdit && lookupQ.data.editProjectId === lookupQ.data.projectId;
+  const openMasked = openItem ? openItem.masked : !!lookupQ.data?.masked;
 
   // ── Keyboard ──
   const refocus = useRef(false);
@@ -343,7 +353,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       {body}
       {search.task && !deciding && (editable
         ? <TaskDetailPanel taskId={search.task} onClose={() => setSearch({ task: undefined })} />
-        : <TaskPreview taskId={search.task} projectName={openItem?.project?.name ?? null} notMember={openItem !== null} onClose={() => setSearch({ task: undefined })} />)}
+        : <TaskPreview taskId={search.task} projectName={openItem?.project?.name ?? null} notMember={openItem !== null || !!lookupQ.data?.found} masked={openMasked} onClose={() => setSearch({ task: undefined })} />)}
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
       <span className="sr-only" aria-live="polite">{tree.total ? tn(tree.total, "{n} task", "{n} tasks") : ""}</span>
     </div>
