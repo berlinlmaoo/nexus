@@ -37,7 +37,7 @@ sealed interface Target {
     data class Folder(val id: String) : Target
     data object RoomBooking : Target
     /** The master Calendar (replaces Team Calendar): `/calendar?date=&view=&lens=&focus=&scope=&task=`. */
-    data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null) : Target
+    data class Calendar(val date: String? = null, val view: String? = null, val lens: String? = null, val focus: String? = null, val scope: String? = null, val task: String? = null, val q: String? = null) : Target
     /** Control Room (manager and above). */
     data object Admin : Target
     data class Announcement(val id: String) : Target
@@ -128,7 +128,7 @@ object Links {
             p == "/reports" -> Target.Reports(null)
             p == "/leaderboard" -> Target.Leaderboard
             p == "/room-booking" -> Target.RoomBooking
-            p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"])
+            p == "/calendar" -> Target.Calendar(q["date"], q["view"], q["lens"], q["focus"], q["scope"], q["task"], q["q"])
             // The old page: a booking link goes to Room booking, anything else to the Calendar (web aa9ecdc).
             p == "/master-calendar" -> if (q["booking"] != null) Target.RoomBooking else Target.Calendar(q["date"])
             p == "/admin" -> Target.Admin

@@ -110,7 +110,8 @@ class AppContainer(private val context: Context) {
         fetch = { calendar.glance(it).value },
         currentUserId = { sessionStore.current?.userId },
         widgetsOn = { remoteConfig.current.calendarWidgets },
-        changed = { runCatching { CalendarWidgets.updateAll(context) }; CalendarWidgetWork.scheduleRedraw(context) })
+        changed = { runCatching { CalendarWidgets.updateAll(context) }; CalendarWidgetWork.scheduleRedraw(context) },
+        scopes = { CalendarWidgets.placedScopes(context) })
 
     /** Foreground, the Calendar screen loading, a widget placed: at most every 5 minutes unless [force]. */
     fun refreshCalendarWidgets(force: Boolean = false) { appScope.launch { calendarSnapshots.refresh(force) } }

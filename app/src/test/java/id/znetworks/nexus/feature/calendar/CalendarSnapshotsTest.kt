@@ -32,10 +32,11 @@ class CalendarSnapshotsTest {
     private val asked = mutableListOf<GlanceScope>()
     private var changes = 0
     private var signOutDuringFetch = false
+    private var placed: Set<GlanceScope> = GlanceScope.entries.toSet()
 
     private val store = CalendarSnapshots(dir,
         fetch = { scope -> asked += scope; if (signOutDuringFetch) user = null; snapshot(scope, answerAs ?: "u_staff") },
-        currentUserId = { user }, widgetsOn = { on }, changed = { changes++ }, now = { clock })
+        currentUserId = { user }, widgetsOn = { on }, changed = { changes++ }, now = { clock }, scopes = { placed })
 
     @Test fun savesAllThreeScopesForThePersonSignedIn() = runBlocking {
         assertEquals(Pass.SAVED, store.refresh(force = true))
@@ -100,6 +101,26 @@ class CalendarSnapshotsTest {
         clock += CalendarSnapshots.THROTTLE_MS
         assertEquals(Pass.SAVED, store.refresh())
         assertEquals(9, asked.size)
+    }
+
+    @Test fun noWidgetPlacedAsksNothing() = runBlocking {
+        // Audit #20: phones without a calendar widget make no request and keep no file.
+        store.refresh(force = true)
+        placed = emptySet()
+        asked.clear(); changes = 0
+        assertEquals(Pass.NO_WIDGETS, store.refresh(force = true))
+        assertTrue(asked.isEmpty())
+        assertEquals(0, changes)
+        assertTrue(dir.listFiles().orEmpty().none { it.name.endsWith(".json") })
+    }
+
+    @Test fun onlyThePlacedScopesAreFetchedAndKept() = runBlocking {
+        store.refresh(force = true)
+        placed = setOf(GlanceScope.ALL)
+        asked.clear()
+        store.refresh(force = true)
+        assertEquals(listOf(GlanceScope.ALL), asked)
+        assertNull(store.load(GlanceScope.ME)); assertNull(store.load(GlanceScope.DIVISION)); assertNotNull(store.load(GlanceScope.ALL))
     }
 
     @Test fun nextRedrawIsTheFirstChangeOrMidnight() {

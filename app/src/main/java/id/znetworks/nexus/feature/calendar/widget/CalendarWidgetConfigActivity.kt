@@ -7,7 +7,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,21 +63,30 @@ class CalendarWidgetConfigActivity : AppCompatActivity() {
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return }
         val container = (application as NexusApplication).container
         val initial = CalendarWidgetPrefs.scope(this, id)
+        // Which widget is being set up (audit #46): its own name under the question.
+        val widgetName = runCatching { AppWidgetManager.getInstance(this).getAppWidgetInfo(id)?.loadLabel(packageManager) }.getOrNull()
         setContent {
             val theme by container.appearance.theme.collectAsStateWithLifecycle()
             NexusTheme(theme) {
                 var scope by rememberSaveable { mutableStateOf(initial) }
                 val c = Nx.colors
                 Column(Modifier.fillMaxSize().background(c.background).safeDrawingPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(stringResource(R.string.wcal_cfg_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground)
+                    Text(stringResource(R.string.wcal_cfg_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground,
+                        modifier = Modifier.semantics { heading() })
+                    widgetName?.let { Text(it.toString(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground) }
                     Text(stringResource(R.string.wcal_cfg_hint), fontSize = 14.sp, color = c.mutedFg)
                     Spacer(Modifier.height(8.dp))
-                    listOf(GlanceScope.ME to R.string.wcal_scope_me, GlanceScope.DIVISION to R.string.wcal_scope_division, GlanceScope.ALL to R.string.wcal_scope_all).forEach { (s, label) ->
-                        Row(Modifier.fillMaxWidth().clickable { scope = s }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = scope == s, onClick = { scope = s })
-                            Column {
-                                Text(stringResource(label), fontSize = 16.sp, color = c.foreground)
-                                if (s == GlanceScope.DIVISION) Text(stringResource(R.string.wcal_cfg_division_hint), fontSize = 12.sp, color = c.mutedFg)
+                    // One focus stop per choice, with its role and state (audit #10).
+                    Column(Modifier.selectableGroup()) {
+                        listOf(GlanceScope.ME to R.string.wcal_scope_me, GlanceScope.DIVISION to R.string.wcal_scope_division, GlanceScope.ALL to R.string.wcal_scope_all).forEach { (s, label) ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected = scope == s, role = Role.RadioButton, onClick = { scope = s }).padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = scope == s, onClick = null)
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(stringResource(label), fontSize = 16.sp, color = c.foreground)
+                                    if (s == GlanceScope.DIVISION) Text(stringResource(R.string.wcal_cfg_division_hint), fontSize = 12.sp, color = c.mutedFg)
+                                }
                             }
                         }
                     }
@@ -87,7 +102,8 @@ class CalendarWidgetConfigActivity : AppCompatActivity() {
         val container = (application as NexusApplication).container
         lifecycleScope.launch {
             runCatching { CalendarWidgets.updateAll(applicationContext) }
-            if (container.sessionStore.current != null) container.refreshCalendarWidgets()
+            // A scope this phone may not have fetched yet: now, not in 5 minutes.
+            if (container.sessionStore.current != null) container.refreshCalendarWidgets(force = true)
             setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id))
             finish()
         }

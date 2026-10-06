@@ -1894,8 +1894,8 @@
     <string name="wcal_q_later">Someday</string>
     <string name="wcal_q_do_desc">Urgent or high priority, due today or tomorrow, or overdue.</string>
     <string name="wcal_q_plan_desc">High priority, not due yet.</string>
-    <string name="wcal_q_act_desc">Due today or tomorrow, or overdue, at normal priority.</string>
-    <string name="wcal_q_later_desc">Everything else, tasks without a due date included.</string>
+    <string name="wcal_q_act_desc">Urgent, not high priority: due today or tomorrow, or overdue.</string>
+    <string name="wcal_q_later_desc">Not urgent, not high priority, tasks without a due date included.</string>
     <string name="wcal_year">Day %1$d · %2$d%%</string>
     <string name="wcal_updated">Updated %s</string>
     <string name="wcal_stale">Open NEXUS to refresh</string>
@@ -1903,18 +1903,17 @@
     <string name="wcal_no_calendar">The calendar isn’t on for your account yet</string>
     <string name="wcal_open_nexus">Open NEXUS</string>
     <string name="wcal_coming_up">Coming up</string>
-    <string name="wcal_nothing_up">Nothing coming up</string>
-    <string name="wcal_q_empty">Nothing here</string>
+    <string name="wcal_nothing_up">Nothing coming up (%s)</string>
     <string name="wcal_today">Today</string>
     <string name="wcal_today_at">Today %s</string>
     <string name="wcal_tomorrow">Tomorrow</string>
     <string name="wcal_tomorrow_at">Tomorrow %s</string>
     <string name="wcal_no_due">No due date</string>
-    <string name="wcal_scope_me">Me</string>
+    <string name="wcal_scope_me">Mine</string>
     <string name="wcal_scope_division">My division</string>
     <string name="wcal_scope_all">Everyone</string>
-    <string name="wcal_cfg_title">Widget scope</string>
-    <string name="wcal_cfg_hint">Whose tasks this widget shows.</string>
+    <string name="wcal_cfg_title">Whose tasks?</string>
+    <string name="wcal_cfg_hint">This widget shows the tasks of:</string>
     <string name="wcal_cfg_division_hint">Shows your own tasks while you’re not on a card in the org chart.</string>
     <string name="wcal_cfg_save">Save</string>
     <string name="cal_updated_offline">Updated %s · offline</string>
@@ -1941,4 +1940,14 @@
         <item quantity="one">Show %d task</item>
         <item quantity="other">Show %d tasks</item>
     </plurals>
+    <string name="wcal_q_act_note">urgent, not high priority</string>
+    <string name="wcal_q_later_note">not urgent, not high priority</string>
+    <string name="wcal_q_do_empty">Nothing important and urgent (%s). Nice.</string>
+    <string name="wcal_q_plan_empty">No high-priority task waiting (%s).</string>
+    <string name="wcal_q_act_empty">Nothing urgent (%s). Nice.</string>
+    <string name="wcal_q_later_empty">Nothing set aside for later (%s).</string>
+    <string-array name="wcal_weekdays">
+        <item>Mo</item><item>Tu</item><item>We</item><item>Th</item><item>Fr</item><item>Sa</item><item>Su</item>
+    </string-array>
+    <string name="calq_title_note">Tap a task to open it in the Calendar.</string>
 </resources>

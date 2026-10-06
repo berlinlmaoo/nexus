@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Calendar widget (phase 4). Hourly: a backstop only; CalendarRedrawWorker redraws at the moments the
+<!-- Calendar widget (phase 4). No updatePeriodMillis: WorkManager is the one scheduler (audit #20) — CalendarRedrawWorker redraws at the moments the
      picture changes (WIB midnight, a task's time passing) and CalendarGlanceWorker fetches hourly. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
@@ -9,7 +9,7 @@
     android:minResizeWidth="110dp"
     android:minResizeHeight="110dp"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="3600000"
+    android:updatePeriodMillis="0"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:configure="id.znetworks.nexus.feature.calendar.widget.CalendarWidgetConfigActivity"
     android:widgetFeatures="reconfigurable|configuration_optional"

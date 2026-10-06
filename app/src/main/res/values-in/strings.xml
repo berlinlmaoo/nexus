@@ -1888,8 +1888,8 @@
     <string name="wcal_q_later">Suatu hari</string>
     <string name="wcal_q_do_desc">Prioritas mendesak atau tinggi, tenggat hari ini atau besok, atau lewat tenggat.</string>
     <string name="wcal_q_plan_desc">Prioritas tinggi, belum dekat tenggat.</string>
-    <string name="wcal_q_act_desc">Tenggat hari ini atau besok, atau lewat tenggat, prioritas biasa.</string>
-    <string name="wcal_q_later_desc">Sisanya, termasuk tugas tanpa tenggat.</string>
+    <string name="wcal_q_act_desc">Mendesak, bukan prioritas tinggi: tenggat hari ini atau besok, atau lewat tenggat.</string>
+    <string name="wcal_q_later_desc">Tidak mendesak, bukan prioritas tinggi, termasuk tugas tanpa tenggat.</string>
     <string name="wcal_year">Hari ke-%1$d · %2$d%%</string>
     <string name="wcal_updated">Diperbarui %s</string>
     <string name="wcal_stale">Buka NEXUS untuk memperbarui</string>
@@ -1897,8 +1897,7 @@
     <string name="wcal_no_calendar">Kalender belum aktif untuk akunmu</string>
     <string name="wcal_open_nexus">Buka NEXUS</string>
     <string name="wcal_coming_up">Tidak lama lagi</string>
-    <string name="wcal_nothing_up">Belum ada yang mendekat</string>
-    <string name="wcal_q_empty">Kosong</string>
+    <string name="wcal_nothing_up">Belum ada yang mendekat (%s)</string>
     <string name="wcal_today">Hari ini</string>
     <string name="wcal_today_at">Hari ini %s</string>
     <string name="wcal_tomorrow">Besok</string>
@@ -1907,8 +1906,8 @@
     <string name="wcal_scope_me">Saya</string>
     <string name="wcal_scope_division">Divisi saya</string>
     <string name="wcal_scope_all">Semua</string>
-    <string name="wcal_cfg_title">Cakupan widget</string>
-    <string name="wcal_cfg_hint">Tugas siapa yang ditampilkan widget ini.</string>
+    <string name="wcal_cfg_title">Tugas siapa?</string>
+    <string name="wcal_cfg_hint">Widget ini menampilkan tugas:</string>
     <string name="wcal_cfg_division_hint">Menampilkan tugasmu sendiri selama kamu belum ada di kartu Bagan.</string>
     <string name="wcal_cfg_save">Simpan</string>
     <string name="cal_updated_offline">Diperbarui %s · offline</string>
@@ -1935,4 +1934,14 @@
         <item quantity="one">Tampilkan %d tugas</item>
         <item quantity="other">Tampilkan %d tugas</item>
     </plurals>
+    <string name="wcal_q_act_note">mendesak, bukan prioritas tinggi</string>
+    <string name="wcal_q_later_note">tidak mendesak, bukan prioritas tinggi</string>
+    <string name="wcal_q_do_empty">Tidak ada yang penting dan mendesak (%s). Mantap.</string>
+    <string name="wcal_q_plan_empty">Tidak ada tugas prioritas tinggi yang menunggu (%s).</string>
+    <string name="wcal_q_act_empty">Tidak ada yang mendesak (%s). Mantap.</string>
+    <string name="wcal_q_later_empty">Tidak ada yang disimpan untuk nanti (%s).</string>
+    <string-array name="wcal_weekdays">
+        <item>Sn</item><item>Sl</item><item>Rb</item><item>Km</item><item>Jm</item><item>Sb</item><item>Mg</item>
+    </string-array>
+    <string name="calq_title_note">Ketuk tugas untuk membukanya di Kalender.</string>
 </resources>

@@ -16,9 +16,9 @@ import id.znetworks.nexus.feature.calendar.GlanceScope
 import java.util.concurrent.TimeUnit
 
 /**
- * Hourly, with a network: the three glance snapshots, so the widgets stay current while the app sleeps
- * (plan 4.2). Skipped while no calendar widget is on the home screen — placing one fetches at once
- * (CalendarWidgetReceiver.onUpdate) — so phones without one never pay for it.
+ * Hourly, with a network: the glance snapshots of the scopes the placed widgets use, so they stay current
+ * while the app sleeps (plan 4.2). Every fetch path (this worker, foreground, the Calendar screen) goes
+ * through CalendarSnapshots.refresh, which asks nothing while no calendar widget is placed (audit #20).
  */
 class CalendarGlanceWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -37,6 +37,8 @@ class CalendarGlanceWorker(context: Context, params: WorkerParameters) : Corouti
  */
 class CalendarRedrawWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        // No widget left: nothing to draw and no next alarm (audit #20).
+        if (!CalendarWidgets.anyPlaced(applicationContext)) return Result.success()
         CalendarWidgets.updateAll(applicationContext)
         CalendarWidgetWork.scheduleRedraw(applicationContext)
         return Result.success()
@@ -60,6 +62,7 @@ object CalendarWidgetWork {
 
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC)
+        WorkManager.getInstance(context).cancelUniqueWork(REDRAW)
     }
 
     /** The next moment any saved snapshot changes on its own; at the latest the next WIB midnight. */
@@ -68,7 +71,8 @@ object CalendarWidgetWork {
         return (saved.mapNotNull { CalendarGlance.redrawTimes(it.snapshot, it.savedAt, nowMs, HORIZON_MS).firstOrNull() } + midnight).min()
     }
 
-    fun scheduleRedraw(context: Context) {
+    suspend fun scheduleRedraw(context: Context) {
+        if (!CalendarWidgets.anyPlaced(context)) { WorkManager.getInstance(context).cancelUniqueWork(REDRAW); return }
         val snapshots = (context.applicationContext as NexusApplication).container.calendarSnapshots
         val now = System.currentTimeMillis()
         val at = nextRedraw(GlanceScope.entries.mapNotNull(snapshots::load), now)

@@ -50,6 +50,7 @@ import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.calendar.CalendarScreen
 import id.znetworks.nexus.feature.calendar.TaskPreviewScreen
+import id.znetworks.nexus.feature.calendar.CalendarQuadrantScreen
 import id.znetworks.nexus.feature.people.LeaderboardScreen
 import id.znetworks.nexus.feature.people.MemberProfileScreen
 import id.znetworks.nexus.feature.reports.PersonReportScreen
@@ -220,9 +221,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
             is Target.Calendar -> {
                 container.router.consumed(t)
+                // A quadrant widget's whole list (audit #40).
+                if (t.view == "quadrant") nav.navigate("calendar-list?q=${enc(t.q.orEmpty())}&scope=${enc(t.scope.orEmpty())}") { launchSingleTop = true }
                 // A fresh nonce: the same link tapped again (a widget, a notification) is applied again,
                 // while the entry never re-applies one it already used (CalendarLinkGate).
-                nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
+                else nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
             }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
@@ -362,6 +365,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
                 onOpenPreview = { id, project -> nav.navigate("task-preview/${enc(id)}?project=${enc(project.orEmpty())}") { launchSingleTop = true } }) }
+            composable("calendar-list?q={q}&scope={scope}", arguments = listOf("q", "scope").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
+                CalendarQuadrantScreen(e.arguments?.getString("q"), e.arguments?.getString("scope"), onBack = { nav.popBackStack() }) { day, task, scope ->
+                    nav.navigate(calendarRoute(date = day, task = task, scope = scope, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
+                }
+            }
             // A task the viewer may read but not edit: a destination like the task screen (audit #38).
             composable("task-preview/{id}?project={project}", arguments = listOf(androidx.navigation.navArgument("project") { nullable = true; defaultValue = null })) { e ->
                 TaskPreviewScreen(e.arguments?.getString("id").orEmpty(), e.arguments?.getString("project")?.takeIf { it.isNotEmpty() }) { nav.popBackStack() }
