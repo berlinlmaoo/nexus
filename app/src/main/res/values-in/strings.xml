@@ -1775,6 +1775,7 @@
     <string name="cal_filter_by">Filter %1$s</string>
     <string name="cal_other">Lainnya</string>
     <string name="cal_times_wib">Jam dalam WIB</string>
+    <string name="cal_refresh_failed">Gagal memperbarui. Data per %s</string>
     <string name="cal_load_failed">Kalender gagal dimuat</string>
     <string name="cal_check_connection">Periksa koneksi lalu coba lagi.</string>
     <string name="cal_none_title">Kalender ini khusus anggota perusahaan</string>

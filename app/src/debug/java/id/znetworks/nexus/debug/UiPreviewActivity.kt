@@ -74,7 +74,7 @@ class UiPreviewActivity : ComponentActivity() {
                             id.znetworks.nexus.feature.admin.orgchart.ChartCanvas(tree, mode, if (screen == "org-pats") pats else null, 0,
                                 androidx.compose.ui.Modifier.fillMaxSize(), onCard = {}, onPerson = {})
                         }
-                        "cal-month", "cal-person", "cal-people", "cal-filters", "cal-tablet" -> {
+                        "cal-month", "cal-person", "cal-people", "cal-filters", "cal-tablet", "cal-loading", "cal-failed" -> {
                             val vm: id.znetworks.nexus.feature.calendar.CalendarViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
                             val st = androidx.compose.runtime.remember { calState(screen) }
                             id.znetworks.nexus.feature.calendar.CalendarPreviewLayout(st, vm, tablet = screen == "cal-tablet", filters = screen == "cal-filters")
@@ -125,7 +125,11 @@ class UiPreviewActivity : ComponentActivity() {
         val body = """{"today":"2026-10-05","now":"2026-10-05T05:00:00.000Z","access":"all","structureVersion":null,"rules":{"overdueWindowDays":14,"urgentDays":3},
             "items":${assets.open("calendar/$file").bufferedReader().readText()},"people":{},"holidays":[{"day":"2026-10-01","name":"Hari Kesaktian Pancasila"}],"truncated":false}"""
         val items = j.decodeFromString(id.znetworks.nexus.feature.calendar.CalItems.serializer(), body)
-        return id.znetworks.nexus.feature.calendar.CalState(structure = structure, items = items, loading = false, day = day,
+        // cal-loading / cal-failed: October's items held while November is on screen (audit P1).
+        val other = screen == "cal-loading" || screen == "cal-failed"
+        val loadedRange = id.znetworks.nexus.feature.calendar.CalendarCore.gridRange(day)
+        return id.znetworks.nexus.feature.calendar.CalState(structure = structure, items = items, loading = other, day = if (other) "2026-11-10" else day,
+            itemsRange = loadedRange, rangeError = if (screen == "cal-failed") "No internet connection." else null,
             view = if (screen == "cal-people") id.znetworks.nexus.feature.calendar.CalView.PEOPLE else id.znetworks.nexus.feature.calendar.CalView.MONTH,
             lens = if (screen == "cal-person") id.znetworks.nexus.feature.calendar.CalLens.PERSON else id.znetworks.nexus.feature.calendar.CalLens.DIVISION)
     }

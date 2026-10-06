@@ -219,7 +219,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
             is Target.Calendar -> {
                 container.router.consumed(t)
-                nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task)) { launchSingleTop = true }
+                // A fresh nonce: the same link tapped again (a widget, a notification) is applied again,
+                // while the entry never re-applies one it already used (CalendarLinkGate).
+                nav.navigate(calendarRoute(t.date, t.view, t.lens, t.focus, t.scope, t.task, nonce = System.currentTimeMillis().toString())) { launchSingleTop = true }
             }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
@@ -349,13 +351,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("profile/{id}") { e -> MemberProfileScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("rooms") { RoomBookingScreen(onBack = { nav.popBackStack() }) }
             // The master Calendar; `team-calendar` stays as an alias for old links and shortcuts.
-            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}",
-                arguments = listOf("date", "view", "lens", "focus", "scope", "task").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
+            composable("calendar?date={date}&view={view}&lens={lens}&focus={focus}&scope={scope}&task={task}&n={n}",
+                arguments = listOf("date", "view", "lens", "focus", "scope", "task", "n").map { a -> androidx.navigation.navArgument(a) { nullable = true; defaultValue = null } }) { e ->
                 val a = e.arguments
-                CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") }, onOpenMyMission = { goTab(Tab.TASKS) },
-                    date = a?.getString("date"), view = a?.getString("view"), lens = a?.getString("lens"), focus = a?.getString("focus"), scope = a?.getString("scope"), task = a?.getString("task"))
+                CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) },
+                    date = a?.getString("date"), view = a?.getString("view"), lens = a?.getString("lens"), focus = a?.getString("focus"), scope = a?.getString("scope"), task = a?.getString("task"),
+                    nonce = a?.getString("n"))
             }
-            composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") }, onOpenMyMission = { goTab(Tab.TASKS) }) }
+            composable("team-calendar") { CalendarScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/${enc(it)}") { launchSingleTop = true } }, onOpenMyMission = { goTab(Tab.TASKS) }) }
             composable("gideon") { GideonScreen(onBack = { nav.popBackStack() }) }
             composable("admin") {
                 ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
@@ -661,7 +664,7 @@ private fun TabLabel(text: String) = androidx.compose.foundation.text.BasicText(
 )
 
 /** `calendar?date=…`, with only the arguments that are set (each one encoded). */
-internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null): String {
-    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task).filter { it.second != null }
+internal fun calendarRoute(date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null, nonce: String? = null): String {
+    val args = listOf("date" to date, "view" to view, "lens" to lens, "focus" to focus, "scope" to scope, "task" to task, "n" to nonce).filter { it.second != null }
     return if (args.isEmpty()) "calendar" else "calendar?" + args.joinToString("&") { (k, v) -> "$k=${android.net.Uri.encode(v)}" }
 }

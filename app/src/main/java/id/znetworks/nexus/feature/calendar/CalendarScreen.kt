@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +42,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -91,7 +95,9 @@ class CalDerived(val s: CalState, dark: Boolean) {
     val atTop = ix.top?.id == focus
     val me = structure.me
     private val ctx = CalendarCore.FilterContext(ix, me?.userId, me?.homeUnitIds.orEmpty(), s.today, s.nowMs, s.windowDays)
-    val all = s.items?.items.orEmpty()
+    /** The loaded items are for the range on screen. If not, it is loading or failed: no dots, no "no tasks" (audit P1). */
+    val ready = s.current
+    val all = if (ready) s.items?.items.orEmpty() else emptyList()
     val filtered = CalendarCore.filterItems(all, s.filters, ctx)
     val shown = CalendarCore.underFocus(filtered, ix, focus)
     val byDay = CalendarCore.byDay(shown)
@@ -130,6 +136,7 @@ fun CalendarScreen(
     onOpenTask: (String) -> Unit,
     onOpenMyMission: () -> Unit,
     date: String? = null, view: String? = null, lens: String? = null, focus: String? = null, scope: String? = null, task: String? = null,
+    nonce: String? = null,
     vm: CalendarViewModel = viewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -137,7 +144,8 @@ fun CalendarScreen(
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val config by container.remoteConfig.body.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(date, view, lens, focus, scope, task) { vm.applyLink(date, view, lens, focus, scope, task) }
+    // Runs again on every return to this entry and on rotation; the VM applies a link only once.
+    LaunchedEffect(date, view, lens, focus, scope, task, nonce) { vm.applyLink(date, view, lens, focus, scope, task, nonce) }
     // On show and every return to the foreground, then every calendarPollSeconds while visible (with ETag).
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -148,7 +156,12 @@ fun CalendarScreen(
     val opening = s.opening
     LaunchedEffect(opening) { if (opening is CalOpen.Edit) { vm.opened(); onOpenTask(opening.taskId) } }
     val dark = c.background.luminance() < 0.5f
+    // A refresh of data already on screen failed: say so, with the time of the data shown.
+    val snackbar = remember { SnackbarHostState() }
+    val failedText = s.loadedAt?.let { stringResource(R.string.cal_refresh_failed, loadedClock(it)) }
+    LaunchedEffect(s.refreshFailures) { if (s.refreshFailures > 0 && failedText != null) snackbar.showSnackbar(failedText) }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -196,6 +209,8 @@ fun CalendarScreen(
                 if (filtersOpen) FiltersScreen(d, vm) { filtersOpen = false }
             }
         }
+    }
+    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
     when (opening) {
         is CalOpen.Preview -> TaskPreview(opening.taskId, opening.projectName) { vm.opened() }
@@ -368,9 +383,24 @@ internal fun MonthGrid(d: CalDerived, vm: CalendarViewModel, modifier: Modifier 
     }
 }
 
+/** "14.05" / "14:05": when the data on screen was loaded, WIB. */
+internal fun loadedClock(ms: Long): String = java.time.Instant.ofEpochMilli(ms).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE).let { clock("%02d:%02d".format(it.hour, it.minute)) }
+
+/**
+ * The range on screen is not loaded yet (a bar under the grid) or failed (the reason + Try again).
+ * Shown instead of any "no tasks" notice: an unloaded month is not an empty one.
+ */
+@Composable
+internal fun RangeStatus(d: CalDerived, vm: CalendarViewModel) {
+    val err = d.s.rangeError
+    if (err == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+    else Notice(stringResource(R.string.cal_load_failed) + ". " + err, stringResource(R.string.try_again)) { vm.retry() }
+}
+
 /** Empty month, empty filters, truncated: said under the grid. */
-private fun LazyListScope.monthNotices(d: CalDerived, vm: CalendarViewModel) {
+internal fun LazyListScope.monthNotices(d: CalDerived, vm: CalendarViewModel) {
     val s = d.s
+    if (!d.ready) { item(key = "rangestatus") { RangeStatus(d, vm) }; return }
     val monthItems = d.all.count { CalendarCore.sameMonth(it.day, s.day) }
     val monthShown = d.shown.count { CalendarCore.sameMonth(it.day, s.day) }
     if (s.items?.truncated == true) item { Notice(stringResource(R.string.cal_truncated), null) {} }
@@ -397,6 +427,15 @@ internal fun LazyListScope.dayPanel(d: CalDerived, vm: CalendarViewModel) {
     val s = d.s
     item(key = "dayhead") { DayHeader(d, vm) }
     if (d.rail.isNotEmpty()) item(key = "rail") { OverdueRail(d, vm) }
+    if (!d.ready) {
+        // Loading: placeholders where the day's cards go. Failed: the reason is under the grid already.
+        if (d.s.rangeError == null) item(key = "dayskeleton") {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                repeat(2) { Box(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(14.dp)).background(Nx.colors.muted)) }
+            }
+        }
+        return
+    }
     val root = d.tree.root
     if (root == null) {
         item(key = "dayempty") {
@@ -433,7 +472,7 @@ private fun DayHeader(d: CalDerived, vm: CalendarViewModel) {
                     if (rel != null) { Spacer(Modifier.width(8.dp)); Text(stringResource(rel), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
                         modifier = Modifier.clip(CircleShape).background(Color(0xFF1E3A5F)).padding(horizontal = 8.dp, vertical = 2.dp)) }
                 }
-                Text(pluralStringResource(R.plurals.cal_tasks_n, d.tree.total, d.tree.total) + " · " + pluralStringResource(R.plurals.cal_people_n, d.tree.people, d.tree.people),
+                if (d.ready) Text(pluralStringResource(R.plurals.cal_tasks_n, d.tree.total, d.tree.total) + " · " + pluralStringResource(R.plurals.cal_people_n, d.tree.people, d.tree.people),
                     fontSize = 12.sp, color = c.mutedFg)
                 d.holidays[s.day]?.let { Text(it, fontSize = 12.sp, color = c.danger) }
             }
@@ -660,11 +699,11 @@ internal fun CalendarPreviewLayout(s: CalState, vm: CalendarViewModel, tablet: B
     Column(Modifier.fillMaxSize().background(c.background)) {
         if (s.view == CalView.PEOPLE) PeopleView(d, vm, tablet, onFilters = {})
         else if (tablet) Row(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.weight(1f).fillMaxHeight()) { item { Controls(d, vm) {} }; item { Legend(d, vm) }; item { MonthGrid(d, vm, Modifier.padding(horizontal = 16.dp)) }; item { LegendHint(d) } }
+            LazyColumn(Modifier.weight(1f).fillMaxHeight()) { item { Controls(d, vm) {} }; item { Legend(d, vm) }; item { MonthGrid(d, vm, Modifier.padding(horizontal = 16.dp)) }; item { LegendHint(d) }; monthNotices(d, vm) }
             Box(Modifier.width(1.dp).fillMaxHeight().background(c.border))
             LazyColumn(Modifier.width(360.dp).fillMaxHeight()) { dayPanel(d, vm) }
         } else LazyColumn(Modifier.fillMaxSize()) {
-            item { Controls(d, vm) {} }; item { Legend(d, vm) }; item { MonthGrid(d, vm, Modifier.padding(horizontal = 12.dp)) }; item { LegendHint(d) }; dayPanel(d, vm)
+            item { Controls(d, vm) {} }; item { Legend(d, vm) }; item { MonthGrid(d, vm, Modifier.padding(horizontal = 12.dp)) }; item { LegendHint(d) }; monthNotices(d, vm); dayPanel(d, vm)
         }
     }
     if (filters) FiltersScreen(d, vm) {}

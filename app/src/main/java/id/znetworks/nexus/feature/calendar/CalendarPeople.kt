@@ -57,7 +57,9 @@ internal fun PeopleView(d: CalDerived, vm: CalendarViewModel, tablet: Boolean, o
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { Controls(d, vm, onFilters) }
         item { Legend(d, vm) }
-        if (rows.isEmpty()) item {
+        // Not loaded (or failed) for this week: a bar or the reason, never "nobody this week".
+        if (!d.ready) item { RangeStatus(d, vm) }
+        else if (rows.isEmpty()) item {
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.cal_nobody_week), fontWeight = FontWeight.SemiBold, color = c.foreground)
                 Text(stringResource(R.string.cal_pick_week), fontSize = 12.sp, color = c.mutedFg)

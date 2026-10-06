@@ -1781,6 +1781,7 @@
     <string name="cal_filter_by">Filter by %1$s</string>
     <string name="cal_other">Other</string>
     <string name="cal_times_wib">Times in WIB</string>
+    <string name="cal_refresh_failed">Couldn’t update. Data as of %s</string>
     <string name="cal_load_failed">The calendar could not be loaded</string>
     <string name="cal_check_connection">Check the connection and try again.</string>
     <string name="cal_none_title">This calendar is for members of the company</string>
