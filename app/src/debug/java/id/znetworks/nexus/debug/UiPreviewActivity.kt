@@ -127,7 +127,9 @@ class UiPreviewActivity : ComponentActivity() {
         val items = j.decodeFromString(id.znetworks.nexus.feature.calendar.CalItems.serializer(), body)
         // cal-loading / cal-failed: October's items held while November is on screen (audit P1).
         val other = screen == "cal-loading" || screen == "cal-failed"
-        val loadedRange = id.znetworks.nexus.feature.calendar.CalendarCore.gridRange(day)
+        val people = screen == "cal-people"
+        val loadedRange = if (people) id.znetworks.nexus.feature.calendar.CalendarCore.mondayOf(day).let { it to id.znetworks.nexus.feature.calendar.CalendarCore.addDays(it, 6) }
+            else id.znetworks.nexus.feature.calendar.CalendarCore.gridRange(day)
         return id.znetworks.nexus.feature.calendar.CalState(structure = structure, items = items, loading = other, day = if (other) "2026-11-10" else day,
             itemsRange = loadedRange, rangeError = if (screen == "cal-failed") "No internet connection." else null,
             view = if (screen == "cal-people") id.znetworks.nexus.feature.calendar.CalView.PEOPLE else id.znetworks.nexus.feature.calendar.CalView.MONTH,

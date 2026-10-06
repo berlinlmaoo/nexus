@@ -53,6 +53,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SegmentedButton
@@ -343,6 +345,8 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
     // Back zooms out before it leaves the Calendar (audit #32).
     BackHandler(enabled = !filtersOpen && d != null && !d.atTop) { vm.focus(d?.ix?.ancestors(d.focus)?.firstOrNull()) }
 
+    // Icons and text default to the theme's foreground (no Surface here): visible in dark mode too.
+    CompositionLocalProvider(LocalContentColor provides c.foreground) {
     BoxWithConstraints(Modifier.fillMaxSize().background(c.background)) {
         val layout = when {
             maxWidth >= 840.dp && maxHeight >= 480.dp -> CalLayout.EXPANDED
@@ -379,6 +383,7 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
             }
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
     }
 }
 

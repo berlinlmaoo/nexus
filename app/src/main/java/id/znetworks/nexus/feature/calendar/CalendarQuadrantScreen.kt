@@ -72,6 +72,7 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
     val title = stringResource(when (quadrant) { Quadrant.DO -> R.string.wcal_q_do; Quadrant.PLAN -> R.string.wcal_q_plan; Quadrant.ACT -> R.string.wcal_q_act; Quadrant.LATER -> R.string.wcal_q_later })
     val note = when (quadrant) { Quadrant.ACT -> R.string.wcal_q_act_note; Quadrant.LATER -> R.string.wcal_q_later_note; else -> null }
     val scopeLabel = stringResource(when (glanceScope) { GlanceScope.DIVISION -> R.string.wcal_scope_division; GlanceScope.ALL -> R.string.wcal_scope_all; else -> R.string.wcal_scope_me })
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides c.foreground) {
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -97,6 +98,7 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
                 }
             }
         }
+    }
     }
 }
 

@@ -82,6 +82,7 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
     var failed by remember(taskId) { mutableStateOf(false) }
     var attempt by remember(taskId) { mutableStateOf(0) }
     LaunchedEffect(taskId, attempt) { failed = false; runCatching { api.task(taskId).value }.onSuccess { task = it }.onFailure { failed = true } }
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides c.foreground) {
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -142,6 +143,7 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
                 }
             }
         }
+    }
     }
 }
 

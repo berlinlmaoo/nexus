@@ -79,6 +79,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
         .sortedWith { a, b -> CalendarCore.localeCompare(a.second, b.second) }
     val projects = d.all.mapNotNull { it.project }.distinctBy { it.id }
     val shownProjects = projects.filter { qProjects.isBlank() || it.name.contains(qProjects.trim(), true) }.sortedWith { a, b -> CalendarCore.localeCompare(a.name, b.name) }
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides c.foreground) {
     Column(modifier.background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -151,6 +152,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
         Button(onClick = onClose, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).height(52.dp)) {
             Text(pluralStringResource(R.plurals.cal_show_n_tasks, n, n))
         }
+    }
     }
 }
 
