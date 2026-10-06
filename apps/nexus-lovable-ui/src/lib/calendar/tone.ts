@@ -91,8 +91,12 @@ export function useLogoTone(url: string | null): "light" | "dark" | null {
     const img = new Image();
     // Logos on another origin can only be read when they are fetched with CORS.
     img.crossOrigin = "anonymous";
-    img.onload = () => {
+    img.onload = async () => {
       try {
+        // Decoded off the main thread first: a synchronous drawImage of an undecoded logo froze the
+        // page for ~370 ms per large logo (Impeccable audit, 6 Oct 2026).
+        await img.decode().catch(() => undefined);
+        if (!live) return;
         const c = document.createElement("canvas");
         c.width = c.height = 32;
         const g = c.getContext("2d", { willReadFrequently: true });
