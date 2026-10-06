@@ -1,0 +1,105 @@
+{
+ "cell": {
+  "day": "2026-10-03",
+  "count": 4,
+  "dots": [
+   {
+    "unitId": "ouda117084994807e15c72c9a",
+    "filled": true,
+    "count": 4
+   }
+  ],
+  "overdue": true
+ },
+ "legend": [
+  {
+   "unitId": "ouda117084994807e15c72c9a",
+   "count": 4
+  }
+ ],
+ "tree": {
+  "total": 4,
+  "people": 1,
+  "unplaced": [],
+  "root": {
+   "unit": "PATS",
+   "count": 4,
+   "items": [],
+   "loose": [],
+   "people": [],
+   "children": [
+    {
+     "unit": "PATS Entertainment",
+     "count": 4,
+     "items": [
+      "cmunxi0cb005u01nn3gc19rgx",
+      "cmunxhdj2005b01nnxu80gjk9",
+      "cmunxfdq0004b01nnwhjmcfau",
+      "cmunxgh96004t01nn2j5qzlp6"
+     ],
+     "loose": [],
+     "people": [
+      {
+       "userId": "cmok1zwln006e08s0g4r5g84b",
+       "items": [
+        "cmunxi0cb005u01nn3gc19rgx",
+        "cmunxhdj2005b01nnxu80gjk9",
+        "cmunxfdq0004b01nnwhjmcfau",
+        "cmunxgh96004t01nn2j5qzlp6"
+       ]
+      }
+     ],
+     "children": []
+    }
+   ]
+  }
+ },
+ "week": [
+  {
+   "kind": "unit",
+   "unit": "PATS",
+   "depth": 0,
+   "count": 4
+  },
+  {
+   "kind": "unit",
+   "unit": "PATS Entertainment",
+   "depth": 1,
+   "count": 4
+  },
+  {
+   "kind": "person",
+   "unitId": "ouda117084994807e15c72c9a",
+   "userId": "cmok1zwln006e08s0g4r5g84b",
+   "depth": 2,
+   "days": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+     "cmunxi0cb005u01nn3gc19rgx",
+     "cmunxhdj2005b01nnxu80gjk9",
+     "cmunxfdq0004b01nnwhjmcfau",
+     "cmunxgh96004t01nn2j5qzlp6"
+    ],
+    []
+   ]
+  }
+ ],
+ "overdue": {
+  "cmunxi0cb005u01nn3gc19rgx": "recent",
+  "cmunxhdj2005b01nnxu80gjk9": "recent",
+  "cmunxfdq0004b01nnwhjmcfau": "recent",
+  "cmunxgh96004t01nn2j5qzlp6": "recent",
+  "x_h2a21yc29ydg": "recent",
+  "x_h2bzA5emFnOQ": "recent",
+  "cmuppgahr047t01qizvo8x5td": "none",
+  "cmuofioc800vm01qiqczbfgj7": "none",
+  "cmunx4kld009q01nqndjkfyzg": "none",
+  "cmuppa96b046701qiff754acx": "none",
+  "x_djZnh2aW91Yg": "none",
+  "x_dwZ3g1NXMxOA": "none"
+ }
+}
