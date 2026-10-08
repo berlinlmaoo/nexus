@@ -77,9 +77,11 @@ class ChatApi(private val api: ApiClient) {
         api.send(Request.Builder().url(api.url("/api/conversations/$id")).patch(buildJsonObject { put("name", name.trim()) }.toString().toJsonBody()).build(),
             ConversationResponse.serializer()).conversation
 
-    suspend fun addMembers(id: String, userIds: List<String>) = post("/api/conversations/$id/members", buildJsonObject {
-        putJsonArray("userIds") { userIds.forEach { add(JsonPrimitive(it)) } }
-    })
+    /** Add people to a GROUP (Manager and above since 8 Oct; anyone else gets 403 MANAGER_REQUIRED, see [ChatRules]). */
+    suspend fun addMembers(id: String, userIds: List<String>): Conversation =
+        api.send(Request.Builder().url(api.url("/api/conversations/$id/members")).post(buildJsonObject {
+            putJsonArray("userIds") { userIds.forEach { add(JsonPrimitive(it)) } }
+        }.toString().toJsonBody()).build(), ConversationResponse.serializer()).conversation
 
     private suspend fun post(path: String, body: JsonObject): JsonObject =
         api.send(Request.Builder().url(api.url(path)).post(body.toString().toJsonBody()).build(), JsonObject.serializer())

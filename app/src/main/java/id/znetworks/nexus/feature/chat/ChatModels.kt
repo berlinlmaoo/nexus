@@ -43,6 +43,8 @@ data class Conversation(
     val unreadCount: Int = 0,
     /** Muted until then (ISO; far future = always); null = not muted. Servers before 8 Oct send none. */
     val mutedUntil: String? = null,
+    /** Whether you may add or remove members of this GROUP (owner, 8 Oct: Manager and above). Null = a server from before the rule. */
+    val canManageMembers: Boolean? = null,
 ) {
     fun muted(nowMs: Long = System.currentTimeMillis()): Boolean =
         mutedUntil?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() > nowMs }.getOrDefault(true) } ?: false
@@ -136,4 +138,14 @@ object Mentions {
 
     /** The members whose tag is still in the final text. */
     fun ids(text: String, picked: Map<String, String>) = picked.filterValues { it in text }.keys.toList()
+}
+
+/** Who may grow a room (ANDROID-GROUP-ADMINS, owner 8 Oct; iOS showsAddPeople). */
+object ChatRules {
+    /** A project room adds through the project; a GROUP only when the server has not said no; a DM never. */
+    fun showsAddPeople(conv: Conversation?): Boolean =
+        conv != null && (conv.projectId != null || (conv.type == "GROUP" && conv.canManageMembers != false))
+
+    /** The server's 403 for someone below Manager, told apart from other 403s by its code, never its sentence. */
+    fun managerRequired(e: Throwable): Boolean = (e as? id.znetworks.nexus.core.net.ApiError.Http)?.let { it.status == 403 && it.code == "MANAGER_REQUIRED" } == true
 }

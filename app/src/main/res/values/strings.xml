@@ -1982,4 +1982,14 @@
     <string name="chat_mute_always">Mute always</string>
     <string name="chat_mute_unavailable">Muting isn\'t available on the server yet.</string>
     <string name="tab_calendar">Calendar</string>
+    <!-- Group chat members: Manager and above (owner, 8 Oct) -->
+    <string name="chat_add_people">Add people</string>
+    <string name="chat_add_project_hint">Anyone you add joins the project itself, not just this chat.</string>
+    <string name="chat_added_group">Added to the group.</string>
+    <string name="chat_added_project">Added. They\'ll show up here once they open the app.</string>
+    <string name="chat_add_partial">Couldn\'t add everyone. Some people were left out.</string>
+    <string name="chat_everyone_here">Everyone\'s already here</string>
+    <string name="chat_everyone_here_group">Every workspace member is already in this chat.</string>
+    <string name="chat_everyone_here_project">Every workspace member is already in this project.</string>
+    <string name="chat_manager_required">Only managers and above can add or remove members.</string>
 </resources>

@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.chat
 
+import androidx.compose.material.icons.filled.PersonAdd
+import id.znetworks.nexus.feature.projects.RosterMember
+import id.znetworks.nexus.feature.projects.ProjectsApi
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -27,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -129,6 +133,9 @@ data class ThreadState(
     val nextCursor: String? = null,
     /** False once the server answered 404 to mute: the option is hidden. */
     val muteSupported: Boolean = true,
+    /** The workspace people for Add people; null until asked for. */
+    val roster: List<RosterMember>? = null,
+    val adding: Boolean = false,
 )
 
 class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -288,6 +295,47 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         }
     }
 
+    fun loadRoster() = viewModelScope.launch {
+        if (_state.value.roster != null) return@launch
+        val list = try { ProjectsApi(c.api).roster().members } catch (e: ApiError) { emptyList() }
+        _state.update { it.copy(roster = list) }
+    }
+
+    /** The conversation as the server has it now (members, canManageMembers). */
+    private suspend fun refreshConversation() {
+        val conv: Conversation? = try { api.conversations().value.conversations.firstOrNull { it.id == id } } catch (e: ApiError) { null }
+        if (conv != null) _state.update { it.copy(conversation = conv) }
+    }
+
+    /**
+     * Add people (iOS AddProjectPeopleSheet): a project room adds them to the project (their seat in the
+     * room follows when they next open the app); a GROUP adds them to the room itself, which only Manager
+     * and above may do — a MANAGER_REQUIRED refusal shows this app's sentence and hides the control.
+     */
+    fun addPeople(userIds: List<String>) = viewModelScope.launch {
+        val conv = _state.value.conversation ?: return@launch
+        if (userIds.isEmpty()) return@launch
+        _state.update { it.copy(adding = true, notice = null) }
+        val pid = conv.projectId
+        try {
+            if (pid != null) {
+                val projects = ProjectsApi(c.api)
+                val failed = userIds.count { uid -> try { projects.addMember(pid, uid); false } catch (e: ApiError) { true } }
+                _state.update { it.copy(notice = res.getString(if (failed > 0) R.string.chat_add_partial else R.string.chat_added_project)) }
+            } else {
+                val updated = api.addMembers(id, userIds)
+                _state.update { it.copy(conversation = if (updated.members.isNotEmpty()) updated else it.conversation, notice = res.getString(R.string.chat_added_group)) }
+                refreshConversation()
+            }
+        } catch (e: ApiError) {
+            if (ChatRules.managerRequired(e)) {
+                _state.update { it.copy(notice = res.getString(R.string.chat_manager_required), conversation = it.conversation?.copy(canManageMembers = false)) }
+                refreshConversation()
+            } else _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
+        }
+        _state.update { it.copy(adding = false) }
+    }
+
     fun rename(name: String) = viewModelScope.launch {
         try { val conv = api.rename(id, name); _state.update { it.copy(conversation = conv) } }
         catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
@@ -305,6 +353,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
     var menu by remember { mutableStateOf(false) }
     var attachMenu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
+    var addingPeople by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<String?>(null) }
     val list = rememberLazyListState()
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let(vm::attach) }
@@ -345,6 +394,10 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
                     if (conv?.muted() == true) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                 }
                 if (conv != null && conv.type != "DM") Text(stringResource(R.string.chat_members_n, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
+            }
+            // Add people: project rooms through the project, a GROUP for Manager and above (ChatRules).
+            if (ChatRules.showsAddPeople(conv)) IconButton(onClick = { vm.loadRoster(); addingPeople = true }, enabled = !s.adding) {
+                Icon(Icons.Filled.PersonAdd, stringResource(R.string.chat_add_people), tint = c.violetText)
             }
             if (conv != null && (conv.type == "GROUP" || s.muteSupported)) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
@@ -491,6 +544,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
             }
         }
     }
+    if (addingPeople && conv != null) AddPeopleDialog(conv, s.roster, vm.meId, onDismiss = { addingPeople = false }) { ids -> addingPeople = false; vm.addPeople(ids) }
     if (renaming) {
         var name by rememberSaveable { mutableStateOf(conv?.name.orEmpty()) }
         AlertDialog(onDismissRequest = { renaming = false }, title = { Text(stringResource(R.string.chat_rename)) },
@@ -533,3 +587,50 @@ object ChatText {
     /** "www.x.id" opens as "https://www.x.id". */
     fun url(raw: String) = if (raw.startsWith("http", ignoreCase = true)) raw else "https://$raw"
 }
+
+/** Pick workspace people not yet in the room (iOS AddProjectPeopleSheet; a dialog, not a bottom sheet). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, meId: String?, onDismiss: () -> Unit, onAdd: (List<String>) -> Unit) {
+    val c = Nx.colors
+    var q by rememberSaveable { mutableStateOf("") }
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    val inRoom = conv.members.map { it.uid }.toSet() + listOfNotNull(meId)
+    val candidates = roster.orEmpty().filter { m -> (m.userId ?: m.id).let { !it.isNullOrBlank() && it !in inRoom } }
+    val shown = candidates.filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), true) } }
+        .sortedBy { it.name.orEmpty().lowercase() }
+    val project = conv.projectId != null
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.chat_add_people)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (project) Text(stringResource(R.string.chat_add_project_hint), fontSize = 12.sp, color = c.mutedFg)
+                when {
+                    roster == null -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    candidates.isEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(stringResource(R.string.chat_everyone_here), fontWeight = FontWeight.Bold, color = c.foreground)
+                        Text(stringResource(if (project) R.string.chat_everyone_here_project else R.string.chat_everyone_here_group), fontSize = 13.sp, color = c.mutedFg)
+                    }
+                    else -> {
+                        OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(shown, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
+                                val uid = m.userId ?: m.id ?: ""
+                                val on = uid in picked
+                                Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                                    Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
+                                    androidx.compose.material3.Checkbox(on, { picked = if (on) picked - uid else picked + uid })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onAdd(picked.toList()) }, enabled = picked.isNotEmpty()) { Text(stringResource(R.string.add)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+

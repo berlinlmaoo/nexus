@@ -1976,4 +1976,14 @@
     <string name="chat_mute_always">Bisukan selamanya</string>
     <string name="chat_mute_unavailable">Fitur bisukan belum tersedia di server.</string>
     <string name="tab_calendar">Kalender</string>
+    <!-- Group chat members: Manager and above (owner, 8 Oct) -->
+    <string name="chat_add_people">Tambah orang</string>
+    <string name="chat_add_project_hint">Orang yang ditambahkan ikut masuk ke proyeknya, bukan cuma ke chat ini.</string>
+    <string name="chat_added_group">Ditambahkan ke grup.</string>
+    <string name="chat_added_project">Sudah ditambahkan. Mereka muncul di sini setelah membuka aplikasi.</string>
+    <string name="chat_add_partial">Tidak semua orang berhasil ditambahkan.</string>
+    <string name="chat_everyone_here">Semua orang sudah di sini</string>
+    <string name="chat_everyone_here_group">Semua anggota workspace sudah ada di obrolan ini.</string>
+    <string name="chat_everyone_here_project">Semua anggota workspace sudah ada di proyek ini.</string>
+    <string name="chat_manager_required">Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.</string>
 </resources>
