@@ -16,8 +16,10 @@ extension Notification.Name {
     static let nexusAuditChanged = Notification.Name("nexus.audit.changed")
 
     /// The workspace's structure changed: a project was created, renamed, moved to another folder,
-    /// deleted or restored, or a folder changed. userInfo: `RealtimeKey.kind` ("projects" | "folders"
-    /// | "audit"), optionally `RealtimeKey.projectId` / `RealtimeKey.folderId`.
+    /// deleted or restored, or a folder changed; or something in Z Vault was added, renamed, moved,
+    /// trashed, restored or locked ("vault", server since 9 Oct 2026). userInfo: `RealtimeKey.kind`
+    /// ("projects" | "folders" | "audit" | "vault"), optionally `RealtimeKey.projectId` /
+    /// `RealtimeKey.folderId`.
     static let nexusWorkspaceChanged = Notification.Name("nexus.workspace.changed")
 
     /// A task of a project was created, changed, moved or deleted, a comment was added to one, or a
@@ -52,4 +54,6 @@ enum RealtimeKind {
     static let projects = "projects"
     static let folders = "folders"
     static let audit = "audit"
+    /// Z Vault: anything a colleague would see change in a folder listing. Ids only, like the rest.
+    static let vault = "vault"
 }

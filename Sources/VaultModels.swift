@@ -38,6 +38,9 @@ struct VaultItem: Codable, Identifiable, Hashable {
     let trashed: Bool
     let createdAt: String?
     let canModify: Bool
+    /// `/api/vault/items/<id>/thumb?v=…` for a picture the server can make a small copy of; nil for
+    /// everything else and from servers before 9 Oct 2026. Ask for a size with `thumbURL(width:)`.
+    let thumbUrl: String?
 
     var isFolder: Bool { kind == "FOLDER" }
     /// Locked by a role threshold somewhere up the tree. Shown as a small padlock, never used to

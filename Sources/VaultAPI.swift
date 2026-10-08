@@ -44,6 +44,17 @@ extension APIClient {
         try await vaultPatch(itemId, body: ["restore": true])
     }
 
+    /// Put an item in another folder, or at the top level with nil.
+    ///
+    /// The server decides everything that matters and its refusal is the text to show: a folder can
+    /// never go into itself or anything below it, the destination must be a folder this person may
+    /// write in, and a name already taken there gets " (2)" — so the item that comes back may carry a
+    /// new name. The top level is sent as an explicit null: leaving `parentId` out would not be a move.
+    @discardableResult
+    func vaultMove(_ itemId: String, to parentId: String?) async throws -> VaultItem {
+        try await vaultPatch(itemId, body: ["parentId": jsonOrNull(parentId)])
+    }
+
     private func vaultPatch(_ itemId: String, body: [String: Any]) async throws -> VaultItem {
         var req = makeRequest("/api/vault/items/\(vaultEnc(itemId))", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
