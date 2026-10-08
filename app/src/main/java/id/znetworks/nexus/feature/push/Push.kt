@@ -159,6 +159,8 @@ class PushManager(
             val t = type.orEmpty().lowercase()
             return when {
                 t == "attendance_auto_offsite_checkout" -> "attendance_location"
+                // A staff member has been outside the office a while (Berlin, 8 Oct): for whoever approves them.
+                t == "attendance_outside_approver" -> "approvals"
                 t.startsWith("attendance_request") || t.startsWith("offsite_checkout") -> "approvals"
                 t.startsWith("attendance") || t.startsWith("dayoff") || t.startsWith("red_date") -> "attendance_reminders"
                 t.startsWith("message") || t.startsWith("feed") -> "messages"

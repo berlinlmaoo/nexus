@@ -1,5 +1,13 @@
 package id.znetworks.nexus.feature.inbox
 
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedButton
@@ -174,6 +182,20 @@ fun InboxScreen(vm: InboxViewModel = viewModel()) {
     }
 }
 
+/** The row's mark, by kind (Berlin, 8 Oct: a staff member outside the office has its own). */
+internal fun inboxIcon(type: String?): ImageVector = when {
+    type.orEmpty().lowercase() == "attendance_outside_approver" -> Icons.AutoMirrored.Filled.DirectionsWalk
+    else -> when (InboxGroup.of(type)) {
+        InboxGroup.TASKS -> Icons.Filled.TaskAlt
+        InboxGroup.ATTENDANCE -> Icons.Filled.EventAvailable
+        InboxGroup.MESSAGES -> Icons.AutoMirrored.Filled.Chat
+        InboxGroup.SUBMISSIONS -> Icons.Filled.Description
+        InboxGroup.TICKETS -> Icons.Filled.ConfirmationNumber
+        InboxGroup.ANNOUNCEMENTS -> Icons.Filled.Campaign
+        else -> Icons.Filled.Notifications
+    }
+}
+
 @Composable
 private fun InboxRow(item: InboxItem, onClick: () -> Unit) {
     val c = Nx.colors
@@ -182,6 +204,11 @@ private fun InboxRow(item: InboxItem, onClick: () -> Unit) {
             .border(1.dp, c.border, RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(12.dp),
     ) {
         Box(Modifier.padding(top = 5.dp).size(8.dp).background(if (item.read) Color.Transparent else c.violet, CircleShape))
+        Spacer(Modifier.size(8.dp))
+        val outside = item.type.orEmpty().lowercase() == "attendance_outside_approver"
+        Box(Modifier.size(32.dp).background(if (outside) c.warning.copy(alpha = 0.18f) else c.muted, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(inboxIcon(item.type), null, tint = if (outside) c.warningFg else c.mutedFg, modifier = Modifier.size(18.dp))
+        }
         Spacer(Modifier.size(10.dp))
         Column(Modifier.weight(1f)) {
             Text(item.title.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = c.foreground)

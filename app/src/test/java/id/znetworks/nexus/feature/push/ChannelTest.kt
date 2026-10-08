@@ -24,4 +24,12 @@ class ChannelTest {
         assertEquals("system", PushManager.channelFor("brand_new", null))
         assertEquals("system", PushManager.channelFor("app_update", "system"))
     }
+
+    @Test fun outsideApproverGoesToApprovals() {
+        // Berlin, 8 Oct: a staff member outside the office, for their approver — the approvals channel,
+        // the Attendance group in the Inbox, and the link opens the attendance board.
+        assertEquals("approvals", PushManager.channelFor("attendance_outside_approver", null))
+        assertEquals(id.znetworks.nexus.feature.inbox.InboxGroup.ATTENDANCE, id.znetworks.nexus.feature.inbox.InboxGroup.of("attendance_outside_approver"))
+        assertEquals(id.znetworks.nexus.core.nav.Target.Attendance(), id.znetworks.nexus.core.nav.Links.parse("/attendance"))
+    }
 }
