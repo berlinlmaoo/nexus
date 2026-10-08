@@ -29,11 +29,13 @@ export const CHAT_MEMBER_SELECT = {
  */
 export const CHAT_MESSAGE_INCLUDE = {
   user: { select: { id: true, name: true, avatar: true } },
-  // Just enough of the quoted message to render a preview; the client never needs its body.
+  // Just enough of the quoted message to render a preview: its text, the picture's thumbnail
+  // (attachmentUrl, 8 Oct 2026 — the quoted message is in the same room) and who wrote it.
   replyTo: {
     select: {
       id: true,
       content: true,
+      attachmentUrl: true,
       attachmentType: true,
       user: { select: { id: true, name: true } },
     },
