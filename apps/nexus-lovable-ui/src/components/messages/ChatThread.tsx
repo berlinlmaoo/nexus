@@ -7,6 +7,7 @@ import { usePageVisible } from "@/lib/chat-unread";
 import { localeOf, useLang, t as translate } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { MessageText, safeHref } from "@/components/messages/MessageText";
+import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 
 function initialsOf(name?: string | null) {
   if (!name) return "?";
@@ -64,6 +65,12 @@ type ThreadData = {
   olderCursor: string | null;
   /** The server sends nextCursor, so it also understands `after=`. */
   cursorAware: boolean;
+  /**
+   * The window was opened around one message (a search result, a far-away quote) and does not reach
+   * the newest message yet. New messages are not stitched on below it — they would leave a hole — and
+   * the newer ones load as you scroll down, or all at once with "Jump to latest".
+   */
+  hasMoreNewer?: boolean;
 };
 
 const PAGE = 50;
@@ -92,14 +99,18 @@ function fromPage(res: NexusMessagePage): ThreadData {
     hasMoreOlder: !!res.hasMore,
     olderCursor: res.nextCursor ?? messages[0]?.createdAt ?? null,
     cursorAware: "nextCursor" in res,
+    hasMoreNewer: !!res.hasMoreNewer,
   };
 }
 
 const threadKey = (conversationId: string) => ["messages", conversationId] as const;
 
-/** Adds messages to a thread already in the cache; a thread that isn't cached is left for its first fetch. */
+/**
+ * Adds messages to a thread already in the cache; a thread that isn't cached is left for its first
+ * fetch, and a window opened further up (hasMoreNewer) is left alone until it reaches the bottom.
+ */
 function addToThread(qc: QueryClient, conversationId: string, incoming: NexusMessage[]) {
-  qc.setQueryData<ThreadData>(threadKey(conversationId), (cur) => (cur ? { ...cur, messages: mergeMessages(cur.messages, incoming) } : cur));
+  qc.setQueryData<ThreadData>(threadKey(conversationId), (cur) => (cur && !cur.hasMoreNewer ? { ...cur, messages: mergeMessages(cur.messages, incoming) } : cur));
 }
 
 async function fetchThread(qc: QueryClient, conversationId: string): Promise<ThreadData> {
@@ -107,6 +118,8 @@ async function fetchThread(qc: QueryClient, conversationId: string): Promise<Thr
   const prev = qc.getQueryData<ThreadData>(key);
   const anchor = prev?.messages[prev.messages.length - 1];
   if (!prev || !anchor) return fromPage(await nexusApi.conversationMessages(conversationId, { limit: PAGE }));
+  // A window opened around an older message grows downwards by scrolling (loadNewer), not here.
+  if (prev.hasMoreNewer) return prev;
 
   // Merge into whatever the cache holds NOW, not `prev`: a socket insert or a confirmed send may
   // have landed while the request was out, and must not be overwritten.
@@ -172,10 +185,27 @@ function attachmentHref(url: string): string | null {
   return safeHref(url);
 }
 
-export function ChatThread({ conversationId, meId, members = [] }: { conversationId: string; meId?: string; members?: NexusUser[] }) {
+/** How long a jumped-to message stays highlighted. */
+const FLASH_MS = 2000;
+
+export function ChatThread({
+  conversationId,
+  meId,
+  members = [],
+  jump = null,
+  composerClassName,
+}: {
+  conversationId: string;
+  meId?: string;
+  members?: NexusUser[];
+  /** Scroll to this message (loading the page around it when needed) and highlight it; `seq` repeats a jump. */
+  jump?: { id: string; seq: number } | null;
+  /** Extra classes for the composer row (the page keeps it clear of the floating GIDEON button). */
+  composerClassName?: string;
+}) {
   const qc = useQueryClient();
   const { lang, t, tn } = useLang();
-  const { socket, connected } = useRealtime();
+  const { socket, connected, join } = useRealtime();
   const visible = usePageVisible();
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<{ url: string; type: string } | null>(null);
@@ -188,6 +218,7 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
   const [flashId, setFlashId] = useState<string | null>(null);
   const [outbox, setOutbox] = useState<Outgoing[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [loadingNewer, setLoadingNewer] = useState(false);
   const [olderFailed, setOlderFailed] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -203,6 +234,9 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
   const prependRef = useRef<{ conversationId: string; height: number; top: number } | null>(null);
   const prevLastRef = useRef<string | undefined>(undefined);
   const loadingOlderRef = useRef(false);
+  const loadingNewerRef = useRef(false);
+  // A jump waiting for its message to be drawn (after the page around it has loaded).
+  const pendingJumpRef = useRef<string | null>(null);
 
   useRealtimeRoom(`conversation:${conversationId}`);
 
@@ -226,17 +260,29 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
       const m = payload as NexusMessage | null;
       if (m && typeof m.id === "string" && m.conversationId === conversationId) addToThread(qc, conversationId, [m]);
     };
+    // Added back to a room after being taken out: the server dropped this socket from the room then,
+    // so ask to join again (the join is checked against the membership as it is now).
+    const onConversation = (payload: unknown) => {
+      const d = (payload ?? {}) as { conversationId?: unknown; reason?: unknown };
+      if (d.conversationId === conversationId && d.reason === "membership") join(`conversation:${conversationId}`);
+    };
     socket.on("message-created", onMessage);
-    return () => { socket.off("message-created", onMessage); };
-  }, [socket, conversationId, qc]);
+    socket.on("conversation-updated", onConversation);
+    return () => {
+      socket.off("message-created", onMessage);
+      socket.off("conversation-updated", onConversation);
+    };
+  }, [socket, conversationId, qc, join]);
 
   // Read receipt follows the LAST message, not the count: the count stops at the page size, so a
   // long chat used to stop being marked read after its 50th message. `upToMessageId` keeps a message
   // that lands mid-request unread (older servers ignore it). A tab in the background doesn't read —
   // its count shows in the title and the badge until you look.
   const markedRef = useRef<string | null>(null);
+  const detached = !!thread?.hasMoreNewer;
   useEffect(() => {
-    if (!lastServerId || !visible) return;
+    // Reading an older stretch (opened from a search) is not reading what came in since.
+    if (!lastServerId || !visible || detached) return;
     const mark = `${conversationId}:${lastServerId}`;
     if (markedRef.current === mark) return;
     markedRef.current = mark;
@@ -247,17 +293,37 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
       .markConversationRead(conversationId, lastServerId)
       .then(() => qc.invalidateQueries({ queryKey: ["conversations"] }))
       .catch(() => { if (markedRef.current === mark) markedRef.current = null; });
-  }, [conversationId, lastServerId, visible, qc]);
+  }, [conversationId, lastServerId, visible, qc, detached]);
+
+  // Stay at the bottom when the thread's box changes size while you are there: it is shown after
+  // being hidden (a phone opening the room), the window is resized, the composer grows.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let last = `${el.clientWidth}x${el.clientHeight}`;
+    const ro = new ResizeObserver(() => {
+      const size = `${el.clientWidth}x${el.clientHeight}`;
+      if (size === last) return;
+      last = size;
+      if (atBottomRef.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Switching rooms must not carry a half-written message or an unsent picture across.
   useEffect(() => {
     setInput(""); setPending(null); setTagged({}); setUploadError(null); setReplyTo(null);
     setOlderFailed(false); setNewBelow(0);
   }, [conversationId]);
+  // A room left while reading an older stretch opens at its newest messages next time.
+  useEffect(() => () => {
+    if (qc.getQueryData<ThreadData>(threadKey(conversationId))?.hasMoreNewer) qc.removeQueries({ queryKey: threadKey(conversationId) });
+  }, [conversationId, qc]);
   // The highlight on a jumped-to message is a nudge, not a state worth keeping.
   useEffect(() => {
     if (!flashId) return;
-    const timer = setTimeout(() => setFlashId(null), 1200);
+    const timer = setTimeout(() => setFlashId(null), FLASH_MS);
     return () => clearTimeout(timer);
   }, [flashId]);
 
@@ -307,7 +373,7 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
       if (o.conversationId !== conversationId) return false;
       if (o.status !== "sending") return true;
       const echo = messages.find((m) =>
-        !claimed.has(m.id) && !o.knownIds.has(m.id) && !!meId && m.userId === meId &&
+        !claimed.has(m.id) && !o.knownIds.has(m.id) && !!meId && m.userId === meId && !isSystemMessage(m) &&
         (m.content ?? "") === o.content && (m.attachmentUrl ?? "") === (o.attachmentUrl ?? ""));
       if (!echo) return true;
       claimed.add(echo.id);
@@ -354,7 +420,7 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
     } else if (lastServerId !== prevLast) {
       // Reading further up: don't yank the view, count what landed below instead.
       const from = prevLast ? messages.findIndex((m) => m.id === prevLast) : -1;
-      const landed = (from >= 0 ? messages.slice(from + 1) : messages.slice(-1)).filter((m) => m.userId !== meId).length;
+      const landed = (from >= 0 ? messages.slice(from + 1) : messages.slice(-1)).filter((m) => m.userId !== meId && !isSystemMessage(m)).length;
       if (landed > 0) setNewBelow((n) => n + landed);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -395,6 +461,38 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
     }
   }, [conversationId, qc]);
 
+  // A window opened around an older message: the next page below it, as you scroll down.
+  const loadNewer = useCallback(async () => {
+    const key = threadKey(conversationId);
+    const cur = qc.getQueryData<ThreadData>(key);
+    const last = cur?.messages[cur.messages.length - 1];
+    if (!cur?.hasMoreNewer || !last || loadingNewerRef.current) return;
+    loadingNewerRef.current = true;
+    setLoadingNewer(true);
+    try {
+      const res = await nexusApi.conversationMessages(conversationId, { after: last.id, limit: PAGE });
+      const rows = res.messages ?? [];
+      // Nothing to count as "new below": these were already there, just not loaded.
+      prevLastRef.current = rows[rows.length - 1]?.id ?? prevLastRef.current;
+      qc.setQueryData<ThreadData>(key, (c) => (c ? { ...c, messages: mergeMessages(c.messages, rows), hasMoreNewer: !!res.hasMore && rows.length > 0 } : c));
+    } catch {
+      // The bottom stays where it is; scrolling down again retries.
+    } finally {
+      loadingNewerRef.current = false;
+      setLoadingNewer(false);
+    }
+  }, [conversationId, qc]);
+
+  /** Back to the newest messages: from a window opened further up, a fresh latest page. */
+  const jumpToLatest = useCallback(() => {
+    if (qc.getQueryData<ThreadData>(threadKey(conversationId))?.hasMoreNewer) {
+      initialDoneRef.current = false;
+      atBottomRef.current = true;
+      // Back to no data: the fetch starts again from the latest page, and lands at the bottom.
+      void qc.resetQueries({ queryKey: threadKey(conversationId) });
+    }
+  }, [conversationId, qc]);
+
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -403,12 +501,14 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
     lastTopRef.current = el.scrollTop;
     // Only a scroll UP lets go of the bottom: a smooth scroll on its way down passes through
     // "not at the bottom" positions too, and must not count as the reader leaving.
-    if (nearBottom) { atBottomRef.current = true; setNewBelow(0); }
+    if (nearBottom && !detached) { atBottomRef.current = true; setNewBelow(0); }
     else if (goingUp) atBottomRef.current = false;
     if (initialDoneRef.current && goingUp && el.scrollTop < 160 && !olderFailed) void loadOlder();
+    if (detached && !goingUp && el.scrollHeight - el.scrollTop - el.clientHeight < 240) void loadNewer();
   };
 
   const scrollToBottom = () => {
+    if (detached) { setNewBelow(0); jumpToLatest(); return; }
     const el = scrollRef.current;
     if (!el) return;
     atBottomRef.current = true;
@@ -424,14 +524,48 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
 
   const startReply = (m: NexusMessage) => { setReplyTo(m); inputRef.current?.focus(); };
 
-  // Clicking a quote walks back to the message it came from while it is loaded; a quote of a
-  // message further up than what's loaded does nothing rather than jump to the wrong place.
-  const jumpTo = (id: string) => {
+  // Walk to a message and highlight it: a quote, a search result. One that isn't loaded yet brings
+  // the page around it (servers since 8 Oct 2026: `around=`), which then grows as you scroll.
+  const jumpTo = useCallback(async (id: string) => {
+    const el = bubbleRefs.current[id];
+    if (el) {
+      atBottomRef.current = false;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashId(id);
+      return;
+    }
+    try {
+      const res = await nexusApi.conversationMessages(conversationId, { around: id, limit: PAGE });
+      const rows = res.messages ?? [];
+      if (!rows.some((m) => m.id === id)) return; // an older server ignored `around`: stay put
+      const page = fromPage(res);
+      atBottomRef.current = false;
+      forceBottomRef.current = false;
+      prevLastRef.current = page.messages[page.messages.length - 1]?.id;
+      pendingJumpRef.current = id;
+      setNewBelow(0);
+      qc.setQueryData<ThreadData>(threadKey(conversationId), page);
+    } catch {
+      // Not reachable (deleted, or no longer in this room): nothing to show.
+    }
+  }, [conversationId, qc]);
+
+  // Once the page around a jumped-to message is drawn, bring it into view.
+  useLayoutEffect(() => {
+    const id = pendingJumpRef.current;
+    if (!id) return;
     const el = bubbleRefs.current[id];
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    pendingJumpRef.current = null;
+    el.scrollIntoView({ block: "center" });
     setFlashId(id);
-  };
+  }, [messages]);
+
+  // A jump asked for from outside (the info panel's search).
+  useEffect(() => {
+    if (jump?.id) void jumpTo(jump.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump?.seq]);
 
   const mentionQuery = useMemo(() => {
     const m = MENTION_TAIL.exec(input);
@@ -480,30 +614,40 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
     setOutbox((list) => [...list, o]);
     setInput(""); setPending(null); setTagged({}); setReplyTo(null);
     forceBottomRef.current = true;
+    // Writing from an older stretch: back to the bottom, where the message will appear.
+    jumpToLatest();
     deliver(o);
   };
 
   const hasMoreOlder = !!thread?.hasMoreOlder;
   let lastDay = "";
 
-  const renderQuote = (quoted: NexusMessage["replyTo"], mine: boolean) => quoted && (
-    <button
-      onClick={() => jumpTo(quoted.id)}
-      title={t("Jump to that message")}
-      className={cn(
-        "mb-1 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[11px] leading-snug transition-colors",
-        mine ? "border-primary-foreground/50 bg-primary-foreground/10 hover:bg-primary-foreground/20" : "border-primary/60 bg-background/60 hover:bg-background",
-      )}
-    >
-      <span className={cn("block font-semibold", mine ? "text-primary-foreground/90" : "text-foreground")}>{quoted.user?.name ?? t("A member")}</span>
-      <span className={cn("block truncate", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{quoteSnippet(quoted.content, quoted.attachmentType)}</span>
-    </button>
-  );
+  const renderQuote = (quoted: NexusMessage["replyTo"], mine: boolean) => {
+    if (!quoted) return null;
+    // A quoted picture shows as a thumbnail (servers since 8 Oct 2026 send its attachmentUrl).
+    const thumb = quoted.attachmentUrl && (!quoted.attachmentType || quoted.attachmentType.startsWith("image/")) ? attachmentHref(quoted.attachmentUrl) : null;
+    return (
+      <button
+        onClick={() => { void jumpTo(quoted.id); }}
+        title={t("Jump to that message")}
+        className={cn(
+          "mb-1 flex w-full items-center gap-2 rounded-lg border-l-2 px-2 py-1 text-left text-[11px] leading-snug transition-colors",
+          mine ? "border-primary-foreground/50 bg-primary-foreground/10 hover:bg-primary-foreground/20" : "border-primary/60 bg-background/60 hover:bg-background",
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className={cn("block font-semibold", mine ? "text-primary-foreground/90" : "text-foreground")}>{quoted.user?.name ?? t("A member")}</span>
+          <span className={cn("block truncate", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{!(quoted.content ?? "").trim() && thumb ? `📷 ${t("Photo")}` : quoteSnippet(quoted.content, quoted.attachmentType)}</span>
+        </span>
+        {thumb && <img src={thumb} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded object-cover" />}
+      </button>
+    );
+  };
 
   return (
     <div lang={lang} className="flex h-full flex-col">
       <div className="relative min-h-0 flex-1">
-      <div ref={scrollRef} onScroll={onScroll} className="h-full space-y-1.5 overflow-y-auto p-4">
+      <div ref={scrollRef} onScroll={onScroll} className="h-full space-y-1.5 overflow-y-auto overscroll-contain p-4">
         {messagesQuery.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
         {messagesQuery.isError && !thread && (
           <div className="py-10 text-center text-sm text-muted-foreground">
@@ -532,6 +676,31 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
           const day = dayLabel(m.createdAt);
           const showDay = day && day !== lastDay;
           lastDay = day;
+          // A group's log line ("Bagas added Mey"): centred, muted, no avatar, no bubble, no actions.
+          if (isSystemMessage(m)) {
+            const when = m.createdAt ? new Date(m.createdAt) : null;
+            const full = when && !Number.isNaN(when.getTime())
+              ? when.toLocaleString(localeOf(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
+              : "";
+            return (
+              <div key={m.id}>
+                {showDay && <div className="my-3 text-center text-[11px] font-semibold text-muted-foreground">{day}</div>}
+                <div className="flex justify-center py-1">
+                  <div
+                    ref={(el) => { bubbleRefs.current[m.id] = el; }}
+                    title={full}
+                    className={cn(
+                      "group/sys inline-flex max-w-[85%] items-baseline gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-center text-[11px] font-medium leading-snug text-muted-foreground ring-1 ring-border/60 transition-shadow",
+                      flashId === m.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                    )}
+                  >
+                    <span>{systemSentence(m, meId)}</span>
+                    <span className="hidden shrink-0 tabular-nums text-muted-foreground/70 group-hover/sys:inline">{fmtTime(m.createdAt)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          }
           const href = m.attachmentUrl ? attachmentHref(m.attachmentUrl) : null;
           return (
             <div key={m.id}>
@@ -540,7 +709,7 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
                 {!mine && <MiniAvatar user={m.user} size={26} />}
                 <div
                   ref={(el) => { bubbleRefs.current[m.id] = el; }}
-                  className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm transition-shadow", mine ? "bg-primary text-primary-foreground" : "bg-muted", flashId === m.id && "ring-2 ring-primary")}
+                  className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm transition-shadow", mine ? "bg-primary text-primary-foreground" : "bg-muted", flashId === m.id && "ring-2 ring-primary ring-offset-2 ring-offset-background")}
                 >
                   {!mine && <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{m.user?.name}</div>}
                   {renderQuote(m.replyTo, mine)}
@@ -564,12 +733,24 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
             </div>
           );
         })}
+        {detached && (
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={() => void loadNewer()}
+              disabled={loadingNewer}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-60"
+            >
+              {loadingNewer && <Loader2 className="h-3 w-3 animate-spin" />}
+              {loadingNewer ? t("Loading…") : t("Load newer messages")}
+            </button>
+          </div>
+        )}
         {shownOutbox.map((o) => {
           const failed = o.status === "failed";
           return (
             <div key={o.tempId} className="flex flex-col items-end gap-1">
               <div className={cn("max-w-[78%] rounded-2xl bg-primary px-3.5 py-2 text-sm text-primary-foreground", failed ? "opacity-70 ring-2 ring-destructive/60" : "opacity-80")}>
-                {renderQuote(o.replyTo ? { id: o.replyTo.id, content: o.replyTo.content, attachmentType: o.replyTo.attachmentType, user: o.replyTo.user } : null, true)}
+                {renderQuote(o.replyTo ? { id: o.replyTo.id, content: o.replyTo.content, attachmentUrl: o.replyTo.attachmentUrl, attachmentType: o.replyTo.attachmentType, user: o.replyTo.user } : null, true)}
                 {o.attachmentUrl && <img src={o.attachmentUrl} alt="" onLoad={onMediaLoad} className="mb-1 max-h-72 w-auto max-w-full rounded-xl object-cover" />}
                 {o.content && <MessageText text={o.content} mine />}
                 <span className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
@@ -592,17 +773,17 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
           );
         })}
       </div>
-      {newBelow > 0 && (
+      {(newBelow > 0 || detached) && (
         <button
           onClick={scrollToBottom}
           className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-pop transition-transform active:scale-[0.97]"
         >
-          <ArrowDown className="h-3.5 w-3.5" /> {tn(newBelow, "{n} new message", "{n} new messages")}
+          <ArrowDown className="h-3.5 w-3.5" /> {newBelow > 0 ? tn(newBelow, "{n} new message", "{n} new messages") : t("Jump to latest")}
         </button>
       )}
       </div>
 
-      <div className="relative border-t border-border p-3">
+      <div className={cn("relative border-t border-border p-3", composerClassName)}>
         {mentionMatches.length > 0 && (
           <div className="absolute bottom-full left-3 right-3 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-pop">
             {mentionMatches.map((u) => (
@@ -654,6 +835,9 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
           >
             {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
           </button>
+          {/* The hint is drawn over the box, cut with an ellipsis, rather than as a placeholder: a
+              placeholder wraps to a second, hidden line on a narrow screen. */}
+          <div className="relative min-w-0 flex-1">
           <textarea
             ref={inputRef}
             value={input}
@@ -667,9 +851,15 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
               }
             }}
             rows={1}
-            placeholder={t("Type a message…  (@ to tag someone)")}
-            className="max-h-32 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
+            aria-label={t("Type a message…  (@ to tag someone)")}
+            className="block max-h-32 w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
           />
+          {!input && (
+            <span aria-hidden className="pointer-events-none absolute left-[13px] right-[13px] top-[9px] truncate text-sm leading-5 text-muted-foreground">
+              {t("Type a message…  (@ to tag someone)")}
+            </span>
+          )}
+          </div>
           <button onClick={submit} disabled={!canSend} title={t("Send")} aria-label={t("Send")} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
             <Send className="h-4 w-4" />
           </button>
