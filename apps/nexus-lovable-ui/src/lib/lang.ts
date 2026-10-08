@@ -4,6 +4,8 @@ import { ID_CALENDAR } from "@/lib/i18n/id-calendar";
 import { ID_CALENDAR_EXTRA } from "@/lib/i18n/id-calendar-extra";
 import { ID_CALENDAR_PAGE } from "@/lib/i18n/id-calendar-page";
 import { ID_CHAT } from "@/lib/i18n/id-chat";
+import { ID_FORMER } from "@/lib/i18n/id-former";
+import { ID_OFFBOARD } from "@/lib/i18n/id-offboard";
 import { ID_COMMON } from "@/lib/i18n/id-common";
 import { ID_ORGCHART } from "@/lib/i18n/id-orgchart";
 
@@ -21,7 +23,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER };
 
 function read(): Lang {
   try {
