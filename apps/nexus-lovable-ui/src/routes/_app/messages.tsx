@@ -14,6 +14,7 @@ import { isMuted, usePageVisible } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtime } from "@/lib/realtime";
+import { useTypingRooms } from "@/lib/chat-typing";
 import { t, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,8 @@ function Messages() {
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const meId = me.data?.user?.id;
   const { connected, socket } = useRealtime();
+  // Who is typing where (server since 9 Oct 2026): "typing…" in the list and in the open chat's header.
+  const typingRooms = useTypingRooms();
   // The open group was deleted while it was on screen (by someone else, or in another tab): the thread
   // closes and this note stands in its place until another chat is opened.
   const [goneId, setGoneId] = useState<string | null>(null);
@@ -237,7 +240,11 @@ function Messages() {
                         <span className={cn("truncate text-sm", unread > 0 && !muted ? "font-bold" : "font-semibold")}>{convoTitle(c, meId)}</span>
                         {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t("Muted")} />}
                       </div>
-                      <div className={cn("truncate text-xs text-muted-foreground", isSystemMessage(c.lastMessage) && "italic")}>{lastLine(c, meId)}</div>
+                      {typingRooms.get(c.id)?.length ? (
+                        <div className="truncate text-xs font-medium text-primary">{t("typing…")}</div>
+                      ) : (
+                        <div className={cn("truncate text-xs text-muted-foreground", isSystemMessage(c.lastMessage) && "italic")}>{lastLine(c, meId)}</div>
+                      )}
                     </div>
                     {/* A muted room still counts its unread, quietly: grey, and left out of the nav badge. */}
                     {unread > 0 && (
@@ -267,11 +274,15 @@ function Messages() {
                   <ConvoAvatar c={active} meId={meId} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{convoTitle(active, meId)}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {tn(active.members?.length ?? 0, "{n} member", "{n} members")}
-                      {active.type === "PROJECT" ? ` · ${t("project room")}` : ""}
-                      {isMuted(active) ? ` · ${mutedLabel(active)}` : ""}
-                    </span>
+                    {typingRooms.get(active.id)?.length ? (
+                      <span className="block truncate text-xs font-medium text-primary">{t("typing…")}</span>
+                    ) : (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {tn(active.members?.length ?? 0, "{n} member", "{n} members")}
+                        {active.type === "PROJECT" ? ` · ${t("project room")}` : ""}
+                        {isMuted(active) ? ` · ${mutedLabel(active)}` : ""}
+                      </span>
+                    )}
                   </span>
                 </button>
                 <MuteMenu conversation={active} />
@@ -291,6 +302,7 @@ function Messages() {
                 conversationId={active.id}
                 meId={meId}
                 members={threadMembers}
+                kind={active.type}
                 jump={jump}
                 // The floating GIDEON button sits over the composer's right end (bottom-32 right-4 on a
                 // phone, bottom-6 right-6 from md): keep Send clear of it. With the info panel open the

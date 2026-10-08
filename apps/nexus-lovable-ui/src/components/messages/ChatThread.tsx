@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { AlertCircle, ArrowDown, Clock, ImagePlus, Loader2, Reply, RotateCw, Send, X } from "lucide-react";
 import { ApiError, fmtTime, nexusApi, type NexusConversation, type NexusMessage, type NexusMessagePage, type NexusUser } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
+import { useTypers, useTypingSender, type Typer } from "@/lib/chat-typing";
+import { Avatar, AvatarFace } from "@/components/Avatar";
 import { usePageVisible } from "@/lib/chat-unread";
 import { localeOf, useLang, t as translate } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -14,11 +16,41 @@ function initialsOf(name?: string | null) {
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
+/** The sender's photo beside their bubble (initials when there is none), as everywhere else in NEXUS. */
 function MiniAvatar({ user, size = 28 }: { user?: NexusUser | null; size?: number }) {
+  if (user?.id) return <Avatar userId={user.id} name={user.name} avatar={user.avatar} size={size} className="shrink-0" />;
+  return <AvatarFace name={user?.name} size={size} className="shrink-0" />;
+}
+
+/**
+ * Who is typing, at the bottom of the thread like WhatsApp: their photos beside one bubble of three
+ * dots (up to three photos, overlapping, then "+N"), and in a group or project room the words under it.
+ * The dots hold still under "reduce motion".
+ */
+function TypingRow({ typers, named }: { typers: Typer[]; named: boolean }) {
+  const { t } = useLang();
+  const shown = typers.slice(0, 3);
+  const more = typers.length - shown.length;
+  const label = typers.length === 1
+    ? t("{name} is typing…", { name: typers[0].name || t("Someone") })
+    : t("{n} people are typing…", { n: typers.length });
   return (
-    <span className="inline-grid shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary ring-1 ring-border" style={{ width: size, height: size, fontSize: size * 0.36 }} title={user?.name ?? ""}>
-      {initialsOf(user?.name)}
-    </span>
+    <div role="status" aria-live="polite" aria-label={label} className="flex items-end gap-2 pt-1">
+      <span className="flex shrink-0 -space-x-2" aria-hidden>
+        {shown.map((p) => <Avatar key={p.userId} userId={p.userId} name={p.name} avatar={p.avatar} size={26} />)}
+        {more > 0 && (
+          <span className="inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-background">+{more}</span>
+        )}
+      </span>
+      <span className="flex min-w-0 flex-col items-start">
+        <span className="inline-flex items-center gap-1 rounded-2xl bg-muted px-3.5 py-3" aria-hidden>
+          {[0, 150, 300].map((delay) => (
+            <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70 motion-reduce:animate-none" style={{ animationDelay: `${delay}ms` }} />
+          ))}
+        </span>
+        {named && <span className="mt-0.5 max-w-full truncate text-[11px] text-muted-foreground">{label}</span>}
+      </span>
+    </div>
   );
 }
 
@@ -192,12 +224,15 @@ export function ChatThread({
   conversationId,
   meId,
   members = [],
+  kind,
   jump = null,
   composerClassName,
 }: {
   conversationId: string;
   meId?: string;
   members?: NexusUser[];
+  /** "DM" | "GROUP" | "PROJECT": who is typing is named under the dots everywhere but in a DM. */
+  kind?: string;
   /** Scroll to this message (loading the page around it when needed) and highlight it; `seq` repeats a jump. */
   jump?: { id: string; seq: number } | null;
   /** Extra classes for the composer row (the page keeps it clear of the floating GIDEON button). */
@@ -239,6 +274,9 @@ export function ChatThread({
   const pendingJumpRef = useRef<string | null>(null);
 
   useRealtimeRoom(`conversation:${conversationId}`);
+  // "… is typing": what this composer says, and who else is (chat-typing.ts).
+  const typing = useTypingSender(socket, conversationId);
+  const typers = useTypers(conversationId);
 
   const messagesQuery = useQuery({
     queryKey: threadKey(conversationId),
@@ -384,7 +422,8 @@ export function ChatThread({
   // --- Scrolling: start at the bottom, follow new messages only while you're there, keep your
   // place when older ones are added above ---
   const firstId = messages[0]?.id;
-  const bottomKey = `${lastServerId ?? ""}|${shownOutbox.length}`;
+  // The typing bubble appearing counts as something new at the bottom (followed only while you're there).
+  const bottomKey = `${lastServerId ?? ""}|${shownOutbox.length}|${typers.length}`;
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -613,6 +652,7 @@ export function ChatThread({
     };
     setOutbox((list) => [...list, o]);
     setInput(""); setPending(null); setTagged({}); setReplyTo(null);
+    typing.stop();
     forceBottomRef.current = true;
     // Writing from an older stretch: back to the bottom, where the message will appear.
     jumpToLatest();
@@ -772,6 +812,7 @@ export function ChatThread({
             </div>
           );
         })}
+        {typers.length > 0 && !detached && <TypingRow typers={typers} named={kind !== "DM"} />}
       </div>
       {(newBelow > 0 || detached) && (
         <button
@@ -841,7 +882,8 @@ export function ChatThread({
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => { setInput(e.target.value); typing.onInput(e.target.value); }}
+            onBlur={typing.stop}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 // Enter picks the highlighted name while the mention list is open, and only sends

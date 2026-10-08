@@ -147,4 +147,9 @@ export const ID_CHAT: Record<string, string> = {
   "Only managers and above can delete this group.": "Hanya manager ke atas yang bisa menghapus grup ini.",
   "You're the only member left, so you can't leave. Delete the group instead.": "Kamu satu-satunya anggota, jadi tidak bisa keluar. Hapus grupnya saja.",
   "This group was deleted": "Grup ini sudah dihapus",
+
+  // "… is typing" (owner, 9 Oct 2026)
+  "typing…": "mengetik…",
+  "{name} is typing…": "{name} sedang mengetik…",
+  "{n} people are typing…": "{n} orang sedang mengetik…",
 }
