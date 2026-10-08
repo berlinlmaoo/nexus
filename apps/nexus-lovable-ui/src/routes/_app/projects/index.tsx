@@ -7,6 +7,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { ProjectTypeChosen, ProjectTypePicker } from "@/components/projects/ProjectTypePicker";
+import { projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
+import { useLang } from "@/lib/lang";
 import { projects as fallbackProjects } from "@/lib/mock-data";
 import { nexusApi, ORG_HIERARCHY, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
 import { folderPath } from "@/lib/folder-tree-client";
@@ -39,7 +42,12 @@ import {
   X,
 } from "lucide-react";
 
-export const Route = createFileRoute("/_app/projects/")({ component: ProjectsPage });
+export const Route = createFileRoute("/_app/projects/")({
+  component: ProjectsPage,
+  // `?new=1` opens "New project" (the sidebar's "+ New project" lands here, so every project starts by
+  // choosing its type — owner, 9 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { new?: 1 } => ({ new: s.new === 1 || s.new === "1" ? 1 : undefined }),
+});
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "In play", cls: "bg-success/15 text-success" },
@@ -93,6 +101,9 @@ function ProjectsPage() {
   const [newProjectIcon, setNewProjectIcon] = useState("🚀");
   const [newProjectColor, setNewProjectColor] = useState("#a168be");
   const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
+  // New project, step one (owner, 9 Oct 2026): what the project is for. null = the picker is showing.
+  const [newProjectType, setNewProjectType] = useState<ProjectTypeId | null>(null);
+  const { t: tr } = useLang();
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1 });
   const projects: NexusProject[] = projectsQuery.data?.length
@@ -188,6 +199,7 @@ function ProjectsPage() {
         icon: newProjectIcon.trim() || "🚀",
         color: newProjectColor,
         workspaceId: newProjectWorkspaceId || workspaceOptions[0]?.id || "",
+        type: newProjectType ?? "TASK",
       }),
     onSuccess: async (project) => {
       invalidateProjectData(queryClient);
@@ -198,10 +210,25 @@ function ProjectsPage() {
     },
   });
 
-  const createErrorMessage =
-    createProject.error instanceof Error
+  const createErrorKnown = projectSettingsErrorText((createProject.error as { payload?: { code?: unknown } } | null)?.payload?.code);
+  const createErrorMessage = createErrorKnown
+    ? tr(createErrorKnown)
+    : createProject.error instanceof Error
       ? createProject.error.message
       : "Create failed. Check session and workspace permission.";
+
+  const openCreate = () => {
+    if (!newProjectWorkspaceId && workspaceOptions[0]) setNewProjectWorkspaceId(workspaceOptions[0].id);
+    setNewProjectType(null);
+    setIsCreateOpen(true);
+  };
+  const search = Route.useSearch();
+  useEffect(() => {
+    if (search.new !== 1) return;
+    openCreate();
+    navigate({ to: "/projects", search: {}, replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.new]);
 
   // ---- Project folders (grouping) ----
   // Folders + role are scoped to the SAME workspace (the one new folders are created in) so the gate and
@@ -343,11 +370,7 @@ function ProjectsPage() {
             <Button
               size="sm"
               variant="primary"
-              onPress={() => {
-                if (!newProjectWorkspaceId && workspaceOptions[0])
-                  setNewProjectWorkspaceId(workspaceOptions[0].id);
-                setIsCreateOpen(true);
-              }}
+              onPress={openCreate}
             >
               <Plus className="h-3.5 w-3.5" /> New mission
             </Button>
@@ -361,7 +384,7 @@ function ProjectsPage() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-lg rounded-[32px] border border-border bg-card p-5 shadow-pop">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
@@ -381,7 +404,14 @@ function ProjectsPage() {
               </button>
             </div>
 
+            {newProjectType === null ? (
+              <div className="mt-5 space-y-3">
+                <p className="text-sm font-semibold">{tr("What is this project for?")}</p>
+                <ProjectTypePicker onPick={setNewProjectType} />
+              </div>
+            ) : (
             <div className="mt-5 space-y-3">
+              <ProjectTypeChosen type={newProjectType} onChange={() => setNewProjectType(null)} />
               <div className="grid grid-cols-[72px_1fr] gap-3">
                 <label className="text-xs font-semibold text-muted-foreground">
                   Icon
@@ -467,6 +497,7 @@ function ProjectsPage() {
                 {createProject.isPending ? "Creating mission…" : "Create mission + open board"}
               </Button>
             </div>
+            )}
           </div>
         </div>
       )}
