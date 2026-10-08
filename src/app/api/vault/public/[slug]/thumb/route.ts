@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { serveFile } from "@/lib/file-response"
 import { vaultThumbnail } from "@/lib/vault-thumb"
-import { openShare, itemInShare } from "@/lib/vault-share"
+import { openShare, itemInShare, shareCacheControl } from "@/lib/vault-share"
 
 // GET /api/vault/public/<slug>/thumb[?item=<id>]&w=320 — a picture's thumbnail through a link
 // (9 Oct 2026): the grid of a shared folder, and the preview card a chat app draws for an external
@@ -25,9 +25,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return serveFile(request, thumb.path, {
       filename: thumb.filename,
       contentType: "image/webp",
-      // The address carries the content version, but it is still a link that can be revoked: short,
-      // and never in a shared cache for an internal link.
-      cacheControl: access.share.requireAuth ? "private, max-age=300" : "public, max-age=300",
+      // The address carries the content version, but it is still a link that can be revoked: as short
+      // as the link's bytes (a revoke reaches thumbnails as fast), never in a shared cache when internal.
+      cacheControl: shareCacheControl(access.share),
     })
   } catch (error) {
     console.error("[vault] public thumb failed:", error)
