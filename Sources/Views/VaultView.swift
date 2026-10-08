@@ -874,7 +874,12 @@ struct VaultView: View {
             parts.append(human(size))
         }
         if item.shareCount > 0 { parts.append("\(item.shareCount) \(T("links"))") }
-        if let uploader = item.uploader { parts.append(uploader.name) }
+        // Search results come from anywhere in the vault: say where (server `path`, since 9 Oct 2026).
+        if let path = item.path {
+            parts.append(String(format: T("in %@"), ([T("Vault")] + path.map(\.name)).joined(separator: " › ")))
+        } else if let uploader = item.uploader {
+            parts.append(uploader.name)
+        }
         return parts.joined(separator: " · ")
     }
 
