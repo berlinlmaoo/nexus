@@ -13,6 +13,7 @@ import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { sessionVersionRejects } from "@/lib/session-version"
 import { conversationMemberAccess } from "@/lib/chat-access"
 import { resolveAuditAccess } from "@/lib/audit-query"
+import { TypingGate, parseTypingEvent, type TypingRelay } from "@/lib/chat-typing"
 
 const log = createLogger("socket")
 
@@ -41,6 +42,8 @@ const ALL_WORKSPACES_ROOM = "workspace-all"
 const AUDIT_ROOM = "audit"
 /** A burst of audit writes (a bulk action, a reorder) reaches the audit room as one ping. */
 const AUDIT_PING_COALESCE_MS = 250
+/** How long a conversation's member list is reused for `typing` before it is read again. */
+const TYPING_MEMBERS_TTL_MS = 60_000
 
 const ALLOWED_ORIGINS = [
   process.env.NEXTAUTH_URL || "http://localhost:3000",
@@ -159,6 +162,39 @@ export function initializeSocketServer(
    * room's every minute. Adding the room to `presence-update` would change a shape the OLD NEXUS app
    * still consumes (src/hooks/use-presence.ts), so this is a separate, additive event instead.
    */
+  /**
+   * Who is in a conversation, for `typing` (lib/chat-typing.ts): read once and reused for a minute, and
+   * forgotten as soon as its membership changes (the bus events below), so a keystroke never costs a
+   * query. Only decides whose chat LIST also hears it; who may SEND is the socket's own room membership.
+   */
+  const typingMembers = new Map<string, { ids: string[]; at: number }>()
+  async function typingMembersOf(conversationId: string): Promise<string[]> {
+    const hit = typingMembers.get(conversationId)
+    if (hit && Date.now() - hit.at < TYPING_MEMBERS_TTL_MS) return hit.ids
+    const rows = await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } })
+    const ids = rows.map((r) => r.userId)
+    typingMembers.set(conversationId, { ids, at: Date.now() })
+    return ids
+  }
+
+  /**
+   * "… is typing" to the room's other people: the open thread (`conversation:<id>`) and every member's
+   * own room (`user:<id>`), where their chat list shows "typing…" for it. One emit to the union, so a
+   * socket in both gets it once; never to the sender's own sockets.
+   */
+  function relayTyping(payload: TypingRelay) {
+    const room = `conversation:${payload.conversationId}`
+    typingMembersOf(payload.conversationId)
+      .catch((error) => {
+        log.warn("typing: could not read the members; the open thread only", { room, error: String(error) })
+        return [] as string[]
+      })
+      .then((ids) => {
+        const rooms = [room, ...ids.filter((id) => id !== payload.userId).map((id) => `user:${id}`)]
+        io.to(rooms).except(`user:${payload.userId}`).emit("typing", payload)
+      })
+  }
+
   function broadcastSheetPresence(room: string) {
     if (!room.startsWith("sheet:")) return
     io.to(room).emit("sheet-presence", {
@@ -203,7 +239,7 @@ export function initializeSocketServer(
       // leftover JWT must not be allowed back into those rooms.
       const owner = await prisma.user.findUnique({
         where: { id: token.id as string },
-        select: { email: true, sessionVersion: true, deactivatedAt: true, role: true },
+        select: { email: true, sessionVersion: true, deactivatedAt: true, role: true, name: true, avatar: true },
       })
       if (!owner || isDeletedAccountEmail(owner.email)) return next(new Error("Invalid session"))
       // Offboarded (lib/offboarding.ts): out of the company, so out of its chat rooms too.
@@ -213,7 +249,10 @@ export function initializeSocketServer(
       if (sessionVersionRejects(token.sessionVersion, owner.sessionVersion)) return next(new Error("Invalid session"))
 
       socket.data.userId = token.id as string
-      socket.data.userName = token.name as string
+      // The database's name over the token's (a rename shows at once), and the photo, which the token
+      // does not carry: what `typing` shows of the sender, read once per connection.
+      socket.data.userName = (owner.name as string | null | undefined) || (token.name as string)
+      socket.data.userAvatar = (owner.avatar as string | null | undefined) ?? null
       // Only now, after every refusal above: a deleted, offboarded or revoked session never gets here.
       // Joined synchronously on "connection" below, so the rooms are in place before the client's
       // connect event fires and nothing emitted after that can miss it.
@@ -230,6 +269,14 @@ export function initializeSocketServer(
 
     let currentRoom: string | null = null
     let currentUser: { userId: string; name: string; avatar: string | null } | null = null
+    const typingGate = new TypingGate()
+    const typingFrom = (conversationId: string, typing: boolean): TypingRelay => ({
+      conversationId,
+      userId: socket.data.userId as string,
+      name: (socket.data.userName as string) || "",
+      avatar: (socket.data.userAvatar as string | null) ?? null,
+      typing,
+    })
 
     socket.on("join-room", async (data: { room: string; userId: string; name: string; avatar?: string | null }) => {
       const me = socket.data.userId as string
@@ -276,6 +323,10 @@ export function initializeSocketServer(
 
     socket.on("leave-room", (room: string) => {
       socket.leave(room)
+      // Left the thread while typing in it: the others' dots go now, not when they time out.
+      if (typeof room === "string" && room.startsWith("conversation:") && typingGate.stop(room)) {
+        relayTyping(typingFrom(room.slice("conversation:".length), false))
+      }
       if (roomPresence.has(room)) {
         const members = roomPresence.get(room)!
         const member = members.get(socket.id)
@@ -328,6 +379,19 @@ export function initializeSocketServer(
       })
     })
 
+    // "… is typing" (lib/chat-typing.ts). Only from a socket in the conversation's room: join-room let it
+    // in after conversationMemberAccess, and a removal takes it out (CONVERSATION_MEMBERSHIP, and the
+    // roster check on every message) — so no database lookup per keystroke. Rate-limited per room by
+    // TypingGate. Content-free: who, and whether; nothing stored, nothing pushed.
+    socket.on("typing", (raw: unknown) => {
+      const event = parseTypingEvent(raw)
+      if (!event) return
+      const room = `conversation:${event.conversationId}`
+      if (!socket.rooms.has(room)) return
+      if (!typingGate.accept(room, event.typing)) return
+      relayTyping(typingFrom(event.conversationId, event.typing))
+    })
+
     socket.on("task-update", (data: Record<string, unknown>) => {
       if (!currentRoom) return
       socket.to(currentRoom).emit("task-update", data)
@@ -342,6 +406,8 @@ export function initializeSocketServer(
     })
 
     socket.on("disconnect", () => {
+      // Gone mid-sentence (tab closed, app backgrounded, link dropped): stop the dots everywhere.
+      for (const room of typingGate.stopAll()) relayTyping(typingFrom(room.slice("conversation:".length), false))
       if (currentRoom && roomPresence.has(currentRoom)) {
         const members = roomPresence.get(currentRoom)!
         const member = members.get(socket.id)
@@ -429,10 +495,14 @@ export function initializeSocketServer(
   // The chat list of every member, wherever it is open: `conversation-updated` to each user's own room.
   eventBus.on(BUS_EVENTS.CONVERSATION_UPDATED, (data: { userIds: string[]; payload: unknown }) => {
     for (const userId of data.userIds ?? []) io.to(`user:${userId}`).emit("conversation-updated", data.payload)
+    // Someone added, removed, left, or the group deleted: `typing` reads the members again.
+    const p = (data.payload ?? {}) as { conversationId?: unknown; reason?: unknown }
+    if (typeof p.conversationId === "string" && (p.reason === "membership" || p.reason === "deleted")) typingMembers.delete(p.conversationId)
   })
 
   // Removed from a conversation (project/workspace/group change): out of its room immediately.
   eventBus.on(BUS_EVENTS.CONVERSATION_MEMBERSHIP, (data: { conversationId: string; removedUserIds: string[] }) => {
+    typingMembers.delete(data.conversationId)
     const room = `conversation:${data.conversationId}`
     const removed = new Set(data.removedUserIds ?? [])
     if (removed.size === 0) return
