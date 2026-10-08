@@ -8,6 +8,8 @@ import { logAudit } from "@/lib/audit"
 import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 import { checkProjectAccess } from "@/lib/rbac"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 export async function GET(
   _request: NextRequest,
@@ -68,7 +70,7 @@ export async function POST(
 
     const project = await prisma.project.findUnique({
       where: { id: (await params).projectId },
-      select: { name: true },
+      select: { name: true, workspaceId: true },
     })
 
     const member = await prisma.projectMember.create({
@@ -82,6 +84,14 @@ export async function POST(
 
     // Into the project's chat room now, not whenever they next open the chat list.
     await syncProjectRoomSafe((await params).projectId, "project-member-added")
+
+    // Who sees the project changed: the workspace's open views refetch, and so does the new member's
+    // sidebar (their own room: they may not be in this workspace).
+    emitWorkspaceChanged(
+      project?.workspaceId,
+      { kind: "projects", projectId: (await params).projectId, actorId: session.user.id! },
+      [userId],
+    )
 
     // Notify the invited user
     if (userId !== session.user.id) {
@@ -148,6 +158,9 @@ export async function DELETE(
 
     // Out of the project's chat room: no more pushes, no more reading it (CHAT-CONTRACT security).
     await syncProjectRoomSafe((await params).projectId, "project-member-removed")
+
+    // The removed person's sidebar drops it live; the workspace's member counts move.
+    await emitProjectChanged((await params).projectId, { actorId: session.user.id!, userIds: [userId] })
 
     logAudit({ action: "delete", entityType: "project_member", entityId: existing.userId, entityName: userId, userId: session.user.id!, request, metadata: { projectId: (await params).projectId } })
 

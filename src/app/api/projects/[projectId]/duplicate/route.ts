@@ -7,6 +7,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 import { logAudit } from "@/lib/audit"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 // POST /api/projects/[projectId]/duplicate
 //
@@ -190,6 +191,13 @@ export async function POST(
       request,
       metadata: { duplicatedFrom: projectId },
     })
+
+    // The copy, complete with its tasks, appears live beside the original for the workspace and its members.
+    emitWorkspaceChanged(
+      original.workspaceId,
+      { kind: "projects", projectId: newProject.id, folderId: original.folderId ?? undefined, actorId: me },
+      memberRows.map((m) => m.userId),
+    )
 
     const result = await prisma.project.findUnique({
       where: { id: newProject.id },

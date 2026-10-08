@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
 import { normalizeAggregateProjectIds } from "@/lib/folder-aggregate"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 async function canManageWorkspace(userId: string, workspaceId: string) {
   if (await isSystemAdminUser(userId)) return true
@@ -106,6 +107,10 @@ export async function PATCH(
       },
     })
 
+    // Rename, icon, colour, move, reorder or the aggregate pick: live for the whole workspace. A drag
+    // reorder sends one PATCH per folder; the web client folds the burst into one refetch.
+    emitWorkspaceChanged(existing.workspaceId, { kind: "folders", folderId: folder.id, actorId: session.user.id })
+
     return NextResponse.json(folder)
   } catch (error: any) {
     if (error?.code === "P2002") {
@@ -159,6 +164,9 @@ export async function DELETE(
       userId: session.user.id, request,
       metadata: { parentFolderId: existing.parentFolderId, workspaceId: existing.workspaceId },
     })
+
+    // The folder disappears and what was in it moves up a level, live for the whole workspace.
+    emitWorkspaceChanged(existing.workspaceId, { kind: "folders", folderId: existing.id, actorId: session.user.id })
 
     return NextResponse.json({ message: "Folder deleted" })
   } catch (error) {

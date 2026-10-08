@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 function isMissingSchemaError(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
@@ -122,6 +123,9 @@ export async function POST(request: NextRequest) {
         position: (lastFolder?.position ?? -1) + 1,
       },
     })
+
+    // Live in every open sidebar and projects page of the workspace (a ping, no data).
+    emitWorkspaceChanged(workspaceId, { kind: "folders", folderId: folder.id, actorId: session.user.id })
 
     return NextResponse.json(folder, { status: 201 })
   } catch (error: any) {

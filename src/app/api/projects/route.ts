@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 const projectListSelect = {
   id: true,
@@ -310,6 +311,11 @@ export async function POST(request: NextRequest) {
     // The project's chat room, with its creator in it. Rooms used to appear only when someone happened
     // to open the chat list (lib/chat-membership.ts).
     await syncProjectRoomSafe(project.id, "project-created")
+
+    // Live in every open sidebar, projects page and folder page of the workspace (a ping, no data).
+    emitWorkspaceChanged(workspaceId, {
+      kind: "projects", projectId: project.id, folderId: typeof folderId === "string" ? folderId : undefined, actorId: userId,
+    })
 
     // The NAS folder pre-create used to live here. It is gone: the Files tab it existed for was
     // removed, the Synology at 192.168.223.92 is unreachable from every machine here, and the call

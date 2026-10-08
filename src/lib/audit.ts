@@ -3,6 +3,7 @@ import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { NextRequest } from 'next/server'
 import { createLogger } from '@/lib/logger'
 import { redactAuditMetadata } from '@/lib/audit-describe'
+import { emitAuditChanged } from '@/lib/socket-emitter'
 
 const log = createLogger('audit')
 
@@ -53,6 +54,8 @@ export async function logAudit({
       },
       select: { id: true },
     })
+    // Every open Control Room → Audit refetches (a ping, no data; lib/socket-emitter.ts).
+    emitAuditChanged()
     // The id ties a restorable delete (lib/deletion-snapshot.ts) to its row.
     return row.id
   } catch (error) {
@@ -99,6 +102,7 @@ export async function logAuditBatch(
         userAgent,
       })),
     })
+    if (entries.length > 0) emitAuditChanged()
   } catch (error) {
     log.error('Batch audit log write failed', { error: String(error) })
   }

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { emitWorkspaceChanged } from '@/lib/socket-emitter'
 
 // GET → list of the current user's pinned project ids (most-recent first).
 export async function GET() {
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
   } else {
     await prisma.projectPin.deleteMany({ where: { userId: user.id, projectId } })
   }
+
+  // Pins are per person, so nobody else's view changes: only this user's other tabs and devices.
+  emitWorkspaceChanged(null, { kind: "projects", actorId: user.id }, [user.id])
 
   return NextResponse.json({ pinned })
 }

@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { resolveAuditAccess } from "@/lib/audit-query"
 import { restoreDeletion } from "@/lib/deletion-snapshot"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
+import { emitAuditChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 /**
  * Restore what a delete removed (owner, 8 Oct 2026). Who may: whoever may see the entry in Control
@@ -88,6 +89,21 @@ export async function POST(
         relinked,
       },
     })
+
+    // Live for everyone (owner, 8 Oct 2026): the project and the folder it brought back appear in every
+    // open sidebar, projects page and folder page of its workspace (and of its members outside it), and
+    // every open Control Room → Audit, list and drawer, flips this entry to "Restored by …". logAudit
+    // above pings the audit too; this one is explicit so a failed audit write cannot leave the other
+    // screens on "Restore". A failed lookup only costs the workspace ping, never the restore's 200.
+    const target = projectId
+      ? await prisma.project
+        .findUnique({ where: { id: projectId }, select: { workspaceId: true, members: { select: { userId: true } } } })
+        .catch(() => null)
+      : null
+    const memberIds = target?.members.map((m) => m.userId) ?? []
+    emitWorkspaceChanged(target?.workspaceId, { kind: "projects", projectId: projectId ?? undefined, actorId: session.user.id }, memberIds)
+    emitWorkspaceChanged(target?.workspaceId, { kind: "folders", actorId: session.user.id }, memberIds)
+    emitAuditChanged()
 
     return NextResponse.json({ ok: true, entityType: outcome.entityType, entityId: outcome.entityId, projectId, restored })
   } catch (error) {

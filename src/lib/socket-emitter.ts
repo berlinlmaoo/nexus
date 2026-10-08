@@ -80,3 +80,65 @@ export function emitSheetCells(
 export function emitSheetStructure(sheetId: string, actorId: string) {
   eventBus.emit(BUS_EVENTS.SHEET_STRUCTURE, { sheetId, actorId })
 }
+
+export type WorkspaceChangedKind = "projects" | "folders" | "audit"
+
+/**
+ * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
+ * holds. Everyone in the workspace receives it, including people who may not see a given project, so
+ * it is only an invalidation ping: the receiver refetches through the normal API, which applies the
+ * normal access rules. Ids only, no names, no fields.
+ */
+export type WorkspaceChangedPayload = {
+  kind: WorkspaceChangedKind
+  projectId?: string
+  folderId?: string
+  actorId?: string
+}
+
+/**
+ * Tell every open sidebar, projects page, folder page and project header in `workspaceId` to refetch.
+ *
+ * Goes to the `workspace:<id>` room, which the socket server puts each socket in by itself on connect
+ * from the user's WorkspaceMember rows (pages/api/socket.ts), never by client request. `alsoUserIds`
+ * adds those users' own `user:<id>` rooms: for someone the change concerns who may not be in the
+ * workspace (a guest added to a project), or for a per-user change such as a pin (workspaceId null).
+ *
+ * The payload is rebuilt from the four allowed fields, so a caller can never put data on the wire by
+ * passing a bigger object.
+ */
+export function emitWorkspaceChanged(
+  workspaceId: string | null | undefined,
+  payload: WorkspaceChangedPayload,
+  alsoUserIds: Array<string | null | undefined> = [],
+) {
+  const userIds = Array.from(new Set(alsoUserIds.filter((id): id is string => typeof id === "string" && id.length > 0)))
+  if (!workspaceId && userIds.length === 0) return
+  const ping: WorkspaceChangedPayload = { kind: payload.kind }
+  if (payload.projectId) ping.projectId = payload.projectId
+  if (payload.folderId) ping.folderId = payload.folderId
+  if (payload.actorId) ping.actorId = payload.actorId
+  publishSafely(BUS_EVENTS.WORKSPACE_CHANGED, { workspaceId: workspaceId || null, userIds, payload: ping })
+}
+
+/**
+ * `audit-changed` to the `audit` room (only sockets whose user passes resolveAuditAccess are in it).
+ * Called after every successful audit write: no database work here, and the socket server folds a
+ * burst into one ping, so it costs nothing when nobody has the audit open.
+ */
+export function emitAuditChanged() {
+  publishSafely(BUS_EVENTS.AUDIT_CHANGED, { kind: "audit" })
+}
+
+/**
+ * These two are called right after a write has succeeded (inside logAudit's try, among others). A
+ * listener that throws would otherwise surface there as a failed write: logAudit would return null and
+ * a restorable delete would lose the link to its audit row. A ping is never worth that.
+ */
+function publishSafely(event: string, data: unknown) {
+  try {
+    eventBus.emit(event, data)
+  } catch (error) {
+    console.warn(`[socket-emitter] ${event} listener failed`, error)
+  }
+}
