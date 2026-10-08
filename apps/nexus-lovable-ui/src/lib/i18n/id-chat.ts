@@ -71,6 +71,7 @@ export const ID_CHAT: Record<string, string> = {
   "Everyone is already in this project.": "Semua orang sudah ada di proyek ini.",
   "Everyone is already in this chat.": "Semua orang sudah ada di chat ini.",
   "Couldn't add that person.": "Gagal menambahkan orang itu.",
+  "Only managers and above can add or remove members.": "Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.",
   "Pick 1 person for a DM, or several for a group.": "Pilih 1 orang untuk pesan pribadi, atau beberapa untuk grup.",
   "Group name (optional)": "Nama grup (opsional)",
   "Start group": "Mulai grup",

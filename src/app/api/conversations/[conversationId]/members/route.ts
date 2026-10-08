@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { createInAppNotification } from "@/lib/notification-service"
-import { CHAT_MEMBER_SELECT, groupRoomAllowsUser } from "@/lib/chat-access"
+import { CHAT_MEMBER_SELECT, canManageMembersIn, groupRoomAllowsUser, memberManagerContext } from "@/lib/chat-access"
+import { MANAGER_REQUIRED, MANAGER_REQUIRED_MESSAGE } from "@/lib/chat-rules"
 import { emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
 
 const memberInclude = {
@@ -17,10 +18,11 @@ const memberInclude = {
  * membership from the project, so the way to add someone there is to add them to the project;
  * writing a member row here would be undone the next time the room is provisioned.
  *
- * Any member may add or remove, because a Conversation has no owner column to appeal to. That is a
- * deliberate reading of an internal tool rather than an oversight: everyone in the room is a
- * colleague, and the alternative — inventing an owner now — would leave every group created before
- * today without one.
+ * Who (owner decision, 8 Oct 2026): adding anyone, or removing anyone other than yourself, takes
+ * Manager, BoD or One Above All in the group's workspace, or a system admin (chat-rules
+ * canManageGroupMembers); everyone else gets 403 MANAGER_REQUIRED. Leaving — DELETE with your own
+ * userId — stays open to every member. Until then any member could add or remove anyone. Creating a
+ * group with its first members (POST /api/conversations) is unchanged.
  */
 async function loadGroup(conversationId: string, userId: string) {
   const convo = await prisma.conversation.findUnique({
@@ -39,6 +41,10 @@ async function loadGroup(conversationId: string, userId: string) {
     return { error: "Forbidden", status: 403 as const }
   }
   return { convo }
+}
+
+function managerRequired() {
+  return NextResponse.json({ error: MANAGER_REQUIRED_MESSAGE, code: MANAGER_REQUIRED }, { status: 403 })
 }
 
 /**
@@ -67,6 +73,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     const loaded = await loadGroup(conversationId, userId)
     if (loaded.error) return NextResponse.json({ error: loaded.error }, { status: loaded.status })
     const convo = loaded.convo!
+    // Adding people is a Manager-and-above act (owner, 8 Oct 2026).
+    const manages = canManageMembersIn(await memberManagerContext(userId), convo)
+    if (!manages) return managerRequired()
 
     const body = await req.json().catch(() => null)
     const requested: string[] = Array.isArray(body?.userIds)
@@ -110,7 +119,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       where: { id: conversationId },
       include: memberInclude,
     })
-    return NextResponse.json({ conversation, added: toAdd.length })
+    return NextResponse.json({
+      conversation: conversation ? { ...conversation, canManageMembers: manages } : conversation,
+      added: toAdd.length,
+    })
   } catch (error) {
     console.error("conversation members POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -131,6 +143,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     const body = await req.json().catch(() => null)
     const target = typeof body?.userId === "string" ? body.userId : null
     if (!target) return NextResponse.json({ error: "userId required" }, { status: 400 })
+
+    // Removing someone else is a Manager-and-above act (owner, 8 Oct 2026); leaving is anyone's.
+    const manages = canManageMembersIn(await memberManagerContext(userId), convo)
+    if (target !== userId && !manages) return managerRequired()
 
     // A group that loses its last member becomes a room nobody can reach but that still holds every
     // message ever sent in it. Refuse rather than orphan it.
@@ -153,7 +169,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       where: { id: conversationId },
       include: memberInclude,
     })
-    return NextResponse.json({ conversation })
+    return NextResponse.json({ conversation: conversation ? { ...conversation, canManageMembers: manages } : conversation })
   } catch (error) {
     console.error("conversation members DELETE error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -1,8 +1,8 @@
 // node src/lib/chat-rules.test.mjs
 //
 // Plain node, no test runner (same loader as fcm-payload.test.mjs). The pure half of the chat contract
-// (CHAT-CONTRACT 8 Oct 2026): push decision, push text, cursors, read position, unread sums, mute, and
-// who may stay in a group/DM.
+// (CHAT-CONTRACT 8 Oct 2026): push decision, push text, cursors, read position, unread sums, mute,
+// who may stay in a group/DM, and who may add or remove people in a group.
 import { readFile } from "node:fs/promises"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import path from "node:path"
@@ -241,6 +241,41 @@ test("new room's workspace: one everybody is in, the creator's oldest first; non
   assert.equal(R.commonWorkspace([["W", "P"], ["W", "P"]], ["P", "W"]), "P", "creator's oldest wins")
   assert.equal(R.commonWorkspace([["W"], ["Q"]], ["W"]), null)
   assert.equal(R.commonWorkspace([], ["W"]), null)
+})
+
+// ── who may add or remove people in a group (owner, 8 Oct 2026) ──
+const manage = (kind, callerWorkspaceRole, callerSystemRole = "MEMBER", targetIsSelf = false) =>
+  R.canManageGroupMembers({ kind, callerWorkspaceRole, callerSystemRole, targetIsSelf })
+test("group: Manager, BoD and One Above All of the room's workspace may add or remove; staff may not", () => {
+  assert.equal(manage("GROUP", "MANAGER"), true)
+  assert.equal(manage("GROUP", "BOD"), true)
+  assert.equal(manage("GROUP", "ONE_ABOVE_ALL"), true)
+  assert.equal(manage("GROUP", "STAFF"), false)
+})
+test("group: no role in the room's workspace (or a room without one) is no say — unless system admin", () => {
+  assert.equal(manage("GROUP", null), false)
+  assert.equal(manage("GROUP", undefined), false)
+  assert.equal(manage("GROUP", ""), false)
+  assert.equal(manage("GROUP", "staff"), false, "roles are exact enum values")
+  assert.equal(manage("GROUP", null, "ADMIN"), true)
+  assert.equal(manage("GROUP", "STAFF", "ADMIN"), true)
+  assert.equal(R.canManageGroupMembers({ kind: "GROUP", callerWorkspaceRole: "STAFF", callerSystemRole: null }), false)
+})
+test("group: leaving is not removing — anyone may take themselves out", () => {
+  assert.equal(manage("GROUP", "STAFF", "MEMBER", true), true)
+  assert.equal(manage("GROUP", null, null, true), true)
+  assert.equal(manage("GROUP", "STAFF", "MEMBER", false), false)
+})
+test("DM and project rooms have no member management here, whatever the role", () => {
+  for (const kind of ["DM", "PROJECT", null, undefined, "group"]) {
+    assert.equal(manage(kind, "ONE_ABOVE_ALL"), false, String(kind))
+    assert.equal(manage(kind, null, "ADMIN"), false, String(kind))
+    assert.equal(manage(kind, "STAFF", "MEMBER", true), false, String(kind))
+  }
+})
+test("MANAGER_REQUIRED code and sentence", () => {
+  assert.equal(R.MANAGER_REQUIRED, "MANAGER_REQUIRED")
+  assert.equal(R.MANAGER_REQUIRED_MESSAGE, "Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.")
 })
 
 console.log(`chat-rules: ${passed} passed`)

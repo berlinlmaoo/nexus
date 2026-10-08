@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma"
-import { CHAT_MEMBER_SELECT, visibleRoomIds, workspaceForNewRoom } from "@/lib/chat-access"
+import { CHAT_MEMBER_SELECT, canManageMembersIn, memberManagerContext, visibleRoomIds, workspaceForNewRoom } from "@/lib/chat-access"
 import { chatUnreadForUser } from "@/lib/chat-unread"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 
@@ -13,7 +13,9 @@ const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
  *
  * Each item: id, type, name, projectId, members (the roster: the iOS @mention picker reads it from
  * here, so it stays — without email), memberCount, lastMessage, unreadCount, mutedUntil (null when not
- * muted). The response adds totalUnread (muted rooms count their mentions only — chat-unread.ts).
+ * muted), canManageMembers (the caller may add/remove people: GROUP only, Manager and above —
+ * chat-rules canManageGroupMembers). The response adds totalUnread (muted rooms count their mentions
+ * only — chat-unread.ts).
  *
  * No longer provisions project rooms: that ran two queries per project on every load, and was the
  * only way a project room came to exist. Rooms now follow project/workspace membership changes
@@ -73,6 +75,8 @@ export async function GET() {
     const lastOf = new Map(lastMessages.map((m) => [m.conversationId, m]))
 
     const unread = await chatUnreadForUser(userId, { conversationIds: ids })
+    // One lookup for the whole list, and none when there is no group in it.
+    const managerCtx = shown.some((c) => c.type === "GROUP") ? await memberManagerContext(userId) : null
 
     const conversations = shown.map((c) => {
       const mutedUntil = muteOf.get(c.id) ?? null
@@ -88,6 +92,7 @@ export async function GET() {
         lastMessage: lastOf.get(c.id) ?? null,
         unreadCount: unread.perConversation.get(c.id)?.unread ?? 0,
         mutedUntil: mutedUntil && mutedUntil.getTime() > Date.now() ? mutedUntil.toISOString() : null,
+        canManageMembers: managerCtx ? canManageMembersIn(managerCtx, c) : false,
       }
     })
 
