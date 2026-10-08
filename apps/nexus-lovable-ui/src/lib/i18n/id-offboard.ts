@@ -1,5 +1,6 @@
 /** English → Indonesian for offboarding in Control Room → Users and task people tags. Keys must be unique across all id-*.ts files. */
 export const ID_OFFBOARD: Record<string, string> = {
+  "Created by": "Dibuat oleh",
   // Control Room → Users: rows and the person's detail card
   "Left": "Keluar",
   // "Left · {date}" (the row badge) is in id-former.ts, shared with the attendance screens.
