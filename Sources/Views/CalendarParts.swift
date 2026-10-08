@@ -381,6 +381,10 @@ private struct CalAvatar: View {
 
 /// ○ to do, ✓ done, ! overdue within the window (red), a dashed ring once it is older, ◆ project
 /// without status.
+///
+/// `size` is the mark at the default text size; it grows with the reader's text size as the title
+/// beside it does (Inter is scaled relative to body). It used to stay 16 pt beside a title three times
+/// that at AX5 (impeccable re-audit round 3, 8 Oct 2026).
 struct CalStatusGlyph: View {
     let item: CalItem
     let today: String
@@ -389,9 +393,11 @@ struct CalStatusGlyph: View {
     var size: CGFloat = 16
     /// The row has usually worked this out already; passed in, it is not done twice per row.
     var state: CalOverdue? = nil
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
     var body: some View {
         let od = state ?? CalendarCore.overdueState(item, today: today, now: now, windowDays: windowDays)
+        let side = size * scale
         Group {
             if item.done {
                 Image(systemName: "checkmark.circle.fill").resizable().foregroundStyle(NX.success)
@@ -403,19 +409,19 @@ struct CalStatusGlyph: View {
                 // Overdue past the window: no longer red news, but not a plain to-do either. It was the
                 // to-do ring at 70% (2.9:1, under the 3:1 a mark needs) and VoiceOver called it "To do";
                 // now a dashed ring at full strength (5.3:1), spoken as what it is.
-                Circle().strokeBorder(NX.mutedFg, style: StrokeStyle(lineWidth: 2, dash: dash))
+                Circle().strokeBorder(NX.mutedFg, style: StrokeStyle(lineWidth: 2, dash: dash(side)))
             } else {
                 Circle().strokeBorder(NX.mutedFg, lineWidth: 2)
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: side, height: side)
         .accessibilityLabel(spoken(od))
     }
 
     /// Even dashes all the way round, at any size.
-    private var dash: [CGFloat] {
-        let round = CGFloat.pi * max(size - 2, 1)
-        let step = round / (size >= 14 ? 8 : 6)
+    private func dash(_ side: CGFloat) -> [CGFloat] {
+        let round = CGFloat.pi * max(side - 2, 1)
+        let step = round / (side >= 14 ? 8 : 6)
         return [step * 0.6, step * 0.4]
     }
 
@@ -434,10 +440,59 @@ struct CalPriorityChip: View {
     let priority: String?
     var body: some View {
         if priority == "URGENT" {
-            NexusChip(text: T("Urgent"), tone: .danger)
+            CalChip(text: T("Urgent"), tone: .danger)
         } else if priority == "HIGH" {
-            NexusChip(text: T("High"), tone: .warning)
+            CalChip(text: T("High"), tone: .warning)
         }
+    }
+}
+
+/// NexusChip's look in the Calendar's sizes (CalType): the shared chip is 11 pt as written, which the
+/// Mac draws at about 8.5 pt (impeccable re-audit round 3, 8 Oct 2026). The same chip on iPhone and
+/// iPad; every other screen keeps NexusChip as it is.
+private struct CalChip: View {
+    let text: String
+    let tone: ChipTone
+    var body: some View {
+        Text(text).font(NXFont.text(CalType.size(11), .bold))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .foregroundStyle(tone.fg)
+            .background(tone.bg, in: Capsule())
+    }
+}
+
+/// OfflineNotice in the Calendar's sizes (CalType), its symbol in the line's own type so it grows with
+/// the text. The shared notice is 11 / 10 pt as written: about 8.5 pt on the Mac.
+struct CalSavedNotice: View {
+    let savedAt: Date
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "arrow.down.circle").font(NXFont.text(CalType.size(10), .semibold))
+            Text(String(format: T("Saved copy from %@"), OfflineNotice.stamp(savedAt)))
+                .font(NXFont.text(CalType.size(11)))
+        }
+        .foregroundStyle(NX.mutedFg)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, 2)
+    }
+}
+
+/// The Calendar's two-line bar title on iPhone: "Calendar" in the bar's own face, and the day. The
+/// first line grows with the text size like a headline (it was a fixed 17 pt beside a day that grew);
+/// the cap is set from outside, where the bar's room is known.
+struct CalBarTitle: View {
+    let day: String
+    @ScaledMetric(relativeTo: .headline) private var titleSize: CGFloat = 17
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(T("Calendar")).font(.system(size: CalType.size(titleSize), weight: .bold)).foregroundStyle(NX.foreground)
+            Text(CalFormat.day(day, "EEEdMMM")).font(NXFont.text(CalType.size(11), .medium)).foregroundStyle(NX.mutedFg)
+        }
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -456,7 +511,7 @@ private struct CalYouBadge: View {
 // MARK: - Month grid
 
 /// Monday first, always six weeks. One dot per unit at the focus level (filled = still something to
-/// do, ring = only done / status-less), in Bagan order; a red bar = overdue within the window; days
+/// do, a small tick = only done / status-less), in Bagan order; a red bar = overdue within the window; days
 /// of other months are muted and carry no dots.
 ///
 /// The grid grows with the reader's text size as far as AX1, like Apple's Calendar month (beyond
@@ -473,6 +528,9 @@ struct CalMonthGrid: View {
     /// The month on screen has arrived. While it has not (loading, or failed) the cells carry no
     /// counts, and VoiceOver must not hear "No tasks" about a month nobody has seen.
     var loaded: Bool = true
+    /// Two panes: the height the whole grid may take (CalendarView.gridRoom). The tall weeks then
+    /// shrink from their 84 pt to fit it, down to 56 pt; nil = the weeks' own height.
+    var fitHeight: CGFloat? = nil
     let onSelect: (String) -> Void
 
     var body: some View {
@@ -488,11 +546,32 @@ private struct CalMonthGridBody: View {
     /// instead of spilling a day into the week below it.
     @ScaledMetric(relativeTo: .body) private var phoneHeight: CGFloat = 54
     @ScaledMetric(relativeTo: .body) private var wideHeight: CGFloat = 84
+    /// The least a tall week shrinks to when fitting two panes (`fitHeight`).
+    @ScaledMetric(relativeTo: .body) private var wideFloor: CGFloat = 56
+    /// From this height down a tall cell leaves the holiday's name out (its number stays red, and the
+    /// day list names it) and takes less padding, so its marks stay inside it.
+    @ScaledMetric(relativeTo: .body) private var holidayRoom: CGFloat = 76
     @ScaledMetric(relativeTo: .body) private var disc: CGFloat = 26
     @ScaledMetric(relativeTo: .body) private var dotRow: CGFloat = 8
+    /// The weekday row's measured height, taken off `fitHeight` with the six dividers.
+    @State private var headRow: CGFloat = 30
+
+    /// The height of a week: the phone's, the tall cell's, or — two panes — what fits `fitHeight`
+    /// between the floor and the tall cell's own height. Fitted, it is whole points: the grid then
+    /// grows or shrinks by whole points, the measured heights it is fitted from move together, and
+    /// the fit cannot flip between two sizes a fraction apart.
+    private var rowHeight: CGFloat {
+        guard grid.wide else { return CalType.size(phoneHeight) }
+        let ideal = CalType.size(wideHeight)
+        guard let room = grid.fitHeight else { return ideal }
+        let fit = ((room - headRow - 6) / 6).rounded(.down)
+        return min(ideal.rounded(.down), max(CalType.size(wideFloor).rounded(.up), fit))
+    }
 
     var body: some View {
         let names = CalFormat.weekdays()
+        let height = rowHeight
+        let roomy = height >= CalType.size(holidayRoom)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(0..<7, id: \.self) { i in
@@ -504,11 +583,21 @@ private struct CalMonthGridBody: View {
                 }
             }
             .background(NX.muted.opacity(0.5))
+            .background {
+                if grid.fitHeight != nil {
+                    GeometryReader { g in
+                        Color.clear.onChange(of: g.size.height, initial: true) { _, h in
+                            let v = h.rounded(.up)
+                            if headRow != v { headRow = v }
+                        }
+                    }
+                }
+            }
             Divider().overlay(NX.border)
             ForEach(0..<6, id: \.self) { w in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { d in
-                        dayCell(grid.days[w * 7 + d], weekend: d >= 5)
+                        dayCell(grid.days[w * 7 + d], weekend: d >= 5, height: height, roomy: roomy)
                     }
                 }
                 if w < 5 { Divider().overlay(CalTone.hairline) }
@@ -519,7 +608,7 @@ private struct CalMonthGridBody: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
     }
 
-    private func dayCell(_ day: String, weekend: Bool) -> some View {
+    private func dayCell(_ day: String, weekend: Bool, height: CGFloat, roomy: Bool) -> some View {
         let g = grid
         let inMonth = day.hasPrefix(g.month)
         let cell = inMonth ? g.cells[day] : nil
@@ -559,7 +648,7 @@ private struct CalMonthGridBody: View {
                     Capsule().fill(CalTone.overdue).frame(width: 14, height: 2)
                         .frame(maxWidth: .infinity, alignment: g.wide ? .leading : .center)
                 }
-                if g.wide, let holiday {
+                if g.wide, roomy, let holiday {
                     Text(holiday).font(NXFont.text(CalType.size(11), .medium)).foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -585,9 +674,10 @@ private struct CalMonthGridBody: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: dotRow, alignment: g.wide ? .leading : .center)
             }
-            .padding(g.wide ? 7 : 4)
+            .padding(.horizontal, g.wide ? 7 : 4)
+            .padding(.vertical, g.wide && roomy ? 7 : 4)
             .frame(maxWidth: .infinity)
-            .frame(height: CalType.size(g.wide ? wideHeight : phoneHeight))
+            .frame(height: height)
             .background(weekend ? NX.muted.opacity(0.3) : Color.clear)
             // The picked day is a ring set inside the cell: a shape no division mark has. It used to be
             // the cell's edge drawn violet, which only its colour told apart from the dots of the
@@ -623,7 +713,7 @@ private struct CalMonthGridBody: View {
 }
 
 /// Which divisions have work on a day, for VoiceOver's "More content": what the dots tell a sighted
-/// reader (filled = still to do, ring = only done or status-less).
+/// reader (filled = still to do, a small tick = only done or status-less).
 private struct CalCellDivisions: ViewModifier {
     let todo: String
     let done: String
@@ -678,6 +768,7 @@ struct CalItemRow: View {
     var trailingNote: String? = nil
     let onOpen: (CalItem) -> Void
     @Environment(AuthStore.self) private var auth
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var explained = false
 
     var body: some View {
@@ -685,6 +776,8 @@ struct CalItemRow: View {
         let openable = !item.masked && item.taskId != nil
         // The rule CalendarView.openItem follows: editable only through the task's home project.
         let readOnly = openable && !(item.canEdit && item.editProjectId == item.project?.id)
+        let large = typeSize.isAccessibilitySize
+        let hasNotes = trailingNote != nil || item.time != nil || readOnly
         Button {
             if openable || item.masked {
                 onOpen(item)
@@ -697,32 +790,17 @@ struct CalItemRow: View {
                                size: CalType.size(compact ? 14 : 16), state: od)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .top, spacing: 8) {
-                        if item.masked {
-                            Label(maskedTitle, systemImage: "lock.fill")
-                                .font(NXFont.text(CalType.size(13)).italic()).foregroundStyle(NX.mutedFg).lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            Text(item.title ?? "")
-                                .font(NXFont.text(CalType.size(compact ? 12.5 : 13.5), .medium))
-                                .foregroundStyle(item.done || od == .stale ? NX.mutedFg : NX.foreground)
-                                .strikethrough(item.done, color: NX.mutedFg)
-                                .lineLimit(compact ? 1 : 2)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    // At the accessibility text sizes the title has the line to itself and the date,
+                    // time and read-only eye go under it: beside them it came down to a word or two.
+                    if large {
+                        rowTitle(od, large: true)
+                        if hasNotes {
+                            HStack(alignment: .top, spacing: 8) { rowNotes(readOnly: readOnly) }
                         }
-                        if let note = trailingNote {
-                            Text(note).font(NXFont.text(CalType.size(11))).foregroundStyle(CalTone.overdue)
-                        }
-                        if item.time != nil {
-                            Text(CalFormat.time(item.time)).font(NXFont.text(CalType.size(11.5), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
-                        }
-                        if readOnly {
-                            Image(systemName: "eye")
-                                .font(NXFont.text(CalType.size(11), .semibold))
-                                .foregroundStyle(NX.mutedFg)
-                                .padding(.top, 1)
-                                .accessibilityHidden(true)
+                    } else {
+                        HStack(alignment: .top, spacing: 8) {
+                            rowTitle(od, large: false)
+                            rowNotes(readOnly: readOnly)
                         }
                     }
                     if !openable && explained {
@@ -741,6 +819,45 @@ struct CalItemRow: View {
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
         .accessibilityHint(readOnly ? T("Read only") : (openable ? "" : closedReason))
+    }
+
+    /// The title, or "Internal task · <division>" for a masked row. Up to four lines in the People
+    /// week and the whole title in the day list at the accessibility sizes; one or two otherwise.
+    @ViewBuilder private func rowTitle(_ od: CalOverdue, large: Bool) -> some View {
+        if item.masked {
+            Label(maskedTitle, systemImage: "lock.fill")
+                .font(NXFont.text(CalType.size(13)).italic()).foregroundStyle(NX.mutedFg)
+                .lineLimit(large ? 3 : 1)
+                .fixedSize(horizontal: false, vertical: large)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            let lines: Int? = large ? (compact ? 4 : nil) : (compact ? 1 : 2)
+            Text(item.title ?? "")
+                .font(NXFont.text(CalType.size(compact ? 12.5 : 13.5), .medium))
+                .foregroundStyle(item.done || od == .stale ? NX.mutedFg : NX.foreground)
+                .strikethrough(item.done, color: NX.mutedFg)
+                .lineLimit(lines)
+                .fixedSize(horizontal: false, vertical: large)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The overdue rail's date, the time and the read-only eye: after the title, or under it.
+    @ViewBuilder private func rowNotes(readOnly: Bool) -> some View {
+        if let note = trailingNote {
+            Text(note).font(NXFont.text(CalType.size(11))).foregroundStyle(CalTone.overdue)
+        }
+        if item.time != nil {
+            Text(CalFormat.time(item.time)).font(NXFont.text(CalType.size(11.5), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+        }
+        if readOnly {
+            Image(systemName: "eye")
+                .font(NXFont.text(CalType.size(11), .semibold))
+                .foregroundStyle(NX.mutedFg)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+        }
     }
 
     private var maskedTitle: String {
@@ -961,7 +1078,7 @@ struct CalSectionCard: View {
         let name = Text(node.unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground)
         let number = Text("\(count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
             .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
-        let chevron = Image(systemName: "chevron.down").font(.system(size: CalType.size(11), weight: .semibold)).foregroundStyle(NX.mutedFg)
+        let chevron = Image(systemName: "chevron.down").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
             .rotationEffect(.degrees(collapsed ? -90 : 0))
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 8) {
@@ -1678,7 +1795,7 @@ private struct CalCheckRow<RowLabel: View>: View {
                 label
                 Spacer(minLength: 8)
                 Image(systemName: "checkmark")
-                    .font(.system(size: CalType.size(15), weight: .semibold))
+                    .font(NXFont.text(CalType.size(15), .semibold))
                     .foregroundStyle(CalTone.accent)
                     .opacity(on ? 1 : 0)
                     .accessibilityHidden(true)
@@ -1912,14 +2029,14 @@ struct CalTaskPreview: View {
         let description = blockText(t.description)
         if !description.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(T("Description")).accessibilityAddTraits(.isHeader)
+                Text(T("Description").uppercased()).calCaps().foregroundStyle(NX.mutedFg).accessibilityAddTraits(.isHeader)
                 Text(description).font(NXFont.text(CalType.size(13.5))).foregroundStyle(NX.foreground).frame(maxWidth: .infinity, alignment: .leading)
                     .nexusCard(padding: 14, radius: 16)
             }
         }
         if let subs = t.subtasks, !subs.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(T("Subtasks")).accessibilityAddTraits(.isHeader)
+                Text(T("Subtasks").uppercased()).calCaps().foregroundStyle(NX.mutedFg).accessibilityAddTraits(.isHeader)
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(subs) { s in
                         HStack(spacing: 8) {
@@ -1937,7 +2054,7 @@ struct CalTaskPreview: View {
         }
         if let comments = t.comments, !comments.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(T("Comments")).accessibilityAddTraits(.isHeader)
+                Text(T("Comments").uppercased()).calCaps().foregroundStyle(NX.mutedFg).accessibilityAddTraits(.isHeader)
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(comments) { c in
                         HStack(alignment: .top, spacing: 8) {

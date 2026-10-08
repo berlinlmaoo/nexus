@@ -397,6 +397,12 @@ struct SidebarRoot: View {
                                 .background(.regularMaterial, in: Circle())
                                 .overlay(Circle().strokeBorder(NX.border))
                                 .nexusShadowSoft()
+                                // The 38 pt circle is what is drawn; the tap takes the 44 pt square
+                                // around it, the least a finger needs (impeccable re-audit round 3,
+                                // 8 Oct 2026). The pointer's lift keeps to the circle.
+                                .frame(width: 44, height: 44)
+                                .contentShape(.interaction, Rectangle())
+                                .contentShape(.hoverEffect, Circle().inset(by: 3))
                         }
                         .buttonStyle(.plain)
                         // A trackpad pointer that doesn't change shape over a control leaves you
@@ -409,8 +415,10 @@ struct SidebarRoot: View {
                         .accessibilityLabel(columns == .detailOnly ? T("Show sidebar") : T("Hide sidebar"))
                         Spacer(minLength: 0)
                     }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
+                    // 3 pt less each side than with the 38 pt frame: the strip keeps its width and the
+                    // circle its place.
+                    .padding(.leading, 7)
+                    .padding(.trailing, 1)
                 }
                 // Reserved on every screen that hides its navigation bar, whatever the sidebar is
                 // doing. It used to appear and disappear with the sidebar, and a safe-area inset

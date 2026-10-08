@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The Calendar (master calendar, owner 5 Oct 2026; replaces Team Calendar in 0.1.7): every task with
 /// a due date in the company, a dot per Bagan division on the month, the day split by division or by
@@ -50,6 +51,12 @@ struct CalendarView: View {
     /// The width this screen was given, measured in 8 pt steps: it, not the size class alone, decides
     /// the panes.
     @State private var layoutWidth: CGFloat?
+    /// The height this screen was given, in the same 8 pt steps, and — two panes — the height of the
+    /// grid pane's content and of the month grid in it: together they say how tall the weeks may be
+    /// for all six of them and the key under them to fit the window (`gridRoom`).
+    @State private var layoutHeight: CGFloat?
+    @State private var paneContent: CGFloat = 0
+    @State private var paneGrid: CGFloat = 0
     /// Bumped to bring the picked day's list into view on iPhone; `revealedDay` is the last one done.
     @State private var revealDay = 0
     @State private var revealedDay = 0
@@ -198,6 +205,16 @@ struct CalendarView: View {
     private var gridWidth: CGFloat { twoPane ? width - panelWidth - 1 - 40 : width - 32 }
     /// The tall cell (count, four dots, holiday name) needs about 56 pt a column.
     private var wideCells: Bool { hSize == .regular && gridWidth / 7 >= 56 }
+    /// Two panes: the height the month grid may take for its six weeks and the key under them to fit
+    /// the window — the window less what the pane holds besides the grid (header, banners, key,
+    /// padding), which does not depend on the grid's height. The weeks used to be 84 pt whatever the
+    /// window, and an iPad mini or 11" iPad in landscape lost week six and the key below the fold
+    /// (impeccable re-audit round 3, 8 Oct 2026). Nil until measured, and in every other layout, where
+    /// the screen scrolls as one.
+    private var gridRoom: CGFloat? {
+        guard twoPane, let h = layoutHeight, paneContent > 0, paneGrid > 0 else { return nil }
+        return h - (paneContent - paneGrid)
+    }
     /// The People week as a table (a 180 pt name column and seven days) only where it has room.
     private var peopleTable: Bool { hSize == .regular && width >= 820 }
     /// Month / People and Everyone / Mine / My division side by side as two switches.
@@ -383,20 +400,29 @@ struct CalendarView: View {
             content
                 .background {
                     GeometryReader { g in
-                        Color.clear.onChange(of: g.size.width, initial: true) { _, w in
-                            // In 8 pt steps: a Mac or Stage Manager window being dragged used to rebuild
-                            // the whole screen on every frame of the drag (impeccable re-audit, 7 Oct
-                            // 2026), and only the 760 / 820 / 900 pt and 56 pt-a-column steps matter.
-                            let stepped = (w / 8).rounded(.down) * 8
-                            if layoutWidth != stepped { layoutWidth = stepped }
-                        }
+                        Color.clear
+                            .onChange(of: g.size.width, initial: true) { _, w in
+                                // In 8 pt steps: a Mac or Stage Manager window being dragged used to
+                                // rebuild the whole screen on every frame of the drag (impeccable
+                                // re-audit, 7 Oct 2026), and only the 760 / 820 / 900 pt and 56 pt-a-
+                                // column steps matter.
+                                let stepped = (w / 8).rounded(.down) * 8
+                                if layoutWidth != stepped { layoutWidth = stepped }
+                            }
+                            // The same steps, rounded down: the weeks come out a little short of the
+                            // window rather than a little over it.
+                            .onChange(of: g.size.height, initial: true) { _, h in
+                                let stepped = (h / 8).rounded(.down) * 8
+                                if layoutHeight != stepped { layoutHeight = stepped }
+                            }
                     }
                 }
         }
         .navigationTitle(T("Calendar"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
-        .background { shortcuts }
+        // The iPhone's keyboard shortcuts; the iPad and the Mac have them in the Calendar menu.
+        .background { if !CalendarKeys.inMenu { shortcuts } }
         .publishesCalendarMenu(menuActions)
         .task { await firstLoad() }
         .task(id: rangeKey) { await loadItems(silent: items != nil) }
@@ -469,6 +495,15 @@ struct CalendarView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) { header; gridArea }
                         .padding(20)
+                        // How tall the pane's content is (see `gridRoom`).
+                        .background {
+                            GeometryReader { g in
+                                Color.clear.onChange(of: g.size.height, initial: true) { _, h in
+                                    let v = h.rounded()
+                                    if paneContent != v { paneContent = v }
+                                }
+                            }
+                        }
                 }
                 .refreshable { await refreshAll(silent: true) }
                 Divider().overlay(NX.border)
@@ -527,7 +562,7 @@ struct CalendarView: View {
             if divisionFellBack { chartNote }
             legendRow
             if !chipFilters(filters).isEmpty { activeFilterRow }
-            if let savedAt { OfflineNotice(savedAt: savedAt) }
+            if let savedAt { CalSavedNotice(savedAt: savedAt) }
         }
     }
 
@@ -638,10 +673,11 @@ struct CalendarView: View {
                 }
             }
         } label: {
+            // The symbols in the label's own type, so they grow with the text size as it does.
             HStack(spacing: 6) {
-                Image(systemName: scopeIcon(scope)).font(.system(size: CalType.size(12), weight: .semibold))
+                Image(systemName: scopeIcon(scope)).font(NXFont.text(CalType.size(12), .semibold))
                 Text(scopeLabel(scope)).font(NXFont.text(CalType.size(13), .semibold)).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: CalType.size(10), weight: .semibold))
+                Image(systemName: "chevron.up.chevron.down").font(NXFont.text(CalType.size(10), .semibold))
                     .foregroundStyle(NX.mutedFg)
             }
             .foregroundStyle(NX.foreground)
@@ -704,7 +740,7 @@ struct CalendarView: View {
                     let path = Array(ix.ancestors(focus).reversed()) + [focus]
                     ForEach(Array(path.enumerated()), id: \.offset) { i, id in
                         if i > 0 {
-                            Image(systemName: "chevron.right").font(.system(size: CalType.size(9), weight: .bold)).foregroundStyle(NX.mutedFg)
+                            Image(systemName: "chevron.right").font(NXFont.text(CalType.size(9), .bold)).foregroundStyle(NX.mutedFg)
                                 .accessibilityHidden(true)
                         }
                         let name = i == 0 ? T("All divisions") : (ix.byId[id]?.name ?? "")
@@ -761,12 +797,12 @@ struct CalendarView: View {
                 Text(name).font(NXFont.text(CalType.size(12), .semibold)).lineLimit(1)
                 Text("\(e.count)").font(NXFont.text(CalType.size(12))).monospacedDigit().foregroundStyle(NX.mutedFg)
                 if on {
-                    Image(systemName: "checkmark").font(.system(size: CalType.size(10), weight: .bold)).foregroundStyle(NX.violetText)
+                    Image(systemName: "checkmark").font(NXFont.text(CalType.size(10), .bold)).foregroundStyle(NX.violetText)
                 }
                 if focusable {
                     // The focus mark, as on the web and Android: this name narrows the calendar to
                     // that division; a name without it filters.
-                    Image(systemName: "scope").font(.system(size: CalType.size(11), weight: .semibold)).foregroundStyle(NX.mutedFg)
+                    Image(systemName: "scope").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
                 }
             }
             .padding(.horizontal, 10).frame(minHeight: 30)
@@ -884,7 +920,7 @@ struct CalendarView: View {
                     Button { removeFilter(c, from: shown) } label: {
                         HStack(spacing: 5) {
                             Text(text).lineLimit(1)
-                            Image(systemName: "xmark").font(.system(size: CalType.size(9), weight: .bold)).accessibilityHidden(true)
+                            Image(systemName: "xmark").font(NXFont.text(CalType.size(9), .bold)).accessibilityHidden(true)
                         }
                         .font(NXFont.text(CalType.size(12), .semibold))
                         .foregroundStyle(NX.violetText)
@@ -940,17 +976,30 @@ struct CalendarView: View {
                 emptyMonthBanner
             }
             CalMonthGrid(days: days, month: month, cells: cells, selected: selected, today: today, holidays: facts.holidays, ix: ix, wide: wideCells,
-                         loaded: loaded) { select($0, reveal: true) }
+                         loaded: loaded, fitHeight: gridRoom) { select($0, reveal: true) }
                 // Apple's Calendar month stops growing at the first accessibility size too: past it the
                 // fixed-height cells overflow into the next week. The day list below scales fully.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                // Two panes: how tall the grid is (see `gridRoom`).
+                .background {
+                    if twoPane {
+                        GeometryReader { g in
+                            Color.clear.onChange(of: g.size.height, initial: true) { _, h in
+                                let v = h.rounded()
+                                if paneGrid != v { paneGrid = v }
+                            }
+                        }
+                    }
+                }
                 .opacity(dimmed ? 0.6 : 1)
                 .animation(.easeOut(duration: 0.15), value: dimmed)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 14) {
-                    legendKey(filled: true, T("has tasks to do"))
-                    legendKey(filled: false, T("done or no status"))
-                    HStack(spacing: 5) { Capsule().fill(CalTone.overdue).frame(width: 14, height: 2); Text(T("overdue")) }
+                // One key under the other at the accessibility text sizes: side by side they were
+                // broken in the middle of their words.
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) { legendKeys }
+                } else {
+                    HStack(spacing: 14) { legendKeys }
                 }
                 if !legendEntries.isEmpty {
                     Text(T("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it."))
@@ -979,6 +1028,13 @@ struct CalendarView: View {
         }
     }
 
+    /// The month's three marks, in words.
+    @ViewBuilder private var legendKeys: some View {
+        legendKey(filled: true, T("has tasks to do"))
+        legendKey(filled: false, T("done or no status"))
+        HStack(spacing: 5) { Capsule().fill(CalTone.overdue).frame(width: 14, height: 2); Text(T("overdue")) }
+    }
+
     /// The key draws a neutral sample: the real dots are each division's own colour.
     private func legendKey(filled: Bool, _ text: String) -> some View {
         HStack(spacing: 5) {
@@ -994,24 +1050,40 @@ struct CalendarView: View {
 
     /// The action is a system bordered button in the app's tint: it looked exactly like the filter
     /// tokens beside it (and like the breadcrumb), so "Go to this month" read as a filter (impeccable
-    /// re-audit, 7 Oct 2026). The banner keeps its 44 pt height.
+    /// re-audit, 7 Oct 2026). The banner keeps its 44 pt height. At the accessibility text sizes the
+    /// button goes under the sentence, which had been squeezed to a word a line beside it.
     private func banner(_ text: String, action: (String, () -> Void)?) -> some View {
-        HStack(spacing: 8) {
-            Text(text).font(NXFont.text(CalType.size(12.5))).foregroundStyle(NX.mutedFg)
-            Spacer(minLength: 0)
-            if let action {
-                Button(action.0, action: action.1)
-                    .font(NXFont.text(CalType.size(12), .semibold))
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .tint(NX.violetText)
-                    .frame(minHeight: 44)
+        let sentence = Text(text).font(NXFont.text(CalType.size(12.5))).foregroundStyle(NX.mutedFg)
+        return Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 0) {
+                    sentence
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, action == nil ? 0 : 8)
+                    if let action { bannerButton(action) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: 8) {
+                    sentence
+                    Spacer(minLength: 0)
+                    if let action { bannerButton(action) }
+                }
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, action == nil ? 10 : 2)
         .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+    }
+
+    private func bannerButton(_ action: (String, () -> Void)) -> some View {
+        Button(action.0, action: action.1)
+            .font(NXFont.text(CalType.size(12), .semibold))
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(NX.violetText)
+            .frame(minHeight: 44)
     }
 
     // MARK: Day
@@ -1027,12 +1099,26 @@ struct CalendarView: View {
         let holiday = monthFacts.holidays[selected]
         let folded = collapsed
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 8) {
-                dayHeading(tree: tree, rel: rel, holiday: holiday)
-                Spacer(minLength: 0)
-                HStack(spacing: 0) {
-                    dayStepButton(-1)
-                    dayStepButton(1)
+            // At the accessibility text sizes the arrows go under the heading, as Today does under the
+            // month: beside them the weekday was broken in the middle of the word.
+            Group {
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        dayHeading(tree: tree, rel: rel, holiday: holiday)
+                        HStack(spacing: 0) {
+                            dayStepButton(-1)
+                            dayStepButton(1)
+                        }
+                    }
+                } else {
+                    HStack(alignment: .center, spacing: 8) {
+                        dayHeading(tree: tree, rel: rel, holiday: holiday)
+                        Spacer(minLength: 0)
+                        HStack(spacing: 0) {
+                            dayStepButton(-1)
+                            dayStepButton(1)
+                        }
+                    }
                 }
             }
             .id(Self.headAnchor)
@@ -1131,17 +1217,19 @@ struct CalendarView: View {
 
     /// The date, TODAY / TOMORROW / YESTERDAY, the holiday and the count, as one VoiceOver heading.
     /// Picking a day on the grid moves VoiceOver here, instead of leaving the day's tasks some forty
-    /// cells, keys and buttons further on.
+    /// cells, keys and buttons further on. At the accessibility text sizes the date has a line of its
+    /// own, wrapping between words, with TODAY under it.
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
-                Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(16), .bold)).foregroundStyle(NX.foreground)
-                if rel == 0 || rel == 1 || rel == -1 {
-                    // The app's violet, as "today" is everywhere else (grid, widgets, Watch).
-                    Text((rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : T("Yesterday")).uppercased()).calCaps()
-                        .foregroundStyle(NX.violetText)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 5))
+        let date = Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(16), .bold)).foregroundStyle(NX.foreground)
+        let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
+        return VStack(alignment: .leading, spacing: 3) {
+            if typeSize.isAccessibilitySize {
+                date.fixedSize(horizontal: false, vertical: true)
+                if let tag { relativeTag(tag) }
+            } else {
+                HStack(spacing: 8) {
+                    date
+                    if let tag { relativeTag(tag) }
                 }
             }
             if let holiday { Text(holiday).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue) }
@@ -1153,6 +1241,15 @@ struct CalendarView: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
         .accessibilityFocused($dayHeaderFocused)
+    }
+
+    /// TODAY / TOMORROW / YESTERDAY, in the app's violet, as "today" is everywhere else (grid, widgets,
+    /// Watch).
+    private func relativeTag(_ text: String) -> some View {
+        Text(text.uppercased()).calCaps()
+            .foregroundStyle(NX.violetText)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 5))
     }
 
     private func dayStepButton(_ n: Int) -> some View {
@@ -1252,27 +1349,23 @@ struct CalendarView: View {
             }
             .accessibilityLabel(count > 0 ? "\(T("Filters")) (\(count))" : T("Filters"))
             .accessibilityFocused($a11yTarget, equals: .filtersButton)
-            .keyboardShortcut("f", modifiers: .command)
+            // ⌘F here on the iPhone only: on the iPad and the Mac, Calendar › Filters… has it.
+            .calendarShortcut("f", .command, bound: !CalendarKeys.inMenu)
             .macHelp("\(T("Filters")) (⌘F)")
         }
     }
 
     /// One scroll on iPhone: once the list has carried the grid and the day's heading away, the bar
-    /// still says which day this is.
+    /// still says which day this is. Capped at xxLarge, where the bar has no more room.
     private var barTitle: some View {
-        VStack(spacing: 0) {
-            Text(T("Calendar")).font(.system(size: CalType.size(17), weight: .bold)).foregroundStyle(NX.foreground)
-            Text(CalFormat.day(selected, "EEEdMMM")).font(NXFont.text(CalType.size(11), .medium)).foregroundStyle(NX.mutedFg)
-        }
-        .lineLimit(1)
-        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        CalBarTitle(day: selected)
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// iPad / Mac keyboard: ⌘T today, ⌘←/⌘→ month (week in People), ⌥←/⌥→ day, ⌘1/⌘2 lens, ⌘R reload.
-    /// Hidden buttons, so they show in the ⌘ overlay without crowding the toolbar. The Mac has no
-    /// overlay: there the same commands are a Calendar menu in the menu bar (CalendarMenuCommands).
+    /// Keyboard: ⌘T today, ⌘←/⌘→ month (week in People), ⌥←/⌥→ day, ⌘1/⌘2 lens, ⌘R reload. On the
+    /// iPhone these hidden buttons bind them. The iPad and the Mac have the same commands as a Calendar
+    /// menu (CalendarMenuCommands) — in the ⌘ overlay and the menu bar — which binds them there; the
+    /// two used to bind every key twice on the Mac (impeccable re-audit round 3, 8 Oct 2026).
     private var shortcuts: some View {
         Group {
             Button(T("Today")) { select(today) }.keyboardShortcut("t", modifiers: .command)
@@ -1288,8 +1381,8 @@ struct CalendarView: View {
         .accessibilityHidden(true)
     }
 
-    /// The Mac menu bar's handle on this Calendar. Off while a task or a sheet covers it, so the
-    /// arrows are not taken from a text field up there.
+    /// The Calendar menu's handle on this Calendar (iPad, Mac). Off while a task or a sheet covers it,
+    /// so the arrows are not taken from a text field up there.
     private var menuActions: CalendarMenuActions {
         CalendarMenuActions(
             enabled: pushedTask == nil && sheet == nil,
@@ -1489,13 +1582,25 @@ struct CalendarView: View {
 
     // MARK: Loading
 
+    /// The saved copies first, read and decoded off the main actor (CalCachedRead): the screen used to
+    /// stop while the Bagan, the month and the overdue list were read from disk and decoded on it
+    /// (impeccable re-audit round 3, 8 Oct 2026). Each goes on screen only if nothing fresher has
+    /// arrived meanwhile, for the same person and — the month — for the range still on screen.
     private func firstLoad() async {
-        if structure == nil, let hit = ResponseCache.decoded(APIClient.calStructureKey(uid), as: CalStructure.self) { setStructure(hit.value) }
-        if items == nil, let hit = ResponseCache.decoded(APIClient.calItemsKey(uid, from: range.from, to: range.to), as: CalItemsResponse.self) {
-            setItems(hit.value)
-            loading = false
+        let id = uid
+        let r = range
+        let saved = await CalCachedRead.load(
+            structure: structure == nil ? APIClient.calStructureKey(id) : nil,
+            items: items == nil ? APIClient.calItemsKey(id, from: r.from, to: r.to) : nil,
+            overdue: overdue == nil ? APIClient.calOverdueKey(id) : nil)
+        if id == uid {
+            if structure == nil, let s = saved.structure { setStructure(s) }
+            if items == nil, r == range, let hit = saved.items {
+                setItems(hit.value)
+                loading = false
+            }
+            if overdue == nil, let o = saved.overdue { setOverdue(o) }
         }
-        if overdue == nil, let hit = ResponseCache.decoded(APIClient.calOverdueKey(uid), as: CalOverdueResponse.self) { setOverdue(hit.value) }
         // The items of the month on screen are `.task(id: rangeKey)`'s job.
         await loadStructure()
         await loadOverdue()
@@ -1613,7 +1718,11 @@ struct CalendarView: View {
             // load for the range on screen decides what shows.
             return
         } catch let failure as APIError where failure.nobodyAnswered {
-            if let hit = ResponseCache.decoded(APIClient.calItemsKey(uid, from: r.from, to: r.to), as: CalItemsResponse.self) {
+            // The saved copy, read off the main actor too. Meanwhile the month may have changed or a
+            // newer load started: then that one decides, as for any superseded load.
+            let saved = await CalCachedRead.load(structure: nil, items: APIClient.calItemsKey(uid, from: r.from, to: r.to), overdue: nil)
+            guard r == range, gen == loadGen else { return }
+            if let hit = saved.items {
                 setItems(hit.value)
                 savedAt = hit.savedAt
                 error = nil
@@ -1684,9 +1793,34 @@ private final class CalendarDerived {
     var mineOrAbove: Set<String> = []
 }
 
-// MARK: - Mac menu bar
+/// The Calendar's saved answers (ResponseCache), read from disk and decoded on a background task and
+/// handed back to the main actor. A nil key is not read.
+private struct CalCachedRead: Sendable {
+    var structure: CalStructure?
+    var items: (value: CalItemsResponse, savedAt: Date)?
+    var overdue: CalOverdueResponse?
 
-/// What the Calendar on screen can do from the Mac's menu bar (CalendarMenuCommands), handed up by
+    static func load(structure structureKey: String?, items itemsKey: String?, overdue overdueKey: String?) async -> CalCachedRead {
+        await Task.detached(priority: .userInitiated) { () -> CalCachedRead in
+            var out = CalCachedRead()
+            if let structureKey { out.structure = ResponseCache.decoded(structureKey, as: CalStructure.self)?.value }
+            if let itemsKey { out.items = ResponseCache.decoded(itemsKey, as: CalItemsResponse.self) }
+            if let overdueKey { out.overdue = ResponseCache.decoded(overdueKey, as: CalOverdueResponse.self)?.value }
+            return out
+        }.value
+    }
+}
+
+// MARK: - Menu bar (iPad, Mac)
+
+/// Where the Calendar's keyboard shortcuts are bound — once on each kind of device. On the iPad and
+/// the Mac by the Calendar menu (CalendarMenuCommands): the ⌘ overlay, and the menu bar on the Mac and
+/// from iPadOS 26. On the iPhone, which has neither, by hidden buttons on the Calendar itself.
+enum CalendarKeys {
+    static var inMenu: Bool { UIDevice.current.userInterfaceIdiom != .phone }
+}
+
+/// What the Calendar on screen can do from the Calendar menu (CalendarMenuCommands), handed up by
 /// the Calendar as a scene value.
 struct CalendarMenuActions {
     /// False while a task or a sheet covers the Calendar.
@@ -1706,57 +1840,60 @@ private struct CalendarMenuKey: FocusedValueKey {
 }
 
 extension FocusedValues {
-    /// The Calendar on screen, for the Mac's Calendar menu; nil anywhere else.
+    /// The Calendar on screen, for the Calendar menu; nil anywhere else.
     var calendarMenu: CalendarMenuActions? {
         get { self[CalendarMenuKey.self] }
         set { self[CalendarMenuKey.self] = newValue }
     }
 }
 
-/// Mac: the Calendar's keyboard commands as a Calendar menu in the menu bar, each with its shortcut,
-/// for the Calendar on screen and greyed out anywhere else. On the iPad they show in the ⌘ overlay;
-/// the Mac has none, so there they could not be discovered (impeccable re-audit, 7 Oct 2026).
+/// The Calendar's keyboard commands as a Calendar menu, each with its shortcut, for the Calendar on
+/// screen and greyed out anywhere else: in the menu bar on the Mac (which has no ⌘ overlay, so there
+/// they could not be discovered — impeccable re-audit, 7 Oct 2026) and on the iPad from iPadOS 26, in
+/// the ⌘ overlay on earlier iPads. The iPhone shows no menu; its shortcuts are bound by the Calendar
+/// itself, so here they are left out (CalendarKeys).
 struct CalendarMenuCommands: Commands {
     @FocusedValue(\.calendarMenu) private var calendar
 
     private var on: Bool { calendar?.enabled == true }
     private var people: Bool { calendar?.people == true }
+    private var keys: Bool { CalendarKeys.inMenu }
 
     var body: some Commands {
         CommandMenu(T("Calendar")) {
             Section {
                 Button(T("Today")) { calendar?.today() }
-                    .keyboardShortcut("t", modifiers: .command)
+                    .calendarShortcut("t", .command, bound: keys)
                     .disabled(!on)
             }
             Section {
                 Button(people ? T("Previous week") : T("Previous month")) { calendar?.step(-1) }
-                    .keyboardShortcut(.leftArrow, modifiers: .command)
+                    .calendarShortcut(.leftArrow, .command, bound: keys)
                     .disabled(!on)
                 Button(people ? T("Next week") : T("Next month")) { calendar?.step(1) }
-                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                    .calendarShortcut(.rightArrow, .command, bound: keys)
                     .disabled(!on)
                 Button(T("Previous day")) { calendar?.stepDay(-1) }
-                    .keyboardShortcut(.leftArrow, modifiers: .option)
+                    .calendarShortcut(.leftArrow, .option, bound: keys)
                     .disabled(!on)
                 Button(T("Next day")) { calendar?.stepDay(1) }
-                    .keyboardShortcut(.rightArrow, modifiers: .option)
+                    .calendarShortcut(.rightArrow, .option, bound: keys)
                     .disabled(!on)
             }
             Section {
                 Button(T("By division")) { calendar?.lens(false) }
-                    .keyboardShortcut("1", modifiers: .command)
+                    .calendarShortcut("1", .command, bound: keys)
                     .disabled(!on)
                 Button(T("By person")) { calendar?.lens(true) }
-                    .keyboardShortcut("2", modifiers: .command)
+                    .calendarShortcut("2", .command, bound: keys)
                     .disabled(!on)
             }
             Section {
                 Button(T("Filters") + "…") { calendar?.filters() }
-                    .keyboardShortcut("f", modifiers: .command)
+                    .calendarShortcut("f", .command, bound: keys)
                     .disabled(!on)
                 Button(T("Reload")) { calendar?.reload() }
-                    .keyboardShortcut("r", modifiers: .command)
+                    .calendarShortcut("r", .command, bound: keys)
                     .disabled(!on)
             }
         }
@@ -1764,13 +1901,19 @@ struct CalendarMenuCommands: Commands {
 }
 
 private extension View {
-    /// Mac: hands the Calendar menu its actions. Elsewhere the ⌘ overlay already lists the shortcuts.
+    /// Hands the Calendar menu its actions (iPad, Mac). Harmless on the iPhone, which shows no menu.
     func publishesCalendarMenu(_ actions: CalendarMenuActions) -> some View {
-        #if targetEnvironment(macCatalyst)
-        return focusedSceneValue(\.calendarMenu, actions)
-        #else
-        return self
-        #endif
+        focusedSceneValue(\.calendarMenu, actions)
+    }
+
+    /// `keyboardShortcut` only where `bound`: each of the Calendar's shortcuts is bound in one place on
+    /// each kind of device (CalendarKeys).
+    @ViewBuilder func calendarShortcut(_ key: KeyEquivalent, _ modifiers: EventModifiers, bound: Bool) -> some View {
+        if bound {
+            keyboardShortcut(key, modifiers: modifiers)
+        } else {
+            self
+        }
     }
 
     /// Mac: a tooltip for an icon-only control, with its shortcut. Not on iPhone or iPad, where `help`
