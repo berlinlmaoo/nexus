@@ -2,12 +2,12 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
 import { auth } from "@/lib/auth"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
 import { normalizeAggregateProjectIds } from "@/lib/folder-aggregate"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 async function canManageWorkspace(userId: string, workspaceId: string) {
   if (await isSystemAdminUser(userId)) return true
@@ -145,24 +145,28 @@ export async function DELETE(
 
     // Deleting a folder must NOT delete what's inside it. Move its subfolders and its projects UP one
     // level (to the deleted folder's own parent — root if it had none), then remove the empty folder.
-    await prisma.$transaction([
-      prisma.projectFolder.updateMany({
-        where: { parentFolderId: existing.id },
-        data: { parentFolderId: existing.parentFolderId },
-      }),
-      prisma.project.updateMany({
-        where: { folderId: existing.id },
-        data: { folderId: existing.parentFolderId },
-      }),
-      prisma.projectFolder.delete({ where: { id: existing.id } }),
-    ])
-
-    // Not restorable on its own (nothing inside is lost), but it belongs in the audit: on 8 Oct 2026
-    // six emptied folders went without a trace. A restored project brings its folder back.
-    await logAudit({
-      action: "delete", entityType: "project_folder", entityId: existing.id, entityName: existing.name,
+    // One transaction, after keeping the folder and what was moved out of it: Control Room → Audit
+    // restores the folder (as "Name (2)" if the name was taken since) and moves its projects and
+    // subfolders back in, unless someone has moved them since. In the audit since 8 Oct 2026, when six
+    // emptied folders went without a trace.
+    const folderId = existing.id
+    const moveTo = existing.parentFolderId
+    await restorableDelete({
+      entityType: "project_folder", entityId: folderId, entityName: existing.name, workspaceId: existing.workspaceId,
       userId: session.user.id, request,
-      metadata: { parentFolderId: existing.parentFolderId, workspaceId: existing.workspaceId },
+      metadata: { parentFolderId: moveTo, workspaceId: existing.workspaceId },
+      meta: { open: { type: "folder", id: folderId }, folderId },
+      before: async (tx) => {
+        const subfolders = await tx.projectFolder.findMany({ where: { parentFolderId: folderId }, select: { id: true } })
+        const projects = await tx.project.findMany({ where: { folderId }, select: { id: true } })
+        await tx.projectFolder.updateMany({ where: { parentFolderId: folderId }, data: { parentFolderId: moveTo } })
+        await tx.project.updateMany({ where: { folderId }, data: { folderId: moveTo } })
+        return [
+          ...subfolders.map((f) => ({ table: "ProjectFolder", column: "parentFolderId", key: f.id, value: folderId, movedTo: moveTo })),
+          ...projects.map((p) => ({ table: "Project", column: "folderId", key: p.id, value: folderId, movedTo: moveTo })),
+        ]
+      },
+      remove: (tx) => tx.projectFolder.delete({ where: { id: folderId } }),
     })
 
     // The folder disappears and what was in it moves up a level, live for the whole workspace.

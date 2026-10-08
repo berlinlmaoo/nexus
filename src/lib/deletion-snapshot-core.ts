@@ -25,8 +25,8 @@ type Row = Record<string, unknown>
  * A row that outlived the delete with `column` set to NULL; restoring sets it back to `value`.
  *
  * `movedTo` (a "move then delete": tasks moved out of a deleted section, projects moved up out of a
- * deleted folder): the value the delete wrote instead of NULL. Restoring sets the column back to
- * `value` only where it still holds `movedTo` (or NULL) — a row moved again since stays where it is.
+ * deleted folder): the value the move wrote — NULL for a move to the top level. Restoring sets the
+ * column back to `value` only where it still holds `movedTo` — a row moved again since stays put.
  */
 export type SnapshotLink = { table: string; column: string; key: string; value: string; movedTo?: string | null }
 
@@ -624,17 +624,19 @@ export async function restoreSnapshot(db: Db, schema: DbSchema, data: SnapshotDa
     const type = schema.columns.get(table)?.get(column)
     if (!pk || pk.length !== 1 || !fk || (type !== "text" && type !== "character varying")) continue
     for (const part of chunks(links)) {
-      // NULL (the delete unlinked it), or still the value a "move then delete" put there.
+      // Unlinked by the delete: only where it is still NULL. Moved by a "move then delete": only where
+      // it still holds the value the move wrote (NULL included, for a move to the top level) — a row
+      // someone has moved again since stays where they put it.
       const [{ n }] = await db.query<{ n: number }>(
         `with u as (
            update ${ident(table)} t set ${ident(column)} = v.value
            from jsonb_to_recordset($1::jsonb) as v(key text, value text, moved boolean, moved_to text)
            where t.${ident(pk[0])}::text = v.key
-             and (t.${ident(column)} is null or (v.moved and t.${ident(column)}::text = v.moved_to))
+             and (case when v.moved then t.${ident(column)}::text is not distinct from v.moved_to else t.${ident(column)} is null end)
              and exists (select 1 from ${ident(fk.parent)} p where p.${ident(fk.refcol)}::text = v.value)
            returning 1)
          select count(*)::int as n from u`,
-        [JSON.stringify(part.map((l) => ({ key: l.key, value: l.value, moved: l.movedTo != null, moved_to: l.movedTo ?? null })))],
+        [JSON.stringify(part.map((l) => ({ key: l.key, value: l.value, moved: l.movedTo !== undefined, moved_to: l.movedTo ?? null })))],
       )
       relinked += n
     }
