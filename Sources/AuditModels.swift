@@ -26,6 +26,8 @@ struct AuditLog: Decodable, Identifiable, Sendable, Hashable {
     /// Optional because a server that predates it sends nothing, and the row then falls back to
     /// the entity name the old list showed.
     let summary: String?
+    /// On a deleted project or task that kept a copy (since 8 Oct 2026). Absent = can't be restored.
+    let restore: AuditRestoreInfo?
 
     struct UserRef: Decodable, Sendable, Hashable {
         let id: String?
@@ -47,8 +49,10 @@ struct AuditEntryDetail: Decodable, Sendable {
     let title: String?
     let changes: [Change]
     let details: [Detail]
+    /// A delete that kept a copy: what comes back and whether it already did. Absent on older servers.
+    let restore: AuditRestoreDetail?
 
-    enum CodingKeys: String, CodingKey { case entry, title, changes, details }
+    enum CodingKeys: String, CodingKey { case entry, title, changes, details, restore }
 
     /// Lenient about the two lists: an entry with nothing to diff may arrive with them missing or
     /// null, and that must still open the sheet rather than fail it.
@@ -58,6 +62,7 @@ struct AuditEntryDetail: Decodable, Sendable {
         title = try c.decodeIfPresent(String.self, forKey: .title)
         changes = (try? c.decodeIfPresent([Change].self, forKey: .changes)) ?? []
         details = (try? c.decodeIfPresent([Detail].self, forKey: .details)) ?? []
+        restore = try? c.decodeIfPresent(AuditRestoreDetail.self, forKey: .restore)
     }
 
     struct Entry: Decodable, Sendable {
@@ -115,6 +120,45 @@ struct AuditEntryDetail: Decodable, Sendable {
             let id: String
         }
     }
+}
+
+/// The `restore` of a row in GET /api/audit (owner, 8 Oct 2026: Restore in Control Room → Audit).
+struct AuditRestoreInfo: Decodable, Sendable, Hashable {
+    let available: Bool
+    let restoredAt: String?
+    /// When the copy is from: the delete itself, or the nightly backup it was taken from.
+    let dataAsOf: String?
+    let fromBackup: Bool?
+}
+
+/// The `restore` of GET /api/audit/{id}: the row's facts plus who restored it and what comes back.
+struct AuditRestoreDetail: Decodable, Sendable {
+    let available: Bool
+    let restoredAt: String?
+    let dataAsOf: String?
+    let fromBackup: Bool?
+    let restoredBy: AuditLog.UserRef?
+    let counts: Counts
+
+    struct Counts: Decodable, Sendable {
+        let lists: Int, tasks: Int, files: Int, comments: Int, sheets: Int, members: Int
+
+        enum CodingKeys: String, CodingKey { case lists, tasks, files, comments, sheets, members }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            func n(_ k: CodingKeys) -> Int { (try? c.decodeIfPresent(Int.self, forKey: k)) ?? 0 }
+            lists = n(.lists); tasks = n(.tasks); files = n(.files)
+            comments = n(.comments); sheets = n(.sheets); members = n(.members)
+        }
+    }
+}
+
+/// POST /api/audit/{id}/restore.
+struct AuditRestoreResult: Decodable, Sendable {
+    let entityType: String
+    let entityId: String
+    let projectId: String?
 }
 
 /// Any JSON value. Arrays and dictionaries already live on the heap, so no `indirect` is needed.

@@ -31,7 +31,7 @@ struct AdminAuditSection: View {
     private static let filters: [ActionFilter] = [
         ActionFilter(label: "All", value: nil), ActionFilter(label: "Create", value: "create"),
         ActionFilter(label: "Update", value: "update"), ActionFilter(label: "Delete", value: "delete"),
-        ActionFilter(label: "Login", value: "login"),
+        ActionFilter(label: "Restore", value: "restore"), ActionFilter(label: "Login", value: "login"),
     ]
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -53,8 +53,9 @@ struct AdminAuditSection: View {
             }
             await reload()
         }
-        // The only sheet on this view — the detail is the one thing it presents.
-        .sheet(item: $opened) { AuditEntrySheet(log: $0) }
+        // The only sheet on this view — the detail is the one thing it presents. A restore in it
+        // turns the row's "Restorable" into "Restored", so the list reloads behind it.
+        .sheet(item: $opened) { AuditEntrySheet(log: $0, onRestored: { Task { await reload() } }) }
     }
 
     // MARK: controls
@@ -249,6 +250,8 @@ struct AuditActionStyle {
             icon = "person.badge.key"; tint = Color.gray
         } else if a.hasPrefix("view") {
             icon = "eye"; tint = NX.violet
+        } else if a.hasPrefix("restore") {
+            icon = "arrow.uturn.backward"; tint = NX.success
         } else {
             icon = "circle.dashed"; tint = NX.mutedFg
         }
@@ -286,6 +289,9 @@ private struct AuditRow: View {
                         Text("· \(when)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                 }
+                if log.action == "delete", let restore = log.restore {
+                    AuditRestorePill(available: restore.available)
+                }
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
@@ -299,15 +305,37 @@ private struct AuditRow: View {
     }
 }
 
+/// On a delete row: whether it can still come back.
+private struct AuditRestorePill: View {
+    let available: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: available ? "arrow.uturn.backward" : "checkmark")
+                .font(.system(size: 9, weight: .bold))
+            Text(T(available ? "Restorable" : "Restored")).font(NXFont.text(10, .semibold))
+        }
+        .foregroundStyle(available ? NX.violetText : NX.mutedFg)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .overlay(Capsule().strokeBorder(available ? NX.violetText.opacity(0.35) : NX.border))
+    }
+}
+
 // MARK: - Detail
 
-/// One entry, read out: what changed, what it touched, and — folded away — the raw evidence.
+/// One entry, read out: what changed, what it touched, and — folded away — the raw evidence. A
+/// deleted project or task that kept a copy also offers to put it back (owner, 8 Oct 2026).
 private struct AuditEntrySheet: View {
     let log: AuditLog
+    var onRestored: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var detail: AuditEntryDetail?
     @State private var error: String?
     @State private var showTechnical = false
+    @State private var confirmRestore = false
+    @State private var restoring = false
+    @State private var restoreError: String?
+    @State private var restoredNow: AuditRestoreResult?
 
     var body: some View {
         // Its own stack, so a tapped link pushes inside the sheet rather than trying to reach a
@@ -319,6 +347,14 @@ private struct AuditEntrySheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         header
                         if let detail {
+                            if let restore = detail.restore {
+                                restoreCard(detail.entry, restore)
+                            } else if isDeletedProjectOrTask(detail.entry) {
+                                Text(T("This was deleted before NEXUS started keeping deleted projects and tasks, so it can't be restored."))
+                                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+                            }
                             if !detail.changes.isEmpty { changesCard(detail.changes) }
                             if !detail.details.isEmpty { detailsCard(detail.details) }
                             technicalCard(detail.entry)
@@ -331,6 +367,12 @@ private struct AuditEntrySheet: View {
                     }
                     .padding(16)
                 }
+            }
+            .alert(String(format: T("Restore “%@”?"), detail?.entry.entityName ?? log.entityName ?? ""), isPresented: $confirmRestore) {
+                Button(T("Yes, restore")) { Task { await restore() } }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: {
+                if let r = detail?.restore { Text(explanation(r, entityType: detail?.entry.entityType)) }
             }
             .navigationTitle(T("Audit entry"))
             .navigationBarTitleDisplayMode(.inline)
@@ -345,6 +387,128 @@ private struct AuditEntrySheet: View {
         error = nil
         do { detail = try await APIClient.shared.auditEntry(id: log.id) }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load this entry.") }
+    }
+
+    // MARK: restore
+
+    private func isDeletedProjectOrTask(_ e: AuditEntryDetail.Entry) -> Bool {
+        e.action == "delete" && (e.entityType == "project" || e.entityType == "task")
+    }
+
+    private func restore() async {
+        restoring = true
+        restoreError = nil
+        defer { restoring = false }
+        do {
+            restoredNow = try await APIClient.shared.auditRestore(id: log.id)
+            onRestored()
+            await load()
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? T("Couldn't restore it. Try again in a moment.")
+            // Someone else may have restored it meanwhile: show the entry as it is now.
+            await load()
+            restoreError = message
+        }
+    }
+
+    /// "226 tasks, 7 lists and 155 files" — only what there is, joined in the app's language.
+    private static func whatComesBack(_ c: AuditRestoreDetail.Counts, isTask: Bool) -> String {
+        func n(_ v: Int, _ one: String, _ many: String) -> String? {
+            v == 0 ? nil : (v == 1 ? T(one) : String(format: T(many), v))
+        }
+        let parts = [
+            isTask ? n(c.tasks, "1 subtask", "%d subtasks") : n(c.tasks, "1 task", "%d tasks"),
+            n(c.lists, "1 list", "%d lists"),
+            n(c.files, "1 file", "%d files"),
+            n(c.comments, "1 comment", "%d comments"),
+            n(c.sheets, "1 sheet", "%d sheets"),
+            n(c.members, "1 member", "%d members"),
+        ].compactMap { $0 }
+        let f = ListFormatter()
+        f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_US")
+        return f.string(from: parts) ?? parts.joined(separator: ", ")
+    }
+
+    private func explanation(_ r: AuditRestoreDetail, entityType: String?) -> String {
+        let what = Self.whatComesBack(r.counts, isTask: entityType == "task")
+        if r.fromBackup == true {
+            let when = AuditTime.full(r.dataAsOf) ?? ""
+            return what.isEmpty
+                ? String(format: T("It comes back as it was in the backup of %@. Changes made after that backup are not in it."), when)
+                : String(format: T("It comes back as it was in the backup of %@: %@. Changes made after that backup are not in it."), when, what)
+        }
+        return what.isEmpty
+            ? T("It comes back as it was when it was deleted.")
+            : String(format: T("It comes back as it was when it was deleted: %@."), what)
+    }
+
+    private func restoredLine(_ r: AuditRestoreDetail) -> String {
+        if restoredNow != nil { return T("Restored. It's back where it was.") }
+        let when = AuditTime.full(r.restoredAt) ?? ""
+        if let name = r.restoredBy?.name, !name.isEmpty { return String(format: T("Restored by %@ · %@"), name, when) }
+        return String(format: T("Restored · %@"), when)
+    }
+
+    @ViewBuilder private func restoreCard(_ e: AuditEntryDetail.Entry, _ r: AuditRestoreDetail) -> some View {
+        let isProject = e.entityType == "project"
+        if !r.available || restoredNow != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.success)
+                    Text(restoredLine(r)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let id = restoredNow?.entityId ?? e.entityId {
+                    NavigationLink {
+                        if isProject {
+                            ProjectDetailView(projectId: id, projectName: e.entityName ?? "")
+                        } else {
+                            TaskDetailView(taskId: id)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(T(isProject ? "Open project" : "Open task")).font(NXFont.text(13, .semibold))
+                            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(NX.violetText)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(T("Bring it back"))
+                Text(explanation(r, entityType: e.entityType)).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                    .fixedSize(horizontal: false, vertical: true)
+                if isProject {
+                    Text(T("Its folder comes back too if it was deleted.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let restoreError {
+                    Text(restoreError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button { confirmRestore = true } label: {
+                    HStack(spacing: 6) {
+                        if restoring {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "arrow.uturn.backward").font(.system(size: 13, weight: .bold))
+                        }
+                        Text(restoring ? T("Restoring…") : T(isProject ? "Restore project" : "Restore task"))
+                            .font(NXFont.text(14, .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(restoring)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        }
     }
 
     // Drawn from the row before the detail arrives, so the sheet is never blank while it loads.

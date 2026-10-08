@@ -1493,6 +1493,35 @@ struct APIClient {
     func auditEntry(id: String) async throws -> AuditEntryDetail {
         try await run(makeRequest("/api/audit/\(encValue(id))"), decode: AuditEntryDetail.self)
     }
+
+    /// POST /api/audit/{id}/restore — puts back what a delete removed (owner, 8 Oct 2026). The four
+    /// refusals come back by `code` and are read out in this app's words and language, not the
+    /// server's English sentence.
+    func auditRestore(id: String) async throws -> AuditRestoreResult {
+        let req = makeRequest("/api/audit/\(encValue(id))/restore", method: "POST")
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.nothingAnswered(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            switch (try? JSONDecoder().decode(ServerError.self, from: data))?.code {
+            case "ALREADY_RESTORED": throw APIError.transport(T("Someone has restored this already."))
+            case "ALREADY_EXISTS": throw APIError.transport(T("It's already back."))
+            case "PARENT_MISSING": throw APIError.transport(T("Its project was deleted too. Restore the project first, then this task."))
+            case "NOT_RESTORABLE": throw APIError.transport(T("No copy of this delete was kept, so it can't be restored."))
+            default: throw APIError.http(http.statusCode, Self.serverMessage(data))
+            }
+        }
+        do {
+            return try JSONDecoder().decode(AuditRestoreResult.self, from: data)
+        } catch {
+            throw APIError.decoding
+        }
+    }
     func adminQuests(workspaceId: String) async throws -> [AdminQuest] {
         (try await run(makeRequest("/api/gamification/quests/admin?workspaceId=\(enc(workspaceId))"), decode: AdminQuestsResponse.self)).quests ?? []
     }
