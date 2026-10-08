@@ -6,6 +6,7 @@ import path from "path"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { syncUserRoomsSafe } from "@/lib/chat-membership"
 import { deleteGideonAttachmentFiles } from "@/lib/gideon-attachments"
 import {
   DELETED_ACCOUNT_NAME,
@@ -220,6 +221,10 @@ export async function POST(request: NextRequest) {
     } catch {
       /* no avatar directory or file — nothing to remove */
     }
+
+    // Out of the project chat rooms (they left every project above). Their groups and DMs keep them,
+    // so the history still says who wrote it (lib/chat-membership.ts syncUserRooms).
+    await syncUserRoomsSafe(userId, "account-deleted")
 
     // The audit row is written against the same (now anonymised) user id. The old email is
     // deliberately NOT recorded: keeping it here would undo the anonymisation.

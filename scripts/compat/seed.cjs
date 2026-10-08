@@ -112,6 +112,20 @@ async function main() {
   for (const u of allPeople) {
     await prisma.projectMember.create({ data: { userId: u.id, projectId: project.id } })
   }
+  // The project's chat room with every project member in it — what production has for every project
+  // (lib/chat-membership.ts keeps rooms in step with project membership; since 8 Oct 2026 the chat
+  // list no longer creates them on the fly). workspaceId only where the candidate schema has it.
+  if (typeof prisma.conversation?.create === "function") {
+    await prisma.conversation.create({
+      data: fit("Conversation", {
+        type: "PROJECT",
+        projectId: project.id,
+        name: project.name,
+        workspaceId: workspace.id,
+        members: { create: allPeople.map((u) => ({ userId: u.id })) },
+      }),
+    })
+  }
   const list = await prisma.taskList.create({ data: { name: "To do", projectId: project.id } })
   for (const u of Object.values(staff).flatMap((s) => [s.a, s.b])) {
     const task = await prisma.task.create({

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
+import { syncProjectRoomSafe } from "@/lib/chat-membership"
 
 const projectListSelect = {
   id: true,
@@ -305,6 +306,10 @@ export async function POST(request: NextRequest) {
     })
 
     logAudit({ action: "create", entityType: "project", entityId: project.id, entityName: name, userId, request })
+
+    // The project's chat room, with its creator in it. Rooms used to appear only when someone happened
+    // to open the chat list (lib/chat-membership.ts).
+    await syncProjectRoomSafe(project.id, "project-created")
 
     // The NAS folder pre-create used to live here. It is gone: the Files tab it existed for was
     // removed, the Synology at 192.168.223.92 is unreachable from every machine here, and the call

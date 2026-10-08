@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { resolveUploadedImageType } from "@/lib/image-sniff"
-import prisma from "@/lib/prisma"
+import { conversationMemberAccess } from "@/lib/chat-access"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import { randomUUID } from "crypto"
@@ -51,11 +51,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File too large. Maximum size is 8MB" }, { status: 400 })
     }
 
-    const member = await prisma.conversationMember.findFirst({
-      where: { conversationId, userId: session.user.id },
-      select: { userId: true },
-    })
-    if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // A member of the room who may still be in it (a project member of a project room, in the
+    // group/DM's workspace) — the same rule as sending the message the picture belongs to.
+    const access = await conversationMemberAccess(session.user.id, conversationId)
+    if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const ext = EXT_MAP[fileType] || "png"
     const fileName = `${randomUUID()}.${ext}`

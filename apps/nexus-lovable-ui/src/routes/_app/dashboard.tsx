@@ -25,6 +25,7 @@ import {
 import learner from "@/assets/philearn/learner.png";
 import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
+import { chatUnreadTotal } from "@/lib/chat-unread";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
@@ -740,7 +741,8 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
 function MessagesCard() {
   const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false, staleTime: 30_000 });
   const rows = convos.data?.conversations ?? [];
-  const unread = rows.reduce((n, c) => n + (c.unreadCount ?? 0), 0);
+  // Same count as the nav badge: the server's total when it sends one, muted rooms left out.
+  const unread = chatUnreadTotal(convos.data);
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
   return (

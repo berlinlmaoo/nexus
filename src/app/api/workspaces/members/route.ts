@@ -15,6 +15,7 @@ import { Prisma } from '@/generated/prisma/client'
 import { canonicalEmail } from '@/lib/email-auth'
 import { sendEmail, workspaceAddedEmail, workspaceInviteNewUserEmail } from '@/lib/email'
 import type { WorkspaceRole } from '@/generated/prisma/client'
+import { syncUserRoomsSafe } from '@/lib/chat-membership'
 
 // Caller's effective tier (system super-admin = top). Used to gate who can assign which role.
 function callerTier(role: string | null | undefined, isSystemAdmin: boolean) {
@@ -292,6 +293,9 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+
+    // Back into the project rooms of this workspace's projects they are (still) a member of.
+    await syncUserRoomsSafe(user.id, "workspace-member-added")
 
     logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: inviteEmail, userId: session.user.id, request: req, metadata: { role, attendanceRole, workspaceId: currentMember.workspaceId, ...(absorbed.length ? { absorbedWorkspaces: absorbed } : {}), ...(kept.length ? { keptWorkspaces: kept } : {}) } })
 
@@ -627,6 +631,10 @@ export async function DELETE(req: NextRequest) {
     }
 
     await prisma.workspaceMember.delete({ where: { id: memberId } })
+
+    // Out of this workspace's chat rooms — project rooms and its groups/DMs — at once. Until 8 Oct 2026
+    // a removed member kept reading and writing them and got a push for every message.
+    await syncUserRoomsSafe(targetMember.userId, "workspace-member-removed")
 
     logAudit({ action: "delete", entityType: "workspace_member", entityId: memberId, userId: session.user.id, request: req })
 

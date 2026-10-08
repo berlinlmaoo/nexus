@@ -1,62 +1,97 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { Prisma } from "@/generated/prisma"
+import { CHAT_MEMBER_SELECT, visibleRoomIds, workspaceForNewRoom } from "@/lib/chat-access"
+import { chatUnreadForUser } from "@/lib/chat-unread"
+import { emitConversationUpdated } from "@/lib/socket-emitter"
 
-const memberInclude = { members: { include: { user: { select: { id: true, name: true, avatar: true, email: true } } } } }
+const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
 
-/** Ensure a PROJECT chat room exists for every project the user belongs to. */
-async function provisionProjectRooms(userId: string) {
-  const memberships = await prisma.projectMember.findMany({ where: { userId }, select: { projectId: true } })
-  for (const { projectId } of memberships) {
-    const existing = await prisma.conversation.findUnique({ where: { projectId }, select: { id: true } })
-    if (existing) {
-      // make sure this user is a member
-      await prisma.conversationMember.upsert({
-        where: { conversationId_userId: { conversationId: existing.id, userId } },
-        create: { conversationId: existing.id, userId },
-        update: {},
-      })
-      continue
-    }
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true, members: { select: { userId: true } } } })
-    if (!project) continue
-    await prisma.conversation.create({
-      data: {
-        type: "PROJECT",
-        projectId,
-        name: project.name,
-        members: { create: project.members.map((m) => ({ userId: m.userId })) },
-      },
-    })
-  }
-}
-
+/**
+ * The caller's conversations, most recently active first.
+ *
+ * Each item: id, type, name, projectId, members (the roster: the iOS @mention picker reads it from
+ * here, so it stays — without email), memberCount, lastMessage, unreadCount, mutedUntil (null when not
+ * muted). The response adds totalUnread (muted rooms count their mentions only — chat-unread.ts).
+ *
+ * No longer provisions project rooms: that ran two queries per project on every load, and was the
+ * only way a project room came to exist. Rooms now follow project/workspace membership changes
+ * (lib/chat-membership.ts) and scripts/chat-membership-backfill.cjs covers the rows from before.
+ * Rooms the caller can no longer open (they left the project's or the room's workspace) are left out.
+ */
 export async function GET() {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id
 
-    await provisionProjectRooms(userId)
-
-    const memberships = await prisma.conversationMember.findMany({ where: { userId }, select: { conversationId: true, lastReadAt: true } })
-    const ids = memberships.map((m) => m.conversationId)
-    const readMap = new Map(memberships.map((m) => [m.conversationId, m.lastReadAt]))
-    if (ids.length === 0) return NextResponse.json({ conversations: [] })
+    const memberships = await prisma.conversationMember.findMany({
+      where: { userId },
+      select: { conversationId: true, mutedUntil: true },
+    })
+    if (memberships.length === 0) return NextResponse.json({ conversations: [], totalUnread: 0 })
+    const muteOf = new Map(memberships.map((m) => [m.conversationId, m.mutedUntil]))
 
     const convos = await prisma.conversation.findMany({
-      where: { id: { in: ids } },
-      include: { ...memberInclude, messages: { orderBy: { createdAt: "desc" }, take: 1, include: { user: { select: { id: true, name: true } } } } },
+      where: { id: { in: memberships.map((m) => m.conversationId) } },
+      select: {
+        id: true, type: true, name: true, projectId: true, workspaceId: true,
+        project: { select: { name: true, workspaceId: true } },
+        ...memberInclude,
+      },
       orderBy: { updatedAt: "desc" },
     })
+    const visible = await visibleRoomIds(userId, convos.map((c) => ({
+      id: c.id,
+      type: c.type,
+      workspaceId: c.workspaceId,
+      projectWorkspaceId: c.project?.workspaceId ?? null,
+      memberIds: c.members.map((m) => m.userId),
+    })))
+    const shown = convos.filter((c) => visible.has(c.id))
+    const ids = shown.map((c) => c.id)
+    if (ids.length === 0) return NextResponse.json({ conversations: [], totalUnread: 0 })
 
-    const conversations = await Promise.all(convos.map(async (c) => {
-      const lastReadAt = readMap.get(c.id) ?? null
-      const unreadCount = await prisma.message.count({ where: { conversationId: c.id, userId: { not: userId }, ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}) } })
-      return { id: c.id, type: c.type, name: c.name, projectId: c.projectId, members: c.members, lastMessage: c.messages[0] ?? null, unreadCount }
-    }))
+    // The newest message of each room: one index probe per room (LATERAL), not every message of
+    // every room — a nested `take: 1` is not pushed down per parent.
+    const lastIds = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT m.id FROM "Conversation" c
+      CROSS JOIN LATERAL (
+        SELECT "Message".id FROM "Message"
+         WHERE "Message"."conversationId" = c.id
+         ORDER BY "Message"."createdAt" DESC, "Message".id DESC
+         LIMIT 1
+      ) m
+      WHERE c.id IN (${Prisma.join(ids)})`
+    const lastMessages = lastIds.length
+      ? await prisma.message.findMany({
+          where: { id: { in: lastIds.map((r) => r.id) } },
+          include: { user: { select: { id: true, name: true } } },
+        })
+      : []
+    const lastOf = new Map(lastMessages.map((m) => [m.conversationId, m]))
 
-    return NextResponse.json({ conversations })
+    const unread = await chatUnreadForUser(userId, { conversationIds: ids })
+
+    const conversations = shown.map((c) => {
+      const mutedUntil = muteOf.get(c.id) ?? null
+      return {
+        id: c.id,
+        type: c.type,
+        // A project room is called what its project is called NOW, not what it was called when the
+        // room was created.
+        name: c.type === "PROJECT" ? (c.project?.name ?? c.name) : c.name,
+        projectId: c.projectId,
+        members: c.members,
+        memberCount: c.members.length,
+        lastMessage: lastOf.get(c.id) ?? null,
+        unreadCount: unread.perConversation.get(c.id)?.unread ?? 0,
+        mutedUntil: mutedUntil && mutedUntil.getTime() > Date.now() ? mutedUntil.toISOString() : null,
+      }
+    })
+
+    return NextResponse.json({ conversations, totalUnread: unread.totalUnread })
   } catch (error) {
     console.error("conversations GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -96,14 +131,19 @@ export async function POST(req: NextRequest) {
     }
 
     const allMembers = Array.from(new Set([userId, ...others]))
+    // The workspace this room belongs to (every participant is in it): leaving that workspace later
+    // takes a person out of the room (lib/chat-membership.ts). Null when it spans workspaces.
+    const workspaceId = await workspaceForNewRoom(userId, others)
     const conversation = await prisma.conversation.create({
       data: {
         type: type === "GROUP" ? "GROUP" : "DM",
         name: type === "GROUP" ? (name?.trim() || null) : null,
+        workspaceId,
         members: { create: allMembers.map((uid) => ({ userId: uid })) },
       },
       include: memberInclude,
     })
+    emitConversationUpdated(allMembers, { conversationId: conversation.id, lastMessageAt: null, reason: "membership" })
     return NextResponse.json({ conversation }, { status: 201 })
   } catch (error) {
     console.error("conversations POST error:", error)

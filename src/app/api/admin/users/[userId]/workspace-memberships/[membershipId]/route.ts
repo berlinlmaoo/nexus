@@ -7,6 +7,7 @@ import { getAdminSessionContext } from "@/lib/admin-access"
 import { logAudit } from "@/lib/audit"
 import { membershipChangeError } from "@/lib/org"
 import { isPrimaryWorkspace } from "@/lib/primary-team"
+import { syncUserRoomsSafe } from "@/lib/chat-membership"
 
 const WORKSPACE_ROLES: WorkspaceRole[] = ["BOD", "MANAGER", "STAFF"]
 
@@ -173,6 +174,8 @@ export async function DELETE(
     await prisma.workspaceMember.delete({
       where: { id: target.id },
     })
+    // Out of that workspace's chat rooms at once (lib/chat-membership.ts).
+    await syncUserRoomsSafe(target.userId, "admin-workspace-membership-removed")
 
     await logAudit({
       action: "delete",

@@ -7,6 +7,7 @@ import { notifyProjectInvite } from "@/lib/notification-service"
 import { logAudit } from "@/lib/audit"
 import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 import { checkProjectAccess } from "@/lib/rbac"
+import { syncProjectRoomSafe } from "@/lib/chat-membership"
 
 export async function GET(
   _request: NextRequest,
@@ -79,6 +80,9 @@ export async function POST(
       include: { user: true },
     })
 
+    // Into the project's chat room now, not whenever they next open the chat list.
+    await syncProjectRoomSafe((await params).projectId, "project-member-added")
+
     // Notify the invited user
     if (userId !== session.user.id) {
       notifyProjectInvite({
@@ -141,6 +145,9 @@ export async function DELETE(
         },
       },
     })
+
+    // Out of the project's chat room: no more pushes, no more reading it (CHAT-CONTRACT security).
+    await syncProjectRoomSafe((await params).projectId, "project-member-removed")
 
     logAudit({ action: "delete", entityType: "project_member", entityId: existing.userId, entityName: userId, userId: session.user.id!, request, metadata: { projectId: (await params).projectId } })
 

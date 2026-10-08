@@ -4,9 +4,10 @@
  * Pure: no imports and no I/O, so fcm-payload.test.mjs can load it with plain node. The sender that
  * signs and posts these lives in fcm.ts.
  *
- * The payload carries the same fields the APNs payload does (apns.ts sendOne): title, body, type, and
- * when present taskId, projectId, link, category, plus the caller's extra `data` keys — which, as on
- * iOS, can never replace the fixed ones. It is a DATA-ONLY message (owner decision 24 Sep 2026,
+ * The payload carries the same fields the APNs payload does (apns.ts buildApnsBody): title, body, type,
+ * and when present taskId, projectId, link, category, badge, plus the caller's extra `data` keys — which,
+ * as on iOS, can never replace the fixed ones. A chat push adds conversationId, messageId,
+ * conversationName, senderName, isGroup and text through `data` (chat-rules buildChatPush). It is a DATA-ONLY message (owner decision 24 Sep 2026,
  * nexus-android SERVER-REQUESTS R1):
  *   data             every field as a string (FCM requires string values), plus `channel` — the
  *                    notification channel the app files it under (androidChannelFor). With no
@@ -110,6 +111,8 @@ export interface FcmPushInput {
   /** The in-app Notification row this push mirrors, so a tap can mark it read. */
   notificationId?: string | null
   data?: Record<string, string | number | boolean | null> | null
+  /** App-icon number (chat pushes): sent as data `badge`; the app decides what to do with it. */
+  badge?: number | null
 }
 
 // FCM refuses a data message that uses these keys (or any key starting with "google." / "gcm.").
@@ -135,6 +138,7 @@ export function buildFcmMessage(token: string, p: FcmPushInput) {
   if (p.link) data.link = p.link
   if (p.category) data.category = p.category
   if (p.notificationId) data.notificationId = p.notificationId
+  if (typeof p.badge === "number" && Number.isFinite(p.badge)) data.badge = String(Math.max(0, Math.floor(p.badge)))
   data.channel = androidChannelFor(p.type, p.category)
 
   return {

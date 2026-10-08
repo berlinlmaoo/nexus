@@ -18,6 +18,10 @@ const REALTIME_EVENTS = [
   "new-notification",
   "sprint-updated",
   "message-created",
+  // Server since 8 Oct 2026: to every member's user:<id> room on each new message, so the list,
+  // the nav badge and the tab title move for chats that aren't open. Older servers never send it;
+  // the "new-notification" fallback below and the list's own poll cover them.
+  "conversation-updated",
 ] as const;
 
 // Each event invalidates any query whose key contains one of these terms (substring, case-insensitive).
@@ -29,7 +33,15 @@ const INVALIDATION: Record<string, string[]> = {
   "new-notification": ["notification"],
   "sprint-updated": ["sprint", "project", "dashboard"],
   "message-created": ["messages", "conversation"],
+  "conversation-updated": ["conversation"],
 };
+
+/**
+ * What a reconnect refetches: anything that only moves on a socket event (chat threads, the
+ * conversation list and its badge, the bell). Events emitted while the socket was down are gone
+ * for good, so without this an open chat would stay frozen at the moment the connection dropped.
+ */
+const RECONNECT_TERMS = ["messages", "conversation", "notification"];
 
 /**
  * Query keys that must never be blanket-invalidated, matched as a substring like the terms above.
@@ -116,9 +128,16 @@ export function RealtimeProvider({
             socket.emit("join-room", { room, userId, name: userName }),
           );
         };
+        // The first connect of this provider is the initial load (queries fetch on their own);
+        // every later one is a reconnect after a drop, and must catch up on what was missed.
+        let connectedBefore = false;
         const onConnect = () => {
           setConnected(true);
           joinAll();
+          if (connectedBefore) {
+            queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, RECONNECT_TERMS) });
+          }
+          connectedBefore = true;
         };
         const onDisconnect = () => setConnected(false);
 
@@ -127,9 +146,21 @@ export function RealtimeProvider({
         if (socket.connected) onConnect();
 
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
-          const handler = () => {
-            const terms = INVALIDATION[evt] ?? [];
+          const handler = (payload?: unknown) => {
+            const terms = [...(INVALIDATION[evt] ?? [])];
+            const data = (payload && typeof payload === "object" ? payload : {}) as { type?: unknown; conversationId?: unknown };
+            // Servers before 8 Oct 2026 send no conversation-updated, but do write a bell
+            // notification (type MESSAGE / MESSAGE_MENTION) for every chat message — so that is
+            // the signal that some other chat moved.
+            if (evt === "new-notification" && typeof data.type === "string" && data.type.startsWith("MESSAGE")) {
+              terms.push("conversation");
+            }
             queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) });
+            // The thread of that room too, in case it's on screen but its room join was refused.
+            // With `after=` this is a near-empty request when the room event already delivered it.
+            if (evt === "conversation-updated" && typeof data.conversationId === "string") {
+              queryClient.invalidateQueries({ queryKey: ["messages", data.conversationId] });
+            }
           };
           socket.on(evt, handler);
           return () => socket.off(evt, handler);

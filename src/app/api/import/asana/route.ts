@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { syncProjectRoomSafe } from '@/lib/chat-membership'
 
 const ASANA_BASE = 'https://app.asana.com/api/1.0'
 
@@ -119,6 +120,7 @@ async function importFromAsana(
             },
           },
         })
+        await syncProjectRoomSafe(project.id, 'import-asana')
 
         const sections = await asanaFetch(
           `/projects/${asanaProject.gid}/sections?opt_fields=name`,

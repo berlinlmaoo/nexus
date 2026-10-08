@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit"
 import { membershipChangeError } from "@/lib/org"
 import { ensureUserInPrimaryWorkspaceTeam, isPrimaryWorkspace } from "@/lib/primary-team"
 import { syncTeamMemberAccess } from "@/lib/team-sync"
+import { syncUserRoomsSafe } from "@/lib/chat-membership"
 
 const WORKSPACE_ROLES: WorkspaceRole[] = ["BOD", "MANAGER", "STAFF"]
 
@@ -99,6 +100,8 @@ export async function POST(
       await syncTeamMemberAccess(team.id, (await params).userId)
       autoJoinedPrimaryTeam = true
     }
+
+    await syncUserRoomsSafe((await params).userId, "admin-workspace-membership-added")
 
     await logAudit({
       action: "create",

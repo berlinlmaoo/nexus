@@ -147,6 +147,24 @@ title and project nowhere in the body) · `calendar/overdue` → the task from 3
 400 `BAD_RANGE`, a 63-day range → 400 `RANGE_TOO_LONG`. The calendar fixtures SKIP when the candidate schema has
 no `OrgUnit`/`AppSetting` (seed note).
 
+Chat (CHAT-CONTRACT, 8 Oct 2026). The seed gives the Compat Project a chat room with every project member
+in it (production has one per project; `GET /api/conversations` no longer creates them). Every non-legacy
+profile, with its own two staff users so no count depends on another profile: `GET /api/conversations` →
+the project room with its roster (`members[].userId/user.id/user.name` — the iOS @mention picker), plus
+`totalUnread`, `mutedUntil`, `memberCount` and no `email`/`mutedUntil` inside the roster · `POST
+/api/conversations {type:DM}` (twice → the same DM) · three messages in that client's exact body (iOS adds
+`mentionedUserIds: []`, the third replies to the first) and one into the project room · partner's DM
+`unreadCount` 3, sender's 0 (own messages never unread) · the page oldest first (Android with `?limit=50`;
+Android/web also `before=<ISO>` → strictly older) · mark read as each client sends it (iOS no body, Android
+`{}`, web no body) → 0 · the manager (not in the DM) → 403. Contract steps, web and iOS 0.1.6 (a cookie and a
+token session): `limit=2` → `hasMore` + `nextCursor`, `before=<cursor>` → the rest with `nextCursor:null`,
+`after=<id>` → newer ones oldest first, `after=<newest>` → `[]`, `{upToMessageId}` → only later ones stay
+unread and an older id never moves it back, `GET /api/conversations/unread`, `PATCH …/mute` forever/null
+(and a muted DM leaves `totalUnread`), junk → 400 (policy), outsider → 403. Web only, last (it moves people):
+the BoD takes b off the project → the room leaves b's list, back on → back at once; takes b out of the
+workspace → b gets 403 on the DM and loses both rooms, the partner keeps the DM titled after b; b re-added →
+project room back; then 30 messages + the 31st → 429 with a sentence (policy; `repeat: 30` in runner.mjs).
+
 ## Minimum-version gate
 
 The runner models the policy of 24 Sep 2026: floor 0.1.4; a legacy app (no header, known by UA build)

@@ -549,6 +549,23 @@ export type NexusConversation = {
   members?: Array<{ userId?: string; user?: NexusUser | null }>;
   lastMessage?: NexusMessage | null;
   unreadCount?: number;
+  /**
+   * Until when this member silenced the room (no push except @mentions); null or missing = not muted.
+   * "Always" is stored as a far-future date. Servers before the chat contract of 8 Oct 2026 omit it.
+   */
+  mutedUntil?: string | null;
+};
+
+/**
+ * One page of a conversation's messages, oldest first.
+ * `hasMore`: with `before` (or none) = older ones exist; with `after` = newer ones exist.
+ * `nextCursor`: pass back as `before` for the page above. Only servers since 8 Oct 2026 send it;
+ * older ones paginate on the oldest message's createdAt instead.
+ */
+export type NexusMessagePage = {
+  messages: NexusMessage[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
 };
 
 export type NexusXp = {
@@ -2023,9 +2040,26 @@ export const nexusApi = {
   markAllNotificationsRead: () => apiFetch<{ success: boolean }>("/api/notifications", { method: "PATCH", body: JSON.stringify({ markAllRead: true }) }),
 
   // --- Messages (DM / group / project chat) ---
-  conversations: () => apiFetch<{ conversations: NexusConversation[] }>("/api/conversations"),
+  /** `totalUnread` (unmuted rooms only) comes from servers since 8 Oct 2026; sum the rows otherwise. */
+  conversations: () => apiFetch<{ conversations: NexusConversation[]; totalUnread?: number }>("/api/conversations"),
+  /**
+   * Cheap badge count. Servers before 8 Oct 2026 have no such route: the path then lands on
+   * /api/conversations/[id] with id "unread" and answers 404 — callers fall back to the list.
+   */
+  conversationsUnread: () => apiFetch<{ totalUnread: number; mentions?: number }>("/api/conversations/unread"),
   conversation: (id: string) => apiFetch<{ conversation: NexusConversation }>(`/api/conversations/${id}`),
-  conversationMessages: (id: string, before?: string) => apiFetch<{ messages: NexusMessage[]; hasMore?: boolean }>(`/api/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`),
+  /**
+   * `before` = a `nextCursor` or an ISO date (older page); `after` = a message id (only newer ones,
+   * oldest first). Servers before 8 Oct 2026 ignore `after` and return the latest page.
+   */
+  conversationMessages: (id: string, opts: { before?: string; after?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.before) q.set("before", opts.before);
+    if (opts.after) q.set("after", opts.after);
+    if (opts.limit) q.set("limit", String(opts.limit));
+    const qs = q.toString();
+    return apiFetch<NexusMessagePage>(`/api/conversations/${id}/messages${qs ? `?${qs}` : ""}`);
+  },
   sendMessage: (
     id: string,
     content: string,
@@ -2062,7 +2096,24 @@ export const nexusApi = {
       body: JSON.stringify({ name }),
     }),
   createConversation: (payload: { type: "DM" | "GROUP"; userIds: string[]; name?: string }) => apiFetch<{ conversation: NexusConversation }>("/api/conversations", { method: "POST", body: JSON.stringify(payload) }),
-  markConversationRead: (id: string) => apiFetch<{ success?: boolean }>(`/api/conversations/${id}/read`, { method: "POST" }),
+  /**
+   * Read up to (and including) `upToMessageId` — never further, so a message that lands while the
+   * request is in flight stays unread. Servers before 8 Oct 2026 ignore the body and mark "now".
+   */
+  markConversationRead: (id: string, upToMessageId?: string) =>
+    apiFetch<{ success?: boolean }>(`/api/conversations/${id}/read`, {
+      method: "POST",
+      body: JSON.stringify(upToMessageId ? { upToMessageId } : {}),
+    }),
+  /**
+   * Silence a room for this member: an ISO date, "forever", or null to unmute. A 404 means the
+   * server predates muting (8 Oct 2026) — show "not available yet", not an error.
+   */
+  muteConversation: (id: string, mutedUntil: string | "forever" | null) =>
+    apiFetch<{ mutedUntil: string | null }>(`/api/conversations/${id}/mute`, {
+      method: "PATCH",
+      body: JSON.stringify({ mutedUntil }),
+    }),
 
   // --- Gamification (XP / levels / quests / leaderboard) ---
   gamificationMe: () => apiFetch<NexusGamification>("/api/gamification/me"),

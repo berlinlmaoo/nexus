@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { syncUserRoomsSafe } from "@/lib/chat-membership"
 
 // SSO / SAML / SCIM are not used (their tables are empty): every handler answers 404 until someone needs them.
 const SSO_DISABLED = true
@@ -103,6 +104,7 @@ export async function PATCH(
             await prisma.workspaceMember.deleteMany({
               where: { userId: id, workspaceId: scimAuth.workspaceId },
             })
+            await syncUserRoomsSafe(id, "scim-deactivated")
 
             logAudit({
               action: "delete",
@@ -188,6 +190,7 @@ export async function DELETE(
     await prisma.workspaceMember.deleteMany({
       where: { userId: id, workspaceId: scimAuth.workspaceId },
     })
+    await syncUserRoomsSafe(id, "scim-deleted")
 
     logAudit({
       action: "delete",
