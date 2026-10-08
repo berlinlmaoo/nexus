@@ -116,7 +116,7 @@ class AppContainer(private val context: Context) {
      * [chatEvents] (the list and an open thread refresh), anything unread-related refreshes [badges];
      * every screen listens for its own pings through LiveRefresh.
      */
-    val realtime = id.znetworks.nexus.core.realtime.Realtime(api.http, id.znetworks.nexus.core.net.NexusConfig.PUBLIC_BASE) { sessionStore.current }
+    val realtime = id.znetworks.nexus.core.realtime.Realtime(api.http, id.znetworks.nexus.core.net.NexusConfig.PUBLIC_BASE, session = { sessionStore.current })
 
     /** Unread counts for More (Inbox) and the Messages entry points (chat) (Berlin, 8 Oct). */
     val badges = Badges(appScope,

@@ -1,5 +1,17 @@
 package id.znetworks.nexus.core.realtime
 
+import java.util.concurrent.TimeUnit
+import okhttp3.Request
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import id.znetworks.nexus.core.net.NexusJson
 import id.znetworks.nexus.core.session.Session
 import io.socket.client.IO
@@ -45,9 +57,19 @@ object RealtimeEvents {
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED) + TASK
 
-    /** The handshake refusals (a deleted, offboarded or revoked session): stop until the next sign-in. */
-    private val AUTH_REFUSALS = listOf("Authentication required", "Invalid session", "Authentication failed")
+    /**
+     * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
+     * try again once on the next return to the front. "Authentication failed" is NOT one: it is the
+     * server's catch-all for an exception in its auth step, so it is retried like a dropped connection.
+     */
+    private val AUTH_REFUSALS = listOf("Authentication required", "Invalid session")
     fun isAuthError(text: String?) = text != null && AUTH_REFUSALS.any { text.contains(it) }
+
+    /** Wait before attempt [n] (1-based after a failure): 1, 2, 4, 8, 16, 30, 30 … s, ±50 % jitter ([jitter] in 0..1). */
+    fun backoffMs(n: Int, jitter: Double): Long {
+        val base = (1_000L shl (n - 1).coerceIn(0, 5)).coerceAtMost(30_000L)
+        return (base * (0.5 + jitter)).toLong()
+    }
 
     /** [json] is the event's first argument as JSON text (an object, or nothing). Unknown shapes give a bare event. */
     fun parse(name: String, json: String?): RealtimeEvent {
@@ -83,9 +105,26 @@ object RealtimeEvents {
  * OkHttp (identity headers, LAN route and the cookie-on-redirect guard all apply). Connected while signed
  * in and the app is in front; the server puts us in our workspace rooms (+ `audit`); we join `user:<me>`
  * and whatever the screens ask for ([join]/[leave], counted). Push stays for the background.
+ *
+ * The retry loop is ours, not the library's: before EVERY attempt it calls GET /api/realtime-init, which
+ * attaches the server's Socket.IO engine (lazily, per server process) — without it a websocket after a
+ * server restart is never answered. A refusal about the session stops the loop; the next return to the
+ * front clears it once (iOS af0000f: on 8 Oct the server refused every socket for a bug of its own).
  */
-class Realtime(private val http: OkHttpClient, private val baseUrl: String, private val session: () -> Session?) {
+class Realtime(
+    private val http: OkHttpClient,
+    private val baseUrl: String,
+    private val session: () -> Session?,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    /** GET /api/realtime-init; best effort, the attempt goes ahead whatever it answers. Tests replace it. */
+    bootstrap: (suspend () -> Unit)? = null,
+    /** One connection, suspended until it ends. Tests replace it. */
+    connect: (suspend (Session) -> Outcome)? = null,
+    private val jitter: () -> Double = { Math.random() },
+) {
     enum class State { OFF, CONNECTING, CONNECTED, RECONNECTING }
+    /** How one connection ended: refused for the session, or dropped/failed after having [connected] or not. */
+    sealed interface Outcome { object Refused : Outcome; data class Dropped(val connected: Boolean) : Outcome }
 
     private val _state = MutableStateFlow(State.OFF)
     val state: StateFlow<State> = _state.asStateFlow()
@@ -94,42 +133,87 @@ class Realtime(private val http: OkHttpClient, private val baseUrl: String, priv
     private val _events = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<RealtimeEvent> = _events.asSharedFlow()
 
+    private val bootstrapFn: suspend () -> Unit = bootstrap ?: ::bootstrapServer
+    private val connectFn: suspend (Session) -> Outcome = connect ?: ::connectSocket
+    private val initClient by lazy { http.newBuilder().callTimeout(10, TimeUnit.SECONDS).build() }
+
+    private var loop: Job? = null
     private var socket: Socket? = null
     private var me: String? = null
     private val rooms = mutableMapOf<String, Int>()
-    /** The server refused this session: no retry loop until the next sign-in. */
+    /** The server refused this session: no retry until the next sign-in or return to the front. */
     private var refused = false
+    /** Set by [stop] (the app went to the background): the next [start] may retry a refusal once. */
+    private var wasBackground = false
 
+    /** Signed in and in front (app start, every return to the front, sign-in). Idempotent. */
     @Synchronized
     fun start() {
+        if (wasBackground) { refused = false; wasBackground = false }
         val s = session() ?: return
-        if (refused || socket != null) return
+        if (refused || loop?.isActive == true) return
+        me = s.userId
+        loop = scope.launch { run(s) }
+    }
+
+    private suspend fun run(s: Session) {
+        var failures = 0
+        while (currentCoroutineContext().isActive) {
+            _state.value = if (failures == 0) State.CONNECTING else State.RECONNECTING
+            bootstrapFn()
+            when (val o = connectFn(s)) {
+                Outcome.Refused -> { synchronized(this) { refused = true }; _state.value = State.OFF; return }
+                is Outcome.Dropped -> {
+                    failures = if (o.connected) 1 else failures + 1
+                    _state.value = State.RECONNECTING
+                    delay(RealtimeEvents.backoffMs(failures, jitter()))
+                }
+            }
+        }
+    }
+
+    private suspend fun bootstrapServer() {
+        withContext(Dispatchers.IO) {
+            runCatching { initClient.newCall(Request.Builder().url("$baseUrl/api/realtime-init").get().build()).execute().close() }
+        }
+    }
+
+    /** One Socket.IO connection (the library's own reconnection off), suspended until it ends. */
+    private suspend fun connectSocket(s: Session): Outcome {
         val opts = IO.Options.builder()
             .setPath("/api/socket")
             .setTransports(arrayOf(WebSocket.NAME))
-            .setReconnection(true)
-            .setReconnectionDelay(1_000).setReconnectionDelayMax(30_000).setRandomizationFactor(0.5)
+            .setReconnection(false)
+            .setForceNew(true)
             .setExtraHeaders(mapOf("Cookie" to listOf("${s.cookieName}=${s.token}")))
             .build()
         opts.callFactory = http
         opts.webSocketFactory = http
         val sock = IO.socket(URI.create(baseUrl), opts)
-        me = s.userId
-        sock.on(Socket.EVENT_CONNECT) { onConnected(sock) }
-        sock.on(Socket.EVENT_DISCONNECT) { synchronized(this) { if (socket === sock) _state.value = State.RECONNECTING } }
+        val end = CompletableDeferred<Outcome>()
+        var wasUp = false
+        sock.on(Socket.EVENT_CONNECT) { wasUp = true; onConnected(sock) }
+        sock.on(Socket.EVENT_DISCONNECT) { end.complete(Outcome.Dropped(wasUp)) }
         sock.on(Socket.EVENT_CONNECT_ERROR) { args ->
             val text = args.firstOrNull()?.let { (it as? Throwable)?.message ?: (it as? JSONObject)?.optString("message") ?: it.toString() }
-            if (RealtimeEvents.isAuthError(text)) { synchronized(this) { refused = true }; stop() }
-            else synchronized(this) { if (socket === sock) _state.value = State.RECONNECTING }
+            end.complete(if (RealtimeEvents.isAuthError(text)) Outcome.Refused else Outcome.Dropped(wasUp))
         }
         RealtimeEvents.LISTENED.forEach { ev -> sock.on(ev) { args -> _events.tryEmit(RealtimeEvents.parse(ev, args.firstOrNull()?.toString())) } }
-        socket = sock
-        _state.value = State.CONNECTING
-        sock.connect()
+        synchronized(this) { socket = sock }
+        return try {
+            sock.connect()
+            end.await()
+        } finally {
+            synchronized(this) { if (socket === sock) socket = null }
+            sock.off(); sock.disconnect(); sock.close()
+        }
     }
 
+    /** The app went to the background (or a sign-out through [reset]). */
     @Synchronized
     fun stop() {
+        wasBackground = true
+        loop?.cancel(); loop = null
         socket?.let { it.off(); it.disconnect(); it.close() }
         socket = null
         _state.value = State.OFF
@@ -137,7 +221,7 @@ class Realtime(private val http: OkHttpClient, private val baseUrl: String, priv
 
     /** Signed out: off, rooms forgotten, a refused session may try again with the next one. */
     @Synchronized
-    fun reset() { stop(); rooms.clear(); refused = false }
+    fun reset() { stop(); rooms.clear(); refused = false; wasBackground = false }
 
     /** After every (re)connect: `user:<me>` and the screens' rooms again, then the screens refetch. */
     @Synchronized
@@ -171,4 +255,8 @@ class Realtime(private val http: OkHttpClient, private val baseUrl: String, priv
     /** For tests: the rooms screens hold now. */
     @Synchronized
     internal fun heldRooms(): Set<String> = rooms.keys.toSet()
+
+    /** For tests: whether a refusal is holding the loop off. */
+    @Synchronized
+    internal fun isRefused(): Boolean = refused
 }
