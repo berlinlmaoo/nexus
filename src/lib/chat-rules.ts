@@ -572,3 +572,156 @@ export function buildSystemPush(input: {
   }
 }
 
+// ── group info screen (SYSTEM-MESSAGES contract, Part 2, owner 8 Oct 2026) ───────────────────────
+
+/** Conversation.description: at most this many characters. */
+export const DESCRIPTION_MAX = 500
+
+/**
+ * PATCH body `description`: absent → leave it (undefined), null or blank → clear it (null), a string up
+ * to DESCRIPTION_MAX → that text, trimmed. Anything else is refused.
+ */
+export function parseDescription(raw: unknown):
+  | { ok: true; value: string | null | undefined }
+  | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true, value: undefined }
+  if (raw === null) return { ok: true, value: null }
+  if (typeof raw !== "string") return { ok: false, error: "description must be a string or null" }
+  const text = raw.trim()
+  if (!text) return { ok: true, value: null }
+  if (text.length > DESCRIPTION_MAX) return { ok: false, error: `description too long (max ${DESCRIPTION_MAX})` }
+  return { ok: true, value: text }
+}
+
+/** Workspace roles shown as "Admin" in a room: the people who may add or remove members. */
+export function isRoomAdmin(input: { workspaceRole: string | null | undefined; systemRole: string | null | undefined }): boolean {
+  if (input.systemRole === "ADMIN") return true
+  return GROUP_MEMBER_MANAGER_ROLES.has(input.workspaceRole ?? "")
+}
+
+/** The info screen's member list: admins first, then A–Z by name (Indonesian collation, case-blind). */
+export function orderInfoMembers<T extends { name: string; isAdmin: boolean }>(rows: T[]): T[] {
+  return rows.slice().sort((a, b) =>
+    a.isAdmin !== b.isAdmin ? (a.isAdmin ? -1 : 1) : a.name.localeCompare(b.name, "id", { sensitivity: "base" }),
+  )
+}
+
+export type MediaType = "photos" | "links" | "docs"
+
+export function parseMediaType(raw: string | null | undefined): MediaType | null {
+  return raw === "photos" || raw === "links" || raw === "docs" ? raw : null
+}
+
+/** A picture, as everywhere else in chat: an image/* type, or none at all (the oldest uploads). */
+export function isImageAttachment(attachmentType: string | null | undefined): boolean {
+  const t = (attachmentType ?? "").trim().toLowerCase()
+  return !t || t.startsWith("image/")
+}
+
+/** Media counts on the info screen stop here; a client shows "999+" at the cap. */
+export const MEDIA_COUNT_CAP = 999
+
+const LINK_RUN = /https?:\/\/[^\s<>"'`]+/gi
+// Punctuation that ends the sentence rather than the address: "see https://x.id/a." is /a.
+const LINK_TRAILING = /[.,;:!?'"’”)\]}>]+$/
+
+/**
+ * The http(s) addresses in a message, in order, one per occurrence: what the Links tab lists. The
+ * same rule the web makes clickable (MessageText), minus bare "www." runs: only real http(s) URLs.
+ */
+export function extractLinks(text: string | null | undefined): string[] {
+  const out: string[] = []
+  for (const m of (text ?? "").matchAll(LINK_RUN)) {
+    let url = m[0]
+    const tail = LINK_TRAILING.exec(url)
+    if (tail) {
+      url = url.slice(0, tail.index)
+      // "…/Foo_(bar))." keeps the ")" its own "(" opened.
+      let rest = tail[0]
+      while (rest.startsWith(")") && (url.match(/\(/g)?.length ?? 0) > (url.match(/\)/g)?.length ?? 0)) {
+        url += ")"
+        rest = rest.slice(1)
+      }
+    }
+    try {
+      const u = new URL(url)
+      if ((u.protocol === "http:" || u.protocol === "https:") && u.hostname) out.push(url)
+    } catch {
+      // not an address after all
+    }
+  }
+  return out
+}
+
+/** A link's title on the Links tab: its host, without "www.". */
+export function linkTitle(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "")
+  } catch {
+    return url
+  }
+}
+
+export const SEARCH_MIN = 2
+export const SEARCH_MAX = 100
+
+/** In-chat search `q`: trimmed, at least SEARCH_MIN characters, at most SEARCH_MAX. */
+export function parseSearchQuery(raw: string | null | undefined):
+  | { ok: true; q: string }
+  | { ok: false; error: string; code: "QUERY_TOO_SHORT" | "QUERY_TOO_LONG" } {
+  const q = (raw ?? "").replace(/\s+/g, " ").trim()
+  if (q.length < SEARCH_MIN) return { ok: false, error: `q needs at least ${SEARCH_MIN} characters`, code: "QUERY_TOO_SHORT" }
+  if (q.length > SEARCH_MAX) return { ok: false, error: `q is longer than ${SEARCH_MAX} characters`, code: "QUERY_TOO_LONG" }
+  return { ok: true, q }
+}
+
+/**
+ * A search hit's one line: whitespace folded, cut to about `max` characters around the first
+ * case-insensitive match, with "…" where text was cut.
+ */
+export function searchSnippet(content: string | null | undefined, q: string, max = 120): string {
+  const text = (content ?? "").replace(/\s+/g, " ").trim()
+  if (text.length <= max) return text
+  const at = text.toLowerCase().indexOf(q.toLowerCase())
+  if (at < 0) return text.slice(0, max - 1).trimEnd() + "…"
+  const lead = Math.max(0, Math.min(at - Math.floor((max - q.length) / 3), text.length - max))
+  const end = Math.min(text.length, lead + max)
+  return (lead > 0 ? "…" : "") + text.slice(lead, end).trim() + (end < text.length ? "…" : "")
+}
+
+/** How a page of `limit` centred on one message splits: the message itself, the rest before and after. */
+export function aroundSplit(limit: number): { older: number; newer: number } {
+  const rest = Math.max(0, limit - 1)
+  const older = Math.ceil(rest / 2)
+  return { older, newer: rest - older }
+}
+
+/**
+ * Shape a page centred on `anchor` (GET …/messages?around=<id>). `older` was fetched newest first
+ * with take = split.older + 1, `newer` oldest first with take = split.newer + 1; each extra row only
+ * says there is more that way. Same keys as the before/after pages — messages (oldest first), hasMore
+ * and nextCursor for what is older (pass as `before`) — plus hasMoreNewer and newerCursor, the id of
+ * the newest message shown (pass as `after`).
+ */
+export function shapeAroundPage<T extends { id: string; createdAt: Date | string }>(
+  older: T[],
+  anchor: T,
+  newer: T[],
+  split: { older: number; newer: number },
+): { messages: T[]; hasMore: boolean; nextCursor: string | null; hasMoreNewer: boolean; newerCursor: string | null; anchorId: string } {
+  const hasMore = older.length > split.older
+  const olderShown = older.slice(0, split.older).reverse()
+  const hasMoreNewer = newer.length > split.newer
+  const newerShown = newer.slice(0, split.newer)
+  const messages = [...olderShown, anchor, ...newerShown]
+  const oldest = messages[0]
+  const newest = messages[messages.length - 1]
+  return {
+    messages,
+    hasMore,
+    nextCursor: hasMore ? encodeCursor(oldest.createdAt, oldest.id) : null,
+    hasMoreNewer,
+    newerCursor: hasMoreNewer ? newest.id : null,
+    anchorId: anchor.id,
+  }
+}

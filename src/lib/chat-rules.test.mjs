@@ -3,7 +3,8 @@
 // Plain node, no test runner (same loader as fcm-payload.test.mjs). The pure half of the chat contract
 // (CHAT-CONTRACT 8 Oct 2026): push decision, push text, cursors, read position, unread sums, mute,
 // who may stay in a group/DM, and who may add or remove people in a group. SYSTEM-MESSAGES (8 Oct
-// 2026): the system lines' fallback text, who they push, unread and replies.
+// 2026): the system lines' fallback text, who they push, unread and replies; the group info screen's
+// description, Admin, member order, media, links, search and the page around one message.
 import { readFile } from "node:fs/promises"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import path from "node:path"
@@ -354,6 +355,98 @@ test("the 'added you' push: title = group, body names the actor, thread = conver
   assert.deepEqual(p.data, { conversationId: "conv9", messageId: "msg9", conversationName: "QA", senderName: "Bagas Putro", isGroup: true, text: "Bagas Putro menambahkan kamu ke grup", kind: "SYSTEM" })
   assert.equal(R.buildSystemPush({ conversationId: "c", messageId: "m", conversationName: null, actorName: "" }).title, "Group")
   assert.equal(R.buildSystemPush({ conversationId: "c", messageId: "m", conversationName: null, actorName: "" }).body, "Seseorang menambahkan kamu ke grup")
+})
+
+// ── group info screen (SYSTEM-MESSAGES Part 2) ──
+test("description: absent / null / blank / text / too long / junk", () => {
+  assert.deepEqual(R.parseDescription(undefined), { ok: true, value: undefined })
+  assert.deepEqual(R.parseDescription(null), { ok: true, value: null })
+  assert.deepEqual(R.parseDescription("   "), { ok: true, value: null }, "blank clears")
+  assert.deepEqual(R.parseDescription("  Tim QA rilis  "), { ok: true, value: "Tim QA rilis" })
+  assert.deepEqual(R.parseDescription("x".repeat(500)), { ok: true, value: "x".repeat(500) })
+  assert.equal(R.parseDescription("x".repeat(501)).ok, false)
+  assert.equal(R.parseDescription(42).ok, false)
+  assert.equal(R.DESCRIPTION_MAX, 500)
+})
+test("Admin = Manager, BoD, One Above All in the room's workspace, or a system admin", () => {
+  assert.equal(R.isRoomAdmin({ workspaceRole: "MANAGER", systemRole: "MEMBER" }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: "BOD", systemRole: null }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: "ONE_ABOVE_ALL", systemRole: null }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: "STAFF", systemRole: "MEMBER" }), false)
+  assert.equal(R.isRoomAdmin({ workspaceRole: null, systemRole: "ADMIN" }), true)
+  assert.equal(R.isRoomAdmin({ workspaceRole: null, systemRole: null }), false)
+})
+test("members: admins first, then A–Z, case-blind", () => {
+  const rows = [
+    { name: "zaki", isAdmin: false }, { name: "Bagas", isAdmin: true }, { name: "ani", isAdmin: false },
+    { name: "Mey", isAdmin: false }, { name: "Angela", isAdmin: true },
+  ]
+  assert.deepEqual(R.orderInfoMembers(rows).map((r) => r.name), ["Angela", "Bagas", "ani", "Mey", "zaki"])
+  assert.deepEqual(rows[0].name, "zaki", "input untouched")
+})
+test("media type and picture vs document", () => {
+  assert.equal(R.parseMediaType("photos"), "photos")
+  assert.equal(R.parseMediaType("links"), "links")
+  assert.equal(R.parseMediaType("docs"), "docs")
+  assert.equal(R.parseMediaType("videos"), null)
+  assert.equal(R.parseMediaType(null), null)
+  assert.equal(R.isImageAttachment("image/jpeg"), true)
+  assert.equal(R.isImageAttachment("IMAGE/PNG"), true)
+  assert.equal(R.isImageAttachment(null), true, "the oldest uploads carry no type and are pictures")
+  assert.equal(R.isImageAttachment("application/pdf"), false)
+})
+test("links: every http(s) address once per occurrence, sentence punctuation trimmed", () => {
+  assert.deepEqual(R.extractLinks("cek https://example.com/a. dan http://foo.test/b?x=1, lalu https://example.com/a"), [
+    "https://example.com/a", "http://foo.test/b?x=1", "https://example.com/a",
+  ])
+  assert.deepEqual(R.extractLinks("(lihat https://en.wikipedia.org/wiki/Foo_(bar))."), ["https://en.wikipedia.org/wiki/Foo_(bar)"])
+  assert.deepEqual(R.extractLinks("www.example.com bukan, javascript:alert(1) juga bukan, https:// kosong"), [])
+  assert.deepEqual(R.extractLinks(null), [])
+  assert.deepEqual(R.extractLinks("HTTPS://Example.COM/X"), ["HTTPS://Example.COM/X"])
+  assert.equal(R.linkTitle("https://www.docs.google.com/x"), "docs.google.com")
+  assert.equal(R.linkTitle("http://foo.test:8080/b"), "foo.test")
+})
+test("search query: at least 2 characters, at most 100, whitespace folded", () => {
+  assert.deepEqual(R.parseSearchQuery("  rap  at "), { ok: true, q: "rap at" })
+  assert.equal(R.parseSearchQuery("a").ok, false)
+  assert.equal(R.parseSearchQuery(" a ").code, "QUERY_TOO_SHORT")
+  assert.equal(R.parseSearchQuery(null).code, "QUERY_TOO_SHORT")
+  assert.equal(R.parseSearchQuery("x".repeat(101)).code, "QUERY_TOO_LONG")
+  assert.deepEqual(R.parseSearchQuery("ok"), { ok: true, q: "ok" })
+})
+test("search snippet: short text whole; long text cut around the match with ellipses", () => {
+  assert.equal(R.searchSnippet("rapat jam 3\n di lantai 2", "jam"), "rapat jam 3\n di lantai 2".replace(/\s+/g, " "))
+  const long = "awal ".repeat(40) + "KATA KUNCI di tengah " + "akhir ".repeat(40)
+  const s = R.searchSnippet(long, "kata kunci", 60)
+  assert.ok(s.includes("KATA KUNCI"), s)
+  assert.ok(s.startsWith("…") && s.endsWith("…"), s)
+  assert.ok(s.length <= 62, `${s.length}`)
+  const start = R.searchSnippet("kunci " + "x".repeat(300), "kunci", 50)
+  assert.ok(start.startsWith("kunci") && start.endsWith("…"), start)
+  assert.ok(R.searchSnippet("y".repeat(300), "nothing", 50).endsWith("…"))
+})
+test("around: split, then a page with the anchor in it and a cursor each way", () => {
+  assert.deepEqual(R.aroundSplit(50), { older: 25, newer: 24 })
+  assert.deepEqual(R.aroundSplit(1), { older: 0, newer: 0 })
+  assert.deepEqual(R.aroundSplit(4), { older: 2, newer: 1 })
+  const all = rowsAt(20, NOW) // m000..m019 oldest first
+  const anchor = all[10]
+  const split = R.aroundSplit(5) // 2 older, 2 newer
+  const olderDesc = all.slice(0, 10).reverse().slice(0, split.older + 1)
+  const newerAsc = all.slice(11).slice(0, split.newer + 1)
+  const p = R.shapeAroundPage(olderDesc, anchor, newerAsc, split)
+  assert.deepEqual(p.messages.map((m) => m.id), ["m008", "m009", "m010", "m011", "m012"])
+  assert.equal(p.anchorId, "m010")
+  assert.equal(p.hasMore, true)
+  assert.deepEqual(R.decodeCursor(p.nextCursor), { createdAt: all[8].createdAt, id: "m008" })
+  assert.equal(p.hasMoreNewer, true)
+  assert.equal(p.newerCursor, "m012", "pass as after=")
+  const edge = R.shapeAroundPage([], all[0], all.slice(1, 3), R.aroundSplit(5))
+  assert.deepEqual(edge.messages.map((m) => m.id), ["m000", "m001", "m002"])
+  assert.equal(edge.hasMore, false)
+  assert.equal(edge.nextCursor, null)
+  assert.equal(edge.hasMoreNewer, false)
+  assert.equal(edge.newerCursor, null)
 })
 
 console.log(`chat-rules: ${passed} passed`)

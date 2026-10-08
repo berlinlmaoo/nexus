@@ -6,11 +6,13 @@ import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitte
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
 import {
+  aroundSplit,
   canReplyTo,
   newerThan,
   olderThan,
   parseBefore,
   parseLimit,
+  shapeAroundPage,
   shapePage,
   nextLastReadAt,
   SYSTEM_MESSAGE_REPLY,
@@ -30,6 +32,10 @@ const SEND_LIMIT = { limit: 30, windowSeconds: 60 }
  *   before=<ISO date>   older than that instant, as every client sent until 8 Oct 2026.
  *   after=<messageId>   strictly newer than that message, oldest first — what phones poll with.
  *                       An empty array means nothing new; `hasMore` means poll again straight away.
+ *   around=<messageId>  a page centred on that message (8 Oct 2026: a search result or a reply quote
+ *                       jumps there). Same keys, plus `hasMoreNewer` and `newerCursor` (the id of the
+ *                       newest message shown: pass it as `after`) and `anchorId`. `nextCursor` / `hasMore`
+ *                       still mean "older", as `before` pages them.
  *
  * Every response carries `hasMore` and `nextCursor` (null when there is nothing older, and always null
  * for `after`): the web tells a server that pages this way by the key being present.
@@ -49,7 +55,37 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
     const sp = req.nextUrl.searchParams
     const limit = parseLimit(sp.get("limit"))
     const afterId = sp.get("after")
+    const aroundId = sp.get("around")
     const before = parseBefore(sp.get("before"))
+
+    if (aroundId) {
+      if (afterId || before.kind !== "none") {
+        return NextResponse.json({ error: "Use around on its own, without before or after", code: "BAD_CURSOR" }, { status: 400 })
+      }
+      const anchor = await prisma.message.findFirst({
+        where: { id: aroundId, conversationId },
+        include: messageInclude,
+      })
+      if (!anchor) {
+        return NextResponse.json({ error: "around is not a message of this conversation", code: "UNKNOWN_MESSAGE" }, { status: 400 })
+      }
+      const split = aroundSplit(limit)
+      const [older, newer] = await Promise.all([
+        prisma.message.findMany({
+          where: { conversationId, ...olderThan(anchor.createdAt, anchor.id) },
+          include: messageInclude,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: split.older + 1,
+        }),
+        prisma.message.findMany({
+          where: { conversationId, ...newerThan(anchor.createdAt, anchor.id) },
+          include: messageInclude,
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: split.newer + 1,
+        }),
+      ])
+      return NextResponse.json(shapeAroundPage(older, anchor, newer, split))
+    }
 
     if (afterId) {
       if (before.kind !== "none") {
