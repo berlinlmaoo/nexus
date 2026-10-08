@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import type { SnapshotMeta } from "@/lib/deletion-entities"
-import { emitCommentAdded, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { emitCommentAdded, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 const log = createLogger("deletion-restore")
@@ -16,9 +16,10 @@ const SHEET_TYPES = new Set(["project_sheet", "sheet_rows", "project_sheet_colum
 /**
  * After a restore has committed (POST /api/audit/[id]/restore), for every kind except projects and
  * tasks (the route keeps their own follow-ups): the realtime pings that make the thing reappear on
- * screens already open. Only pings that exist today — kinds with no realtime (Vault, attendance, org
- * chart, P&L…) show up on the next load; the audit itself is pinged by the route. Never throws: the
- * restore has already succeeded. Returns the project the thing lives in, when there is one.
+ * screens already open. Only pings that exist today — kinds with no realtime (attendance, org chart,
+ * P&L…) show up on the next load; the audit itself is pinged by the route. The Vault has one since
+ * 9 Oct 2026. Never throws: the restore has already succeeded. Returns the project the thing lives
+ * in, when there is one.
  */
 export async function afterRestore(input: {
   entityType: string
@@ -61,6 +62,13 @@ export async function afterRestore(input: {
     }
     if (SHEET_TYPES.has(entityType) && meta?.sheetId) {
       emitSheetStructure(meta.sheetId, actorId)
+    }
+    if (entityType === "vault_folder" || entityType === "vault_file" || entityType === "vault_trash") {
+      // A whole emptied trash is logged against the workspace itself; one item, against the item.
+      const workspaceId = entityType === "vault_trash"
+        ? input.entityId
+        : (await prisma.vaultItem.findUnique({ where: { id: input.entityId }, select: { workspaceId: true } }))?.workspaceId
+      emitVaultChanged(workspaceId, actorId)
     }
     if (entityType === "project_folder") {
       const folder = await prisma.projectFolder.findUnique({ where: { id: input.entityId }, select: { workspaceId: true } })

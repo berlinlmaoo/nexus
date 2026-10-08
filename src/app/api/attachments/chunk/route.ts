@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 import { mkdir, writeFile, readFile, rm, stat, readdir, rename, unlink } from "fs/promises"
 import { createReadStream, createWriteStream } from "fs"
 import { Readable, Transform } from "stream"
@@ -375,6 +376,7 @@ export async function POST(request: NextRequest) {
         } catch {
           /* audit is best-effort */
         }
+        emitVaultChanged(vaultActor.workspaceId, userId)
 
         return NextResponse.json(payload, { status: 201 })
       }

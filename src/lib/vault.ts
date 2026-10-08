@@ -58,7 +58,8 @@ export async function ensureStorageDir(storageKey: string): Promise<string> {
 }
 
 /** Delete the bytes. Emptying the trash MUST reach disk — a soft delete that only hides rows makes
- *  the quota measure a number with no relationship to the disk it is supposed to protect. */
+ *  the quota measure a number with no relationship to the disk it is supposed to protect. The
+ *  file's thumbnails go with it. */
 export async function deleteStoredFile(storageKey: string | null | undefined): Promise<void> {
   if (!storageKey) return
   try {
@@ -66,6 +67,54 @@ export async function deleteStoredFile(storageKey: string | null | undefined): P
   } catch {
     /* already gone — the desired end state either way */
   }
+  for (const width of VAULT_THUMB_WIDTHS) {
+    const thumb = thumbPath(storageKey, width)
+    await unlink(thumb).catch(() => {})
+    await unlink(`${thumb}.failed`).catch(() => {})
+  }
+}
+
+// ── thumbnails ───────────────────────────────────────────────────────────────
+//
+// Owner, 9 Oct 2026: a folder of pictures has to show the pictures. GET /api/vault/items/<id>/thumb
+// makes a small WebP once per file and width and keeps it here, next to the originals, under
+// `.thumbs/` + the original's own storage key — so it inherits the key's randomness (nothing about a
+// thumbnail's path can be guessed from an item id) and goes away with the bytes in deleteStoredFile.
+
+/** The only widths made. A request is rounded UP to one of these, so a client cannot fill the disk
+ *  with one copy per pixel width it can think of. */
+export const VAULT_THUMB_WIDTHS = [160, 320, 640, 1280] as const
+
+export function thumbWidthFor(raw: string | null | undefined): number {
+  const n = Number(raw)
+  if (!raw || !Number.isFinite(n) || n <= 0) return 320
+  return VAULT_THUMB_WIDTHS.find((w) => w >= n) ?? VAULT_THUMB_WIDTHS[VAULT_THUMB_WIDTHS.length - 1]
+}
+
+/** Where the thumbnail of a stored file lives: `.thumbs/YYYY/MM/<uuid>-w320.webp`. */
+export function thumbPath(storageKey: string, width: number): string {
+  const stem = storageKey.replace(/\.[a-z0-9]{1,8}$/i, "")
+  const full = path.resolve(VAULT_DIR, ".thumbs", `${stem}-w${width}.webp`)
+  if (!full.startsWith(VAULT_DIR + path.sep)) {
+    throw new Error("Vault thumbnail escaped the vault directory")
+  }
+  return full
+}
+
+const THUMB_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/tiff"])
+const THUMB_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".tif", ".tiff"])
+
+/**
+ * Pictures this server can draw small. Not SVG: rasterising someone's uploaded SVG on the server is
+ * an attack surface for a picture the browser can already draw safely by itself in an <img>. Not
+ * HEIC either: the libvips that ships with sharp reads AVIF but not HEVC-coded HEIC (checked
+ * 9 Oct 2026), so a HEIC photo keeps its icon on the web; the iOS app decodes it itself.
+ */
+export function canThumbnail(mimeType: string | null | undefined, name: string | null | undefined): boolean {
+  const mime = (mimeType || "").toLowerCase()
+  if (THUMB_MIMES.has(mime)) return true
+  if (mime && mime !== "application/octet-stream") return false
+  return THUMB_EXTS.has(path.extname(name || "").toLowerCase())
 }
 
 // ── share slugs ──────────────────────────────────────────────────────────────
@@ -279,6 +328,11 @@ export function serializeVaultItem(row: VaultItemRow, actor: VaultActor) {
     // The ONLY address a client ever gets for the bytes. There is no path anywhere in this payload.
     url: isFile ? `/api/vault/items/${row.id}/raw` : null,
     downloadUrl: isFile ? `/api/vault/items/${row.id}/raw?download=1` : null,
+    // Pictures only; the client adds `&w=`. `v` changes whenever the row does, so a cached thumbnail
+    // can never outlive what it shows. Absent from servers before 9 Oct 2026: clients draw the icon.
+    thumbUrl: isFile && row.deletedAt === null && canThumbnail(row.mimeType, row.name)
+      ? `/api/vault/items/${row.id}/thumb?v=${row.updatedAt.getTime()}`
+      : null,
     uploader: row.uploader ?? null,
     owner: row.owner ?? null,
     childCount: row._count?.children ?? 0,

@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getVaultActor, canModifyItem, isBodPlus } from "@/lib/vault"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 
 // POST /api/vault/trash/empty — permanently destroy trashed items.
 //
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
       meta: { open: { type: "vault", id: actor.workspaceId } },
       remove: (tx) => tx.vaultItem.deleteMany({ where: { id: { in: ids } } }),
     })
+    emitVaultChanged(actor.workspaceId, actor.userId)
 
     // `filesUnlinked` stays for older clients: nothing leaves the disk at this point any more.
     return NextResponse.json({ purged: ids.length, filesUnlinked: 0 })
