@@ -2395,4 +2395,18 @@
         <item quantity="one">%1$d file uploaded to %2$s</item>
         <item quantity="other">%1$d files uploaded to %2$s</item>
     </plurals>
+    <!-- Profile tidy (Berlin, 9 Oct; PROFILE-TIDY) -->
+    <string name="pp_view_photo">View profile photo</string>
+    <string name="pp_total_xp">Total XP</string>
+    <string name="pp_period">Period</string>
+    <string name="pp_late">Late</string>
+    <string name="pp_never">Never</string>
+    <string name="pp_allowance">Day-off allowance</string>
+    <string name="pp_allowance_value">%1$d of %2$d used · %3$d left</string>
+    <string name="pp_xp_value">+%1$d gained · %2$d lost</string>
+    <string name="pp_score_note">Days worked (present or permit) out of %1$d working days: %2$d days minus %3$d day-off allowance.</string>
+    <plurals name="pp_late_value">
+        <item quantity="one">%1$d min · 1 day</item>
+        <item quantity="other">%1$d min · %2$d days</item>
+    </plurals>
 </resources>
