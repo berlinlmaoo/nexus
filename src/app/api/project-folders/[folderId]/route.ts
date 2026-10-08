@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 import { auth } from "@/lib/auth"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
@@ -117,7 +118,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ folderId: string }> }
 ) {
   try {
@@ -126,7 +127,7 @@ export async function DELETE(
 
     const existing = await prisma.projectFolder.findUnique({
       where: { id: (await params).folderId },
-      select: { id: true, workspaceId: true, parentFolderId: true },
+      select: { id: true, name: true, workspaceId: true, parentFolderId: true },
     })
 
     if (!existing) {
@@ -150,6 +151,14 @@ export async function DELETE(
       }),
       prisma.projectFolder.delete({ where: { id: existing.id } }),
     ])
+
+    // Not restorable on its own (nothing inside is lost), but it belongs in the audit: on 8 Oct 2026
+    // six emptied folders went without a trace. A restored project brings its folder back.
+    await logAudit({
+      action: "delete", entityType: "project_folder", entityId: existing.id, entityName: existing.name,
+      userId: session.user.id, request,
+      metadata: { parentFolderId: existing.parentFolderId, workspaceId: existing.workspaceId },
+    })
 
     return NextResponse.json({ message: "Folder deleted" })
   } catch (error) {
