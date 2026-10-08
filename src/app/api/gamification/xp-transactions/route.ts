@@ -47,7 +47,19 @@ export async function GET(req: NextRequest) {
     const offset = Math.max(0, Number(sp.get("offset")) || 0)
 
     const amountFilter = sign === "pos" ? { gt: 0 } : sign === "neg" ? { lt: 0 } : undefined
-    const targetUser = filterUserId && userIds.includes(filterUserId) ? filterUserId : null
+    // `?userId=` of someone outside the company workspace used to fall through to EVERYONE's
+    // transactions. Now: a member, or a former member (offboarding keeps their XP history), else nothing.
+    let targetUser: string | null = null
+    if (filterUserId) {
+      const isFormer = !userIds.includes(filterUserId) && Boolean(await prisma.formerMember.findUnique({
+        where: { userId_workspaceId: { userId: filterUserId, workspaceId: ORG_WORKSPACE_ID } },
+        select: { id: true },
+      }))
+      if (!userIds.includes(filterUserId) && !isFormer) {
+        return NextResponse.json({ rows: [], hasMore: false, nextOffset: offset, scope, sign })
+      }
+      targetUser = filterUserId
+    }
 
     const where = {
       userId: targetUser ? targetUser : { in: userIds },

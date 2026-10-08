@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
 import { buildPeopleReports, publicPeriod, resolveReportWindows, rosterFlags } from "@/lib/people-reports"
+import { leftKeyOf } from "@/lib/former-members"
 
 /**
  * GET /api/reports/people — Reports per crew, the roster ("Tim saya").
@@ -16,6 +17,8 @@ import { buildPeopleReports, publicPeriod, resolveReportWindows, rosterFlags } f
  *   a manager (has direct reports)     → their direct reports, one level; teamId narrows them;
  *   anyone else                        → 403, unless they ask only for themselves (userIds=me).
  * `userIds` (csv, "me" allowed) can only NARROW: one id outside the viewer's scope → 403.
+ * People who left (offboarding, 8 Oct 2026) are on it for the periods they were still there for — a
+ * last working day on/after the period's first day — with an additive `leftAt` ("YYYY-MM-DD").
  *
  * Query: period=YYYY-MM | from=YYYY-MM-DD&to=YYYY-MM-DD, teamId, userIds, includeExempt=1.
  */
@@ -51,6 +54,13 @@ export async function GET(request: NextRequest) {
       ids = scope.userIds.filter((id) => id !== viewerId && (includeExempt || !exempt.has(id)))
     }
 
+    // Someone who left before this period began was not part of it.
+    const fromKey = windows.current.from
+    ids = ids.filter((id) => {
+      const leftKey = leftKeyOf(scope.formerLeftAt.get(id))
+      return !leftKey || leftKey >= fromKey
+    })
+
     const teamId = sp.get("teamId")
     let team: { id: string; name: string } | null = null
     if (teamId) {
@@ -60,17 +70,22 @@ export async function GET(request: NextRequest) {
       ids = ids.filter((id) => inTeam.has(id))
     }
 
-    const [reports, users, members, teamLinks] = await Promise.all([
+    const formerIds = ids.filter((id) => scope.formerLeftAt.has(id))
+    const [reports, users, members, formers, teamLinks] = await Promise.all([
       buildPeopleReports({ workspaceId, userIds: ids, current: windows.current, previous: windows.previous, detail: false }),
       prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true, avatar: true } }),
       prisma.workspaceMember.findMany({ where: { workspaceId, userId: { in: ids } }, select: { userId: true, role: true, approverId: true } }),
+      // What the member row of someone who left said (role, approver).
+      formerIds.length
+        ? prisma.formerMember.findMany({ where: { workspaceId, userId: { in: formerIds } }, select: { userId: true, role: true, approverId: true } })
+        : Promise.resolve([]),
       prisma.teamMember.findMany({
         where: { userId: { in: ids }, team: { workspaceId } },
         select: { userId: true, team: { select: { id: true, name: true } } },
       }),
     ])
 
-    const memberBy = new Map(members.map((m) => [m.userId, m]))
+    const memberBy = new Map([...formers, ...members].map((m) => [m.userId, m]))
     const teamsBy = new Map<string, { id: string; name: string }[]>()
     for (const t of teamLinks) teamsBy.set(t.userId, [...(teamsBy.get(t.userId) ?? []), t.team])
 
@@ -91,6 +106,7 @@ export async function GET(request: NextRequest) {
           previous: r.previous,
           flags: { overdue3: flags.overdue3, late3: flags.late3, lowReflections: flags.lowReflections },
           flagCount: flags.count,
+          ...(scope.formerLeftAt.has(u.id) ? { leftAt: leftKeyOf(scope.formerLeftAt.get(u.id)) } : {}),
         }
       })
       .filter((row): row is NonNullable<typeof row> => row !== null)

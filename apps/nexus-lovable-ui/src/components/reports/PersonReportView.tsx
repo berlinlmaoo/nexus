@@ -10,6 +10,7 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { Reveal, AnimatedBar } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { cn } from "@/lib/utils";
 import type { PersonReportResponse, ReportPriority, ReportRatio } from "@/lib/nexus-api";
 import { fmtDayKey, fmtHours, fmtNum, fmtPct, periodRangeLabel, ROLE_LABEL } from "./report-format";
@@ -57,7 +58,7 @@ function IdentityCard({ person }: { person: PersonReportResponse["person"] }) {
     <section className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
       <Avatar userId={person.id} name={person.name} avatar={person.avatar} size={48} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-display text-lg font-bold tracking-tight">{person.name}</div>
+        <div className="flex min-w-0 items-center gap-2"><span className="truncate font-display text-lg font-bold tracking-tight">{person.name}</span><LeftTag leftAt={leftAtOf(person)} /></div>
         <div className="truncate text-xs text-muted-foreground">{person.email}</div>
         {(person.role || person.teams.length > 0) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">

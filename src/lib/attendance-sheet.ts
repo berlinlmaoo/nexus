@@ -22,6 +22,9 @@ import {
   coverAbsencesWithDayOffQuota,
 } from "@/lib/attendance-export-format"
 import { getPrimaryWorkspaceDefaults } from "@/lib/workspace-defaults"
+import { leftKeyOf } from "@/lib/former-members"
+import { withLeftNote } from "@/lib/former-member-days"
+import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
 
 /**
  * Live one-way copy of the monthly attendance sheet into Google Sheets.
@@ -93,7 +96,8 @@ export type AttendanceSheetGrid = {
   firstDataRow: number
 }
 
-export type SheetPerson = { id: string; name: string; dayOffQuota?: number }
+/** `leftAt`: the last working day of someone who left (offboarding) — their header says "(keluar 10 Okt)". */
+export type SheetPerson = { id: string; name: string; dayOffQuota?: number; leftAt?: Date | null }
 export type SheetDay = { dateKey: string; dayType: AttendanceDayType }
 
 const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -182,7 +186,7 @@ export function buildAttendanceSheetGrid(input: {
   rows[3][0] = { value: "DATE", fill: C.title, bold: true, fontSize: 10, hAlign: "CENTER" }
   for (let c = 1; c < columnCount; c++) {
     const person = people[c - 1]
-    rows[3][c] = { value: person ? person.name.toUpperCase() : null, fill: C.header, bold: true, fontSize: 10, hAlign: "CENTER", wrap: true }
+    rows[3][c] = { value: person ? withLeftNote(person.name.toUpperCase(), leftKeyOf(person.leftAt)) : null, fill: C.header, bold: true, fontSize: 10, hAlign: "CENTER", wrap: true }
   }
 
   // Grid + counters
@@ -525,11 +529,19 @@ async function resolveWorkspace(): Promise<SheetWorkspace | null> {
  * The roster the xlsx export would have for a workspace-wide board: everyone with a record, an
  * approved request or membership in the period, minus BoD / One Above All (exempt from attendance),
  * each day classified by classifyAttendanceDays.
+ *
+ * People who left (offboarding, 8 Oct 2026) are on the tab of every period they were still there for
+ * (last working day on/after the period start), as the member row they were: their role (a former BoD
+ * stays off the sheet), join date, quota and rest days; TK only up to their last working day
+ * (classifyAttendanceDays), and "(keluar 10 Okt)" after their name.
  */
 export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodKey: string, now: Date) {
   const { start, end } = attendancePeriodRange(periodKey)
-  const [members, recordUsers, requestUsers] = await Promise.all([
+  const [currentMembers, formers, recordUsers, requestUsers] = await Promise.all([
     prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { userId: true, role: true, joinedAt: true } }),
+    // Every former member, not only this period's: one who left earlier can still have an approved
+    // request reaching into it, and must keep their role (exempt or not) and their "keluar" mark.
+    formerMembersOf(workspace.id),
     prisma.attendanceRecord.findMany({
       where: { workspaceId: workspace.id, attendanceDate: { gte: start, lte: end } },
       select: { userId: true },
@@ -541,7 +553,9 @@ export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodK
       distinct: ["userId"],
     }),
   ])
-  const exempt = new Set(members.filter((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL").map((m) => m.userId))
+  const leftAtOf = new Map(formers.map((f) => [f.userId, f.leftAt]))
+  const members = [...currentMembers, ...formers.filter((f) => f.leftAt >= start).map((f) => ({ userId: f.userId, role: f.role, joinedAt: f.joinedAt }))]
+  const exempt = new Set([...currentMembers, ...formers].filter((m) => isExemptRole(m.role)).map((m) => m.userId))
   const userIds = [...new Set([...members, ...recordUsers, ...requestUsers].map((x) => x.userId))].filter((id) => !exempt.has(id))
 
   const classified = await classifyAttendanceDays({ workspaceId: workspace.id, userIds, start, end })
@@ -557,7 +571,7 @@ export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodK
         dayOffQuotaByUser(workspace.id, withDays, periodKey),
       ])
     : [[], new Map<string, number>()]
-  const users = found.map((u) => ({ ...u, dayOffQuota: quotas.get(u.id) }))
+  const users = found.map((u) => ({ ...u, dayOffQuota: quotas.get(u.id), leftAt: leftAtOf.get(u.id) ?? null }))
   const days = new Map<string, SheetDay[]>()
   for (const [userId, list] of classified) days.set(userId, list.map((d) => ({ dateKey: d.dateKey, dayType: d.dayType })))
 

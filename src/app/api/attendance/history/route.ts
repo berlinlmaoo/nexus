@@ -10,6 +10,9 @@ import { getHolidayKeys } from "@/lib/holidays"
 import { placeLabel } from "@/lib/attendance-place"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffQuotaByUser } from "@/lib/day-off-usage"
+import { leftKeyOf } from "@/lib/former-members"
+import { attendanceStartKey, owesAttendanceOn, withLeftNote } from "@/lib/former-member-days"
+import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
 // Letters, colours, summary rows and labels are shared with the live Google Sheet
 // (src/lib/attendance-sheet.ts) so the two can never disagree about a day.
 import {
@@ -73,6 +76,7 @@ async function buildAttendanceWorkbook({
   workspaceName,
   quotaByUser,
   extraUsers = [],
+  leftAtByUser,
 }: {
   rows: HistoryRow[]
   start: Date
@@ -81,6 +85,8 @@ async function buildAttendanceWorkbook({
   quotaByUser?: Map<string, number>
   /** People who belong on the sheet with no row in the range yet (the history roster). */
   extraUsers?: Array<{ id: string; name: string | null; email?: string | null }>
+  /** Last working day of the people who left (offboarding): "(keluar 10 Okt)" after their name. */
+  leftAtByUser?: Map<string, Date>
 }) {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = "NEXUS"
@@ -143,7 +149,7 @@ async function buildAttendanceWorkbook({
 
   users.forEach((user, index) => {
     const cell = sheet.getCell(4, index + 2)
-    cell.value = user.name.toUpperCase()
+    cell.value = withLeftNote(user.name.toUpperCase(), leftKeyOf(leftAtByUser?.get(user.id)))
     cell.font = { bold: true, size: 10 }
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true }
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "9DC3E6" } }
@@ -263,7 +269,7 @@ async function buildPersonWorkbook({
   start: Date
   end: Date
   workspaceName: string
-  person: { name: string; email?: string | null }
+  person: { name: string; email?: string | null; leftAt?: Date | null }
   dayOffQuota?: number
 }) {
   const workbook = new ExcelJS.Workbook()
@@ -278,7 +284,7 @@ async function buildPersonWorkbook({
   const headers = ["TANGGAL", "STATUS", "CHECK-IN", "CHECK-OUT", "TELAT (MENIT)", "JAM KERJA", "KETERANGAN"]
   sheet.mergeCells(1, 1, 1, headers.length)
   const title = sheet.getCell(1, 1)
-  title.value = `ABSENSI · ${person.name.toUpperCase()}`
+  title.value = `ABSENSI · ${withLeftNote(person.name.toUpperCase(), leftKeyOf(person.leftAt))}`
   title.font = { bold: true, size: 16 }
   title.alignment = { vertical: "middle", horizontal: "center" }
   title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD966" } }
@@ -408,20 +414,6 @@ export async function GET(request: NextRequest) {
     }
 
     const scope = parsed.data.scope ?? "me"
-    // BoD/OAA melihat seluruh workspace; seorang MANAGER hanya orang-orang di bawahnya di Bagan
-    // Approval. (Dulu: anggota tim yang dia pimpin — lead tim sudah tidak ada.)
-    const isTeamManager = !context.canManageAttendance && context.directReportIds.length > 0
-    if (scope === "workspace" && !context.canManageAttendance && !isTeamManager) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    let teamScopeUserIds: string[] | null = null
-    if (scope === "workspace" && isTeamManager) {
-      // Their reports AND themselves. The board is the only place a manager's own history shows,
-      // and scoping it to the reports alone made their own month vanish the day they got one.
-      teamScopeUserIds = [...new Set([...context.directReportIds, session.user.id])]
-    }
-
     const range = parsed.data.month
       ? attendancePeriodRange(parsed.data.month)
       : {
@@ -432,18 +424,46 @@ export async function GET(request: NextRequest) {
     // use: the requested month, else the period the range ends in.
     const quotaPeriodKey = parsed.data.month ?? attendancePeriodKey(formatAttendanceDateKey(range.end))
 
+    // People who left (offboarding, 8 Oct 2026): their member row is gone, FormerMember keeps what it
+    // said. They are on the board of every range they were still there for (last working day on/after
+    // the range start), absent only up to that day, a former BoD/OAA stays exempt, and a manager keeps
+    // seeing the former direct reports of those ranges (FormerMember.approverId). A handful of rows.
+    const formers = scope === "me" ? [] : await formerMembersOf(context.workspace.id)
+    const formersInRange = formers.filter((f) => f.leftAt >= range.start)
+    const leftAtByUser = new Map(formers.map((f) => [f.userId, f.leftAt]))
+    const formerReportIds = context.canManageAttendance
+      ? []
+      : formersInRange.filter((f) => f.approverId === session.user.id).map((f) => f.userId)
+
+    // BoD/OAA melihat seluruh workspace; seorang MANAGER hanya orang-orang di bawahnya di Bagan
+    // Approval. (Dulu: anggota tim yang dia pimpin — lead tim sudah tidak ada.)
+    const isTeamManager = !context.canManageAttendance && (context.directReportIds.length > 0 || formerReportIds.length > 0)
+    if (scope === "workspace" && !context.canManageAttendance && !isTeamManager) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    let teamScopeUserIds: string[] | null = null
+    if (scope === "workspace" && isTeamManager) {
+      // Their reports AND themselves. The board is the only place a manager's own history shows,
+      // and scoping it to the reports alone made their own month vanish the day they got one.
+      teamScopeUserIds = [...new Set([...context.directReportIds, ...formerReportIds, session.user.id])]
+    }
+
     // BoD and One Above All are exempt from attendance — the nightly cron never penalises them
     // (attendance-absence.ts) — so a workspace-wide board and the Sheets export leave them out.
     // They still see their own history under "me", and can still be asked for by userId.
     const exemptUserIds =
       scope === "me" || parsed.data.userId || teamScopeUserIds
         ? []
-        : (
-            await prisma.workspaceMember.findMany({
-              where: { workspaceId: context.workspace.id, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
-              select: { userId: true },
-            })
-          ).map((m) => m.userId)
+        : [
+            ...(
+              await prisma.workspaceMember.findMany({
+                where: { workspaceId: context.workspace.id, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
+                select: { userId: true },
+              })
+            ).map((m) => m.userId),
+            ...formers.filter((f) => isExemptRole(f.role)).map((f) => f.userId),
+          ]
 
     const userWhere: Record<string, unknown> =
       scope === "me"
@@ -457,6 +477,16 @@ export async function GET(request: NextRequest) {
             : exemptUserIds.length
               ? { userId: { notIn: exemptUserIds } }
               : {}
+
+    // The same people as `userWhere`, for the former members (who have no member row to filter).
+    const inUserScope = (userId: string) =>
+      scope === "me"
+        ? userId === session.user.id
+        : teamScopeUserIds
+          ? (parsed.data.userId && teamScopeUserIds.includes(parsed.data.userId) ? userId === parsed.data.userId : teamScopeUserIds.includes(userId))
+          : parsed.data.userId
+            ? userId === parsed.data.userId
+            : !exemptUserIds.includes(userId)
 
     const recordWhere: Record<string, unknown> = {
       workspaceId: context.workspace.id,
@@ -688,12 +718,17 @@ export async function GET(request: NextRequest) {
       // workspace, or their first check-in if that came earlier, is where their month begins. The
       // nightly cron has had the same guard for months; the board and the export did not.
       const firstRecordKey = new Map(firstRecords.map((r) => [r.userId, r._min.attendanceDate ? formatAttendanceDateKey(r._min.attendanceDate) : null] as const))
-      const startKeyOf = (m: (typeof workspaceMembers)[number]) => {
-        const join = formatAttendanceDateKey(m.joinedAt ?? m.user.createdAt ?? new Date(0))
-        const first = firstRecordKey.get(m.user.id) ?? null
-        return first && first < join ? first : join
-      }
-      for (const member of workspaceMembers) {
+      // Members, plus the people who left during or after the range, read back as the member row they
+      // were: a former member is absent only up to their last working day, never after (8 Oct 2026).
+      const absenceMembers = [
+        ...workspaceMembers.map((m) => ({ joinedAt: m.joinedAt, restDays: m.restDays, user: m.user, leftKey: null as string | null })),
+        ...formersInRange
+          .filter((f) => inUserScope(f.userId))
+          .map((f) => ({ joinedAt: f.joinedAt, restDays: f.restDays, user: f.user, leftKey: leftKeyOf(f.leftAt) })),
+      ]
+      const startKeyOf = (m: (typeof absenceMembers)[number]) =>
+        attendanceStartKey(formatAttendanceDateKey(m.joinedAt ?? m.user.createdAt ?? new Date(0)), firstRecordKey.get(m.user.id) ?? null)
+      for (const member of absenceMembers) {
         const startKey = startKeyOf(member)
         for (const date of enumerateAttendanceDates(range.start, range.end)) {
           if (!isWorkdayForAttendanceDate(date, fallbackOffice)) continue
@@ -701,6 +736,8 @@ export async function GET(request: NextRequest) {
           // Their fixed rest day is not an absence — no red cell, no TK on the sheet.
           if (isRestDayForMember(date, member.restDays, fallbackOffice.timezone)) continue
           const dateKey = date.toISOString().slice(0, 10)
+          // After their last working day nothing is expected of someone who left.
+          if (!owesAttendanceOn(dateKey, startKey, member.leftKey)) continue
           if (dateKey >= todayKey || holidayKeys.has(dateKey) || outageKeys.has(dateKey)) continue
           const key = `${member.user.id}:${dateKey}`
           if (rowMap.has(key)) continue
@@ -819,22 +856,35 @@ export async function GET(request: NextRequest) {
     // most people have no row yet, and a board built only from rows showed a handful of names. Same
     // people as the rows would cover — the manager's reports + self, or the workspace minus BoD/OAA —
     // limited to members who had joined by the end of the range. Additive: older clients ignore it.
+    // People who left are on it for the ranges they were still there for (formersInRange).
+    const rosterEnd = new Date(range.end.getTime() + 24 * 60 * 60 * 1000)
     const rosterMembers = scope === "workspace" && !parsed.data.userId
-      ? await prisma.workspaceMember.findMany({
-          where: {
-            workspaceId: context.workspace.id,
-            joinedAt: { lte: new Date(range.end.getTime() + 24 * 60 * 60 * 1000) },
-            ...(teamScopeUserIds ? { userId: { in: teamScopeUserIds } } : exemptUserIds.length ? { userId: { notIn: exemptUserIds } } : {}),
-          },
-          select: { user: { select: { id: true, name: true, email: true, avatar: true } } },
-        })
+      ? [
+          ...(await prisma.workspaceMember.findMany({
+            where: {
+              workspaceId: context.workspace.id,
+              joinedAt: { lte: rosterEnd },
+              ...(teamScopeUserIds ? { userId: { in: teamScopeUserIds } } : exemptUserIds.length ? { userId: { notIn: exemptUserIds } } : {}),
+            },
+            select: { user: { select: { id: true, name: true, email: true, avatar: true } } },
+          })),
+          ...formersInRange
+            .filter((f) => f.joinedAt <= rosterEnd && inUserScope(f.userId))
+            .map((f) => ({ user: { id: f.user.id, name: f.user.name, email: f.user.email, avatar: f.user.avatar } })),
+        ]
       : []
+    // Additive `leftAt` (ISO, the last working day) on a person who left, so clients can mark them.
+    const leftAtField = (userId: string) => {
+      const leftAt = leftAtByUser.get(userId)
+      return leftAt ? { leftAt: leftAt.toISOString() } : {}
+    }
 
     if (parsed.data.format === "xlsx" && parsed.data.userId) {
       const fromRows = rows[0]?.user
+      const personLeftAt = leftAtByUser.get(parsed.data.userId) ?? null
       const person = fromRows
-        ? { name: fromRows.name || fromRows.email || "Crew", email: fromRows.email }
-        : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Crew", email: u?.email ?? null }))
+        ? { name: fromRows.name || fromRows.email || "Crew", email: fromRows.email, leftAt: personLeftAt }
+        : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Crew", email: u?.email ?? null, leftAt: personLeftAt }))
       const personQuota = (await dayOffQuotaByUser(context.workspace.id, [parsed.data.userId], quotaPeriodKey)).get(parsed.data.userId)
       const personBuffer = await buildPersonWorkbook({ rows, start: range.start, end: range.end, workspaceName: context.workspace.name, person, dayOffQuota: personQuota })
       const slug = person.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "crew"
@@ -856,6 +906,7 @@ export async function GET(request: NextRequest) {
         end: range.end,
         workspaceName: context.workspace.name,
         quotaByUser: await dayOffQuotaByUser(context.workspace.id, exportUserIds, quotaPeriodKey),
+        leftAtByUser,
       })
 
       return new NextResponse(Buffer.from(workbookBuffer), {
@@ -899,6 +950,8 @@ export async function GET(request: NextRequest) {
         // Appended (additive): where the day was: the check-in address when it was away from the
         // office (location-free members), else the office. office_name above stays the office filed.
         "check_in_place",
+        // Appended (additive, 8 Oct 2026): the last working day of someone who left, else empty.
+        "user_left_at",
       ]
 
       const csv = [headers, ...rows.map((row) => [
@@ -929,6 +982,7 @@ export async function GET(request: NextRequest) {
         row.correctionReason ?? "",
         row.notes ?? "",
         row.recordKind === "ATTENDANCE" && row.checkInAt ? placeLabel(row) : "",
+        leftKeyOf(leftAtByUser.get(row.user.id)) ?? "",
       ])]
         .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
         .join("\n")
@@ -960,10 +1014,15 @@ export async function GET(request: NextRequest) {
       }
       return NextResponse.json({
         scope,
-        records: rows.map((r) => ({
-          userId: r.user.id, name: r.user.name, date: r.attendanceDate.slice(0, 10), tone: toneOf(r),
-          checkInAt: r.checkInAt, checkOutAt: r.checkOutAt, lateMinutes: r.lateMinutes ?? 0, kind: r.recordKind,
-        })),
+        records: rows.map((r) => {
+          const leftKey = leftKeyOf(leftAtByUser.get(r.user.id))
+          return {
+            userId: r.user.id, name: r.user.name, date: r.attendanceDate.slice(0, 10), tone: toneOf(r),
+            checkInAt: r.checkInAt, checkOutAt: r.checkOutAt, lateMinutes: r.lateMinutes ?? 0, kind: r.recordKind,
+            // Additive: someone who left, with their last working day.
+            ...(leftKey ? { leftAt: leftKey } : {}),
+          }
+        }),
       })
     }
 
@@ -977,9 +1036,9 @@ export async function GET(request: NextRequest) {
     )
     return NextResponse.json({
       scope,
-      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA } })),
+      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(r.user.id) } })),
       roster: rosterMembers
-        .map((m) => ({ ...m.user, dayOffQuota: quotaByUserId.get(m.user.id) ?? DEFAULT_DAY_OFF_QUOTA }))
+        .map((m) => ({ ...m.user, dayOffQuota: quotaByUserId.get(m.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(m.user.id) }))
         .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     })
   } catch (error) {

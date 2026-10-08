@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// The quota readers query two tables and the usage one; each is mocked with an in-memory list the
-// mock filters the way Postgres would for the `where` the helper sends.
+// The quota readers query two tables (three when someone has no member row: FormerMember) and the
+// usage one; each is mocked with an in-memory list the mock filters the way Postgres would for the
+// `where` the helper sends.
 type Member = { userId: string; workspaceId: string; dayOffQuota: number | null }
 type Bonus = { id: string; workspaceId: string; userId: string; periodKey: string; days: number; reason: string; revokedAt: Date | null; createdAt: Date }
 type Req = { userId: string; type: string; status: string; startDate: Date; endDate: Date }
 
-const db = vi.hoisted(() => ({ members: [] as Member[], bonuses: [] as Bonus[], requests: [] as Req[] }))
+const db = vi.hoisted(() => ({ members: [] as Member[], formers: [] as Member[], bonuses: [] as Bonus[], requests: [] as Req[] }))
 
 vi.mock("@/lib/prisma", () => {
   const inList = (v: string, cond?: { in?: string[] }) => !cond?.in || cond.in.includes(v)
@@ -15,6 +16,11 @@ vi.mock("@/lib/prisma", () => {
       workspaceMember: {
         findMany: vi.fn(async ({ where }: { where: { workspaceId: string; userId?: { in: string[] } } }) =>
           db.members.filter((m) => m.workspaceId === where.workspaceId && inList(m.userId, where.userId)).map((m) => ({ userId: m.userId, dayOffQuota: m.dayOffQuota })),
+        ),
+      },
+      formerMember: {
+        findMany: vi.fn(async ({ where }: { where: { workspaceId: string; userId?: { in: string[] } } }) =>
+          db.formers.filter((m) => m.workspaceId === where.workspaceId && inList(m.userId, where.userId)).map((m) => ({ userId: m.userId, dayOffQuota: m.dayOffQuota })),
         ),
       },
       dayOffBonus: {
@@ -59,6 +65,7 @@ beforeEach(() => {
     { userId: "cici", workspaceId: WS, dayOffQuota: 0 },
     { userId: "ana", workspaceId: "ws2", dayOffQuota: 6 },
   ]
+  db.formers = []
   db.bonuses = []
   db.requests = []
 })
@@ -114,6 +121,29 @@ describe("effectiveDayOffQuotas", () => {
     db.bonuses = [bonus("zed", "2026-10", 2)]
     const q = await effectiveDayOffQuota(WS, "zed", "2026-10")
     expect(q).toMatchObject({ base: 4, bonus: 2, quota: 6 })
+  })
+
+  it("someone who left keeps the quota their member row had (offboarding), only in that workspace", async () => {
+    db.formers = [
+      { userId: "dodi", workspaceId: WS, dayOffQuota: 9 },
+      { userId: "eka", workspaceId: WS, dayOffQuota: null },
+      { userId: "fani", workspaceId: "ws2", dayOffQuota: 7 },
+    ]
+    db.bonuses = [bonus("dodi", "2026-10", 1)]
+    const q = await effectiveDayOffQuotas(WS, ["dodi", "eka", "fani", "ana"].map((userId) => ({ userId, periodKey: "2026-10" })))
+    expect(q.get("dodi|2026-10")).toMatchObject({ base: 9, bonus: 1, quota: 10 })
+    expect(q.get("eka|2026-10")).toMatchObject({ base: 4, quota: 4 })
+    expect(q.get("fani|2026-10")).toMatchObject({ base: 4, quota: 4 })
+    expect(q.get("ana|2026-10")).toMatchObject({ base: 4, quota: 4 })
+  })
+
+  it("asks FormerMember only when someone has no member row", async () => {
+    const prisma = (await import("@/lib/prisma")).default as unknown as { formerMember: { findMany: ReturnType<typeof vi.fn> } }
+    prisma.formerMember.findMany.mockClear()
+    await effectiveDayOffQuotas(WS, ["ana", "budi"].map((userId) => ({ userId, periodKey: "2026-10" })))
+    expect(prisma.formerMember.findMany).not.toHaveBeenCalled()
+    await effectiveDayOffQuotas(WS, [{ userId: "zed", periodKey: "2026-10" }])
+    expect(prisma.formerMember.findMany).toHaveBeenCalledTimes(1)
   })
 
   it("empty input makes no query", async () => {

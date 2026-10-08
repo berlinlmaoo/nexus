@@ -530,7 +530,7 @@ export async function refundOutageDay(opts: {
     entries: [],
   }
 
-  const members = await prisma.workspaceMember.findMany({
+  const currentMembers = await prisma.workspaceMember.findMany({
     where: {
       workspaceId,
       role: { notIn: ["BOD", "ONE_ABOVE_ALL"] },
@@ -541,6 +541,19 @@ export async function refundOutageDay(opts: {
     },
     select: { userId: true, user: { select: { id: true, name: true } } },
   })
+  // People who left on or after this day were still crew on it (offboarding, 8 Oct 2026): their cut is
+  // refunded like everyone else's. Non-BoD by the role their member row had; not a member again.
+  const formerMembers = await prisma.formerMember.findMany({
+    where: {
+      workspaceId,
+      role: { notIn: ["BOD", "ONE_ABOVE_ALL"] },
+      leftAt: { gte: new Date(`${dateKey}T00:00:00.000Z`) },
+      ...(opts.userIds?.length ? { userId: { in: opts.userIds } } : {}),
+      user: { workspaceMembers: { none: { workspaceId } } },
+    },
+    select: { userId: true, user: { select: { id: true, name: true } } },
+  })
+  const members = [...currentMembers, ...formerMembers]
 
   for (const member of members) {
     const userId = member.userId

@@ -15,6 +15,8 @@ import { isAutoDeduction } from "@/lib/attendance-absence"
 import { PERIOD_BASELINE_XP, getLeaderboardPeriodStart, levelForXp } from "@/lib/gamification"
 import { getAttendanceSheetUrl } from "@/lib/attendance-sheet"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffUsageKey, effectiveDayOffQuotas } from "@/lib/day-off-usage"
+import { leftKeyOf } from "@/lib/former-members"
+import { formerMembersOf } from "@/lib/former-recaps"
 
 const DEFAULT_DAYOFF_QUOTA = DEFAULT_DAY_OFF_QUOTA
 const MONTH_RE = /^\d{4}-\d{2}$/
@@ -25,6 +27,10 @@ const MONTH_RE = /^\d{4}-\d{2}$/
 //   GET ?month=YYYY-MM&userId=…     -> that member's full deduction log: every XP cut and every
 //                                      auto-deducted day-off, with the reason and whether it's
 //                                      already been cleared
+//
+// People who left (offboarding, 8 Oct 2026) are in the table for the periods they were still there for
+// (last working day on/after the period start), with an additive `leftAt` ("YYYY-MM-DD"), and their
+// log still opens.
 //
 // BoD-only: this exposes one person's penalties to another, which is exactly the crew board's gate.
 // Clearing a deduction is NOT here — it's POST /api/attendance/override { action: "CLEAR_PENALTY" },
@@ -63,8 +69,9 @@ export async function GET(req: NextRequest) {
       const monthRange = attendanceMonthRange(month)
       const xpSince = getLeaderboardPeriodStart()
 
-      const [members, dayoffs, redDates, redQuotaRow, xpAgg] = await Promise.all([
+      const [currentMembers, formers, dayoffs, redDates, redQuotaRow, xpAgg] = await Promise.all([
         prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true } }),
+        formerMembersOf(workspaceId, { leftSince: start }),
         prisma.attendanceRequest.findMany({
           where: {
             workspaceId, type: "DAY_OFF", status: { in: ["PENDING", "APPROVED"] },
@@ -98,6 +105,9 @@ export async function GET(req: NextRequest) {
           map.set(r.userId, (map.get(r.userId) ?? 0) + enumerateAttendanceDates(s0, e0).length)
         }
       }
+      const leftKeyByUser = new Map(formers.map((f) => [f.userId, leftKeyOf(f.leftAt)]))
+      const members = [...currentMembers, ...formers.map((f) => ({ userId: f.userId }))]
+
       const usedDayOff = new Map<string, number>()
       const usedRedDate = new Map<string, number>()
       countInto(usedDayOff, dayoffs, start, end)
@@ -131,6 +141,7 @@ export async function GET(req: NextRequest) {
             bonus: { days: a?.bonus ?? 0, grants: (a?.grants ?? []).map((g) => ({ days: g.days, reason: g.reason })) },
             redDate: { quota: redQuota, used: Math.min(redUsed, redQuota), remaining: Math.max(0, redQuota - redUsed) },
             xp: { score, level: lvl.level, levelName: lvl.name },
+            ...(leftKeyByUser.has(m.userId) ? { leftAt: leftKeyByUser.get(m.userId) } : {}),
           }
         }),
       })
@@ -141,7 +152,9 @@ export async function GET(req: NextRequest) {
       where: { userId_workspaceId: { userId, workspaceId } },
       select: { id: true },
     })
-    if (!member) return NextResponse.json({ error: "Orang ini bukan member workspace." }, { status: 404 })
+    // Someone who left this workspace keeps their log (offboarding: nothing of theirs is deleted).
+    const former = member ? null : (await formerMembersOf(workspaceId, { userIds: [userId] }))[0] ?? null
+    if (!member && !former) return NextResponse.json({ error: "Orang ini bukan member workspace." }, { status: 404 })
 
     const [txns, requests] = await Promise.all([
       prisma.xpTransaction.findMany({
@@ -242,6 +255,7 @@ export async function GET(req: NextRequest) {
       },
       totalXpLost: entries.filter((e) => e.unit === "XP" && !e.cleared).reduce((s, e) => s + e.amount, 0),
       entries,
+      ...(former ? { leftAt: leftKeyOf(former.leftAt) } : {}),
     })
   } catch (error) {
     console.error("Error listing attendance deductions:", error)

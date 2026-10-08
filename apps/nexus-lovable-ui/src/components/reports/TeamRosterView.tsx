@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ChevronRight, Flag, Search, Users } from "lucide-re
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { cn } from "@/lib/utils";
 import type { ReportRosterResponse, ReportRosterRow } from "@/lib/nexus-api";
 import { fmtNum, fmtPct, ratioPct, ROLE_LABEL } from "./report-format";
@@ -129,7 +130,7 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
                       <div className="flex items-center gap-2.5">
                         <Avatar userId={r.userId} name={r.name} avatar={r.avatar} size={30} />
                         <div className="min-w-0">
-                          <div className="truncate font-semibold">{r.name}</div>
+                          <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-semibold">{r.name}</span><LeftTag leftAt={leftAtOf(r)} /></div>
                           <div className="truncate text-[11px] text-muted-foreground">{[r.role ? ROLE_LABEL[r.role] ?? r.role : null, ...r.teams.map((t) => t.name)].filter(Boolean).join(" · ") || r.email}</div>
                         </div>
                       </div>

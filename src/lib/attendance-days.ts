@@ -10,6 +10,8 @@ import {
 } from "@/lib/attendance"
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
+import { asMemberAsOf, leftKeyOf } from "@/lib/former-members"
+import { attendanceStartKey, owesAttendanceOn } from "@/lib/former-member-days"
 
 /**
  * What each (person, day) WAS, by the same rules the attendance history board and the Sheets export
@@ -24,6 +26,8 @@ import { getHolidayKeys } from "@/lib/holidays"
  *   3. neither, on a past workday of the first active office, on/after the person's first day
  *      (joinedAt / user.createdAt, or an earlier first check-in), not their rest day, not a public
  *      holiday, not a NEXUS-down day                                                   → ABSENT.
+ *      Someone who left (FormerMember — offboarding, 8 Oct 2026) is read back from what their member
+ *      row said, and is never absent after their last working day (leftAt).
  *   Anything else (future, today, holiday, rest day, before they joined) is simply not a day here.
  *
  * Keep this in step with src/app/api/attendance/history/route.ts. The route is deliberately not
@@ -59,7 +63,7 @@ export async function classifyAttendanceDays(opts: {
   const out = new Map<string, ClassifiedAttendanceDay[]>(userIds.map((id) => [id, []]))
   if (userIds.length === 0) return out
 
-  const [records, approvedRequests, activeOffices, members, holidayKeys, outageKeys, firstRecords] = await Promise.all([
+  const [records, approvedRequests, activeOffices, currentMembers, formerRows, holidayKeys, outageKeys, firstRecords] = await Promise.all([
     prisma.attendanceRecord.findMany({
       where: { workspaceId, userId: { in: userIds }, attendanceDate: { gte: start, lte: end } },
       include: { officeLocation: true },
@@ -73,12 +77,28 @@ export async function classifyAttendanceDays(opts: {
       where: { workspaceId, userId: { in: userIds } },
       select: { userId: true, joinedAt: true, restDays: true, user: { select: { createdAt: true } } },
     }),
+    // People who left: their member row is gone, what it said is here (with the last working day).
+    prisma.formerMember.findMany({
+      where: { workspaceId, userId: { in: userIds } },
+      include: { user: { select: { createdAt: true } } },
+    }),
     getHolidayKeys(workspaceId, start, end),
     getOutageDateKeysForRange(start, end),
     prisma.attendanceRecord.groupBy({ by: ["userId"], where: { workspaceId, userId: { in: userIds } }, _min: { attendanceDate: true } }),
   ])
 
   const days = new Map<string, ClassifiedAttendanceDay>() // `${userId}:${dateKey}`
+  // A member row wins over a FormerMember row (someone added back as an ordinary member is current).
+  const currentIds = new Set(currentMembers.map((m) => m.userId))
+  const members = [
+    ...currentMembers.map((m) => ({ ...m, leftKey: null as string | null })),
+    ...formerRows
+      .filter((f) => !currentIds.has(f.userId))
+      .map((f) => {
+        const asOf = asMemberAsOf(f)
+        return { userId: asOf.userId, joinedAt: asOf.joinedAt, restDays: asOf.restDays, user: f.user, leftKey: leftKeyOf(asOf.leftAt) }
+      }),
+  ]
 
   // 1. records
   for (const record of records) {
@@ -129,13 +149,14 @@ export async function classifyAttendanceDays(opts: {
     const allDates = enumerateAttendanceDates(start, end)
     for (const member of members) {
       const join = formatAttendanceDateKey(member.joinedAt ?? member.user.createdAt ?? new Date(0))
-      const first = firstRecordKey.get(member.userId) ?? null
-      const startKey = first && first < join ? first : join
+      const startKey = attendanceStartKey(join, firstRecordKey.get(member.userId) ?? null)
       for (const date of allDates) {
         if (!isWorkdayForAttendanceDate(date, fallbackOffice)) continue
         if (formatAttendanceDateKey(date) < startKey) continue
         if (isRestDayForMember(date, member.restDays, fallbackOffice.timezone)) continue
         const dateKey = date.toISOString().slice(0, 10)
+        // Before their first day or after their last working day nothing is expected of them.
+        if (!owesAttendanceOn(dateKey, startKey, member.leftKey)) continue
         if (dateKey >= todayKey || holidayKeys.has(dateKey) || outageKeys.has(dateKey)) continue
         const key = `${member.userId}:${dateKey}`
         if (days.has(key)) continue
