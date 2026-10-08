@@ -619,7 +619,8 @@ private struct CalMonthGridBody: View {
         let maxDots = g.wide ? 4 : 3
         let shown = Array(dots.prefix(maxDots))
         // Another month's days used to be the whole cell at 38% (2.2:1); muted type reads at 5:1.
-        let numberColor: Color = isToday ? Color.white : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : NX.foreground)
+        // The picked day's number takes the accent too, so the pick reads by more than the tile's tint.
+        let numberColor: Color = isToday ? Color.white : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? CalTone.accent : NX.foreground))
         // The disc and the row height follow the type on the Mac (CalType), or the number outgrows them.
         let discSize = CalType.size(min(disc, g.wide ? 40 : 34))
         let unitName: (CalDot) -> String = { dot in dot.unitId == "other" ? T("Other") : (g.ix.byId[dot.unitId]?.name ?? "") }
@@ -679,13 +680,13 @@ private struct CalMonthGridBody: View {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(weekend ? NX.muted.opacity(0.3) : Color.clear)
-            // The picked day is a ring set inside the cell: a shape no division mark has. It used to be
-            // the cell's edge drawn violet, which only its colour told apart from the dots of the
-            // Bagan's violet divisions (INTOO, Production House, PATS BSD) inside it.
-            .overlay {
+            // The picked day is a soft accent tile behind the cell: an area, not a line. A ring drawn
+            // 2 pt inside the 54 pt cell ran into today's disc (owner, 8 Oct 2026: "nabrak sama tanggal
+            // hari ini yang bulet"); a tile has no edge to collide with, and no division mark is a tile.
+            .background {
                 if isSel {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(CalTone.accent, lineWidth: 2)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(CalTone.accent.opacity(0.14))
                         .padding(2)
                 }
             }
