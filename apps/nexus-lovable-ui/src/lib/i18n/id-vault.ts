@@ -203,4 +203,6 @@ export const ID_VAULT: Record<string, string> = {
   // Control Room → Audit, for a replaced Vault file
   "Restore previous version": "Pulihkan versi sebelumnya",
   "The file goes back to the version from before it was replaced. Its links keep working and show that version.": "Berkasnya kembali ke versi sebelum diganti. Tautannya tetap jalan dan menampilkan versi itu.",
+  // The trash (9 Oct 2026)
+  "Only whoever uploaded it, or BoD, can restore it": "Hanya yang mengunggahnya, atau BoD, yang bisa memulihkannya",
 };

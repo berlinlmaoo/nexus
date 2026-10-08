@@ -359,7 +359,18 @@ function VaultPage() {
 
   // ── the item's menu ────────────────────────────────────────────────────────
 
-  const itemMenu = (item: VaultItem, tone: "card" | "tile" = "card") => (
+  const itemMenu = (item: VaultItem, tone: "card" | "tile" = "card") => trash && !item.canModify ? (
+    // In the trash, restoring and deleting for good are both the uploader's or BoD's to do (the server
+    // refuses everyone else): no menu that only offers what would be refused.
+    <span
+      className="grid h-8 w-8 shrink-0 place-items-center text-muted-foreground/60"
+      title={t("Only whoever uploaded it, or BoD, can restore it")}
+      aria-label={t("Only whoever uploaded it, or BoD, can restore it")}
+      role="img"
+    >
+      <Lock className="h-3.5 w-3.5" aria-hidden />
+    </span>
+  ) : (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -377,7 +388,6 @@ function VaultPage() {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive"
-              disabled={!item.canModify}
               onClick={() => {
                 if (window.confirm(t("Delete “{name}” permanently?", { name: item.name }))) remove.mutate({ id: item.id, purge: true });
               }}
