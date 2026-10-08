@@ -525,8 +525,25 @@ export type OfficePayload = {
 export type NexusReplyPreview = {
   id: string;
   content: string;
+  /** The quoted picture, for a thumbnail (servers since 8 Oct 2026). */
+  attachmentUrl?: string | null;
   attachmentType?: string | null;
   user?: NexusUser | null;
+};
+
+/** One person named in a system line ("Bagas added Mey"). */
+export type NexusSystemPerson = { id: string; name: string };
+
+/**
+ * What a SYSTEM message records (server since 8 Oct 2026). `targets`: the people added or removed (and
+ * the leaver for member_left); `name`: the group name (created / renamed); `previousName`: before a rename.
+ */
+export type NexusSystemEvent = {
+  type: "members_added" | "member_removed" | "member_left" | "group_created" | "group_renamed" | string;
+  actor: NexusSystemPerson;
+  targets?: NexusSystemPerson[];
+  name?: string;
+  previousName?: string;
 };
 
 export type NexusMessage = {
@@ -541,6 +558,12 @@ export type NexusMessage = {
   attachmentType?: string | null;
   /** Set when this message replies to another one in the same conversation; null otherwise. */
   replyTo?: NexusReplyPreview | null;
+  /**
+   * "SYSTEM" for a group's log line ("Bagas added Mey"): drawn as a centred pill from `event`, never
+   * replied to, never unread. "USER" (or missing, on servers before 8 Oct 2026) for a person's message.
+   */
+  kind?: "USER" | "SYSTEM" | string;
+  event?: NexusSystemEvent | null;
 };
 
 export type NexusConversation = {
@@ -561,6 +584,52 @@ export type NexusConversation = {
    * 2026). Anyone may still leave. Missing = a server from before the rule; keep showing the controls.
    */
   canManageMembers?: boolean;
+  /** Group description (≤ 500 characters); only on GET /api/conversations/:id and PATCH. */
+  description?: string | null;
+};
+
+/** GET /api/conversations/:id/info — the group info screen (server since 8 Oct 2026). */
+export type NexusConversationInfo = {
+  conversation: {
+    id: string;
+    type: "DM" | "GROUP" | "PROJECT";
+    name: string | null;
+    description: string | null;
+    projectId: string | null;
+    createdAt: string;
+    createdBy: { id: string; name: string } | null;
+    memberCount: number;
+    mutedUntil: string | null;
+    /** May add or remove people (GROUP, Manager and above). */
+    canManageMembers: boolean;
+    /** May change the name and the description (any member of a GROUP). */
+    canEdit: boolean;
+  };
+  /** Admins first, then A–Z. */
+  members: Array<{ userId: string; name: string; avatar: string | null; isMe: boolean; isAdmin: boolean; deactivatedAt: string | null }>;
+  /** Each capped at 999. */
+  counts: { photos: number; links: number; docs: number };
+};
+
+export type NexusChatMediaType = "photos" | "links" | "docs";
+
+/** One page of GET /api/conversations/:id/media, newest first. */
+export type NexusChatMediaPage = {
+  items: Array<{
+    messageId: string;
+    createdAt: string;
+    sender: { id: string; name: string };
+    url: string;
+    attachmentType?: string | null;
+    title?: string;
+  }>;
+  nextCursor: string | null;
+};
+
+/** One page of GET /api/conversations/:id/search, newest first. */
+export type NexusChatSearchPage = {
+  results: Array<{ messageId: string; createdAt: string; sender: { id: string; name: string }; snippet: string }>;
+  nextCursor: string | null;
 };
 
 /**
@@ -573,6 +642,10 @@ export type NexusMessagePage = {
   messages: NexusMessage[];
   hasMore?: boolean;
   nextCursor?: string | null;
+  /** `around=` pages only: newer messages exist; `newerCursor` (an id) is the `after` that loads them. */
+  hasMoreNewer?: boolean;
+  newerCursor?: string | null;
+  anchorId?: string;
 };
 
 export type NexusXp = {
@@ -2141,10 +2214,12 @@ export const nexusApi = {
    * `before` = a `nextCursor` or an ISO date (older page); `after` = a message id (only newer ones,
    * oldest first). Servers before 8 Oct 2026 ignore `after` and return the latest page.
    */
-  conversationMessages: (id: string, opts: { before?: string; after?: string; limit?: number } = {}) => {
+  conversationMessages: (id: string, opts: { before?: string; after?: string; around?: string; limit?: number } = {}) => {
     const q = new URLSearchParams();
     if (opts.before) q.set("before", opts.before);
     if (opts.after) q.set("after", opts.after);
+    // A page centred on one message (servers since 8 Oct 2026): a search result or a reply quote.
+    if (opts.around) q.set("around", opts.around);
     if (opts.limit) q.set("limit", String(opts.limit));
     const qs = q.toString();
     return apiFetch<NexusMessagePage>(`/api/conversations/${id}/messages${qs ? `?${qs}` : ""}`);
@@ -2184,6 +2259,34 @@ export const nexusApi = {
       method: "PATCH",
       body: JSON.stringify({ name }),
     }),
+  /** GROUP rooms only: the description (≤ 500; null or "" clears it). Any member may change it. */
+  setConversationDescription: (id: string, description: string | null) =>
+    apiFetch<{ conversation: NexusConversation }>(`/api/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ description }),
+    }),
+  /**
+   * Take someone out of a GROUP (Manager and above; 403 MANAGER_REQUIRED otherwise) — or yourself,
+   * which is leaving and open to every member.
+   */
+  removeConversationMember: (id: string, userId: string) =>
+    apiFetch<{ conversation: NexusConversation | null }>(`/api/conversations/${id}/members`, {
+      method: "DELETE",
+      body: JSON.stringify({ userId }),
+    }),
+  /** The group info screen: members, permissions, media counts (servers since 8 Oct 2026). */
+  conversationInfo: (id: string) => apiFetch<NexusConversationInfo>(`/api/conversations/${id}/info`),
+  conversationMedia: (id: string, type: NexusChatMediaType, cursor?: string | null) => {
+    const q = new URLSearchParams({ type });
+    if (cursor) q.set("cursor", cursor);
+    return apiFetch<NexusChatMediaPage>(`/api/conversations/${id}/media?${q.toString()}`);
+  },
+  /** In-chat search: people's messages only, case-insensitive, at least 2 characters. */
+  searchConversation: (id: string, q: string, cursor?: string | null) => {
+    const params = new URLSearchParams({ q });
+    if (cursor) params.set("cursor", cursor);
+    return apiFetch<NexusChatSearchPage>(`/api/conversations/${id}/search?${params.toString()}`);
+  },
   createConversation: (payload: { type: "DM" | "GROUP"; userIds: string[]; name?: string }) => apiFetch<{ conversation: NexusConversation }>("/api/conversations", { method: "POST", body: JSON.stringify(payload) }),
   /**
    * Read up to (and including) `upToMessageId` — never further, so a message that lands while the

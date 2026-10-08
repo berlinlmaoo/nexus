@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bell, BellOff, Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
+import { ArrowLeft, BellOff, Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ChatThread } from "@/components/messages/ChatThread";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChatInfoPanel, chatInfoKey } from "@/components/messages/ChatInfoPanel";
+import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
 import { ApiError, nexusApi, type NexusConversation, type NexusUser } from "@/lib/nexus-api";
-import { isMuted, isMutedForever, usePageVisible } from "@/lib/chat-unread";
+import { isMuted, usePageVisible } from "@/lib/chat-unread";
+import { isSystemMessage, systemSentence } from "@/lib/chat-system";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtime } from "@/lib/realtime";
-import { localeOf, t, useLang } from "@/lib/lang";
+import { t, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/messages")({
@@ -52,10 +55,11 @@ function convoTitle(c: NexusConversation, meId?: string): string {
   return (c.members ?? []).map((m) => m.user?.name).filter(Boolean).slice(0, 3).join(", ") || t("Conversation");
 }
 
-/** The list's second line: the last message, a marker for a bare picture, or nothing yet. */
-function lastLine(c: NexusConversation): string {
+/** The list's second line: the last message (a group's log line in words), a marker for a bare picture, or nothing yet. */
+function lastLine(c: NexusConversation, meId?: string): string {
   const m = c.lastMessage;
   if (!m) return t("No messages yet");
+  if (isSystemMessage(m)) return systemSentence(m, meId);
   const text = (m.content ?? "").trim();
   if (text) return text;
   return m.attachmentUrl || m.attachmentType ? `📷 ${t("Photo")}` : "";
@@ -76,82 +80,30 @@ function isManagerRequired(e: unknown): boolean {
   return typeof p === "object" && p !== null && p.code === "MANAGER_REQUIRED";
 }
 
-type MuteChoice = "8h" | "1w" | "always" | "off";
-
-function muteValue(choice: MuteChoice): string | "forever" | null {
-  if (choice === "off") return null;
-  if (choice === "always") return "forever";
-  const hours = choice === "8h" ? 8 : 24 * 7;
-  return new Date(Date.now() + hours * 3600_000).toISOString();
-}
-
-/** "Muted" for Always, "Muted until Fri 17:30" otherwise. */
-function mutedLabel(c: NexusConversation): string {
-  if (isMutedForever(c)) return t("Muted");
-  const until = new Date(c.mutedUntil ?? "");
-  if (Number.isNaN(until.getTime())) return t("Muted");
-  const when = until.toLocaleString(localeOf(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
-  return t("Muted until {when}", { when });
-}
-
 type ConversationList = { conversations: NexusConversation[]; totalUnread?: number };
 
-/**
- * Bell menu in the thread header: silence a room for 8 hours, a week or for good, or undo it.
- * Muted rooms stop pushing (an @mention still gets through) and leave the badge count.
- */
-function MuteMenu({ conversation }: { conversation: NexusConversation }) {
-  const qc = useQueryClient();
-  const muted = isMuted(conversation);
-  const mute = useMutation({
-    mutationFn: (choice: MuteChoice) => nexusApi.muteConversation(conversation.id, muteValue(choice)),
-    onSuccess: (res, choice) => {
-      const value = res && "mutedUntil" in res ? res.mutedUntil : muteValue(choice);
-      qc.setQueryData<ConversationList>(["conversations"], (cur) =>
-        cur ? { ...cur, conversations: cur.conversations.map((c) => (c.id === conversation.id ? { ...c, mutedUntil: value } : c)) } : cur,
-      );
-      qc.invalidateQueries({ queryKey: ["conversations"] });
-      toast.success(choice === "off" ? t("Notifications back on for this chat.") : t("Chat muted. You'll still hear about @mentions."));
-    },
-    onError: (e) => {
-      // A server from before 8 Oct 2026 has no mute route at all.
-      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) toast(t("Muting isn't available yet. It comes with the next server update."));
-      else toast.error(t("Couldn't change the mute. Try again."));
-    },
-  });
+/** The info panel sits beside the thread from this width; below it covers the screen. */
+const WIDE = "(min-width: 1024px)";
+
+/** A small dot in the header: green while the socket is up, amber while it reconnects. */
+function LiveDot({ connected }: { connected: boolean }) {
+  const label = connected ? t("Live") : t("Reconnecting…");
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          title={muted ? mutedLabel(conversation) : t("Mute notifications")}
-          aria-label={muted ? mutedLabel(conversation) : t("Mute notifications")}
-          disabled={mute.isPending}
-          className={cn("rounded-lg p-2 transition-colors hover:bg-accent disabled:opacity-50", muted ? "text-primary" : "text-muted-foreground")}
-        >
-          {mute.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">{muted ? mutedLabel(conversation) : t("Mute notifications")}</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => mute.mutate("8h")}>{t("For 8 hours")}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => mute.mutate("1w")}>{t("For 1 week")}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => mute.mutate("always")}>{t("Always")}</DropdownMenuItem>
-        {muted && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => mute.mutate("off")}>{t("Unmute")}</DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <span role="status" title={label} aria-label={label} className="inline-grid h-8 w-6 place-items-center">
+      <span className={cn("h-2 w-2 rounded-full", connected ? "bg-success" : "animate-pulse bg-warning")} />
+    </span>
   );
 }
 
 function Messages() {
   const { lang, tn } = useLang();
+  const qc = useQueryClient();
   const [composer, setComposer] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
+  // The chat info panel (tap the chat header), and a message it asked the thread to show.
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [jump, setJump] = useState<{ id: string; seq: number } | null>(null);
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const meId = me.data?.user?.id;
   const { connected } = useRealtime();
@@ -168,17 +120,52 @@ function Messages() {
   const rows = convos.data?.conversations ?? [];
   const search = Route.useSearch();
   const [activeId, setActiveId] = useState<string | null>(search.c ?? null);
-  useEffect(() => { if (search.c) setActiveId(search.c); }, [search.c]);
+  // On a phone the list and the open chat take turns on the screen; from md up they sit side by side.
+  const [phoneThread, setPhoneThread] = useState<boolean>(!!search.c);
+  useEffect(() => { if (search.c) { setActiveId(search.c); setPhoneThread(true); } }, [search.c]);
   // Hold on to the room opened by default: the list re-sorts as messages arrive, and "whichever is
-  // first" would otherwise swap the open chat under the reader.
-  useEffect(() => { if (!activeId && rows[0]) setActiveId(rows[0].id); }, [activeId, rows]);
-  const active = rows.find((c) => c.id === activeId) ?? rows[0] ?? null;
+  // first" would otherwise swap the open chat under the reader. Not on a phone: there the list comes
+  // first and a room opens only when tapped — a thread mounted out of sight would mark it read.
+  const phone = useIsMobile();
+  useEffect(() => { if (!activeId && rows[0] && !phone) setActiveId(rows[0].id); }, [activeId, rows, phone]);
+  const active = phone && !phoneThread ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
   const activeKey = active?.id ?? null;
 
   const threadMembers = useMemo(
     () => (active?.members ?? []).map((m) => m.user).filter(Boolean) as NexusUser[],
     [active],
   );
+
+  const openRoom = useCallback((id: string) => { setActiveId(id); setPhoneThread(true); setJump(null); }, []);
+
+  // From the info panel: show a message in the thread. On a narrow screen the panel covers the
+  // thread, so it steps aside.
+  const jumpTo = useCallback((messageId: string) => {
+    setJump({ id: messageId, seq: Date.now() });
+    if (typeof window !== "undefined" && !window.matchMedia(WIDE).matches) setInfoOpen(false);
+  }, []);
+
+  // "Message" on a member: their DM, opened or started.
+  const messagePerson = useCallback(async (userId: string) => {
+    try {
+      const res = await nexusApi.createConversation({ type: "DM", userIds: [userId] });
+      await qc.invalidateQueries({ queryKey: ["conversations"] });
+      setInfoOpen(false);
+      openRoom(res.conversation.id);
+    } catch {
+      toast.error(t("Couldn't start the chat."));
+    }
+  }, [qc, openRoom]);
+
+  // Left the group: it leaves the list at once, and the screen goes back to the list.
+  const leftRoom = useCallback((id: string) => {
+    qc.setQueryData<ConversationList>(["conversations"], (cur) => (cur ? { ...cur, conversations: cur.conversations.filter((c) => c.id !== id) } : cur));
+    qc.removeQueries({ queryKey: chatInfoKey(id) });
+    qc.invalidateQueries({ queryKey: ["conversations"] });
+    setInfoOpen(false);
+    setActiveId(null);
+    setPhoneThread(false);
+  }, [qc]);
 
   const groups = {
     DM: rows.filter((c) => c.type === "DM"),
@@ -187,13 +174,22 @@ function Messages() {
   };
 
   return (
-    <div lang={lang}>
-      <PageHeader title={t("Messages")} subtitle={t("Chat with your crew + per-project rooms.")} actions={
-        <button onClick={() => setComposer(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New chat")}</button>
-      } />
-      <div className="grid h-[calc(100vh-9rem)] grid-cols-1 md:grid-cols-[300px_1fr]">
+    // The page itself never scrolls: it fills the screen under the app header (above the phone's tab
+    // bar, which the app shell pads for with 7rem), and the list, the thread and the info panel each
+    // scroll on their own. Until 8 Oct 2026 the page was taller than the screen, so scrolling the
+    // thread past its end scrolled the whole page and pushed the list out of view.
+    <div lang={lang} className="flex h-[calc(100dvh-7rem)] flex-col overflow-hidden md:h-[100dvh]">
+      <div className={cn("shrink-0", phoneThread && "hidden md:block")}>
+        <PageHeader title={t("Messages")} subtitle={t("Chat with your crew + per-project rooms.")} actions={
+          <>
+            <LiveDot connected={connected} />
+            <button onClick={() => setComposer(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New chat")}</button>
+          </>
+        } />
+      </div>
+      <div className={cn("grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]", infoOpen && active && "lg:grid-cols-[300px_minmax(0,1fr)_360px]")}>
         {/* conversation list */}
-        <aside className="overflow-y-auto border-r border-border">
+        <aside className={cn("min-h-0 overflow-y-auto overscroll-contain border-r border-border", phoneThread && "hidden md:block")}>
           {convos.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
           {!convos.isLoading && rows.length === 0 && (
             <div className="p-3">
@@ -210,14 +206,14 @@ function Messages() {
                 // The open room is being read as it arrives; its count would only flicker.
                 const unread = activeKey === c.id && visible ? 0 : c.unreadCount ?? 0;
                 return (
-                  <button key={c.id} onClick={() => setActiveId(c.id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-accent", activeKey === c.id && "bg-accent")}>
+                  <button key={c.id} onClick={() => openRoom(c.id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-accent", activeKey === c.id && "md:bg-accent")}>
                     <ConvoAvatar c={c} meId={meId} size={36} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
                         <span className={cn("truncate text-sm", unread > 0 && !muted ? "font-bold" : "font-semibold")}>{convoTitle(c, meId)}</span>
                         {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t("Muted")} />}
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">{lastLine(c)}</div>
+                      <div className={cn("truncate text-xs text-muted-foreground", isSystemMessage(c.lastMessage) && "italic")}>{lastLine(c, meId)}</div>
                     </div>
                     {/* A muted room still counts its unread, quietly: grey, and left out of the nav badge. */}
                     {unread > 0 && (
@@ -232,22 +228,31 @@ function Messages() {
           ))}
         </aside>
         {/* active thread */}
-        <section className="min-w-0">
+        <section className={cn("min-h-0 min-w-0 flex-col", phoneThread ? "flex" : "hidden md:flex")}>
           {active ? (
             <>
-              <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-                <ConvoAvatar c={active} meId={meId} size={32} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold">{convoTitle(active, meId)}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {tn(active.members?.length ?? 0, "{n} member", "{n} members")}
-                    {active.type === "PROJECT" ? ` · ${t("project room")}` : ""}
-                    {isMuted(active) ? ` · ${mutedLabel(active)}` : ""}
-                  </div>
-                </div>
+              <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-2 py-2.5 md:gap-2.5 md:px-4">
+                <button onClick={() => setPhoneThread(false)} title={t("Back to chats")} aria-label={t("Back to chats")} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent md:hidden"><ArrowLeft className="h-4 w-4" /></button>
+                {/* The header opens the chat's info: members, media, search (like WhatsApp). */}
+                <button
+                  onClick={() => setInfoOpen((o) => !o)}
+                  aria-expanded={infoOpen}
+                  title={t("Open chat info")}
+                  className="-my-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-1.5 py-1 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  <ConvoAvatar c={active} meId={meId} size={32} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{convoTitle(active, meId)}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {tn(active.members?.length ?? 0, "{n} member", "{n} members")}
+                      {active.type === "PROJECT" ? ` · ${t("project room")}` : ""}
+                      {isMuted(active) ? ` · ${mutedLabel(active)}` : ""}
+                    </span>
+                  </span>
+                </button>
                 <MuteMenu conversation={active} />
                 {active.type === "GROUP" && (
-                  <button onClick={() => setRenaming(true)} title={t("Rename group")} aria-label={t("Rename group")} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => setRenaming(true)} title={t("Rename group")} aria-label={t("Rename group")} className="hidden rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent sm:inline-flex"><Pencil className="h-4 w-4" /></button>
                 )}
                 {/* Both kinds of room can take people, by different routes. A project room's
                     membership is derived from the project, so adding here really means adding to
@@ -258,14 +263,37 @@ function Messages() {
                   <button onClick={() => setAdding(true)} title={t("Add people")} aria-label={t("Add people")} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><UserPlus className="h-4 w-4" /></button>
                 )}
               </div>
-              <div className="h-[calc(100%-3.5rem)]"><ChatThread conversationId={active.id} meId={meId} members={threadMembers} /></div>
+              <div className="min-h-0 flex-1"><ChatThread
+                conversationId={active.id}
+                meId={meId}
+                members={threadMembers}
+                jump={jump}
+                // The floating GIDEON button sits over the composer's right end (bottom-32 right-4 on a
+                // phone, bottom-6 right-6 from md): keep Send clear of it. With the info panel open the
+                // thread is covered (phone, tablet) or no longer at the screen's edge (wide).
+                composerClassName={infoOpen ? undefined : "pr-[4.75rem] md:pr-[5.25rem]"}
+              /></div>
             </>
+          ) : convos.isLoading ? (
+            <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
           ) : (
             <div className="grid h-full place-items-center text-center text-muted-foreground"><div><MessageCircle className="mx-auto mb-3 h-10 w-10 opacity-40" /><p className="text-sm">{t("Pick a conversation or start a new chat.")}</p></div></div>
           )}
         </section>
+        {infoOpen && active && (
+          <ChatInfoPanel
+            conversation={active}
+            meId={meId}
+            onClose={() => setInfoOpen(false)}
+            onAdd={() => setAdding(true)}
+            onRename={() => setRenaming(true)}
+            onJump={jumpTo}
+            onMessage={(userId) => { void messagePerson(userId); }}
+            onLeft={() => leftRoom(active.id)}
+          />
+        )}
       </div>
-      {composer && <NewChat onClose={() => setComposer(false)} onCreated={(id) => { setActiveId(id); setComposer(false); }} meId={meId} />}
+      {composer && <NewChat onClose={() => setComposer(false)} onCreated={(id) => { openRoom(id); setComposer(false); }} meId={meId} />}
       {renaming && active && <RenameGroup conversation={active} onClose={() => setRenaming(false)} />}
       {adding && active && (
         active.projectId
@@ -293,7 +321,7 @@ function RenameGroup({ conversation, onClose }: { conversation: NexusConversatio
   const [name, setName] = useState(conversation.name ?? "");
   const rename = useMutation({
     mutationFn: () => nexusApi.renameConversation(conversation.id, name.trim()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["conversations"] }); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["conversations"] }); qc.invalidateQueries({ queryKey: chatInfoKey(conversation.id) }); onClose(); },
   });
   const valid = name.trim().length > 0 && name.trim().length <= 80;
   return (
@@ -347,8 +375,10 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
         await nexusApi.addProjectMember(target.projectId, u.id);
         await qc.invalidateQueries({ queryKey: ["project-members", target.projectId] });
       } else {
+        // No "added" toast: the "You added …" line in the chat is the confirmation (8 Oct 2026).
         await nexusApi.addConversationMembers(target.conversationId, [u.id]);
         await qc.invalidateQueries({ queryKey: ["conversation", target.conversationId] });
+        await qc.invalidateQueries({ queryKey: chatInfoKey(target.conversationId) });
       }
       await qc.invalidateQueries({ queryKey: ["conversations"] });
     } catch (e) {

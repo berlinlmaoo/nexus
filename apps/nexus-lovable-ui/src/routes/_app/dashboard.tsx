@@ -26,6 +26,7 @@ import learner from "@/assets/philearn/learner.png";
 import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
 import { chatUnreadTotal } from "@/lib/chat-unread";
+import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
@@ -830,7 +831,7 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{initials}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{label}</div>
-                      <div className="truncate text-xs text-muted-foreground">{c.lastMessage?.content ?? "No messages yet"}</div>
+                      <div className="truncate text-xs text-muted-foreground">{c.lastMessage ? (isSystemMessage(c.lastMessage) ? systemSentence(c.lastMessage, myId) : c.lastMessage.content) : "No messages yet"}</div>
                     </div>
                     {(c.unreadCount ?? 0) > 0 && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{c.unreadCount}</span>}
                   </Link>
