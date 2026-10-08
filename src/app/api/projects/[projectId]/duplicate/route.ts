@@ -68,6 +68,10 @@ export async function POST(
         enablePnlDashboard: original.enablePnlDashboard,
         requireAttachmentForDone: original.requireAttachmentForDone,
         disableTaskStatus: original.disableTaskStatus,
+        // Type and tabs (9 Oct 2026) — the copy looks like the original.
+        type: original.type,
+        hiddenTabs: original.hiddenTabs,
+        financeEnabled: original.financeEnabled,
       },
     })
 

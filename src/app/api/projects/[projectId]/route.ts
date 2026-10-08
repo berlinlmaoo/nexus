@@ -13,6 +13,7 @@ import {
 } from "@/lib/project-auto-assign"
 import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { normalizeHiddenTabs } from "@/lib/project-tabs"
 
 async function canManageProject(userId: string, projectId: string) {
   if (await isSystemAdminUser(userId)) {
@@ -184,6 +185,8 @@ export async function PATCH(
       requireAttachmentForDone,
       disableTaskStatus,
       tableColumns,
+      financeEnabled,
+      hiddenTabs,
     } = body
 
     const existing = await prisma.project.findUnique({
@@ -249,6 +252,30 @@ export async function PATCH(
       }
     }
 
+    // The Finance tab is opt-in exactly like P&L (owner, 9 Oct 2026: "perlu di aktifin manual deh di
+    // project settings sama kaya PnL"): money data, so the same BoD-and-above gate.
+    if (financeEnabled !== undefined) {
+      if (typeof financeEnabled !== "boolean") {
+        return NextResponse.json({ error: "financeEnabled harus true atau false.", code: "INVALID_FINANCE_FLAG" }, { status: 400 })
+      }
+      const { allowed: isBod } = await checkWorkspaceAccess(session.user.id!, existing.workspaceId, "BOD")
+      if (!isBod) {
+        return NextResponse.json({ error: "Forbidden: hanya BoD ke atas yang bisa mengaktifkan Finance", code: "BOD_REQUIRED" }, { status: 403 })
+      }
+    }
+
+    // Which tabs the project shows (owner, 9 Oct 2026): a project setting like the others, so LEAD
+    // (checked above). Validated here, because a client that hid both Board and List would leave a
+    // task project with no way to see its tasks.
+    let normalizedHiddenTabs: string[] | undefined
+    if (hiddenTabs !== undefined) {
+      const tabs = normalizeHiddenTabs(hiddenTabs)
+      if (!tabs.ok) {
+        return NextResponse.json({ error: tabs.error, code: tabs.code, ...(tabs.tab !== undefined && { tab: tabs.tab }) }, { status: 400 })
+      }
+      normalizedHiddenTabs = tabs.hiddenTabs
+    }
+
     const project = await prisma.project.update({
       where: { id: (await params).projectId },
       data: {
@@ -261,6 +288,8 @@ export async function PATCH(
         ...(Number.isInteger(position) && position >= 0 && { position }),
         ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
         ...(enablePnlDashboard !== undefined && { enablePnlDashboard: !!enablePnlDashboard }),
+        ...(financeEnabled !== undefined && { financeEnabled }),
+        ...(normalizedHiddenTabs !== undefined && { hiddenTabs: normalizedHiddenTabs }),
         ...(requireAttachmentForDone !== undefined && { requireAttachmentForDone: !!requireAttachmentForDone }),
         ...(disableTaskStatus !== undefined && { disableTaskStatus: !!disableTaskStatus }),
         ...(Array.isArray(tableColumns) && { tableColumns: tableColumns.filter((c: unknown) => typeof c === "string") }),
