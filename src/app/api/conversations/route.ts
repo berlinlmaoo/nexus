@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma"
 import { CHAT_MEMBER_SELECT, canManageMembersIn, memberManagerContext, visibleRoomIds, workspaceForNewRoom } from "@/lib/chat-access"
 import { chatUnreadForUser } from "@/lib/chat-unread"
+import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 
 const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
@@ -12,7 +13,8 @@ const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
  * The caller's conversations, most recently active first.
  *
  * Each item: id, type, name, projectId, members (the roster: the iOS @mention picker reads it from
- * here, so it stays — without email), memberCount, lastMessage, unreadCount, mutedUntil (null when not
+ * here, so it stays — without email), memberCount, lastMessage (a SYSTEM line too, with its `kind` and
+ * `event`: clients show the localized sentence — chat-system.ts), unreadCount, mutedUntil (null when not
  * muted), canManageMembers (the caller may add/remove people: GROUP only, Manager and above —
  * chat-rules canManageGroupMembers). The response adds totalUnread (muted rooms count their mentions
  * only — chat-unread.ts).
@@ -139,16 +141,33 @@ export async function POST(req: NextRequest) {
     // The workspace this room belongs to (every participant is in it): leaving that workspace later
     // takes a person out of the room (lib/chat-membership.ts). Null when it spans workspaces.
     const workspaceId = await workspaceForNewRoom(userId, others)
-    const conversation = await prisma.conversation.create({
-      data: {
-        type: type === "GROUP" ? "GROUP" : "DM",
-        name: type === "GROUP" ? (name?.trim() || null) : null,
-        workspaceId,
-        members: { create: allMembers.map((uid) => ({ userId: uid })) },
-      },
-      include: memberInclude,
+    const isGroup = type === "GROUP"
+    // A new group opens with its own log line, "Bagas created the group “QA”", written with it: the
+    // people put in it get one push each from that line (chat-system.ts). A DM has none.
+    const { conversation, system } = await prisma.$transaction(async (tx) => {
+      const created = await tx.conversation.create({
+        data: {
+          type: isGroup ? "GROUP" : "DM",
+          name: isGroup ? (name?.trim() || null) : null,
+          workspaceId,
+          members: { create: allMembers.map((uid) => ({ userId: uid })) },
+        },
+        include: memberInclude,
+      })
+      if (!isGroup) return { conversation: created, system: null }
+      const [actor, ...targets] = await systemPeople(tx, allMembers)
+      const system = await writeSystemMessage(tx, {
+        conversationId: created.id,
+        actorId: userId,
+        event: { type: "group_created", actor, targets, ...(created.name ? { name: created.name } : {}) },
+      })
+      return { conversation: created, system }
     })
-    emitConversationUpdated(allMembers, { conversationId: conversation.id, lastMessageAt: null, reason: "membership" })
+    if (system) {
+      announceSystemMessage({ conversationId: conversation.id, message: system, memberIds: allMembers })
+    } else {
+      emitConversationUpdated(allMembers, { conversationId: conversation.id, lastMessageAt: null, reason: "membership" })
+    }
     return NextResponse.json({ conversation }, { status: 201 })
   } catch (error) {
     console.error("conversations POST error:", error)

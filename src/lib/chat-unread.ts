@@ -8,6 +8,8 @@ import { conversationIdFromLink, summarizeUnread, UNREAD_CAP, type UnreadRow } f
  * One grouped query instead of one COUNT per conversation (GET /api/conversations did a COUNT per
  * room). Rules, the same everywhere:
  *   - your own messages are never unread;
+ *   - SYSTEM lines ("Bagas added Mey", chat-system.ts) are never unread: kind must be USER
+ *     (chat-rules countsTowardUnread). The badge, totalUnread and every push's badge come from here;
  *   - unread starts at your read position, or at the moment you joined if you never opened the room —
  *     joining a group does not hand you its whole history as "unread" (a null lastReadAt used to);
  *   - counted up to UNREAD_CAP per room (a badge reads "99+" long before);
@@ -29,6 +31,7 @@ async function unreadCounts(userIds: string[], conversationIds?: string[]): Prom
          SELECT 1 FROM "Message" m
           WHERE m."conversationId" = cm."conversationId"
             AND m."userId" <> cm."userId"
+            AND m."kind" = 'USER'
             AND m."createdAt" > COALESCE(cm."lastReadAt", cm."joinedAt")
           LIMIT ${UNREAD_CAP}
        ) capped)::int AS "unread"

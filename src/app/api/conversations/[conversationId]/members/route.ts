@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { createInAppNotification } from "@/lib/notification-service"
 import { CHAT_MEMBER_SELECT, canManageMembersIn, groupRoomAllowsUser, memberManagerContext } from "@/lib/chat-access"
 import { MANAGER_REQUIRED, MANAGER_REQUIRED_MESSAGE } from "@/lib/chat-rules"
-import { emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
+import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
+import { emitConversationMembersRemoved } from "@/lib/socket-emitter"
 
 const memberInclude = {
   members: { select: CHAT_MEMBER_SELECT },
@@ -23,6 +23,11 @@ const memberInclude = {
  * canManageGroupMembers); everyone else gets 403 MANAGER_REQUIRED. Leaving — DELETE with your own
  * userId — stays open to every member. Until then any member could add or remove anyone. Creating a
  * group with its first members (POST /api/conversations) is unchanged.
+ *
+ * Each change leaves a log line in the group, in the same transaction (chat-system.ts): "Bagas added
+ * Mey and Yuza" (only the people really added), "Bagas removed Mey", "Mey left". The people added get
+ * one push each from that line — it replaces the "X added you to Y" Inbox notification written here
+ * until then.
  */
 async function loadGroup(conversationId: string, userId: string) {
   const convo = await prisma.conversation.findUnique({
@@ -87,32 +92,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     const already = new Set(convo.members.map((m) => m.userId))
     const toAdd = Array.from(new Set(requested)).filter((id) => reachable.has(id) && !already.has(id))
 
+    let added: string[] = []
     if (toAdd.length > 0) {
-      await prisma.conversationMember.createMany({
-        data: toAdd.map((uid) => ({ conversationId, userId: uid })),
-        skipDuplicates: true,
+      // Only the rows this call really inserted: someone added a moment ago by another request is
+      // skipped here and is not named twice in the log.
+      const system = await prisma.$transaction(async (tx) => {
+        const rows = await tx.conversationMember.createManyAndReturn({
+          data: toAdd.map((uid) => ({ conversationId, userId: uid })),
+          skipDuplicates: true,
+          select: { userId: true },
+        })
+        const inserted = new Set(rows.map((r) => r.userId))
+        added = toAdd.filter((id) => inserted.has(id))
+        if (added.length === 0) return null
+        const [actor, ...targets] = await systemPeople(tx, [userId, ...added])
+        return writeSystemMessage(tx, { conversationId, actorId: userId, event: { type: "members_added", actor, targets } })
       })
-      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } })
-      const label = convo.name?.trim() || "a group chat"
-      await Promise.allSettled(
-        toAdd.map((uid) =>
-          createInAppNotification({
-            userId: uid,
-            type: "MESSAGE",
-            title: `${actor?.name ?? "Someone"} added you to ${label}`,
-            message: "Open Messages to see the conversation.",
-            link: `/messages?c=${conversationId}`,
-            push: true,
-            // So a phone can open the room straight from the push, as with a chat message.
-            pushData: { conversationId },
-          }),
-        ),
-      )
-      emitConversationUpdated([...convo.members.map((m) => m.userId), ...toAdd], {
-        conversationId,
-        lastMessageAt: convo.updatedAt.toISOString(),
-        reason: "membership",
-      })
+      if (system) {
+        announceSystemMessage({
+          conversationId,
+          message: system,
+          memberIds: Array.from(new Set([...convo.members.map((m) => m.userId), ...added])),
+        })
+      }
     }
 
     const conversation = await prisma.conversation.findUnique({
@@ -121,7 +123,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     })
     return NextResponse.json({
       conversation: conversation ? { ...conversation, canManageMembers: manages } : conversation,
-      added: toAdd.length,
+      added: added.length,
     })
   } catch (error) {
     console.error("conversation members POST error:", error)
@@ -154,14 +156,29 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       return NextResponse.json({ error: "A group needs at least one member" }, { status: 400 })
     }
 
-    const { count } = await prisma.conversationMember.deleteMany({ where: { conversationId, userId: target } })
-    if (count > 0) {
-      // Out of the room's socket at once, and every member's list (theirs included) refreshes.
-      emitConversationMembersRemoved(conversationId, [target])
-      emitConversationUpdated(convo.members.map((m) => m.userId), {
+    // The removal and its log line ("Bagas removed Mey" / "Mey left") together, or neither.
+    const system = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.conversationMember.deleteMany({ where: { conversationId, userId: target } })
+      if (count === 0) return null
+      const leaving = target === userId
+      const [actor, removed] = await systemPeople(tx, leaving ? [userId] : [userId, target])
+      return writeSystemMessage(tx, {
         conversationId,
-        lastMessageAt: convo.updatedAt.toISOString(),
-        reason: "membership",
+        actorId: userId,
+        event: leaving
+          ? { type: "member_left", actor, targets: [actor] }
+          : { type: "member_removed", actor, targets: [removed] },
+      })
+    })
+    if (system) {
+      // Out of the room's socket at once; the line reaches who is still in it, and every member's
+      // list (the one who left included) refreshes.
+      emitConversationMembersRemoved(conversationId, [target])
+      announceSystemMessage({
+        conversationId,
+        message: system,
+        memberIds: convo.members.map((m) => m.userId).filter((id) => id !== target),
+        alsoUserIds: [target],
       })
     }
 

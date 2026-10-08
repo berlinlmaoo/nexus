@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 import { CHAT_MEMBER_SELECT, canManageMembersOf, conversationAccess } from "@/lib/chat-access"
+import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
 
 /**
  * One conversation. Adds, for the caller: `mutedUntil` (null when not muted) and `canManageMembers`
@@ -44,9 +45,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const userId = session.user.id
     const { conversationId } = await params
 
-    const access = await conversationAccess(session.user.id, conversationId)
+    const access = await conversationAccess(userId, conversationId)
     if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
     const conversation = access.convo
     // Renaming stays a members-only act (a BoD reading a project room is refused below anyway).
@@ -63,16 +65,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     if (!trimmed) return NextResponse.json({ error: "name required" }, { status: 400 })
     if (trimmed.length > 80) return NextResponse.json({ error: "name too long" }, { status: 400 })
 
-    const updated = await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { name: trimmed },
-      include: { members: { select: CHAT_MEMBER_SELECT } },
+    // A real change of name leaves "Bagas renamed the group to “QA”" in the group, written with it
+    // (chat-system.ts); saving the same name again changes nothing and writes nothing.
+    const previousName = (conversation.name ?? "").trim()
+    const { updated, system } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.conversation.update({
+        where: { id: conversationId },
+        data: { name: trimmed },
+        include: { members: { select: CHAT_MEMBER_SELECT } },
+      })
+      if (trimmed === previousName) return { updated, system: null }
+      const [actor] = await systemPeople(tx, [userId])
+      const system = await writeSystemMessage(tx, {
+        conversationId,
+        actorId: actor.id,
+        event: { type: "group_renamed", actor, name: trimmed, ...(previousName ? { previousName } : {}) },
+      })
+      return { updated, system }
     })
-    emitConversationUpdated(updated.members.map((m) => m.userId), {
-      conversationId,
-      lastMessageAt: updated.updatedAt.toISOString(),
-      reason: "membership",
-    })
+    const memberIds = updated.members.map((m) => m.userId)
+    if (system) announceSystemMessage({ conversationId, message: system, memberIds })
+    else emitConversationUpdated(memberIds, { conversationId, lastMessageAt: updated.updatedAt.toISOString(), reason: "membership" })
     return NextResponse.json({ conversation: updated })
   } catch (error) {
     console.error("conversation PATCH error:", error)
