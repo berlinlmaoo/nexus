@@ -3,14 +3,14 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { canManageMembersOf, conversationAccess } from "@/lib/chat-access"
 import { mediaCounts } from "@/lib/chat-media"
-import { isRoomAdmin, MESSAGE_KIND_SYSTEM, orderInfoMembers } from "@/lib/chat-rules"
+import { canDeleteGroup, isRoomAdmin, MESSAGE_KIND_SYSTEM, orderInfoMembers } from "@/lib/chat-rules"
 
 /**
  * The group info screen, like WhatsApp's (SYSTEM-MESSAGES contract, Part 2, owner 8 Oct 2026).
  *
  * GET /api/conversations/:id/info →
  *   { conversation: { id, type, name, description, projectId, createdAt, createdBy: {id,name} | null,
- *                     memberCount, mutedUntil, canManageMembers, canEdit },
+ *                     memberCount, mutedUntil, canManageMembers, canEdit, canDelete },
  *     members: [{ userId, name, avatar, isMe, isAdmin, deactivatedAt }],   // admins first, then A–Z
  *     counts: { photos, links, docs } }                                    // each capped at 999
  *
@@ -20,6 +20,8 @@ import { isRoomAdmin, MESSAGE_KIND_SYSTEM, orderInfoMembers } from "@/lib/chat-r
  *   isAdmin    MANAGER, BOD or ONE_ABOVE_ALL in the room's workspace, or a system admin — the people who
  *              may add and remove members (owner, 8 Oct 2026). A room without a workspace: admins only.
  *   canEdit    may change the name and the description: any member of a GROUP. Project rooms and DMs: no.
+ *   canDelete  may delete the group (DELETE /api/conversations/:id, 9 Oct 2026): canManageMembers, or
+ *              being its only remaining member — who can no longer leave it (LAST_MEMBER). GROUP only.
  *   createdBy  the author of the group's "created the group" line; null for groups from before those
  *              lines existed, and for DMs and project rooms.
  *   name       a project room is called what its project is called now (as in the list).
@@ -91,6 +93,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
         mutedUntil,
         canManageMembers,
         canEdit: convo.type === "GROUP" && !!access.member,
+        canDelete: canDeleteGroup({ kind: convo.type, canManageMembers, isMember: !!access.member, memberCount: members.length }),
       },
       members,
       counts,

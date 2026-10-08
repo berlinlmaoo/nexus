@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import type { SnapshotMeta } from "@/lib/deletion-entities"
-import { emitCommentAdded, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { emitCommentAdded, emitConversationUpdated, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 const log = createLogger("deletion-restore")
@@ -69,6 +69,21 @@ export async function afterRestore(input: {
         ? input.entityId
         : (await prisma.vaultItem.findUnique({ where: { id: input.entityId }, select: { workspaceId: true } }))?.workspaceId
       emitVaultChanged(workspaceId, actorId)
+    }
+    if (entityType === "chat_group") {
+      // The group is back with its members: their lists refetch it ("membership", the reason every
+      // client already refetches on). No line is written in the chat for it.
+      const room = await prisma.conversation.findUnique({
+        where: { id: input.entityId },
+        select: { members: { select: { userId: true } }, messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { createdAt: true } } },
+      })
+      if (room) {
+        emitConversationUpdated(room.members.map((m) => m.userId), {
+          conversationId: input.entityId,
+          lastMessageAt: room.messages[0]?.createdAt.toISOString() ?? null,
+          reason: "membership",
+        })
+      }
     }
     if (entityType === "project_folder") {
       const folder = await prisma.projectFolder.findUnique({ where: { id: input.entityId }, select: { workspaceId: true } })

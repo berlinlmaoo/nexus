@@ -280,6 +280,34 @@ test("MANAGER_REQUIRED code and sentence", () => {
   assert.equal(R.MANAGER_REQUIRED_MESSAGE, "Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.")
 })
 
+// ── deleting a group (owner, 9 Oct 2026) ──
+const del = (kind, canManageMembers, memberCount, isMember = true) => R.canDeleteGroup({ kind, canManageMembers, isMember, memberCount })
+test("delete: whoever may manage members, in a group of any size", () => {
+  assert.equal(del("GROUP", true, 1), true)
+  assert.equal(del("GROUP", true, 2), true)
+  assert.equal(del("GROUP", true, 57), true)
+})
+test("delete: below Manager only as the group's only member", () => {
+  assert.equal(del("GROUP", false, 1), true, "the last one left may delete it")
+  assert.equal(del("GROUP", false, 2), false)
+  assert.equal(del("GROUP", false, 0), false, "no members: not theirs to delete")
+})
+test("delete: never a DM or a project room, never without a member row", () => {
+  for (const kind of ["DM", "PROJECT", null, undefined, "group"]) {
+    assert.equal(del(kind, true, 1), false, String(kind))
+    assert.equal(del(kind, false, 1), false, String(kind))
+  }
+  assert.equal(del("GROUP", true, 3, false), false)
+  assert.equal(del("GROUP", false, 1, false), false)
+})
+test("delete and last-member codes and sentences", () => {
+  assert.equal(R.NOT_A_GROUP, "NOT_A_GROUP")
+  assert.equal(R.LAST_MEMBER, "LAST_MEMBER")
+  assert.match(R.LAST_MEMBER_MESSAGE, /Hapus grupnya/)
+  assert.doesNotMatch(R.LAST_MEMBER_MESSAGE, /at least one member/, "clients that matched the old sentence fall back to their generic text")
+  assert.equal(R.DELETE_GROUP_MANAGER_MESSAGE, "Hanya manager ke atas yang bisa menghapus grup.")
+})
+
 // ── system messages (SYSTEM-MESSAGES contract, 8 Oct 2026) ──
 const bagas = { id: "u-bagas", name: "Bagas Putro" }
 const mey = { id: "u-mey", name: "Mey" }

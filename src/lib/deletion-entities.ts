@@ -5,7 +5,11 @@
  * failure messages. Pure: no database, so the web/mobile handoff can be read straight off this file.
  */
 
-/** Where an "Open …" link goes after a restore. `projectId` when the thing lives inside a project. */
+/**
+ * Where an "Open …" link goes after a restore. `projectId` when the thing lives inside a project.
+ * `type` "chat" (a group chat, 9 Oct 2026): `id` is the conversation — web /messages?c=<id>, iOS the
+ * thread.
+ */
 export type RestoreOpen = { type: string; id: string; projectId?: string; date?: string }
 
 /** Stored on DeletionSnapshot.meta when the copy is taken: the link, and the ids follow-ups need. */
@@ -75,6 +79,8 @@ export const RESTORABLE: Record<string, Spec> = {
   quest: { table: "Quest", label: "quest" },
   calendar_event: { table: "TeamCalendarEvent", label: "calendar event" },
   dayoff_bonus: { table: "DayOffBonus", label: "extra day off" },
+  // A group chat with its members and messages (owner, 9 Oct 2026).
+  chat_group: { table: "Conversation", label: "group chat" },
 }
 
 export function rootTableOf(entityType: string): string {
@@ -117,6 +123,8 @@ export type RestoreCounts = {
   folders?: number
   units?: number
   points?: number
+  /** A group chat's messages (its log lines included). */
+  messages?: number
 }
 
 /** Counts as stored on DeletionSnapshot.counts: rows per table, plus "moved:<Table>.<column>" for links a move-then-delete recorded. */
@@ -151,11 +159,13 @@ export function restoreCountsOf(entityType: string, stored: Record<string, unkno
     ["folders", moved("ProjectFolder.parentFolderId")],
     ["units", moved("OrgUnit.parentId")],
     ["points", less("AttendanceLocationPoint")],
+    ["messages", less("Message")],
   ]
   // Projects and tasks keep exactly the counts they always had (plus `items`).
   if (entityType === "project" || entityType === "task") return out
-  // Everywhere else a sheet's cell comments are comments too.
+  // Everywhere else a sheet's cell comments are comments too, and a chat's member rows are members.
   out.comments += less("SheetComment")
+  out.members += less("ConversationMember")
   for (const [k, n] of extra) if (n > 0) (out as Record<string, number>)[k] = n
   return out
 }
