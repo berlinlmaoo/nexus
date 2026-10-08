@@ -16,6 +16,10 @@ model User {
   /// carries the value; bumping it ends every token carrying an older one. Bumped by a password reset,
   /// and by a password change made from the web (which re-issues that browser's own cookie).
   sessionVersion Int               @default(0)
+  /// Offboarded (owner, 8 Oct 2026): set = this account can no longer sign in anywhere. Nothing of
+  /// theirs is deleted; see FormerMember.
+  deactivatedAt   DateTime?
+  deactivatedById String?
   /// Passkeys registered from this person's devices. Additive: password sign-in stays, because a
   /// lost device must not become a lost account.
   passkeys       Passkey[]
@@ -43,6 +47,7 @@ model User {
   updatedAt      DateTime          @updatedAt
 
   workspaceMembers WorkspaceMember[]
+  formerMemberships FormerMember[]
   projectMembers   ProjectMember[]
   taskAssignees    TaskAssignee[]
   tasksCompleted   Task[]           @relation("TaskCompletedBy")
@@ -227,6 +232,7 @@ model Workspace {
   updatedAt   DateTime          @updatedAt
 
   members         WorkspaceMember[]
+  formerMembers   FormerMember[]
   /// Group/DM and project chat rooms that belong to this workspace (Conversation.workspaceId).
   conversations   Conversation[]
   projects        Project[]
@@ -423,6 +429,37 @@ model WorkspaceMember {
 
   @@unique([userId, workspaceId])
   @@index([approverId])
+}
+
+/// Someone who left a workspace (owner, 8 Oct 2026: offboarding a resignation without losing their
+/// attendance, requests, projects or tasks). Their WorkspaceMember row is deleted exactly as "remove
+/// member" always did — every operational list, cron and approver lookup already skips them — and this
+/// keeps what that row said plus the last working day, for the recaps of periods they were part of.
+/// One per person per workspace; reinstating turns it back into a WorkspaceMember. See lib/former-members.ts.
+model FormerMember {
+  id                  String        @id @default(cuid())
+  userId              String
+  workspaceId         String
+  role                WorkspaceRole
+  joinedAt            DateTime
+  /// Last working day, 00:00 UTC of the Jakarta date (like AttendanceRecord.attendanceDate).
+  leftAt              DateTime
+  reason              String // "RESIGNED" | "CONTRACT_ENDED" | "DISMISSED" | "OTHER"
+  note                String?
+  approverId          String?
+  restDays            Int[]         @default([])
+  dayOffQuota         Int?
+  employmentStartDate DateTime?
+  /// The whole WorkspaceMember row as it was when they left (shifts, flags…).
+  member              Json
+  offboardedById      String?
+  offboardedAt        DateTime      @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId, leftAt])
 }
 
 model Project {
