@@ -1452,6 +1452,18 @@ enum AttTone {
 
 // MARK: - Crew streak board (month heatmap; web "Crew streak board" grid)
 
+/// Where today's column sits in the board's days scroll area (its midX), reported by the date row.
+private struct CrewTodayMidX: PreferenceKey {
+    static var defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
+}
+
+/// The visible width of the board's days scroll area.
+private struct CrewDaysViewportWidth: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 /// Today's cell of somebody who is outside the office right now (owner, 8 Oct 2026; the web board
 /// draws the same amber bar). Not colour alone: a walking figure in the corner carries it too, and
 /// VoiceOver reads "Budi, Outside the office since 10:12". Nothing at all when `since` is nil.
@@ -1513,6 +1525,10 @@ struct StreakBoardCard: View {
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
     @State private var monthOffset = 0               // 0 = this month; ◀ ▶ to reach past months
+    /// The period (monthOffset|today) whose board has already been brought to today, and the width of
+    /// the days' scroll area: see `landOnToday`.
+    @State private var landedOn: String?
+    @State private var daysViewportW: CGFloat = 0
     /// Who is outside the office right now is live (owner, 8 Oct 2026): the current period is read
     /// again every minute while the board is on screen and the app is in front, and on coming back.
     @Environment(\.scenePhase) private var scenePhase
@@ -1752,6 +1768,23 @@ struct StreakBoardCard: View {
         await load(silent: true)
     }
 
+    private static let daysSpace = "crewDays"
+
+    /// Brings today's column into view once per period, and keeps at it until it really is there:
+    /// every layout pass reports where today's column sits in the days' scroll area, and while it is
+    /// off-screen the board is scrolled to it again. Once it has been seen, the board is the
+    /// person's to scroll — later reports change nothing until the period (or the day) changes.
+    private func landOnToday(_ midX: CGFloat?, _ proxy: ScrollViewProxy) {
+        guard let midX, let t = todayKey, daysViewportW > 0 else { return }
+        let key = "\(monthOffset)|\(t)"
+        guard landedOn != key else { return }
+        if midX >= 0 && midX <= daysViewportW {
+            landedOn = key
+            return
+        }
+        DispatchQueue.main.async { proxy.scrollTo("day-\(t)", anchor: .center) }
+    }
+
     /// Tried again as the layout settles: a single call made before the scroll view has its
     /// size scrolls nowhere and says nothing.
     private func scrollToToday(_ proxy: ScrollViewProxy) {
@@ -1800,7 +1833,13 @@ struct StreakBoardCard: View {
                         cells
                     }
                 }
+                .coordinateSpace(name: Self.daysSpace)
+                .background(GeometryReader { g in Color.clear.preference(key: CrewDaysViewportWidth.self, value: g.size.width) })
+                .onPreferenceChange(CrewDaysViewportWidth.self) { daysViewportW = $0 }
                 // Land on today, not on the 28th: the column that matters is the one being filled in.
+                // The timed tries below were not enough on a phone with a full crew (owner, 8 Oct 2026:
+                // "selalu rata kiri"); where today's column really is decides now (`landOnToday`).
+                .onPreferenceChange(CrewTodayMidX.self) { x in landOnToday(x, proxy) }
                 .onAppear { scrollToToday(proxy) }
                 .onChange(of: members.count) { _, _ in scrollToToday(proxy) }
                 .onChange(of: periodDays.count) { _, _ in scrollToToday(proxy) }
@@ -1827,6 +1866,11 @@ struct StreakBoardCard: View {
                         .background(isToday ? NX.violet : Color.clear, in: Capsule())
                 }
                 .frame(width: cell, height: headerH)
+                .background {
+                    if isToday {
+                        GeometryReader { g in Color.clear.preference(key: CrewTodayMidX.self, value: g.frame(in: .named(Self.daysSpace)).midX) }
+                    }
+                }
                 .id("day-\(pd.key)")
                 // Where the month turns over, so 31 followed by 1 reads as a new
                 // month rather than as a gap.
