@@ -5,13 +5,14 @@ import { toast } from "sonner";
 import {
   ChevronRight, Download, ExternalLink, Eye, File as FileIcon, FileText, Film,
   FolderInput, FolderPlus, Folder, HardDrive, Image as ImageIcon, Loader2, Lock, Music,
-  MoreVertical, Pencil, RotateCcw, Search, Share2, Trash2, Upload,
+  MoreVertical, Pencil, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { VaultAccessDialog } from "@/components/vault/VaultAccessDialog";
 import { VaultLightbox } from "@/components/vault/VaultLightbox";
 import { VaultMoveDialog } from "@/components/vault/VaultMoveDialog";
 import { VaultShareDialog } from "@/components/vault/VaultShareDialog";
@@ -48,6 +49,11 @@ function iconFor(item: VaultItem) {
   return FileIcon;
 }
 
+/** A role threshold as people say it. */
+function roleLabel(role: string | null | undefined): string {
+  return role === "BOD_PLUS" ? "BoD and above" : role === "MANAGER_PLUS" ? "Managers and above" : "Everyone";
+}
+
 /** Where something can be dropped or moved to: a folder (null = the top of the vault) and its name. */
 type Destination = { id: string | null; name: string };
 
@@ -66,6 +72,7 @@ function VaultPage() {
   const [renaming, setRenaming] = useState<VaultItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [moving, setMoving] = useState<VaultItem | null>(null);
+  const [accessing, setAccessing] = useState<VaultItem | null>(null);
   const [viewer, setViewer] = useState<{ items: VaultItem[]; index: number } | null>(null);
   const [uploads, setUploads] = useState<{ key: number; name: string; pct: number }[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -381,6 +388,11 @@ function VaultPage() {
             <DropdownMenuItem disabled={!item.canModify} onClick={() => setMoving(item)}>
               <FolderInput className="h-4 w-4 mr-2" /> {t("Move to…")}
             </DropdownMenuItem>
+            {data?.canManageAccess && (
+              <DropdownMenuItem onClick={() => setAccessing(item)}>
+                <ShieldCheck className="h-4 w-4 mr-2" /> {t("Access…")}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               className="text-destructive"
               disabled={!item.canModify}
@@ -393,6 +405,13 @@ function VaultPage() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+
+  /** What a lock badge says on hover: who may open it, and for a folder who may add to it. */
+  const lockTitle = (item: VaultItem) =>
+    [
+      item.minReadRole ? t("Opens for: {who}", { who: t(roleLabel(item.minReadRole)) }) : null,
+      item.kind === "FOLDER" && item.minWriteRole ? t("adding: {who}", { who: t(roleLabel(item.minWriteRole)) }) : null,
+    ].filter(Boolean).join(" · ");
 
   /** Share, on every card and tile — not only behind ⋮ (owner, 9 Oct 2026: nobody found it there). */
   const shareButton = (item: VaultItem, size: "card" | "tile" = "card") =>
@@ -448,12 +467,17 @@ function VaultPage() {
             <span className="block truncate text-xs text-muted-foreground">
               {isFolder ? tn(item.childCount, "{n} item", "{n} items") : humanSize(item.size)}
               {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
-              {item.minReadRole && ` · ${t("restricted")}`}
+              {item.minReadRole && ` · ${t(roleLabel(item.minReadRole))}`}
+              {isFolder && item.minWriteRole && ` · ${t("adding: {who}", { who: t(roleLabel(item.minWriteRole)) })}`}
             </span>
           </span>
         </div>
 
-        {item.minReadRole && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label={t("restricted")} />}
+        {(item.minReadRole || (isFolder && item.minWriteRole)) && (
+          <span className="shrink-0 text-muted-foreground" role="img" aria-label={`${t("Locked")}: ${lockTitle(item)}`} title={lockTitle(item)}>
+            <Lock className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        )}
         {shareButton(item)}
         {itemMenu(item)}
       </div>
@@ -490,7 +514,11 @@ function VaultPage() {
             {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
           </p>
         </div>
-        {item.minReadRole && <Lock className="h-3 w-3 text-muted-foreground shrink-0" aria-label={t("restricted")} />}
+        {item.minReadRole && (
+          <span className="shrink-0 text-muted-foreground" role="img" aria-label={`${t("Locked")}: ${lockTitle(item)}`} title={lockTitle(item)}>
+            <Lock className="h-3 w-3" aria-hidden />
+          </span>
+        )}
         {shareButton(item, "tile")}
         {itemMenu(item, "tile")}
       </div>
@@ -691,6 +719,11 @@ function VaultPage() {
         onIndexChange={(index) => setViewer((v) => (v ? { ...v, index } : v))}
         onClose={() => setViewer(null)}
         onShare={(i) => { setViewer(null); setSharing(i); }}
+      />
+      <VaultAccessDialog
+        item={accessing}
+        onClose={() => setAccessing(null)}
+        onSaved={() => { setAccessing(null); refresh(); }}
       />
       <VaultMoveDialog
         item={moving}
