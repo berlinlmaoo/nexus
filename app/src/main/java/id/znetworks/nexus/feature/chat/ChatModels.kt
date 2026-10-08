@@ -28,8 +28,12 @@ data class Message(
     val createdAt: String? = null,
     val user: ChatUser? = null,
     val replyTo: ReplyRef? = null,
+    /** "USER" | "SYSTEM" (8 Oct): a SYSTEM row is a group's log line, drawn as a pill (ChatSystemText). */
+    val kind: String? = null,
+    @Serializable(with = LenientSystemEvent::class) val event: ChatSystemEvent? = null,
 ) {
     val isImage: Boolean get() = attachmentUrl != null && attachmentType.orEmpty().startsWith("image/")
+    val isSystem: Boolean get() = kind == "SYSTEM"
 }
 
 @Serializable

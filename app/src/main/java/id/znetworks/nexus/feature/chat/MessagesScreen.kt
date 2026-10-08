@@ -216,13 +216,15 @@ internal fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> U
                 val preview = when {
                     last == null -> stringResource(R.string.chat_no_message)
                     last.content.isBlank() && last.attachmentUrl != null -> "📷 " + stringResource(R.string.chat_photo)
+                    last.isSystem -> ChatSystemText.sentence(last.event, last.content, meId, ChatSystemText.Words.of(LocalContext.current.resources))
                     else -> when (val p = ChatPayload.parse(last.content)) {
                         is ChatPayload.Location -> "📍 " + stringResource(R.string.chat_location)
                         is ChatPayload.Task -> "📋 " + p.title
                         ChatPayload.Plain -> last.content
                     }
                 }
-                val who = if (conv.type != "DM" && last?.user?.name != null) "${last.user.name.substringBefore(' ')}: " else ""
+                // A log line reads as its own sentence, not "Bagas: Bagas Putro menambahkan …" (SYSTEM-MESSAGES).
+                val who = if (conv.type != "DM" && last?.user?.name != null && !last.isSystem) "${last.user.name.substringBefore(' ')}: " else ""
                 Text(who + preview, fontSize = 13.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 // A muted conversation still counts its unread, quietly (grey).
                 if (conv.unreadCount > 0) Text("${conv.unreadCount}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (conv.muted()) c.background else androidx.compose.ui.graphics.Color.White,

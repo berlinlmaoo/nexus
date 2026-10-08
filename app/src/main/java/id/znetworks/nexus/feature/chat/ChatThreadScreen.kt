@@ -324,7 +324,9 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 _state.update { it.copy(notice = res.getString(if (failed > 0) R.string.chat_add_partial else R.string.chat_added_project)) }
             } else {
                 val updated = api.addMembers(id, userIds)
-                _state.update { it.copy(conversation = if (updated.members.isNotEmpty()) updated else it.conversation, notice = res.getString(R.string.chat_added_group)) }
+                // No toast: the thread's own log line ("You added Mey") is the confirmation now (SYSTEM-MESSAGES).
+                _state.update { it.copy(conversation = if (updated.members.isNotEmpty()) updated else it.conversation) }
+                poll()
                 refreshConversation()
             }
         } catch (e: ApiError) {
@@ -428,6 +430,9 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
             if (s.loading && s.messages.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             if (!s.loading && s.messages.isEmpty()) item { Text(stringResource(R.string.chat_say_hi), fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.fillMaxWidth().padding(24.dp)) }
             items(s.messages, key = { it.id }) { m ->
+                // A group's log line ("Bagas added Mey"): a centred muted pill, no avatar, no bubble, no actions;
+                // a tap shows its time (SYSTEM-MESSAGES).
+                if (m.isSystem) { SystemPill(m, vm.meId); return@items }
                 val mine = m.userId == vm.meId || m.user?.id == vm.meId
                 var msgMenu by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
@@ -634,5 +639,19 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
         confirmButton = { TextButton(onClick = { onAdd(picked.toList()) }, enabled = picked.isNotEmpty()) { Text(stringResource(R.string.add)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+@Composable
+private fun SystemPill(m: Message, meId: String?) {
+    val c = Nx.colors
+    val res = LocalContext.current.resources
+    val text = remember(m.id, m.event, meId) { ChatSystemText.sentence(m.event, m.content, meId, ChatSystemText.Words.of(res)) }
+    var showTime by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text, fontSize = 12.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(10.dp)).background(c.muted)
+                .clickable { showTime = !showTime }.padding(horizontal = 10.dp, vertical = 5.dp))
+        if (showTime) Text(chatTime(m.createdAt), fontSize = 10.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
+    }
 }
 

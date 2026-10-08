@@ -1979,7 +1979,6 @@
     <!-- Group chat members: Manager and above (owner, 8 Oct) -->
     <string name="chat_add_people">Tambah orang</string>
     <string name="chat_add_project_hint">Orang yang ditambahkan ikut masuk ke proyeknya, bukan cuma ke chat ini.</string>
-    <string name="chat_added_group">Ditambahkan ke grup.</string>
     <string name="chat_added_project">Sudah ditambahkan. Mereka muncul di sini setelah membuka aplikasi.</string>
     <string name="chat_add_partial">Tidak semua orang berhasil ditambahkan.</string>
     <string name="chat_everyone_here">Semua orang sudah di sini</string>
@@ -2244,4 +2243,13 @@
     <plurals name="au_n_people">
         <item quantity="other">%d orang</item>
     </plurals>
+    <!-- Chat log lines, like WhatsApp (Berlin, 8 Oct; SYSTEM-MESSAGES) -->
+    <string name="sys_you">Kamu</string>
+    <string name="sys_you_object">kamu</string>
+    <string name="sys_added">%1$s menambahkan %2$s</string>
+    <string name="sys_removed">%1$s mengeluarkan %2$s</string>
+    <string name="sys_left">%1$s keluar</string>
+    <string name="sys_created">%1$s membuat grup</string>
+    <string name="sys_created_named">%1$s membuat grup “%2$s”</string>
+    <string name="sys_renamed">%1$s mengubah nama grup jadi “%2$s”</string>
 </resources>

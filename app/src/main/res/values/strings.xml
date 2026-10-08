@@ -1985,7 +1985,6 @@
     <!-- Group chat members: Manager and above (owner, 8 Oct) -->
     <string name="chat_add_people">Add people</string>
     <string name="chat_add_project_hint">Anyone you add joins the project itself, not just this chat.</string>
-    <string name="chat_added_group">Added to the group.</string>
     <string name="chat_added_project">Added. They\'ll show up here once they open the app.</string>
     <string name="chat_add_partial">Couldn\'t add everyone. Some people were left out.</string>
     <string name="chat_everyone_here">Everyone\'s already here</string>
@@ -2274,4 +2273,13 @@
         <item quantity="one">%d person</item>
         <item quantity="other">%d people</item>
     </plurals>
+    <!-- Chat log lines, like WhatsApp (Berlin, 8 Oct; SYSTEM-MESSAGES) -->
+    <string name="sys_you">You</string>
+    <string name="sys_you_object">you</string>
+    <string name="sys_added">%1$s added %2$s</string>
+    <string name="sys_removed">%1$s removed %2$s</string>
+    <string name="sys_left">%1$s left</string>
+    <string name="sys_created">%1$s created the group</string>
+    <string name="sys_created_named">%1$s created the group “%2$s”</string>
+    <string name="sys_renamed">%1$s renamed the group to “%2$s”</string>
 </resources>
