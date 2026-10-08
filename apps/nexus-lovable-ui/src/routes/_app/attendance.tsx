@@ -311,6 +311,20 @@ function Attendance() {
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     periodDays.push({ key, day: d.getDate() });
   }
+  // Land on today, not on the 28th (owner, 8 Oct 2026: "harusnya lock ke tanggal hari itu"): once per
+  // period, after the rows are drawn — today's column fourth, the three days before it still in view.
+  // Never again while the person scrolls; a period without today stays at its start.
+  const boardScrollRef = useRef<HTMLDivElement>(null);
+  const landedPeriod = useRef<string | null>(null);
+  useEffect(() => {
+    if (viewMode !== "grid" || history.isLoading || landedPeriod.current === monthKey) return;
+    const box = boardScrollRef.current;
+    const cell = box?.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
+    if (!box || !cell) return;
+    const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
+    box.scrollLeft = Math.max(0, cell.offsetLeft - pinned - cell.offsetWidth * 3);
+    landedPeriod.current = monthKey;
+  }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
   // Cut-off aware: past the 27th we're already in NEXT month's payroll period, so the board's
   // "current period" (and the Next-button guard) must roll over on the 28th, not on the 1st.
   const nowKey = (() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > CUTOFF_DAY ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; })();
@@ -496,7 +510,7 @@ function Attendance() {
           // Its own scroll box, as tall as the screen allows: the date row can only stay pinned inside
           // the element that scrolls, and a page-level sticky cannot cross `overflow-x`. So the days
           // and weekdays stay above the dots while you scroll down the crew (owner, 28 Sep 2026).
-          <div className="max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
+          <div ref={boardScrollRef} className="max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
                 top of each other. Now the table keeps its natural width and this container scrolls,
@@ -504,11 +518,13 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">Member</th>
+                  <th data-member-col className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">Member</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70")}>
-                      <span className="block text-[9px] font-normal uppercase opacity-70">{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}</span>
-                      {pd.day}
+                    <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
+                      <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}</span>
+                      {pd.key === todayKey
+                        ? <span className="inline-grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 font-bold text-primary-foreground">{pd.day}</span>
+                        : pd.day}
                     </th>
                   ))}
                   <th className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">Score</th>
