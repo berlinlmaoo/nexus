@@ -5,7 +5,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { toast } from "sonner";
 import {
   ArrowLeft, ChevronRight, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Link2, Loader2, LogOut, MessageSquare,
-  Pencil, Search, UserMinus, UserPlus, UserRound, Users as UsersIcon, X,
+  Pencil, Search, Trash2, UserMinus, UserPlus, UserRound, Users as UsersIcon, X,
 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { MuteMenu, mutedLabel } from "@/components/messages/MuteMenu";
@@ -26,7 +26,8 @@ import { cn } from "@/lib/utils";
  *
  *   group    picture, name, "Group · N members", description (editable by any member), Add / Search /
  *            Mute, media links and docs, the members (you first, Admin badge, Left tag; tap one for
- *            Message / View profile / Remove), Exit group.
+ *            Message / View profile / Remove), Exit group, and Delete group for whoever may
+ *            (canDelete: Manager and above, or the only member left — who cannot leave).
  *   project  the same without Add, Remove and Exit: "Members follow the project" + Open project.
  *   DM       the person's card, Search / Mute, media, View profile.
  *
@@ -108,6 +109,7 @@ export function ChatInfoPanel({
   onJump,
   onMessage,
   onLeft,
+  onDeleted,
 }: {
   conversation: NexusConversation;
   meId?: string;
@@ -121,6 +123,8 @@ export function ChatInfoPanel({
   onMessage: (userId: string) => void;
   /** After leaving the group: back to the chat list. */
   onLeft: () => void;
+  /** After deleting the group: the same — the room is gone from the list. */
+  onDeleted: () => void;
 }) {
   const { lang, t, tn } = useLang();
   const qc = useQueryClient();
@@ -201,6 +205,7 @@ export function ChatInfoPanel({
               onMedia={() => setView("media")}
               onMessage={onMessage}
               onLeft={onLeft}
+              onDeleted={onDeleted}
               onChanged={() => {
                 qc.invalidateQueries({ queryKey: chatInfoKey(id) });
                 qc.invalidateQueries({ queryKey: ["conversations"] });
@@ -214,12 +219,19 @@ export function ChatInfoPanel({
   return wide || typeof document === "undefined" ? panel : createPortal(panel, document.body);
 }
 
+/** The server's 400 when the last member tries to leave (LAST_MEMBER; before 9 Oct 2026 only a sentence). */
+function isLastMemberRefusal(e: unknown): boolean {
+  if (!(e instanceof ApiError) || e.status !== 400) return false;
+  const p = (e.payload && typeof e.payload === "object" ? e.payload : {}) as { code?: unknown; error?: unknown };
+  return p.code === "LAST_MEMBER" || (typeof p.error === "string" && p.error.toLowerCase().includes("at least one member"));
+}
+
 function InfoBody({
-  data, conversation, title, meId, onAdd, onRename, onSearch, onMedia, onMessage, onLeft, onChanged,
+  data, conversation, title, meId, onAdd, onRename, onSearch, onMedia, onMessage, onLeft, onDeleted, onChanged,
 }: {
   data: Info; conversation: NexusConversation; title: string; meId?: string;
   onAdd: () => void; onRename: () => void; onSearch: () => void; onMedia: () => void;
-  onMessage: (userId: string) => void; onLeft: () => void; onChanged: () => void;
+  onMessage: (userId: string) => void; onLeft: () => void; onDeleted: () => void; onChanged: () => void;
 }) {
   const { t, tn } = useLang();
   const c = data.conversation;
@@ -231,6 +243,13 @@ function InfoBody({
   const members = useMemo(() => [...data.members.filter((m) => m.isMe), ...data.members.filter((m) => !m.isMe)], [data.members]);
   const [removing, setRemoving] = useState<{ userId: string; name: string } | null>(null);
   const [exiting, setExiting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // The server refused Exit because nobody else is left (another member left a moment ago).
+  const [lastRefused, setLastRefused] = useState(false);
+  // The only one left can't leave a group (it would be orphaned with all its messages): they delete it
+  // instead (owner, 9 Oct 2026).
+  const onlyMember = isGroup && !!me && (c.memberCount <= 1 || lastRefused);
+  const canDelete = isGroup && c.canDelete === true;
   const mediaTotal = data.counts.photos + data.counts.links + data.counts.docs;
   const anyCapped = data.counts.photos >= COUNT_CAP || data.counts.links >= COUNT_CAP || data.counts.docs >= COUNT_CAP;
 
@@ -248,7 +267,27 @@ function InfoBody({
   const exit = useMutation({
     mutationFn: () => nexusApi.removeConversationMember(c.id, meId ?? me?.userId ?? ""),
     onSuccess: () => { setExiting(false); onLeft(); },
-    onError: () => { toast.error(t("Couldn't leave the group.")); setExiting(false); },
+    onError: (e) => {
+      setExiting(false);
+      if (isLastMemberRefusal(e)) {
+        // Exit gives way to Delete group, with the reason above it.
+        setLastRefused(true);
+        onChanged();
+        return;
+      }
+      toast.error(t("Couldn't leave the group."));
+    },
+  });
+  const del = useMutation({
+    mutationFn: () => nexusApi.deleteConversation(c.id),
+    onSuccess: () => { setDeleting(false); onDeleted(); },
+    onError: (e) => {
+      setDeleting(false);
+      // Already gone (deleted from another tab or by someone else): the same outcome.
+      if (e instanceof ApiError && e.status === 404) { onDeleted(); return; }
+      toast.error(e instanceof ApiError && e.status === 403 ? t("Only managers and above can delete this group.") : t("Couldn't delete the group."));
+      onChanged();
+    },
   });
 
   const muted = isMuted(conversation);
@@ -356,10 +395,14 @@ function InfoBody({
         </div>
       )}
 
-      {/* Exit group */}
-      {isGroup && me && (
+      {/* Exit group · Delete group. The only member left can't exit: Delete takes Exit's place, with why. */}
+      {isGroup && (me || canDelete) && (
         <div className="mt-2 border-t border-border px-2 pt-2">
-          <Row icon={<LogOut className="h-4 w-4" />} label={t("Exit group")} danger onClick={() => setExiting(true)} />
+          {onlyMember && (
+            <p className="px-3 pb-1 pt-1 text-xs text-muted-foreground">{t("You're the only member left, so you can't leave. Delete the group instead.")}</p>
+          )}
+          {me && !onlyMember && <Row icon={<LogOut className="h-4 w-4" />} label={t("Exit group")} danger onClick={() => setExiting(true)} />}
+          {canDelete && <Row icon={<Trash2 className="h-4 w-4" />} label={t("Delete group")} danger onClick={() => setDeleting(true)} />}
         </div>
       )}
 
@@ -402,6 +445,25 @@ function InfoBody({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {exit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{t("Exit group")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleting} onOpenChange={(o) => { if (!o && !del.isPending) setDeleting(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Delete “{group}”?", { group: title })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("Its messages and members go with it. It can be restored from Control Room → Audit.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={del.isPending}>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={del.isPending}
+              onClick={(e) => { e.preventDefault(); del.mutate(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {del.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{t("Delete group")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

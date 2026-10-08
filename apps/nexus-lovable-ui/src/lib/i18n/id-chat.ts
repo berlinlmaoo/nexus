@@ -138,4 +138,13 @@ export const ID_CHAT: Record<string, string> = {
   "Couldn't leave the group.": "Gagal keluar dari grup.",
   "Created by {name} · {date}": "Dibuat oleh {name} · {date}",
   "Created {date}": "Dibuat {date}",
+
+  // Delete group (owner, 9 Oct 2026)
+  "Delete group": "Hapus grup",
+  "Delete “{group}”?": "Hapus “{group}”?",
+  "Its messages and members go with it. It can be restored from Control Room → Audit.": "Pesan dan anggotanya ikut terhapus. Grup ini bisa dipulihkan dari Control Room → Audit.",
+  "Couldn't delete the group.": "Gagal menghapus grup.",
+  "Only managers and above can delete this group.": "Hanya manager ke atas yang bisa menghapus grup ini.",
+  "You're the only member left, so you can't leave. Delete the group instead.": "Kamu satu-satunya anggota, jadi tidak bisa keluar. Hapus grupnya saja.",
+  "This group was deleted": "Grup ini sudah dihapus",
 }

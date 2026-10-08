@@ -249,9 +249,19 @@ export function RealtimeProvider({
               terms.push("conversation");
             }
             queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, terms) });
+            // A deleted group (server since 9 Oct 2026): out of every list at once, its cached thread and
+            // info dropped. An open thread closes itself (routes/_app/messages.tsx).
+            if (evt === "conversation-updated" && data.reason === "deleted" && typeof data.conversationId === "string") {
+              const gone = data.conversationId;
+              queryClient.setQueryData<{ conversations?: Array<{ id: string }> }>(["conversations"], (cur) =>
+                cur && Array.isArray(cur.conversations) ? { ...cur, conversations: cur.conversations.filter((c) => c.id !== gone) } : cur);
+              queryClient.removeQueries({ queryKey: ["chat-info", gone] });
+              queryClient.removeQueries({ queryKey: ["messages", gone] });
+              void queryClient.refetchQueries({ queryKey: ["conversations"], type: "all" });
+            }
             // The thread of that room too, in case it's on screen but its room join was refused.
             // With `after=` this is a near-empty request when the room event already delivered it.
-            if (evt === "conversation-updated" && typeof data.conversationId === "string") {
+            else if (evt === "conversation-updated" && typeof data.conversationId === "string") {
               queryClient.invalidateQueries({ queryKey: ["messages", data.conversationId] });
               // Someone joined, left, was added or removed, or the group was renamed — possibly me, in a
               // room this tab has never listed. Refetch the list even when no screen is showing it (an

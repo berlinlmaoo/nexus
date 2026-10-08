@@ -613,6 +613,11 @@ export type NexusConversationInfo = {
     canManageMembers: boolean;
     /** May change the name and the description (any member of a GROUP). */
     canEdit: boolean;
+    /**
+     * May delete the group (servers since 9 Oct 2026): canManageMembers, or being its only member left.
+     * Missing = a server without DELETE /api/conversations/:id — offer no Delete.
+     */
+    canDelete?: boolean;
   };
   /** Admins first, then A–Z. */
   members: Array<{ userId: string; name: string; avatar: string | null; isMe: boolean; isAdmin: boolean; deactivatedAt: string | null }>;
@@ -1580,9 +1585,11 @@ export type NexusRestoreCounts = {
   items?: number; rows?: number; cells?: number; submissions?: number; values?: number; receipts?: number;
   payments?: number; milestones?: number; pages?: number; people?: number; projects?: number; folders?: number;
   units?: number; points?: number;
+  /** A group chat's messages (servers since 9 Oct 2026). */
+  messages?: number;
 };
 
-/** Where "Open …" goes once it's back. `type`: project, task, doc, folder, sheet, page, form, pnl, vault, attendance_request, attendance_record, attendance_office, room_booking, calendar, calendar_event, post, goal, portfolio, announcement, org_chart. */
+/** Where "Open …" goes once it's back. `type`: project, task, doc, folder, sheet, page, form, pnl, vault, attendance_request, attendance_record, attendance_office, room_booking, calendar, calendar_event, post, goal, portfolio, announcement, org_chart, chat (a group chat: `id` is the conversation). */
 export type NexusRestoreOpen = { type: string; id: string; projectId?: string; date?: string };
 
 export type NexusAuditRestoreInfo = {
@@ -2285,6 +2292,12 @@ export const nexusApi = {
       method: "DELETE",
       body: JSON.stringify({ userId }),
     }),
+  /**
+   * Delete a GROUP (servers since 9 Oct 2026): Manager and above, or its only member. 400 NOT_A_GROUP
+   * for a DM or a project room, 403 MANAGER_REQUIRED otherwise. Restorable from Control Room → Audit.
+   */
+  deleteConversation: (id: string) =>
+    apiFetch<{ ok: boolean; conversationId: string; members: number; messages: number }>(`/api/conversations/${id}`, { method: "DELETE" }),
   /** The group info screen: members, permissions, media counts (servers since 8 Oct 2026). */
   conversationInfo: (id: string) => apiFetch<NexusConversationInfo>(`/api/conversations/${id}/info`),
   conversationMedia: (id: string, type: NexusChatMediaType, cursor?: string | null) => {
