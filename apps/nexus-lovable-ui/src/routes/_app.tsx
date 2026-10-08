@@ -16,6 +16,7 @@ import { XpPenaltyModal } from "@/components/XpPenaltyModal";
 import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
 import { ChatUnreadTitle } from "@/lib/chat-unread";
+import { VaultUploadPanel } from "@/components/vault/VaultUploadPanel";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -117,6 +118,8 @@ function AppLayout() {
         <AppStoreModal />
         <XpPenaltyModal />
         <PhoneNumberPrompt />
+        {/* Z Vault uploads: here, above every route, so they keep going wherever the person goes. */}
+        <VaultUploadPanel />
         {/* "(3) NEXUS Phaëthon" in the browser tab while chats are unread. */}
         <ChatUnreadTitle />
       </SidebarProvider>

@@ -1982,10 +1982,56 @@ export async function downloadFile(path: string, fallbackName: string) {
 const UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
 const UPLOAD_CHUNK_THRESHOLD = 20 * 1024 * 1024; // below this, one request is simpler and faster
 
+/** What an upload can be told besides the file: a way to stop it, and progress in bytes rather than
+ *  percent (the Vault's upload panel shows "12.4 MB of 40.1 MB"). Both optional. */
+export type UploadControl = {
+  signal?: AbortSignal;
+  /** Bytes of the FILE sent so far (not of the multipart body around it). */
+  onBytes?: (sent: number) => void;
+};
+
+/** The error a stopped upload rejects with; `isAbort` recognises it. */
+function abortError(): DOMException {
+  return new DOMException("Upload cancelled", "AbortError");
+}
+export function isAbort(e: unknown): boolean {
+  return e instanceof DOMException && e.name === "AbortError";
+}
+
+/** One XHR upload that a signal can stop. Shared by the single-shot Vault upload and replace. */
+function xhrUpload<T>(url: string, fd: FormData, file: File, onProgress: (pct: number) => void, control?: UploadControl): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (control?.signal?.aborted) { reject(abortError()); return; }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      onProgress(Math.round((e.loaded / e.total) * 100));
+      control?.onBytes?.(Math.min(file.size, Math.round((e.loaded / e.total) * file.size)));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText) as T); } catch { reject(new ApiError(0, "Upload failed.", null)); }
+      } else {
+        let msg = "Upload failed.";
+        let payload: unknown = null;
+        try { payload = JSON.parse(xhr.responseText); msg = String((payload as { error?: string }).error || msg); } catch { /* non-JSON */ }
+        reject(new ApiError(xhr.status, msg, payload));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload failed."));
+    xhr.onabort = () => reject(abortError());
+    control?.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(fd);
+  });
+}
+
 function uploadChunked<T extends { id?: string }>(
   file: File,
   params: Record<string, string>,
   onProgress: (pct: number) => void,
+  control?: UploadControl,
 ): Promise<T> {
   const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_SIZE);
   const uploadId = ((typeof crypto !== "undefined" && "randomUUID" in crypto)
@@ -2008,11 +2054,14 @@ function uploadChunked<T extends { id?: string }>(
         mime: file.type || "application/octet-stream",
         ...params,
       });
+      if (control?.signal?.aborted) { reject(abortError()); return; }
       const xhr = new XMLHttpRequest();
       xhr.open("POST", `/api/attachments/chunk?${qs.toString()}`);
       xhr.withCredentials = true;
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) onProgress(Math.min(99, Math.round(((baseBytes + e.loaded) / file.size) * 100)));
+        if (!e.lengthComputable) return;
+        onProgress(Math.min(99, Math.round(((baseBytes + e.loaded) / file.size) * 100)));
+        control?.onBytes?.(Math.min(file.size, baseBytes + e.loaded));
       };
       xhr.onload = () => {
         let body: (T & { error?: string }) | null = null;
@@ -2020,6 +2069,8 @@ function uploadChunked<T extends { id?: string }>(
         resolve({ status: xhr.status, body });
       };
       xhr.onerror = () => reject(new Error("network"));
+      xhr.onabort = () => reject(abortError());
+      control?.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
       xhr.send(blob);
     });
 
@@ -2035,9 +2086,10 @@ function uploadChunked<T extends { id?: string }>(
           if (res.status === 409 || res.status === 429) throw new Error(`retry ${res.status}`);
           // Other 4xx is permanent (bad request / target gone / too big / over quota) → surface it.
           if (res.status >= 400 && res.status < 500) throw new ApiError(res.status, res.body?.error || "Upload rejected by server.", null);
+          if (attempt >= 3) throw new ApiError(res.status, res.body?.error || `Server error (${res.status}).`, null);
           throw new Error(`server ${res.status}`); // 5xx → retryable
         } catch (err) {
-          if (err instanceof ApiError) throw err;
+          if (err instanceof ApiError || isAbort(err)) throw err;
           if (attempt >= 3) throw new ApiError(0, "Upload failed (connection dropped). Try again.", null);
           await new Promise((r) => setTimeout(r, 500 * attempt));
         }
@@ -2658,59 +2710,31 @@ export const nexusApi = {
 
   // Small files go single-shot; anything larger rides the shared chunked transport with target=vault,
   // which is what makes the browser ceiling match the phone's instead of stopping at 640MB.
-  vaultUpload: (file: File, parentId: string | null, onProgress: (pct: number) => void): Promise<VaultItem> => {
+  vaultUpload: (file: File, parentId: string | null, onProgress: (pct: number) => void, control?: UploadControl): Promise<VaultItem> => {
     if (file.size <= UPLOAD_CHUNK_THRESHOLD) {
-      return new Promise<VaultItem>((resolve, reject) => {
-        const fd = new FormData();
-        fd.set("file", file);
-        if (parentId) fd.set("parentId", parentId);
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/vault/upload");
-        xhr.withCredentials = true;
-        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try { resolve(JSON.parse(xhr.responseText) as VaultItem); } catch { reject(new ApiError(0, "Upload failed.", null)); }
-          } else {
-            let msg = "Upload failed.";
-            try { msg = String(JSON.parse(xhr.responseText).error || msg); } catch { /* non-JSON */ }
-            reject(new ApiError(xhr.status, msg, null));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Upload failed."));
-        xhr.send(fd);
-      });
+      const fd = new FormData();
+      fd.set("file", file);
+      if (parentId) fd.set("parentId", parentId);
+      return xhrUpload<VaultItem>("/api/vault/upload", fd, file, onProgress, control);
     }
-    return uploadChunked<VaultItem>(file, { target: "vault", ...(parentId ? { parentId } : {}) }, onProgress);
+    return uploadChunked<VaultItem>(file, { target: "vault", ...(parentId ? { parentId } : {}) }, onProgress, control);
   },
 
   // Replace file… (9 Oct 2026): new bytes for the same item — same id, same links. Small files go to
   // /api/vault/items/<id>/replace; larger ones ride the chunked transport with `replaceItemId`.
-  vaultReplace: (itemId: string, file: File, onProgress: (pct: number) => void): Promise<VaultItem> => {
+  vaultReplace: (itemId: string, file: File, onProgress: (pct: number) => void, control?: UploadControl): Promise<VaultItem> => {
     if (file.size <= UPLOAD_CHUNK_THRESHOLD) {
-      return new Promise<VaultItem>((resolve, reject) => {
-        const fd = new FormData();
-        fd.set("file", file);
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `/api/vault/items/${encodeURIComponent(itemId)}/replace`);
-        xhr.withCredentials = true;
-        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try { resolve(JSON.parse(xhr.responseText) as VaultItem); } catch { reject(new ApiError(0, "Upload failed.", null)); }
-          } else {
-            let msg = "Upload failed.";
-            let payload: unknown = null;
-            try { payload = JSON.parse(xhr.responseText); msg = String((payload as { error?: string }).error || msg); } catch { /* non-JSON */ }
-            reject(new ApiError(xhr.status, msg, payload));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Upload failed."));
-        xhr.send(fd);
-      });
+      const fd = new FormData();
+      fd.set("file", file);
+      return xhrUpload<VaultItem>(`/api/vault/items/${encodeURIComponent(itemId)}/replace`, fd, file, onProgress, control);
     }
-    return uploadChunked<VaultItem>(file, { target: "vault", replaceItemId: itemId }, onProgress);
+    return uploadChunked<VaultItem>(file, { target: "vault", replaceItemId: itemId }, onProgress, control);
   },
+
+  /** How many files and bytes a multi-item zip would hold, or a 413 ZIP_TOO_BIG — asked before the
+   *  download itself, which the browser makes as a plain form post (see vaultZipDownload). */
+  vaultZipCheck: (ids: string[]) =>
+    apiFetch<{ ok: true; files: number; bytes: number }>("/api/vault/zip?check=1", { method: "POST", body: JSON.stringify({ ids }) }),
 
   // --- Attachments ---
   taskAttachments: (taskId: string) => apiFetch<NexusAttachment[]>(`/api/attachments?taskId=${encodeURIComponent(taskId)}`),
