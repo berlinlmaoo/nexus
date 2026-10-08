@@ -288,11 +288,16 @@ extension APIClient {
         }
         // A share link's reason, or a refusal's code, in the app's language (since 9 Oct 2026). The
         // server's own sentence is Indonesian whatever the app is set to.
+        //
+        // `.http` with the sentence rather than `.transport` (9 Oct 2026): the text shown is the same,
+        // but the status survives, and the upload panel words a full vault (507), a locked or vanished
+        // folder (403/404) or a file too big (413) from it. `.transport` also read as "nobody
+        // answered" to `nobodyAnswered`, which a refusal is not.
         if let key = (obj["reason"] as? String) ?? (obj["code"] as? String), let text = vaultReasonText[key] {
-            return .transport(T(text))
+            return .http(status, T(text))
         }
         if let message = obj["error"] as? String, !message.isEmpty {
-            return .transport(message)
+            return .http(status, message)
         }
         return .http(status, nil)
     }

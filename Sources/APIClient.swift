@@ -2252,7 +2252,9 @@ struct APIClient {
     /// "Server error (400)", which is why an upload that wants to be understood does not use it.
     private static func refusal(_ body: Data, status: Int) -> APIError {
         let said = try? JSONDecoder().decode(ServerError.self, from: body)
-        return .transport(said?.error ?? "\(T("Upload failed. Try again.")) (\(status))")
+        // `.http`, not `.transport`: the same sentence on screen, and the status kept for whoever
+        // needs to tell a full vault (507) from a locked folder (403) — the vault's upload panel does.
+        return .http(status, said?.error ?? "\(T("Upload failed. Try again.")) (\(status))")
     }
 
     // MARK: - Attachments

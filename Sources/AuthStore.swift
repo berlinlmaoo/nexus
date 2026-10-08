@@ -134,6 +134,9 @@ final class AuthStore {
         // the next person to sign in on the same phone opens it onto somebody else's questions —
         // and onto the file they attached to one.
         GideonChat.shared.reset()
+        // Nor an upload queue: every request reads the session afresh, so a file still queued would
+        // go up under whoever signs in next. Cancelled, and the copies made for it deleted.
+        VaultUploads.shared.reset()
         // A queued check-in is NOT cleared here: see `signOut` / `holdForSignIn` / `keepOnly`.
         AttendancePresence.stop()
         // Location stops with the session, and whatever was not uploaded goes with it: the next

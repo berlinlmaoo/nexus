@@ -47,6 +47,10 @@ struct RootView: View {
                 // GIDEON first, announcements second: the overlay added last draws on top, and an
                 // announcement must never end up behind a floating button.
                 .overlay(alignment: .bottomLeading) { GideonLauncher() }
+                // Z Vault uploads (owner, 9 Oct 2026): the centred card, or its pill above the tab bar,
+                // over whatever screen the person has moved on to. An overlay, not a sheet, so the app
+                // underneath stays usable; above GIDEON, below an announcement.
+                .overlay { VaultUploadOverlay() }
                 // Above the whole app rather than inside a tab: an announcement is not a screen you
                 // navigate to, and it must reach somebody wherever they happen to be standing.
                 .overlay { AnnouncementModal() }
