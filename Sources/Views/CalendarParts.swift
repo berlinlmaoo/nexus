@@ -567,10 +567,16 @@ private struct CalMonthGridBody: View {
                 HStack(spacing: 3) {
                     ForEach(shown, id: \.unitId) { dot in
                         let tint = calUnitColor(g.ix.byId[dot.unitId])
-                        Circle()
-                            .fill(dot.filled ? tint : Color.clear)
-                            .overlay(Circle().strokeBorder(tint, lineWidth: 1.5))
-                            .frame(width: 6, height: 6)
+                        // Filled = something still to do; a tick = nothing left (done or status-less).
+                        // Owner, 8 Oct 2026: a ring read as "to do" beside the task list's ○.
+                        if dot.filled {
+                            Circle().fill(tint).frame(width: 6, height: 6)
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: CalType.size(7), weight: .black))
+                                .foregroundStyle(tint)
+                                .frame(width: 8, height: 8)
+                        }
                     }
                     if dots.count > shown.count {
                         Text("+\(dots.count - shown.count)").font(NXFont.text(CalType.size(11), .bold)).foregroundStyle(NX.mutedFg)

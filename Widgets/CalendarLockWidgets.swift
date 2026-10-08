@@ -137,7 +137,7 @@ struct CalendarWeekStripView: View {
     }
 }
 
-/// A weekday letter over 0–3 dots: one per task, filled while anything that day is still to do, hollow
+/// A weekday letter over 0–3 dots: one per task, filled while anything that day is still to do, a tick
 /// once all of it is done. Today's letter is cut out of a filled pill. VoiceOver hears the day in
 /// words — "Today, Thursday 8 October, 3 tasks" — rather than a letter and some dots.
 struct CalendarStripDay: View {
@@ -189,7 +189,8 @@ struct CalendarStripDay: View {
         if day.open > 0 {
             Circle().fill(Color.primary).frame(width: 4, height: 4)
         } else {
-            Circle().stroke(Color.primary, lineWidth: 1).frame(width: 4, height: 4)
+            Image(systemName: "checkmark").font(.system(size: 5, weight: .black)).foregroundStyle(Color.primary)
+                .frame(width: 5, height: 5)
         }
     }
 }

@@ -323,7 +323,7 @@ private struct WCalDayRow: View {
     }
 }
 
-/// Filled = something still to do; ring = only done or status-less tasks (`CalDot.filled`).
+/// Filled = something still to do; a tick = only done or status-less tasks (`CalDot.filled`).
 private struct WCalDotMark: View {
     let color: Color
     let filled: Bool
@@ -331,10 +331,13 @@ private struct WCalDotMark: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(filled ? color : Color.clear)
-            Circle().strokeBorder(color, lineWidth: 1.5)
+            if filled {
+                Circle().fill(color)
+            } else {
+                Image(systemName: "checkmark").font(.system(size: size, weight: .black)).foregroundStyle(color)
+            }
         }
-        .frame(width: size, height: size)
+        .frame(width: size + 1, height: size + 1)
     }
 }
 

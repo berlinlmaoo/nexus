@@ -982,7 +982,12 @@ struct CalendarView: View {
     /// The key draws a neutral sample: the real dots are each division's own colour.
     private func legendKey(filled: Bool, _ text: String) -> some View {
         HStack(spacing: 5) {
-            Circle().fill(filled ? NX.mutedFg : Color.clear).overlay(Circle().strokeBorder(NX.mutedFg, lineWidth: 1.5)).frame(width: 7, height: 7)
+            if filled {
+                Circle().fill(NX.mutedFg).frame(width: 7, height: 7)
+            } else {
+                Image(systemName: "checkmark").font(.system(size: CalType.size(8), weight: .black))
+                    .foregroundStyle(NX.mutedFg).frame(width: 9, height: 9)
+            }
             Text(text)
         }
     }
