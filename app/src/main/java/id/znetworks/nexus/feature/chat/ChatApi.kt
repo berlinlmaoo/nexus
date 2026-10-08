@@ -46,6 +46,10 @@ class ChatApi(private val api: ApiClient) {
         api.send(Request.Builder().url(api.url("/api/conversations/$id")).patch(buildJsonObject {
             name?.let { put("name", it.trim()) }; put("description", description?.trim()?.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
         }.toString().toJsonBody()).build(), JsonObject.serializer())
+    /** Delete a GROUP with its members and messages (restorable from Control Room › Audit; DELETE-GROUP). */
+    suspend fun deleteGroup(id: String) =
+        api.send(Request.Builder().url(api.url("/api/conversations/$id")).delete().build(), JsonObject.serializer())
+
     /** Remove someone (Manager+), or leave when [userId] is you (anyone). */
     suspend fun removeMember(id: String, userId: String) =
         api.send(Request.Builder().url(api.url("/api/conversations/$id/members")).delete(buildJsonObject { put("userId", userId) }.toString().toJsonBody()).build(), JsonObject.serializer())

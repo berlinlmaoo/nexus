@@ -35,11 +35,32 @@ object ChatInfoLogic {
             h.status == 403 && h.code == "MANAGER_REQUIRED" -> R.string.chat_manager_required
             h.status == 403 -> R.string.ci_err_gone_member
             h.status == 404 && h.body != null -> R.string.ci_err_gone_chat
-            h.status == 400 && h.serverMessage?.contains("at least one member") == true -> R.string.ci_err_last
+            lastMember(e) -> R.string.ci_err_last
             h.code == "BAD_DESCRIPTION" -> R.string.ci_err_desc_len
             else -> generic
         }
     }
+
+    /** Leaving as the only member: LAST_MEMBER (9 Oct), or the older sentence without a code. */
+    fun lastMember(e: Throwable) = (e as? ApiError.Http)?.let { it.status == 400 && (it.code == "LAST_MEMBER" || it.serverMessage?.contains("at least one member") == true) } == true
+
+    /** How a DELETE of the group ended, for the screen. */
+    enum class DeleteOutcome { GONE, NOT_ALLOWED, NOT_A_GROUP, UNSUPPORTED, FAILED }
+    fun deleteOutcome(e: Throwable): DeleteOutcome {
+        val h = e as? ApiError.Http ?: return DeleteOutcome.FAILED
+        return when {
+            // No such route yet (405, or the framework's own HTML 404): the button goes, with a note.
+            h.status == 405 || missingRoute(e) -> DeleteOutcome.UNSUPPORTED
+            // A JSON 404: already deleted (by someone else, a moment ago) — as good as done.
+            h.status == 404 -> DeleteOutcome.GONE
+            h.status == 403 && h.code == "MANAGER_REQUIRED" -> DeleteOutcome.NOT_ALLOWED
+            h.status == 400 && h.code == "NOT_A_GROUP" -> DeleteOutcome.NOT_A_GROUP
+            else -> DeleteOutcome.FAILED
+        }
+    }
+
+    /** You alone in a GROUP: no Exit, a muted line instead (and Delete when allowed). */
+    fun onlyMember(info: ChatInfo) = info.conversation.type == "GROUP" && info.members.size == 1 && info.members[0].isMe
 
     /** The viewer first (shown as "You"), then the server's order (admins first, A–Z). */
     fun ordered(members: List<ChatInfoMember>) = members.filter { it.isMe } + members.filterNot { it.isMe }

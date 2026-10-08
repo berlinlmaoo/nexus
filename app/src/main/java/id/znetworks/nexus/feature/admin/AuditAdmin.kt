@@ -103,7 +103,9 @@ import java.util.Locale
 @Serializable data class AuditRestoreCounts(val lists: Int = 0, val tasks: Int = 0, val files: Int = 0, val comments: Int = 0, val sheets: Int = 0, val members: Int = 0,
                                             val items: Int = 0, val rows: Int = 0, val cells: Int = 0, val submissions: Int = 0, val values: Int = 0,
                                             val receipts: Int = 0, val payments: Int = 0, val milestones: Int = 0, val pages: Int = 0, val people: Int = 0,
-                                            val projects: Int = 0, val folders: Int = 0, val units: Int = 0, val points: Int = 0)
+                                            val projects: Int = 0, val folders: Int = 0, val units: Int = 0, val points: Int = 0,
+                                            /** A deleted group chat's messages, log lines included (DELETE-GROUP). */
+                                            val messages: Int = 0)
 @Serializable data class AuditRestoreDetail(val available: Boolean = false, val restoredAt: String? = null, val dataAsOf: String? = null, val fromBackup: Boolean? = null,
                                             val restoredBy: AuditUser? = null, val counts: AuditRestoreCounts = AuditRestoreCounts(),
                                             val soft: Boolean? = null, val entityLabel: String? = null, @Serializable(with = OpenField::class) val open: JsonElement = OpenField.ABSENT)

@@ -84,7 +84,9 @@ data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMo
 @Serializable data class ChatRef(val id: String? = null, val name: String? = null)
 @Serializable data class ChatInfoConversation(val id: String, val type: String = "GROUP", val name: String? = null, val description: String? = null,
                                               val projectId: String? = null, val createdAt: String? = null, val createdBy: ChatRef? = null,
-                                              val memberCount: Int = 0, val mutedUntil: String? = null, val canManageMembers: Boolean = false, val canEdit: Boolean = false)
+                                              val memberCount: Int = 0, val mutedUntil: String? = null, val canManageMembers: Boolean = false, val canEdit: Boolean = false,
+                                              /** DELETE-GROUP (9 Oct): may delete this GROUP. Absent on older servers → no Delete. */
+                                              val canDelete: Boolean = false)
 @Serializable data class ChatInfoMember(val userId: String, val name: String? = null, val avatar: String? = null, val isMe: Boolean = false,
                                         val isAdmin: Boolean = false, val deactivatedAt: String? = null)
 @Serializable data class ChatMediaCounts(val photos: Int = 0, val links: Int = 0, val docs: Int = 0) { val total get() = photos + links + docs }

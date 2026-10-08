@@ -2347,4 +2347,23 @@
         <item quantity="one">%d member</item>
         <item quantity="other">%d members</item>
     </plurals>
+    <!-- Delete group (Berlin, 9 Oct; DELETE-GROUP) -->
+    <string name="dg_delete">Delete group</string>
+    <string name="dg_delete_q">Delete “%1$s”?</string>
+    <string name="dg_delete_body">Its messages and members go with it. It can be restored from Control Room → Audit.</string>
+    <string name="dg_alone">You\'re the only member left, so you can\'t leave. Delete the group instead.</string>
+    <string name="dg_err_failed">Couldn\'t delete this group.</string>
+    <string name="dg_err_manager">Only managers and above can delete this group.</string>
+    <string name="dg_err_not_group">Only group chats can be deleted.</string>
+    <string name="dg_unsupported">Deleting groups comes with the next server update.</string>
+    <string name="dg_deleted_title">This group was deleted</string>
+    <string name="dg_deleted_body">Its messages are gone for everyone in it. A manager can restore it from Control Room → Audit.</string>
+    <string name="dg_back_to_chats">Back to chats</string>
+    <string name="au_rb_chat_group">Restore group chat</string>
+    <string name="au_note_chat_group">It shows in its members\' chat lists again. Nothing is posted in the chat about it.</string>
+    <string name="au_open_chat">Open chat</string>
+    <plurals name="au_n_messages">
+        <item quantity="one">%d message</item>
+        <item quantity="other">%d messages</item>
+    </plurals>
 </resources>

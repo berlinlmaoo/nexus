@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
@@ -114,6 +115,11 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
     var picked by remember { mutableStateOf<ChatInfoMember?>(null) }
     var confirmRemove by remember { mutableStateOf<ChatInfoMember?>(null) }
     var confirmExit by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    /** Exit was just refused with LAST_MEMBER: show the only-member state even if the list said otherwise. */
+    var lastMember by remember { mutableStateOf(false) }
+    /** The server has no DELETE yet (405 / no route): the row goes, a note says why. */
+    var deleteUnsupported by remember { mutableStateOf(false) }
 
     suspend fun load() {
         try { info = api.info(id); legacy = false; loadError = null }
@@ -221,12 +227,13 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
                         }
                     }
                 }
-                // Leave (a GROUP only; a project room follows the project, a DM has nothing to leave).
-                if (isGroup) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp))
-                    .clickable(enabled = !busy) { confirmExit = true }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = c.dangerText); Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.ci_exit), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText)
-                }
+                // Leave (a GROUP only; a project room follows the project, a DM has nothing to leave). Alone in it:
+                // no Exit, a muted line instead (DELETE-GROUP).
+                val alone = isGroup && (lastMember || ChatInfoLogic.onlyMember(x))
+                if (isGroup && !alone) DangerRow(Icons.AutoMirrored.Filled.ExitToApp, stringResource(R.string.ci_exit), !busy) { confirmExit = true }
+                if (alone) Text(stringResource(R.string.dg_alone), fontSize = 12.sp, color = c.mutedFg)
+                if (isGroup && cv.canDelete && !deleteUnsupported) DangerRow(Icons.Filled.Delete, stringResource(R.string.dg_delete), !busy) { confirmDelete = true }
+                if (deleteUnsupported) Text(stringResource(R.string.dg_unsupported), fontSize = 12.sp, color = c.mutedFg)
             }
         }
     }
@@ -262,9 +269,47 @@ fun ChatInfoScreen(id: String, onBack: () -> Unit, onOpenChat: (String) -> Unit,
         text = { Text(stringResource(R.string.ci_exit_body)) },
         confirmButton = { TextButton(onClick = {
             confirmExit = false
-            act(R.string.ci_err_leave) { api.removeMember(id, meId ?: return@act); container.chatEvents.tryEmit(null); container.badges.refresh(); onLeft() }
+            scope.launch {
+                busy = true; notice = null
+                try { api.removeMember(id, meId ?: return@launch); container.chatEvents.tryEmit(null); container.badges.refresh(); onLeft() }
+                catch (e: ApiError) {
+                    // The last one in: not an error, the screen switches to "delete it instead".
+                    if (ChatInfoLogic.lastMember(e)) lastMember = true else notice = res.getString(ChatInfoLogic.errorRes(e, R.string.ci_err_leave))
+                }
+                busy = false
+            }
         }) { Text(stringResource(R.string.ci_exit), color = c.dangerText) } },
         dismissButton = { TextButton(onClick = { confirmExit = false }) { Text(stringResource(R.string.cancel)) } })
+    // A centred dialog, not a bottom sheet (DELETE-GROUP).
+    if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(stringResource(R.string.dg_delete_q, cv?.name ?: "")) },
+        text = { Text(stringResource(R.string.dg_delete_body)) },
+        confirmButton = { TextButton(onClick = {
+            confirmDelete = false
+            scope.launch {
+                busy = true; notice = null
+                val outcome = try { api.deleteGroup(id); ChatInfoLogic.DeleteOutcome.GONE } catch (e: ApiError) { ChatInfoLogic.deleteOutcome(e) }
+                busy = false
+                when (outcome) {
+                    // Gone (or already gone): back past the thread to the list, exactly like Exit.
+                    ChatInfoLogic.DeleteOutcome.GONE -> { container.chatEvents.tryEmit(null); container.badges.refresh(); onLeft() }
+                    ChatInfoLogic.DeleteOutcome.NOT_ALLOWED -> { notice = res.getString(R.string.dg_err_manager); load() }
+                    ChatInfoLogic.DeleteOutcome.NOT_A_GROUP -> notice = res.getString(R.string.dg_err_not_group)
+                    ChatInfoLogic.DeleteOutcome.UNSUPPORTED -> deleteUnsupported = true
+                    ChatInfoLogic.DeleteOutcome.FAILED -> notice = res.getString(R.string.dg_err_failed)
+                }
+            }
+        }) { Text(stringResource(R.string.dg_delete), color = c.dangerText, fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } })
+}
+
+@Composable
+private fun DangerRow(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+    val c = Nx.colors
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp))
+        .clickable(enabled = enabled, onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = c.dangerText); Spacer(Modifier.width(10.dp))
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText)
+    }
 }
 
 @Composable

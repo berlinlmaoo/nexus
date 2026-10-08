@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.chat
 
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.filled.PersonAdd
 import id.znetworks.nexus.feature.projects.RosterMember
 import id.znetworks.nexus.feature.projects.ProjectsApi
@@ -140,6 +142,8 @@ data class ThreadState(
     val anchorId: String? = null,
     /** After a jump, newer messages are still coming in through the polls. */
     val newerPending: Boolean = false,
+    /** The group was deleted (here or elsewhere, DELETE-GROUP): the thread shows that instead, and stops polling. */
+    val deleted: Boolean = false,
 )
 
 class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -170,9 +174,16 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
             _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.value.messages), hasMore = r.value.hasMore, nextCursor = r.value.nextCursor,
                 loading = false, savedAt = r.savedAtMillis) }
         } catch (e: ApiError) {
+            if (goneGroup(e)) return markDeleted()
             _state.update { it.copy(loading = false, notice = if (it.messages.isEmpty()) e.describe(res) else it.notice) }
         }
     }
+
+    /** A JSON 404 for a group (or a room this phone doesn't know yet): it was deleted. */
+    private fun goneGroup(e: ApiError) = (e as? ApiError.Http)?.let { it.status == 404 && it.body != null } == true &&
+        (_state.value.conversation?.type ?: "GROUP") == "GROUP"
+
+    fun markDeleted() { _state.update { it.copy(deleted = true, loading = false) }; ChatNotifier.cancel(getApplication(), id) }
 
     /**
      * Only what is new (`after=<last id>`), merged by id: nothing held is ever dropped. An older server that
@@ -197,7 +208,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 }
             }
             _state.update { it.copy(messages = merged, loading = false, savedAt = null) }
-        } catch (_: ApiError) { /* a failed poll keeps what is on screen; the next one tries again */ }
+        } catch (e: ApiError) { if (goneGroup(e)) markDeleted() /* else a failed poll keeps what is on screen; the next one tries again */ }
     }
 
     /**
@@ -415,7 +426,9 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             ChatNotifier.cancel(context, vm.id)
             try {
                 launch { container.chatEvents.collect { cid -> if (cid == null || cid == vm.id) { vm.poll(); vm.markReadVisible() } } }
-                while (true) { vm.poll(); vm.markReadVisible(); delay(id.znetworks.nexus.core.realtime.RealtimeEvents.interval(container.realtime.connected, ChatApi.THREAD_POLL_LIVE_MS, ChatApi.THREAD_POLL_MS)) }
+                // Deleted elsewhere (conversation-updated, reason "deleted"): close it with a note.
+                launch { container.realtime.events.collect { e -> if (id.znetworks.nexus.core.realtime.RealtimeEvents.groupDeleted(e, vm.id)) vm.markDeleted() } }
+                while (!vm.state.value.deleted) { vm.poll(); vm.markReadVisible(); delay(id.znetworks.nexus.core.realtime.RealtimeEvents.interval(container.realtime.connected, ChatApi.THREAD_POLL_LIVE_MS, ChatApi.THREAD_POLL_MS)) }
             } finally {
                 if (ChatPresence.openConversationId == vm.id) ChatPresence.openConversationId = null
             }
@@ -432,7 +445,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             // The header opens the chat's info, like WhatsApp (SYSTEM-MESSAGES part 2).
             val infoHint = stringResource(R.string.ci_open_info)
-            Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = conv != null, onClickLabel = infoHint, onClick = onOpenInfo)) {
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = conv != null && !s.deleted, onClickLabel = infoHint, onClick = onOpenInfo)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(conv?.title(vm.meId) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -441,10 +454,10 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 if (conv != null && conv.type != "DM") Text(stringResource(R.string.chat_members_n, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
             }
             // Add people: project rooms through the project, a GROUP for Manager and above (ChatRules).
-            if (ChatRules.showsAddPeople(conv)) IconButton(onClick = { vm.loadRoster(); addingPeople = true }, enabled = !s.adding) {
+            if (ChatRules.showsAddPeople(conv) && !s.deleted) IconButton(onClick = { vm.loadRoster(); addingPeople = true }, enabled = !s.adding) {
                 Icon(Icons.Filled.PersonAdd, stringResource(R.string.chat_add_people), tint = c.violetText)
             }
-            if (conv != null && (conv.type == "GROUP" || s.muteSupported)) Box {
+            if (conv != null && !s.deleted && (conv.type == "GROUP" || s.muteSupported)) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, { menu = false }) {
                     if (conv.type == "GROUP") DropdownMenuItem(text = { Text(stringResource(R.string.chat_rename)) }, onClick = { menu = false; renaming = true })
@@ -461,6 +474,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                 }
             }
         }
+        if (s.deleted) { DeletedGroup(onBack); return@Column }
         LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (s.hasMore) item(key = "earlier") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -693,6 +707,22 @@ internal fun SystemPill(m: Message, meId: String?) {
             modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(10.dp)).background(c.muted)
                 .clickable { showTime = !showTime }.padding(horizontal = 10.dp, vertical = 5.dp))
         if (showTime) Text(chatTime(m.createdAt), fontSize = 10.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
+    }
+}
+
+/** The group was deleted (DELETE-GROUP): instead of its messages and composer. */
+@Composable
+private fun ColumnScope.DeletedGroup(onBack: () -> Unit) {
+    val c = Nx.colors
+    Column(Modifier.weight(1f).fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Icon(Icons.Filled.Delete, null, tint = c.mutedFg, modifier = Modifier.size(40.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.dg_deleted_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(stringResource(R.string.dg_deleted_body), fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp))
+        Spacer(Modifier.height(16.dp))
+        androidx.compose.material3.Button(onClick = onBack) { Text(stringResource(R.string.dg_back_to_chats)) }
     }
 }
 

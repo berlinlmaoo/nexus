@@ -418,7 +418,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     RestoreTarget.Kind.DOC -> "doc/${t.id}"; RestoreTarget.Kind.FOLDER -> "folder/${t.id}"
                     RestoreTarget.Kind.ATTENDANCE -> "attendance"; RestoreTarget.Kind.ROOMS -> "rooms"
                     RestoreTarget.Kind.CALENDAR -> t.date?.let { "calendar?date=$it" } ?: "calendar"
-                    RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"
+                    RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"; RestoreTarget.Kind.CHAT -> "chat/${t.id}"
                 }) }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }

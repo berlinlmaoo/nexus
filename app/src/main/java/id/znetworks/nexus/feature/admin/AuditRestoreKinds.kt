@@ -31,7 +31,7 @@ object OpenField : kotlinx.serialization.KSerializer<JsonElement> {
 
 /** A screen this app has for "Open …". */
 data class RestoreTarget(val kind: Kind, val id: String? = null, val date: String? = null) {
-    enum class Kind { PROJECT, TASK, DOC, FOLDER, ATTENDANCE, ROOMS, CALENDAR, VAULT, WIRE }
+    enum class Kind { PROJECT, TASK, DOC, FOLDER, ATTENDANCE, ROOMS, CALENDAR, VAULT, WIRE, CHAT }
 }
 
 object RestoreKinds {
@@ -43,6 +43,7 @@ object RestoreKinds {
         "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
         "vault_file", "vault_folder", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
         "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus",
+        "chat_group", // DELETE-GROUP, 9 Oct
     )
     private val VAULT = setOf("vault_file", "vault_folder", "vault_trash")
 
@@ -63,6 +64,7 @@ object RestoreKinds {
         "org_unit" -> R.string.au_rb_unit; "sheet_rows" -> R.string.au_rb_rows; "form_submission" -> R.string.au_rb_submission
         "attendance_record" -> R.string.au_rb_attendance_record; "project_sheet_column" -> R.string.au_rb_column; "post" -> R.string.au_rb_post
         "quest" -> R.string.au_rb_quest; "calendar_event" -> R.string.au_rb_event; "dayoff_bonus" -> R.string.au_rb_extra_day_off
+        "chat_group" -> R.string.au_rb_chat_group
         else -> R.string.au_restore
     }
 
@@ -77,6 +79,7 @@ object RestoreKinds {
         in VAULT -> if (soft) R.string.au_note_vault_soft else R.string.au_note_vault_purged
         "post" -> R.string.au_note_post; "quest" -> R.string.au_note_quest; "calendar_event" -> R.string.au_note_event
         "dayoff_bonus" -> R.string.au_note_bonus; "attendance_office" -> if (soft) R.string.au_note_office else null
+        "chat_group" -> R.string.au_note_chat_group
         else -> null
     }
 
@@ -123,6 +126,7 @@ object RestoreKinds {
                 (if (type == "task") R.plurals.au_n_subtasks else R.plurals.au_n_tasks) to c.tasks,
                 R.plurals.au_n_lists to c.lists, R.plurals.au_n_files to c.files, R.plurals.au_n_comments to c.comments,
                 R.plurals.au_n_sheets to c.sheets, R.plurals.au_n_members to c.members)
+            type == "chat_group" -> listOf(R.plurals.au_n_messages to c.messages, R.plurals.au_n_members to c.members)
             type in VAULT || type !in RESTORABLE -> if (c.items > 1) listOf(R.plurals.au_n_items to c.items) else emptyList()
             else -> listOf(
                 R.plurals.au_n_rows to c.rows, R.plurals.au_n_values to c.cells, R.plurals.au_n_tasks to c.tasks, R.plurals.au_n_lists to c.lists,
@@ -160,6 +164,7 @@ object RestoreKinds {
             "room_booking" -> RestoreTarget(RestoreTarget.Kind.ROOMS, o.id)
             "calendar", "calendar_event" -> RestoreTarget(RestoreTarget.Kind.CALENDAR, date = o.date)
             "post" -> RestoreTarget(RestoreTarget.Kind.WIRE, o.id)
+            "chat" -> withId(RestoreTarget.Kind.CHAT)
             else -> o.projectId?.let { RestoreTarget(RestoreTarget.Kind.PROJECT, it) } // a sheet, page, form, P&L…: its project
         }
     }
@@ -169,7 +174,7 @@ object RestoreKinds {
         RestoreTarget.Kind.DOC -> R.string.au_open_doc; RestoreTarget.Kind.FOLDER -> R.string.au_open_folder
         RestoreTarget.Kind.ATTENDANCE -> R.string.au_open_attendance; RestoreTarget.Kind.ROOMS -> R.string.au_open_room
         RestoreTarget.Kind.CALENDAR -> R.string.au_open_calendar; RestoreTarget.Kind.VAULT -> R.string.au_open_vault
-        RestoreTarget.Kind.WIRE -> R.string.au_open_wire
+        RestoreTarget.Kind.WIRE -> R.string.au_open_wire; RestoreTarget.Kind.CHAT -> R.string.au_open_chat
     }
 
     /** No copy on a delete: why, for a kind that is restorable today. Null = say nothing (not a restorable kind, or not a delete). */

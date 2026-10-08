@@ -2314,4 +2314,22 @@
     <plurals name="ci_members">
         <item quantity="other">%d anggota</item>
     </plurals>
+    <!-- Delete group (Berlin, 9 Oct; DELETE-GROUP) -->
+    <string name="dg_delete">Hapus grup</string>
+    <string name="dg_delete_q">Hapus “%1$s”?</string>
+    <string name="dg_delete_body">Pesan dan anggotanya ikut terhapus. Grup ini bisa dipulihkan dari Control Room → Audit.</string>
+    <string name="dg_alone">Kamu satu-satunya anggota, jadi tidak bisa keluar. Hapus grupnya saja.</string>
+    <string name="dg_err_failed">Gagal menghapus grup ini.</string>
+    <string name="dg_err_manager">Hanya manager ke atas yang bisa menghapus grup ini.</string>
+    <string name="dg_err_not_group">Hanya grup yang bisa dihapus.</string>
+    <string name="dg_unsupported">Hapus grup baru bisa setelah server diperbarui.</string>
+    <string name="dg_deleted_title">Grup ini sudah dihapus</string>
+    <string name="dg_deleted_body">Pesannya hilang untuk semua anggotanya. Manager bisa memulihkannya dari Control Room → Audit.</string>
+    <string name="dg_back_to_chats">Kembali ke daftar chat</string>
+    <string name="au_rb_chat_group">Pulihkan grup chat</string>
+    <string name="au_note_chat_group">Grupnya muncul lagi di daftar chat anggotanya. Tidak ada pesan yang dikirim soal ini.</string>
+    <string name="au_open_chat">Buka chat</string>
+    <plurals name="au_n_messages">
+        <item quantity="other">%d pesan</item>
+    </plurals>
 </resources>

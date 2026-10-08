@@ -41,6 +41,8 @@ data class RealtimeEvent(
     val folderId: String? = null,
     val conversationId: String? = null,
     val taskId: String? = null,
+    /** conversation-updated: "message" | "read" | "mute" | "membership" | "deleted" (9 Oct). */
+    val reason: String? = null,
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -79,7 +81,7 @@ object RealtimeEvents {
             // { kind: projects|folders|audit, projectId?, folderId? }
             WORKSPACE_CHANGED, AUDIT_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), folderId = o.str("folderId"))
             // { conversationId, lastMessageAt, reason? } / the message itself
-            CONVERSATION_UPDATED, MESSAGE_CREATED -> RealtimeEvent(name, conversationId = o.str("conversationId"))
+            CONVERSATION_UPDATED, MESSAGE_CREATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), reason = o.str("reason"))
             // the task itself / { taskId } / { taskId, comment }
             "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"))
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
@@ -90,6 +92,10 @@ object RealtimeEvents {
 
     /** Fallback polling (ANDROID-REALTIME): rare while the socket is up, today's pace while it is not. */
     fun interval(connected: Boolean, liveMs: Long, fallbackMs: Long) = if (connected) liveMs else fallbackMs
+
+    /** A group deleted (DELETE-GROUP): its room leaves the list, an open thread of it closes. */
+    fun groupDeleted(e: RealtimeEvent, conversationId: String? = null) =
+        e.name == CONVERSATION_UPDATED && e.reason == "deleted" && (conversationId == null || e.conversationId == conversationId)
 
     fun isAudit(e: RealtimeEvent) = e.name == AUDIT_CHANGED || (e.name == WORKSPACE_CHANGED && e.kind == "audit")
     fun isProjectsOrFolders(e: RealtimeEvent) = e.name == WORKSPACE_CHANGED && (e.kind == "projects" || e.kind == "folders")
