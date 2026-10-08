@@ -2219,6 +2219,10 @@ model Conversation {
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
+  /// Group description (8 Oct 2026), shown on the group info screen; ≤ 500 characters, null = none.
+  /// Any member of a GROUP may change it, like the name. DMs and project rooms have none.
+  description String?
+
   members  ConversationMember[]
   messages Message[]
 
@@ -2302,6 +2306,14 @@ model Message {
   replyToId      String?
   replyTo        Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[] @relation("MessageReplies")
+
+  /// "USER" (typed by a person) or "SYSTEM" (8 Oct 2026): a log line the server writes when a group
+  /// changes — "X added Y", "Y left", renamed, created (src/lib/chat-system.ts). On a SYSTEM row userId is
+  /// the person who did it and `content` is an Indonesian sentence for clients that don't know `kind`
+  /// yet. SYSTEM rows never count as unread, never push to the room and cannot be replied to.
+  kind           String   @default("USER")
+  /// SYSTEM rows only: { type, actor: {id,name}, targets?: [{id,name}], name?, previousName? }.
+  event          Json?
 
   @@index([conversationId, createdAt])
   @@index([replyToId])
