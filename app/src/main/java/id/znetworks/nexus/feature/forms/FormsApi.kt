@@ -22,6 +22,18 @@ class FormClosed(message: String) : Exception(message)
 
 class FormsApi(private val context: Context, private val api: ApiClient, private val sessions: SessionStore) {
 
+    // The builder (FORM-BUILDER, 9 Oct): the list's whole rows, edited as they are.
+    suspend fun builderForms(projectId: String): List<BuilderForm> =
+        (api.get("/api/forms?projectId=${URLEncoder.encode(projectId, "UTF-8")}", JsonArray.serializer())).mapNotNull { (it as? JsonObject)?.let(::BuilderForm) }
+    suspend fun createForm(body: JsonObject) = BuilderForm(builderSend("POST", "/api/forms", body))
+    /** Only the keys sent are written: `{ isPublic: false }` alone unpublishes. */
+    suspend fun updateForm(id: String, body: JsonObject) = BuilderForm(builderSend("PATCH", "/api/forms/$id", body))
+    /** 409 `{ submissionCount }` when it has submissions: ask again with the count, then [force]. */
+    suspend fun deleteForm(id: String, force: Boolean) =
+        api.send(Request.Builder().url(api.url("/api/forms/$id" + if (force) "?force=1" else "")).delete().build(), JsonObject.serializer())
+    private suspend fun builderSend(method: String, path: String, body: JsonObject): JsonObject =
+        api.send(Request.Builder().url(api.url(path)).method(method, with(ApiClient) { body.toString().toJsonBody() }).build(), JsonObject.serializer())
+
     suspend fun projectForms(projectId: String) = api.get("/api/forms?projectId=$projectId", ListSerializer(FormSummary.serializer()))
 
     /**

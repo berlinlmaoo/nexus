@@ -187,7 +187,8 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 }
 
 @Composable
-fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, onOpenChat: (String) -> Unit = {}, onOpenForm: (String) -> Unit = {}, onOpenDoc: (String) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
+fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, onOpenChat: (String) -> Unit = {}, onOpenForm: (String) -> Unit = {}, onOpenDoc: (String) -> Unit = {},
+                        /** The form builder: null = a new form (FORM-BUILDER). */ onBuildForm: (String?) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     // Back from settings or a task: what changed there shows here.
@@ -257,12 +258,17 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.FINANCE -> FinanceTab(vm.projectId)
                             ProjectTab.PNL -> PnlTab(vm.projectId)
                             ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
-                            ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm)
+                            ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
                             ProjectTab.CHAT -> id.znetworks.nexus.feature.chat.ProjectChatTab(vm.projectId) { onOpenChat(it); tab = ProjectTab.BOARD }
                         }
                     }
                 }
             }
+        }
+        // On the Forms tab the "+" makes a form, never a task (the iOS bug, FORM-BUILDER).
+        if (s.detail != null && tab == ProjectTab.FORMS) {
+            FloatingActionButton(onClick = { onBuildForm(null) }, containerColor = c.violet, contentColor = Color.White,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.fb_new)) }
         }
         if (s.detail != null && s.lanes.isNotEmpty() && tab.searches) {
             FloatingActionButton(onClick = { createDue = null; creating = true }, containerColor = c.violet, contentColor = Color.White,

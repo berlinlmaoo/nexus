@@ -1,5 +1,6 @@
 package id.znetworks.nexus.ui.shell
 
+import id.znetworks.nexus.feature.forms.FormBuilderScreen
 import id.znetworks.nexus.feature.chat.ChatSearchScreen
 import id.znetworks.nexus.feature.chat.ChatMediaScreen
 import id.znetworks.nexus.feature.chat.ChatInfoScreen
@@ -470,7 +471,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
                     onOpenChat = { nav.navigate("chat/$it") },
                     onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
-                    onOpenDoc = { nav.navigate("doc/$it") })
+                    onOpenDoc = { nav.navigate("doc/$it") },
+                    onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) })
+            }
+            composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
+                FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") })
             }
             composable("project/{id}/settings") {
                 ProjectSettingsScreen(

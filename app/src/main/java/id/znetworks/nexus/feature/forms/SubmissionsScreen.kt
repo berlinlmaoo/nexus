@@ -1,5 +1,9 @@
 package id.znetworks.nexus.feature.forms
 
+import androidx.compose.material.icons.filled.Add
+import kotlinx.coroutines.launch
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -259,29 +263,81 @@ fun SubmissionDetailScreen(id: String, onBack: () -> Unit, onOpenTask: (String) 
     }
 }
 
-/** The project's Forms tab: open one to fill it in. */
+/**
+ * The project's Forms tab (FORM-BUILDER): "New form" on top, then its forms; tap = edit in the builder, long
+ * press = Fill in, Copy public link / Share link (public only), Publish / Unpublish.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun ProjectFormsTab(projectId: String, onOpenForm: (String) -> Unit) {
+fun ProjectFormsTab(projectId: String, onOpenForm: (String) -> Unit, onBuildForm: (String?) -> Unit = {}) {
     val api = formsApi()
     val c = Nx.colors
-    val res = LocalContext.current.resources
-    var forms by remember { mutableStateOf<List<FormSummary>?>(null) }
+    val context = LocalContext.current
+    val res = context.resources
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var forms by remember { mutableStateOf<List<BuilderForm>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(projectId) { try { forms = api.projectForms(projectId) } catch (e: ApiError) { error = e.describe(res) } }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(projectId, tick) { try { forms = api.builderForms(projectId); error = null } catch (e: ApiError) { error = e.describe(res) } }
+    // Back from the builder: what was saved shows here.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { tick++ } }
     val l = forms
     when {
         l == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         l == null -> TabEmpty(Icons.Filled.Assignment, error!!)
-        l.isEmpty() -> TabEmpty(Icons.Filled.Assignment, stringResource(R.string.form_none_in_project))
+        l.isEmpty() -> id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.Assignment, stringResource(R.string.fb_empty_title), stringResource(R.string.fb_empty_body),
+            stringResource(R.string.fb_new), { onBuildForm(null) }, Modifier.fillMaxSize())
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.accentBg).clickable { onBuildForm(null) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Add, null, tint = c.violetText); Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.fb_new), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
+                }
+                Text(stringResource(R.string.fb_tab_hint), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(top = 6.dp))
+            }
             items(l, key = { it.id }) { f ->
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))
-                    .clickable { onOpenForm(f.slug ?: f.id) }.padding(12.dp)) {
-                    Text(f.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                    f.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = c.mutedFg, maxLines = 2) }
-                    Text(stringResource(R.string.form_submissions_n, f.count?.submissions ?: 0), fontSize = 11.sp, color = c.mutedFg)
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))
+                        .combinedClickable(onClick = { onBuildForm(f.id) }, onLongClick = { menu = true }).padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(f.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+                            id.znetworks.nexus.feature.projects.Pill(stringResource(if (f.isPublic) R.string.fb_chip_public else R.string.fb_chip_private), if (f.isPublic) c.success else c.mutedFg)
+                        }
+                        f.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = c.mutedFg, maxLines = 2) }
+                        Text(androidx.compose.ui.res.pluralStringResource(R.plurals.fb_submissions_n, f.submissions, f.submissions) + " · " +
+                            androidx.compose.ui.res.pluralStringResource(R.plurals.fb_fields_count, f.fields.size, f.fields.size), fontSize = 11.sp, color = c.mutedFg)
+                    }
+                    androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.fb_fill_in)) }, onClick = { menu = false; onOpenForm(f.slug ?: f.id) })
+                        if (f.isPublic) {
+                            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.fb_copy_public_link)) }, onClick = {
+                                menu = false
+                                val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                                cm?.setPrimaryClip(android.content.ClipData.newPlainText("form", f.link)); notice = res.getString(R.string.fb_link_copied)
+                            })
+                            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.fb_share_link)) }, onClick = {
+                                menu = false
+                                runCatching { context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
+                                    .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, f.link), null)) }
+                            })
+                        }
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(if (f.isPublic) R.string.fb_unpublish else R.string.fb_publish)) }, onClick = {
+                            menu = false
+                            scope.launch {
+                                // Only this key is sent: the rest of the form stays as it is.
+                                try { api.updateForm(f.id, kotlinx.serialization.json.JsonObject(mapOf("isPublic" to kotlinx.serialization.json.JsonPrimitive(!f.isPublic))))
+                                    notice = res.getString(if (f.isPublic) R.string.fb_unpublished else R.string.fb_published); tick++ }
+                                catch (e: ApiError) { notice = res.getString(R.string.fb_update_failed) + ": " + ((e as? ApiError.Http)?.serverMessage ?: e.describe(res)) }
+                            }
+                        })
+                    }
                 }
             }
         }
     }
+    notice?.let { androidx.compose.material3.AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { notice = null }) { Text("OK") } }) }
 }
