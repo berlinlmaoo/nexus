@@ -134,12 +134,11 @@ extension APIClient {
     /// be handed to Safari or to QuickLook's own fetch — and going through the client is also what
     /// makes it take the office LAN like everything else in the app.
     ///
-    /// A WARNING for whoever adds "replace this file" in 0.1.5. `AttachmentCache` keys on the URL,
-    /// and it does that safely today because an attachment URL carries a random on-disk name that is
-    /// never reused. A vault URL is the ITEM id, which is stable on purpose — that is what keeps a
-    /// link that has already been sent working after the logo behind it changes. The moment bytes
-    /// can be swapped under an id, this cache will keep handing back the old file with no way to
-    /// notice, and the fix belongs there (a version or an ETag in the key), not in the viewer.
+    /// `AttachmentCache` keys on the URL, and a vault URL names the ITEM, which is stable on purpose —
+    /// it is what keeps a link that has already been sent working after the logo behind it changes.
+    /// Since "Replace file…" (9 Oct 2026) the server puts the file's content version in that URL
+    /// (`…/raw?v=<fileVersion>`), so a replaced file arrives at a new URL and this cache misses
+    /// instead of handing back the old bytes. Nothing here builds the URL; it is used as given.
     func vaultDownload(item: VaultItem, progress: UploadProgress? = nil) async throws -> URL {
         guard let raw = item.url else { throw APIError.transport(T("That file has no address.")) }
         return try await downloadAttachment(url: raw, fileName: item.name, progress: progress)
@@ -180,6 +179,34 @@ extension APIClient {
         // as its target. Same transport as a task attachment; only the destination differs.
         try await uploadInChunks(file: file, fileName: fileName, size: size,
                                  extraQuery: "&target=vault" + (parentId.map { "&parentId=\(vaultEnc($0))" } ?? ""),
+                                 progress: progress)
+        return true
+    }
+
+    /// New bytes for an existing file — same item id, same place, same links ("Replace file…",
+    /// 9 Oct 2026). One request for a small file; the shared chunk route with `replaceItemId` for a
+    /// large one. The server answers with the item, carrying its new `fileVersion` and URLs.
+    @discardableResult
+    func vaultReplace(itemId: String, file: URL, fileName: String,
+                      progress: UploadProgress? = nil) async throws -> Bool {
+        let size = Self.fileSize(of: file)
+        guard size > 0 else { throw APIError.transport(T("Couldn't read that file.")) }
+
+        if size <= Self.singleRequestCeiling {
+            let data = try Data(contentsOf: file, options: .mappedIfSafe)
+            let boundary = "Boundary-\(UUID().uuidString)"
+            var req = makeRequest("/api/vault/items/\(vaultEnc(itemId))/replace", method: "POST")
+            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            var body = Data()
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(vaultQuoted(fileName))\"\r\nContent-Type: application/octet-stream\r\n\r\n".utf8))
+            body.append(data)
+            body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+            req.httpBody = body
+            _ = try await vaultRun(req, decode: VaultItem.self, reporting: progress)
+            return true
+        }
+        try await uploadInChunks(file: file, fileName: fileName, size: size,
+                                 extraQuery: "&target=vault&replaceItemId=\(vaultEnc(itemId))",
                                  progress: progress)
         return true
     }

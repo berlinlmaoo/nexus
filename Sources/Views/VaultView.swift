@@ -390,6 +390,10 @@ struct VaultView: View {
                     Button { Task { await save(item) } } label: { Label(T("Send a copy…"), systemImage: "square.and.arrow.up") }
                 }
             }
+            if item.canModify && !item.isFolder {
+                // New bytes under the same item: its links keep working and show the new version.
+                Button { sheet = .replace(item) } label: { Label(T("Replace file…"), systemImage: "arrow.triangle.2.circlepath") }
+            }
             if item.canModify {
                 Button { renameText = item.name; vaultAlert = .rename(item) } label: { Label(T("Rename"), systemImage: "pencil") }
                 Button { sheet = .move(item) } label: { Label(T("Move to…"), systemImage: "folder") }
@@ -504,6 +508,11 @@ struct VaultView: View {
             ActivityView(items: [share.url])
         case .shareLink(let item):
             NavigationStack { VaultShareSheet(item: item) { sheet = nil; Task { await load() } } }
+        case .replace(let item):
+            DocumentPicker(types: [.item], multiple: false) { urls in
+                if let url = urls.first { enqueueReplace(item, with: url) }
+            }
+            .ignoresSafeArea()
         case .access(let item):
             NavigationStack {
                 VaultAccessSheet(item: item) { saved in
@@ -666,6 +675,33 @@ struct VaultView: View {
         await load(quiet: true)
     }
 
+    /// Replace file…: queued behind any upload in flight, like every other transfer on this screen.
+    private func enqueueReplace(_ item: VaultItem, with url: URL) {
+        let before = uploadChain
+        uploadChain = Task {
+            await before?.value
+            await replace(item, with: url)
+        }
+    }
+
+    private func replace(_ item: VaultItem, with url: URL) async {
+        busy = true
+        defer { busy = false }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            try await APIClient.shared.vaultReplace(itemId: item.id, file: url, fileName: url.lastPathComponent,
+                                                    progress: uploadProgress)
+            flash(String(format: T("“%@” replaced — its links show the new version"), item.name))
+        } catch APIError.unauthorized {
+            auth.logout()
+            return
+        } catch {
+            await report(String(format: T("Couldn't replace %@"), item.name), error)
+        }
+        await load(quiet: true)
+    }
+
     private func move(itemId: String, to folderId: String?, name: String) async {
         do {
             let moved = try await APIClient.shared.vaultMove(itemId, to: folderId)
@@ -790,6 +826,7 @@ private enum VaultSheet: Identifiable {
     case shareLink(VaultItem)
     case move(VaultItem)
     case access(VaultItem)
+    case replace(VaultItem)
 
     var id: String {
         switch self {
@@ -798,6 +835,7 @@ private enum VaultSheet: Identifiable {
         case .shareLink(let item): return "link-\(item.id)"
         case .move(let item): return "move-\(item.id)"
         case .access(let item): return "access-\(item.id)"
+        case .replace(let item): return "replace-\(item.id)"
         }
     }
 }

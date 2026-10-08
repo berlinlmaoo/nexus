@@ -422,7 +422,7 @@ enum AuditRestoreKinds {
         "calendar", "room_booking", "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment",
         "pnl_category", "pnl_stage", "pnl_recurring", "pnl_expense_attachment", "pnl_budget", "holiday",
         "attendance_request", "attendance_office", "org_unit_member", "vault_file", "vault_folder", "vault_trash",
-        "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission", "attendance_record",
+        "vault_file_version", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission", "attendance_record",
         "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
     ]
 
@@ -439,7 +439,7 @@ enum AuditRestoreKinds {
         "pnl_expense_attachment": "Restore receipt", "pnl_budget": "Restore budget", "holiday": "Restore holiday",
         "attendance_request": "Restore day off", "attendance_office": "Restore office",
         "org_unit_member": "Restore placement", "vault_file": "Restore file", "vault_folder": "Restore folder",
-        "vault_trash": "Restore trash", "task_list": "Restore section", "project_folder": "Restore folder",
+        "vault_trash": "Restore trash", "vault_file_version": "Restore previous version", "task_list": "Restore section", "project_folder": "Restore folder",
         "org_unit": "Restore unit", "sheet_rows": "Restore rows", "form_submission": "Restore submission",
         "attendance_record": "Restore attendance record", "project_sheet_column": "Restore column",
         "post": "Restore post", "quest": "Restore quest", "calendar_event": "Restore event",
@@ -477,6 +477,9 @@ enum AuditRestoreKinds {
         case "vault_file", "vault_folder", "vault_trash":
             return soft ? "It comes out of the Vault trash."
                 : "It comes back to the Vault trash, as it was. Restore it from there to use it again."
+        // "Replace file…" (9 Oct 2026): the copy is the file's previous bytes.
+        case "vault_file_version":
+            return "The file goes back to the version from before it was replaced. Its links keep working and show that version."
         // The web says The Wire; this app calls the feed Threads.
         case "post": return "It shows in Threads again."
         case "quest": return "The quest becomes active again."
