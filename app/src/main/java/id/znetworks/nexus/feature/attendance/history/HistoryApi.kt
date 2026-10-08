@@ -44,6 +44,8 @@ data class HistoryRow(
     val supportingDocumentUrl: String? = null,
     val supportingDocumentName: String? = null,
     val locationTrackingState: String? = null,
+    /** When the person left the office (still outside while there is no check-out); servers before 8 Oct send none. */
+    val outsideSince: String? = null,
     val officeLocation: OfficeRef? = null,
     val user: PersonRef? = null,
     val reviewedBy: PersonRef? = null,

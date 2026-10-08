@@ -120,4 +120,17 @@ class BoardModelTest {
         assertEquals(false, BoardModel.isFuture("2026-09-28", today))
         assertEquals(false, BoardModel.isFuture("", today))
     }
+
+    @Test fun outsideNowOnlyTodayWithoutCheckOut() {
+        // Berlin, 8 Oct (as the web board): outside now = today's row, outsideSince set, no check-out yet.
+        val row = HistoryRow(id = "r", attendanceDate = "2026-10-08", checkInAt = "2026-10-08T01:00:00Z", outsideSince = "2026-10-08T03:12:00Z")
+        assertEquals("2026-10-08T03:12:00Z", BoardModel.outsideNow(row, "2026-10-08"))
+        assertEquals(null, BoardModel.outsideNow(row.copy(checkOutAt = "2026-10-08T09:00:00Z"), "2026-10-08"))
+        assertEquals(null, BoardModel.outsideNow(row, "2026-10-09"))
+        assertEquals(null, BoardModel.outsideNow(row.copy(outsideSince = null), "2026-10-08"))
+        assertEquals(null, BoardModel.outsideNow(null, "2026-10-08"))
+        // An old server's JSON without the key still parses.
+        val parsed = id.znetworks.nexus.core.net.NexusJson.decodeFromString(HistoryRow.serializer(), """{"id":"r","attendanceDate":"2026-10-08"}""")
+        assertEquals(null, parsed.outsideSince)
+    }
 }

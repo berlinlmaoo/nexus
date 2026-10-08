@@ -1,5 +1,11 @@
 package id.znetworks.nexus.feature.attendance.history
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import android.app.Application
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -285,11 +291,17 @@ fun CrewBoardCard(vm: BoardViewModel) {
     val context = LocalContext.current
     // A board left open past 00:00 WIB on the 28th moves to the new period by itself (audit R5).
     var periodNow by remember { mutableStateOf(BoardModel.periodKey(0)) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(60_000)
-            val k = BoardModel.periodKey(0)
-            if (k != periodNow) { periodNow = k; vm.load() }
+    // Every 60 s while the board is on screen and the app in front (Berlin, 8 Oct): who is outside
+    // the office now stays current; a new period is picked up the same way.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                val k = BoardModel.periodKey(0)
+                if (k != periodNow) periodNow = k
+                if (s.offset == 0) vm.load()
+            }
         }
     }
     val period = remember(s.offset, periodNow) { BoardModel.periodKey(s.offset) }
@@ -432,11 +444,20 @@ private fun Grid(
                     Row(Modifier.weight(1f).horizontalScroll(hScroll), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         days.forEach { d ->
                             val key = d.toString()
+                            // Outside the office now: an amber walking mark on today's cell, spoken too (not colour alone).
+                            val outside = if (d == today) BoardModel.outsideNow(m.rows[key], key) else null
+                            val outsideText = outside?.let { stringResource(R.string.outside_since, hhmm(it)) }
                             Box(
                                 Modifier.size(cell).background(toneColor(m.cells[key] ?: AttTone.NONE), RoundedCornerShape(5.dp))
-                                    .then(if (d == today) Modifier.border(1.5.dp, c.violet, RoundedCornerShape(5.dp)) else Modifier)
+                                    .then(if (d == today) Modifier.border(1.5.dp, if (outside != null) OUTSIDE_AMBER else c.violet, RoundedCornerShape(5.dp)) else Modifier)
+                                    .then(if (outsideText != null) Modifier.semantics { contentDescription = "${m.name}, $outsideText" } else Modifier)
                                     .clickable { onCell(m, d) },
-                            )
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (outside != null) Box(Modifier.size(cell - 6.dp).background(OUTSIDE_AMBER, CircleShape), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.AutoMirrored.Filled.DirectionsWalk, null, tint = Color(0xFF3A2500), modifier = Modifier.size(cell - 10.dp))
+                                }
+                            }
                         }
                     }
                     val score = BoardModel.score(m.worked, periodDays, m.quota)
@@ -460,8 +481,18 @@ private fun Legend() {
                 Text(if (t == AttTone.PRESENT) stringResource(R.string.tone_present_permit) else toneLabel(t), fontSize = 10.sp, color = Nx.colors.mutedFg)
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(12.dp).background(OUTSIDE_AMBER, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Filled.DirectionsWalk, null, tint = Color(0xFF3A2500), modifier = Modifier.size(9.dp))
+            }
+            Spacer(Modifier.size(4.dp))
+            Text(stringResource(R.string.board_outside_now), fontSize = 10.sp, color = Nx.colors.mutedFg)
+        }
     }
 }
+
+/** The "outside the office now" mark (the web board's amber). */
+private val OUTSIDE_AMBER = Color(0xFFF59E0B)
 
 /** One day: status, times, place, selfies, evidence, correction, and the trail (iOS day detail). */
 @Composable

@@ -1970,4 +1970,5 @@
     <string name="outside_warn_plain">2 hours outside the office. File a permit if you have something to do outside.</string>
     <string name="outside_left_body_plain">File a permit if you have something to do outside the office.</string>
     <string name="outside_hour_body_plain">File a permit if you have something to do outside, or head back to the office.</string>
+    <string name="board_outside_now">Outside now</string>
 </resources>

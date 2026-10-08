@@ -104,6 +104,13 @@ object BoardModel {
         }.sortedBy { it.name.lowercase() }
     }
 
+    /**
+     * The person is outside the office right now (Berlin, 8 Oct, as the web board): today's row has an
+     * `outsideSince` and no check-out yet. Returns the outsideSince instant, else null.
+     */
+    fun outsideNow(row: HistoryRow?, today: String = id.znetworks.nexus.core.time.OfficeTime.today().toString()): String? =
+        row?.takeIf { it.dayKey == today && it.checkOutAt == null }?.outsideSince?.takeIf { it.isNotBlank() }
+
     /** Period key [offset] periods away from today's. */
     fun periodKey(offset: Int, today: LocalDate = OfficeTime.today()): String {
         val base = OfficeTime.periodKey(today)
