@@ -1,5 +1,14 @@
 package id.znetworks.nexus.feature.admin
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.withStyle
@@ -83,7 +92,14 @@ import java.util.Locale
 
 @Serializable data class AuditUser(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null)
 @Serializable data class AuditLog(val id: String, val action: String? = null, val entityType: String? = null, val entityName: String? = null,
-                                  val createdAt: String? = null, val user: AuditUser? = null, val summary: String? = null)
+                                  val createdAt: String? = null, val user: AuditUser? = null, val summary: String? = null,
+                                  /** On a deleted project/task that kept a copy (since 8 Oct); absent = can't be restored. */
+                                  val restore: AuditRestoreInfo? = null)
+@Serializable data class AuditRestoreInfo(val available: Boolean = false, val restoredAt: String? = null, val dataAsOf: String? = null, val fromBackup: Boolean? = null)
+@Serializable data class AuditRestoreCounts(val lists: Int = 0, val tasks: Int = 0, val files: Int = 0, val comments: Int = 0, val sheets: Int = 0, val members: Int = 0)
+@Serializable data class AuditRestoreDetail(val available: Boolean = false, val restoredAt: String? = null, val dataAsOf: String? = null, val fromBackup: Boolean? = null,
+                                            val restoredBy: AuditUser? = null, val counts: AuditRestoreCounts = AuditRestoreCounts())
+@Serializable data class AuditRestoreResult(val ok: Boolean = false, val entityType: String? = null, val entityId: String? = null, val projectId: String? = null)
 @Serializable data class AuditPage(val logs: List<AuditLog> = emptyList(), val total: Int = 0, val limit: Int = 50, val offset: Int = 0)
 @Serializable data class AuditEntry(val id: String, val action: String? = null, val entityType: String? = null, val entityId: String? = null,
                                     val entityName: String? = null, val createdAt: String? = null, val ipAddress: String? = null,
@@ -91,7 +107,8 @@ import java.util.Locale
 @Serializable data class AuditChange(val field: String? = null, val label: String? = null, val from: JsonElement? = null, val to: JsonElement? = null)
 @Serializable data class AuditLink(val type: String? = null, val id: String? = null)
 @Serializable data class AuditDetail(val label: String = "", val value: JsonElement? = null, val link: AuditLink? = null)
-@Serializable data class AuditEntryResponse(val entry: AuditEntry, val title: String? = null, val changes: List<AuditChange> = emptyList(), val details: List<AuditDetail> = emptyList())
+@Serializable data class AuditEntryResponse(val entry: AuditEntry, val title: String? = null, val changes: List<AuditChange> = emptyList(), val details: List<AuditDetail> = emptyList(),
+                                            val restore: AuditRestoreDetail? = null)
 
 object AuditLogic {
     val LINKABLE = setOf("task", "project", "user")
@@ -105,15 +122,49 @@ object AuditLogic {
         val a = action.orEmpty().lowercase()
         return when {
             a.startsWith("create") -> "create"; a.startsWith("update") -> "update"; a.startsWith("delete") -> "delete"
-            a.startsWith("login") || a.startsWith("logout") -> "login"; a.startsWith("view") -> "view"; else -> "other"
+            a.startsWith("login") || a.startsWith("logout") -> "login"; a.startsWith("view") -> "view"; a.startsWith("restore") -> "restore"; else -> "other"
         }
     }
+}
+
+/** Restore a deleted project or task from Control Room › Audit (Berlin, 8 Oct; iOS ba38cf4). */
+object AuditRestore {
+    /** Bumped after a restore so the list behind the entry reloads (its row pill turns to Restored). */
+    val changed = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    /** The app's own text per refusal code, never the server's English sentence. */
+    fun errorRes(e: Throwable): Int = when ((e as? ApiError.Http)?.code) {
+        "ALREADY_RESTORED" -> R.string.au_err_already_restored
+        "ALREADY_EXISTS" -> R.string.au_err_already_exists
+        "PARENT_MISSING" -> R.string.au_err_parent_missing
+        "NOT_RESTORABLE" -> R.string.au_err_not_restorable
+        else -> R.string.au_err_restore_failed
+    }
+
+    /** What comes back, non-zero only, in order: (plural, n). For a task, `tasks` is its subtasks. */
+    fun parts(c: AuditRestoreCounts, isTask: Boolean): List<Pair<Int, Int>> = listOf(
+        (if (isTask) R.plurals.au_n_subtasks else R.plurals.au_n_tasks) to c.tasks,
+        R.plurals.au_n_lists to c.lists, R.plurals.au_n_files to c.files, R.plurals.au_n_comments to c.comments,
+        R.plurals.au_n_sheets to c.sheets, R.plurals.au_n_members to c.members,
+    ).filter { it.second > 0 }
+
+    /** "a", "a and b", "a, b and c" — the conjunction in the app's language. */
+    fun join(items: List<String>, and: String): String = when (items.size) {
+        0 -> ""; 1 -> items[0]
+        else -> items.dropLast(1).joinToString(", ") + " $and " + items.last()
+    }
+
+    /** A delete of a project or task from before NEXUS kept copies. */
+    fun tooOld(e: AuditEntry, restore: AuditRestoreDetail?) = restore == null && e.action == "delete" && (e.entityType == "project" || e.entityType == "task")
 }
 
 class AuditApi(private val api: ApiClient) {
     suspend fun page(offset: Int, action: String?, search: String?) = api.get("/api/audit?limit=${AuditLogic.PAGE}&offset=$offset" +
         (action?.let { "&action=$it" } ?: "") + (search?.takeIf { it.isNotBlank() }?.let { "&search=${URLEncoder.encode(it.trim(), "UTF-8")}" } ?: ""), AuditPage.serializer())
     suspend fun entry(id: String) = api.get("/api/audit/$id", AuditEntryResponse.serializer())
+    /** Really restores — never call it on production to test (ANDROID-RESTORE rules). */
+    suspend fun restore(id: String) = api.send(okhttp3.Request.Builder().url(api.url("/api/audit/$id/restore"))
+        .post(with(ApiClient) { "{}".toJsonBody() }).build(), AuditRestoreResult.serializer())
 }
 
 @Composable
@@ -127,7 +178,8 @@ private fun kindStyle(kind: String): Pair<ImageVector, Color> {
     val c = Nx.colors
     return when (kind) {
         "create" -> Icons.Filled.Add to c.success; "update" -> Icons.Filled.Edit to c.blue; "delete" -> Icons.Filled.Delete to c.danger
-        "login" -> Icons.Filled.Key to Color.Gray; "view" -> Icons.Filled.Visibility to c.violet; else -> Icons.Filled.History to c.mutedFg
+        "login" -> Icons.Filled.Key to Color.Gray; "view" -> Icons.Filled.Visibility to c.violet
+        "restore" -> Icons.AutoMirrored.Filled.Undo to c.success; else -> Icons.Filled.History to c.mutedFg
     }
 }
 
@@ -145,7 +197,8 @@ fun AuditTab(onOpen: (String) -> Unit) {
     var total by remember { mutableStateOf(0) }
     var more by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(action, q) {
+    val restored by AuditRestore.changed.collectAsState()
+    LaunchedEffect(action, q, restored) {
         if (q.isNotBlank()) delay(350) // typing: only the pause after the last key reaches the server
         try { val p = api.page(0, action, q); logs = p.logs; total = p.total; error = null } catch (e: ApiError) { error = e.describe(res) }
     }
@@ -153,7 +206,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
         OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.au_search)) },
             shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), keyboardOptions = AdminKeyboard.Done)
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(null to R.string.tk_all, "create" to R.string.au_create, "update" to R.string.au_update, "delete" to R.string.au_delete, "login" to R.string.au_login).forEach { (v, l) ->
+            listOf(null to R.string.tk_all, "create" to R.string.au_create, "update" to R.string.au_update, "delete" to R.string.au_delete, "restore" to R.string.au_restore, "login" to R.string.au_login).forEach { (v, l) ->
                 FilterChip(action == v, { action = v }, { Text(stringResource(l)) })
             }
         }
@@ -177,6 +230,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
                             Column(Modifier.weight(1f)) {
                                 Text(log.summary ?: listOfNotNull(log.action, log.entityType, log.entityName).joinToString(" · "), fontSize = 13.sp, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text((log.user?.name ?: stringResource(R.string.au_system)) + " · " + time(log.createdAt), fontSize = 11.sp, color = c.mutedFg)
+                                if (log.action == "delete") log.restore?.let { RestorePill(it.available) }
                             }
                         }
                     }
@@ -200,7 +254,19 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
     val res = LocalContext.current.resources
     var r by remember { mutableStateOf<AuditEntryResponse?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(id) { try { r = api.entry(id) } catch (e: ApiError) { error = e.describe(res) } }
+    val scope = rememberCoroutineScope()
+    var confirm by remember { mutableStateOf(false) }
+    var restoring by remember { mutableStateOf(false) }
+    var restoreError by remember { mutableStateOf<String?>(null) }
+    var restoredNow by remember { mutableStateOf<AuditRestoreResult?>(null) }
+    suspend fun load() { try { r = api.entry(id) } catch (e: ApiError) { if (r == null) error = e.describe(res) } }
+    LaunchedEffect(id) { load() }
+    fun restore() = scope.launch {
+        restoring = true; restoreError = null
+        try { restoredNow = api.restore(id); AuditRestore.changed.value++; load() }
+        catch (e: ApiError) { load(); restoreError = res.getString(AuditRestore.errorRes(e)) } // someone else may have restored it meanwhile
+        restoring = false
+    }
     Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -216,6 +282,17 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
                     Avatar(x.entry.user?.name, x.entry.user?.avatar, 26.dp); Spacer(Modifier.width(8.dp))
                     Text((x.entry.user?.name ?: stringResource(R.string.au_system)) + " · " + (x.entry.createdAt?.let { runCatching {
                         DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() } ?: ""), fontSize = 12.sp, color = c.mutedFg)
+                }
+                x.restore?.let { rs ->
+                    RestoreCard(x.entry, rs, restoredNow, restoring, restoreError, onRestore = { confirm = true }, onOpenLink = onOpenLink)
+                    if (confirm) androidx.compose.material3.AlertDialog(onDismissRequest = { confirm = false },
+                        title = { Text(stringResource(R.string.au_restore_confirm, x.entry.entityName ?: "")) },
+                        text = { Text(restoreExplanation(rs, x.entry.entityType == "task")) },
+                        confirmButton = { TextButton(onClick = { confirm = false; restore() }) { Text(stringResource(R.string.au_restore_yes)) } },
+                        dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } })
+                }
+                if (AuditRestore.tooOld(x.entry, x.restore)) AdminCard {
+                    Text(stringResource(R.string.au_restore_too_old), fontSize = 12.sp, color = c.mutedFg)
                 }
                 if (x.changes.isNotEmpty()) AdminCard(stringResource(R.string.au_changed)) {
                     x.changes.forEach { ch ->
@@ -260,3 +337,66 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
         }
     }
 }
+
+private fun fullTime(iso: String?) = iso?.let { runCatching { DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.getDefault()).format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull() }.orEmpty()
+
+/** On a delete row: whether it can still come back (iOS AuditRestorePill). */
+@Composable
+internal fun RestorePill(available: Boolean) {
+    val c = Nx.colors
+    val tint = if (available) c.violetText else c.mutedFg
+    Row(Modifier.padding(top = 4.dp).border(1.dp, if (available) c.violetText.copy(alpha = 0.35f) else c.border, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(if (available) Icons.AutoMirrored.Filled.Undo else Icons.Filled.Check, null, tint = tint, modifier = Modifier.size(11.dp))
+        Text(stringResource(if (available) R.string.au_restorable else R.string.au_restored), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = tint)
+    }
+}
+
+/** "It comes back as it was …: 226 tasks, 7 lists and 155 files." */
+@Composable
+private fun restoreExplanation(r: AuditRestoreDetail, isTask: Boolean): String {
+    val res = LocalContext.current.resources
+    val what = AuditRestore.join(AuditRestore.parts(r.counts, isTask).map { (p, n) -> res.getQuantityString(p, n, n) }, stringResource(R.string.au_and))
+    return if (r.fromBackup == true) {
+        val whenText = fullTime(r.dataAsOf)
+        if (what.isEmpty()) stringResource(R.string.au_restore_backup_plain, whenText) else stringResource(R.string.au_restore_backup, whenText, what)
+    } else {
+        if (what.isEmpty()) stringResource(R.string.au_restore_deleted_plain) else stringResource(R.string.au_restore_deleted, what)
+    }
+}
+
+/** Right under the entry's header: bring it back, or who already did (iOS restoreCard). */
+@Composable
+internal fun RestoreCard(e: AuditEntry, r: AuditRestoreDetail, restoredNow: AuditRestoreResult?, restoring: Boolean, error: String?,
+                        onRestore: () -> Unit, onOpenLink: (String, String) -> Unit) {
+    val c = Nx.colors
+    val isProject = e.entityType == "project"
+    if (!r.available || restoredNow != null) AdminCard {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.CheckCircle, null, tint = c.success, modifier = Modifier.size(18.dp))
+            Text(when {
+                restoredNow != null -> stringResource(R.string.au_restored_now)
+                !r.restoredBy?.name.isNullOrBlank() -> stringResource(R.string.au_restored_by, r.restoredBy!!.name!!, fullTime(r.restoredAt))
+                else -> stringResource(R.string.au_restored_at, fullTime(r.restoredAt))
+            }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+        }
+        (restoredNow?.entityId ?: e.entityId)?.let { target ->
+            TextButton(onClick = { onOpenLink(if (isProject) "project" else "task", target) }, modifier = Modifier.heightIn(min = 44.dp)) {
+                Text(stringResource(if (isProject) R.string.au_open_project else R.string.au_open_task), color = c.violetText, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.violetText, modifier = Modifier.size(16.dp))
+            }
+        }
+    } else AdminCard(stringResource(R.string.au_bring_back)) {
+        Text(restoreExplanation(r, e.entityType == "task"), fontSize = 13.sp, color = c.foreground)
+        if (isProject) Text(stringResource(R.string.au_restore_folder), fontSize = 11.sp, color = c.mutedFg)
+        error?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText) }
+        androidx.compose.material3.Button(onClick = onRestore, enabled = !restoring, shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp)) {
+            if (restoring) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+            else Icon(Icons.AutoMirrored.Filled.Undo, null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(when { restoring -> R.string.au_restoring; isProject -> R.string.au_restore_project; else -> R.string.au_restore_task }), fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+

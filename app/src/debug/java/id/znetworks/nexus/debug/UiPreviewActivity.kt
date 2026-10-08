@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.verticalScroll
 import id.znetworks.nexus.ui.shell.Tab
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -45,6 +46,11 @@ class UiPreviewActivity : ComponentActivity() {
                     when (screen) {
                         "account" -> AccountScreen(onBack = {})
                         "nav8" -> Nav8Preview()
+                        "restore" -> RestorePreview()
+                        "addpeople" -> id.znetworks.nexus.feature.chat.AddPeopleDialog(
+                            id.znetworks.nexus.feature.chat.Conversation("c", "GROUP", "Tim Kreatif", members = listOf(id.znetworks.nexus.feature.chat.ChatMember(userId = "u1", user = id.znetworks.nexus.feature.chat.ChatUser("u1", "Rina")))),
+                            listOf("u1" to "Rina", "u2" to "Dimas Pratama", "u3" to "Sari Wulandari", "u4" to "Bayu").map { (k, n) -> id.znetworks.nexus.feature.projects.RosterMember(userId = k, name = n) },
+                            "me", onDismiss = {}, onAdd = {})
                         "board" -> SubmissionBoardView(sampleBoard, onOpen = {})
                         "composer" -> id.znetworks.nexus.feature.admin.AnnouncementComposer(
                             id.znetworks.nexus.feature.admin.AdminMoreApi((application as id.znetworks.nexus.NexusApplication).container.api), onDismiss = {}, onPosted = {})
@@ -193,6 +199,28 @@ private fun Nav8Preview() {
             androidx.compose.material3.Text(id.znetworks.nexus.feature.chat.highlight("@Dimas cek brief di https://nexus.znetworks.id/calendar ya", Nx.colors.violetText, Nx.colors.foreground), color = Nx.colors.foreground)
         }
         Box(Modifier.weight(1f)) { MoreScreen(Session("t", "c", "u", "Staff Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {}) }
+    }
+}
+
+/** 8 Oct: Restore in Control Room › Audit — pills, the card before and after, the error, the too-old note. Nothing is posted. */
+@androidx.compose.runtime.Composable
+private fun RestorePreview() {
+    val e = id.znetworks.nexus.feature.admin.AuditEntry("a1", action = "delete", entityType = "project", entityId = "p1", entityName = "Rindu Alam Papua")
+    val counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts(lists = 7, tasks = 226, files = 155)
+    val open = id.znetworks.nexus.feature.admin.AuditRestoreDetail(available = true, dataAsOf = "2026-10-07T19:00:00Z", fromBackup = true, counts = counts)
+    val done = id.znetworks.nexus.feature.admin.AuditRestoreDetail(available = false, restoredAt = "2026-10-08T04:12:00Z",
+        restoredBy = id.znetworks.nexus.feature.admin.AuditUser(name = "Berlin"), counts = counts)
+    val task = e.copy(entityType = "task", entityName = "Brief konten")
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+        androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            id.znetworks.nexus.feature.admin.RestorePill(true); id.znetworks.nexus.feature.admin.RestorePill(false)
+        }
+        id.znetworks.nexus.feature.admin.RestoreCard(e, open, null, restoring = false, error = null, onRestore = {}, onOpenLink = { _, _ -> })
+        id.znetworks.nexus.feature.admin.RestoreCard(task, open.copy(fromBackup = false, counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts(tasks = 3, comments = 1)), null,
+            restoring = true, error = androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.au_err_parent_missing), onRestore = {}, onOpenLink = { _, _ -> })
+        id.znetworks.nexus.feature.admin.RestoreCard(e, done, null, restoring = false, error = null, onRestore = {}, onOpenLink = { _, _ -> })
+        id.znetworks.nexus.feature.admin.RestoreCard(task, open, id.znetworks.nexus.feature.admin.AuditRestoreResult(true, "task", "t1"), restoring = false, error = null, onRestore = {}, onOpenLink = { _, _ -> })
     }
 }
 

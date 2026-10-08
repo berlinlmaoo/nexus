@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (412 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (431 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -36,7 +36,7 @@ Phases 1–5 done; Wear OS not built (Berlin: not a Play Store priority).
 | Live location | TrailMachine (port of iOS WorkTrailPolicy), foreground service type location + "Work session" notification, disclosure once per record (not repeated after a yes), "Allow all the time", OEM battery guide, on/denied reporting, boot resume with background permission | `feature/attendance/trail` |
 | Deep links | router holding targets across cold start/sign-in, `nexus://`, notification extras, `/attendance?request=|offsite=|permit=today`, unbuilt screens open the web | `core/nav` |
 | Inbox, announcements, reflections, appearance | as named | `feature/inbox`, `feature/attendance/reflections`, More tab |
-| Push | FCM data-only handling, PRD channels (+ `system`, + the pre-R1 ids), "File a permit" action only, auto-offsite reconcile, tap marks inbox read; local 15-min check-in reminder while push is off. **Off until** `~/.nexus-android-secrets/firebase.properties` exists (projectId, applicationId, apiKey, senderId) | `feature/push` |
+| Push | FCM data-only handling, PRD channels (+ `system`, + the pre-R1 ids), "File a permit" action only, auto-offsite reconcile, tap marks inbox read; local 15-min check-in reminder when push is unavailable. **On**: Firebase is installed (`~/.nexus-android-secrets/firebase.properties` + google-services.json), release builds are made with it; chat pushes as MessagingStyle per conversation (8 Oct) | `feature/push` |
 | Distribution | release key (see CLAUDE.md), ARM-only release APK ~22 MB, staff install guide | `docs/INSTALL-APK.md` |
 
 Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796b; iOS I1/I2 fixed by the main session).
@@ -224,6 +224,32 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 5 Home stat cards | No bottom sheet: the detail grows out of the tapped card as iOS MorphFlip — drawn full size in the middle, a scale+translate starts it exactly on the card and springs to full (response 0.4, damping 0.84), one gradient top to bottom, no scrim, list fading in once landed; tap outside, × or back shrinks it back into the card. Card rects kept outside state (no recomposition while scrolling) | 2bc7765 |
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
+
+## 8 Oct, group chat admins + Restore in Audit (agents:~/handoff/chat/ANDROID-GROUP-ADMINS.md, ANDROID-RESTORE.md)
+
+NOT published (decision 13). Server: group admins nexus 56e25ff (deploy by the lead), restore LIVE (nexus-prod 5017bf7).
+iOS references 1e9190f, ba38cf4. POST /api/audit/{id}/restore was never called on production: checked with JSON
+fixtures in JUnit and a debug preview only.
+
+| Part | What changed | Commit |
+|---|---|---|
+| Group members, Manager and above | `Conversation.canManageMembers` (null = old server, today's behaviour). New **Add people** in the thread header (iOS parity, a dialog not a bottom sheet): a project room adds to the project ("joins the project itself" hint, seat follows when they open the app), a GROUP adds to the room and shows only when `canManageMembers != false`, a DM never. 403 `MANAGER_REQUIRED` (recognised by code; other 403s unchanged) shows "Only managers and above can add or remove members." / "Hanya manager ke atas…", hides the button and refetches the conversation. Remove-member and leave-group UI not built (neither web nor iOS has them) (ChatGroupAdminsTest) | d46a9e1 |
+| Restore in Control Room › Audit | List: delete rows with `restore` get an outlined pill ↺ Restorable (violet) / ✓ Restored (muted); filter chip Restore between Delete and Login; action restore = ↺ in green. Entry, under the header: "Bring it back" card with the explanation (backup of {when, WIB} or as when deleted; "226 tasks, 7 lists and 155 files", subtasks for a task, joined with and/dan), the folder note for projects, error in red, full-width 48 dp "Restore project/task" (spinner + Restoring…) → confirm "Restore “{name}”?" / Yes, restore. After: "Restored. It's back where it was." / "Restored by {name} · {time}" + Open project/task; the list behind reloads. Errors per code (ALREADY_RESTORED, ALREADY_EXISTS, PARENT_MISSING, NOT_RESTORABLE, else "Couldn't restore it…"), the entry reloads first. Old delete of a project/task without `restore`: the "deleted before NEXUS kept…" note. Old server: nothing new shows (AuditRestoreTest) | this step |
+| Screens | Debug preview `--es screen restore` and `addpeople` (phone, light + dark) | this step |
+
+## 8 Oct, attendance + navbar + chat (agents:~/handoff/chat/ANDROID-8OKT.md, CHAT-CONTRACT.md)
+
+NOT published (decision 13). The server is being built in parallel: every new field is optional and each
+call has an old-server fallback (noted per row).
+
+| Part | What changed | Commit |
+|---|---|---|
+| A1 auto check-out off | Remote flag `outsideAutoCheckout` (default **false**): no countdown anywhere (notification chronometer counts up from "outside since", wording without "auto check-out at"), the 1 h 30 reminder and the 2 h heads-up stay with plain wording ("Sudah 2 jam di luar kantor. Ajukan izin…"). Flag true = the old 2 h 30 behaviour (OutsideClockTest) | 9661536 |
+| A2 crew board, outside now | `HistoryRow.outsideSince`: today's cell for someone checked in, not checked out and outside shows an amber circle with a walking figure + amber border; TalkBack "Name, Outside the office since 10:12"; legend "Sedang di luar". Board reloads every 60 s only while visible and resumed. Old server (no field) = board as before (BoardModelTest) | 5fba9c4 |
+| A3 push `attendance_outside_approver` | Approvals channel; Inbox row with a walking-figure icon on amber; tap opens the board as the other attendance pushes (ChannelTest) | c8b81a7 |
+| C chat P0 | MessagingStyle, one notification per conversation (id from the conversation) + group summary; mentions on their own HIGH channel `chat_mentions`; image-only = "📷 Foto". No notification for the conversation open on screen; opening it clears its card; tapping a push for the open conversation does not stack a second thread. Thread polls `after=` only while visible and resumed (5 s), merges by id (never drops; old server ignoring `after` = same merge, a full page triggers backfill via `before`); "load older" via `nextCursor`/`before`; mark read with `upToMessageId` only while visible (no background mark-read). Links tappable (LinkAnnotation) + Copy. Mute 8 h / 1 week / always / unmute via PATCH `/mute`; a 404 hides the option with a notice. Unread from `/api/conversations/unread`, falling back to the list's sum of unmuted conversations; muted conversations get a grey pill and a bell-off icon (ChatReadyTest) | 8d5d56d |
+| B navbar | Home · Tasks · **Calendar** · Projects · More; with `flags.calendar` off Inbox takes the slot back. Inbox moved into More (first tile, with its unread badge) and the More tab carries that badge; Inbox deep links/pushes push the screen when it has no tab. Messages tile (More) and Home's chat action show the chat unread (ShellMotionTest) | 6375687 |
+| Screens | Debug preview `--es screen nav8` (bars, board cell, inbox row, conversations, link, More with badges), phone + 10.1" tablet, light + dark; chat list time at the row end, muted pill readable in dark | b379cb0 |
 
 ## 8 Oct, Calendar — audit round 3, the remaining 8 findings (agents:~/handoff/calendar/AUDIT3-android.md)
 
@@ -542,8 +568,8 @@ camera), and no account has been used. Needed:
 1. Test phone: Oppo Reno 16 F 5G (Dimensity 7300-Energy, Android 16), with the APK above.
 2. Test account: the STAFF member who holds that phone logs in himself; his attendance is real.
    Never ask for or store a password. One check-in per day per account.
-3. Firebase: Berlin is creating the project (bagas@znetworks.id); the main session installs
-   google-services.json + the server key. Then rebuild and test a push (never POST cron endpoints).
+3. Firebase is installed (release builds have push on). Test a real chat and attendance push on the phone
+   (never POST cron or notification endpoints).
 
 Run the PRD §5 Phase 1 acceptance list on that phone: liveness vs a photo on a screen, airplane-mode
 check-in replayed at the tap time, 502/530 queued vs 409 not queued, reflection gate, offsite

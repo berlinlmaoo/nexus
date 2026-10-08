@@ -1986,4 +1986,52 @@
     <string name="chat_everyone_here_group">Semua anggota workspace sudah ada di obrolan ini.</string>
     <string name="chat_everyone_here_project">Semua anggota workspace sudah ada di proyek ini.</string>
     <string name="chat_manager_required">Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.</string>
+    <!-- Restore deleted projects and tasks, Control Room › Audit (Berlin, 8 Oct) -->
+    <string name="au_restore">Pulihkan</string>
+    <string name="au_restorable">Bisa dipulihkan</string>
+    <string name="au_restored">Sudah dipulihkan</string>
+    <string name="au_bring_back">Kembalikan</string>
+    <string name="au_restore_project">Pulihkan proyek</string>
+    <string name="au_restore_task">Pulihkan tugas</string>
+    <string name="au_restoring">Memulihkan…</string>
+    <string name="au_restore_confirm">Pulihkan “%1$s”?</string>
+    <string name="au_restore_yes">Ya, pulihkan</string>
+    <string name="au_restore_deleted">Kembali seperti saat dihapus: %1$s.</string>
+    <string name="au_restore_deleted_plain">Kembali seperti saat dihapus.</string>
+    <string name="au_restore_backup">Kembali seperti di backup %1$s: %2$s. Perubahan setelah backup itu tidak ikut.</string>
+    <string name="au_restore_backup_plain">Kembali seperti di backup %1$s. Perubahan setelah backup itu tidak ikut.</string>
+    <string name="au_restore_folder">Foldernya ikut kembali kalau sudah terhapus.</string>
+    <string name="au_and">dan</string>
+    <string name="au_restored_by">Dipulihkan oleh %1$s · %2$s</string>
+    <string name="au_restored_at">Dipulihkan · %1$s</string>
+    <string name="au_restored_now">Sudah dipulihkan. Kembali ke tempat semula.</string>
+    <string name="au_open_project">Buka proyek</string>
+    <string name="au_open_task">Buka tugas</string>
+    <string name="au_err_already_restored">Sudah dipulihkan oleh orang lain.</string>
+    <string name="au_err_already_exists">Sudah kembali.</string>
+    <string name="au_err_parent_missing">Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru tugas ini.</string>
+    <string name="au_err_not_restorable">Tidak ada salinan dari penghapusan ini, jadi tidak bisa dipulihkan.</string>
+    <string name="au_err_restore_failed">Belum bisa dipulihkan. Coba lagi sebentar lagi.</string>
+    <string name="au_restore_too_old">Ini dihapus sebelum NEXUS mulai menyimpan proyek dan tugas yang dihapus, jadi tidak bisa dipulihkan.</string>
+    <plurals name="au_n_tasks">
+        <item quantity="other">%d tugas</item>
+    </plurals>
+    <plurals name="au_n_subtasks">
+        <item quantity="other">%d subtugas</item>
+    </plurals>
+    <plurals name="au_n_lists">
+        <item quantity="other">%d list</item>
+    </plurals>
+    <plurals name="au_n_files">
+        <item quantity="other">%d file</item>
+    </plurals>
+    <plurals name="au_n_comments">
+        <item quantity="other">%d komentar</item>
+    </plurals>
+    <plurals name="au_n_sheets">
+        <item quantity="other">%d sheet</item>
+    </plurals>
+    <plurals name="au_n_members">
+        <item quantity="other">%d anggota</item>
+    </plurals>
 </resources>

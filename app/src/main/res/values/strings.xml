@@ -1992,4 +1992,59 @@
     <string name="chat_everyone_here_group">Every workspace member is already in this chat.</string>
     <string name="chat_everyone_here_project">Every workspace member is already in this project.</string>
     <string name="chat_manager_required">Only managers and above can add or remove members.</string>
+    <!-- Restore deleted projects and tasks, Control Room › Audit (Berlin, 8 Oct) -->
+    <string name="au_restore">Restore</string>
+    <string name="au_restorable">Restorable</string>
+    <string name="au_restored">Restored</string>
+    <string name="au_bring_back">Bring it back</string>
+    <string name="au_restore_project">Restore project</string>
+    <string name="au_restore_task">Restore task</string>
+    <string name="au_restoring">Restoring…</string>
+    <string name="au_restore_confirm">Restore “%1$s”?</string>
+    <string name="au_restore_yes">Yes, restore</string>
+    <string name="au_restore_deleted">It comes back as it was when it was deleted: %1$s.</string>
+    <string name="au_restore_deleted_plain">It comes back as it was when it was deleted.</string>
+    <string name="au_restore_backup">It comes back as it was in the backup of %1$s: %2$s. Changes made after that backup are not in it.</string>
+    <string name="au_restore_backup_plain">It comes back as it was in the backup of %1$s. Changes made after that backup are not in it.</string>
+    <string name="au_restore_folder">Its folder comes back too if it was deleted.</string>
+    <string name="au_and">and</string>
+    <string name="au_restored_by">Restored by %1$s · %2$s</string>
+    <string name="au_restored_at">Restored · %1$s</string>
+    <string name="au_restored_now">Restored. It\'s back where it was.</string>
+    <string name="au_open_project">Open project</string>
+    <string name="au_open_task">Open task</string>
+    <string name="au_err_already_restored">Someone has restored this already.</string>
+    <string name="au_err_already_exists">It\'s already back.</string>
+    <string name="au_err_parent_missing">Its project was deleted too. Restore the project first, then this task.</string>
+    <string name="au_err_not_restorable">No copy of this delete was kept, so it can\'t be restored.</string>
+    <string name="au_err_restore_failed">Couldn\'t restore it. Try again in a moment.</string>
+    <string name="au_restore_too_old">This was deleted before NEXUS started keeping deleted projects and tasks, so it can\'t be restored.</string>
+    <plurals name="au_n_tasks">
+        <item quantity="one">%d task</item>
+        <item quantity="other">%d tasks</item>
+    </plurals>
+    <plurals name="au_n_subtasks">
+        <item quantity="one">%d subtask</item>
+        <item quantity="other">%d subtasks</item>
+    </plurals>
+    <plurals name="au_n_lists">
+        <item quantity="one">%d list</item>
+        <item quantity="other">%d lists</item>
+    </plurals>
+    <plurals name="au_n_files">
+        <item quantity="one">%d file</item>
+        <item quantity="other">%d files</item>
+    </plurals>
+    <plurals name="au_n_comments">
+        <item quantity="one">%d comment</item>
+        <item quantity="other">%d comments</item>
+    </plurals>
+    <plurals name="au_n_sheets">
+        <item quantity="one">%d sheet</item>
+        <item quantity="other">%d sheets</item>
+    </plurals>
+    <plurals name="au_n_members">
+        <item quantity="one">%d member</item>
+        <item quantity="other">%d members</item>
+    </plurals>
 </resources>
