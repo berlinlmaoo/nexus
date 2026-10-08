@@ -32,6 +32,8 @@ import kotlinx.serialization.Serializable
     val calendar: Boolean? = null,
     /** The Calendar widgets. */
     val calendarWidgets: Boolean? = null,
+    /** Automatic offsite check-out after 2 h 30 outside (server cd89d72): off unless the server says so (Berlin, 8 Oct). */
+    val outsideAutoCheckout: Boolean? = null,
 )
 @Serializable data class ConfigValues(val outsideHourAlertMinutes: Int? = null, val calendarPollSeconds: Int? = null)
 @Serializable data class ConfigBanner(val id: String, val tone: String? = null, val title: String = "", val message: String = "", val link: String? = null)
@@ -49,6 +51,8 @@ import kotlinx.serialization.Serializable
     val outsideHourAlertMinutes get() = values?.outsideHourAlertMinutes?.takeIf { it in 1..600 } ?: 60
     val calendar get() = flags?.calendar ?: true
     val calendarWidgets get() = flags?.calendarWidgets ?: true
+    /** False (the default): no countdown and no "auto check-out at" anywhere; the reminders stay. */
+    val outsideAutoCheckout get() = flags?.outsideAutoCheckout ?: false
     /** How often the Calendar polls while it is on screen (with If-None-Match). */
     val calendarPollSeconds get() = values?.calendarPollSeconds?.takeIf { it in 10..3600 } ?: 60
 

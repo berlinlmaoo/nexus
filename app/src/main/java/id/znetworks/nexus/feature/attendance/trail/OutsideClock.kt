@@ -84,6 +84,21 @@ object OutsideClock {
         }
     }
 
+    /**
+     * What the phone says while outside (Berlin, 8 Oct; remote config `flags.outsideAutoCheckout`). With the
+     * automatic check-out on: the countdown and "auto check-out at HH:MM" as before. Off (the default): no
+     * countdown and no check-out time anywhere — the time outside counts up, the 1 h 30 reminder and the
+     * 2 h heads-up ask for a permit.
+     */
+    enum class Wording { AUTO_AT, REMIND_AUTO, WARN_AUTO, PLAIN, REMIND_PLAIN, WARN_PLAIN }
+    fun wording(level: Level, autoCheckout: Boolean): Wording = when (level) {
+        Level.OUTSIDE -> if (autoCheckout) Wording.AUTO_AT else Wording.PLAIN
+        Level.REMIND -> if (autoCheckout) Wording.REMIND_AUTO else Wording.REMIND_PLAIN
+        Level.WARN -> if (autoCheckout) Wording.WARN_AUTO else Wording.WARN_PLAIN
+    }
+    /** The ongoing notification's clock: down to the check-out when it exists, else up from leaving. */
+    fun chronometer(o: Outside, autoCheckout: Boolean): Pair<Long, Boolean> = if (autoCheckout) o.autoAtMillis to true else o.sinceMillis to false
+
     /** One key per episode: the phone's own exit time (the server's may arrive later and differ). */
     fun episode(s: TrailState): Long? = s.outsideSinceMillis ?: s.serverOutsideSinceMillis
 }

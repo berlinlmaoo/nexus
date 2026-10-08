@@ -1959,4 +1959,9 @@
     <string name="cal_lists_loading">Memuat orang dan proyek di rentang ini…</string>
     <string name="calq_empty_next">Tugasmu ada di Kalender, hari per hari.</string>
     <string name="calq_open_calendar">Buka Kalender</string>
+    <string name="outside_plain">Waktu di luar kantor sedang dihitung. Ajukan izin kalau bekerja di luar.</string>
+    <string name="outside_remind_plain">Sudah 1,5 jam di luar kantor. Ajukan izin kalau ada kegiatan di luar.</string>
+    <string name="outside_warn_plain">Sudah 2 jam di luar kantor. Ajukan izin kalau ada kegiatan di luar.</string>
+    <string name="outside_left_body_plain">Ajukan izin kalau ada kegiatan di luar kantor.</string>
+    <string name="outside_hour_body_plain">Ajukan izin kalau ada kegiatan di luar, atau balik ke kantor.</string>
 </resources>

@@ -207,21 +207,26 @@ class WorkTrailService : Service() {
                 .setUsesChronometer(since != null)
                 .apply { if (since != null) setWhen(since) }
         } else {
+            val autoOn = (application as NexusApplication).container.remoteConfig.current.outsideAutoCheckout
             val auto = LocalNotifier.hhmm(outside.autoAtMillis)
-            val text = when (outside.level) {
-                OutsideClock.Level.OUTSIDE -> getString(R.string.outside_auto_at, auto)
-                OutsideClock.Level.REMIND -> getString(R.string.outside_remind, auto)
-                OutsideClock.Level.WARN -> getString(R.string.outside_warn, auto)
+            val text = when (OutsideClock.wording(outside.level, autoOn)) {
+                OutsideClock.Wording.AUTO_AT -> getString(R.string.outside_auto_at, auto)
+                OutsideClock.Wording.REMIND_AUTO -> getString(R.string.outside_remind, auto)
+                OutsideClock.Wording.WARN_AUTO -> getString(R.string.outside_warn, auto)
+                OutsideClock.Wording.PLAIN -> getString(R.string.outside_plain)
+                OutsideClock.Wording.REMIND_PLAIN -> getString(R.string.outside_remind_plain)
+                OutsideClock.Wording.WARN_PLAIN -> getString(R.string.outside_warn_plain)
             }
+            val (clockAt, countDown) = OutsideClock.chronometer(outside, autoOn)
             b.setColor(AMBER)
                 .setContentTitle(getString(R.string.outside_since, LocalNotifier.hhmm(outside.sinceMillis)))
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-                // Counts down to the automatic check-out by itself; no per-minute re-posting.
+                // Counts by itself (down to the automatic check-out when it is on, else up from leaving); no per-minute re-posting.
                 .setShowWhen(true)
                 .setUsesChronometer(true)
-                .setChronometerCountDown(true)
-                .setWhen(outside.autoAtMillis)
+                .setChronometerCountDown(countDown)
+                .setWhen(clockAt)
             if (outside.level != OutsideClock.Level.OUTSIDE) b.permitAction(1)
         }
         return b.build()
@@ -253,15 +258,18 @@ class WorkTrailService : Service() {
         val alert = step.post ?: return
         val o = OutsideClock.present(trail.state, now) ?: return
         val auto = LocalNotifier.hhmm(o.autoAtMillis)
+        val autoOn = (application as NexusApplication).container.remoteConfig.current.outsideAutoCheckout
         val (title, text) = when (alert) {
-            OutsideClock.Alert.LEFT -> getString(R.string.outside_left_title, LocalNotifier.hhmm(o.sinceMillis)) to getString(R.string.outside_left_body, auto)
+            OutsideClock.Alert.LEFT -> getString(R.string.outside_left_title, LocalNotifier.hhmm(o.sinceMillis)) to
+                (if (autoOn) getString(R.string.outside_left_body, auto) else getString(R.string.outside_left_body_plain))
             OutsideClock.Alert.HOUR -> {
                 val left = ((o.autoAtMillis - now) / 60_000L).coerceAtLeast(0).toInt()
                 val dur = if (left >= 60) getString(R.string.dur_hm, left / 60, left % 60) else getString(R.string.dur_m, left)
                 // The minute mark is the server's (remote config): the title says the real one.
                 val title = if (minutes == 60) getString(R.string.outside_hour_title) else getString(R.string.outside_minutes_title,
                     if (minutes >= 60) getString(R.string.dur_hm, minutes / 60, minutes % 60) else getString(R.string.dur_m, minutes))
-                title to getString(R.string.outside_hour_body, dur, auto)
+                // No time left to tell when there is no automatic check-out.
+                title to (if (autoOn) getString(R.string.outside_hour_body, dur, auto) else getString(R.string.outside_hour_body_plain))
             }
         }
         val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),

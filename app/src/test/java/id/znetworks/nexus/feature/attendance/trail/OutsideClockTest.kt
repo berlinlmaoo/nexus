@@ -2,6 +2,7 @@ package id.znetworks.nexus.feature.attendance.trail
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OutsideClockTest {
@@ -107,5 +108,19 @@ class OutsideClockTest {
         assertEquals(OutsideClock.AlertStep(null, true), OutsideClock.alertStep(out().copy(zone = TrailZone.INSIDE), t0, emptySet()))
         assertEquals(OutsideClock.AlertStep(null, true), OutsideClock.alertStep(out(t0, { it.copy(stage = "paused_permit") }), t0 + 60 * min, emptySet()))
         assertEquals(OutsideClock.AlertStep(null, true), OutsideClock.alertStep(TrailState(), t0, emptySet()))
+    }
+
+    @Test fun noCountdownWhenAutoCheckoutIsOff() {
+        // Berlin, 8 Oct: flags.outsideAutoCheckout false (default) = no countdown, no check-out time; reminders stay.
+        for (l in OutsideClock.Level.entries) {
+            val w = OutsideClock.wording(l, autoCheckout = false)
+            assertTrue(w.name, w.name.endsWith("PLAIN"))
+        }
+        assertEquals(OutsideClock.Wording.AUTO_AT, OutsideClock.wording(OutsideClock.Level.OUTSIDE, true))
+        val o = OutsideClock.present(out(), t0 + 100 * min)!!
+        assertEquals(o.sinceMillis to false, OutsideClock.chronometer(o, autoCheckout = false))
+        assertEquals(o.autoAtMillis to true, OutsideClock.chronometer(o, autoCheckout = true))
+        // The default when the server says nothing is OFF.
+        assertEquals(false, id.znetworks.nexus.core.config.ConfigBody().outsideAutoCheckout)
     }
 }

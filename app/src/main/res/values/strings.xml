@@ -1965,4 +1965,9 @@
     <string name="cal_lists_loading">Loading the people and projects of this range…</string>
     <string name="calq_empty_next">Your tasks are in the Calendar, day by day.</string>
     <string name="calq_open_calendar">Open Calendar</string>
+    <string name="outside_plain">Time outside the office is counting. File a permit if you\'re working outside.</string>
+    <string name="outside_remind_plain">1.5 hours outside the office. File a permit if you have something to do outside.</string>
+    <string name="outside_warn_plain">2 hours outside the office. File a permit if you have something to do outside.</string>
+    <string name="outside_left_body_plain">File a permit if you have something to do outside the office.</string>
+    <string name="outside_hour_body_plain">File a permit if you have something to do outside, or head back to the office.</string>
 </resources>
