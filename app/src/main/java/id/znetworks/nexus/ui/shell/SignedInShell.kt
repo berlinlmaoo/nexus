@@ -1,5 +1,6 @@
 package id.znetworks.nexus.ui.shell
 
+import id.znetworks.nexus.feature.admin.RestoreTarget
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Badge
@@ -407,7 +408,15 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
             composable("reflections/{id}") { e -> ReflectionsScreen(e.arguments?.getString("id"), onBack = { nav.popBackStack() }) }
             composable("audit/{id}") { e -> AuditEntryScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() },
-                onOpenLink = { type, id -> when (type) { "task" -> nav.navigate("task/$id"); "project" -> nav.navigate("project/$id"); else -> nav.navigate("profile/$id") } }) }
+                onOpenLink = { type, id -> when (type) { "task" -> nav.navigate("task/$id"); "project" -> nav.navigate("project/$id"); else -> nav.navigate("profile/$id") } },
+                // A restored thing of any kind, on the screen this app has for it (RESTORE-ALL-TYPES).
+                onOpenTarget = { t -> nav.navigate(when (t.kind) {
+                    RestoreTarget.Kind.PROJECT -> "project/${t.id}"; RestoreTarget.Kind.TASK -> "task/${t.id}"
+                    RestoreTarget.Kind.DOC -> "doc/${t.id}"; RestoreTarget.Kind.FOLDER -> "folder/${t.id}"
+                    RestoreTarget.Kind.ATTENDANCE -> "attendance"; RestoreTarget.Kind.ROOMS -> "rooms"
+                    RestoreTarget.Kind.CALENDAR -> t.date?.let { "calendar?date=$it" } ?: "calendar"
+                    RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"
+                }) }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }

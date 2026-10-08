@@ -224,11 +224,18 @@ private fun RestorePreview() {
         androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
             id.znetworks.nexus.feature.admin.RestorePill(true); id.znetworks.nexus.feature.admin.RestorePill(false)
         }
-        id.znetworks.nexus.feature.admin.RestoreCard(e, open, null, restoring = false, error = null, onRestore = {}, onOpenLink = { _, _ -> })
+        id.znetworks.nexus.feature.admin.RestoreCard(e, open, null, restoring = false, error = null, onRestore = {}, onOpenTarget = {})
         id.znetworks.nexus.feature.admin.RestoreCard(task, open.copy(fromBackup = false, counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts(tasks = 3, comments = 1)), null,
-            restoring = true, error = androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.au_err_parent_missing), onRestore = {}, onOpenLink = { _, _ -> })
-        id.znetworks.nexus.feature.admin.RestoreCard(e, done, null, restoring = false, error = null, onRestore = {}, onOpenLink = { _, _ -> })
-        id.znetworks.nexus.feature.admin.RestoreCard(task, open, id.znetworks.nexus.feature.admin.AuditRestoreResult(true, "task", "t1"), restoring = false, error = null, onRestore = {}, onOpenLink = { _, _ -> })
+            restoring = true, error = androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.au_err_parent_missing), onRestore = {}, onOpenTarget = {})
+        id.znetworks.nexus.feature.admin.RestoreCard(e, done, null, restoring = false, error = null, onRestore = {}, onOpenTarget = {})
+        id.znetworks.nexus.feature.admin.RestoreCard(task, open, id.znetworks.nexus.feature.admin.AuditRestoreResult(true, "task", "t1"), restoring = false, error = null, onRestore = {}, onOpenTarget = {})
+        // Other kinds (RESTORE-ALL-TYPES): a sheet's rows, a soft-deleted post, a purged Vault folder just restored.
+        id.znetworks.nexus.feature.admin.RestoreCard(e.copy(entityType = "sheet_rows", entityName = "Budget Q4"), open.copy(fromBackup = false, counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts(rows = 3, comments = 1)),
+            null, restoring = false, error = null, onRestore = {}, onOpenTarget = {})
+        id.znetworks.nexus.feature.admin.RestoreCard(e.copy(entityType = "post"), open.copy(fromBackup = false, soft = true, counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts()),
+            null, restoring = false, error = androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.au_cf_soft), onRestore = {}, onOpenTarget = {})
+        id.znetworks.nexus.feature.admin.RestoreCard(e.copy(entityType = "vault_folder"), open.copy(soft = false), id.znetworks.nexus.feature.admin.AuditRestoreResult(true, "vault_folder", "v1",
+            open = kotlinx.serialization.json.buildJsonObject { put("type", kotlinx.serialization.json.JsonPrimitive("vault")) }), restoring = false, error = null, onRestore = {}, onOpenTarget = {})
     }
 }
 

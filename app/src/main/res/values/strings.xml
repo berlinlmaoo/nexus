@@ -2112,4 +2112,166 @@
     <string name="rt_reconnecting">reconnecting</string>
     <string name="rt_off">off</string>
     <string name="td_created_by">Created by %1$s</string>
+    <!-- Restore every kind of delete (Berlin, 8 Oct; RESTORE-ALL-TYPES) -->
+    <string name="au_restore_too_old_any">This was deleted before NEXUS started keeping deleted items, so it can\'t be restored.</string>
+    <string name="au_restored_now_vault">Restored. It\'s back in the Vault trash.</string>
+    <string name="au_rb_comment">Restore comment</string>
+    <string name="au_rb_file">Restore file</string>
+    <string name="au_rb_annotation">Restore annotation</string>
+    <string name="au_rb_doc">Restore doc</string>
+    <string name="au_rb_page">Restore page</string>
+    <string name="au_rb_sheet">Restore sheet</string>
+    <string name="au_rb_custom_field">Restore custom field</string>
+    <string name="au_rb_form">Restore form</string>
+    <string name="au_rb_automation">Restore automation</string>
+    <string name="au_rb_webhook">Restore webhook</string>
+    <string name="au_rb_workflow_bundle">Restore workflow bundle</string>
+    <string name="au_rb_goal">Restore goal</string>
+    <string name="au_rb_portfolio">Restore portfolio</string>
+    <string name="au_rb_calendar">Restore calendar</string>
+    <string name="au_rb_booking">Restore booking</string>
+    <string name="au_rb_announcement">Restore announcement</string>
+    <string name="au_rb_saved_search">Restore saved search</string>
+    <string name="au_rb_expense">Restore expense</string>
+    <string name="au_rb_income">Restore income</string>
+    <string name="au_rb_payment">Restore payment</string>
+    <string name="au_rb_category">Restore category</string>
+    <string name="au_rb_stage">Restore stage</string>
+    <string name="au_rb_recurring">Restore recurring expense</string>
+    <string name="au_rb_receipt">Restore receipt</string>
+    <string name="au_rb_budget">Restore budget</string>
+    <string name="au_rb_holiday">Restore holiday</string>
+    <string name="au_rb_day_off">Restore day off</string>
+    <string name="au_rb_office">Restore office</string>
+    <string name="au_rb_placement">Restore placement</string>
+    <string name="au_rb_folder">Restore folder</string>
+    <string name="au_rb_trash">Restore trash</string>
+    <string name="au_rb_section">Restore section</string>
+    <string name="au_rb_unit">Restore unit</string>
+    <string name="au_rb_rows">Restore rows</string>
+    <string name="au_rb_submission">Restore submission</string>
+    <string name="au_rb_attendance_record">Restore attendance record</string>
+    <string name="au_rb_column">Restore column</string>
+    <string name="au_rb_post">Restore post</string>
+    <string name="au_rb_quest">Restore quest</string>
+    <string name="au_rb_event">Restore event</string>
+    <string name="au_rb_extra_day_off">Restore extra day off</string>
+    <string name="au_note_task_list">Tasks moved out of it go back in, unless someone has moved them since.</string>
+    <string name="au_note_project_folder">Projects and folders moved out of it go back in, unless someone has moved them since. If its name is taken, it comes back as “Name (2)”.</string>
+    <string name="au_note_org_unit">Its people come back on the card, and units moved up go back under it unless someone has moved them since.</string>
+    <string name="au_note_sheet_rows">They go back where they were. If new rows have taken those places, they go after the last row.</string>
+    <string name="au_note_column">Its values come back in the rows that still exist.</string>
+    <string name="au_note_sheet">If its tab position is taken, it comes back as the last tab.</string>
+    <string name="au_note_form">If its link has been taken since, it comes back with “-2” at the end.</string>
+    <string name="au_note_submission">Its task comes back with it.</string>
+    <string name="au_note_attendance_record">XP penalties refunded and the waiver given when it was deleted stay as they are.</string>
+    <string name="au_note_recurring">It posts again from this month on. The months it was deleted are not billed.</string>
+    <string name="au_note_category">Expenses that were in it go back into it.</string>
+    <string name="au_note_stage">Deals that were in it go back into it.</string>
+    <string name="au_note_room_booking">It can\'t come back if the room has been booked for that time since.</string>
+    <string name="au_note_vault_soft">It comes out of the Vault trash.</string>
+    <string name="au_note_vault_purged">It comes back to the Vault trash, as it was. Restore it from there to use it again.</string>
+    <string name="au_note_post">It shows on The Wire again.</string>
+    <string name="au_note_quest">The quest becomes active again.</string>
+    <string name="au_note_event">The event is no longer cancelled.</string>
+    <string name="au_note_bonus">The extra day off is granted again.</string>
+    <string name="au_note_office">The office is back in the list and open for check-ins.</string>
+    <string name="au_cf_holiday">There\'s already a holiday on that date. Remove it first if this one should come back.</string>
+    <string name="au_cf_attendance_record">That person already has an attendance record for that day.</string>
+    <string name="au_cf_budget">A budget has been set for that month since. Change that one instead.</string>
+    <string name="au_cf_room_booking">The room has been booked for that time since.</string>
+    <string name="au_cf_placement">They\'re on that card again already.</string>
+    <string name="au_cf_column">The sheet has no room for another column.</string>
+    <string name="au_cf_soft">It was changed after it was deleted, so it can\'t be put back as it was.</string>
+    <string name="au_cf_other">Something has taken its place since, so it can\'t come back as it was.</string>
+    <string name="au_pm_project">Its project was deleted too. Restore the project first, then this.</string>
+    <string name="au_pm_task">Its task was deleted too. Restore the task first, then this.</string>
+    <string name="au_pm_section">Its section was deleted too. Restore the section first, then this.</string>
+    <string name="au_pm_comment">The comment it replied to was deleted too. Restore that comment first, then this.</string>
+    <string name="au_pm_file">Its file was deleted too. Restore the file first, then this.</string>
+    <string name="au_pm_sheet">Its sheet was deleted too. Restore the sheet first, then this.</string>
+    <string name="au_pm_row">Its row was deleted too. Restore the rows first, then this.</string>
+    <string name="au_pm_page">Its parent page was deleted too. Restore that page first, then this.</string>
+    <string name="au_pm_doc">Its doc was deleted too. Restore the doc first, then this.</string>
+    <string name="au_pm_form">Its form was deleted too. Restore the form first, then this.</string>
+    <string name="au_pm_field">Its custom field was deleted too. Restore the field first, then this.</string>
+    <string name="au_pm_goal">Its goal was deleted too. Restore the goal first, then this.</string>
+    <string name="au_pm_portfolio">Its portfolio was deleted too. Restore the portfolio first, then this.</string>
+    <string name="au_pm_income">Its income was deleted too. Restore the income first, then this.</string>
+    <string name="au_pm_expense">Its expense was deleted too. Restore the expense first, then this.</string>
+    <string name="au_pm_folder">Its folder was deleted too. Restore the folder first, then this.</string>
+    <string name="au_pm_unit">Its unit was deleted too. Restore the unit first, then this.</string>
+    <string name="au_pm_office">Its office was deleted too. Restore the office first, then this.</string>
+    <string name="au_pm_person">The person it belonged to no longer exists, so it can\'t come back.</string>
+    <string name="au_pm_workspace">The workspace it belonged to no longer exists, so it can\'t come back.</string>
+    <string name="au_pm_team">The team it belonged to no longer exists, so it can\'t come back.</string>
+    <string name="au_pm_subtask">Its parent task was deleted too. Restore that task first, then this subtask.</string>
+    <string name="au_pm_unknown">What it belonged to was deleted too. Restore that first, then this.</string>
+    <string name="au_open_doc">Open doc</string>
+    <string name="au_open_folder">Open folder</string>
+    <string name="au_open_attendance">Open attendance</string>
+    <string name="au_open_room">Open room booking</string>
+    <string name="au_open_calendar">Open calendar</string>
+    <string name="au_open_vault">Open Vault</string>
+    <string name="au_open_wire">Open Threads</string>
+    <plurals name="au_n_rows">
+        <item quantity="one">%d row</item>
+        <item quantity="other">%d rows</item>
+    </plurals>
+    <plurals name="au_n_values">
+        <item quantity="one">%d value</item>
+        <item quantity="other">%d values</item>
+    </plurals>
+    <plurals name="au_n_items">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <plurals name="au_n_subfolders">
+        <item quantity="one">%d subfolder</item>
+        <item quantity="other">%d subfolders</item>
+    </plurals>
+    <plurals name="au_n_units_under">
+        <item quantity="one">%d unit under it</item>
+        <item quantity="other">%d units under it</item>
+    </plurals>
+    <plurals name="au_n_subpages">
+        <item quantity="one">%d subpage</item>
+        <item quantity="other">%d subpages</item>
+    </plurals>
+    <plurals name="au_n_submissions">
+        <item quantity="one">%d submission</item>
+        <item quantity="other">%d submissions</item>
+    </plurals>
+    <plurals name="au_n_field_values">
+        <item quantity="one">%d field value</item>
+        <item quantity="other">%d field values</item>
+    </plurals>
+    <plurals name="au_n_receipts">
+        <item quantity="one">%d receipt</item>
+        <item quantity="other">%d receipts</item>
+    </plurals>
+    <plurals name="au_n_payments">
+        <item quantity="one">%d payment</item>
+        <item quantity="other">%d payments</item>
+    </plurals>
+    <plurals name="au_n_milestones">
+        <item quantity="one">%d milestone</item>
+        <item quantity="other">%d milestones</item>
+    </plurals>
+    <plurals name="au_n_points">
+        <item quantity="one">%d location point</item>
+        <item quantity="other">%d location points</item>
+    </plurals>
+    <plurals name="au_n_replies">
+        <item quantity="one">%d reply</item>
+        <item quantity="other">%d replies</item>
+    </plurals>
+    <plurals name="au_n_projects">
+        <item quantity="one">%d project</item>
+        <item quantity="other">%d projects</item>
+    </plurals>
+    <plurals name="au_n_people">
+        <item quantity="one">%d person</item>
+        <item quantity="other">%d people</item>
+    </plurals>
 </resources>

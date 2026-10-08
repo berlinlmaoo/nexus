@@ -17,9 +17,9 @@ class AuditRestoreTest {
         val entry = NexusJson.decodeFromString(AuditEntryResponse.serializer(), """{"entry":{"id":"a","action":"delete","entityType":"project"}}""")
         assertNull(entry.restore)
         // A project/task delete without a copy says why it can't come back; other entries say nothing.
-        assertTrue(AuditRestore.tooOld(entry.entry, entry.restore))
-        assertFalse(AuditRestore.tooOld(entry.entry.copy(action = "update"), null))
-        assertFalse(AuditRestore.tooOld(entry.entry.copy(entityType = "user"), null))
+        assertEquals(R.string.au_restore_too_old, RestoreKinds.tooOld(entry.entry, entry.restore))
+        assertNull(RestoreKinds.tooOld(entry.entry.copy(action = "update"), null))
+        assertNull(RestoreKinds.tooOld(entry.entry.copy(entityType = "user"), null))
     }
 
     @Test fun newServerFields() {
@@ -30,10 +30,10 @@ class AuditRestoreTest {
             "restore":{"available":false,"restoredAt":"2026-10-08T03:00:00Z","dataAsOf":"2026-10-08T01:00:00Z","fromBackup":true,
             "restoredBy":{"id":"u","name":"Berlin"},"counts":{"lists":0,"tasks":3,"files":1,"comments":0,"sheets":0,"members":0}}}""")
         assertEquals("Berlin", e.restore!!.restoredBy!!.name)
-        assertFalse(AuditRestore.tooOld(e.entry, e.restore))
+        assertNull(RestoreKinds.tooOld(e.entry, e.restore))
         // For a task, counts.tasks are its subtasks; zeros are left out.
-        assertEquals(listOf(R.plurals.au_n_subtasks to 3, R.plurals.au_n_files to 1), AuditRestore.parts(e.restore!!.counts, isTask = true))
-        assertEquals(R.plurals.au_n_tasks, AuditRestore.parts(e.restore!!.counts, isTask = false)[0].first)
+        assertEquals(listOf(R.plurals.au_n_subtasks to 3, R.plurals.au_n_files to 1), RestoreKinds.parts(e.restore!!.counts, "task"))
+        assertEquals(R.plurals.au_n_tasks, RestoreKinds.parts(e.restore!!.counts, "project")[0].first)
         val result = NexusJson.decodeFromString(AuditRestoreResult.serializer(),
             """{"ok":true,"entityType":"project","entityId":"p1","projectId":"p1","restored":{"lists":7,"tasks":226,"files":155,"comments":0,"folders":1}}""")
         assertEquals("p1", result.entityId)
@@ -48,12 +48,12 @@ class AuditRestoreTest {
 
     @Test fun eachCodeHasTheAppsOwnText() {
         fun http(status: Int, code: String?) = ApiError.Http(status, "server english", code, null)
-        assertEquals(R.string.au_err_already_restored, AuditRestore.errorRes(http(409, "ALREADY_RESTORED")))
-        assertEquals(R.string.au_err_already_exists, AuditRestore.errorRes(http(409, "ALREADY_EXISTS")))
-        assertEquals(R.string.au_err_parent_missing, AuditRestore.errorRes(http(409, "PARENT_MISSING")))
-        assertEquals(R.string.au_err_not_restorable, AuditRestore.errorRes(http(404, "NOT_RESTORABLE")))
-        assertEquals(R.string.au_err_restore_failed, AuditRestore.errorRes(http(500, null)))
-        assertEquals(R.string.au_err_restore_failed, AuditRestore.errorRes(ApiError.Http(502, null, null, null)))
+        assertEquals(R.string.au_err_already_restored, RestoreKinds.errorRes(http(409, "ALREADY_RESTORED"), "task", false))
+        assertEquals(R.string.au_err_already_exists, RestoreKinds.errorRes(http(409, "ALREADY_EXISTS"), "task", false))
+        assertEquals(R.string.au_err_parent_missing, RestoreKinds.errorRes(http(409, "PARENT_MISSING"), "task", false))
+        assertEquals(R.string.au_err_not_restorable, RestoreKinds.errorRes(http(404, "NOT_RESTORABLE"), "task", false))
+        assertEquals(R.string.au_err_restore_failed, RestoreKinds.errorRes(http(500, null), "task", false))
+        assertEquals(R.string.au_err_restore_failed, RestoreKinds.errorRes(ApiError.Http(502, null, null, null), "task", false))
     }
 
     @Test fun restoreIsAKind() {

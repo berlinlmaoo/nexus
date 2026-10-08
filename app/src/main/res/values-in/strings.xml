@@ -2097,4 +2097,151 @@
     <string name="rt_reconnecting">menyambung ulang</string>
     <string name="rt_off">mati</string>
     <string name="td_created_by">Dibuat oleh %1$s</string>
+    <!-- Restore every kind of delete (Berlin, 8 Oct; RESTORE-ALL-TYPES) -->
+    <string name="au_restore_too_old_any">Ini dihapus sebelum NEXUS mulai menyimpan data yang dihapus, jadi tidak bisa dipulihkan.</string>
+    <string name="au_restored_now_vault">Sudah dipulihkan. Kembali ke sampah Vault.</string>
+    <string name="au_rb_comment">Pulihkan komentar</string>
+    <string name="au_rb_file">Pulihkan file</string>
+    <string name="au_rb_annotation">Pulihkan anotasi</string>
+    <string name="au_rb_doc">Pulihkan dokumen</string>
+    <string name="au_rb_page">Pulihkan halaman</string>
+    <string name="au_rb_sheet">Pulihkan sheet</string>
+    <string name="au_rb_custom_field">Pulihkan custom field</string>
+    <string name="au_rb_form">Pulihkan form</string>
+    <string name="au_rb_automation">Pulihkan otomasi</string>
+    <string name="au_rb_webhook">Pulihkan webhook</string>
+    <string name="au_rb_workflow_bundle">Pulihkan workflow bundle</string>
+    <string name="au_rb_goal">Pulihkan goal</string>
+    <string name="au_rb_portfolio">Pulihkan portofolio</string>
+    <string name="au_rb_calendar">Pulihkan kalender</string>
+    <string name="au_rb_booking">Pulihkan booking</string>
+    <string name="au_rb_announcement">Pulihkan pengumuman</string>
+    <string name="au_rb_saved_search">Pulihkan pencarian tersimpan</string>
+    <string name="au_rb_expense">Pulihkan pengeluaran</string>
+    <string name="au_rb_income">Pulihkan pemasukan</string>
+    <string name="au_rb_payment">Pulihkan pembayaran</string>
+    <string name="au_rb_category">Pulihkan kategori</string>
+    <string name="au_rb_stage">Pulihkan tahap</string>
+    <string name="au_rb_recurring">Pulihkan pengeluaran rutin</string>
+    <string name="au_rb_receipt">Pulihkan nota</string>
+    <string name="au_rb_budget">Pulihkan anggaran</string>
+    <string name="au_rb_holiday">Pulihkan tanggal merah</string>
+    <string name="au_rb_day_off">Pulihkan day off</string>
+    <string name="au_rb_office">Pulihkan kantor</string>
+    <string name="au_rb_placement">Pulihkan penempatan</string>
+    <string name="au_rb_folder">Pulihkan folder</string>
+    <string name="au_rb_trash">Pulihkan isi sampah</string>
+    <string name="au_rb_section">Pulihkan section</string>
+    <string name="au_rb_unit">Pulihkan unit</string>
+    <string name="au_rb_rows">Pulihkan baris</string>
+    <string name="au_rb_submission">Pulihkan pengajuan</string>
+    <string name="au_rb_attendance_record">Pulihkan data absen</string>
+    <string name="au_rb_column">Pulihkan kolom</string>
+    <string name="au_rb_post">Pulihkan postingan</string>
+    <string name="au_rb_quest">Pulihkan quest</string>
+    <string name="au_rb_event">Pulihkan acara</string>
+    <string name="au_rb_extra_day_off">Pulihkan extra day off</string>
+    <string name="au_note_task_list">Tugas yang dipindahkan keluar akan kembali ke sini, kecuali sudah dipindahkan lagi oleh seseorang.</string>
+    <string name="au_note_project_folder">Proyek dan folder yang dipindahkan keluar akan kembali ke dalamnya, kecuali sudah dipindahkan lagi. Kalau namanya sudah dipakai, folder ini kembali sebagai “Nama (2)”.</string>
+    <string name="au_note_org_unit">Orang-orangnya kembali ke kartu, dan unit yang dinaikkan kembali ke bawahnya kecuali sudah dipindahkan lagi.</string>
+    <string name="au_note_sheet_rows">Barisnya kembali ke tempat semula. Kalau tempatnya sudah diisi baris baru, barisnya ditaruh setelah baris terakhir.</string>
+    <string name="au_note_column">Isinya kembali di baris yang masih ada.</string>
+    <string name="au_note_sheet">Kalau posisi tab-nya sudah dipakai, sheet ini kembali sebagai tab terakhir.</string>
+    <string name="au_note_form">Kalau link-nya sudah dipakai, form ini kembali dengan akhiran “-2”.</string>
+    <string name="au_note_submission">Tugasnya ikut kembali.</string>
+    <string name="au_note_attendance_record">Potongan XP yang sudah dikembalikan dan pengecualian yang diberikan saat dihapus tetap seperti sekarang.</string>
+    <string name="au_note_recurring">Mulai tercatat lagi bulan ini. Bulan-bulan selama terhapus tidak ditagihkan.</string>
+    <string name="au_note_category">Pengeluaran yang tadinya di kategori ini kembali masuk ke sini.</string>
+    <string name="au_note_stage">Deal yang tadinya di tahap ini kembali masuk ke sini.</string>
+    <string name="au_note_room_booking">Tidak bisa kembali kalau ruangannya sudah dibooking di jam itu.</string>
+    <string name="au_note_vault_soft">Keluar dari sampah Vault.</string>
+    <string name="au_note_vault_purged">Kembali ke sampah Vault seperti semula. Pulihkan dari sana untuk dipakai lagi.</string>
+    <string name="au_note_post">Tampil lagi di The Wire.</string>
+    <string name="au_note_quest">Quest-nya aktif lagi.</string>
+    <string name="au_note_event">Acaranya tidak lagi dibatalkan.</string>
+    <string name="au_note_bonus">Extra day off-nya diberikan lagi.</string>
+    <string name="au_note_office">Kantornya kembali di daftar dan bisa dipakai absen lagi.</string>
+    <string name="au_cf_holiday">Sudah ada tanggal merah di tanggal itu. Hapus dulu kalau yang ini mau dikembalikan.</string>
+    <string name="au_cf_attendance_record">Orang itu sudah punya data absen di hari itu.</string>
+    <string name="au_cf_budget">Anggaran bulan itu sudah diisi lagi. Ubah yang itu saja.</string>
+    <string name="au_cf_room_booking">Ruangannya sudah dibooking di jam itu.</string>
+    <string name="au_cf_placement">Orangnya sudah ada lagi di kartu itu.</string>
+    <string name="au_cf_column">Sheet-nya sudah tidak muat kolom lagi.</string>
+    <string name="au_cf_soft">Sudah diubah setelah dihapus, jadi tidak bisa dikembalikan seperti semula.</string>
+    <string name="au_cf_other">Tempatnya sudah diisi yang lain, jadi tidak bisa kembali seperti semula.</string>
+    <string name="au_pm_project">Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru ini.</string>
+    <string name="au_pm_task">Tugasnya juga terhapus. Pulihkan tugasnya dulu, baru ini.</string>
+    <string name="au_pm_section">Section-nya juga terhapus. Pulihkan section-nya dulu, baru ini.</string>
+    <string name="au_pm_comment">Komentar yang dibalasnya juga terhapus. Pulihkan komentar itu dulu, baru ini.</string>
+    <string name="au_pm_file">File-nya juga terhapus. Pulihkan file-nya dulu, baru ini.</string>
+    <string name="au_pm_sheet">Sheet-nya juga terhapus. Pulihkan sheet-nya dulu, baru ini.</string>
+    <string name="au_pm_row">Barisnya juga terhapus. Pulihkan barisnya dulu, baru ini.</string>
+    <string name="au_pm_page">Halaman induknya juga terhapus. Pulihkan halaman itu dulu, baru ini.</string>
+    <string name="au_pm_doc">Dokumennya juga terhapus. Pulihkan dokumennya dulu, baru ini.</string>
+    <string name="au_pm_form">Form-nya juga terhapus. Pulihkan form-nya dulu, baru ini.</string>
+    <string name="au_pm_field">Custom field-nya juga terhapus. Pulihkan field-nya dulu, baru ini.</string>
+    <string name="au_pm_goal">Goal-nya juga terhapus. Pulihkan goal-nya dulu, baru ini.</string>
+    <string name="au_pm_portfolio">Portofolionya juga terhapus. Pulihkan portofolionya dulu, baru ini.</string>
+    <string name="au_pm_income">Pemasukannya juga terhapus. Pulihkan pemasukannya dulu, baru ini.</string>
+    <string name="au_pm_expense">Pengeluarannya juga terhapus. Pulihkan pengeluarannya dulu, baru ini.</string>
+    <string name="au_pm_folder">Folder-nya juga terhapus. Pulihkan folder-nya dulu, baru ini.</string>
+    <string name="au_pm_unit">Unit-nya juga terhapus. Pulihkan unit-nya dulu, baru ini.</string>
+    <string name="au_pm_office">Kantornya juga terhapus. Pulihkan kantornya dulu, baru ini.</string>
+    <string name="au_pm_person">Orang pemiliknya sudah tidak ada, jadi tidak bisa dikembalikan.</string>
+    <string name="au_pm_workspace">Workspace-nya sudah tidak ada, jadi tidak bisa dikembalikan.</string>
+    <string name="au_pm_team">Tim-nya sudah tidak ada, jadi tidak bisa dikembalikan.</string>
+    <string name="au_pm_subtask">Tugas induknya juga terhapus. Pulihkan tugas itu dulu, baru subtugas ini.</string>
+    <string name="au_pm_unknown">Induknya juga terhapus. Pulihkan itu dulu, baru ini.</string>
+    <string name="au_open_doc">Buka dokumen</string>
+    <string name="au_open_folder">Buka folder</string>
+    <string name="au_open_attendance">Buka absensi</string>
+    <string name="au_open_room">Buka booking ruangan</string>
+    <string name="au_open_calendar">Buka kalender</string>
+    <string name="au_open_vault">Buka Vault</string>
+    <string name="au_open_wire">Buka Threads</string>
+    <plurals name="au_n_rows">
+        <item quantity="other">%d baris</item>
+    </plurals>
+    <plurals name="au_n_values">
+        <item quantity="other">%d isian</item>
+    </plurals>
+    <plurals name="au_n_items">
+        <item quantity="other">%d item</item>
+    </plurals>
+    <plurals name="au_n_subfolders">
+        <item quantity="other">%d subfolder</item>
+    </plurals>
+    <plurals name="au_n_units_under">
+        <item quantity="other">%d unit di bawahnya</item>
+    </plurals>
+    <plurals name="au_n_subpages">
+        <item quantity="other">%d subhalaman</item>
+    </plurals>
+    <plurals name="au_n_submissions">
+        <item quantity="other">%d pengajuan</item>
+    </plurals>
+    <plurals name="au_n_field_values">
+        <item quantity="other">%d isian field</item>
+    </plurals>
+    <plurals name="au_n_receipts">
+        <item quantity="other">%d nota</item>
+    </plurals>
+    <plurals name="au_n_payments">
+        <item quantity="other">%d pembayaran</item>
+    </plurals>
+    <plurals name="au_n_milestones">
+        <item quantity="other">%d milestone</item>
+    </plurals>
+    <plurals name="au_n_points">
+        <item quantity="other">%d titik lokasi</item>
+    </plurals>
+    <plurals name="au_n_replies">
+        <item quantity="other">%d balasan</item>
+    </plurals>
+    <plurals name="au_n_projects">
+        <item quantity="other">%d proyek</item>
+    </plurals>
+    <plurals name="au_n_people">
+        <item quantity="other">%d orang</item>
+    </plurals>
 </resources>
