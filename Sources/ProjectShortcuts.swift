@@ -10,9 +10,10 @@ struct ProjectRef: Codable, Hashable, Identifiable {
     var icon: String?
 
     var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
+    /// A named icon ("briefcase") draws its emoji, as on web — see projectIconEmoji.
     var emoji: String? {
-        guard let icon, !icon.isEmpty, !isUploadedIcon, isEmojiIcon(icon) else { return nil }
-        return icon
+        guard !isUploadedIcon else { return nil }
+        return projectIconEmoji(icon)
     }
 }
 

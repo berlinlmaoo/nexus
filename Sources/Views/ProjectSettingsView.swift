@@ -16,12 +16,18 @@ struct ProjectSettingsView: View {
     @State private var desc = ""
     @State private var color = "#7b68ee"
     @State private var icon = "🚀"
+    /// What the icon field showed on open: the emoji the stored icon stands for. Saving sends the
+    /// stored value back untouched unless someone picked another emoji (see hydrate()).
+    @State private var shownIcon = "🚀"
     @State private var savingIdentity = false
     @State private var identitySaved = false
 
     // flags
     @State private var batchDup = false
     @State private var pnl = false
+    @State private var finance = false
+    @State private var hiddenTabs: [String] = []
+    @State private var savingTabs = false
     @State private var autoAssign = false
     @State private var autoIds: Set<String> = []
     @State private var viewerWsRole: String?
@@ -38,6 +44,8 @@ struct ProjectSettingsView: View {
 
     private let swatches = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#64748b"]
     private var canPnl: Bool { viewerWsRole == "BOD" || viewerWsRole == "ONE_ABOVE_ALL" }
+    /// Tabs follow the server's rule for every project setting: Manager and above.
+    private var canManageTabs: Bool { viewerWsRole == "MANAGER" || canPnl }
     private var iconIsImage: Bool { icon.hasPrefix("/") || icon.hasPrefix("http") }
 
     var body: some View {
@@ -46,6 +54,7 @@ struct ProjectSettingsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     identityCard
                     customizeCard
+                    tabsCard
                     fieldsCard
                     membersCard
                     dangerCard
@@ -74,8 +83,10 @@ struct ProjectSettingsView: View {
                             .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 8))
                         Button(T("Use an emoji instead")) { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                     } else {
+                        // One emoji: typing another replaces it. The field used to keep the first two
+                        // characters of whatever it held, so a named icon ("briefcase") became "br".
                         TextField("🚀", text: $icon).font(.system(size: 24)).frame(width: 50)
-                            .onChange(of: icon) { _, v in if v.count > 2 { icon = String(v.prefix(2)) } }
+                            .onChange(of: icon) { _, v in if v.count > 1 { icon = String(v.suffix(1)) } }
                     }
                     Spacer()
                 }
@@ -109,6 +120,11 @@ struct ProjectSettingsView: View {
                 flagToggle("P&L Dashboard", T("Standalone finance view: daily spend, incoming-cash pipeline."), $pnl) {
                     await patch(["enablePnlDashboard": pnl])
                 }
+                // Finance is opt-in exactly like P&L (owner, 9 Oct 2026), BoD and above.
+                Divider().overlay(NX.border)
+                flagToggle("Finance", T("Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&L. Turning it off only hides the tab — the numbers stay."), $finance) {
+                    await saveFinance()
+                }
             }
             Divider().overlay(NX.border)
             flagToggle("Auto assign", T("Auto-assign the selected members to new tasks in this project."), $autoAssign) {
@@ -134,6 +150,44 @@ struct ProjectSettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: tabs (owner, 9 Oct 2026)
+
+    /// One switch per tab. Off only hides the tab; Board or List always stays on.
+    private var tabsCard: some View {
+        card(T("Tabs")) {
+            Text(T("Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            ForEach(ProjectTab.hideable) { tab in
+                if tab != ProjectTab.hideable.first { Divider().overlay(NX.border) }
+                tabToggle(tab)
+            }
+            if !canManageTabs && viewerWsRole != nil {
+                Text(T("Only managers and above can change the tabs.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+        }
+    }
+
+    private func tabToggle(_ tab: ProjectTab) -> some View {
+        let key = tab.key ?? ""
+        let shown = !hiddenTabs.contains(key)
+        let shownTaskViews = ProjectTab.taskViews.filter { !hiddenTabs.contains($0.key ?? "") }
+        // The last task view stays on: a task project needs some way to see its tasks.
+        let lastTaskView = shown && shownTaskViews == [tab]
+        return Toggle(isOn: Binding(get: { !hiddenTabs.contains(key) }, set: { on in Task { await setTab(key, shown: on) } })) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 8) {
+                    Image(systemName: tab.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.violetText).frame(width: 18)
+                    Text(tab.label).font(NXFont.text(14, .semibold)).foregroundStyle(shown ? NX.foreground : NX.mutedFg)
+                }
+                if lastTaskView {
+                    Text(T("Board or List stays on")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+            }
+        }
+        .tint(NX.violetText)
+        .disabled(!canManageTabs || lastTaskView || savingTabs)
     }
 
     // MARK: custom fields
@@ -254,9 +308,14 @@ struct ProjectSettingsView: View {
         name = detail.name
         desc = detail.description ?? ""
         color = detail.color ?? "#7b68ee"
-        icon = detail.icon ?? "🚀"
+        let stored = detail.icon ?? "🚀"
+        icon = (stored.hasPrefix("/") || stored.hasPrefix("http")) ? stored : (projectIconEmoji(stored) ?? "🚀")
+        shownIcon = icon
         batchDup = detail.enableTaskBatchDuplicate ?? false
         pnl = detail.enablePnlDashboard ?? false
+        // Same rule as the tab bar: an older server without the flag → the name rule.
+        finance = detail.financeEnabled ?? (detail.name.range(of: "finance", options: .caseInsensitive) != nil)
+        hiddenTabs = detail.hiddenTabs ?? []
         autoAssign = detail.autoAssignEnabled ?? false
         autoIds = Set(detail.autoAssignAssigneeIds ?? [])
         projectMembers = detail.members ?? []
@@ -272,7 +331,8 @@ struct ProjectSettingsView: View {
     private func saveIdentity() async {
         savingIdentity = true; identitySaved = false
         let ok = (try? await APIClient.shared.updateProject(projectId, fields: [
-            "name": name, "description": desc, "color": color, "icon": icon
+            "name": name, "description": desc, "color": color,
+            "icon": icon == shownIcon ? (detail.icon ?? icon) : icon
         ])) != nil
         savingIdentity = false; identitySaved = ok
         if ok { await onChange() }
@@ -280,6 +340,29 @@ struct ProjectSettingsView: View {
     private func patch(_ fields: [String: Any]) async {
         if (try? await APIClient.shared.updateProject(projectId, fields: fields)) != nil { await onChange() }
         else { show(T("Couldn't save — try again.")) }
+    }
+    private func saveFinance() async {
+        let wanted = finance
+        if (try? await APIClient.shared.updateProject(projectId, fields: ["financeEnabled": wanted])) != nil { await onChange() }
+        else { finance = !wanted; show(T("Couldn't save — try again.")) }
+    }
+    /// The whole hidden set goes up each time; keys this build does not know are kept as they are.
+    private func setTab(_ key: String, shown: Bool) async {
+        guard !key.isEmpty, !savingTabs else { return }
+        let before = hiddenTabs
+        var next = hiddenTabs.filter { $0 != key }
+        if !shown { next.append(key) }
+        hiddenTabs = next
+        savingTabs = true
+        do {
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["hiddenTabs": next])
+            savingTabs = false
+            await onChange()
+        } catch let failure {
+            savingTabs = false
+            hiddenTabs = before
+            show((failure as? LocalizedError)?.errorDescription ?? T("Couldn't save — try again."))
+        }
     }
     private func deleteField(_ f: CustomField) async {
         busy = true; try? await APIClient.shared.deleteCustomFieldDef(id: f.id); await reloadFields(); busy = false

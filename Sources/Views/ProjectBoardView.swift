@@ -88,24 +88,30 @@ struct ProjectDetailView: View {
 
     // MARK: which tabs this project actually gets
     //
-    // Finance and P&L are opt-in per project and OFF by default — they were showing on every
-    // project here. Rules mirror the web's tab filter exactly:
-    //   Po.filter(t => (t.id !== "finance" || /finance/i.test(project.name))
-    //               && (t.id !== "pnl"     || (!!project.enablePnlDashboard && isBoD)))
+    // Same rules as the web's tab bar (owner, 9 Oct 2026):
+    //   • a project hides the tabs it doesn't need — Project settings → Tabs, stored as
+    //     Project.hiddenTabs with the same keys as web (ProjectTab.key). Hiding only hides.
+    //   • Finance is opt-in per project like P&L (Project.financeEnabled, switched by BoD). It used
+    //     to follow the project's NAME containing "finance", which is how a project nobody had
+    //     switched it on for got a Finance tab.
+    //   • P&L needs its flag AND a BoD-tier viewer.
 
-    /// Web gates Finance on the PROJECT NAME containing "finance" — there is no backend flag for it.
+    /// Against a server that does not send the flag yet, the old name rule still applies.
     private var financeEnabled: Bool {
-        (detail?.name ?? projectName).range(of: "finance", options: .caseInsensitive) != nil
+        guard let detail else { return false }
+        if let flag = detail.financeEnabled { return flag }
+        return detail.name.range(of: "finance", options: .caseInsensitive) != nil
     }
     /// P&L needs the per-project flag AND a BoD-tier viewer.
     private var pnlEnabled: Bool { (detail?.enablePnlDashboard ?? false) && isBod }
+    private var hiddenTabKeys: Set<String> { Set(detail?.hiddenTabs ?? []) }
 
     private var visibleTabs: [ProjectTab] {
         ProjectTab.allCases.filter {
             switch $0 {
             case .finance: return financeEnabled
             case .pnl:     return pnlEnabled
-            default:       return true
+            default:       return !hiddenTabKeys.contains($0.key ?? "")
             }
         }
     }
@@ -136,6 +142,11 @@ struct ProjectDetailView: View {
             }
         }
         .task { await load() }
+        // The open tab was just hidden (in settings, or live from another device): land on Board,
+        // else List, else whatever is left.
+        .onChange(of: visibleTabs) { _, tabs in
+            if !tabs.contains(tab) { tab = tabs.first { ProjectTab.taskViews.contains($0) } ?? tabs.first ?? .board }
+        }
         // Live (owner, 8 Oct 2026): a task created, moved, edited or deleted on another device — or
         // the project itself renamed or changed — shows on the board, list, sheet, calendar and
         // timeline without a reload. The server sends task events only to the project's room, which
@@ -199,7 +210,7 @@ struct ProjectDetailView: View {
                     if let ic = d.icon, ic.hasPrefix("/") || ic.hasPrefix("http") {
                         CachedImage(url: URL(string: ic.hasPrefix("http") ? ic : Config.baseURL.absoluteString + ic)) { $0.resizable().scaledToFill() } placeholder: { tint.opacity(0.2) }
                     } else {
-                        Text(isEmojiIcon(d.icon ?? "") ? (d.icon ?? "📁") : "📁").font(.system(size: 17))
+                        Text(projectIconEmoji(d.icon) ?? "📁").font(.system(size: 17))
                     }
                 }
                 .frame(width: 30, height: 30)
@@ -238,7 +249,7 @@ struct ProjectDetailView: View {
                         VStack(spacing: 5) {
                             HStack(spacing: 5) {
                                 Image(systemName: t.icon).font(.system(size: 12, weight: .semibold))
-                                Text(t.rawValue).font(NXFont.text(13, tab == t ? .semibold : .medium))
+                                Text(t.label).font(NXFont.text(13, tab == t ? .semibold : .medium))
                             }
                             .foregroundStyle(tab == t ? NX.foreground : NX.mutedFg)
                             .padding(.horizontal, 12).padding(.vertical, 9)

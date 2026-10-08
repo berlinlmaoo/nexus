@@ -70,9 +70,10 @@ struct Project: Decodable, Identifiable, Sendable {
     }
 
     var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
+    /// A named icon ("briefcase") draws its emoji (💼), as on web — see projectIconEmoji.
     var emoji: String {
-        guard let icon, !icon.isEmpty, !isUploadedIcon, isEmojiIcon(icon) else { return "📁" }
-        return icon
+        guard !isUploadedIcon else { return "📁" }
+        return projectIconEmoji(icon) ?? "📁"
     }
     /// Status chip label + tone (mirrors web statusBadge).
     var statusLabel: String {

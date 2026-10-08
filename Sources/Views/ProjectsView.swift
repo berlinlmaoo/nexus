@@ -561,6 +561,8 @@ struct CreateProjectSheet: View {
     let workspaceId: String
     let onCreated: () async -> Void
     @Environment(\.dismiss) private var dismiss
+    /// Step one (owner, 9 Oct 2026): what the project is for. nil = the type cards are showing.
+    @State private var kind: ProjectKind?
     @State private var name = ""
     @State private var color = "#7B2FBE"
     @State private var icon = "🚀"
@@ -574,8 +576,10 @@ struct CreateProjectSheet: View {
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
+                if let kind {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        chosenKind(kind)
                         field(T("MISSION NAME")) {
                             TextField("mis. Z Networks Multimedia", text: $name)
                                 .font(NXFont.text(16)).padding(12)
@@ -610,6 +614,9 @@ struct CreateProjectSheet: View {
                     }
                     .padding(20)
                 }
+                } else {
+                    kindPicker
+                }
             }
             .navigationTitle(T("New mission"))
             .navigationBarTitleDisplayMode(.inline)
@@ -624,10 +631,63 @@ struct CreateProjectSheet: View {
         }
     }
 
+    /// Four cards. Only Task Project can be picked; the other three say "Coming soon" and do nothing.
+    private var kindPicker: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                ForEach(ProjectKind.allCases) { k in
+                    Button { kind = k } label: { kindCard(k) }
+                        .buttonStyle(.plain)
+                        .disabled(!k.available)
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    private func kindCard(_ k: ProjectKind) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: k.symbol).font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(k.available ? NX.violetText : NX.mutedFg)
+                .frame(width: 40, height: 40)
+                .background(k.available ? NX.violet.opacity(0.12) : NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(k.title).font(NXFont.text(15, .bold)).foregroundStyle(k.available ? NX.foreground : NX.mutedFg)
+                    if !k.available { NexusChip(text: T("Coming soon")) }
+                }
+                Text(k.blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if k.available {
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg).padding(.top, 12)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(k.available ? NX.card : NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: k.available ? [] : [4])))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    /// The chosen type above the form, with the way back to the cards.
+    private func chosenKind(_ k: ProjectKind) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: k.symbol).font(.system(size: 12, weight: .semibold))
+            Text(k.title).font(NXFont.text(13, .semibold))
+            Spacer(minLength: 4)
+            Button(T("Change type")) { kind = nil }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+        }
+        .foregroundStyle(NX.violetText)
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     private func create() async {
         busy = true; err = nil; defer { busy = false }
         do {
-            try await APIClient.shared.createProject(workspaceId: workspaceId, name: name.trimmingCharacters(in: .whitespaces), color: color, icon: icon)
+            try await APIClient.shared.createProject(workspaceId: workspaceId, name: name.trimmingCharacters(in: .whitespaces), color: color, icon: icon, type: (kind ?? .task).rawValue)
             await onCreated()
             dismiss()
         } catch {

@@ -16,6 +16,42 @@ struct ProjectDetail: Decodable, Sendable {
     let enablePnlDashboard: Bool?
     let autoAssignEnabled: Bool?
     let autoAssignAssigneeIds: [String]?
+    // Project type and tabs (owner, 9 Oct 2026) — see ProjectKinds.swift. Additive: a server from
+    // before sends none of them, and they are read leniently so an odd shape in one of them can never
+    // cost the whole board.
+    /// "TASK" | "FINANCE" | "CONTENT" | "PIPELINE". nil = an older server = TASK.
+    let type: String?
+    /// Tab keys this project hides (ProjectTab.key). A key this build does not know is ignored.
+    let hiddenTabs: [String]?
+    /// The Finance tab is opt-in, like P&L. nil = an older server, where the old name rule applies.
+    let financeEnabled: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, color, icon, description, workspaceId, taskLists, members
+        case enableTaskBatchDuplicate, enablePnlDashboard, autoAssignEnabled, autoAssignAssigneeIds
+        case type, hiddenTabs, financeEnabled
+    }
+
+    /// Written out only so the three fields above can be read leniently. Every other field decodes
+    /// exactly as the synthesized version did.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId)
+        taskLists = try c.decodeIfPresent([Lane].self, forKey: .taskLists)
+        members = try c.decodeIfPresent([ProjectMember].self, forKey: .members)
+        enableTaskBatchDuplicate = try c.decodeIfPresent(Bool.self, forKey: .enableTaskBatchDuplicate)
+        enablePnlDashboard = try c.decodeIfPresent(Bool.self, forKey: .enablePnlDashboard)
+        autoAssignEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoAssignEnabled)
+        autoAssignAssigneeIds = try c.decodeIfPresent([String].self, forKey: .autoAssignAssigneeIds)
+        type = try? c.decodeIfPresent(String.self, forKey: .type)
+        hiddenTabs = try? c.decodeIfPresent([String].self, forKey: .hiddenTabs)
+        financeEnabled = try? c.decodeIfPresent(Bool.self, forKey: .financeEnabled)
+    }
 
     struct Lane: Decodable, Identifiable, Sendable {
         let id: String

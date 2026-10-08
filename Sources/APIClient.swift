@@ -696,10 +696,11 @@ struct APIClient {
     }
 
     @discardableResult
-    func createProject(workspaceId: String, name: String, color: String, icon: String) async throws -> Bool {
+    /// `type`: only "TASK" is accepted today (owner, 9 Oct 2026); the others answer 400 TYPE_COMING_SOON.
+    func createProject(workspaceId: String, name: String, color: String, icon: String, type: String = "TASK") async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": type])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
