@@ -10,6 +10,7 @@ import { ID_COMMON } from "@/lib/i18n/id-common";
 import { ID_ORGCHART } from "@/lib/i18n/id-orgchart";
 import { ID_PROFILE } from "@/lib/i18n/id-profile";
 import { ID_PROJECTS } from "@/lib/i18n/id-projects";
+import { ID_VAULT } from "@/lib/i18n/id-vault";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -25,7 +26,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_PROFILE };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_PROFILE, ...ID_VAULT };
 
 function read(): Lang {
   try {

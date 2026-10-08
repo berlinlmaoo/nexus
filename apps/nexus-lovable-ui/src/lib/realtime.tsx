@@ -157,7 +157,7 @@ export function RealtimeProvider({
           );
         };
         // What the pending workspace/audit pings ask for, flushed as one invalidation per burst.
-        const pending = { tree: false, allProjects: false, audit: false, projectIds: new Set<string>() };
+        const pending = { tree: false, allProjects: false, audit: false, vault: false, projectIds: new Set<string>() };
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let burstStartedAt = 0;
         const flushPings = () => {
@@ -166,9 +166,13 @@ export function RealtimeProvider({
           burstStartedAt = 0;
           if (pending.tree) invalidateProjectViews(queryClient, pending.allProjects ? "all" : new Set(pending.projectIds));
           if (pending.audit) invalidateAuditViews(queryClient);
+          // Z Vault: the folder on screen, search results, the trash and the Move-to picker, all keyed
+          // ["vault", …]. Share dialogs (["vault-shares", id]) refetch on their own when opened.
+          if (pending.vault) queryClient.invalidateQueries({ queryKey: ["vault"] });
           pending.tree = false;
           pending.allProjects = false;
           pending.audit = false;
+          pending.vault = false;
           pending.projectIds.clear();
         };
         const schedulePings = () => {
@@ -181,6 +185,10 @@ export function RealtimeProvider({
           const data = (payload && typeof payload === "object" ? payload : {}) as { kind?: unknown; projectId?: unknown };
           if (data.kind === "audit") {
             pending.audit = true;
+          } else if (data.kind === "vault") {
+            // Server since 9 Oct 2026: a file or folder in Z Vault was added, moved, renamed, trashed,
+            // restored or locked. Nothing about projects moved, so the project tree stays as it is.
+            pending.vault = true;
           } else {
             // "projects" or "folders" (or a kind a newer server adds): the tree refetches either way, since
             // a folder change moves projects and a project change moves what a folder holds.
@@ -209,6 +217,7 @@ export function RealtimeProvider({
             pending.tree = true;
             pending.allProjects = true;
             pending.audit = true;
+            pending.vault = true;
             flushPings();
           }
           connectedBefore = true;
