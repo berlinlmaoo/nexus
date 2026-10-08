@@ -289,8 +289,10 @@ struct VaultView: View {
             }
             Spacer(minLength: 6)
 
-            if item.isRestricted {
-                Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
+            if item.isRestricted || (item.isFolder && item.isWriteLocked) {
+                Image(systemName: item.isRestricted ? "lock.fill" : "pencil.slash")
+                    .font(.system(size: 11)).foregroundStyle(NX.mutedFg)
+                    .accessibilityLabel(T("Locked"))
             }
 
             // Share, in plain sight on every row (owner, 9 Oct 2026: behind "…" nobody found it).
@@ -391,6 +393,11 @@ struct VaultView: View {
             if item.canModify {
                 Button { renameText = item.name; vaultAlert = .rename(item) } label: { Label(T("Rename"), systemImage: "pencil") }
                 Button { sheet = .move(item) } label: { Label(T("Move to…"), systemImage: "folder") }
+            }
+            if listing?.canManageAccess == true {
+                Button { sheet = .access(item) } label: { Label(T("Access…"), systemImage: "lock.shield") }
+            }
+            if item.canModify {
                 Button(role: .destructive) { vaultAlert = .delete(item) } label: { Label(T("Move to trash"), systemImage: "trash") }
             }
         }
@@ -497,6 +504,13 @@ struct VaultView: View {
             ActivityView(items: [share.url])
         case .shareLink(let item):
             NavigationStack { VaultShareSheet(item: item) { sheet = nil; Task { await load() } } }
+        case .access(let item):
+            NavigationStack {
+                VaultAccessSheet(item: item) { saved in
+                    sheet = nil
+                    if saved { flash(T("Access saved")); Task { await load(quiet: true) } }
+                }
+            }
         case .move(let item):
             // Opens where the item is when browsing; search results come from anywhere, so those
             // start at the top.
@@ -775,6 +789,7 @@ private enum VaultSheet: Identifiable {
     case activity(ShareItem)
     case shareLink(VaultItem)
     case move(VaultItem)
+    case access(VaultItem)
 
     var id: String {
         switch self {
@@ -782,6 +797,7 @@ private enum VaultSheet: Identifiable {
         case .activity(let share): return "activity-\(share.id.uuidString)"
         case .shareLink(let item): return "link-\(item.id)"
         case .move(let item): return "move-\(item.id)"
+        case .access(let item): return "access-\(item.id)"
         }
     }
 }

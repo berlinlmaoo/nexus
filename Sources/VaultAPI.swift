@@ -55,6 +55,17 @@ extension APIClient {
         try await vaultPatch(itemId, body: ["parentId": jsonOrNull(parentId)])
     }
 
+    /// Set who may open (`read`) and add to (`write`) an item — BoD only, the server decides. Each is
+    /// sent only when given: `.some(nil)` clears the item's own lock (it follows the folder above
+    /// again), `.none` leaves that threshold alone.
+    @discardableResult
+    func vaultSetAccess(_ itemId: String, read: String??, write: String??) async throws -> VaultItem {
+        var body: [String: Any] = [:]
+        if let read { body["minReadRole"] = jsonOrNull(read) }
+        if let write { body["minWriteRole"] = jsonOrNull(write) }
+        return try await vaultPatch(itemId, body: body)
+    }
+
     private func vaultPatch(_ itemId: String, body: [String: Any]) async throws -> VaultItem {
         var req = makeRequest("/api/vault/items/\(vaultEnc(itemId))", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
