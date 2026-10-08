@@ -15,6 +15,7 @@ import {
   updateMasterCalendarEventSchema,
   validateBody,
 } from "@/lib/validations"
+import { restorableSoftDelete } from "@/lib/deletion-snapshot"
 
 export async function PATCH(
   req: NextRequest,
@@ -203,9 +204,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    await prisma.teamCalendarEvent.update({
-      where: { id: (await params).eventId },
-      data: { status: "CANCELLED" },
+    // A delete here cancels the event. In the audit now, with a copy of its status so Control Room →
+    // Audit can bring it back.
+    const eventId = (await params).eventId
+    const event = await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: eventId }, select: { title: true, startsAt: true } })
+    const date = event.startsAt ? formatMasterCalendarDateInput(event.startsAt) : null
+    await restorableSoftDelete({
+      entityType: "calendar_event", entityId: eventId, entityName: date ? `${event.title} · ${date}` : event.title,
+      workspaceId: access.event.workspaceId, userId: session.user.id, request: _req,
+      metadata: { teamId: access.event.teamId, date },
+      meta: { open: { type: "calendar_event", id: eventId, ...(date ? { date } : {}) } },
+      apply: (tx) => tx.teamCalendarEvent.update({ where: { id: eventId }, data: { status: "CANCELLED" } }),
     })
 
     return NextResponse.json({ success: true })

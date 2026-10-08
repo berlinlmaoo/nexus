@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import {
   buildAttendanceDerivedFields,
   deriveAttendanceStatus,
@@ -294,23 +295,23 @@ export async function DELETE(
 
     // Delete the whole record. Refund the day's penalties + waive it so the nightly absence cron doesn't
     // turn the now-empty day into an alpha (−XP + auto day-off).
+    // The record and its location trail are kept first, so Control Room → Audit can restore them. The
+    // refund and the waiver below are not undone by a restore (the restore card says so).
     const dateKey = formatAttendanceDateKey(record.attendanceDate)
-    await prisma.attendanceRecord.delete({ where: { id: record.id } })
+    await restorableDelete({
+      entityType: "attendance_record", entityId: record.id,
+      entityName: `${record.user.name ?? "Someone"} · ${dateKey}`,
+      workspaceId: context.workspace.id, userId: session.user.id, request,
+      metadata: { date: dateKey, reason, targetUserId: record.userId },
+      meta: { open: { type: "attendance_record", id: record.id, date: dateKey } },
+      remove: (tx) => tx.attendanceRecord.delete({ where: { id: record.id } }),
+    })
     try {
       await cancelAttendancePenaltiesForDate(record.userId, context.workspace.id, record.attendanceDate, dateKey)
       await grantAttendanceWaiver(record.userId, dateKey)
     } catch (err) {
       console.error("DELETE attendance record: penalty cleanup failed:", err)
     }
-    await logAudit({
-      action: "delete",
-      entityType: "attendance_record",
-      entityId: record.id,
-      entityName: `${record.user.name} — hapus absen ${dateKey}`,
-      userId: session.user.id,
-      request,
-      metadata: { date: dateKey, reason },
-    })
     return NextResponse.json({ deleted: true, date: dateKey })
   } catch (error) {
     console.error("Error deleting attendance record:", error)

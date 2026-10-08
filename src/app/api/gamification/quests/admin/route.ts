@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { restorableSoftDelete } from "@/lib/deletion-snapshot"
 
 async function canManage(userId: string, workspaceId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
@@ -75,10 +76,15 @@ export async function DELETE(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const id = req.nextUrl.searchParams.get("id")
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
-    const quest = await prisma.quest.findUnique({ where: { id }, select: { workspaceId: true } })
+    const quest = await prisma.quest.findUnique({ where: { id }, select: { workspaceId: true, title: true } })
     if (!quest) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (!(await canManage(session.user.id, quest.workspaceId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    await prisma.quest.update({ where: { id }, data: { isActive: false } })
+    // In the audit now, with a copy of the flag so Control Room → Audit can switch it back on.
+    await restorableSoftDelete({
+      entityType: "quest", entityId: id, entityName: quest.title, workspaceId: quest.workspaceId,
+      userId: session.user.id, request: req, meta: { open: null },
+      apply: (tx) => tx.quest.update({ where: { id }, data: { isActive: false } }),
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("admin quests DELETE error:", error)

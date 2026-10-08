@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth"
 import { orgRoleOf } from "@/lib/org"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableSoftDelete } from "@/lib/deletion-snapshot"
+import { auditSnippet } from "@/lib/deletion-entities"
 import { notifyFeedMention } from "@/lib/notification-service"
 import {
   POST_TEXT_MAX, MENTION_MAX, EDIT_WINDOW_MS, POST_INCLUDE, type PostRow,
@@ -23,7 +25,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const role = await getUserOrgRole(me)
 
-    const post = await prisma.post.findFirst({ where: { id, deletedAt: null }, select: { authorId: true } })
+    const post = await prisma.post.findFirst({ where: { id, deletedAt: null }, select: { authorId: true, text: true } })
     if (!post) return NextResponse.json({ error: "Post tidak ditemukan." }, { status: 404 })
 
     // Your own post, or a BoD taking something down. Narrower than the old isManagerRole check on
@@ -31,8 +33,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // so nobody is shown a button this would refuse.
     if (post.authorId !== me && !isBodPlus(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    await prisma.post.update({ where: { id }, data: { deletedAt: new Date() } })
-    logAudit({ action: "delete", entityType: "post", entityId: id, userId: me, request, metadata: { moderation: post.authorId !== me } })
+    // Already a soft delete; the copy of the flag lets Control Room → Audit undo it.
+    await restorableSoftDelete({
+      entityType: "post", entityId: id, entityName: auditSnippet(post.text) ?? "Post", workspaceId: null,
+      userId: me, request, metadata: { moderation: post.authorId !== me, authorId: post.authorId },
+      meta: { open: { type: "post", id } },
+      apply: (tx) => tx.post.update({ where: { id }, data: { deletedAt: new Date() } }),
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting post:", error)

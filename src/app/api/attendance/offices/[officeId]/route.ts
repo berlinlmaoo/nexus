@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { restorableDelete } from "@/lib/deletion-snapshot"
+import { restorableDelete, restorableSoftDelete } from "@/lib/deletion-snapshot"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { updateOfficeLocationSchema, validateBody } from "@/lib/validations"
 
@@ -98,15 +98,12 @@ export async function DELETE(
     // day already recorded keeps its office name. An office nobody ever used is simply deleted.
     const records = await prisma.attendanceRecord.count({ where: { officeLocationId: officeId } })
     if (records > 0) {
-      await prisma.officeLocation.update({ where: { id: officeId }, data: { isActive: false, archivedAt: new Date() } })
-      await logAudit({
-        action: "delete",
-        entityType: "attendance_office",
-        entityId: existing.id,
-        entityName: existing.name,
-        userId: session.user.id,
-        request,
-        metadata: { workspaceId: context.workspace.id },
+      // Archived: in the audit first, with a copy of the flags so Control Room → Audit can un-archive it.
+      await restorableSoftDelete({
+        entityType: "attendance_office", entityId: existing.id, entityName: existing.name, workspaceId: context.workspace.id,
+        userId: session.user.id, request, metadata: { workspaceId: context.workspace.id, archived: true },
+        meta: { open: { type: "attendance_office", id: existing.id } },
+        apply: (tx) => tx.officeLocation.update({ where: { id: officeId }, data: { isActive: false, archivedAt: new Date() } }),
       })
     } else {
       // Never used: really deleted, kept first so Control Room → Audit can restore it.
