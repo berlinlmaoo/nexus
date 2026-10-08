@@ -8,6 +8,7 @@ import { isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { checkCreatableProjectType } from "@/lib/project-tabs"
 
 const projectListSelect = {
   id: true,
@@ -16,6 +17,8 @@ const projectListSelect = {
   color: true,
   icon: true,
   status: true,
+  // Additive (9 Oct 2026): "TASK" for every project today; lets a list badge other types later.
+  type: true,
   workspaceId: true,
   folderId: true,
   position: true,
@@ -251,6 +254,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name and workspaceId are required" }, { status: 400 })
     }
 
+    // Project type (owner, 9 Oct 2026). No type = a Task Project, which is what every client before
+    // this sends. Finance Dashboard, Content Planner and Pipeline Dashboard are "coming soon".
+    const typeCheck = checkCreatableProjectType(body.type)
+    if (!typeCheck.ok) {
+      return NextResponse.json({ error: typeCheck.error, code: typeCheck.code }, { status: 400 })
+    }
+
     const userId = session.user.id
 
     // Verify the user is a member of the target workspace
@@ -278,6 +288,7 @@ export async function POST(request: NextRequest) {
         description,
         color,
         icon,
+        type: typeCheck.type,
         workspaceId,
         ...(folderId && { folderId }),
         members: {
