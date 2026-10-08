@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,22 @@ export const Route = createFileRoute("/_app/messages")({
 function initialsOf(name?: string | null) {
   if (!name) return "?";
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+}
+
+/** The other person of a DM: their photo stands for the chat, as in the iOS app. */
+function dmPeer(c: NexusConversation, meId?: string) {
+  return (c.members ?? []).find((m) => (m.userId || m.user?.id) !== meId)?.user ?? null;
+}
+
+/** A chat's picture: the other person's photo for a DM, a people icon for a group or project room. */
+function ConvoAvatar({ c, meId, size }: { c: NexusConversation; meId?: string; size: number }) {
+  const peer = c.type === "DM" ? dmPeer(c, meId) : null;
+  if (peer?.id) return <Avatar userId={peer.id} name={peer.name} avatar={peer.avatar} size={size} className="shrink-0" />;
+  return (
+    <span className="grid shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border" style={{ width: size, height: size }}>
+      {c.type === "PROJECT" || c.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(c, meId))}
+    </span>
+  );
 }
 
 function convoTitle(c: NexusConversation, meId?: string): string {
@@ -194,7 +211,7 @@ function Messages() {
                 const unread = activeKey === c.id && visible ? 0 : c.unreadCount ?? 0;
                 return (
                   <button key={c.id} onClick={() => setActiveId(c.id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-accent", activeKey === c.id && "bg-accent")}>
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{c.type === "PROJECT" || c.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(c, meId))}</span>
+                    <ConvoAvatar c={c} meId={meId} size={36} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
                         <span className={cn("truncate text-sm", unread > 0 && !muted ? "font-bold" : "font-semibold")}>{convoTitle(c, meId)}</span>
@@ -219,7 +236,7 @@ function Messages() {
           {active ? (
             <>
               <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">{active.type === "PROJECT" || active.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(active, meId))}</span>
+                <ConvoAvatar c={active} meId={meId} size={32} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{convoTitle(active, meId)}</div>
                   <div className="truncate text-xs text-muted-foreground">
@@ -360,7 +377,7 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
         {!roster.isLoading && !current.isLoading && candidates.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{isProject ? t("Everyone is already in this project.") : t("Everyone is already in this chat.")}</div>}
         {candidates.map((u) => (
           <button key={u.id} disabled={busyId !== null} onClick={() => add(u)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(u.name)}</span>
+            <Avatar userId={u.id} name={u.name} avatar={u.avatar} size={28} className="shrink-0" />
             <span className="flex-1 truncate">{u.name ?? u.email}</span>
             {busyId === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 text-muted-foreground" />}
           </button>
@@ -395,7 +412,7 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
           {membersQuery.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{t("Loading…")}</div>}
           {members.map((m: NexusUser) => (
             <button key={m.id} onClick={() => toggle(m.id)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors", selected.includes(m.id) ? "bg-primary/10 text-primary" : "hover:bg-accent")}>
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(m.name)}</span>
+              <Avatar userId={m.id} name={m.name} avatar={m.avatar} size={28} className="shrink-0" />
               <span className="flex-1 truncate">{m.name ?? m.email}</span>
               {selected.includes(m.id) && <span className="text-xs font-bold">✓</span>}
             </button>
