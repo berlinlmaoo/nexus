@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Project types and per-project tabs (owner, 9 Oct 2026)
 //
 // "tiap kali buat project tuh ada dikasih pilihan ada Task Project, Finance Dashboard, Content
-// Planner, Pipeline Dashboard" — every project has a type, chosen first in New mission. Only Task
+// Planner, Pipeline Dashboard" — every project has a type, chosen first in New project. Only Task
 // Project exists today; the other three are shown as coming soon and the server refuses them too
 // (POST /api/projects → 400 TYPE_COMING_SOON), so nothing half-built can be created.
 //

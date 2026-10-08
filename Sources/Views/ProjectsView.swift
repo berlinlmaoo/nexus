@@ -8,9 +8,9 @@ struct ProjectsView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var workspaceId: String?
-    @State private var showCreate = false
-    @State private var showCreateFolder = false
-    @State private var editFolder: ProjectFolder?
+    /// The one sheet this screen shows (owner rule: one sheet per view — two on the same view is how
+    /// one of them silently never presents). New project always opens the type picker first.
+    @State private var sheet: ProjectsSheet?
     @State private var collapsed: Set<String> = []
     /// Folders start closed. With everything open, a workspace this size opens as a wall of rows
     /// and the folder structure stops being useful. Only applied once, so a pull-to-refresh does
@@ -46,23 +46,26 @@ struct ProjectsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { showCreate = true } label: { Label(T("New mission"), systemImage: "rectangle.stack.badge.plus") }
-                        Button { showCreateFolder = true } label: { Label(T("New folder"), systemImage: "folder.badge.plus") }
+                        Button { sheet = .newProject } label: { Label(T("New project"), systemImage: "rectangle.stack.badge.plus") }
+                        Button { sheet = .newFolder } label: { Label(T("New folder"), systemImage: "folder.badge.plus") }
                     } label: { Image(systemName: "plus") }
                     .disabled(workspaceId == nil)
                 }
             }
-            .sheet(isPresented: $showCreate) {
-                CreateProjectSheet(workspaceId: workspaceId ?? "") { await load() }
-            }
-            .sheet(isPresented: $showCreateFolder) {
-                CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
-            }
-            .sheet(item: $editFolder) { f in
-                CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
+            .sheet(item: $sheet) { which in
+                switch which {
+                case .newProject:
+                    // The type picker (Task Project; Finance Dashboard, Content Planner and Pipeline
+                    // Dashboard coming soon) is CreateProjectSheet's first step — the only way in.
+                    CreateProjectSheet(workspaceId: workspaceId ?? "") { await load() }
+                case .newFolder:
+                    CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
+                case .editFolder(let f):
+                    CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
+                }
             }
             .task {
-                // Missions barely change between visits, so draw the last known list immediately
+                // Projects barely change between visits, so draw the last known list immediately
                 // instead of a skeleton, then refresh underneath.
                 if projects.isEmpty, let hit = ResponseCache.decoded("projects", as: [Project].self) {
                     projects = hit.value
@@ -86,9 +89,9 @@ struct ProjectsView: View {
         } else if let error {
             errorState(error)
         } else if projects.isEmpty {
-            EmptyState(icon: "rectangle.stack", title: T("No missions yet"),
-                       subtitle: T("A mission is a project board: its tasks, people and deadlines in one place. You'll see every mission you're part of here — create the first one to get going."),
-                       actionTitle: T("New mission"), actionIcon: "rectangle.stack.badge.plus") { showCreate = true }
+            EmptyState(icon: "rectangle.stack", title: T("No projects yet"),
+                       subtitle: T("A project is one board for a piece of work: its tasks, people and deadlines in one place. You'll see every project you're part of here — create the first one to get going."),
+                       actionTitle: T("New project"), actionIcon: "rectangle.stack.badge.plus") { sheet = .newProject }
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
@@ -96,10 +99,11 @@ struct ProjectsView: View {
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         searchResults
                     } else {
-                    // hero strip (web: "missions visible")
+                    // hero strip (web: "projects visible")
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
-                        Text("\(projects.count) missions visible").font(NXFont.text(12, .semibold))
+                        Text(projects.count == 1 ? T("1 project visible") : String(format: T("%d projects visible"), projects.count))
+                            .font(NXFont.text(12, .semibold))
                     }
                     .foregroundStyle(NX.violetText)
                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -109,7 +113,7 @@ struct ProjectsView: View {
                     ForEach(rootFolders) { f in
                         FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
                                    tallies: tallies, collapsed: $collapsed, onMove: move,
-                                   onDeleteFolder: deleteFolder, onEditFolder: { editFolder = $0 })
+                                   onDeleteFolder: deleteFolder, onEditFolder: { sheet = .editFolder($0) })
                     }
                     ForEach(ungrouped) { p in
                         ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
@@ -177,7 +181,7 @@ struct ProjectsView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-            TextField(T("Search missions and tasks…"), text: $query)
+            TextField(T("Search projects and tasks…"), text: $query)
                 .font(NXFont.text(15)).autocorrectionDisabled().submitLabel(.search)
             if searching { ProgressView().scaleEffect(0.7) }
             if !query.isEmpty {
@@ -191,7 +195,7 @@ struct ProjectsView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
     }
 
-    /// Missions are matched on the device — the list is already loaded, so filtering it is instant
+    /// Projects are matched on the device — the list is already loaded, so filtering it is instant
     /// and works with no signal. Tasks are not loaded here, so those come from the same
     /// /api/search the global search screen uses rather than a second implementation.
     private var matchedProjects: [Project] {
@@ -211,7 +215,7 @@ struct ProjectsView: View {
             .frame(maxWidth: .infinity).padding(.vertical, 40)
         } else {
             if !ps.isEmpty {
-                sectionLabel(T("MISSIONS"))
+                sectionLabel(T("PROJECTS"))
                 ForEach(ps) { p in
                     ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
                 }
@@ -278,6 +282,21 @@ struct ProjectsView: View {
     private func deleteFolder(_ f: ProjectFolder) async {
         try? await APIClient.shared.projectFolderDelete(f.id)
         await load()
+    }
+}
+
+/// The one sheet `ProjectsView` shows.
+private enum ProjectsSheet: Identifiable {
+    case newProject
+    case newFolder
+    case editFolder(ProjectFolder)
+
+    var id: String {
+        switch self {
+        case .newProject: return "new-project"
+        case .newFolder: return "new-folder"
+        case .editFolder(let f): return "edit-folder-\(f.id)"
+        }
     }
 }
 
@@ -556,7 +575,7 @@ struct FolderIconTile: View {
     }
 }
 
-/// Create a new project (web "Launch a new mission"): name + color.
+/// Create a new project (web "Create a new project"): the type first, then name, icon and colour.
 struct CreateProjectSheet: View {
     let workspaceId: String
     let onCreated: () async -> Void
@@ -580,7 +599,7 @@ struct CreateProjectSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         chosenKind(kind)
-                        field(T("MISSION NAME")) {
+                        field(T("PROJECT NAME")) {
                             TextField("mis. Z Networks Multimedia", text: $name)
                                 .font(NXFont.text(16)).padding(12)
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -607,7 +626,7 @@ struct CreateProjectSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Launch mission")) }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Create project")) }
                         }
                         .buttonStyle(NexusPrimaryButton())
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -618,7 +637,7 @@ struct CreateProjectSheet: View {
                     kindPicker
                 }
             }
-            .navigationTitle(T("New mission"))
+            .navigationTitle(T("New project"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
