@@ -709,7 +709,7 @@ private fun LegendHint(hintSeen: Boolean) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).clearAndSetSemantics {}, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(c.foreground)); Text(" " + stringResource(R.string.cal_legend_open) + "   ", fontSize = 12.sp, color = c.mutedFg)
-            Box(Modifier.size(6.dp).clip(CircleShape).border(1.dp, c.foreground, CircleShape)); Text(" " + stringResource(R.string.cal_legend_done) + "   ", fontSize = 12.sp, color = c.mutedFg)
+            Icon(Icons.Filled.Check, null, tint = c.foreground, modifier = Modifier.size(10.dp)); Text(" " + stringResource(R.string.cal_legend_done) + "   ", fontSize = 12.sp, color = c.mutedFg)
             Box(Modifier.width(10.dp).height(2.dp).background(c.danger)); Text(" " + stringResource(R.string.cal_legend_overdue), fontSize = 12.sp, color = c.mutedFg)
         }
         if (!hintSeen) Text(stringResource(R.string.cal_legend_hint), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
@@ -717,7 +717,7 @@ private fun LegendHint(hintSeen: Boolean) {
 }
 
 /**
- * Month: 6 rows × 7 cells (Monday first). Dots — up to 3 + "+", filled/ring — or, in wide cells, up to 2
+ * Month: 6 rows × 7 cells (Monday first). Dots — up to 3 + "+", full dot (to do) / small check (all done or no status, rule 10.31) — or, in wide cells, up to 2
  * titles. Red bar = overdue, Sundays and holidays red, today a navy disc. Each cell speaks its day, tasks,
  * overdue and holiday, and says it is selected (audit #1).
  */
@@ -797,7 +797,9 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
         } else Row(Modifier.padding(top = 3.dp).clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             cell?.dots.orEmpty().take(3).forEach { dot ->
                 val col = index.color(dot.unitId.takeIf { it != CalendarCore.OTHER })
-                Box(Modifier.size(6.dp).clip(CircleShape).then(if (dot.filled) Modifier.background(col) else Modifier.border(1.dp, col, CircleShape)))
+                // Rule 10.31 (Berlin, 8 Oct): a full dot = still something to do; a small check in the division's colour = all done / no status.
+                if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))
+                else Icon(Icons.Filled.Check, null, tint = col, modifier = Modifier.size(8.dp))
             }
             if ((cell?.dots?.size ?: 0) > 3) Text("+", fontSize = 9.sp, color = c.mutedFg, lineHeight = 9.sp)
         }

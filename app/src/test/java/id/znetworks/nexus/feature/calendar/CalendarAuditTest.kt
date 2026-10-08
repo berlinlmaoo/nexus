@@ -148,4 +148,15 @@ class CalendarAuditTest {
         // Every person row is kept.
         assertEquals(rows.count { it is CalendarCore.WeekRow.Person }, visible.count { it is CalendarCore.WeekRow.Person })
     }
+
+    @Test fun monthMarksFollowRule1031() {
+        // Berlin, 8 Oct: full dot = still to do; small check in the division colour = all done / no status. No rings.
+        val screen = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt").readText()
+        assertTrue("if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))" in screen)
+        assertTrue("else Icon(Icons.Filled.Check, null, tint = col" in screen)
+        assertFalse("border(1.dp, col, CircleShape)" in screen)
+        assertFalse("border(1.dp, c.foreground, CircleShape)); Text(\" \" + stringResource(R.string.cal_legend_done)" in screen)
+        val widget = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/widget/CalendarWidgets.kt").readText()
+        assertTrue("Dot(hue(it.color, faded), done = it.dim)" in widget && "R.drawable.ic_cal_check" in widget)
+    }
 }

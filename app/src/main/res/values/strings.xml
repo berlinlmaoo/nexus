@@ -1793,7 +1793,7 @@
     <string name="cal_reset_filters">Reset filters</string>
     <string name="cal_truncated">This month has more tasks than the calendar can show at once.</string>
     <string name="cal_legend_open">has tasks to do</string>
-    <string name="cal_legend_done">done or no status</string>
+    <string name="cal_legend_done">done / no status</string>
     <string name="cal_legend_overdue">overdue</string>
     <string name="cal_legend_hint">Dots follow the IP &amp; Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.</string>
     <string name="cal_today">Today</string>

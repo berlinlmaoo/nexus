@@ -24,6 +24,8 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.ImageProvider
+import androidx.glance.Image
+import androidx.glance.ColorFilter
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
@@ -439,7 +441,8 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
         when (detail) {
             Detail.DOTS -> Row {
                 if (b.overdue) Dot(cp(RED.copy(alpha = faded)))
-                b.bars.take(if (b.overdue) 2 else 3).forEach { Dot(hue(it.color, if (it.dim) 0.35f * faded else faded)) }
+                // Rule 10.31: a full dot = to do; done or status-less = a small check in its colour.
+                b.bars.take(if (b.overdue) 2 else 3).forEach { Dot(hue(it.color, faded), done = it.dim) }
             }
             Detail.BARS -> Column(GlanceModifier.fillMaxWidth().padding(top = 2.dp)) {
                 b.bars.forEach { bar ->
@@ -455,8 +458,9 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
 }
 
 @Composable
-private fun Dot(c: ColorProvider) {
-    Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(c)) {}
+private fun Dot(c: ColorProvider, done: Boolean = false) {
+    if (done) Image(ImageProvider(R.drawable.ic_cal_check), null, GlanceModifier.size(6.dp), colorFilter = ColorFilter.tint(c))
+    else Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(c)) {}
     Spacer(GlanceModifier.width(1.dp))
 }
 
