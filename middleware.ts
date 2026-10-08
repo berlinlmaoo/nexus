@@ -57,6 +57,14 @@ export const config = {
     // (experimental.middlewareClientMaxBodySize): bodies must stay under that, so only bodiless
     // requests and a Content-Length of at most 7 digits (< 10,000,000 bytes) match. A bigger or
     // chunked upload passes ungated — the app's next ordinary call is refused anyway.
+    //
+    // The body matchers also leave out /api/vault/* and /api/attachments/chunk (9 Oct 2026). nginx
+    // streams those bodies unbuffered (proxy_request_buffering off), and Next 15.5's nodejs
+    // middleware does not wait for a still-arriving body before running the route
+    // (next-server.js: `requestData.body.finalize()` without await), so the route got a drained or
+    // locked stream: every iOS vault upload under 10 MB on a slow link failed with "Failed to parse
+    // body as FormData". Reproduced against 15.5.18 on Node 20; the bodiless matchers still gate
+    // those routes.
     // Values must stay literals: Next reads this object statically at build time.
     //
     // iOS with X-Nexus-Client (0.1.6+): all of /api.
@@ -66,7 +74,7 @@ export const config = {
       missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
     },
     {
-      source: "/api/:path*",
+      source: "/api/((?!vault/|attachments/chunk).*)",
       has: [
         { type: "header", key: "x-nexus-client", value: "[iI][oO][sS]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },
@@ -80,7 +88,7 @@ export const config = {
       missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
     },
     {
-      source: "/api/:path*",
+      source: "/api/((?!vault/|attachments/chunk).*)",
       has: [
         { type: "header", key: "x-nexus-client", value: "[aA][nN][dD][rR][oO][iI][dD]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },
