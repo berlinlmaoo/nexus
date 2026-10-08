@@ -36,6 +36,8 @@ final class RealtimeClient {
     /// Conversations with news, folded so the two events of one message (`message-created` to the
     /// room, `conversation-updated` to each member) cost one refresh, not two.
     @ObservationIgnored private var chatNews: Set<String> = []
+    /// Who is signed in, so their own typing on another device is not shown back to them.
+    @ObservationIgnored private var meId: String?
     @ObservationIgnored private var chatFlush: Task<Void, Never>?
 
     private init() {
@@ -77,6 +79,7 @@ final class RealtimeClient {
             engine.clearRefusal()
             token = session.token
         }
+        meId = session.userId
         if phase == .background {
             engine.stop()
             wasBackground = true
@@ -95,6 +98,7 @@ final class RealtimeClient {
     /// Signed out: close now, and forget the session.
     func reset() {
         token = nil
+        meId = nil
         engine.stop()
         engine.clearRefusal()
         chatFlush?.cancel()
@@ -107,6 +111,12 @@ final class RealtimeClient {
     /// See `View.realtimeRoom(_:)`, which is how screens call these.
     func join(_ room: String) { engine.join(room) }
     func leave(_ room: String) { engine.leave(room) }
+
+    /// "… is typing" for a chat (ChatTyping). Only while connected; false when nothing went out.
+    @discardableResult
+    func sendTyping(conversationId: String, typing: Bool) -> Bool {
+        engine.emit("typing", .fields(["conversationId": .string(conversationId), "typing": .bool(typing)]))
+    }
 
     // MARK: the connection
 
@@ -135,6 +145,8 @@ final class RealtimeClient {
 
     private func stateChanged(_ new: RealtimeEngine.State) {
         state = new
+        // No connection, no "typing": what was shown goes, and the server tells the others for us.
+        if new != .connected { ChatTyping.shared.connectionLost() }
         LiveRefreshPolicy.stretch = new == .connected ? Self.connectedStretch : 1
     }
 
@@ -172,7 +184,16 @@ final class RealtimeClient {
                let id = payload?["conversationId"]?.string {
                 center.post(name: .nexusChatDeleted, object: nil, userInfo: [RealtimeKey.conversationId: id])
             }
+            // A message from someone typing in that chat ends their dots.
+            if name == "message-created" {
+                ChatTyping.shared.messageArrived(conversationId: payload?["conversationId"]?.string,
+                                                 userId: payload?["userId"]?.string)
+            }
             chatMoved(payload?["conversationId"]?.string)
+        case "typing":
+            // Someone in one of this person's chats is typing (pages/api/socket.ts): the thread, its
+            // title and the chat list show it. Nothing to fetch.
+            ChatTyping.shared.received(payload, meId: meId)
         case "new-notification":
             Task { await InboxBadge.shared.refresh(force: true) }
             center.post(name: .nexusInboxChanged, object: nil)

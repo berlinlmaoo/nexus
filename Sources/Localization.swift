@@ -2506,6 +2506,10 @@ final class AppLanguage {
         "Download": "Unduh",
         "Previous": "Sebelumnya",
         "Loading the video…": "Memuat video…",
+        // Chat: "… is typing" (owner, 9 Oct 2026)
+        "typing…": "mengetik…",
+        "%@ is typing…": "%@ sedang mengetik…",
+        "%d people are typing…": "%d orang sedang mengetik…",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

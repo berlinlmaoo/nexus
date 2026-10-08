@@ -368,6 +368,8 @@ struct ConvoRow: View {
 
     var body: some View {
         let muted = ChatStore.shared.isMuted(convo)
+        // Someone is typing there right now (realtime only): said in place of the last message.
+        let typingHere = ChatTyping.shared.isTyping(in: convo.id)
         HStack(spacing: 12) {
             if convo.isGroupish {
                 if let url = projectIconURL {
@@ -391,7 +393,11 @@ struct ConvoRow: View {
                             .accessibilityLabel(T("Muted"))
                     }
                 }
-                Text(preview).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                if typingHere {
+                    Text(T("typing…")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
+                } else {
+                    Text(preview).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             if let u = convo.unreadCount, u > 0 {
@@ -562,6 +568,9 @@ struct ChatThreadView: View {
     /// A poll was asked for while one was out: one more follows it (see `pollNewer`).
     @State private var pollAgain = false
     @State private var realtime = RealtimeClient.shared
+    /// "… is typing" (realtime only): who else is typing here, and what this composer says.
+    @State private var typing = ChatTyping.shared
+    @FocusState private var composerFocused: Bool
     /// Whether this server answers `after=` (nil until a poll has shown it either way). Only a
     /// hint for the page size: every answer is checked on its own, so a server updated while the
     /// thread is open is picked up by the next poll.
@@ -613,9 +622,10 @@ struct ChatThreadView: View {
                         .font(NXFont.display(17, .bold))
                         .foregroundStyle(NX.foreground)
                         .lineLimit(1)
-                    Text(T("Tap for info"))
-                        .font(NXFont.text(11))
-                        .foregroundStyle(NX.mutedFg)
+                    // "typing…" in place of the hint while someone types here, as WhatsApp does.
+                    Text(typingHere ? T("typing…") : T("Tap for info"))
+                        .font(NXFont.text(11, typingHere ? .semibold : .regular))
+                        .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                         .lineLimit(1)
                 }
                 .contentShape(Rectangle())
@@ -664,9 +674,9 @@ struct ChatThreadView: View {
                     .font(NXFont.text(15, .semibold))
                     .foregroundStyle(NX.foreground)
                     .lineLimit(1)
-                Text(T("Tap for info"))
-                    .font(NXFont.text(10))
-                    .foregroundStyle(NX.mutedFg)
+                Text(typingHere ? T("typing…") : T("Tap for info"))
+                    .font(NXFont.text(10, typingHere ? .semibold : .regular))
+                    .foregroundStyle(typingHere ? NX.violetText : NX.mutedFg)
                     .lineLimit(1)
             }
             .frame(maxWidth: 260)
@@ -676,6 +686,10 @@ struct ChatThreadView: View {
         .accessibilityLabel(shownTitle ?? title)
         .accessibilityHint(T("Opens the chat's info"))
     }
+
+    /// Who else is typing in this chat now, and whether anyone is.
+    private var typers: [ChatTyping.Typer] { typing.typers(in: conversationId) }
+    private var typingHere: Bool { !roomDeleted && typing.isTyping(in: conversationId) }
 
     /// What the info screen is handed: everything this thread already knows about the room.
     private var infoContext: ChatInfoContext {
@@ -783,6 +797,7 @@ struct ChatThreadView: View {
                                     }
                                     .id(m.id)
                                 }
+                                if typingHere { typingRow(typers) }
                             }
                             .padding(.horizontal, 16)
                             .padding(.top, 16)
@@ -809,6 +824,10 @@ struct ChatThreadView: View {
                     // page is full, and loading older history changes it without anything new arriving.
                     .onChange(of: messages.last?.id) { old, new in
                         lastMessageChanged(from: old, to: new, proxy: proxy)
+                    }
+                    // Someone started typing while the end was in view: keep the dots in view.
+                    .onChange(of: typingHere) { _, now in
+                        if now, atBottom { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomId, anchor: .bottom) } }
                     }
                     .onChange(of: jumpRequest) { _, request in
                         guard let request else { return }
@@ -937,6 +956,7 @@ struct ChatThreadView: View {
             if ChatPresence.visibleConversationId == conversationId {
                 ChatPresence.visibleConversationId = nil
             }
+            typing.stop(conversationId)
         }
     }
 
@@ -1206,6 +1226,11 @@ struct ChatThreadView: View {
                     .font(NXFont.text(15)).lineLimit(1...4)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .focused($composerFocused)
+                    // "typing" while there is text and keys are pressed; an emptied box (a send
+                    // clears it) says "stopped" (ChatTyping).
+                    .onChange(of: input) { _, text in typing.composerChanged(conversationId, text: text) }
+                    .onChange(of: composerFocused) { _, focused in if !focused { typing.stop(conversationId) } }
 
                 Button { Task { await send() } } label: {
                     Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(ChatInk.onMine)
@@ -1218,6 +1243,44 @@ struct ChatThreadView: View {
         }
         .background(NX.card)
         .overlay(Rectangle().fill(NX.border).frame(height: 1), alignment: .top)
+    }
+
+    // MARK: typing
+
+    /// Who is typing, at the end of the thread like WhatsApp: their photos where a message's photo sits
+    /// (up to three, overlapping, then "+N") beside one bubble of three dots, and in a group or project
+    /// room the words under it.
+    private func typingRow(_ typers: [ChatTyping.Typer]) -> some View {
+        let shown = Array(typers.prefix(3))
+        let more = typers.count - shown.count
+        let sentence = ChatTyping.sentence(typers)
+        return HStack(alignment: .bottom, spacing: 8) {
+            HStack(spacing: -10) {
+                ForEach(shown) { p in
+                    AvatarView(url: p.avatar, initial: p.initial, size: 28)
+                        .overlay(Circle().strokeBorder(NX.background, lineWidth: 2))
+                }
+                if more > 0 {
+                    Text("+\(more)")
+                        .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 28, height: 28)
+                        .background(NX.muted, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.background, lineWidth: 2))
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                TypingDots()
+                    .padding(.horizontal, 14).padding(.vertical, 13)
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if type != "DM" {
+                    Text(sentence).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 50)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(sentence)
+        .transition(.opacity)
     }
 
     // MARK: bubbles
@@ -2036,4 +2099,41 @@ private struct SwipeToReply<Content: View>: View {
 private struct ChatPollPace: Equatable {
     let active: Bool
     let live: Bool
+}
+
+/// Three dots that rise in turn while someone types (ChatThreadView's typing row). A TimelineView, so
+/// nothing keeps running once the row is gone; still under Reduce Motion.
+struct TypingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if reduceMotion {
+            dots(at: nil)
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                dots(at: context.date.timeIntervalSinceReferenceDate)
+            }
+        }
+    }
+
+    private func dots(at time: TimeInterval?) -> some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { i in
+                let lift = Self.lift(dot: i, at: time)
+                Circle()
+                    .fill(NX.mutedFg)
+                    .frame(width: 7, height: 7)
+                    .opacity(0.45 + 0.55 * lift)
+                    .offset(y: -3 * lift)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// 0…1: how far dot `i` is up, on a 1.2 s cycle, each dot 0.15 s behind the one before it.
+    private static func lift(dot i: Int, at time: TimeInterval?) -> Double {
+        guard let time else { return 0 }
+        let phase = (time / 1.2 - Double(i) * 0.125) * 2 * Double.pi
+        return max(0, sin(phase))
+    }
 }

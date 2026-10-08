@@ -154,6 +154,15 @@ final class RealtimeEngine {
         sendJoin(room, as: me, on: link)
     }
 
+    /// A client event of the app's own (`typing`), sent only while connected: nothing is queued for
+    /// later, since such an event means nothing by the time the link is back. False when not sent.
+    @discardableResult
+    func emit(_ name: String, _ payload: SIOJSON) -> Bool {
+        guard let link, link.connectedAt != nil else { return false }
+        send(SIOWire.event(name, payload), on: link)
+        return true
+    }
+
     func leave(_ room: String) {
         guard let n = holders[room] else { return }
         if n > 1 {
