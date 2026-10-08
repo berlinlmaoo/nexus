@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { logAudit } from "@/lib/audit"
+import { restorableSoftDelete } from "@/lib/deletion-snapshot"
 import { attendancePeriodKey, getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { checkGrantPeriod, grantablePeriods } from "@/lib/day-off-bonus"
 import { DAY_OFF_BONUS_SELECT, serializeDayOffBonus } from "@/lib/day-off-bonus-serialize"
@@ -47,26 +47,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       )
     }
 
-    // Conditional on still being active: two BoD tapping Revoke at once both get a clean answer.
-    const updated = await prisma.dayOffBonus.updateMany({
-      where: { id, revokedAt: null },
-      data: { revokedAt: new Date(), revokedById: session.user.id },
+    // Conditional on still being active: two BoD tapping Revoke at once both get a clean answer. The
+    // revoke is in the audit first, with a copy of the grant's state, so Control Room → Audit can
+    // grant it again.
+    let revoked = 0
+    await restorableSoftDelete({
+      action: "revoke", entityType: "dayoff_bonus", entityId: id,
+      entityName: `${target.user?.name ?? "Someone"} · ${target.days} extra day${target.days === 1 ? "" : "s"} off · ${target.periodKey}`,
+      workspaceId, userId: session.user.id, request: req,
+      metadata: { reason: "dayoff_bonus_revoke", periodKey: target.periodKey, days: target.days, note: target.reason, targetUserId: target.userId },
+      meta: { open: null },
+      apply: async (tx) => {
+        revoked = (await tx.dayOffBonus.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date(), revokedById: session.user.id } })).count
+      },
     })
     const after = await prisma.dayOffBonus.findUnique({ where: { id }, select: DAY_OFF_BONUS_SELECT })
     if (!after) return NextResponse.json({ error: "Extra day off tidak ditemukan.", code: "NOT_FOUND" }, { status: 404 })
-    if (updated.count === 0) return NextResponse.json({ grant: serializeDayOffBonus(after), alreadyRevoked: true })
-
-    try {
-      await logAudit({
-        action: "revoke",
-        entityType: "dayoff_bonus",
-        entityId: id,
-        entityName: `dayoff-bonus:${target.periodKey}`,
-        userId: session.user.id,
-        request: req,
-        metadata: { reason: "dayoff_bonus_revoke", periodKey: target.periodKey, days: target.days, note: target.reason, targetUserId: target.userId },
-      })
-    } catch { /* audit best-effort */ }
+    if (revoked === 0) return NextResponse.json({ grant: serializeDayOffBonus(after), alreadyRevoked: true })
 
     return NextResponse.json({ grant: serializeDayOffBonus(after), alreadyRevoked: false })
   } catch (error) {

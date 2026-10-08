@@ -6,7 +6,7 @@
  */
 
 /** Where an "Open …" link goes after a restore. `projectId` when the thing lives inside a project. */
-export type RestoreOpen = { type: string; id: string; projectId?: string }
+export type RestoreOpen = { type: string; id: string; projectId?: string; date?: string }
 
 /** Stored on DeletionSnapshot.meta when the copy is taken: the link, and the ids follow-ups need. */
 export type SnapshotMeta = {

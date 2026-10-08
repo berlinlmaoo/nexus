@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import { restorableDelete } from "@/lib/deletion-snapshot"
+import { restorableDelete, restorableSoftDelete } from "@/lib/deletion-snapshot"
 import {
   getVaultActor,
   canReadItem,
@@ -202,19 +202,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!purge) {
       // Trash the whole subtree, not just the folder row. Marking only the folder would leave its
       // children live in every query that filters `deletedAt: null` without also climbing.
-      await prisma.vaultItem.updateMany({
-        where: { id: { in: ids }, deletedAt: null },
-        data: { deletedAt: new Date() },
-      })
-      logAudit({
-        action: "delete",
+      // The Vault has its own Restore for the trash; the copy of each row's flag makes the same delete
+      // undoable from Control Room → Audit too.
+      await restorableSoftDelete({
         entityType: item.kind === "FOLDER" ? "vault_folder" : "vault_file",
-        entityId: item.id,
-        entityName: item.name,
-        userId: actor.userId,
-        request,
-        metadata: { trashed: ids.length },
-      }).catch(() => {})
+        entityId: item.id, entityName: item.name, workspaceId: actor.workspaceId, userId: actor.userId, request,
+        metadata: { trashed: ids.length }, ids,
+        meta: { open: { type: "vault", id: item.id } },
+        apply: (tx) => tx.vaultItem.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt: new Date() } }),
+      })
       return NextResponse.json({ trashed: ids.length })
     }
 

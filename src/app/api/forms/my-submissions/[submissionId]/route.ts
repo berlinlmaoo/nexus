@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 type FormField = { id: string; name?: string; type?: string }
 
@@ -81,31 +81,31 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { submissionId } = await params
     const sub = await prisma.formSubmission.findUnique({
       where: { id: submissionId },
-      select: { id: true, submitterId: true, taskId: true, form: { select: { name: true } } },
+      select: { id: true, submitterId: true, taskId: true, formId: true, form: { select: { name: true, projectId: true, project: { select: { workspaceId: true } } } } },
     })
     if (!sub || sub.submitterId !== session.user.id) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 })
     }
 
-    // Delete the linked project task first (cascades its own subtasks/comments/attachments), then the
-    // submission row. Task delete is best-effort so a relational hiccup never strands the submission.
-    if (sub.taskId) {
-      try {
-        await prisma.task.delete({ where: { id: sub.taskId } })
-      } catch (err) {
-        console.error("delete submission: linked task delete failed:", err)
-      }
-    }
-    await prisma.formSubmission.delete({ where: { id: sub.id } })
-
-    await logAudit({
-      action: "delete",
-      entityType: "form_submission",
-      entityId: sub.id,
+    // The linked project task goes with it (its subtasks, comments, files…), then the submission row —
+    // one transaction, after keeping both in one copy, so Control Room → Audit can bring the
+    // submission back with its task (owner, 8 Oct 2026: this used to delete the task with no copy).
+    const taskId = sub.taskId
+    const projectId = sub.form?.projectId ?? null
+    await restorableDelete({
+      entityType: "form_submission", entityId: sub.id,
       entityName: `Pengajuan ${sub.form?.name ?? ""}`.trim(),
-      userId: session.user.id,
-      request,
-      metadata: { taskId: sub.taskId },
+      workspaceId: sub.form?.project?.workspaceId ?? null, userId: session.user.id, request,
+      metadata: { taskId, formId: sub.formId, projectId },
+      extraRoots: taskId ? [{ table: "Task", ids: [taskId] }] : undefined,
+      meta: {
+        open: taskId ? { type: "task", id: taskId, ...(projectId ? { projectId } : {}) } : projectId ? { type: "form", id: sub.formId, projectId } : null,
+        projectId, taskId,
+      },
+      remove: async (tx) => {
+        if (taskId) await tx.task.deleteMany({ where: { id: taskId } })
+        await tx.formSubmission.delete({ where: { id: sub.id } })
+      },
     })
 
     return NextResponse.json({ deleted: true })
