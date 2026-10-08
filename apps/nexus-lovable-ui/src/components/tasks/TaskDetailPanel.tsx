@@ -130,6 +130,24 @@ function PersonLeftTag() {
   );
 }
 
+/** "Created by Rina · 3 Oct" under the people/due cards, with the Left tag when the creator was offboarded. */
+function CreatedByLine({ creator, createdAt }: { creator: NexusUser; createdAt: string | null }) {
+  const lang = useLang();
+  const when = createdAt ? new Date(createdAt) : null;
+  const date = when && !Number.isNaN(when.getTime())
+    ? when.toLocaleDateString(lang.locale, { timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric" })
+    : null;
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
+      <span>{lang.t("Created by")}</span>
+      <MiniAvatar user={creator} size={18} />
+      <span className="font-semibold text-foreground">{creator.name}</span>
+      {creator.deactivatedAt && <PersonLeftTag />}
+      {date && <span>· {date}</span>}
+    </div>
+  );
+}
+
 function MiniAvatar({ user, size = 28 }: { user?: NexusUser | null; size?: number }) {
   return (
     <span
@@ -640,6 +658,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <input type="datetime-local" value={(() => { if (!t.dueDate) return ""; const d = new Date(t.dueDate); if (Number.isNaN(d.getTime())) return ""; const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; })()} onChange={(e) => update.mutate({ dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-primary" />
               </SecCard>
             </div>
+
+            {/* who created it — every task, not only projects with a CREATED field (owner, 8 Oct 2026) */}
+            {t.creator?.name && <CreatedByLine creator={t.creator} createdAt={t.createdAt ?? null} />}
 
             {/* fields — project fields listed directly (no separate "custom" category) + inline "+ new field" */}
             {projectId && (
