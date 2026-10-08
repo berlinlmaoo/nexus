@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { resolveAuditAccess, resolveAuditNames } from '@/lib/audit-query'
 import { collectAuditIds, describeAuditEntry, redactAuditMetadata } from '@/lib/audit-describe'
+import { restoreDetailFor } from '@/lib/deletion-snapshot'
 
 /**
  * One audit entry, explained: the raw row (`entry`), one English sentence (`title`), the field
@@ -65,6 +66,8 @@ export async function GET(
       title,
       changes,
       details,
+      // A delete that kept a copy: what comes back and whether it already did. POST …/restore does it.
+      restore: row.action === 'delete' ? await restoreDetailFor(row.id) : null,
     })
   } catch (error) {
     console.error('Audit entry API error:', error)

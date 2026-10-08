@@ -24,7 +24,7 @@ export async function logAudit({
   userId,
   metadata,
   request,
-}: AuditLogParams) {
+}: AuditLogParams): Promise<string | null> {
   try {
     let ipAddress: string | undefined
     let userAgent: string | undefined
@@ -38,7 +38,7 @@ export async function logAudit({
       userAgent = headers.get('user-agent') || undefined
     }
 
-    await prisma.auditLog.create({
+    const row = await prisma.auditLog.create({
       data: {
         action,
         entityType,
@@ -51,9 +51,13 @@ export async function logAudit({
         ipAddress,
         userAgent,
       },
+      select: { id: true },
     })
+    // The id ties a restorable delete (lib/deletion-snapshot.ts) to its row.
+    return row.id
   } catch (error) {
     log.error('Audit log write failed', { error: String(error) })
+    return null
   }
 }
 

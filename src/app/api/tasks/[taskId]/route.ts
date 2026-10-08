@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
+import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
@@ -576,7 +577,7 @@ export async function DELETE(
     const existing = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
-        taskList: { include: { project: { select: { name: true } } } },
+        taskList: { include: { project: { select: { name: true, workspaceId: true } } } },
         taskProjects: {
           select: { projectId: true },
         },
@@ -601,7 +602,7 @@ export async function DELETE(
       },
     })
 
-    logAudit({
+    const auditLogId = await logAudit({
       action: "delete", entityType: "task", entityId: taskId, entityName: existing.title,
       userId: session.user.id!, request,
       // The task is gone after this; keep enough to say what it was and where it lived.
@@ -612,8 +613,13 @@ export async function DELETE(
       },
     })
 
-    await prisma.task.delete({
-      where: { id: taskId },
+    // Everything the delete takes with it (subtasks, files, comments…) is kept first, so Control Room →
+    // Audit can restore it.
+    await deleteKeepingSnapshot({
+      entityType: "task", entityId: taskId, entityName: existing.title,
+      workspaceId: existing.taskList.project?.workspaceId ?? null,
+      deletedById: session.user.id!, auditLogId,
+      remove: (tx) => tx.task.delete({ where: { id: taskId } }),
     })
 
     const relatedProjectIds = [

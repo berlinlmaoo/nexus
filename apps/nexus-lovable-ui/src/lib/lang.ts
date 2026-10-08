@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { ID_AUDIT } from "@/lib/i18n/id-audit";
 import { ID_CALENDAR } from "@/lib/i18n/id-calendar";
 import { ID_CALENDAR_EXTRA } from "@/lib/i18n/id-calendar-extra";
 import { ID_CALENDAR_PAGE } from "@/lib/i18n/id-calendar-page";
@@ -20,7 +21,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT };
 
 function read(): Lang {
   try {

@@ -1447,6 +1447,25 @@ export type NexusAuditLog = {
   summary?: string;
   metadata?: unknown;
   user?: NexusUser | null;
+  /** On a deleted project/task that kept a copy (since 8 Oct 2026); null/absent = can't be restored. */
+  restore?: NexusAuditRestoreInfo | null;
+};
+
+export type NexusAuditRestoreInfo = {
+  available: boolean;
+  restoredAt: string | null;
+  /** When the copy is from: the delete itself, or the nightly backup it was taken from. */
+  dataAsOf: string;
+  fromBackup: boolean;
+};
+
+/** POST /api/audit/{id}/restore. Failures are 404/409 with `code`: NOT_RESTORABLE, ALREADY_RESTORED, ALREADY_EXISTS, PARENT_MISSING. */
+export type NexusAuditRestoreResult = {
+  ok: true;
+  entityType: string;
+  entityId: string;
+  projectId: string | null;
+  restored: { lists: number; tasks: number; files: number; comments: number; folders: number };
 };
 
 export type NexusAuditLink = { type: "task" | "project" | "user" | "attendance" | "form"; id: string };
@@ -1468,6 +1487,11 @@ export type NexusAuditEntryDetail = {
   title: string;
   changes: { field: string; label: string; from: string | null; to: string | null }[];
   details: { label: string; value: string; link?: NexusAuditLink }[];
+  /** A delete that kept a copy: what comes back, and whether it already did. Absent on older servers. */
+  restore?: (NexusAuditRestoreInfo & {
+    restoredBy: { id: string; name: string | null } | null;
+    counts: { lists: number; tasks: number; files: number; comments: number; sheets: number; members: number };
+  }) | null;
 };
 
 export type NexusNotificationPrefs = {
@@ -2514,6 +2538,7 @@ export const nexusApi = {
   },
   auditLogs: (query = "") => apiFetch<{ logs: NexusAuditLog[]; total: number }>(`/api/audit${query ? `?${query}` : ""}`),
   auditEntry: (id: string) => apiFetch<NexusAuditEntryDetail>(`/api/audit/${encodeURIComponent(id)}`),
+  auditRestore: (id: string) => apiFetch<NexusAuditRestoreResult>(`/api/audit/${encodeURIComponent(id)}/restore`, { method: "POST" }),
   updateUserRole: (userId: string, role: string) => apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   googleWorkspaceAccounts: () => apiFetch<GoogleWorkspaceAccounts>("/api/admin/google-workspace/accounts"),
   // Membuat mailbox BARU lalu menautkannya. BoD saja — ini satu-satunya panggilan di NEXUS yang

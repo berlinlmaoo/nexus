@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { checkProjectAccess, checkWorkspaceAccess, isSystemAdminUser } from "@/lib/rbac"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import {
@@ -310,13 +311,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden: project lead or workspace admin required to delete projects" }, { status: 403 })
     }
 
-    logAudit({
-      action: "delete", entityType: "project", entityId: (await params).projectId, entityName: existing.name,
+    const projectId = (await params).projectId
+    const auditLogId = await logAudit({
+      action: "delete", entityType: "project", entityId: projectId, entityName: existing.name,
       userId: session.user.id!, request,
     })
 
-    await prisma.project.delete({
-      where: { id: (await params).projectId },
+    // Everything the delete takes with it is kept first, so Control Room → Audit can restore it.
+    await deleteKeepingSnapshot({
+      entityType: "project", entityId: projectId, entityName: existing.name, workspaceId: existing.workspaceId,
+      deletedById: session.user.id!, auditLogId,
+      remove: (tx) => tx.project.delete({ where: { id: projectId } }),
     })
 
     return NextResponse.json({ message: "Project deleted" })
