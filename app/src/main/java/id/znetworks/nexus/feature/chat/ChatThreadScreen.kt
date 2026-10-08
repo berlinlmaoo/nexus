@@ -75,6 +75,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -118,6 +125,10 @@ data class ThreadState(
     val replyTo: Message? = null,
     val notice: String? = null,
     val savedAt: Long? = null,
+    /** The server's cursor for the page older than what is held (null on older servers: the oldest createdAt). */
+    val nextCursor: String? = null,
+    /** False once the server answered 404 to mute: the option is hidden. */
+    val muteSupported: Boolean = true,
 )
 
 class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -136,40 +147,88 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         viewModelScope.launch {
             runCatching { api.conversations().value.conversations.firstOrNull { it.id == id } }.getOrNull()?.let { conv -> _state.update { it.copy(conversation = conv) } }
         }
-        // No socket on mobile: an open thread polls (iOS: every 5 s).
-        viewModelScope.launch { while (isActive) { load(); delay(ChatApi.THREAD_POLL_MS) } }
+        // The first page once; after that the screen polls only while it is visible (CHAT-REPORT P0).
+        viewModelScope.launch { firstPage() }
     }
 
-    private suspend fun load() {
+    private suspend fun firstPage() {
         try {
             val r = api.messages(id)
-            _state.update { s ->
-                // Keep anything older already loaded with "earlier".
-                val fresh = r.value.messages
-                val older = s.messages.filter { m -> fresh.none { it.id == m.id } && (fresh.firstOrNull()?.createdAt ?: "") > (m.createdAt ?: "") }
-                s.copy(messages = older + fresh, hasMore = if (older.isEmpty()) r.value.hasMore else s.hasMore, loading = false, savedAt = r.savedAtMillis)
-            }
-            // Read on screen = read on the server, but only when something new arrived.
-            val last = _state.value.messages.lastOrNull()?.id
-            if (last != null && last != markedReadId && r.savedAtMillis == null) {
-                markedReadId = last
-                runCatching { api.markRead(id) }
-            }
+            _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.value.messages), hasMore = r.value.hasMore, nextCursor = r.value.nextCursor,
+                loading = false, savedAt = r.savedAtMillis) }
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, notice = if (it.messages.isEmpty()) e.describe(res) else it.notice) }
         }
     }
 
+    /**
+     * Only what is new (`after=<last id>`), merged by id: nothing held is ever dropped. An older server that
+     * ignores `after` sends its latest page; when that page leaves a hole (a long pause), older pages are
+     * fetched with `before` until they meet what is held (at most 5).
+     */
+    suspend fun poll() {
+        val held = _state.value.messages
+        val last = held.lastOrNull()?.id ?: return firstPage()
+        try {
+            val page = api.newer(id, last).messages
+            var merged = ChatMerge.merge(held, page)
+            if (ChatMerge.gap(held, page, 50)) {
+                var before = page.minByOrNull { it.createdAt.orEmpty() }?.createdAt
+                var guard = 0
+                while (before != null && guard++ < 5) {
+                    val older = api.earlier(id, before).messages
+                    merged = ChatMerge.merge(merged, older)
+                    if (older.isEmpty() || older.any { o -> held.any { it.id == o.id } }) break
+                    before = older.minByOrNull { it.createdAt.orEmpty() }?.createdAt
+                }
+            }
+            _state.update { it.copy(messages = merged, loading = false, savedAt = null) }
+        } catch (_: ApiError) { /* a failed poll keeps what is on screen; the next one tries again */ }
+    }
+
+    /**
+     * Read up to the last message on screen (`upToMessageId`), only when it changed — and only ever called
+     * while the thread is visible and the app in front (no marking read in the background).
+     */
+    suspend fun markReadVisible() {
+        val last = _state.value.messages.lastOrNull()?.id ?: return
+        if (last == markedReadId || _state.value.savedAt != null) return
+        markedReadId = last
+        if (runCatching { api.markRead(id, last) }.isSuccess) c.badges.refresh()
+    }
+
     fun loadEarlier() {
-        val first = _state.value.messages.firstOrNull()?.createdAt ?: return
-        if (_state.value.loadingEarlier) return
+        val s0 = _state.value
+        val before = ChatMerge.before(s0.messages, s0.nextCursor) ?: return
+        if (s0.loadingEarlier) return
         _state.update { it.copy(loadingEarlier = true) }
         viewModelScope.launch {
             try {
-                val r = api.earlier(id, first)
-                _state.update { s -> s.copy(messages = r.messages + s.messages, hasMore = r.hasMore) }
+                val r = api.earlier(id, before)
+                _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.messages), hasMore = r.hasMore, nextCursor = r.nextCursor) }
             } catch (e: ApiError) { _state.update { it.copy(notice = e.describe(res)) } }
             _state.update { it.copy(loadingEarlier = false) }
+        }
+    }
+
+    enum class Mute { HOURS_8, WEEK, ALWAYS, OFF }
+
+    /** PATCH mute (CHAT-CONTRACT). A 404 = the server has no mute yet: the option goes away. */
+    fun mute(m: Mute) = viewModelScope.launch {
+        val now = java.time.Instant.now()
+        val until = when (m) {
+            Mute.HOURS_8 -> now.plusSeconds(8 * 3600L).toString()
+            Mute.WEEK -> now.plusSeconds(7 * 86_400L).toString()
+            Mute.ALWAYS -> "forever"
+            Mute.OFF -> null
+        }
+        try {
+            val r = api.mute(id, until)
+            _state.update { s -> s.copy(conversation = s.conversation?.copy(mutedUntil = r.mutedUntil)) }
+            c.badges.refresh()
+        } catch (e: ApiError) {
+            if ((e as? ApiError.Http)?.status == 404) _state.update { it.copy(muteSupported = false, notice = res.getString(R.string.chat_mute_unavailable)) }
+            else _state.update { it.copy(notice = e.describe(res)) }
         }
     }
 
@@ -188,7 +247,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
                 picked.clear()
                 _state.update { it.copy(attachment = null, replyTo = null) }
                 onSent()
-                load()
+                poll()
             } catch (e: ApiError) {
                 _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.chat_send_failed)) }
             }
@@ -219,7 +278,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
             try {
                 val fix = c.location.currentFix()
                 api.send(id, ChatPayload.location(fix.lat, fix.lng, res.getString(R.string.chat_my_location)), emptyList(), null, null)
-                load()
+                poll()
             } catch (e: LocationProvider.Failure) {
                 _state.update { it.copy(notice = res.getString(R.string.chat_location_failed)) }
             } catch (e: ApiError) {
@@ -253,6 +312,23 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.sendLocation() }
     val lastId = s.messages.lastOrNull()?.id
     LaunchedEffect(lastId) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
+    // Only while this thread is on screen and the app in front (CHAT-REPORT P0): it is "the open
+    // conversation" (its pushes are not shown, its card is cleared), it polls every 5 s with `after=`,
+    // refreshes at once on a push for it, and marks read up to the last message shown.
+    val container = (context.applicationContext as NexusApplication).container
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle, vm.id) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            ChatPresence.openConversationId = vm.id
+            ChatNotifier.cancel(context, vm.id)
+            try {
+                launch { container.chatEvents.collect { cid -> if (cid == null || cid == vm.id) { vm.poll(); vm.markReadVisible() } } }
+                while (true) { vm.poll(); vm.markReadVisible(); delay(ChatApi.THREAD_POLL_MS) }
+            } finally {
+                if (ChatPresence.openConversationId == vm.id) ChatPresence.openConversationId = null
+            }
+        }
+    }
 
     val conv = s.conversation
     val members = conv?.members.orEmpty().filter { it.uid != vm.meId }
@@ -263,13 +339,27 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Column(Modifier.weight(1f)) {
-                Text(conv?.title(vm.meId) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(conv?.title(vm.meId) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (conv?.muted() == true) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+                }
                 if (conv != null && conv.type != "DM") Text(stringResource(R.string.chat_members_n, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
             }
-            if (conv?.type == "GROUP") Box {
+            if (conv != null && (conv.type == "GROUP" || s.muteSupported)) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.chat_rename)) }, onClick = { menu = false; renaming = true })
+                    if (conv.type == "GROUP") DropdownMenuItem(text = { Text(stringResource(R.string.chat_rename)) }, onClick = { menu = false; renaming = true })
+                    // Mute per conversation (CHAT-CONTRACT): 8 hours, a week, always, or unmute.
+                    if (s.muteSupported) {
+                        if (conv.muted()) DropdownMenuItem(text = { Text(stringResource(R.string.chat_unmute)) }, leadingIcon = { Icon(Icons.Filled.Notifications, null) },
+                            onClick = { menu = false; vm.mute(ChatThreadViewModel.Mute.OFF) })
+                        else listOf(ChatThreadViewModel.Mute.HOURS_8 to R.string.chat_mute_8h, ChatThreadViewModel.Mute.WEEK to R.string.chat_mute_week,
+                            ChatThreadViewModel.Mute.ALWAYS to R.string.chat_mute_always).forEach { (m, label) ->
+                            DropdownMenuItem(text = { Text(stringResource(label)) }, leadingIcon = { Icon(Icons.Filled.NotificationsOff, null) },
+                                onClick = { menu = false; vm.mute(m) })
+                        }
+                    }
                 }
             }
         }
@@ -317,7 +407,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
                                     Icon(Icons.Filled.Checklist, null, tint = fg); Spacer(Modifier.width(6.dp))
                                     Text(p.title.ifBlank { stringResource(R.string.chat_open_task) }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
                                 }
-                                ChatPayload.Plain -> if (m.content.isNotBlank()) Text(highlight(m.content, if (mine) Color.White else c.violetText), fontSize = 15.sp, color = fg)
+                                ChatPayload.Plain -> if (m.content.isNotBlank()) Text(highlight(m.content, if (mine) Color.White else c.violetText, fg), fontSize = 15.sp, color = fg)
                             }
                             Text(chatTime(m.createdAt), fontSize = 10.sp, color = fg.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.End))
                         }
@@ -412,14 +502,34 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
 
 private fun Modifier.clip18() = this.clip(RoundedCornerShape(18.dp))
 
-/** @mention tokens in the accent colour. */
-private fun highlight(text: String, accent: Color): AnnotatedString = buildAnnotatedString {
-    val re = Regex("@\\S+")
+/** @mention tokens in the accent colour; web links underlined and tappable (CHAT-REPORT P0). */
+internal fun highlight(text: String, accent: Color, linkColor: Color = accent): AnnotatedString = buildAnnotatedString {
     var i = 0
-    re.findAll(text).forEach { m ->
-        append(text.substring(i, m.range.first))
-        withStyle(SpanStyle(color = accent, fontWeight = FontWeight.Bold)) { append(m.value) }
-        i = m.range.last + 1
+    ChatText.tokens(text).forEach { t ->
+        append(text.substring(i, t.range.first))
+        val v = text.substring(t.range)
+        when (t.kind) {
+            ChatText.Kind.MENTION -> withStyle(SpanStyle(color = accent, fontWeight = FontWeight.Bold)) { append(v) }
+            ChatText.Kind.LINK -> withLink(LinkAnnotation.Url(ChatText.url(v), TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)))) { append(v) }
+        }
+        i = t.range.last + 1
     }
     append(text.substring(i))
+}
+
+/** Mentions and links in a message (pure, tested). */
+object ChatText {
+    enum class Kind { MENTION, LINK }
+    data class Token(val kind: Kind, val range: IntRange)
+    private val LINK = Regex("""(?i)\b((?:https?://|www\.)[^\s<>"']+[^\s<>"'.,;:!?)\]])""")
+    private val MENTION = Regex("@\\S+")
+
+    fun tokens(text: String): List<Token> {
+        val links = LINK.findAll(text).map { Token(Kind.LINK, it.range) }.toList()
+        val mentions = MENTION.findAll(text).map { Token(Kind.MENTION, it.range) }.filter { m -> links.none { it.range.first <= m.range.first && m.range.first <= it.range.last } }
+        return (links + mentions).sortedBy { it.range.first }
+    }
+
+    /** "www.x.id" opens as "https://www.x.id". */
+    fun url(raw: String) = if (raw.startsWith("http", ignoreCase = true)) raw else "https://$raw"
 }

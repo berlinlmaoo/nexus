@@ -38,6 +38,8 @@ class NexusApplication : Application() {
                 if (container.sessionStore.current != null) container.appScope.launch { container.shortcuts.syncPins() }
                 // Calendar widgets catch up with whatever changed while the app was away (throttled to 5 min).
                 if (container.sessionStore.current != null) container.refreshCalendarWidgets()
+                // Unread counts for More and Messages; an open chat list or thread refreshes itself.
+                if (container.sessionStore.current != null) { container.badges.refresh(); container.chatEvents.tryEmit(null) }
                 container.appScope.launch {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.

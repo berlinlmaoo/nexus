@@ -41,7 +41,11 @@ data class Conversation(
     val members: List<ChatMember> = emptyList(),
     val lastMessage: Message? = null,
     val unreadCount: Int = 0,
+    /** Muted until then (ISO; far future = always); null = not muted. Servers before 8 Oct send none. */
+    val mutedUntil: String? = null,
 ) {
+    fun muted(nowMs: Long = System.currentTimeMillis()): Boolean =
+        mutedUntil?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() > nowMs }.getOrDefault(true) } ?: false
     /** A DM is titled by the other person; a group or project room by its name. */
     fun title(meId: String?): String = when (type) {
         "DM" -> members.firstOrNull { it.uid != meId }?.displayName ?: name ?: "—"
@@ -51,13 +55,22 @@ data class Conversation(
 }
 
 @Serializable
-data class ConversationsResponse(val conversations: List<Conversation> = emptyList())
+data class ConversationsResponse(val conversations: List<Conversation> = emptyList(), val totalUnread: Int? = null) {
+    /** The server's total (unmuted), else the sum over conversations that are not muted (older servers). */
+    fun unread(nowMs: Long = System.currentTimeMillis()): Int = totalUnread ?: conversations.filter { !it.muted(nowMs) }.sumOf { it.unreadCount }
+}
+
+@Serializable
+data class UnreadResponse(val totalUnread: Int = 0, val mentions: Int = 0)
+
+@Serializable
+data class MuteResponse(val mutedUntil: String? = null)
 
 @Serializable
 data class ConversationResponse(val conversation: Conversation)
 
 @Serializable
-data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMore: Boolean = false)
+data class MessagesResponse(val messages: List<Message> = emptyList(), val hasMore: Boolean = false, val nextCursor: String? = null)
 
 @Serializable
 data class ChatUpload(val url: String, val type: String? = null)

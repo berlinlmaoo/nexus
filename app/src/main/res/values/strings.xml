@@ -1971,4 +1971,14 @@
     <string name="outside_left_body_plain">File a permit if you have something to do outside the office.</string>
     <string name="outside_hour_body_plain">File a permit if you have something to do outside, or head back to the office.</string>
     <string name="board_outside_now">Outside now</string>
+    <string name="ch_chat">Chat messages</string>
+    <string name="ch_chat_mentions">Chat mentions</string>
+    <string name="chat_photo_line">📷 Photo</string>
+    <string name="chat_you">You</string>
+    <string name="chat_muted">Muted</string>
+    <string name="chat_unmute">Unmute</string>
+    <string name="chat_mute_8h">Mute for 8 hours</string>
+    <string name="chat_mute_week">Mute for a week</string>
+    <string name="chat_mute_always">Mute always</string>
+    <string name="chat_mute_unavailable">Muting isn\'t available on the server yet.</string>
 </resources>

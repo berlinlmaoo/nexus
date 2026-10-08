@@ -20,8 +20,25 @@ class ChatApi(private val api: ApiClient) {
 
     suspend fun messages(id: String) = api.getCached("/api/conversations/$id/messages?limit=50", "messages-$id", MessagesResponse.serializer())
 
-    suspend fun earlier(id: String, beforeIso: String) =
-        api.get("/api/conversations/$id/messages?limit=50&before=${URLEncoder.encode(beforeIso, "UTF-8")}", MessagesResponse.serializer())
+    /** Older messages: `before` = the server's `nextCursor` when it sent one, else the oldest createdAt (older servers). */
+    suspend fun earlier(id: String, before: String) =
+        api.get("/api/conversations/$id/messages?limit=50&before=${URLEncoder.encode(before, "UTF-8")}", MessagesResponse.serializer())
+
+    /**
+     * Only messages newer than [afterId], oldest first (CHAT-CONTRACT). An older server ignores `after` and
+     * sends its latest page: ChatMerge unions by id, so nothing is ever dropped either way.
+     */
+    suspend fun newer(id: String, afterId: String) =
+        api.get("/api/conversations/$id/messages?limit=100&after=${URLEncoder.encode(afterId, "UTF-8")}", MessagesResponse.serializer())
+
+    /** Badges: `{ totalUnread, mentions }`; null when the server has no such route yet (the caller sums the list). */
+    suspend fun unread(): UnreadResponse? = runCatching { api.get("/api/conversations/unread", UnreadResponse.serializer()) }.getOrNull()
+
+    /** [until] = ISO time, "forever", or null to unmute. A 404 means the server has no mute yet. */
+    suspend fun mute(id: String, until: String?): MuteResponse =
+        api.send(Request.Builder().url(api.url("/api/conversations/$id/mute")).patch(buildJsonObject {
+            if (until == null) put("mutedUntil", kotlinx.serialization.json.JsonNull) else put("mutedUntil", until)
+        }.toString().toJsonBody()).build(), MuteResponse.serializer())
 
     /** Not idempotent: never retried automatically. */
     suspend fun send(id: String, content: String, mentionIds: List<String>, attachment: ChatUpload?, replyToId: String?) =
@@ -32,8 +49,12 @@ class ChatApi(private val api: ApiClient) {
             replyToId?.let { put("replyToId", it) }
         })
 
-    /** iOS never calls this, so iPhone reads stay unread on the web: Android does (API.md parity gap). */
-    suspend fun markRead(id: String) = post("/api/conversations/$id/read", JsonObject(emptyMap()))
+    /**
+     * Read up to the last message shown (`upToMessageId`, CHAT-CONTRACT): never past what the person saw.
+     * Older servers ignore the field and mark "now", as before.
+     */
+    suspend fun markRead(id: String, upToMessageId: String?) =
+        post("/api/conversations/$id/read", buildJsonObject { upToMessageId?.let { put("upToMessageId", it) } })
 
     /** An image part with a real image type (the server checks it); max 8 MB, no chunk route. */
     suspend fun uploadImage(conversationId: String, jpeg: ByteArray): ChatUpload {

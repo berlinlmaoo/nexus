@@ -25,6 +25,9 @@ import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import id.znetworks.nexus.core.net.ClientIdentity
 import id.znetworks.nexus.core.session.Session
+import id.znetworks.nexus.feature.chat.ChatNotifier
+import id.znetworks.nexus.feature.chat.ChatPresence
+import id.znetworks.nexus.feature.chat.ChatPush
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -138,6 +141,9 @@ class PushManager(
             Triple("attendance_location", R.string.ch_attendance_location, NotificationManager.IMPORTANCE_HIGH),
             Triple("approvals", R.string.ch_approvals, NotificationManager.IMPORTANCE_HIGH),
             Triple("messages", R.string.ch_messages, NotificationManager.IMPORTANCE_HIGH),
+            // Chat: one card per conversation; mentions louder than plain messages (CHAT-CONTRACT).
+            Triple(ChatNotifier.CH_CHAT, R.string.ch_chat, NotificationManager.IMPORTANCE_DEFAULT),
+            Triple(ChatNotifier.CH_MENTIONS, R.string.ch_chat_mentions, NotificationManager.IMPORTANCE_HIGH),
             Triple("tasks", R.string.ch_tasks, NotificationManager.IMPORTANCE_DEFAULT),
             Triple("tickets", R.string.ch_tickets, NotificationManager.IMPORTANCE_DEFAULT),
             Triple("announcements", R.string.ch_announcements, NotificationManager.IMPORTANCE_HIGH),
@@ -190,6 +196,18 @@ class NexusMessagingService : FirebaseMessagingService() {
         val type = d["type"]
         // The server checked the person out at 2 h 30 outside: stop tracking, re-read today.
         if (type == "attendance_auto_offsite_checkout") c.reconcileTrail()
+        // Chat (CHAT-CONTRACT): one card per conversation, none for the conversation on screen, which
+        // refreshes instead; the list and the badges refresh too.
+        val chat = ChatPush.parse(d)
+        if (chat != null) {
+            c.chatEvents.tryEmit(chat.conversationId)
+            c.badges.refresh()
+            val onScreen = ChatPresence.openConversationId == chat.conversationId &&
+                androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+            if (!onScreen) ChatNotifier.show(this, chat)
+            return
+        }
+        c.badges.refresh()
         val title = d["title"] ?: message.notification?.title ?: return
         val body = d["body"] ?: message.notification?.body.orEmpty()
         show(this, title, body, type, d["link"], d["taskId"], d["projectId"], d["category"], d["notificationId"],

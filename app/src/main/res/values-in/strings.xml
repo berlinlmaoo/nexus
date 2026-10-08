@@ -1965,4 +1965,14 @@
     <string name="outside_left_body_plain">Ajukan izin kalau ada kegiatan di luar kantor.</string>
     <string name="outside_hour_body_plain">Ajukan izin kalau ada kegiatan di luar, atau balik ke kantor.</string>
     <string name="board_outside_now">Sedang di luar</string>
+    <string name="ch_chat">Pesan chat</string>
+    <string name="ch_chat_mentions">Mention di chat</string>
+    <string name="chat_photo_line">📷 Foto</string>
+    <string name="chat_you">Kamu</string>
+    <string name="chat_muted">Dibisukan</string>
+    <string name="chat_unmute">Bunyikan lagi</string>
+    <string name="chat_mute_8h">Bisukan 8 jam</string>
+    <string name="chat_mute_week">Bisukan seminggu</string>
+    <string name="chat_mute_always">Bisukan selamanya</string>
+    <string name="chat_mute_unavailable">Fitur bisukan belum tersedia di server.</string>
 </resources>

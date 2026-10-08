@@ -231,7 +231,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
             is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
             is Target.Folder -> { container.router.consumed(t); nav.navigate("folder/${enc(t.id)}") }
-            is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/${enc(it)}" } ?: "messages") }
+            is Target.Chat -> {
+                container.router.consumed(t)
+                // Already in that thread (a push tapped while reading it): stay, no second copy (CHAT-REPORT P0).
+                val here = nav.currentBackStackEntry
+                val inThread = here?.destination?.route == "chat/{id}" && here.arguments?.getString("id") == t.conversationId
+                if (!inThread) nav.navigate(t.conversationId?.let { "chat/${enc(it)}" } ?: "messages") { launchSingleTop = true }
+            }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
             is Target.External -> { container.router.consumed(t); openUrl(context, t.url) }
