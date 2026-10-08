@@ -19,7 +19,7 @@ import {
   monthGrid, mondayOf, overdueRail, shiftMonth, underFocus, weekRows,
   type CalFilters, type CalItem, type CalScope,
 } from "@/lib/calendar/core";
-import { CAL_SWITCH, FOCUS_PILL, fmtDay, TOUCH_ICON, TOUCH_ROW, UnitDot, wibToday, type PeopleLookup } from "./bits";
+import { CAL_SWITCH, DoneTick, FOCUS_PILL, fmtDay, TOUCH_ICON, TOUCH_ROW, UnitDot, wibToday, type PeopleLookup } from "./bits";
 import { HOLIDAY_CUE, MonthGrid } from "./MonthGrid";
 import { DayPanel, type Lens } from "./DayPanel";
 import { PeopleWeek } from "./PeopleWeek";
@@ -732,7 +732,7 @@ function Legend({ holiday }: { holiday: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-[7px] w-[7px] rounded-full bg-cal-accent" />{t("has tasks to do")}</span>
-      <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-[7px] w-[7px] rounded-full border-[1.5px] border-cal-accent" />{t("done or no status")}</span>
+      <span className="inline-flex items-center gap-1.5"><DoneTick accent size={7} />{t("done or no status")}</span>
       <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-[2px] w-4 rounded-full bg-cal-overdue" />{t("overdue")}</span>
       {holiday && (
         <span className="inline-flex items-center gap-1.5"><span aria-hidden className={cn("font-semibold tabular-nums text-cal-holiday", HOLIDAY_CUE)}>1</span>{t("public holiday")}</span>

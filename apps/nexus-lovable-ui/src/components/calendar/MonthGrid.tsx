@@ -35,7 +35,7 @@ function weekdays(locale: string, weekday: "narrow" | "long"): string[] {
 
 /**
  * The month: Monday first, always six weeks. One dot per unit at the focus level that has a task that
- * day (filled = still something to do, ring = only done / status-less), in Bagan order — the same order as the legend.
+ * day (filled = still something to do, tick = only done / status-less), in Bagan order — the same order as the legend.
  * Desktop also shows the day's count; a red bar under the number = a task overdue (within the window)
  * is due that day. Days of other months sit on a muted background and carry no dots.
  * `fill` = the grid stretches its six rows over the height it is given (the desktop pane), so a whole
