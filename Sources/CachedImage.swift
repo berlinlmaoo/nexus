@@ -550,11 +550,21 @@ struct PhotoRef: Identifiable, Hashable {
 /// enlarging it would only produce a bigger blur.
 struct PhotoViewer: View {
     let photo: PhotoRef
+    /// Drag the picture down to close it, the way Photos and WhatsApp do. Only while it is not
+    /// zoomed: zoomed, the same drag pans. Off unless asked for: the profile picture turns it on
+    /// (`ZoomableAvatar`, owner 9 Oct 2026), and the evidence viewers keep their Close button alone
+    /// until the gesture has been tried on a device.
+    var dismissOnSwipeDown: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1
     @State private var committedScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var committedOffset: CGSize = .zero
+    /// How far an unzoomed picture has been pulled down towards closing.
+    @State private var pull: CGFloat = 0
+    /// True while two fingers are on the picture. A `@GestureState` so it is false again however
+    /// the pinch ends, cancelled included, and a pinch's own drift is never read as a pull.
+    @GestureState private var pinching = false
 
     var body: some View {
         ZStack {
@@ -568,12 +578,14 @@ struct PhotoViewer: View {
                 ProgressView().tint(Color.white)
             }
             .scaleEffect(scale)
-            .offset(offset)
+            .offset(x: offset.width, y: offset.height + pull)
             .gesture(magnify)
             .simultaneousGesture(pan)
             .onTapGesture(count: 2) { reset() }
         }
         .overlay(alignment: .top) { bar }
+        // VoiceOver's two-finger scrub closes it too.
+        .accessibilityAction(.escape) { dismiss() }
     }
 
     private var bar: some View {
@@ -582,20 +594,27 @@ struct PhotoViewer: View {
                 Text(name).font(NXFont.text(13, .semibold)).foregroundStyle(Color.white).lineLimit(1)
             }
             Spacer(minLength: 0)
+            // The disc stays 34 pt; the area that answers a tap is the full 44.
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Color.white)
                     .frame(width: 34, height: 34)
                     .background(Color.white.opacity(0.15), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(T("Close"))
         }
-        .padding(.horizontal, 16).padding(.top, 10)
+        .padding(.leading, 16).padding(.trailing, 11).padding(.top, 5)
     }
 
     private var magnify: some Gesture {
         MagnifyGesture()
-            .onChanged { value in scale = min(max(committedScale * value.magnification, 1), 6) }
+            .updating($pinching) { _, state, _ in state = true }
+            .onChanged { value in
+                pull = 0
+                scale = min(max(committedScale * value.magnification, 1), 6)
+            }
             .onEnded { _ in
                 committedScale = scale
                 // Pinching back to fit also puts the picture back in the middle. Left where it was,
@@ -607,18 +626,30 @@ struct PhotoViewer: View {
     private var pan: some Gesture {
         DragGesture()
             .onChanged { value in
-                // Dragging an unzoomed picture would only slide it away; there is nothing hidden to
-                // bring into view.
-                guard scale > 1 else { return }
-                offset = CGSize(width: committedOffset.width + value.translation.width,
-                                height: committedOffset.height + value.translation.height)
+                if scale > 1 {
+                    offset = CGSize(width: committedOffset.width + value.translation.width,
+                                    height: committedOffset.height + value.translation.height)
+                } else if dismissOnSwipeDown && !pinching {
+                    // Unzoomed there is nothing hidden to pan to, so a downward drag pulls the
+                    // picture towards closing instead. Up and sideways do nothing.
+                    pull = max(0, value.translation.height)
+                }
             }
-            .onEnded { _ in committedOffset = offset }
+            .onEnded { value in
+                committedOffset = offset
+                guard pull > 0 else { return }
+                // Far enough, or let go with a downward flick: close. Otherwise it springs back.
+                if pull > 120 || value.predictedEndTranslation.height > 320 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { pull = 0 }
+                }
+            }
     }
 
     private func reset() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            scale = 1; committedScale = 1; offset = .zero; committedOffset = .zero
+            scale = 1; committedScale = 1; offset = .zero; committedOffset = .zero; pull = 0
         }
     }
 }

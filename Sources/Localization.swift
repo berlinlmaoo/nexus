@@ -2235,6 +2235,13 @@ final class AppLanguage {
         "A description can be at most 500 characters.": "Deskripsi maksimal 500 karakter.",
         "A group name can be at most 80 characters.": "Nama grup maksimal 80 karakter.",
         "A search can be at most 100 characters.": "Kata pencarian maksimal 100 karakter.",
+        // Member profile: tidy header and period card, profile photo viewer (9 Oct)
+        "View profile photo": "Lihat foto profil",
+        "Day-off allowance": "Jatah day off",
+        "%d of %d used · %d left": "%d dari %d terpakai · sisa %d",
+        "+%d gained · %d lost": "+%d didapat · %d hilang",
+        "%d min · %d days": "%d mnt · %d hari",
+        "%d min · 1 day": "%d mnt · 1 hari",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

@@ -143,12 +143,17 @@ struct MemberProfileView: View {
 
     // MARK: - header & standing
 
+    /// Who this is, in one card: the face (tap it for the photo), the name with its role, the two
+    /// facts the workspace knows, and the one thing to do from here.
     private var headerCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
-                AvatarView(url: avatarURL, initial: initial, size: 68)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(displayName).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
+                // The full-screen viewer belongs to the avatar itself, so this screen keeps its one
+                // sheet (the streak day). Initials open nothing.
+                ZoomableAvatar(url: avatarURL, initial: initial, size: 72, name: displayName)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(displayName).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 6) {
                         if let role = roleText { RoleChip(role: role) }
                         if isMe { NexusChip(text: T("You"), tone: .accent) }
@@ -157,24 +162,21 @@ struct MemberProfileView: View {
                 }
                 Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 6) {
-                if let email = emailText, !email.isEmpty {
-                    Label(email, systemImage: "envelope.fill")
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                }
-                if let joined = joinedText, !joined.isEmpty {
-                    Label("\(T("Joined")) \(AgendaRange.dayLabel(AgendaRange.dayKey(joined)))", systemImage: "calendar")
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            let email = (emailText ?? "").isEmpty ? nil : emailText
+            let joined = (joinedText ?? "").isEmpty ? nil : joinedText
+            if email != nil || joined != nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let email {
+                        headerFact("envelope", email).truncationMode(.middle)
+                    }
+                    if let joined {
+                        headerFact("calendar", "\(T("Joined")) \(AgendaRange.dayLabel(AgendaRange.dayKey(joined)))")
+                    }
                 }
             }
             // Someone who left can't sign in any more: there is no one to message (the web hides it too).
             if !isMe && record?.person.leftAt == nil {
-                Button { Task { await startChat() } } label: {
-                    Label(T("Message"), systemImage: "bubble.left.fill").font(NXFont.text(14, .bold))
-                }
-                .buttonStyle(NexusPrimaryButton(fullWidth: false))
-                .disabled(startingChat)
-                .opacity(startingChat ? 0.5 : 1)
+                messageButton
             }
             if let chatError {
                 Text(chatError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
@@ -184,17 +186,54 @@ struct MemberProfileView: View {
         .nexusCard()
     }
 
+    private func headerFact(_ icon: String, _ text: String) -> some View {
+        Label {
+            Text(text).foregroundStyle(NX.foreground).lineLimit(1)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(NX.mutedFg)
+        }
+        .font(NXFont.text(13))
+    }
+
+    /// A tonal button the size of the app's other in-card actions. It used to be the primary style
+    /// without full width, which has no side padding: a 50 pt violet slab with the bubble against
+    /// its left edge and the word against its right (owner, 9 Oct 2026). The visible pill is about
+    /// 38 pt; the tappable area is the full 44.
+    private var messageButton: some View {
+        Button { Task { await startChat() } } label: {
+            HStack(spacing: 8) {
+                if startingChat {
+                    ProgressView().controlSize(.small).tint(NX.violetText)
+                } else {
+                    Image(systemName: "bubble.left.fill")
+                }
+                Text(T("Message"))
+            }
+            .font(NXFont.text(14, .semibold))
+            .foregroundStyle(NX.violetText)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(NX.accentBg, in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(startingChat)
+    }
+
     private var standingCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(T("LEVEL"))
+            // Named for the number under it. It said LEVEL above "1,000 XP" and a "Level 6" chip,
+            // the word twice and neither time about the big number.
+            SectionLabel(T("Total XP"))
             if let xp = xpTotal, let level = levelNumber {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(xp.formatted(.number.grouping(.automatic)))
                         .font(NXFont.display(28, .bold)).foregroundStyle(NX.foreground)
-                    Text("XP").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
                     Spacer(minLength: 8)
                     NexusChip(text: "\(T("Level")) \(level)\(levelName.map { " · \($0)" } ?? "")", tone: .accent)
                 }
+                .accessibilityElement(children: .combine)
                 // Only your own score arrives with the level floors around it, so the bar is drawn
                 // for you and a bare number for everybody else — an invented denominator would be
                 // worse than none.
@@ -212,10 +251,10 @@ struct MemberProfileView: View {
             }
             // The streak has no peer endpoint at all — /api/gamification/me answers for the caller
             // and nobody else — so it is a fact this screen can only ever show about you.
+            // One row, name then value, like the period's facts. The count is no longer amber text,
+            // which read at about 2:1 on the white card; the flame keeps the colour.
             if let streak = mine?.streakCurrent {
-                Label("\(streak) \(T("days"))", systemImage: "flame.fill")
-                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.warning)
-                Text(T("Day streak")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                factRow("flame.fill", iconTint: NX.warning, T("Day streak"), "\(streak) \(T("days"))")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -251,7 +290,9 @@ struct MemberProfileView: View {
             if canSeeActivity { activityCard }
         case .loaded:
             if let record {
-                periodBar(record)
+                // A little more air above the period than between its cards: everything from here
+                // down is the record for the period this bar names.
+                periodBar(record).padding(.top, 8)
                 summaryCard(record)
                 streakCard(record)
                 RecordXpCard(record: record, onChanged: { await loadRecord() })
@@ -261,55 +302,60 @@ struct MemberProfileView: View {
         }
     }
 
+    /// The period the record below is about. The arrows are 44 pt to tap (they were 34), and the
+    /// left one now fades when there is nothing earlier, like the right one always did.
     private func periodBar(_ r: MemberRecord) -> some View {
         HStack(spacing: 8) {
-            Button { Task { await switchPeriod(r.period.previousKey) } } label: {
-                Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34).background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
-            }
-            .buttonStyle(.plain)
-            .disabled(r.period.previousKey == nil)
-            .accessibilityLabel(T("Previous period"))
-            VStack(spacing: 1) {
-                Text(r.period.label ?? r.period.key).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
-                Text(T("Attendance period · 28th to 27th")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+            periodArrow("chevron.left", label: T("Previous period"), key: r.period.previousKey)
+            VStack(spacing: 2) {
+                Text(r.period.label ?? r.period.key).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
+                    .multilineTextAlignment(.center)
+                Text(T("Attendance period · 28th to 27th")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            Button { Task { await switchPeriod(r.period.nextKey) } } label: {
-                Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34).background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
-            }
-            .buttonStyle(.plain)
-            .disabled(r.period.nextKey == nil)
-            .opacity(r.period.nextKey == nil ? 0.35 : 1)
-            .accessibilityLabel(T("Next period"))
+            .accessibilityElement(children: .combine)
+            periodArrow("chevron.right", label: T("Next period"), key: r.period.nextKey)
         }
         .foregroundStyle(NX.foreground)
     }
 
+    private func periodArrow(_ icon: String, label: String, key: String?) -> some View {
+        Button { Task { await switchPeriod(key) } } label: {
+            Image(systemName: icon).font(.system(size: 15, weight: .bold))
+                .frame(width: 44, height: 44)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        }
+        .buttonStyle(.plain)
+        .disabled(key == nil)
+        .opacity(key == nil ? 0.35 : 1)
+        .accessibilityLabel(label)
+    }
+
+    /// One period at a glance, read top to bottom: the score, the six day counts, three facts as
+    /// name and value, and last the line that explains how the score is counted. That line used to
+    /// sit between the score and the counts, the longest text in the card in the way of the numbers.
     private func summaryCard(_ r: MemberRecord) -> some View {
         let score = r.summary?.score
         let c = r.summary?.counts
         let d = r.summary?.dayOff
         let xp = r.summary?.xp
-        return VStack(alignment: .leading, spacing: 12) {
-            SectionLabel(r.period.isCurrent == true ? T("THIS PERIOD") : T("PERIOD"))
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if let score {
-                    (StreakBoardCard.scoreText(worked: score.totalWorked ?? score.worked, target: score.working))
-                        .font(NXFont.display(28, .bold)).foregroundStyle(NX.foreground)
-                }
-                Text(T("Score")).font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                Spacer(minLength: 4)
+                SectionLabel(r.period.isCurrent == true ? T("THIS PERIOD") : T("PERIOD"))
+                Spacer(minLength: 8)
                 if r.period.isCurrent == true, let el = r.period.daysElapsed, let all = r.period.days {
-                    Text(String(format: T("Day %d of %d"), el, all)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(String(format: T("Day %d of %d"), el, all)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                 }
             }
-            if let score, let days = r.period.days {
-                Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d day-off allowance."), score.working, days, d?.quota ?? 4))
-                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            if let score {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    (StreakBoardCard.scoreText(worked: score.totalWorked ?? score.worked, target: score.working))
+                        .font(NXFont.display(30, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Score")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                }
+                .accessibilityElement(children: .combine)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 countTile(T("Present"), c?.present, AttTone.present)
@@ -319,41 +365,81 @@ struct MemberProfileView: View {
                 countTile(T("Day off"), c?.dayOff, AttTone.dayoff)
                 countTile(T("Absent (TK)"), c?.absent, AttTone.absent)
             }
-            VStack(alignment: .leading, spacing: 6) {
-                factLine("clock", (c?.lateMinutes ?? 0) > 0
-                         ? String(format: T("Late %d min in total, on %d days"), c?.lateMinutes ?? 0, c?.lateDays ?? 0)
-                         : T("Never late this period"))
+            Divider().overlay(NX.border)
+            // Name on the left, value on the right; the card already says which period, so the
+            // rows no longer repeat "this period" after it.
+            VStack(alignment: .leading, spacing: 10) {
+                let lateMinutes = c?.lateMinutes ?? 0
+                let lateDays = c?.lateDays ?? 0
+                factRow("clock", T("Late"), lateMinutes > 0
+                        ? (lateDays == 1 ? String(format: T("%d min · 1 day"), lateMinutes)
+                                         : String(format: T("%d min · %d days"), lateMinutes, lateDays))
+                        : T("Never"))
                 if let d {
-                    factLine("calendar.badge.minus", String(format: T("Day off: %d of %d used, %d left"), d.usedRaw ?? d.used ?? 0, d.quota ?? 4, d.remaining ?? 0)
-                             + ((d.bonusDays ?? 0) > 0 ? " · " + String(format: T("incl. %d extra"), d.bonusDays ?? 0) : ""))
+                    // "Allowance", not "Day off": the tile above already counts the days off taken.
+                    factRow("calendar.badge.minus", T("Day-off allowance"),
+                            String(format: T("%d of %d used · %d left"), d.usedRaw ?? d.used ?? 0, d.quota ?? 4, d.remaining ?? 0)
+                            + ((d.bonusDays ?? 0) > 0 ? " · " + String(format: T("incl. %d extra"), d.bonusDays ?? 0) : ""))
                 }
                 if let xp {
-                    factLine("sparkles", String(format: T("XP this period: +%d gained, %d lost"), xp.gained ?? 0, xp.lost ?? 0)
-                             + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the BoD"), xp.removed ?? 0) : ""))
+                    factRow("sparkles", "XP",
+                            String(format: T("+%d gained · %d lost"), xp.gained ?? 0, xp.lost ?? 0)
+                            + ((xp.removed ?? 0) > 0 ? " · " + String(format: T("%d removed by the BoD"), xp.removed ?? 0) : ""))
                 }
+            }
+            if let score, let days = r.period.days {
+                Label {
+                    Text(String(format: T("Days worked (present or permit) out of %d working days: %d days minus %d day-off allowance."), score.working, days, d?.quota ?? 4))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle")
+                }
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard()
     }
 
+    /// A zero reads quieter than a count, so the days that did happen stand out when scanning.
     private func countTile(_ label: String, _ value: Int?, _ tone: AttTone) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 3, style: .continuous).fill(tone.color).frame(width: 10, height: 10)
                 Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.8)
             }
-            Text("\(value ?? 0)").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+            Text("\(value ?? 0)").font(NXFont.display(20, .bold))
+                .foregroundStyle((value ?? 0) == 0 ? NX.mutedFg : NX.foreground)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .accessibilityElement(children: .combine)
     }
 
-    private func factLine(_ icon: String, _ text: String) -> some View {
-        Label(text, systemImage: icon).font(NXFont.text(12)).foregroundStyle(NX.foreground)
-            .fixedSize(horizontal: false, vertical: true)
+    /// "Name ........ value". When both no longer fit on one line (a long value, or large text),
+    /// the value moves under its name instead of squeezing it.
+    private func factRow(_ icon: String, iconTint: Color = NX.mutedFg, _ title: String, _ value: String) -> some View {
+        let name = Label {
+            Text(title).foregroundStyle(NX.mutedFg)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(iconTint)
+        }
+        .font(NXFont.text(13))
+        let shown = Text(value).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                name
+                Spacer(minLength: 12)
+                shown.lineLimit(1)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                name
+                shown.fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// The server's day letter → the board's tone, for a day with no history row in hand.

@@ -278,6 +278,10 @@ struct NexusPrimaryButton: ButtonStyle {
         configuration.label
             .font(NXFont.display(16, .bold))
             .foregroundStyle(.white)
+            // A button that hugs its label needs room either side of it. Without this every
+            // `fullWidth: false` button drew its label right against both edges: "Try again",
+            // "Save", and the profile's old Message button (owner, 9 Oct 2026).
+            .padding(.horizontal, fullWidth ? 0 : 20)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.vertical, 15)
             .background(tint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
