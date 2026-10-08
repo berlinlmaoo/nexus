@@ -337,6 +337,12 @@ export type NexusProject = {
   /** Calendar-only project: hide the done checkbox, status select and Table status column. */
   disableTaskStatus?: boolean;
   tableColumns?: string[] | null;
+  /** "TASK" | "FINANCE" | "CONTENT" | "PIPELINE" (9 Oct 2026). Absent on an older server = TASK. */
+  type?: string;
+  /** Tab keys this project hides (components/projects/project-tabs.ts). Unknown keys are ignored. */
+  hiddenTabs?: string[];
+  /** The Finance tab is opt-in, like enablePnlDashboard (9 Oct 2026). */
+  financeEnabled?: boolean;
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
   taskLists?: Array<{ id: string; name: string; position?: number; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
@@ -2001,6 +2007,8 @@ export function loginWithCredentials(email: string, password: string, callbackUr
 
 export type CreateProjectPayload = {
   name: string;
+  /** Only "TASK" is accepted today; the others answer 400 TYPE_COMING_SOON. Omitted = TASK. */
+  type?: string;
   description?: string | null;
   color?: string;
   icon?: string;
@@ -2073,7 +2081,7 @@ export const nexusApi = {
   workspaceProjects: (workspaceId: string) => apiFetch<NexusProject[]>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),
   createProject: (payload: CreateProjectPayload) => apiFetch<NexusProject>("/api/projects", { method: "POST", body: JSON.stringify(payload) }),
   project: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}`),
-  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard" | "requireAttachmentForDone" | "disableTaskStatus">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard" | "requireAttachmentForDone" | "disableTaskStatus" | "hiddenTabs" | "financeEnabled">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteProject: (projectId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}`, { method: "DELETE" }),
   duplicateProject: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}/duplicate`, { method: "POST" }),
   workflowBundles: () => apiFetch<{ bundles: NexusWorkflowBundle[] }>("/api/workflow-bundles"),
