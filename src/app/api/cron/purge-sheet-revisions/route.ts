@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { isCronRequest } from "@/lib/cron-auth"
 import { ensureRevisionTrigger } from "@/lib/project-sheets"
-import { SNAPSHOT_RETENTION_DAYS } from "@/lib/deletion-snapshot"
+import { SNAPSHOT_RETENTION_DAYS, purgeDeletionSnapshots } from "@/lib/deletion-snapshot"
 
 /**
  * Retention for spreadsheet cell history: **90 days, except the newest entry per cell, which is
@@ -61,12 +61,16 @@ export async function POST(req: NextRequest) {
       console.error("Error purging attendance location points:", error)
     }
 
-    // Restorable copies of deleted projects and tasks (lib/deletion-snapshot.ts): kept 90 days, restored
-    // or not. Its own try, like the trail above.
+    // Restorable copies of deleted things (lib/deletion-snapshot.ts): kept 90 days, restored or not,
+    // then the files only those copies still pointed at (deletes no longer unlink them). Its own try,
+    // like the trail above.
     let deletionSnapshotsDeleted: number | null = null
+    let deletedFilesRemoved: number | null = null
     try {
       const snapshotCutoff = new Date(Date.now() - SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-      deletionSnapshotsDeleted = (await prisma.deletionSnapshot.deleteMany({ where: { createdAt: { lt: snapshotCutoff } } })).count
+      const purged = await purgeDeletionSnapshots(snapshotCutoff)
+      deletionSnapshotsDeleted = purged.deleted
+      deletedFilesRemoved = purged.filesRemoved
     } catch (error) {
       console.error("Error purging deletion snapshots:", error)
     }
@@ -81,6 +85,7 @@ export async function POST(req: NextRequest) {
       triggerInstalled: Number(n) > 0,
       locationPointsDeleted,
       deletionSnapshotsDeleted,
+      deletedFilesRemoved,
     })
   } catch (error) {
     console.error("Error purging sheet revisions:", error)

@@ -1838,14 +1838,15 @@ model AuditLog {
 model DeletionSnapshot {
   id           String    @id @default(cuid())
   auditLogId   String?   @unique // the "delete" row in AuditLog it restores
-  entityType   String // "project" | "task"
+  entityType   String // the audit row's entityType: lib/deletion-entities.ts RESTORABLE
   entityId     String
   entityName   String?
   workspaceId  String?
-  source       String    @default("delete") // "delete" | "backup"
+  source       String    @default("delete") // "delete" | "soft" | "backup"
   dataAsOf     DateTime // when the copy's rows are from
   data         Json // deletion-snapshot-core SnapshotData
-  counts       Json // rows per table
+  counts       Json // rows per table (+ "moved:<Table>.<column>" for a move-then-delete)
+  meta         Json? // { open, projectId?, taskId?, sheetId? } — the "Open …" link and what follow-ups need
   deletedById  String?
   restoredAt   DateTime?
   restoredById String?

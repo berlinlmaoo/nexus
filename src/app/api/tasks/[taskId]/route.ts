@@ -619,6 +619,10 @@ export async function DELETE(
       entityType: "task", entityId: taskId, entityName: existing.title,
       workspaceId: existing.taskList.project?.workspaceId ?? null,
       deletedById: session.user.id!, auditLogId,
+      meta: {
+        open: { type: "task", id: taskId, projectId: existing.taskList.projectId },
+        projectId: existing.taskList.projectId, taskId,
+      },
       remove: (tx) => tx.task.delete({ where: { id: taskId } }),
     })
 

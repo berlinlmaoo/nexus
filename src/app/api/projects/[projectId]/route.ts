@@ -333,6 +333,7 @@ export async function DELETE(
     await deleteKeepingSnapshot({
       entityType: "project", entityId: projectId, entityName: existing.name, workspaceId: existing.workspaceId,
       deletedById: session.user.id!, auditLogId,
+      meta: { open: { type: "project", id: projectId }, projectId },
       remove: (tx) => tx.project.delete({ where: { id: projectId } }),
     })
 
