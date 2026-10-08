@@ -338,7 +338,7 @@ const RESTORABLE_TYPES = new Set([
   "custom_field", "form", "automation", "webhook", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
   "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
   "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
-  "vault_file", "vault_folder", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
+  "vault_file", "vault_folder", "vault_file_version", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
   "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
 ]);
 
@@ -353,7 +353,7 @@ const RESTORE_BUTTON: Record<string, string> = {
   pnl_category: "Restore category", pnl_stage: "Restore stage", pnl_recurring: "Restore recurring expense",
   pnl_expense_attachment: "Restore receipt", pnl_budget: "Restore budget", holiday: "Restore holiday",
   attendance_request: "Restore day off", attendance_office: "Restore office", org_unit_member: "Restore placement",
-  vault_file: "Restore file", vault_folder: "Restore folder", vault_trash: "Restore trash", task_list: "Restore section",
+  vault_file: "Restore file", vault_folder: "Restore folder", vault_file_version: "Restore previous version", vault_trash: "Restore trash", task_list: "Restore section",
   project_folder: "Restore folder", org_unit: "Restore unit", sheet_rows: "Restore rows", form_submission: "Restore submission",
   attendance_record: "Restore attendance record", project_sheet_column: "Restore column", post: "Restore post",
   quest: "Restore quest", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
@@ -379,6 +379,8 @@ function restoreNote(entityType: string, soft: boolean): string | null {
     case "room_booking": return "It can't come back if the room has been booked for that time since.";
     case "vault_file": case "vault_folder": case "vault_trash":
       return soft ? "It comes out of the Vault trash." : "It comes back to the Vault trash, as it was. Restore it from there to use it again.";
+    // "Replace file…" (9 Oct 2026): the copy is the file's previous bytes.
+    case "vault_file_version": return "The file goes back to the version from before it was replaced. Its links keep working and show that version.";
     case "post": return "It shows in Threads again.";
     case "quest": return "The quest becomes active again.";
     case "calendar_event": return "The event is no longer cancelled.";
@@ -446,7 +448,7 @@ function failureText(payload: { code?: string; parent?: string | null } | null, 
 }
 
 /** "It comes back with …" counts that only mean something as "N items". */
-const ITEMS_ONLY = new Set(["vault_file", "vault_folder", "vault_trash"]);
+const ITEMS_ONLY = new Set(["vault_file", "vault_folder", "vault_file_version", "vault_trash"]);
 
 /** "226 tasks, 7 lists, 155 files and 5 comments" — only what there is. */
 function whatComesBack(r: NonNullable<NexusAuditEntryDetail["restore"]>, entityType: string, { tn, lang }: LangApi) {

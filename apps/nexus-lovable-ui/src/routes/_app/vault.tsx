@@ -5,12 +5,12 @@ import { toast } from "sonner";
 import {
   ChevronRight, Download, ExternalLink, Eye, File as FileIcon, FileText, Film,
   FolderInput, FolderPlus, Folder, HardDrive, Image as ImageIcon, Loader2, Lock, Music,
-  MoreVertical, Pencil, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload,
+  MoreVertical, Pencil, RefreshCw, RotateCcw, Search, Share2, ShieldCheck, Trash2, Upload,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VaultAccessDialog } from "@/components/vault/VaultAccessDialog";
 import { VaultLightbox } from "@/components/vault/VaultLightbox";
@@ -73,6 +73,8 @@ function VaultPage() {
   const [renameValue, setRenameValue] = useState("");
   const [moving, setMoving] = useState<VaultItem | null>(null);
   const [accessing, setAccessing] = useState<VaultItem | null>(null);
+  const [replacing, setReplacing] = useState<VaultItem | null>(null);
+  const replaceInput = useRef<HTMLInputElement>(null);
   const [viewer, setViewer] = useState<{ items: VaultItem[]; index: number } | null>(null);
   const [uploads, setUploads] = useState<{ key: number; name: string; pct: number }[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -169,6 +171,28 @@ function VaultPage() {
     };
     queue.current = queue.current.then(run, run);
   }, [refresh, t, tn]);
+
+  // Replace file… (9 Oct 2026): new bytes for the same item — same id, same place, same links. Waits
+  // its turn in the same queue as uploads (the server caps chunked sessions per person).
+  const replaceFile = useCallback((item: VaultItem, file: File) => {
+    const run = async () => {
+      const k = ++nextKey.current;
+      setUploads((u) => [...u, { key: k, name: t("{name} (new version)", { name: item.name }), pct: 0 }]);
+      try {
+        const updated = await nexusApi.vaultReplace(item.id, file, (pct) =>
+          setUploads((u) => u.map((x) => (x.key === k ? { ...x, pct } : x))),
+        );
+        toast.success(t("“{name}” replaced", { name: updated.name }), { description: t("Its links now show the new version.") });
+      } catch (e) {
+        const msg = e instanceof ApiError || e instanceof Error ? e.message : t("Upload failed");
+        toast.error(t("Couldn't replace {name}", { name: item.name }), { description: msg });
+      } finally {
+        setUploads((u) => u.filter((x) => x.key !== k));
+        refresh();
+      }
+    };
+    queue.current = queue.current.then(run, run);
+  }, [refresh, t]);
 
   const quotaPct = data ? Math.min(100, Math.round((data.quota.usedBytes / data.quota.totalBytes) * 100)) : 0;
 
@@ -376,6 +400,11 @@ function VaultPage() {
                     <Download className="h-4 w-4 mr-2" /> {t("Download")}
                   </a>
                 </DropdownMenuItem>
+                {item.canModify && (
+                  <DropdownMenuItem onClick={() => setReplacing(item)}>
+                    <RefreshCw className="h-4 w-4 mr-2" /> {t("Replace file…")}
+                  </DropdownMenuItem>
+                )}
               </>
             )}
             <DropdownMenuSeparator />
@@ -582,6 +611,18 @@ function VaultPage() {
         className="hidden"
         onChange={(e) => { uploadFiles(Array.from(e.target.files ?? []), here); e.target.value = ""; }}
       />
+      <input
+        ref={replaceInput}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const target = replacing;
+          e.target.value = "";
+          setReplacing(null);
+          if (file && target) replaceFile(target, file);
+        }}
+      />
 
       <div
         className={cn(
@@ -736,6 +777,26 @@ function VaultPage() {
       />
       <PreviewDialog item={preview} onClose={() => setPreview(null)} onShare={(i) => { setPreview(null); setSharing(i); }} />
       <VaultShareDialog item={sharing} onClose={() => setSharing(null)} />
+
+      <Dialog open={!!replacing} onOpenChange={(o) => !o && setReplacing(null)}>
+        <DialogContent lang={lang} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8">{t("Replace “{name}”", { name: replacing?.name ?? "" })}</DialogTitle>
+            <DialogDescription>
+              {t("Pick the new version. It keeps this file's place and links — everyone with a link sees the new version from now on.")}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            {t("If the new file is another type, the name keeps its first part and takes the new extension. The previous version can be brought back from Control Room → Audit for 90 days.")}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReplacing(null)}>{t("Cancel")}</Button>
+            <Button onClick={() => replaceInput.current?.click()}>
+              <Upload className="h-4 w-4 mr-1.5" /> {t("Choose file…")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>
         <DialogContent lang={lang}>

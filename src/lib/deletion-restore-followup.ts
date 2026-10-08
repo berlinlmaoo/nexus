@@ -63,7 +63,7 @@ export async function afterRestore(input: {
     if (SHEET_TYPES.has(entityType) && meta?.sheetId) {
       emitSheetStructure(meta.sheetId, actorId)
     }
-    if (entityType === "vault_folder" || entityType === "vault_file" || entityType === "vault_trash") {
+    if (entityType === "vault_folder" || entityType === "vault_file" || entityType === "vault_file_version" || entityType === "vault_trash") {
       // A whole emptied trash is logged against the workspace itself; one item, against the item.
       const workspaceId = entityType === "vault_trash"
         ? input.entityId
