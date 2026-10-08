@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
 import { CHAT_MEMBER_SELECT, canManageMembersOf, conversationAccess } from "@/lib/chat-access"
 import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
+import { parseDescription } from "@/lib/chat-rules"
 
 /**
  * One conversation. Adds, for the caller: `mutedUntil` (null when not muted) and `canManageMembers`
@@ -35,7 +36,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
 }
 
 /**
- * Rename a group chat.
+ * Rename a group chat, or change its description.
+ *
+ *   PATCH { name?, description? }   at least one of them. name: 1–80 characters. description: up to 500
+ *                                   characters; null or "" clears it (8 Oct 2026, the group info screen).
+ *
+ * Any member of the group may do either (canEdit on GET …/info). A new name leaves a "renamed the
+ * group" line in the chat; a description change does not.
  *
  * Only GROUP rooms have a name of their own. A DM is titled after the other person, and a PROJECT
  * room borrows the project's name - letting either be renamed here would put a second, divergent
@@ -60,10 +67,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
       )
     }
 
-    const { name } = await req.json()
-    const trimmed = typeof name === "string" ? name.trim() : ""
-    if (!trimmed) return NextResponse.json({ error: "name required" }, { status: 400 })
-    if (trimmed.length > 80) return NextResponse.json({ error: "name too long" }, { status: 400 })
+    const body: unknown = await req.json().catch(() => null)
+    const fields = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
+    const hasName = "name" in fields
+    if (!hasName && !("description" in fields)) {
+      return NextResponse.json({ error: "name or description required" }, { status: 400 })
+    }
+    let trimmed: string | undefined
+    if (hasName) {
+      trimmed = typeof fields.name === "string" ? fields.name.trim() : ""
+      if (!trimmed) return NextResponse.json({ error: "name required" }, { status: 400 })
+      if (trimmed.length > 80) return NextResponse.json({ error: "name too long" }, { status: 400 })
+    }
+    const description = parseDescription(fields.description)
+    if (!description.ok) return NextResponse.json({ error: description.error, code: "BAD_DESCRIPTION" }, { status: 400 })
+    const newName = trimmed
 
     // A real change of name leaves "Bagas renamed the group to “QA”" in the group, written with it
     // (chat-system.ts); saving the same name again changes nothing and writes nothing.
@@ -71,15 +89,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     const { updated, system } = await prisma.$transaction(async (tx) => {
       const updated = await tx.conversation.update({
         where: { id: conversationId },
-        data: { name: trimmed },
+        data: {
+          ...(newName !== undefined ? { name: newName } : {}),
+          ...(description.value !== undefined ? { description: description.value } : {}),
+        },
         include: { members: { select: CHAT_MEMBER_SELECT } },
       })
-      if (trimmed === previousName) return { updated, system: null }
+      if (newName === undefined || newName === previousName) return { updated, system: null }
       const [actor] = await systemPeople(tx, [userId])
       const system = await writeSystemMessage(tx, {
         conversationId,
         actorId: actor.id,
-        event: { type: "group_renamed", actor, name: trimmed, ...(previousName ? { previousName } : {}) },
+        event: { type: "group_renamed", actor, name: newName, ...(previousName ? { previousName } : {}) },
       })
       return { updated, system }
     })
