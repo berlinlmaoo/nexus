@@ -378,7 +378,7 @@ function restoreNote(entityType: string, soft: boolean): string | null {
     case "room_booking": return "It can't come back if the room has been booked for that time since.";
     case "vault_file": case "vault_folder": case "vault_trash":
       return soft ? "It comes out of the Vault trash." : "It comes back to the Vault trash, as it was. Restore it from there to use it again.";
-    case "post": return "It shows on The Wire again.";
+    case "post": return "It shows in Threads again.";
     case "quest": return "The quest becomes active again.";
     case "calendar_event": return "The event is no longer cancelled.";
     case "dayoff_bonus": return "The extra day off is granted again.";
@@ -519,7 +519,7 @@ function openTargetOf(open: NexusRestoreOpen | null | undefined, entityType: str
 
 const OPEN_LABEL: Record<OpenTarget["kind"], string> = {
   project: "Open project", task: "Open task", doc: "Open doc", folder: "Open folder", attendance: "Open attendance",
-  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open The Wire",
+  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open Threads",
 };
 
 function OpenLink({ target, children }: { target: OpenTarget; children: ReactNode }) {
@@ -534,7 +534,7 @@ function OpenLink({ target, children }: { target: OpenTarget; children: ReactNod
     case "room": return <Link to="/room-booking" search={{ booking: target.booking }} className={cls}>{children}{arrow}</Link>;
     case "calendar": return <Link to="/calendar" search={target.date ? { date: target.date } : {}} className={cls}>{children}{arrow}</Link>;
     case "vault": return <Link to="/vault" className={cls}>{children}{arrow}</Link>;
-    case "wire": return <Link to="/social" className={cls}>{children}{arrow}</Link>;
+    case "wire": return <Link to="/threads" className={cls}>{children}{arrow}</Link>;
   }
 }
 

@@ -160,7 +160,7 @@ export const ID_AUDIT: Record<string, string> = {
   "It comes out of the Vault trash.": "Keluar dari sampah Vault.",
   "It comes back to the Vault trash, as it was. Restore it from there to use it again.":
     "Kembali ke sampah Vault seperti semula. Pulihkan dari sana untuk dipakai lagi.",
-  "It shows on The Wire again.": "Tampil lagi di The Wire.",
+  "It shows in Threads again.": "Tampil lagi di Utas.",
   "The quest becomes active again.": "Quest-nya aktif lagi.",
   "The event is no longer cancelled.": "Acaranya tidak lagi dibatalkan.",
   "The extra day off is granted again.": "Extra day off-nya diberikan lagi.",
@@ -233,5 +233,5 @@ export const ID_AUDIT: Record<string, string> = {
   "Open room booking": "Buka booking ruangan",
   "Open calendar": "Buka kalender",
   "Open Vault": "Buka Vault",
-  "Open The Wire": "Buka The Wire",
+  "Open Threads": "Buka Utas",
 }
