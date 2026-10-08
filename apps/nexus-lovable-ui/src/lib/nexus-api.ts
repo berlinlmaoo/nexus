@@ -1484,9 +1484,24 @@ export type NexusAuditLog = {
   summary?: string;
   metadata?: unknown;
   user?: NexusUser | null;
-  /** On a deleted project/task that kept a copy (since 8 Oct 2026); null/absent = can't be restored. */
+  /** On an entry that kept a copy (projects/tasks since 8 Oct 2026, every delete since later that day); null/absent = can't be restored. */
   restore?: NexusAuditRestoreInfo | null;
 };
+
+/**
+ * What comes back. The first six are what project/task copies always had; `items` is every row the
+ * copy holds ("N items" for a kind the client doesn't know); the rest only appear when non-zero.
+ * Never counts the thing itself: a task's `tasks` are subtasks, a comment's `comments` its replies.
+ */
+export type NexusRestoreCounts = {
+  lists: number; tasks: number; files: number; comments: number; sheets: number; members: number;
+  items?: number; rows?: number; cells?: number; submissions?: number; values?: number; receipts?: number;
+  payments?: number; milestones?: number; pages?: number; people?: number; projects?: number; folders?: number;
+  units?: number; points?: number;
+};
+
+/** Where "Open …" goes once it's back. `type`: project, task, doc, folder, sheet, page, form, pnl, vault, attendance_request, attendance_record, attendance_office, room_booking, calendar, calendar_event, post, goal, portfolio, announcement, org_chart. */
+export type NexusRestoreOpen = { type: string; id: string; projectId?: string; date?: string };
 
 export type NexusAuditRestoreInfo = {
   available: boolean;
@@ -1494,15 +1509,23 @@ export type NexusAuditRestoreInfo = {
   /** When the copy is from: the delete itself, or the nightly backup it was taken from. */
   dataAsOf: string;
   fromBackup: boolean;
+  /** Servers since 8 Oct 2026 (all kinds): the delete only flipped a flag, restoring switches it back. */
+  soft?: boolean;
+  /** English noun ("comment", "sheet rows"). */
+  entityLabel?: string;
+  counts?: NexusRestoreCounts;
+  open?: NexusRestoreOpen | null;
 };
 
-/** POST /api/audit/{id}/restore. Failures are 404/409 with `code`: NOT_RESTORABLE, ALREADY_RESTORED, ALREADY_EXISTS, PARENT_MISSING. */
+/** POST /api/audit/{id}/restore. Failures are 404/409 with `code`: NOT_RESTORABLE, ALREADY_RESTORED, ALREADY_EXISTS, PARENT_MISSING (+ `parent`: "task", "project"…), CONFLICT. */
 export type NexusAuditRestoreResult = {
   ok: true;
   entityType: string;
   entityId: string;
+  entityLabel?: string;
   projectId: string | null;
-  restored: { lists: number; tasks: number; files: number; comments: number; folders: number };
+  open?: NexusRestoreOpen | null;
+  restored: { lists: number; tasks: number; files: number; comments: number; folders: number; items?: number };
 };
 
 export type NexusAuditLink = { type: "task" | "project" | "user" | "attendance" | "form"; id: string };
@@ -1524,10 +1547,10 @@ export type NexusAuditEntryDetail = {
   title: string;
   changes: { field: string; label: string; from: string | null; to: string | null }[];
   details: { label: string; value: string; link?: NexusAuditLink }[];
-  /** A delete that kept a copy: what comes back, and whether it already did. Absent on older servers. */
+  /** An entry that kept a copy: what comes back, and whether it already did. Absent on older servers. */
   restore?: (NexusAuditRestoreInfo & {
     restoredBy: { id: string; name: string | null } | null;
-    counts: { lists: number; tasks: number; files: number; comments: number; sheets: number; members: number };
+    counts: NexusRestoreCounts;
   }) | null;
 };
 

@@ -6,7 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import {
   ApiError, nexusApi,
-  type NexusAuditEntryDetail, type NexusAuditLink, type NexusAuditLog, type NexusAuditRestoreResult,
+  type NexusAuditEntryDetail, type NexusAuditLink, type NexusAuditLog, type NexusAuditRestoreResult, type NexusRestoreOpen,
 } from "@/lib/nexus-api";
 import { useDocumentLang, useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -20,9 +20,10 @@ import { cn } from "@/lib/utils";
  * raw metadata into a title, a list of field changes and linked details; the raw bits stay under
  * "Technical" for whoever needs them.
  *
- * A deleted project or task carries `restore` (owner, 8 Oct 2026): the drawer offers to put it back
- * with POST /api/audit/{id}/restore. The server's summary sentences stay English; everything this
- * screen writes itself is EN/ID.
+ * A delete that kept a copy carries `restore` (owner, 8 Oct 2026: projects and tasks first, then every
+ * kind of delete): the drawer offers to put it back with POST /api/audit/{id}/restore, says what comes
+ * back for the kinds it knows ("N items" otherwise), and links to where it lives again. The server's
+ * summary sentences stay English; everything this screen writes itself is EN/ID.
  */
 
 const PAGE_SIZE = 50;
@@ -160,7 +161,7 @@ function Actor({ user, size = 20 }: { user?: { id?: string | null; name?: string
 /** On a delete row: whether it can still come back. Absent on deletes that kept no copy. */
 function RestorePill({ row }: { row: NexusAuditLog }) {
   const { t } = useLang();
-  if (row.action !== "delete" || !row.restore) return null;
+  if (!row.restore) return null;
   return row.restore.available ? (
     <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold text-primary ring-1 ring-inset ring-primary/30">
       <RotateCcw className="h-2.5 w-2.5" aria-hidden /> {t("Restorable")}
@@ -328,29 +329,216 @@ function DetailLink({ link, children }: { link: NexusAuditLink; children: ReactN
   }
 }
 
+/**
+ * What Control Room can restore (server: lib/deletion-entities.ts RESTORABLE). A delete of one of these
+ * that has no copy happened before NEXUS kept copies of it.
+ */
+const RESTORABLE_TYPES = new Set([
+  "project", "task", "comment", "attachment", "proof_annotation", "doc", "project_page", "project_sheet", "sheet_comment",
+  "custom_field", "form", "automation", "webhook", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
+  "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
+  "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
+  "vault_file", "vault_folder", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
+  "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus",
+]);
+
+/** The button, per kind. A kind this list doesn't know (a newer server) gets plain "Restore". */
+const RESTORE_BUTTON: Record<string, string> = {
+  project: "Restore project", task: "Restore task", comment: "Restore comment", attachment: "Restore file",
+  proof_annotation: "Restore annotation", doc: "Restore doc", project_page: "Restore page", project_sheet: "Restore sheet",
+  sheet_comment: "Restore comment", custom_field: "Restore custom field", form: "Restore form", automation: "Restore automation",
+  webhook: "Restore webhook", workflow_bundle: "Restore workflow bundle", goal: "Restore goal", portfolio: "Restore portfolio",
+  calendar: "Restore calendar", room_booking: "Restore booking", announcement: "Restore announcement",
+  saved_search: "Restore saved search", pnl_expense: "Restore expense", pnl_income: "Restore income", pnl_payment: "Restore payment",
+  pnl_category: "Restore category", pnl_stage: "Restore stage", pnl_recurring: "Restore recurring expense",
+  pnl_expense_attachment: "Restore receipt", pnl_budget: "Restore budget", holiday: "Restore holiday",
+  attendance_request: "Restore day off", attendance_office: "Restore office", org_unit_member: "Restore placement",
+  vault_file: "Restore file", vault_folder: "Restore folder", vault_trash: "Restore trash", task_list: "Restore section",
+  project_folder: "Restore folder", org_unit: "Restore unit", sheet_rows: "Restore rows", form_submission: "Restore submission",
+  attendance_record: "Restore attendance record", project_sheet_column: "Restore column", post: "Restore post",
+  quest: "Restore quest", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
+};
+
+/** One line under the explanation, where the kind needs it said. `soft`: the delete only flipped a flag. */
+function restoreNote(entityType: string, soft: boolean): string | null {
+  switch (entityType) {
+    case "project": return "Its folder comes back too if it was deleted.";
+    case "task_list": return "Tasks moved out of it go back in, unless someone has moved them since.";
+    case "project_folder": return "Projects and folders moved out of it go back in, unless someone has moved them since. If its name is taken, it comes back as “Name (2)”.";
+    case "org_unit": return "Its people come back on the card, and units moved up go back under it unless someone has moved them since.";
+    case "sheet_rows": return "They go back where they were. If new rows have taken those places, they go after the last row.";
+    case "project_sheet_column": return "Its values come back in the rows that still exist.";
+    case "project_sheet": return "If its tab position is taken, it comes back as the last tab.";
+    case "form": return "If its link has been taken since, it comes back with “-2” at the end.";
+    case "form_submission": return "Its task comes back with it.";
+    case "attendance_record": return "XP penalties refunded and the waiver given when it was deleted stay as they are.";
+    case "pnl_recurring": return "It posts again from this month on. The months it was deleted are not billed.";
+    case "pnl_category": return "Expenses that were in it go back into it.";
+    case "pnl_stage": return "Deals that were in it go back into it.";
+    case "room_booking": return "It can't come back if the room has been booked for that time since.";
+    case "vault_file": case "vault_folder": case "vault_trash":
+      return soft ? "It comes out of the Vault trash." : "It comes back to the Vault trash, as it was. Restore it from there to use it again.";
+    case "post": return "It shows on The Wire again.";
+    case "quest": return "The quest becomes active again.";
+    case "calendar_event": return "The event is no longer cancelled.";
+    case "dayoff_bonus": return "The extra day off is granted again.";
+    case "attendance_office": return soft ? "The office is back in the list and open for check-ins." : null;
+    default: return null;
+  }
+}
+
+/** CONFLICT: something holds its place now. */
+const CONFLICT_TEXT: Record<string, string> = {
+  holiday: "There's already a holiday on that date. Remove it first if this one should come back.",
+  attendance_record: "That person already has an attendance record for that day.",
+  pnl_budget: "A budget has been set for that month since. Change that one instead.",
+  room_booking: "The room has been booked for that time since.",
+  org_unit_member: "They're on that card again already.",
+  project_sheet_column: "The sheet has no room for another column.",
+};
+
+/** PARENT_MISSING, by what has to come back first (the server's `parent`). */
+const PARENT_TEXT: Record<string, string> = {
+  project: "Its project was deleted too. Restore the project first, then this.",
+  task: "Its task was deleted too. Restore the task first, then this.",
+  section: "Its section was deleted too. Restore the section first, then this.",
+  comment: "The comment it replied to was deleted too. Restore that comment first, then this.",
+  file: "Its file was deleted too. Restore the file first, then this.",
+  sheet: "Its sheet was deleted too. Restore the sheet first, then this.",
+  row: "Its row was deleted too. Restore the rows first, then this.",
+  page: "Its parent page was deleted too. Restore that page first, then this.",
+  doc: "Its doc was deleted too. Restore the doc first, then this.",
+  form: "Its form was deleted too. Restore the form first, then this.",
+  "custom field": "Its custom field was deleted too. Restore the field first, then this.",
+  goal: "Its goal was deleted too. Restore the goal first, then this.",
+  portfolio: "Its portfolio was deleted too. Restore the portfolio first, then this.",
+  income: "Its income was deleted too. Restore the income first, then this.",
+  expense: "Its expense was deleted too. Restore the expense first, then this.",
+  folder: "Its folder was deleted too. Restore the folder first, then this.",
+  "org chart unit": "Its unit was deleted too. Restore the unit first, then this.",
+  office: "Its office was deleted too. Restore the office first, then this.",
+  person: "The person it belonged to no longer exists, so it can't come back.",
+  workspace: "The workspace it belonged to no longer exists, so it can't come back.",
+  team: "The team it belonged to no longer exists, so it can't come back.",
+};
+
 const RESTORE_FAILURE: Record<string, string> = {
   ALREADY_RESTORED: "Someone has restored this already.",
   ALREADY_EXISTS: "It's already back.",
-  PARENT_MISSING: "Its project was deleted too. Restore the project first, then this task.",
   NOT_RESTORABLE: "No copy of this delete was kept, so it can't be restored.",
 };
+
+function failureText(payload: { code?: string; parent?: string | null } | null, entityType: string, soft: boolean): string {
+  const code = String(payload?.code ?? "");
+  if (code === "PARENT_MISSING") {
+    const parent = payload?.parent ?? null;
+    if (entityType === "task" && parent === "task") return "Its parent task was deleted too. Restore that task first, then this subtask.";
+    if (entityType === "task") return "Its project was deleted too. Restore the project first, then this task.";
+    return (parent && PARENT_TEXT[parent]) || "What it belonged to was deleted too. Restore that first, then this.";
+  }
+  if (code === "CONFLICT") {
+    return CONFLICT_TEXT[entityType]
+      ?? (soft ? "It was changed after it was deleted, so it can't be put back as it was." : "Something has taken its place since, so it can't come back as it was.");
+  }
+  return RESTORE_FAILURE[code] ?? "Couldn't restore it. Try again in a moment.";
+}
+
+/** "It comes back with …" counts that only mean something as "N items". */
+const ITEMS_ONLY = new Set(["vault_file", "vault_folder", "vault_trash"]);
 
 /** "226 tasks, 7 lists, 155 files and 5 comments" — only what there is. */
 function whatComesBack(r: NonNullable<NexusAuditEntryDetail["restore"]>, entityType: string, { tn, lang }: LangApi) {
   const c = r.counts;
-  const parts = [
-    c.tasks ? (entityType === "task" ? tn(c.tasks, "{n} subtask", "{n} subtasks") : tn(c.tasks, "{n} task", "{n} tasks")) : "",
-    c.lists ? tn(c.lists, "{n} list", "{n} lists") : "",
-    c.files ? tn(c.files, "{n} file", "{n} files") : "",
-    c.comments ? tn(c.comments, "{n} comment", "{n} comments") : "",
-    c.sheets ? tn(c.sheets, "{n} sheet", "{n} sheets") : "",
-    c.members ? tn(c.members, "{n} member", "{n} members") : "",
-  ].filter(Boolean);
+  const parts: string[] = [];
+  const add = (n: number | undefined, one: string, many: string) => { if (n) parts.push(tn(n, one, many)); };
+  if (entityType === "project" || entityType === "task") {
+    // Exactly what these always said.
+    add(c.tasks, entityType === "task" ? "{n} subtask" : "{n} task", entityType === "task" ? "{n} subtasks" : "{n} tasks");
+    add(c.lists, "{n} list", "{n} lists");
+    add(c.files, "{n} file", "{n} files");
+    add(c.comments, "{n} comment", "{n} comments");
+    add(c.sheets, "{n} sheet", "{n} sheets");
+    add(c.members, "{n} member", "{n} members");
+  } else if (ITEMS_ONLY.has(entityType) || !RESTORABLE_TYPES.has(entityType)) {
+    if ((c.items ?? 0) > 1) add(c.items, "{n} item", "{n} items");
+  } else {
+    add(c.rows, "{n} row", "{n} rows");
+    add(c.cells, "{n} value", "{n} values");
+    add(c.tasks, "{n} task", "{n} tasks");
+    add(c.lists, "{n} list", "{n} lists");
+    add(c.projects, "{n} project", "{n} projects");
+    add(c.folders, "{n} subfolder", "{n} subfolders");
+    add(c.people, "{n} person", "{n} people");
+    add(c.units, "{n} unit under it", "{n} units under it");
+    add(c.pages, "{n} subpage", "{n} subpages");
+    add(c.submissions, "{n} submission", "{n} submissions");
+    add(c.values, "{n} field value", "{n} field values");
+    add(c.receipts, "{n} receipt", "{n} receipts");
+    add(c.payments, "{n} payment", "{n} payments");
+    add(c.milestones, "{n} milestone", "{n} milestones");
+    add(c.points, "{n} location point", "{n} location points");
+    add(c.files, "{n} file", "{n} files");
+    add(c.comments, entityType === "comment" ? "{n} reply" : "{n} comment", entityType === "comment" ? "{n} replies" : "{n} comments");
+    add(c.sheets, "{n} sheet", "{n} sheets");
+    add(c.members, "{n} member", "{n} members");
+  }
   if (parts.length < 2) return parts.join("");
   return new Intl.ListFormat(lang === "id" ? "id" : "en", { style: "long", type: "conjunction" }).format(parts);
 }
 
-/** The Restore block of a deleted project or task: what comes back, then one confirmed tap. */
+type OpenTarget =
+  | { kind: "project" | "task" | "doc" | "folder"; id: string }
+  | { kind: "attendance"; request?: string }
+  | { kind: "room"; booking: string }
+  | { kind: "calendar"; date?: string }
+  | { kind: "vault" | "wire" };
+
+/** Where "Open …" goes on the web, from the server's `open`; copies from before `open` existed are projects and tasks. */
+function openTargetOf(open: NexusRestoreOpen | null | undefined, entityType: string, entityId: string | null): OpenTarget | null {
+  if (open === undefined) {
+    if (!entityId) return null;
+    if (entityType === "project") return { kind: "project", id: entityId };
+    if (entityType === "task") return { kind: "task", id: entityId };
+    return null;
+  }
+  if (!open) return null;
+  switch (open.type) {
+    case "project": return { kind: "project", id: open.id };
+    case "task": return { kind: "task", id: open.id };
+    case "doc": return { kind: "doc", id: open.id };
+    case "folder": return { kind: "folder", id: open.id };
+    case "vault": return { kind: "vault" };
+    case "attendance_request": return { kind: "attendance", request: open.id };
+    case "attendance_record": case "attendance_office": return { kind: "attendance" };
+    case "room_booking": return { kind: "room", booking: open.id };
+    case "calendar": case "calendar_event": return { kind: "calendar", date: open.date };
+    case "post": return { kind: "wire" };
+    default: return open.projectId ? { kind: "project", id: open.projectId } : null; // a sheet, page, form, P&L…: its project
+  }
+}
+
+const OPEN_LABEL: Record<OpenTarget["kind"], string> = {
+  project: "Open project", task: "Open task", doc: "Open doc", folder: "Open folder", attendance: "Open attendance",
+  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open The Wire",
+};
+
+function OpenLink({ target, children }: { target: OpenTarget; children: ReactNode }) {
+  const cls = "inline-flex items-center gap-1 font-semibold text-primary underline-offset-2 hover:underline";
+  const arrow = <ArrowRight className="h-3.5 w-3.5" />;
+  switch (target.kind) {
+    case "project": return <Link to="/projects/$projectId" params={{ projectId: target.id }} className={cls}>{children}{arrow}</Link>;
+    case "task": return <Link to="/tasks/$taskId" params={{ taskId: target.id }} className={cls}>{children}{arrow}</Link>;
+    case "doc": return <Link to="/docs/$docId" params={{ docId: target.id }} className={cls}>{children}{arrow}</Link>;
+    case "folder": return <Link to="/folders/$folderId" params={{ folderId: target.id }} className={cls}>{children}{arrow}</Link>;
+    case "attendance": return <Link to="/attendance" search={target.request ? { request: target.request } : {}} className={cls}>{children}{arrow}</Link>;
+    case "room": return <Link to="/room-booking" search={{ booking: target.booking }} className={cls}>{children}{arrow}</Link>;
+    case "calendar": return <Link to="/calendar" search={target.date ? { date: target.date } : {}} className={cls}>{children}{arrow}</Link>;
+    case "vault": return <Link to="/vault" className={cls}>{children}{arrow}</Link>;
+    case "wire": return <Link to="/social" className={cls}>{children}{arrow}</Link>;
+  }
+}
+
+/** The Restore block of a delete that kept a copy: what comes back, then one confirmed tap. */
 function RestoreSection({ entryId, entityType, entityId, entityName, restore }: {
   entryId: string; entityType: string; entityId: string | null; entityName: string | null;
   restore: NonNullable<NexusAuditEntryDetail["restore"]>;
@@ -365,7 +553,7 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore }: 
     onSuccess: (result) => {
       setDone(result);
       setConfirming(false);
-      // The project, its tasks, folders and chat room are back everywhere: refresh what's on screen.
+      // What came back (a project, its tasks, folders, a sheet…) shows everywhere: refresh what's on screen.
       void qc.invalidateQueries({ queryKey: ["nexus"] });
     },
     onError: () => {
@@ -374,28 +562,27 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore }: 
       void qc.invalidateQueries({ queryKey: ["nexus", "audit-entry", entryId] });
     },
   });
-  const isProject = entityType === "project";
+  const soft = Boolean(restore.soft);
   const what = whatComesBack(restore, entityType, L);
   const when = shortTime(restore.dataAsOf, L.locale);
-  const openLink = (id: string | null, children: ReactNode) => id
-    ? (isProject
-      ? <Link to="/projects/$projectId" params={{ projectId: id }} className="inline-flex items-center gap-1 font-semibold text-primary underline-offset-2 hover:underline">{children}<ArrowRight className="h-3.5 w-3.5" /></Link>
-      : <Link to="/tasks/$taskId" params={{ taskId: id }} className="inline-flex items-center gap-1 font-semibold text-primary underline-offset-2 hover:underline">{children}<ArrowRight className="h-3.5 w-3.5" /></Link>)
-    : null;
+  const note = restoreNote(entityType, soft);
+  // After a restore the server's answer is the freshest `open`; before that, the entry's.
+  const target = openTargetOf(done ? (done.open === undefined ? restore.open : done.open) : restore.open, entityType, done?.entityId ?? entityId);
 
   if (done || !restore.available) {
     const by = restore.restoredBy?.name;
+    const vaultTrash = !soft && (entityType === "vault_file" || entityType === "vault_folder" || entityType === "vault_trash");
     return (
       <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-3 text-sm">
         <div className="flex items-start gap-2">
           <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden />
           <div className="min-w-0 space-y-1">
             <p className="font-semibold">
-              {done ? t("Restored. It's back where it was.")
+              {done ? t(vaultTrash ? "Restored. It's back in the Vault trash." : "Restored. It's back where it was.")
                 : by ? t("Restored by {name} · {when}", { name: by, when: shortTime(restore.restoredAt, L.locale) })
                 : t("Restored · {when}", { when: shortTime(restore.restoredAt, L.locale) })}
             </p>
-            {openLink(done?.entityId ?? entityId, t(isProject ? "Open project" : "Open task"))}
+            {target && <OpenLink target={target}>{t(OPEN_LABEL[target.kind])}</OpenLink>}
           </div>
         </div>
       </section>
@@ -403,7 +590,7 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore }: 
   }
 
   const failure = run.error instanceof ApiError
-    ? t(RESTORE_FAILURE[String((run.error.payload as { code?: string } | null)?.code ?? "")] ?? "Couldn't restore it. Try again in a moment.")
+    ? t(failureText(run.error.payload as { code?: string; parent?: string | null } | null, entityType, soft))
     : run.isError ? t("Couldn't restore it. Try again in a moment.") : null;
   const explanation = restore.fromBackup
     ? (what
@@ -415,16 +602,16 @@ function RestoreSection({ entryId, entityType, entityId, entityName, restore }: 
     <section className="rounded-xl border border-primary/25 bg-primary/[0.04] px-3 py-3">
       <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Bring it back")}</h3>
       <p className="mt-1.5 text-sm">{explanation}</p>
-      {isProject && <p className="mt-1 text-xs text-muted-foreground">{t("Its folder comes back too if it was deleted.")}</p>}
+      {note && <p className="mt-1 text-xs text-muted-foreground">{t(note)}</p>}
       {failure && <p role="alert" className="mt-2 text-sm font-medium text-rose-600 dark:text-rose-300">{failure}</p>}
       {!confirming ? (
         <button type="button" onClick={() => setConfirming(true)} disabled={run.isPending}
           className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.98] disabled:opacity-60">
-          <RotateCcw className="h-4 w-4" aria-hidden /> {t(isProject ? "Restore project" : "Restore task")}
+          <RotateCcw className="h-4 w-4" aria-hidden /> {t(RESTORE_BUTTON[entityType] ?? "Restore")}
         </button>
       ) : (
         <div className="mt-3 space-y-2 rounded-lg border border-border bg-card px-3 py-2.5">
-          <p className="text-sm font-semibold">{t("Restore “{name}”?", { name: entityName || entityLabel(entityType) })}</p>
+          <p className="text-sm font-semibold">{t("Restore “{name}”?", { name: entityName || restore.entityLabel || entityLabel(entityType) })}</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => run.mutate()} disabled={run.isPending} autoFocus
               className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60">
@@ -470,7 +657,8 @@ function AuditEntryDrawer({ id, row, onClose }: { id: string; row: NexusAuditLog
     if (tech.metadata == null) return null;
     try { return JSON.stringify(tech.metadata, null, 2); } catch { return String(tech.metadata); }
   })();
-  const deletable = action === "delete" && (tech.entityType === "project" || tech.entityType === "task");
+  const deletable = action === "delete" && RESTORABLE_TYPES.has(tech.entityType ?? "");
+  const projectOrTask = tech.entityType === "project" || tech.entityType === "task";
 
   return (
     <div lang={lang} className="fixed inset-0 z-50 flex justify-end bg-foreground/30 backdrop-blur-[2px]" onClick={onClose}>
@@ -507,7 +695,9 @@ function AuditEntryDrawer({ id, row, onClose }: { id: string; row: NexusAuditLog
           )}
           {d && !d.restore && deletable && (
             <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {t("This was deleted before NEXUS started keeping deleted projects and tasks, so it can't be restored.")}
+              {projectOrTask
+                ? t("This was deleted before NEXUS started keeping deleted projects and tasks, so it can't be restored.")
+                : t("This was deleted before NEXUS started keeping deleted items, so it can't be restored.")}
             </p>
           )}
 
