@@ -448,7 +448,10 @@ async function removeKeptFile(kind: string, ref: string): Promise<boolean> {
 
 /**
  * The kept files a copy points at: task attachments, P&L receipts, chat pictures and files (a deleted
- * group chat, or a deleted project's room — 9 Oct 2026), Vault files.
+ * group chat, or a deleted project's room — 9 Oct 2026), Vault files. And the two versions a Vault
+ * "Replace file…" copy holds (its soft row's before and after storageKey, 9 Oct 2026): the replaced
+ * bytes stay on disk while that copy can still put them back, and once the copy goes, whichever of
+ * the two no live row uses goes with it. A Vault trash copy's soft rows carry no storageKey (skipped).
  */
 const FILE_REFS_SQL = `
   select 'upload'::text as kind, e->>'url' as ref from jsonb_array_elements(coalesce(s.data->'tables'->'Attachment', '[]'::jsonb)) e
@@ -457,7 +460,11 @@ const FILE_REFS_SQL = `
   union all
   select 'upload', e->>'attachmentUrl' from jsonb_array_elements(coalesce(s.data->'tables'->'Message', '[]'::jsonb)) e
   union all
-  select 'vault', e->>'storageKey' from jsonb_array_elements(coalesce(s.data->'tables'->'VaultItem', '[]'::jsonb)) e where e->>'kind' = 'FILE'`
+  select 'vault', e->>'storageKey' from jsonb_array_elements(coalesce(s.data->'tables'->'VaultItem', '[]'::jsonb)) e where e->>'kind' = 'FILE'
+  union all
+  select 'vault', r->'set'->>'storageKey' from jsonb_array_elements(coalesce(s.data->'soft'->'rows', '[]'::jsonb)) r where s.data->'soft'->>'table' = 'VaultItem'
+  union all
+  select 'vault', r->'was'->>'storageKey' from jsonb_array_elements(coalesce(s.data->'soft'->'rows', '[]'::jsonb)) r where s.data->'soft'->>'table' = 'VaultItem'`
 
 /**
  * Drops copies older than `cutoff` (restored or not), then the files only they still pointed at.

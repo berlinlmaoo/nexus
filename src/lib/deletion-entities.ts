@@ -64,6 +64,8 @@ export const RESTORABLE: Record<string, Spec> = {
   org_unit_member: { table: "OrgUnitMember", label: "org chart placement" },
   vault_file: { table: "VaultItem", label: "file" },
   vault_folder: { table: "VaultItem", label: "folder" },
+  // "Replace file…" (9 Oct 2026): a soft copy of the bytes' columns, so the previous version can be put back.
+  vault_file_version: { table: "VaultItem", label: "file version" },
   // Group B: move what was inside out, then delete.
   task_list: { table: "TaskList", label: "section" },
   project_folder: { table: "ProjectFolder", label: "folder" },

@@ -26,6 +26,7 @@ import {
   type VaultActor,
   type VaultItemRow,
 } from "@/lib/vault"
+import { replaceTargetFor, applyReplace, replacedRow, type ReplaceTarget } from "@/lib/vault-replace"
 
 // Chunked attachment upload — lets files larger than Cloudflare's ~100MB request-body cap through by
 // splitting them client-side into sub-100MB chunks (each passes CF normally), then reassembling here.
@@ -183,6 +184,9 @@ export async function POST(request: NextRequest) {
     // largest duplication in this repo, and the copy that drifts is always the one nobody tests.
     const target = sp.get("target") === "vault" ? "vault" : "task"
     const vaultParentId = sp.get("parentId") || null
+    // "Replace file…" for a file too big for one request (9 Oct 2026): the same transport, and at the
+    // end the bytes go in place of this item's instead of into a new row (lib/vault-replace.ts).
+    const replaceItemId = target === "vault" ? sp.get("replaceItemId") || null : null
     const contentLength = Number(request.headers.get("content-length") ?? "NaN")
 
     // ---- validate the envelope (fail closed on anything malformed) ----
@@ -215,7 +219,13 @@ export async function POST(request: NextRequest) {
     // Authorization is re-checked on EVERY chunk, not just the first, so a client that skips chunk 0
     // can't bypass it — for either target.
     let vaultActor: VaultActor | null = null
-    if (target === "vault") {
+    let replaceTarget: ReplaceTarget | null = null
+    if (target === "vault" && replaceItemId) {
+      vaultActor = await getVaultActor(userId)
+      const check = await replaceTargetFor(vaultActor, replaceItemId, totalSize)
+      if (!check.ok) return NextResponse.json({ error: check.error, code: check.code }, { status: check.status })
+      replaceTarget = check.item
+    } else if (target === "vault") {
       vaultActor = await getVaultActor(userId)
       if (!vaultActor.workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 403 })
       if (vaultParentId) {
@@ -325,6 +335,33 @@ export async function POST(request: NextRequest) {
       }
       if (assembled !== totalSize || assembled > MAX_SIZE)
         return NextResponse.json({ error: "Size mismatch" }, { status: 400 })
+
+      // ── vault replace finalize ──────────────────────────────────────────────
+      if (target === "vault" && replaceTarget && vaultActor?.workspaceId) {
+        const storageKey = newStorageKey(filename || replaceTarget.name)
+        finalPath = await ensureStorageDir(storageKey)
+        await concatToFile(sdir, totalChunks, `${finalPath}.partial`)
+        await rename(`${finalPath}.partial`, finalPath)
+
+        await applyReplace({
+          actor: vaultActor,
+          item: replaceTarget,
+          storageKey,
+          mimeType: resolveMime(mimeType, filename),
+          size: assembled,
+          width: null,
+          height: null,
+          fileName: filename,
+          request,
+          chunked: true,
+        })
+        committed = true
+
+        const payload = serializeVaultItem((await replacedRow(replaceTarget.id)) as unknown as VaultItemRow, vaultActor)
+        await writeFile(donePath, JSON.stringify(payload)).catch(() => {})
+        for (let i = 0; i < totalChunks; i++) await unlink(path.join(sdir, `${i}.part`)).catch(() => {})
+        return NextResponse.json(payload, { status: 200 })
+      }
 
       // ── vault finalize ──────────────────────────────────────────────────────
       if (target === "vault" && vaultActor?.workspaceId) {

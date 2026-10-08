@@ -190,4 +190,17 @@ export const ID_VAULT: Record<string, string> = {
   "Locked": "Dikunci",
   "Opens for: {who}": "Bisa dibuka: {who}",
   "adding: {who}": "menambah: {who}",
+  // Replace file… (9 Oct 2026)
+  "Replace file…": "Ganti berkas…",
+  "Replace “{name}”": "Ganti “{name}”",
+  "Pick the new version. It keeps this file's place and links — everyone with a link sees the new version from now on.": "Pilih versi barunya. Tempat dan tautannya tetap — siapa pun yang punya tautan melihat versi baru mulai sekarang.",
+  "If the new file is another type, the name keeps its first part and takes the new extension. The previous version can be brought back from Control Room → Audit for 90 days.": "Kalau berkas barunya jenis lain, namanya tetap tapi ekstensinya ikut berkas baru. Versi sebelumnya bisa dikembalikan dari Control Room → Audit selama 90 hari.",
+  "Choose file…": "Pilih berkas…",
+  "{name} (new version)": "{name} (versi baru)",
+  "“{name}” replaced": "“{name}” diganti",
+  "Its links now show the new version.": "Tautannya sekarang menampilkan versi baru.",
+  "Couldn't replace {name}": "Gagal mengganti {name}",
+  // Control Room → Audit, for a replaced Vault file
+  "Restore previous version": "Pulihkan versi sebelumnya",
+  "The file goes back to the version from before it was replaced. Its links keep working and show that version.": "Berkasnya kembali ke versi sebelum diganti. Tautannya tetap jalan dan menampilkan versi itu.",
 };
