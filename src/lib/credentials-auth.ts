@@ -12,7 +12,11 @@ const credentialUserSelect = {
   email: true,
   password: true,
   avatar: true,
+  deactivatedAt: true,
 } as const
+
+/** What a person who was offboarded (lib/offboarding.ts) is told when they try to sign in. */
+export const DEACTIVATED_ACCOUNT_MESSAGE = 'Akun ini sudah dinonaktifkan.'
 
 export type VerifiedCredentialUser = {
   id: string
@@ -21,7 +25,22 @@ export type VerifiedCredentialUser = {
   image: string | null
 }
 
+/**
+ * Email + password check. null = refused (unknown account, wrong password, rate limit, offboarded).
+ * Callers that can tell the person WHY an offboarded account is refused use checkCredentialUser.
+ */
 export async function verifyCredentialUser(rawEmail: unknown, rawPassword: unknown) {
+  const result = await checkCredentialUser(rawEmail, rawPassword)
+  return result && result.user ? result : null
+}
+
+/**
+ * verifyCredentialUser, but an offboarded account with the RIGHT password answers
+ * `{ user: null, refusal: 'DEACTIVATED', message }` instead of null, so the sign-in screen can say
+ * "Akun ini sudah dinonaktifkan." rather than "wrong password". Only after the password matched:
+ * telling a stranger who merely knows the address that the account exists would be a leak.
+ */
+export async function checkCredentialUser(rawEmail: unknown, rawPassword: unknown) {
   const email =
     typeof rawEmail === 'string'
       ? canonicalEmail(rawEmail)
@@ -101,6 +120,11 @@ export async function verifyCredentialUser(rawEmail: unknown, rawPassword: unkno
         normalizedPasswordDifferent: mobileNormalizedPassword !== password,
       })
       return null
+    }
+
+    if (user.deactivatedAt) {
+      log.warn('credentials login: account deactivated', { email, userId: user.id })
+      return { user: null, refusal: 'DEACTIVATED' as const, message: DEACTIVATED_ACCOUNT_MESSAGE }
     }
 
     log.info('credentials login: success', {

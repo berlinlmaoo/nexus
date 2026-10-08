@@ -55,13 +55,15 @@ export async function POST(req: NextRequest) {
     const days = Number(body?.businessDays ?? process.env.ATTENDANCE_ESCALATION_BUSINESS_DAYS ?? DEFAULT_BUSINESS_DAYS)
     const cutoff = businessDaysAgo(Number.isFinite(days) && days > 0 ? days : DEFAULT_BUSINESS_DAYS)
 
+    // Not for people who were offboarded (lib/offboarding.ts): their pending rows stay for the record,
+    // but nobody is chased about them.
     const [requests, checkouts] = await Promise.all([
       prisma.attendanceRequest.findMany({
-        where: { status: "PENDING", escalatedAt: null, createdAt: { lte: cutoff } },
+        where: { status: "PENDING", escalatedAt: null, createdAt: { lte: cutoff }, user: { deactivatedAt: null } },
         select: { id: true, type: true, createdAt: true, userId: true, workspaceId: true, user: { select: { name: true } } },
       }),
       prisma.attendanceRecord.findMany({
-        where: { checkOutOffsite: true, checkOutApproval: "PENDING", escalatedAt: null, checkOutAt: { lte: cutoff } },
+        where: { checkOutOffsite: true, checkOutApproval: "PENDING", escalatedAt: null, checkOutAt: { lte: cutoff }, user: { deactivatedAt: null } },
         select: { id: true, checkOutAt: true, userId: true, workspaceId: true, user: { select: { name: true } } },
       }),
     ])

@@ -670,6 +670,8 @@ const VERBS: Record<string, string> = {
   duplicate: "duplicated",
   revoke: "revoked",
   share: "shared",
+  offboard: "offboarded",
+  reinstate: "reinstated",
 }
 
 const NOUNS: Record<string, string> = {

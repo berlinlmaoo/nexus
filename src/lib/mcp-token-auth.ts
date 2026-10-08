@@ -28,10 +28,13 @@ export async function verifyMcpToken(_req: Request, bearerToken?: string): Promi
 
   const apiToken = await prisma.apiToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    select: { id: true, userId: true, scopes: true, expiresAt: true },
+    select: { id: true, userId: true, scopes: true, expiresAt: true, user: { select: { deactivatedAt: true } } },
   })
   if (!apiToken) return undefined
   if (apiToken.expiresAt && apiToken.expiresAt.getTime() < Date.now()) return undefined
+  // Offboarding deletes the tokens, but a token is the one credential that can be minted again
+  // (OAuth refresh): refuse an offboarded owner here too, whatever token they still hold.
+  if (apiToken.user.deactivatedAt) return undefined
 
   // best-effort; don't block the request on this
   prisma.apiToken.update({ where: { id: apiToken.id }, data: { lastUsedAt: new Date() } }).catch(() => {})

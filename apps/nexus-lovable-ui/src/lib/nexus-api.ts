@@ -11,6 +11,8 @@ export type NexusUser = {
   phoneNumber?: string | null;
   role?: string | null;
   onboardedAt?: string | null;
+  /** Set when the person was offboarded (left the company). Task detail marks them "Left". */
+  deactivatedAt?: string | null;
 };
 
 // --- Z Vault ---
@@ -1404,6 +1406,41 @@ export type NexusAdminUser = {
   joinedAt?: string | null;
   /** Akun Google Workspace yang ditautkan BoD dari Control Room. null = belum punya/belum ditautkan. */
   googleWorkspaceEmail?: string | null;
+  /** Earliest workspace join (any workspace). */
+  firstJoinedAt?: string | null;
+  /** Offboarded (left the company): can't sign in. null = active. */
+  deactivatedAt?: string | null;
+  /** The workspaces they left, newest first. Empty for active people. */
+  formerMemberships?: NexusFormerMembership[];
+};
+
+export type OffboardReason = "RESIGNED" | "CONTRACT_ENDED" | "DISMISSED" | "OTHER";
+export type NexusFormerMembership = {
+  workspaceId: string;
+  workspaceName: string;
+  /** Last working day, 00:00 UTC of that Jakarta date: format it in UTC. */
+  leftAt: string;
+  reason: OffboardReason | string;
+};
+/** POST /api/admin/users/:id/offboard. Refusals carry `code` in ApiError.payload. */
+export type NexusOffboardResult = {
+  ok: true;
+  user: { id: string; name: string };
+  leftAt: string;
+  lastWorkingDay: string;
+  workspaces: string[];
+  /** People whose approver was the leaver; they fall back to the BoD until a new one is set. */
+  approverEdgesCleared: Array<{ id: string; name: string }>;
+  pendingRequests: number;
+  autoDeductionsCanceled: number;
+  openTasks: number;
+};
+export type NexusReinstateResult = {
+  ok: true;
+  user: { id: string; name: string };
+  workspaces: string[];
+  alreadyMember: string[];
+  approverDropped: number;
 };
 
 /** Satu akun di Google Workspace, apa adanya dari Admin SDK. */
@@ -2553,6 +2590,9 @@ export const nexusApi = {
       method: "PATCH",
       body: JSON.stringify({ googleWorkspaceEmail }),
     }),
+  offboardUser: (userId: string, body: { lastWorkingDay: string; reason: OffboardReason; note?: string | null }) =>
+    apiFetch<NexusOffboardResult>(`/api/admin/users/${userId}/offboard`, { method: "POST", body: JSON.stringify(body) }),
+  reinstateUser: (userId: string) => apiFetch<NexusReinstateResult>(`/api/admin/users/${userId}/reinstate`, { method: "POST", body: JSON.stringify({}) }),
   deleteUser: (userId: string) => apiFetch<{ ok: boolean; deletedUser: { id: string; name: string; email: string }; reassigned: Record<string, number>; purged: Record<string, number> }>(`/api/admin/users/${userId}`, { method: "DELETE" }),
   bufferDrafts: () => apiFetch<BufferDraftsResponse>("/api/buffer/drafts"),
   bufferApprove: (postId: string, mode: "queue" | "schedule" | "now", dueAt?: string) => apiFetch<{ ok: boolean }>("/api/buffer/approve", { method: "POST", body: JSON.stringify({ postId, mode, dueAt }) }),

@@ -6,6 +6,7 @@ import nexusLogo from "@/assets/nexus-logo.png";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 import { passkeysSupported, signInWithPasskey } from "@/lib/passkey";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
@@ -17,6 +18,7 @@ function getSafeCallbackUrl(value: unknown) {
 
 function LoginPage() {
   const navigate = useNavigate();
+  const lang = useLang();
   const queryClient = useQueryClient();
   const search = useSearch({ strict: false }) as { callbackUrl?: string; error?: string };
   const [showForm, setShowForm] = useState(false);
@@ -86,7 +88,10 @@ function LoginPage() {
       setPassword("");
       enterMissionControl(getSafeCallbackUrl(result.redirectTo || callbackUrl));
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
+      if (err instanceof ApiError && err.status === 401 && (err.payload as { error?: string } | null)?.error === "AccountDeactivated") {
+        // Offboarded (left the company): the right password, refused on purpose. Say so, not "wrong password".
+        setError(lang.t("This account has been deactivated. Ask your BoD if you think this is a mistake."));
+      } else if (err instanceof ApiError && err.status === 401) {
         setError("That access code doesn't match. Give your email/password another look.");
       } else if (err instanceof ApiError && err.status === 403) {
         setError("The NEXUS core doesn't trust this login origin yet. Check the proxy/config.");

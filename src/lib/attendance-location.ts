@@ -528,10 +528,13 @@ async function autoOffsiteCheckout(
   return true
 }
 
-/** Records the per-minute clock has to look at: open, and outside right now. */
+/**
+ * Records the per-minute clock has to look at: open, and outside right now. Not those of someone who
+ * was offboarded (lib/offboarding.ts): no reminder, warning or automatic check-out reaches them.
+ */
 export async function recordsOutsideNow(): Promise<string[]> {
   const rows = await prisma.attendanceRecord.findMany({
-    where: { status: "CHECKED_IN", checkOutAt: null, outsideSince: { not: null } },
+    where: { status: "CHECKED_IN", checkOutAt: null, outsideSince: { not: null }, user: { deactivatedAt: null } },
     select: { id: true },
     orderBy: { outsideSince: "asc" },
     take: 500,

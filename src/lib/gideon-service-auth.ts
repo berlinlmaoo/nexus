@@ -56,6 +56,10 @@ export async function authenticateGideonService(
     if (!actor) {
       return { ok: false, response: jsonError('GIDEON actor (x-gideon-actor) not found', 403) }
     }
+    // Offboarded (lib/offboarding.ts): GIDEON must not keep acting for someone who left.
+    if (actor.deactivatedAt) {
+      return { ok: false, response: jsonError('GIDEON actor (x-gideon-actor) is deactivated', 403) }
+    }
     return { ok: true, actor }
   }
 
@@ -76,6 +80,12 @@ export async function authenticateGideonService(
     return {
       ok: false,
       response: jsonError('GIDEON actor user not found', 503),
+    }
+  }
+  if (actor.deactivatedAt) {
+    return {
+      ok: false,
+      response: jsonError('GIDEON actor user is deactivated', 503),
     }
   }
 

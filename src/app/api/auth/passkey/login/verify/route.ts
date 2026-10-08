@@ -4,6 +4,7 @@ import { verifyAuthenticationResponse } from "@simplewebauthn/server"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { EXPECTED_ORIGINS, RP_ID, takeChallenge } from "@/lib/passkey"
+import { DEACTIVATED_ACCOUNT_MESSAGE } from "@/lib/credentials-auth"
 
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const passkey = await prisma.passkey.findUnique({
     where: { credentialId: assertion.id },
-    include: { user: { select: { id: true, name: true, email: true, avatar: true } } },
+    include: { user: { select: { id: true, name: true, email: true, avatar: true, deactivatedAt: true } } },
   })
   // Same answer whether the credential is unknown or the signature is wrong: distinguishing them
   // would let someone probe which passkeys exist.
@@ -56,6 +57,12 @@ export async function POST(request: NextRequest) {
   // report 0 are legitimate and common, so only a real regression is refused.
   const nextCounter = verification.authenticationInfo.newCounter
   if (nextCounter !== 0 && nextCounter < Number(passkey.counter)) return reject()
+
+  // Offboarded (lib/offboarding.ts) deletes the passkeys; this is the guard for one that survived.
+  // Told apart only after the signature proved the device is theirs.
+  if (passkey.user.deactivatedAt) {
+    return NextResponse.json({ ok: false, error: "AccountDeactivated", message: DEACTIVATED_ACCOUNT_MESSAGE }, { status: 401 })
+  }
 
   await prisma.passkey.update({
     where: { id: passkey.id },

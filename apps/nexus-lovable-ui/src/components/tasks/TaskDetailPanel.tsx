@@ -48,6 +48,7 @@ import {
   type NexusUser,
 } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
@@ -113,6 +114,20 @@ function initialsOf(name?: string | null) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+/**
+ * A task person (assignee or creator) who was offboarded. Their tasks stay theirs (owner, 8 Oct 2026).
+ * No date, unlike components/LeftTag: the task payload carries User.deactivatedAt (when the account was
+ * closed), not the last working day.
+ */
+function PersonLeftTag() {
+  const lang = useLang();
+  return (
+    <span title={lang.t("Left the company. Their tasks stay assigned to them.")} className="rounded-full border border-border px-1.5 text-[10px] font-semibold leading-4 text-muted-foreground">
+      {lang.t("Left")}
+    </span>
+  );
 }
 
 function MiniAvatar({ user, size = 28 }: { user?: NexusUser | null; size?: number }) {
@@ -593,6 +608,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   {(t.assignees ?? []).map((a) => (
                     <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-xs font-semibold">
                       <MiniAvatar user={a.user} size={22} /> {a.user?.name}
+                      {a.user?.deactivatedAt && <PersonLeftTag />}
                       <button onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
                     </span>
                   ))}
@@ -645,7 +661,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <div className="[column-gap:0.75rem] sm:columns-2">
                     {customFields.data!.fields.map((f) => (
                       <div key={f.id} className="mb-3 break-inside-avoid">
-                        <CustomFieldInput field={f} projectId={projectId} onSet={(value) => setCfMut.mutate({ id: f.id, value })} />
+                        <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value })} />
                       </div>
                     ))}
                   </div>
@@ -1122,7 +1138,7 @@ function fmtCreatedDateTime(ts: string): string {
   return `${m.day} ${m.month} ${m.year} • ${m.hour}:${m.minute}`;
 }
 
-export function CustomFieldInput({ field, projectId, onSet, hideLabel }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean }) {
+export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLeft }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean; /** The task's creator was offboarded: the CREATED field marks them "Left". */ creatorLeft?: boolean }) {
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
   const cls = "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
@@ -1171,7 +1187,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel }: { field
     const when = ts ? fmtCreatedDateTime(ts) : "";
     body = (
       <div className="w-full rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
-        {name ? <div className="text-sm font-semibold text-foreground">{name}</div> : null}
+        {name ? <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">{name}{creatorLeft && <PersonLeftTag />}</div> : null}
         <div className={cn("text-muted-foreground", name ? "text-xs" : "text-sm")}>{when || strVal || "—"}</div>
       </div>
     );

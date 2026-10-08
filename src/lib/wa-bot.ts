@@ -44,13 +44,15 @@ async function resolveUser(senderId: string) {
   // 1) verified link (works regardless of LID vs phone format)
   const wid = normalizeWaId(senderId)
   if (wid) {
-    const linked = await prisma.user.findFirst({ where: { whatsappId: wid }, select: { id: true, name: true } })
+    // Offboarded people (deactivatedAt, lib/offboarding.ts) are nobody to the bot: their link is
+    // cleared when they leave, and their phone number (kept on the account) must not match either.
+    const linked = await prisma.user.findFirst({ where: { whatsappId: wid, deactivatedAt: null }, select: { id: true, name: true } })
     if (linked) return linked
   }
   // 2) fallback: admin-set phone number match
   const sd = digits(senderId)
   if (!sd) return null
-  const users = await prisma.user.findMany({ where: { phoneNumber: { not: null } }, select: { id: true, name: true, phoneNumber: true } })
+  const users = await prisma.user.findMany({ where: { phoneNumber: { not: null }, deactivatedAt: null }, select: { id: true, name: true, phoneNumber: true } })
   return users.find((u) => phoneMatches(sd, u.phoneNumber)) ?? null
 }
 
@@ -327,6 +329,8 @@ export async function sendDigestToAll(opts?: { onlyUserId?: string; includeEmpty
   const users = await prisma.user.findMany({
     where: {
       OR: [{ phoneNumber: { not: null } }, { whatsappId: { not: null } }],
+      // No morning digest for someone who left (lib/offboarding.ts); their open tasks stay theirs.
+      deactivatedAt: null,
       ...(opts?.onlyUserId ? { id: opts.onlyUserId } : {}),
     },
     select: { id: true, name: true, phoneNumber: true, whatsappId: true },

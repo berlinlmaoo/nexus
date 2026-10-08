@@ -2,7 +2,7 @@ import { encode } from 'next-auth/jwt'
 import { checkRateLimitByKey, trustedClientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { logAudit } from '@/lib/audit'
-import { verifyCredentialUser } from '@/lib/credentials-auth'
+import { checkCredentialUser } from '@/lib/credentials-auth'
 import { createLogger } from '@/lib/logger'
 import { currentSessionVersion, newSessionId } from "@/lib/session-issue"
 
@@ -108,11 +108,15 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '900' } },
     )
   }
-  const result = await verifyCredentialUser(email, password)
+  const result = await checkCredentialUser(email, password)
 
-  if (!result) {
+  if (!result || !result.user) {
     return NextResponse.json(
-      { ok: false, error: 'CredentialsSignin' },
+      // Offboarded (lib/offboarding.ts): still a 401 (old clients read it as a refused sign-in), with
+      // its own code and the sentence to show.
+      result?.refusal === 'DEACTIVATED'
+        ? { ok: false, error: 'AccountDeactivated', message: result.message }
+        : { ok: false, error: 'CredentialsSignin' },
       {
         status: 401,
         headers: {
