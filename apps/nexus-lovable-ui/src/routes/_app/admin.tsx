@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
+import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
 import { OrgChart } from "@/components/OrgChart";
 import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
-import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam } from "@/lib/nexus-api";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam, type NexusOffboardResult, type OffboardReason } from "@/lib/nexus-api";
 // Crew Hub tidak punya halaman lagi. Pengaturan TIM-nya sendiri — nama, divisi, jam shift,
 // tautan project, hapus — dibuka dari chip tim di baris ORANGNYA, memakai kartu yang sama
 // persis seperti dulu. Tidak ada tim yang jadi tak terjangkau: ke-21 tim punya minimal satu
@@ -21,6 +21,7 @@ import { AuditLogView } from "@/components/audit/AuditLogView";
 import { SuspectAttendanceAdmin } from "@/components/attendance/SuspectAttendanceAdmin";
 import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdmin";
 import { useLang } from "@/lib/lang";
+import { LeftTag } from "@/components/LeftTag";
 
 export const Route = createFileRoute("/_app/admin")({ component: Admin });
 
@@ -36,7 +37,10 @@ function Admin() {
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
-  const [delUser, setDelUser] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [delUser, setDelUser] = useState<{ id: string; name: string; email: string; deactivated?: boolean } | null>(null);
+  // Offboarding (someone left the company) and its undo. One dialog each for the whole table.
+  const [offboardTarget, setOffboardTarget] = useState<NexusAdminUser | null>(null);
+  const [reinstateTarget, setReinstateTarget] = useState<NexusAdminUser | null>(null);
   const [redDateOpen, setRedDateOpen] = useState(false);
   // Satu modal untuk seluruh tabel, bukan satu per baris. Mengeluarkan orang dari tim MENCABUT
   // akses ke semua project yang ditautkan ke tim itu (src/lib/team-sync.ts), dan sebuah "x" kecil
@@ -66,6 +70,11 @@ function Admin() {
   const canManageTeamsOrg = canManageShift || viewerRole === "MANAGER";
   // Permanent account deletion = BoD / One Above All only (backend also enforces). Plain Managers can't.
   const canDeleteUsers = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
+  // Offboard / reinstate: the same people as delete, plus a system admin (POST …/offboard checks
+  // again, including the rank rule). Never on your own row.
+  const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
+  const isSystemAdmin = me?.role === "ADMIN";
+  const canOffboard = canDeleteUsers || isSystemAdmin;
   // The same rule the server enforces in isBoD(). A MANAGER shown the compose form only ever gets a
   // 403 back, which reads as a broken page rather than a permission they do not have.
   const canAnnounce = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
@@ -270,7 +279,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "", deactivated: !!u.deactivatedAt })} canOffboard={canOffboard && !!info && u.id !== me?.id && (isSystemAdmin || canEditTier(viewerRole, info.role))} onOffboard={() => setOffboardTarget(u)} canReinstate={canOffboard && u.id !== me?.id} onReinstate={() => setReinstateTarget(u)} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
                   })}
                 </tbody>
               </table>
@@ -281,6 +290,8 @@ function Admin() {
       </div>
       {dayoffUser && <DayoffModal user={dayoffUser} canEdit={canManageShift} onClose={() => setDayoffUser(null)} />}
       {delUser && <DeleteUserModal user={delUser} onClose={() => setDelUser(null)} />}
+      {offboardTarget && <OffboardUserModal user={offboardTarget} onClose={() => setOffboardTarget(null)} onOpenApproval={() => { setOffboardTarget(null); setView("approval"); }} />}
+      {reinstateTarget && <ReinstateUserModal user={reinstateTarget} onClose={() => setReinstateTarget(null)} />}
       {redDateOpen && <RedDateQuotaModal onClose={() => setRedDateOpen(false)} />}
       {teamSettingsId && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4" onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }}>
@@ -604,6 +615,8 @@ type UserRowProps = {
   shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void;
   flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void;
   onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void;
+  /** Offboard (a member who left the company) and, on an offboarded account, Reinstate. */
+  canOffboard: boolean; onOffboard: () => void; canReinstate: boolean; onReinstate: () => void;
   /** Project langsung: daftar untuk pemilih, dan dua aksi. Yang lewat tim tidak disentuh dari sini. */
   allProjects: Array<{ id: string; name: string; color?: string | null; status?: string | null }>; projectPending: boolean;
   onProjectAdd: (projectId: string) => void; onProjectRemove: (projectId: string) => void;
@@ -623,8 +636,13 @@ type UserRowProps = {
  * tombol yang jarang dipakai. Ringkasannya sekarang hanya menyebut yang MENYALA.
  */
 function UserRow(props: UserRowProps) {
-  const { user, orgInfo, isMember, canDelete, canJoin, joinPending, onJoin, onDelete, workspaceName, memberships, membershipsLoading, gwConfigured } = props;
+  const { user, orgInfo, isMember, canDelete, canJoin, joinPending, onJoin, onDelete, workspaceName, memberships, membershipsLoading, gwConfigured, canReinstate, onReinstate } = props;
   const [open, setOpen] = useState(false);
+  const { t } = useLang();
+  // Offboarded: no membership left, so this row would otherwise read "not in a workspace yet" and offer
+  // to add them back as Staff. It says when they left instead, and offers Reinstate.
+  const deactivated = !!user.deactivatedAt;
+  const leftAt = user.formerMemberships?.[0]?.leftAt ?? null;
   const projectCount = memberships?.projects.length ?? 0;
   const teamCount = memberships?.teams.length ?? 0;
   const overrideCount = Object.keys(orgInfo?.shiftByDay ?? {}).length;
@@ -683,13 +701,22 @@ function UserRow(props: UserRowProps) {
           <div className="flex items-center justify-end gap-2">
             {orgInfo ? (
               <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
+            ) : deactivated ? (
+              leftAt
+                ? <LeftTag leftAt={leftAt} className="px-2 text-[11px] font-bold" />
+                : <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{t("Left")}</span>
             ) : (
               <span className="text-xs text-muted-foreground/60">belum masuk workspace</span>
             )}
             {/* Akun yang mendaftar sendiri tanpa kode workspace berhenti di sini — terdaftar,
                 tapi tidak di mana pun. Satu tombol, langsung jadi Staff; perannya bisa diubah
                 sesudahnya di panel yang sama. */}
-            {!isMember && canJoin && (
+            {deactivated && canReinstate && (
+              <button type="button" onClick={onReinstate} title={t("Reinstate")} aria-label={t("Reinstate")} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-bold text-foreground transition hover:border-primary hover:text-primary">
+                <RotateCcw className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{t("Reinstate")}</span>
+              </button>
+            )}
+            {!isMember && !deactivated && canJoin && (
               <button type="button" onClick={onJoin} disabled={joinPending} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50">
                 {joinPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Masukkan ke {workspaceName}
               </button>
@@ -731,6 +758,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
   };
   const projectCount = memberships?.projects.length ?? 0;
   const teamCount = memberships?.teams.length ?? 0;
+  const { t } = useLang();
 
   // Esc menutup — kartu ini dibuka berkali-kali berturut-turut, dan mengejar tombol × 49 kali
   // adalah cara membuat orang berhenti memakainya.
@@ -912,6 +940,21 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 </div>
               </div>
             </Card>
+
+            {/* Offboard: rare and heavy, so last, and only for those who may (BoD+, system admin, rank). */}
+            {props.canOffboard && (
+              <section className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 md:col-span-2 dark:border-rose-900/50 dark:bg-rose-950/20">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">{t("Offboard")}</div>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{t("For someone who resigned, whose contract ended, or who was let go. Their history stays.")}</p>
+                  </div>
+                  <button type="button" onClick={() => { onClose(); props.onOffboard(); }} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-rose-300 bg-card px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40">
+                    <UserMinus className="h-3.5 w-3.5" /> {t("Offboard {name}…", { name: user.name || user.email || "" })}
+                  </button>
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </div>
@@ -1456,10 +1499,194 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
   );
 }
 
+/** Today in Jakarta as "YYYY-MM-DD" (the attendance calendar), whatever the browser's time zone. */
+function jakartaToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+const OFFBOARD_REASON_LABEL: Record<OffboardReason, string> = {
+  RESIGNED: "Resigned",
+  CONTRACT_ENDED: "Contract ended",
+  DISMISSED: "Dismissed",
+  OTHER: "Other",
+};
+
+/** The server's refusal `code` → a sentence in the interface language. Unknown codes show the server's text. */
+function offboardErrorText(e: unknown, t: (en: string, vars?: Record<string, string | number>) => string): string {
+  const code = e instanceof ApiError ? (e.payload as { code?: string } | null)?.code : undefined;
+  switch (code) {
+    case "SELF": return t("You can't do this to your own account.");
+    case "RANK": return t("You can't do this to someone at or above your level.");
+    case "FORBIDDEN": return t("Only BoD and above can do this.");
+    case "BAD_DATE": return t("Check the last working day: not after today, and not before they joined.");
+    case "NOT_MEMBER": return t("They aren't a member of the company workspace.");
+    case "ALREADY_OFFBOARDED": return t("This account is offboarded already.");
+    case "NOT_OFFBOARDED": return t("This account isn't offboarded.");
+    default: return e instanceof ApiError ? e.message : t("Something went wrong. Nothing was changed.");
+  }
+}
+
+/**
+ * Offboard: someone resigned, their contract ended, or they were let go (POST /api/admin/users/:id/offboard).
+ * Says plainly what happens and what stays before, and what is left for someone to do after: their pending
+ * requests, their open tasks, and the people who lost them as approver.
+ */
+function OffboardUserModal({ user, onClose, onOpenApproval }: { user: NexusAdminUser; onClose: () => void; onOpenApproval: () => void }) {
+  const qc = useQueryClient();
+  const { t, tn, locale } = useLang();
+  const today = jakartaToday();
+  const [day, setDay] = useState(today);
+  const [reason, setReason] = useState<OffboardReason>("RESIGNED");
+  const [note, setNote] = useState("");
+  const name = user.name || user.email || "";
+  const m = useMutation({
+    mutationFn: () => nexusApi.offboardUser(user.id, { lastWorkingDay: day, reason, note: note.trim() || null }),
+    onSuccess: () => {
+      for (const key of ["admin-users", "workspace-members", "approval-chart", "admin-user-memberships", "teams"]) qc.invalidateQueries({ queryKey: ["nexus", key] });
+    },
+  });
+  const result: NexusOffboardResult | undefined = m.data;
+  const minDay = user.firstJoinedAt
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(user.firstJoinedAt))
+    : undefined;
+  const dayValid = /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= today && (!minDay || day >= minDay);
+  const fmtDay = (key: string) => new Date(`${key}T00:00:00.000Z`).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !m.isPending) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, m.isPending]);
+
+  const happens = [
+    t("Can't sign in anymore, on any device."),
+    t("Removed from projects, teams and chats."),
+    t("Their attendance, requests, projects, tasks and messages stay."),
+    t("Their open tasks stay assigned to them."),
+    t("Anyone who had them as approver goes back to the BoD safety net."),
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/40 p-4" onClick={() => { if (!m.isPending) onClose(); }}>
+      <div className="my-auto w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h2 className="min-w-0 font-display text-base font-bold tracking-tight">{result ? t("{name} is offboarded.", { name: result.user.name }) : t("Offboard {name}", { name })}</h2>
+          <button onClick={onClose} disabled={m.isPending} aria-label={t("Close")} className="shrink-0 rounded-lg p-1 text-muted-foreground hover:bg-accent disabled:opacity-40"><X className="h-4 w-4" /></button>
+        </div>
+
+        {result ? (
+          <div className="space-y-3 text-sm">
+            <p className="text-xs text-muted-foreground">{t("Last working day: {date}", { date: fmtDay(result.lastWorkingDay) })}{result.workspaces.length > 0 ? ` · ${result.workspaces.join(", ")}` : ""}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-border bg-background p-3">
+                <div className="text-2xl font-bold tabular-nums">{result.pendingRequests}</div>
+                <div className="text-xs font-semibold">{t("Pending requests")}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{result.pendingRequests > 0 ? t("Still waiting for a decision in Attendance.") : t("Nothing waiting.")}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-3">
+                <div className="text-2xl font-bold tabular-nums">{result.openTasks}</div>
+                <div className="text-xs font-semibold">{t("Open tasks")}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{result.openTasks > 0 ? t("Still assigned to them. Reassign them if someone should take over.") : t("Nothing open.")}</div>
+              </div>
+            </div>
+            {result.approverEdgesCleared.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+                <div className="text-xs font-bold text-amber-800 dark:text-amber-300">{tn(result.approverEdgesCleared.length, "{n} person lost their approver", "{n} people lost their approver")}</div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {result.approverEdgesCleared.map((p) => <span key={p.id} className="rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">{p.name}</span>)}
+                </div>
+                <p className="mt-2 text-[11px] text-amber-800 dark:text-amber-300">{t("Their requests go to the BoD until you set a new approver in the Approval chart.")}</p>
+                <button type="button" onClick={onOpenApproval} className="mt-2 rounded-lg border border-amber-300 bg-card px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-900/40">{t("Open Approval chart")}</button>
+              </div>
+            )}
+            {result.autoDeductionsCanceled > 0 && (
+              <p className="text-[11px] text-muted-foreground">{tn(result.autoDeductionsCanceled, "{n} automatic deduction dated after their last day was canceled.", "{n} automatic deductions dated after their last day were canceled.")}</p>
+            )}
+            <button onClick={onClose} className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">{t("Done")}</button>
+          </div>
+        ) : (
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (dayValid && !m.isPending) m.mutate(); }}>
+            <p className="text-xs text-muted-foreground">{t("For someone who resigned, whose contract ended, or who was let go. Their history stays.")}</p>
+            <label className="block text-xs font-semibold text-muted-foreground">{t("Last working day")}
+              <input type="date" required value={day} max={today} min={minDay} onChange={(e) => setDay(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary" />
+            </label>
+            <fieldset>
+              <legend className="mb-1 text-xs font-semibold text-muted-foreground">{t("Reason")}</legend>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(Object.keys(OFFBOARD_REASON_LABEL) as OffboardReason[]).map((r) => (
+                  <button key={r} type="button" onClick={() => setReason(r)} aria-pressed={reason === r} className={cn("rounded-lg border px-3 py-2 text-left text-sm font-semibold transition", reason === r ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-foreground hover:bg-accent")}>
+                    {t(OFFBOARD_REASON_LABEL[r])}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label className="block text-xs font-semibold text-muted-foreground">{t("Note (optional)")}
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+            </label>
+            <div className="rounded-xl border border-border bg-muted/30 p-3">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("What happens")}</div>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-foreground">
+                {happens.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </div>
+            {m.isError && <p className="text-xs font-semibold text-rose-600">{offboardErrorText(m.error, t)}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={onClose} disabled={m.isPending} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-40">{t("Cancel")}</button>
+              <button type="submit" disabled={!dayValid || m.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">
+                {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />} {m.isPending ? t("Offboarding…") : t("Offboard")}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Undo an offboarding (POST /api/admin/users/:id/reinstate). Says what does NOT come back. */
+function ReinstateUserModal({ user, onClose }: { user: NexusAdminUser; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { t } = useLang();
+  const name = user.name || user.email || "";
+  const workspaces = Array.from(new Set((user.formerMemberships ?? []).map((f) => f.workspaceName)));
+  const m = useMutation({
+    mutationFn: () => nexusApi.reinstateUser(user.id),
+    onSuccess: (r) => {
+      for (const key of ["admin-users", "workspace-members", "approval-chart", "admin-user-memberships"]) qc.invalidateQueries({ queryKey: ["nexus", key] });
+      toast.success(t("{name} is back.", { name: r.user.name }));
+      onClose();
+    },
+  });
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!m.isPending) onClose(); }}>
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h2 className="min-w-0 font-display text-base font-bold tracking-tight">{t("Reinstate {name}?", { name })}</h2>
+          <button onClick={onClose} disabled={m.isPending} aria-label={t("Close")} className="shrink-0 rounded-lg p-1 text-muted-foreground hover:bg-accent disabled:opacity-40"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-2 text-sm">
+          <p>{workspaces.length > 0
+            ? t("They can sign in again and are back in {workspaces} with the role and settings they had.", { workspaces: workspaces.join(", ") })
+            : t("They can sign in again.")}</p>
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">{t("Not restored: projects, teams, passkeys, devices, and anyone who had them as approver. Set those again by hand.")}</p>
+        </div>
+        {m.isError && <p className="mt-2 text-xs font-semibold text-rose-600">{offboardErrorText(m.error, t)}</p>}
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button onClick={onClose} disabled={m.isPending} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-40">{t("Cancel")}</button>
+          <button onClick={() => m.mutate()} disabled={m.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
+            {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} {t("Reinstate")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Permanent account deletion (BoD / One Above All). Reassigns the target's owned content to the
 // acting admin, purges personal/ephemeral rows, then deletes. Requires typing HAPUS to confirm.
-function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; email: string }; onClose: () => void }) {
+function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; email: string; deactivated?: boolean }; onClose: () => void }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const [confirmTxt, setConfirmTxt] = useState("");
   const m = useMutation({
     mutationFn: () => nexusApi.deleteUser(user.id),
@@ -1498,7 +1725,18 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
             <label className="block text-xs font-semibold text-muted-foreground">Type <b className="text-rose-700">DELETE</b> to confirm
               <input autoFocus value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} placeholder="DELETE" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-rose-400" />
             </label>
-            {err && <p className="mt-2 text-xs font-semibold text-rose-600">{(err.payload as { message?: string } | undefined)?.message ?? err.message}</p>}
+            {err && (
+              // An account with attendance history is never deleted (owner, 8 Oct 2026): it is offboarded.
+              (err.payload as { code?: string } | undefined)?.code === "HAS_ATTENDANCE_DATA" ? (
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                  {user.deactivated
+                    ? t("This account has attendance records or requests, so it can't be deleted. It's offboarded already: it can't sign in, and its history stays.")
+                    : t("This account has attendance records or requests. Use Offboard instead, so they stay.")}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs font-semibold text-rose-600">{(err.payload as { message?: string } | undefined)?.message ?? err.message}</p>
+              )
+            )}
             <div className="mt-4 flex items-center justify-end gap-2">
               <button onClick={onClose} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">Cancel</button>
               <button disabled={!ready || m.isPending} onClick={() => m.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">

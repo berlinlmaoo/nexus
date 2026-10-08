@@ -97,9 +97,11 @@ export async function POST(request: NextRequest) {
 
     const authCode = await prisma.oAuthAuthCode.findUnique({
       where: { codeHash: hashToken(code) },
-      select: { id: true, clientId: true, userId: true, redirectUri: true, codeChallenge: true, scopes: true, expiresAt: true, consumedAt: true },
+      select: { id: true, clientId: true, userId: true, redirectUri: true, codeChallenge: true, scopes: true, expiresAt: true, consumedAt: true, user: { select: { deactivatedAt: true } } },
     })
     if (!authCode) return oauthError("invalid_grant", "Unknown or expired code")
+    // Offboarded (lib/offboarding.ts) between consent and exchange: no token for them.
+    if (authCode.user.deactivatedAt) return oauthError("invalid_grant", "Account deactivated")
     if (authCode.clientId !== client.id) return oauthError("invalid_grant", "Code was issued to a different client")
     if (authCode.redirectUri !== redirectUri) return oauthError("invalid_grant", "redirect_uri mismatch")
     if (authCode.consumedAt) return oauthError("invalid_grant", "Code already used")
@@ -135,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     const existing = await prisma.apiToken.findUnique({
       where: { refreshTokenHash: presentedHash },
-      select: { id: true, clientId: true, userId: true, scopes: true, refreshExpiresAt: true },
+      select: { id: true, clientId: true, userId: true, scopes: true, refreshExpiresAt: true, user: { select: { deactivatedAt: true } } },
     })
 
     if (!existing) {
@@ -154,6 +156,8 @@ export async function POST(request: NextRequest) {
     }
     if (!existing.clientId || existing.clientId !== client.id) return oauthError("invalid_grant", "Refresh token was issued to a different client")
     if (existing.refreshExpiresAt && existing.refreshExpiresAt.getTime() < Date.now()) return oauthError("invalid_grant", "Refresh token expired")
+    // Offboarded (lib/offboarding.ts): the connection ends here, it is not rotated into a new one.
+    if (existing.user.deactivatedAt) return oauthError("invalid_grant", "Account deactivated")
 
     const t = issueTokens()
     await prisma.apiToken.update({

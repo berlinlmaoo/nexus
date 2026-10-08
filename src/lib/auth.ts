@@ -67,12 +67,16 @@ export const nexusNextAuthConfig = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { avatar: true, name: true, email: true, sessionVersion: true },
+            select: { avatar: true, name: true, email: true, sessionVersion: true, deactivatedAt: true },
           })
           // Sessions are stateless JWTs (web cookie and the iOS app's Keychain copy alike), so
           // deleting an account cannot revoke them. Returning null here makes auth() answer
           // "signed out" and clears the cookie, on the very next request.
           if (dbUser && isDeletedAccountEmail(dbUser.email)) {
+            return null
+          }
+          // Offboarded (lib/offboarding.ts): the same, for someone who left the company.
+          if (dbUser?.deactivatedAt) {
             return null
           }
           // Revocation (lib/session-version.ts). A sign-in through NextAuth itself records the version

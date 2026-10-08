@@ -216,6 +216,34 @@ async function sendSlack(webhookUrl: string, message: string) {
  *
  * Returns null when the notification was suppressed.
  */
+/**
+ * Offboarded people (User.deactivatedAt, lib/offboarding.ts) get no notifications: they can't sign in
+ * to read them, and a push to a phone that left the company is a leak. One primary-key lookup per
+ * recipient, remembered for a minute so a fan-out to the whole office stays cheap. The offboard and
+ * reinstate routes call forgetRecipientState so the change counts at once in this process.
+ */
+const RECIPIENT_STATE_MS = 60_000
+const recipientDeactivated = new Map<string, { deactivated: boolean; at: number }>()
+
+export function forgetRecipientState(userId: string) {
+  recipientDeactivated.delete(userId)
+}
+
+async function isDeactivatedRecipient(userId: string): Promise<boolean> {
+  const hit = recipientDeactivated.get(userId)
+  if (hit && Date.now() - hit.at < RECIPIENT_STATE_MS) return hit.deactivated
+  try {
+    const row = await prisma.user.findUnique({ where: { id: userId }, select: { deactivatedAt: true } })
+    const deactivated = Boolean(row?.deactivatedAt)
+    if (recipientDeactivated.size > 5000) recipientDeactivated.clear()
+    recipientDeactivated.set(userId, { deactivated, at: Date.now() })
+    return deactivated
+  } catch {
+    // Unreadable: deliver as before this check existed rather than drop a notification.
+    return false
+  }
+}
+
 export async function createInAppNotification(data: {
   userId: string
   type: string
@@ -231,6 +259,11 @@ export async function createInAppNotification(data: {
   /** Extra custom keys in the APNs payload. Push only. */
   pushData?: Record<string, string | number | boolean | null>
 }) {
+  if (await isDeactivatedRecipient(data.userId)) {
+    log.info("notification skipped: recipient offboarded", { userId: data.userId, type: data.type })
+    return null
+  }
+
   if (data.dedupeWindowMs && data.dedupeWindowMs > 0) {
     const since = new Date(Date.now() - data.dedupeWindowMs)
     const duplicate = await prisma.notification.findFirst({

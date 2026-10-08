@@ -41,6 +41,12 @@ export async function GET(
             role: true,
             createdAt: true,
             updatedAt: true,
+            // Offboarding (lib/offboarding.ts). Additive.
+            deactivatedAt: true,
+            formerMemberships: {
+              select: { workspaceId: true, leftAt: true, reason: true, workspace: { select: { name: true } } },
+              orderBy: { leftAt: "desc" },
+            },
           },
         }),
         prisma.workspaceMember.findMany({
@@ -121,9 +127,16 @@ export async function GET(
         })),
     }))
 
+    const { formerMemberships, ...userFields } = user
     return NextResponse.json({
       user: {
-        ...user,
+        ...userFields,
+        formerMemberships: formerMemberships.map((f) => ({
+          workspaceId: f.workspaceId,
+          workspaceName: f.workspace.name,
+          leftAt: f.leftAt,
+          reason: f.reason,
+        })),
         workspaceMemberships: memberships,
       },
       availableWorkspaces,
@@ -335,6 +348,21 @@ export async function PATCH(
   }
 }
 
+const HAS_ATTENDANCE_DATA_MESSAGE = "Akun ini punya data absensi/pengajuan. Pakai Offboard supaya datanya tetap ada."
+
+class AttendanceDataRace extends Error {}
+
+/** Any attendance record or request of this person (the history a delete would cascade away). */
+async function hasAttendanceData(
+  db: Pick<typeof prisma, "attendanceRecord" | "attendanceRequest">,
+  userId: string
+): Promise<boolean> {
+  const record = await db.attendanceRecord.findFirst({ where: { userId }, select: { id: true } })
+  if (record) return true
+  const request = await db.attendanceRequest.findFirst({ where: { userId }, select: { id: true } })
+  return Boolean(request)
+}
+
 // Permanently delete a user account. Stricter than role edits: only a system ADMIN or an org
 // BoD / One Above All may purge an account (plain Managers may NOT). Guards: can't delete yourself,
 // can't delete a system ADMIN unless you're one too, can't delete the LAST system admin, and the
@@ -398,6 +426,17 @@ export async function DELETE(
       }
     }
 
+    // Attendance history is the company's record of someone who worked here (owner, 8 Oct 2026): it must
+    // never go with a delete (the schema cascades it away). People who left are offboarded instead
+    // (POST …/offboard), which keeps everything. Only accounts without any — test or mistaken sign-ups —
+    // can still be deleted. Checked before membership so a member with history is pointed at Offboard.
+    if (await hasAttendanceData(prisma, userId)) {
+      return NextResponse.json(
+        { error: HAS_ATTENDANCE_DATA_MESSAGE, code: "HAS_ATTENDANCE_DATA" },
+        { status: 409 }
+      )
+    }
+
     if (target.workspaceMembers.length > 0) {
       const names = Array.from(new Set(target.workspaceMembers.map((m) => m.workspace.name)))
       // Human message in `error` so the client (which reads payload.error) shows it directly; keep a
@@ -421,6 +460,7 @@ export async function DELETE(
         // between the check above and the delete (TOCTOU). Throw → whole tx rolls back, nothing deleted.
         const stillMember = await tx.workspaceMember.count({ where: { userId } })
         if (stillMember > 0) throw new Error("still-member-race")
+        if (await hasAttendanceData(tx, userId)) throw new AttendanceDataRace()
 
         const tasks = await tx.task.updateMany({ where: { creatorId: userId }, data: { creatorId: actorId } })
         const attachments = await tx.attachment.updateMany({ where: { uploaderId: userId }, data: { uploaderId: actorId } })
@@ -469,6 +509,9 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true, deletedUser: { id: target.id, name: target.name, email: target.email }, ...summary })
   } catch (error) {
+    if (error instanceof AttendanceDataRace) {
+      return NextResponse.json({ error: HAS_ATTENDANCE_DATA_MESSAGE, code: "HAS_ATTENDANCE_DATA" }, { status: 409 })
+    }
     console.error("Error deleting admin user:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

@@ -152,9 +152,11 @@ export function initializeSocketServer(
       // leftover JWT must not be allowed back into those rooms.
       const owner = await prisma.user.findUnique({
         where: { id: token.id as string },
-        select: { email: true, sessionVersion: true },
+        select: { email: true, sessionVersion: true, deactivatedAt: true },
       })
       if (!owner || isDeletedAccountEmail(owner.email)) return next(new Error("Invalid session"))
+      // Offboarded (lib/offboarding.ts): out of the company, so out of its chat rooms too.
+      if (owner.deactivatedAt) return next(new Error("Invalid session"))
       // Revoked (password reset, a password set by a BoD, a change from the web): the same rule as the
       // jwt callback in lib/auth.ts. A token without the field — issued before revocation existed — stays valid.
       if (sessionVersionRejects(token.sessionVersion, owner.sessionVersion)) return next(new Error("Invalid session"))

@@ -2,7 +2,7 @@ import { encode } from "next-auth/jwt"
 import { checkRateLimitByKey, trustedClientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from "next/server"
 import { logAudit } from "@/lib/audit"
-import { verifyCredentialUser } from "@/lib/credentials-auth"
+import { checkCredentialUser } from "@/lib/credentials-auth"
 import { createLogger } from "@/lib/logger"
 import { nativeAppPlatformOf } from "@/lib/client-version"
 
@@ -37,9 +37,13 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '900' } },
     )
   }
-  const result = await verifyCredentialUser(email, password)
-  if (!result) {
-    return NextResponse.json({ ok: false, error: "CredentialsSignin" }, { status: 401, headers: { "Cache-Control": "no-store" } })
+  const result = await checkCredentialUser(email, password)
+  if (!result || !result.user) {
+    // Offboarded (lib/offboarding.ts): a 401 like a refused sign-in, with its own code and sentence.
+    const body = result?.refusal === "DEACTIVATED"
+      ? { ok: false, error: "AccountDeactivated", message: result.message }
+      : { ok: false, error: "CredentialsSignin" }
+    return NextResponse.json(body, { status: 401, headers: { "Cache-Control": "no-store" } })
   }
 
   const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET

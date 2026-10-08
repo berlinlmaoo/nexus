@@ -61,6 +61,12 @@ export async function GET(request: NextRequest) {
           role: true,
           googleWorkspaceEmail: true,
           createdAt: true,
+          // Offboarding (lib/offboarding.ts). Additive.
+          deactivatedAt: true,
+          formerMemberships: {
+            select: { workspaceId: true, leftAt: true, reason: true, workspace: { select: { name: true } } },
+            orderBy: { leftAt: "desc" },
+          },
           workspaceMembers: {
             select: { joinedAt: true },
             orderBy: { joinedAt: "asc" },
@@ -87,6 +93,13 @@ export async function GET(request: NextRequest) {
         createdAt: user.createdAt,
         firstJoinedAt: user.workspaceMembers[0]?.joinedAt ?? null,
         workspaceMembershipCount: user._count.workspaceMembers,
+        deactivatedAt: user.deactivatedAt,
+        formerMemberships: user.formerMemberships.map((f) => ({
+          workspaceId: f.workspaceId,
+          workspaceName: f.workspace.name,
+          leftAt: f.leftAt,
+          reason: f.reason,
+        })),
       })),
       pagination: {
         total,
