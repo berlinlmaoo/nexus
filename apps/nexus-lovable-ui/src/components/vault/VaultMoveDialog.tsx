@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { nexusApi, type VaultItem } from "@/lib/nexus-api";
+import { runBulk, type BulkResult } from "@/lib/vault-bulk";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Move to…" (owner, 9 Oct 2026: the INTOO folder had to come out of LOGO). The path that works
@@ -13,52 +14,64 @@ import { nexusApi, type VaultItem } from "@/lib/nexus-api";
 // at a time like the page does, starting where the item is, with the path above to walk back up;
 // "Move here" puts it in the folder on screen, and "Vault" is the top level.
 //
-// The item itself is never listed, so neither it nor anything inside it can be reached. The server
-// checks that again, along with write access to the destination, and its refusal is what is shown.
+// The items themselves are never listed, so neither they nor anything inside them can be reached. The
+// server checks that again, along with write access to the destination, and its refusal is what is
+// shown. Several items (multi-select, 9 Oct 2026) go one PATCH each, a few at a time; when some move
+// and some are refused the dialog closes and the page reports both.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Props = {
-  item: VaultItem | null;
+  /** What is being moved; null or empty = closed. */
+  items: VaultItem[] | null;
   onClose: () => void;
-  onMoved: (moved: VaultItem, destination: string) => void;
+  onMoved: (result: BulkResult<VaultItem>, destination: string) => void;
 };
 
-export function VaultMoveDialog({ item, onClose, onMoved }: Props) {
-  const { t, lang } = useLang();
+export function VaultMoveDialog({ items, onClose, onMoved }: Props) {
+  const { t, tn, lang } = useLang();
   const [browse, setBrowse] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const open = !!items && items.length > 0;
+  const first = open ? items[0] : null;
 
-  // Each time it opens: start in the folder the item is in.
+  // Each time it opens: start in the folder the (first) item is in.
   useEffect(() => {
-    if (item) { setBrowse(item.parentId); setProblem(null); }
-  }, [item]);
+    if (first) { setBrowse(first.parentId); setProblem(null); }
+  }, [first]);
 
   const listing = useQuery({
     queryKey: ["vault", "picker", browse ?? "root"],
     queryFn: () => nexusApi.vaultList({ parentId: browse }),
-    enabled: !!item,
+    enabled: open,
   });
 
   const move = useMutation({
-    mutationFn: (to: string | null) => nexusApi.vaultUpdateItem(item!.id, { parentId: to }),
-    onSuccess: (moved) => {
+    mutationFn: (to: string | null) =>
+      runBulk((items ?? []).filter((i) => i.parentId !== to), (i) => nexusApi.vaultUpdateItem(i.id, { parentId: to })),
+    onSuccess: (result) => {
+      // Nothing moved: stay open and say why, as for one item.
+      if (result.ok.length === 0 && result.failed.length > 0) { setProblem(result.failed[0].reason); return; }
       const here = listing.data?.breadcrumb;
-      onMoved(moved, here && here.length > 0 ? here[here.length - 1].name : t("Vault"));
+      onMoved(result, browse !== null && here && here.length > 0 ? here[here.length - 1].name : t("Vault"));
     },
     onError: (e: Error) => setProblem(e.message),
   });
 
-  const folders = (listing.data?.items ?? []).filter((f) => f.kind === "FOLDER" && f.id !== item?.id);
-  const isHome = !!item && browse === item.parentId;
+  const movingIds = new Set((items ?? []).map((i) => i.id));
+  const folders = (listing.data?.items ?? []).filter((f) => f.kind === "FOLDER" && !movingIds.has(f.id));
+  const isHome = open && (items ?? []).every((i) => i.parentId === browse);
   const canWrite = listing.data?.canWrite ?? false;
   const trail = listing.data?.breadcrumb ?? [];
+  const many = (items?.length ?? 0) > 1;
 
   return (
-    <Dialog open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent lang={lang} className="max-w-md gap-3 p-0 sm:p-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pr-12">
-          <DialogTitle className="truncate">{t("Move “{name}”", { name: item?.name ?? "" })}</DialogTitle>
-          <DialogDescription>{t("Pick the folder it goes into. Vault is the top level.")}</DialogDescription>
+          <DialogTitle className="truncate">
+            {many ? tn(items!.length, "Move {n} item", "Move {n} items") : t("Move “{name}”", { name: first?.name ?? "" })}
+          </DialogTitle>
+          <DialogDescription>{many ? t("Pick the folder they go into. Vault is the top level.") : t("Pick the folder it goes into. Vault is the top level.")}</DialogDescription>
         </DialogHeader>
 
         <nav aria-label={t("Folder path")} className="px-5 flex items-center gap-1 text-sm flex-wrap">
@@ -115,7 +128,7 @@ export function VaultMoveDialog({ item, onClose, onMoved }: Props) {
           {problem ? (
             <p className="text-destructive">{problem}</p>
           ) : isHome ? (
-            <p className="text-muted-foreground">{t("It's already in this folder.")}</p>
+            <p className="text-muted-foreground">{many ? t("They're already in this folder.") : t("It's already in this folder.")}</p>
           ) : listing.data && !canWrite ? (
             <p className="text-muted-foreground">{t("You can't add to this folder.")}</p>
           ) : null}
@@ -124,7 +137,7 @@ export function VaultMoveDialog({ item, onClose, onMoved }: Props) {
         <DialogFooter className="px-5 pb-5 gap-2">
           <Button variant="outline" onClick={onClose}>{t("Cancel")}</Button>
           <Button
-            disabled={!item || isHome || !listing.data || !canWrite || move.isPending}
+            disabled={!open || isHome || !listing.data || !canWrite || move.isPending}
             onClick={() => { setProblem(null); move.mutate(browse); }}
           >
             {move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Move here")}
