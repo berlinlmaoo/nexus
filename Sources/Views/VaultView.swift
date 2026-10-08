@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 import UniformTypeIdentifiers
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,13 +21,25 @@ import UniformTypeIdentifiers
 //
 // One `.sheet`, one `.alert` and one `.fullScreenCover`, each driven by an enum: two sheets (or two
 // alerts) on the same view is how one of them silently never presents.
+//
+// One folder per SCREEN since 9 Oct 2026: opening a folder pushes the next VaultView on the
+// navigation stack, so swipe-back (and the back button) goes up one folder, as everywhere else in
+// iOS. A crumb of the path pops back to that level (`popTo`, handed down by the screen below).
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct VaultView: View {
     @Environment(AuthStore.self) private var auth
 
-    /// The folder being shown. nil is the root — the same value the API takes.
-    @State private var parentId: String?
+    /// The folder this screen shows; nil is the top of the vault.
+    var folder: VaultCrumb? = nil
+    /// Back to a folder further down the navigation stack (a crumb tapped). Handed down by the screen
+    /// that pushed this one; nil on the first screen.
+    var popTo: ((VaultCrumb?) -> Void)? = nil
+
+    /// The folder being shown, as the API takes it. nil is the root.
+    private var parentId: String? { folder?.id }
+    /// The next folder down, pushed on top of this screen.
+    @State private var pushed: VaultCrumb?
     @State private var listing: VaultListing?
     @State private var loading = true
     @State private var problem: String?
@@ -56,15 +69,33 @@ struct VaultView: View {
     /// A short line at the bottom after a move ("Moved to LOGO"), gone by itself.
     @State private var notice: String?
     @State private var noticeTask: Task<Void, Never>?
+    /// Upload from Photos. Presented from the view, never from inside the toolbar Menu: a PhotosPicker
+    /// nested in a Menu draws its row and never opens (the menu tears down its content as it closes).
+    @State private var showPhotos = false
+    @State private var pickedPhotos: [PhotosPickerItem] = []
 
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
         }
-        .navigationTitle(T("Z Vault"))
+        .navigationTitle(folder?.name ?? T("Z Vault"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: T("Search files…"))
+        .navigationDestination(item: $pushed) { next in
+            VaultView(folder: next, popTo: { go(to: $0) })
+        }
+        .photosPicker(isPresented: $showPhotos, selection: $pickedPhotos, maxSelectionCount: 20,
+                      matching: .any(of: [.images, .videos]),
+                      // JPEG and H.264 rather than HEIC/HEVC: the web's thumbnails and every browser
+                      // (and the people a link is sent to) can show those; HEIC only Safari can.
+                      preferredItemEncoding: .compatible, photoLibrary: .shared())
+        .onChange(of: pickedPhotos) { _, items in
+            guard !items.isEmpty else { return }
+            let target = parentId
+            pickedPhotos = []
+            Task { await absorbPhotos(items, into: target) }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -74,6 +105,9 @@ struct VaultView: View {
                         }
                         Button { sheet = .importer } label: {
                             Label(T("Upload file"), systemImage: "arrow.up.doc")
+                        }
+                        Button { showPhotos = true } label: {
+                            Label(T("Upload from Photos"), systemImage: "photo.on.rectangle")
                         }
                     }
                     Divider()
@@ -253,7 +287,7 @@ struct VaultView: View {
     private func crumb(id: String?, name: String, muted: Bool) -> some View {
         let key = VaultDropKey.crumb(id)
         let targeted = dropKey == key
-        return Button(name) { parentId = id; query = ""; Task { await load() } }
+        return Button(name) { go(to: id.map { VaultCrumb(id: $0, name: name) }) }
             .font(NXFont.text(12, targeted ? .bold : .regular))
             .foregroundStyle(targeted ? NX.violetText : muted ? NX.mutedFg : NX.foreground)
             .padding(.horizontal, 6).padding(.vertical, 3)
@@ -308,14 +342,22 @@ struct VaultView: View {
                 .accessibilityLabel(String(format: T("Share link to %@"), item.name))
             }
 
-            Menu { menuItems(item) } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 15))
+            if trash && !item.canModify {
+                Image(systemName: "lock")
+                    .font(.system(size: 12))
                     .foregroundStyle(NX.mutedFg)
-                    // 44pt of tappable area behind a 15pt glyph. The same fix the Threads delete
-                    // button needed: a menu that only opens on the third try reads as a broken app.
                     .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                    .accessibilityLabel(T("Only whoever uploaded it, or BoD, can restore it"))
+            } else {
+                Menu { menuItems(item) } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 15))
+                        .foregroundStyle(NX.mutedFg)
+                        // 44pt of tappable area behind a 15pt glyph. The same fix the Threads delete
+                        // button needed: a menu that only opens on the third try reads as a broken app.
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
             }
         }
         .padding(.vertical, 8)
@@ -374,8 +416,10 @@ struct VaultView: View {
     /// menu, so the two can never offer different things.
     @ViewBuilder private func menuItems(_ item: VaultItem) -> some View {
         if trash {
-            Button { Task { await restore(item) } } label: { Label(T("Restore"), systemImage: "arrow.uturn.backward") }
+            // Restoring and deleting for good are the uploader's or BoD's (the server refuses anyone
+            // else), so neither is offered to anyone else; the row shows a padlock instead of "…".
             if item.canModify {
+                Button { Task { await restore(item) } } label: { Label(T("Restore"), systemImage: "arrow.uturn.backward") }
                 Button(role: .destructive) { vaultAlert = .delete(item) } label: { Label(T("Delete forever"), systemImage: "trash") }
             }
         } else {
@@ -599,9 +643,7 @@ struct VaultView: View {
     private func open(_ item: VaultItem) {
         guard !trash else { return }
         if item.isFolder {
-            parentId = item.id
-            query = ""
-            Task { await load() }
+            pushed = VaultCrumb(id: item.id, name: item.name)
         } else if VaultMedia.isMedia(item) {
             let media = (listing?.items ?? []).filter { VaultMedia.isMedia($0) }
             openMedia(item, in: media)
@@ -673,6 +715,37 @@ struct VaultView: View {
                                   message: failures.joined(separator: "\n"))
         }
         await load(quiet: true)
+    }
+
+    /// A crumb of the path, or a folder further up: this screen drops what is pushed above it when the
+    /// target is its own folder, otherwise asks the screen below. The first screen, asked for a folder
+    /// that is not on the stack (a search result opened deep in the tree), shows it on top of itself.
+    private func go(to target: VaultCrumb?) {
+        if target?.id == folder?.id { pushed = nil; return }
+        if let popTo { popTo(target); return }
+        pushed = target
+    }
+
+    /// Pictures and films from Photos, copied out of the library and uploaded like dropped files.
+    private func absorbPhotos(_ items: [PhotosPickerItem], into folderId: String?) async {
+        var files: [URL] = []
+        var lost = 0
+        for item in items {
+            if let picked = try? await item.loadTransferable(type: VaultPickedFile.self) {
+                files.append(picked.url)
+            } else {
+                // Still in iCloud, or nothing the library could hand over. Counted, not dropped silently.
+                lost += 1
+            }
+        }
+        if !files.isEmpty { enqueueUpload(files, into: folderId, temporary: true) }
+        if lost > 0 {
+            // A beat after the picker's own dismissal, or the alert asked for in that moment never shows.
+            try? await Task.sleep(for: .milliseconds(350))
+            vaultAlert = .problem(title: T("Some photos didn't come through"),
+                                  message: lost == 1 ? T("1 item couldn't be read from Photos.")
+                                      : String(format: T("%d items couldn't be read from Photos."), lost))
+        }
     }
 
     /// Replace file…: queued behind any upload in flight, like every other transfer on this screen.
@@ -1063,5 +1136,42 @@ enum VaultDropReader {
         } catch {
             return nil
         }
+    }
+}
+
+/// A picture or film from the photo library, as a file this app owns. The library hands over a
+/// temporary copy that is gone once the import closure returns, so it is copied out inside it — the
+/// same rule `VaultDropReader` follows for drops. The picture is asked for first, so a Live Photo
+/// arrives as its still; a film has no picture representation and arrives as the film.
+struct VaultPickedFile: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .image) { received in
+            Self(url: try stash(received.file))
+        }
+        FileRepresentation(importedContentType: .movie) { received in
+            Self(url: try stash(received.file))
+        }
+    }
+
+    /// `tmp/vault-drops/<uuid>/<name>`, removed after the upload (`temporary: true`). The library's own
+    /// file names are sometimes internal ("version=1&uuid=…"); those become "Photo <date>.<ext>".
+    private static func stash(_ file: URL) throws -> URL {
+        let ext = file.pathExtension.lowercased()
+        var name = file.lastPathComponent.replacingOccurrences(of: "/", with: "-")
+        if name.contains("=") || name.count > 80 || ext.isEmpty {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd HH.mm.ss"
+            name = "Photo \(f.string(from: Date()))" + (ext.isEmpty ? "" : ".\(ext)")
+        }
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vault-drops", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let destination = folder.appendingPathComponent(name)
+        try FileManager.default.copyItem(at: file, to: destination)
+        return destination
     }
 }
