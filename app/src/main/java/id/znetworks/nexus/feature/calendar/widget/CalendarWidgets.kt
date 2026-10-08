@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.calendar.widget
 
+import id.znetworks.nexus.ui.theme.NightHues
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
@@ -130,7 +131,7 @@ private const val WIDGET_MAX_FONT_SCALE = 1.3f
 /** Night colours for the task colours (WidgetHues), from the Calendar's cached structure of the person signed in. */
 @Volatile private var darkOf: Map<String, String> = emptyMap()
 /** A task colour as a day/night pair with the same alpha in both (audit 2 #10). */
-private fun hue(hex: String, alpha: Float = 1f) = DayNight(day = WidgetHues.day(hex).copy(alpha = alpha), night = WidgetHues.night(hex, darkOf).copy(alpha = alpha))
+private fun hue(hex: String, alpha: Float = 1f) = DayNight(day = NightHues.day(hex).copy(alpha = alpha), night = NightHues.night(hex, darkOf).copy(alpha = alpha))
 
 /**
  * NEXUS colours for Android 8–11, where there is no Material You (audit #26), built from the app's own
@@ -238,7 +239,7 @@ abstract class CalendarWidget(private val kind: CalWidgetKind) : GlanceAppWidget
         val uid = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
         if (uid != null) runCatching {
             CalendarDiskCache(java.io.File(context.cacheDir, "calendar")).structure(uid)?.value?.units
-        }.getOrNull()?.let { units -> darkOf = WidgetHues.darkMap(units.map { it.color to it.colorDark }) }
+        }.getOrNull()?.let { units -> darkOf = NightHues.darkMap(units.map { it.color to it.colorDark }) }
         provideContent {
             if (Build.VERSION.SDK_INT >= 31) GlanceTheme { Root(lc, kind, data) }
             else GlanceTheme(colors = NexusWidgetColors) { Root(lc, kind, data) }

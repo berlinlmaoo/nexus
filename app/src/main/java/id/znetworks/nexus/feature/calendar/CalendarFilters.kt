@@ -70,7 +70,7 @@ import java.util.Locale
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modifier, onClose: () -> Unit) {
+internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modifier, sidePanel: Boolean = false, onClose: () -> Unit) {
     val c = Nx.colors
     val f = d.s.filters
     fun set(x: CalendarCore.Filters) = vm.setFilters(x)
@@ -92,7 +92,7 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
     Column(modifier.background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.cal_filters), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
+            Text(stringResource(R.string.cal_filters), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, style = CalType.s18, color = c.foreground,
                 modifier = Modifier.weight(1f).semantics { heading() })
             TextButton(onClick = { vm.resetFilters() }, enabled = d.filterCount > 0) { Text(stringResource(R.string.cal_reset)) }
         }
@@ -113,28 +113,28 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
                 Header(stringResource(R.string.cal_people))
                 OutlinedTextField(qPeople, { qPeople = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_people)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
-                if (!d.ready) Text(stringResource(R.string.cal_lists_loading), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
-                else if (ids.isEmpty()) Text(stringResource(R.string.cal_nobody_month), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                if (!d.ready) Text(stringResource(R.string.cal_lists_loading), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                else if (ids.isEmpty()) Text(stringResource(R.string.cal_nobody_month), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
             }
             items(people, key = { "p:${it.first}" }) { (id, name) ->
                 val on = id in f.people
                 CheckRow(on, { set(f.copy(people = if (on) f.people - id else f.people + id)) }) {
                     Initials(name, c.navy, 22); Spacer(Modifier.width(8.dp))
-                    Text(name.ifEmpty { stringResource(R.string.cal_former_member) }, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(name.ifEmpty { stringResource(R.string.cal_former_member) }, style = CalType.s14, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             item(key = "projh") {
                 Header(stringResource(R.string.cal_projects))
                 OutlinedTextField(qProjects, { qProjects = it }, singleLine = true, placeholder = { Text(stringResource(R.string.cal_search_projects)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth())
-                if (!d.ready) Text(stringResource(R.string.cal_lists_loading), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
-                else if (projects.isEmpty()) Text(stringResource(R.string.cal_no_project_month), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                if (!d.ready) Text(stringResource(R.string.cal_lists_loading), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
+                else if (projects.isEmpty()) Text(stringResource(R.string.cal_no_project_month), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 4.dp))
             }
             items(shownProjects, key = { "j:${it.id}" }) { p ->
                 val on = p.id in f.projects
                 CheckRow(on, { set(f.copy(projects = if (on) f.projects - p.id else f.projects + p.id)) }) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(CalIndex.hex(p.color ?: "#64748b"))); Spacer(Modifier.width(8.dp))
-                    Text(p.name, fontSize = 14.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(projectColor(p.color ?: "#64748b"))); Spacer(Modifier.width(8.dp))
+                    Text(p.name, style = CalType.s14, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             item(key = "prio") {
@@ -156,7 +156,8 @@ internal fun FiltersScreen(d: CalDerived, vm: CalendarViewModel, modifier: Modif
         // The live result, and the way back to it.
         val n = d.shown.count { if (d.s.view == CalView.MONTH) CalendarCore.sameMonth(it.day, d.s.day) else true }
         // Typing in a search field (keyboard up): the list keeps the room, the button waits (audit 2 #7).
-        if (!WindowInsets.isImeVisible) Button(onClick = onClose, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).height(52.dp)) {
+        // Beside the grid the results are live: no button there (audit 3 #4); full screen, it leads back to them.
+        if (!sidePanel && !WindowInsets.isImeVisible) Button(onClick = onClose, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).height(52.dp)) {
             Text(pluralStringResource(R.plurals.cal_show_n_tasks, n, n))
         }
     }
@@ -188,7 +189,7 @@ private fun CheckRow(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Mod
 @Composable
 private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = on, role = Role.Switch, onValueChange = onChange), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 14.sp, color = Nx.colors.foreground, modifier = Modifier.weight(1f))
+        Text(label, style = CalType.s14, color = Nx.colors.foreground, modifier = Modifier.weight(1f))
         Switch(on, null)
     }
 }

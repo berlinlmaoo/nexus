@@ -1,16 +1,16 @@
-package id.znetworks.nexus.feature.calendar.widget
+package id.znetworks.nexus.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 
 /**
- * Division and project colours on a dark widget (Calendar audit 2 #10). /api/calendar/glance sends one
+ * Division and project colours on a dark widget (Calendar audit 2 #10). Shared by the widgets and the app (audit 3 #7). /api/calendar/glance sends one
  * light-mode hex per task (`c`); at night the widget uses the Bagan's own `colorDark` for that colour when
  * it is a unit colour (from the Calendar's cached structure), and otherwise lightens it until it reaches
  * 3:1 on a dark surface. No owner data changes: this only picks how a colour is drawn. Pure, so it is tested.
  */
-object WidgetHues {
+object NightHues {
     /** The darkest widget surface the night colours must stand on (NxDark.card, near the dynamic dark ones). */
     val DARK_SURFACE = Color(0xFF1C2130)
     private val NEUTRAL = Color(0xFF64748B)

@@ -109,8 +109,8 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Column(Modifier.weight(1f)) {
-                Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.semantics { heading() })
-                Text(listOfNotNull(note?.let { stringResource(it) }, scopeLabel).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
+                Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, style = CalType.s18, color = c.foreground, modifier = Modifier.semantics { heading() })
+                Text(listOfNotNull(note?.let { stringResource(it) }, scopeLabel).joinToString(" · "), style = CalType.s12, color = c.mutedFg)
             }
         }
         val s = snapshot
@@ -126,7 +126,7 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
                     stringResource(when (quadrant) { Quadrant.DO -> R.string.wcal_q_do_empty; Quadrant.PLAN -> R.string.wcal_q_plan_empty; Quadrant.ACT -> R.string.wcal_q_act_empty; Quadrant.LATER -> R.string.wcal_q_later_empty }, scopeLabel),
                     stringResource(R.string.calq_empty_next), stringResource(R.string.calq_open_calendar), { onOpenDay(null, glanceScope.wire) }, Modifier.fillMaxSize())
                 else LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                    item { Text(stringResource(R.string.calq_title_note), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
+                    item { Text(stringResource(R.string.calq_title_note), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
                     items(list.rows, key = { it.key }) { b -> QuadrantRow(b, today) { open(b) } }
                 }
             }
@@ -140,7 +140,7 @@ fun CalendarQuadrantScreen(q: String?, scope: String?, onBack: () -> Unit, onOpe
 @Composable
 private fun QuadrantRow(b: CalendarGlance.Bar, today: String, onClick: () -> Unit) {
     val c = Nx.colors
-    val col = CalIndex.hex(b.color)
+    val col = projectColor(b.color)
     val day = b.day?.let { d ->
         when (d) {
             today -> stringResource(R.string.wcal_today); CalendarGlance.addDays(today, 1) -> stringResource(R.string.wcal_tomorrow)
@@ -153,11 +153,11 @@ private fun QuadrantRow(b: CalendarGlance.Bar, today: String, onClick: () -> Uni
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (b.masked) { Icon(Icons.Filled.Lock, null, tint = c.mutedFg, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
-                Text(if (b.masked || b.title == null) stringResource(R.string.cal_internal) else b.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.foreground,
+                Text(if (b.masked || b.title == null) stringResource(R.string.cal_internal) else b.title, style = CalType.s15, fontWeight = FontWeight.Medium, color = c.foreground,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Text(listOfNotNull(day, b.project?.takeIf { !b.masked }, if (b.overdue == CalendarGlance.Overdue.RECENT) stringResource(R.string.cal_overdue) else null).joinToString(" · "),
-                fontSize = 12.sp, color = if (b.overdue == CalendarGlance.Overdue.RECENT) c.dangerText else c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                style = CalType.s12, color = if (b.overdue == CalendarGlance.Overdue.RECENT) c.dangerText else c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         b.priority?.takeIf { it == "URGENT" || it == "HIGH" }?.let {
             Box(Modifier.size(8.dp).clip(CircleShape).background(c.danger))

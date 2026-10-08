@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.calendar
 
+import id.znetworks.nexus.ui.theme.NightHues
+import androidx.compose.ui.platform.LocalDensity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,6 +60,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.LocalContentColor
@@ -128,6 +133,7 @@ import id.znetworks.nexus.R
 import id.znetworks.nexus.feature.admin.orgchart.UnitLogo
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.theme.DisplayFont
+import id.znetworks.nexus.ui.theme.NexusTypography
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -139,8 +145,30 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** The one style for uppercase micro-labels in the Calendar (audit 2, contract 6). */
-internal val MicroLabel = UiTextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+/**
+ * The Calendar's type roles, from NexusTypography (Inter body, Plus Jakarta titles) with line heights that
+ * match their size — hand-set sizes used to inherit bodyLarge's 24 sp line and 0.5 sp tracking (audit 3 #3).
+ * Weight and colour stay per call; the role brings family, size, line height and tracking.
+ */
+internal object CalType {
+    val s9 = NexusTypography.labelSmall.copy(fontSize = 9.sp, lineHeight = 12.sp, fontWeight = FontWeight.Normal, letterSpacing = 0.2.sp)
+    val s11 = NexusTypography.labelSmall.copy(fontWeight = FontWeight.Normal)
+    val s12 = NexusTypography.bodySmall
+    val s13 = NexusTypography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp)
+    val s14 = NexusTypography.bodyMedium
+    val s15 = NexusTypography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.15.sp)
+    val s16 = NexusTypography.titleMedium.copy(lineHeight = 22.sp)
+    val s18 = NexusTypography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp)
+    val s22 = NexusTypography.titleLarge.copy(fontSize = 22.sp, lineHeight = 28.sp)
+}
+
+/** A project's colour as drawn now: its own hex by day, lightened to 3:1 at night (audit 3 #7, as the widgets). */
+@Composable
+internal fun projectColor(hex: String?): Color =
+    if (Nx.colors.background.luminance() < 0.5f) NightHues.night(hex, emptyMap()) else NightHues.day(hex)
+
+/** The one style for uppercase micro-labels in the Calendar (audit 2, contract 6): Inter, with its own line height (audit 3 #3). */
+internal val MicroLabel = NexusTypography.labelSmall.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
 
 // ── Derived data, split by what it depends on (audit #18) ───────────────────────────────────────
 
@@ -435,7 +463,7 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
             }
             if (filtersOpen && d != null) {
                 if (layout == CalLayout.EXPANDED) VerticalDivider(color = c.border)
-                FiltersScreen(d, vm, if (layout == CalLayout.EXPANDED) Modifier.width(filtersWidth).fillMaxHeight() else Modifier.fillMaxSize()) { filtersOpen = false }
+                FiltersScreen(d, vm, if (layout == CalLayout.EXPANDED) Modifier.width(filtersWidth).fillMaxHeight() else Modifier.fillMaxSize(), sidePanel = layout == CalLayout.EXPANDED) { filtersOpen = false }
             }
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
@@ -449,7 +477,7 @@ private fun Header(d: CalDerived?, onBack: () -> Unit, onToday: () -> Unit, onFi
     val c = Nx.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-        Text(stringResource(R.string.calendar_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
+        Text(stringResource(R.string.calendar_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, style = CalType.s18, color = c.foreground,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
         if (d != null) {
             IconButton(onClick = onToday) { Icon(Icons.Filled.Today, stringResource(R.string.cal_today)) }
@@ -518,10 +546,10 @@ private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp, showDa
     RevealDay(d, dayRequests, panel, 0, dayFocus, animate = false)
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f).fillMaxHeight().semantics { isTraversalGroup = true }, contentPadding = PaddingValues(bottom = 24.dp)) {
-            item(key = "controls") { Controls(d, vm) }
+            item(key = "controls") { Controls(d, vm, shortHeight = shortHeight) }
             item(key = "active") { ActiveFilters(d, vm) }
             item(key = "legend") { Legend(d, vm) }
-            item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 16.dp)) { vm.selectDay(it, reveal = true) } }
+            item(key = "grid") { MonthGrid(d.data, d.index, d.s.day, d.s.today, Modifier.padding(horizontal = 16.dp), cellMin = if (shortHeight) 40.dp else 52.dp) { vm.selectDay(it, reveal = true) } }
             if (!shortHeight) item(key = "hint") { LegendHint(d.s.hintSeen) }
             monthNotices(d, vm)
         }
@@ -568,37 +596,71 @@ internal fun loadedClock(ms: Long): String = java.time.Instant.ofEpochMilli(ms).
  * Everyone · Mine · My division — shown once (contract 2). Fewer rows above the grid (audit 2 #12).
  */
 @Composable
-internal fun Controls(d: CalDerived, vm: CalendarViewModel) {
+internal fun Controls(d: CalDerived, vm: CalendarViewModel, shortHeight: Boolean = false) {
     val c = Nx.colors
     val s = d.s
     val people = s.view == CalView.PEOPLE
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.shiftMonth(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (people) R.string.cal_prev_week else R.string.cal_prev_month)) }
-            Column(Modifier.weight(1f)) {
-                Text(if (people) weekLabel(s.day) else monthLabel(s.day), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
-                // Not confirmed by the server right now: say how old it is (audit #21).
-                if (s.offline && s.loadedAt != null) Text(stringResource(R.string.cal_updated_offline, loadedClock(s.loadedAt)), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
+    val label = if (people) weekLabel(s.day) else monthLabel(s.day)
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        // Narrow or large text: the view switch gets its own row and the period may wrap, so "October 2026"
+        // or "14–20 Sep 2026" is never cut (audit 3 #1). A phone on its side keeps everything in one row and
+        // the scope in a menu, so the grid gets the height (audit 3 #4).
+        val roomy = maxWidth >= 400.dp && fontScale <= 1.15f
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { vm.shiftMonth(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (people) R.string.cal_prev_week else R.string.cal_prev_month)) }
+                Column(Modifier.weight(1f)) {
+                    Text(label, style = CalType.s16, color = c.foreground, maxLines = 2, modifier = Modifier.semantics { heading() })
+                    // Not confirmed by the server right now: say how old it is (audit #21).
+                    if (s.offline && s.loadedAt != null) Text(stringResource(R.string.cal_updated_offline, loadedClock(s.loadedAt)), style = CalType.s12, color = c.mutedFg, maxLines = 1)
+                }
+                IconButton(onClick = { vm.shiftMonth(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(if (people) R.string.cal_next_week else R.string.cal_next_month)) }
+                if (roomy || shortHeight) ViewSwitch(s.view) { vm.setView(it) }
+                if (shortHeight) { Spacer(Modifier.width(8.dp)); ScopeMenu(d, vm) }
             }
-            IconButton(onClick = { vm.shiftMonth(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(if (people) R.string.cal_next_week else R.string.cal_next_month)) }
-            val colors = SegmentedButtonDefaults.colors(activeContainerColor = c.segmentActive, activeContentColor = c.foreground, activeBorderColor = c.violetText,
-                inactiveContainerColor = Color.Transparent, inactiveContentColor = c.foreground, inactiveBorderColor = c.boundary)
-            SingleChoiceSegmentedButtonRow {
-                listOf(Triple(CalView.MONTH, Icons.Filled.CalendarMonth, R.string.cal_month), Triple(CalView.PEOPLE, Icons.Filled.People, R.string.cal_people)).forEachIndexed { i, (v, icon, label) ->
-                    val name = stringResource(label)
-                    SegmentedButton(selected = s.view == v, onClick = { vm.setView(v) }, colors = colors, shape = SegmentedButtonDefaults.itemShape(i, 2),
-                        icon = {}, modifier = Modifier.semantics { contentDescription = name }) {
-                        Icon(icon, null, Modifier.size(20.dp))
-                    }
+            if (!roomy && !shortHeight) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { ViewSwitch(s.view) { vm.setView(it) } }
+            if (!shortHeight) {
+                // The scope, shown once (contract 2). "My division" without a Bagan card is Mine with a note (contract 3).
+                Choice(listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division)), s.filters.scope.ordinal) {
+                    vm.setScope(CalendarCore.Scope.entries[it], inChart = d.index.inChart)
                 }
             }
+            if (s.divisionFallback) Text(stringResource(R.string.cal_not_in_chart_scope), style = CalType.s12, color = c.mutedFg)
         }
-        // The scope, shown once (contract 2). "My division" without a Bagan card is Mine with a note (contract 3).
-        Choice(listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division)), s.filters.scope.ordinal) {
-            vm.setScope(CalendarCore.Scope.entries[it], inChart = d.index.inChart)
+    }
+}
+
+/** Month | People: icons labelled for TalkBack; the selected one shows M3's check in its place (audit 3 #6). */
+@Composable
+private fun ViewSwitch(view: CalView, onPick: (CalView) -> Unit) {
+    val c = Nx.colors
+    val colors = SegmentedButtonDefaults.colors(activeContainerColor = c.segmentActive, activeContentColor = c.foreground, activeBorderColor = c.violetText,
+        inactiveContainerColor = Color.Transparent, inactiveContentColor = c.foreground, inactiveBorderColor = c.boundary)
+    SingleChoiceSegmentedButtonRow {
+        listOf(Triple(CalView.MONTH, Icons.Filled.CalendarMonth, R.string.cal_month), Triple(CalView.PEOPLE, Icons.Filled.People, R.string.cal_people)).forEachIndexed { i, (v, icon, label) ->
+            val name = stringResource(label)
+            val on = view == v
+            SegmentedButton(selected = on, onClick = { onPick(v) }, colors = colors, shape = SegmentedButtonDefaults.itemShape(i, 2),
+                icon = { SegmentedButtonDefaults.Icon(active = on) { Icon(icon, null, Modifier.size(SegmentedButtonDefaults.IconSize)) } },
+                modifier = Modifier.semantics { contentDescription = name }) {}
         }
-        if (s.divisionFallback) Text(stringResource(R.string.cal_not_in_chart_scope), fontSize = 12.sp, color = c.mutedFg)
+    }
+}
+
+/** The scope as a compact menu (a phone on its side): still shown once, still a view (contract 2). */
+@Composable
+private fun ScopeMenu(d: CalDerived, vm: CalendarViewModel) {
+    var open by remember { mutableStateOf(false) }
+    val names = listOf(stringResource(R.string.cal_everyone), stringResource(R.string.cal_mine), stringResource(R.string.cal_my_division))
+    Box {
+        OutlinedButton(onClick = { open = true }) { Text(names[d.s.filters.scope.ordinal], maxLines = 1); Icon(Icons.Filled.ExpandMore, null) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            names.forEachIndexed { i, n ->
+                DropdownMenuItem(text = { Text(n) }, onClick = { open = false; vm.setScope(CalendarCore.Scope.entries[i], inChart = d.index.inChart) },
+                    leadingIcon = { if (i == d.s.filters.scope.ordinal) Icon(Icons.Filled.Check, null) })
+            }
+        }
     }
 }
 
@@ -710,12 +772,13 @@ internal fun Legend(d: CalDerived, vm: CalendarViewModel) {
 private fun LegendHint(hintSeen: Boolean) {
     val c = Nx.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()).clearAndSetSemantics {}, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(c.foreground)); Text(" " + stringResource(R.string.cal_legend_open) + "   ", fontSize = 12.sp, color = c.mutedFg)
-            Icon(painterResource(R.drawable.ic_cal_check), null, tint = c.foreground, modifier = Modifier.size(12.dp)); Text(" " + stringResource(R.string.cal_legend_done) + "   ", fontSize = 12.sp, color = c.mutedFg)
-            Box(Modifier.width(10.dp).height(2.dp).background(c.danger)); Text(" " + stringResource(R.string.cal_legend_overdue), fontSize = 12.sp, color = c.mutedFg)
+        // Wraps at large font sizes instead of scrolling out of sight (audit 3 #2).
+        FlowRow(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(12.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(6.dp).clip(CircleShape).background(c.foreground)); Text(" " + stringResource(R.string.cal_legend_open), style = CalType.s12, color = c.mutedFg) }
+            Row(verticalAlignment = Alignment.CenterVertically) { Icon(painterResource(R.drawable.ic_cal_check), null, tint = c.foreground, modifier = Modifier.size(12.dp)); Text(" " + stringResource(R.string.cal_legend_done), style = CalType.s12, color = c.mutedFg) }
+            Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.width(10.dp).height(2.dp).background(c.danger)); Text(" " + stringResource(R.string.cal_legend_overdue), style = CalType.s12, color = c.mutedFg) }
         }
-        if (!hintSeen) Text(stringResource(R.string.cal_legend_hint), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
+        if (!hintSeen) Text(stringResource(R.string.cal_legend_hint), style = CalType.s12, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -725,7 +788,7 @@ private fun LegendHint(hintSeen: Boolean) {
  * overdue and holiday, and says it is selected (audit #1).
  */
 @Composable
-internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, today: String, modifier: Modifier = Modifier, onPick: (String) -> Unit) {
+internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, today: String, modifier: Modifier = Modifier, cellMin: Dp = 52.dp, onPick: (String) -> Unit) {
     val c = Nx.colors
     val ready = data.ready
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))) {
@@ -741,7 +804,7 @@ internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, toda
             Column {
                 data.grid.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
-                        week.forEach { day -> DayCell(data, index, day, day == selectedDay, day == today, titles && ready, onPick) }
+                        week.forEach { day -> DayCell(data, index, day, day == selectedDay, day == today, titles && ready, cellMin, onPick) }
                     }
                 }
             }
@@ -750,7 +813,7 @@ internal fun MonthGrid(data: CalData, index: CalIndex, selectedDay: String, toda
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, index: CalIndex, day: String, selected: Boolean, isToday: Boolean, titles: Boolean, onPick: (String) -> Unit) {
+private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, index: CalIndex, day: String, selected: Boolean, isToday: Boolean, titles: Boolean, cellMin: Dp, onPick: (String) -> Unit) {
     val c = Nx.colors
     val cell = data.cells[day]
     val inMonth = CalendarCore.sameMonth(day, data.s.day)
@@ -767,7 +830,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
     )
     val description = parts.joinToString(", ")
     val showLabel = stringResource(R.string.cal_show_tasks)
-    Column(Modifier.weight(1f).heightIn(min = if (titles) 76.dp else 52.dp)
+    Column(Modifier.weight(1f).heightIn(min = if (titles) 76.dp else cellMin)
         .then(if (selected) Modifier.border(1.5.dp, c.navy, RoundedCornerShape(6.dp)) else Modifier)
         .semantics(mergeDescendants = true) { contentDescription = description; this.selected = selected }
         .clickable(onClickLabel = showLabel, role = Role.Button) { onPick(day) }.padding(vertical = 5.dp, horizontal = 2.dp),
@@ -791,11 +854,11 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
                 val list = data.byDay[day].orEmpty()
                 list.take(2).forEach { i ->
                     val col = index.color(i.placements.firstOrNull()?.unitId)
-                    Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Text(if (i.masked) stringResource(R.string.cal_internal) else i.title.orEmpty(), style = CalType.s11, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = if (i.done) c.mutedFg else c.foreground, textDecoration = if (i.done) TextDecoration.LineThrough else null,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(col.copy(alpha = 0.14f)).padding(horizontal = 4.dp, vertical = 1.dp))
                 }
-                if (list.size > 2) Text("+${list.size - 2}", fontSize = 11.sp, color = c.mutedFg)
+                if (list.size > 2) Text("+${list.size - 2}", style = CalType.s11, color = c.mutedFg)
             }
         } else Row(Modifier.padding(top = 3.dp).clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             cell?.dots.orEmpty().take(3).forEach { dot ->
@@ -804,7 +867,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
                 if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))
                 else Icon(painterResource(R.drawable.ic_cal_check), null, tint = col, modifier = Modifier.size(10.dp))
             }
-            if ((cell?.dots?.size ?: 0) > 3) Text("+", fontSize = 9.sp, color = c.mutedFg, lineHeight = 9.sp)
+            if ((cell?.dots?.size ?: 0) > 3) Text("+", style = CalType.s9, color = c.mutedFg, lineHeight = 9.sp)
         }
     }
 }
@@ -854,7 +917,7 @@ internal fun Notice(text: String, action: String?, onAction: () -> Unit) {
     val c = Nx.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Text(text, fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
+        Text(text, style = CalType.s13, color = c.foreground, modifier = Modifier.weight(1f))
         if (action != null) TextButton(onClick = onAction) { Text(action, fontWeight = FontWeight.SemiBold) }
     }
 }
@@ -880,7 +943,7 @@ internal fun LazyListScope.dayPanel(d: CalDerived, vm: CalendarViewModel, headFo
             val hidden = d.all.any { it.day == s.day } && d.filterCount > 0
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(if (hidden) R.string.cal_no_match_day else R.string.cal_no_tasks_day), fontWeight = FontWeight.SemiBold, color = Nx.colors.foreground, textAlign = TextAlign.Center)
-                Text(stringResource(if (hidden) R.string.cal_filters_hiding else R.string.cal_nobody_due), fontSize = 12.sp, color = Nx.colors.mutedFg, textAlign = TextAlign.Center)
+                Text(stringResource(if (hidden) R.string.cal_filters_hiding else R.string.cal_nobody_due), style = CalType.s12, color = Nx.colors.mutedFg, textAlign = TextAlign.Center)
                 if (hidden) TextButton(onClick = { vm.resetFilters() }) { Text(stringResource(R.string.cal_reset_filters)) }
                 else if (s.day != s.today) TextButton(onClick = { vm.today() }) { Text(stringResource(R.string.cal_back_today)) }
             }
@@ -889,7 +952,7 @@ internal fun LazyListScope.dayPanel(d: CalDerived, vm: CalendarViewModel, headFo
     }
     items(d.dayPart.rows, key = { it.key }, contentType = { it::class }) { r -> PanelRowView(d, vm, r) }
     item(key = "total") {
-        Text(stringResource(R.string.cal_unique_total, d.tree.total), fontSize = 12.sp, color = Nx.colors.mutedFg, textAlign = TextAlign.Center,
+        Text(stringResource(R.string.cal_unique_total, d.tree.total), style = CalType.s12, color = Nx.colors.mutedFg, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(16.dp))
     }
 }
@@ -903,19 +966,19 @@ private fun DayHeader(d: CalDerived, vm: CalendarViewModel, focus: FocusRequeste
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).then(if (focus != null) Modifier.focusRequester(focus).focusable() else Modifier)
                 .semantics(mergeDescendants = true) { heading(); liveRegion = LiveRegionMode.Polite }) {
-                Text(longDay(s.day), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
+                Text(longDay(s.day), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, style = CalType.s18, color = c.foreground)
                 // The relative chip sits on the line below, so a long date never crushes it at 360 dp (audit #43).
                 val rel = when (CalendarCore.dayDiff(s.today, s.day)) { 0 -> R.string.cal_today; 1 -> R.string.cal_tomorrow; -1 -> R.string.cal_yesterday; else -> null }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                     if (rel != null) {
-                        Text(stringResource(rel), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.onNavy,
+                        Text(stringResource(rel), style = CalType.s12, fontWeight = FontWeight.Bold, color = c.onNavy,
                             modifier = Modifier.clip(CircleShape).background(c.navy).padding(horizontal = 8.dp, vertical = 2.dp))
                         Spacer(Modifier.width(8.dp))
                     }
                     if (d.ready) Text(pluralStringResource(R.plurals.cal_tasks_n, d.tree.total, d.tree.total) + " · " + pluralStringResource(R.plurals.cal_people_n, d.tree.people, d.tree.people),
-                        fontSize = 12.sp, color = c.mutedFg)
+                        style = CalType.s12, color = c.mutedFg)
                 }
-                d.holidays[s.day]?.let { Text(it, fontSize = 12.sp, color = c.dangerText) }
+                d.holidays[s.day]?.let { Text(it, style = CalType.s12, color = c.dangerText) }
             }
             IconButton(onClick = { vm.selectDay(CalendarCore.addDays(s.day, -1), reveal = true) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cal_prev_day)) }
             IconButton(onClick = { vm.selectDay(CalendarCore.addDays(s.day, 1), reveal = true) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cal_next_day)) }
@@ -965,8 +1028,8 @@ private fun PanelRowView(d: CalDerived, vm: CalendarViewModel, r: PanelRow) {
             else Row(Modifier.padding(start = (16 + 12 * r.depth).dp, end = 16.dp, top = 10.dp).semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(3.dp).height(14.dp).background(d.color(r.unit.id)))
                 Spacer(Modifier.width(8.dp))
-                Text(r.unit.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
-                Text("${r.count}", fontSize = 12.sp, color = c.mutedFg)
+                Text(r.unit.name, style = CalType.s13, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+                Text("${r.count}", style = CalType.s12, color = c.mutedFg)
             }
         }
         is PanelRow.Person -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).cardPiece(d, r.cardUnit, top = false, bottom = false)) {
@@ -1011,14 +1074,14 @@ private fun CardHeader(d: CalDerived, vm: CalendarViewModel, r: PanelRow.Card) {
             Box(Modifier.clearAndSetSemantics {}) {
                 UnitLogo(n.unit.logoUrl, n.unit.name, 26, RoundedCornerShape(7.dp)) {
                     Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(col.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        Text(n.unit.name.take(1).uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = col)
+                        Text(n.unit.name.take(1).uppercase(), style = CalType.s12, fontWeight = FontWeight.Bold, color = col)
                     }
                 }
             }
             Spacer(Modifier.width(10.dp))
             Text(n.unit.name.uppercase(Locale.getDefault()), style = MicroLabel, color = c.foreground, modifier = Modifier.weight(1f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (r.mine) Text(stringResource(R.string.cal_you).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.onNavy,
+            if (r.mine) Text(stringResource(R.string.cal_you).uppercase(Locale.getDefault()), style = CalType.s11, fontWeight = FontWeight.Bold, color = c.onNavy,
                 modifier = Modifier.padding(end = 6.dp).clip(CircleShape).background(c.navy).padding(horizontal = 7.dp, vertical = 2.dp))
             CountPill(n.count)
             Icon(if (r.collapsed) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess, null, tint = c.mutedFg)
@@ -1029,7 +1092,7 @@ private fun CardHeader(d: CalDerived, vm: CalendarViewModel, r: PanelRow.Card) {
 @Composable
 internal fun CountPill(n: Int) {
     val c = Nx.colors
-    Text("$n", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(end = 4.dp).clip(CircleShape).background(c.muted).padding(horizontal = 8.dp, vertical = 2.dp))
+    Text("$n", style = CalType.s12, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(end = 4.dp).clip(CircleShape).background(c.muted).padding(horizontal = 8.dp, vertical = 2.dp))
 }
 
 @Composable
@@ -1042,13 +1105,13 @@ private fun PersonHead(d: CalDerived, r: PanelRow.Person, modifier: Modifier) {
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(d.name(r.userId) ?: stringResource(R.string.cal_former_member), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                Text(d.name(r.userId) ?: stringResource(R.string.cal_former_member), style = CalType.s14, fontWeight = FontWeight.SemiBold, color = c.foreground,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (r.me) Text(stringResource(R.string.cal_you), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.onNavy,
+                if (r.me) Text(stringResource(R.string.cal_you), style = CalType.s11, fontWeight = FontWeight.Bold, color = c.onNavy,
                     modifier = Modifier.padding(start = 6.dp).clip(CircleShape).background(c.navy).padding(horizontal = 7.dp, vertical = 1.dp))
             }
-            if (r.unitId == null) Text(stringResource(R.string.cal_not_in_chart_lower), fontSize = 12.sp, color = c.mutedFg)
-            else if (also.isNotEmpty()) Text(stringResource(R.string.cal_also_in, also.joinToString(", ")), fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (r.unitId == null) Text(stringResource(R.string.cal_not_in_chart_lower), style = CalType.s12, color = c.mutedFg)
+            else if (also.isNotEmpty()) Text(stringResource(R.string.cal_also_in, also.joinToString(", ")), style = CalType.s12, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         CountPill(r.count)
     }
@@ -1059,7 +1122,8 @@ private fun PersonHead(d: CalDerived, r: PanelRow.Person, modifier: Modifier) {
 internal fun Initials(name: String?, color: Color, size: Int) {
     val text = name?.trim()?.split(Regex("\\s+"))?.take(2)?.joinToString("") { it.take(1).uppercase() }?.ifEmpty { "?" } ?: "?"
     val ink = if (color.luminance() > 0.35f) Nx.colors.inkOnLight else Color.White
-    val fs = (size * 0.36).sp
+    // In dp terms, so the letters scale with the circle, not with the font setting (audit 3 #2).
+    val fs = with(LocalDensity.current) { (size * 0.36).dp.toSp() }
     Box(Modifier.size(size.dp).clip(CircleShape).background(color).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
         // The line box is the font size, centred and trimmed, so the letters sit in the middle at any font scale (audit #15).
         Text(text, style = UiTextStyle(fontSize = fs, lineHeight = fs, fontWeight = FontWeight.Bold, color = ink,
@@ -1120,31 +1184,31 @@ internal fun TaskRow(d: CalDerived, i: CalItem, unitId: String?, vm: CalendarVie
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             if (i.masked) {
                 val section = if (inCard) null else d.sectionName(i)
-                Text(section?.let { stringResource(R.string.cal_internal_in, it) } ?: stringResource(R.string.cal_internal), fontSize = 14.sp, color = c.mutedFg)
+                Text(section?.let { stringResource(R.string.cal_internal_in, it) } ?: stringResource(R.string.cal_internal), style = CalType.s14, color = c.mutedFg)
             } else {
-                Text(i.title.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                Text(i.title.orEmpty(), style = CalType.s14, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     color = if (i.done || od == CalendarCore.Overdue.STALE) c.mutedFg else c.foreground,
                     textDecoration = if (i.done) TextDecoration.LineThrough else null)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     i.project?.let { p ->
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(CalIndex.hex(p.color ?: "#64748b")))
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(projectColor(p.color ?: "#64748b")))
                         Spacer(Modifier.width(5.dp))
                         Text(p.name + if (i.linkedProjectIds.isNotEmpty()) " " + pluralStringResource(R.plurals.cal_project_more, i.linkedProjectIds.size, i.linkedProjectIds.size) else "",
-                            fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            style = CalType.s12, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     }
                     if (i.priority == "URGENT" || i.priority == "HIGH") {
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(if (i.priority == "URGENT") R.string.cal_prio_urgent else R.string.cal_prio_high).uppercase(Locale.getDefault()), fontSize = 11.sp,
+                        Text(stringResource(if (i.priority == "URGENT") R.string.cal_prio_urgent else R.string.cal_prio_high).uppercase(Locale.getDefault()), style = CalType.s11,
                             fontWeight = FontWeight.Bold, color = c.dangerText, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(c.danger.copy(alpha = 0.1f)).padding(horizontal = 6.dp, vertical = 1.dp))
                     }
                 }
-                if (od == CalendarCore.Overdue.RECENT) Text(stringResource(R.string.cal_overdue) + if (showDay) " · ${shortDay(i.day)}" else "", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText)
-                if (od == CalendarCore.Overdue.STALE) Text(stringResource(R.string.cal_overdue_older, d.s.windowDays), fontSize = 12.sp, color = c.mutedFg)
-                i.parent?.let { Text("↳ " + stringResource(R.string.cal_from, it.title), fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                if (od == CalendarCore.Overdue.RECENT) Text(stringResource(R.string.cal_overdue) + if (showDay) " · ${shortDay(i.day)}" else "", style = CalType.s12, fontWeight = FontWeight.SemiBold, color = c.dangerText)
+                if (od == CalendarCore.Overdue.STALE) Text(stringResource(R.string.cal_overdue_older, d.s.windowDays), style = CalType.s12, color = c.mutedFg)
+                i.parent?.let { Text("↳ " + stringResource(R.string.cal_from, it.title), style = CalType.s12, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             PeopleLine(d, i, unitId, person)
         }
-        i.time?.let { Text(clock(it), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, modifier = Modifier.padding(start = 8.dp)) }
+        i.time?.let { Text(clock(it), style = CalType.s12, fontWeight = FontWeight.SemiBold, color = c.mutedFg, modifier = Modifier.padding(start = 8.dp)) }
     }
 }
 
@@ -1159,9 +1223,9 @@ private fun MaskedGroupRow(d: CalDerived, vm: CalendarViewModel, r: PanelRow.Mas
         Box(Modifier.padding(top = 1.dp)) { TaskGlyph(d, r.items.first()) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(pluralStringResource(R.plurals.cal_internal_n, r.items.size, r.items.size), fontSize = 14.sp, color = c.mutedFg)
+            Text(pluralStringResource(R.plurals.cal_internal_n, r.items.size, r.items.size), style = CalType.s14, color = c.mutedFg)
             val sub = listOfNotNull(times.takeIf { it.isNotEmpty() }?.joinToString(", "), people.takeIf { it.isNotEmpty() }?.joinToString(", ")).joinToString(" · ")
-            if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = c.mutedFg)
+            if (sub.isNotEmpty()) Text(sub, style = CalType.s12, color = c.mutedFg)
         }
     }
 }
@@ -1180,14 +1244,14 @@ private fun PeopleLine(d: CalDerived, i: CalItem, unitId: String?, person: Strin
         here.forEach { u ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
                 Initials(d.name(u), d.color(unitId), 18); Spacer(Modifier.width(4.dp))
-                Text(d.name(u) ?: stringResource(R.string.cal_former_member), fontSize = 12.sp, color = c.foreground)
+                Text(d.name(u) ?: stringResource(R.string.cal_former_member), style = CalType.s12, color = c.foreground)
             }
         }
         val others = (elsewhere + outside).distinctBy { it.first }
         if (others.isNotEmpty()) {
             val former = stringResource(R.string.cal_former_member)
             Text(stringResource(R.string.cal_with) + " " + others.joinToString(", ") { (u, unit) -> (d.name(u) ?: former) + (unit?.let { " ($it)" } ?: "") },
-                fontSize = 12.sp, color = c.mutedFg)
+                style = CalType.s12, color = c.mutedFg)
         }
     }
 }

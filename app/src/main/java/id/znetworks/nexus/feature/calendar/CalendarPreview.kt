@@ -86,13 +86,13 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.cal_task), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
+            Text(stringResource(R.string.cal_task), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, style = CalType.s18, color = c.foreground,
                 modifier = Modifier.weight(1f).semantics { heading() })
         }
         val project = projectName ?: task?.taskList?.project?.name
         Row(Modifier.fillMaxWidth().background(c.warningBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Visibility, null, tint = c.warningFg, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-            Text(project?.let { stringResource(R.string.cal_read_only_of, it) } ?: stringResource(R.string.cal_read_only), fontSize = 13.sp, color = c.warningFg, modifier = Modifier.weight(1f))
+            Text(project?.let { stringResource(R.string.cal_read_only_of, it) } ?: stringResource(R.string.cal_read_only), style = CalType.s13, color = c.warningFg, modifier = Modifier.weight(1f))
         }
         val t = task
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -101,21 +101,21 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
                 t == null -> EmptyState(Icons.Filled.CloudOff, stringResource(R.string.cal_task_failed), stringResource(R.string.cal_check_connection),
                     stringResource(R.string.try_again), { attempt++ }, Modifier.fillMaxSize())
                 else -> Column(Modifier.widthIn(max = 640.dp).fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(t.title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground, modifier = Modifier.semantics { heading() })
+                    Text(t.title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, style = CalType.s22, color = c.foreground, modifier = Modifier.semantics { heading() })
                     Fact(stringResource(R.string.cal_status)) {
-                        Text(statusLabel(t.status), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                        Text(statusLabel(t.status), style = CalType.s12, fontWeight = FontWeight.SemiBold, color = c.foreground,
                             modifier = Modifier.clip(CircleShape).background(c.muted).padding(horizontal = 10.dp, vertical = 2.dp))
                     }
-                    Fact(stringResource(R.string.cal_due)) { Text(dueText(t.dueDate) ?: stringResource(R.string.cal_no_due), fontSize = 14.sp, color = c.foreground) }
-                    Fact(stringResource(R.string.cal_priority)) { Text(prioLabel(t.priority), fontSize = 14.sp, color = c.foreground) }
-                    project?.let { p -> Fact(stringResource(R.string.cal_project)) { Text(p, fontSize = 14.sp, color = c.foreground) } }
+                    Fact(stringResource(R.string.cal_due)) { Text(dueText(t.dueDate) ?: stringResource(R.string.cal_no_due), style = CalType.s14, color = c.foreground) }
+                    Fact(stringResource(R.string.cal_priority)) { Text(prioLabel(t.priority), style = CalType.s14, color = c.foreground) }
+                    project?.let { p -> Fact(stringResource(R.string.cal_project)) { Text(p, style = CalType.s14, color = c.foreground) } }
                     Fact(stringResource(R.string.cal_people)) {
                         val names = t.assignees.mapNotNull { it.user?.name }
-                        if (names.isEmpty()) Text(stringResource(R.string.cal_nobody_yet), fontSize = 14.sp, color = c.mutedFg)
-                        else Column { names.forEach { n -> Row(verticalAlignment = Alignment.CenterVertically) { Initials(n, c.navy, 20); Spacer(Modifier.width(6.dp)); Text(n, fontSize = 14.sp, color = c.foreground) } } }
+                        if (names.isEmpty()) Text(stringResource(R.string.cal_nobody_yet), style = CalType.s14, color = c.mutedFg)
+                        else Column { names.forEach { n -> Row(verticalAlignment = Alignment.CenterVertically) { Initials(n, c.navy, 20); Spacer(Modifier.width(6.dp)); Text(n, style = CalType.s14, color = c.foreground) } } }
                     }
                     if (t.descriptionText.isNotBlank()) Block(stringResource(R.string.cal_description)) {
-                        Text(t.descriptionText, fontSize = 14.sp, color = c.foreground, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(12.dp))
+                        Text(t.descriptionText, style = CalType.s14, color = c.foreground, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.muted.copy(alpha = 0.6f)).padding(12.dp))
                     }
                     if (t.subtasks.isNotEmpty()) Block(stringResource(R.string.cal_subtasks)) {
                         val done = doneWord; val todo = todoWord
@@ -125,7 +125,7 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
                                 if (st.isDone) Box(Modifier.size(16.dp).clip(CircleShape).background(c.success), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Check, null, tint = c.onSuccess, modifier = Modifier.size(11.dp)) }
                                 else Box(Modifier.size(16.dp).clip(CircleShape).border(1.5.dp, c.mutedFg, CircleShape))
                                 Spacer(Modifier.width(8.dp))
-                                Text(st.title, fontSize = 14.sp, color = if (st.isDone) c.mutedFg else c.foreground, textDecoration = if (st.isDone) TextDecoration.LineThrough else null)
+                                Text(st.title, style = CalType.s14, color = if (st.isDone) c.mutedFg else c.foreground, textDecoration = if (st.isDone) TextDecoration.LineThrough else null)
                             }
                         }
                     }
@@ -134,8 +134,8 @@ fun TaskPreviewScreen(taskId: String, projectName: String?, onBack: () -> Unit) 
                             Row(Modifier.padding(vertical = 4.dp)) {
                                 Initials(cm.user?.name, c.navy, 24); Spacer(Modifier.width(8.dp))
                                 Column {
-                                    Text(listOfNotNull(cm.user?.name, commentTime(cm.createdAt)).joinToString(" · "), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                                    Text(cm.content, fontSize = 14.sp, color = c.foreground)
+                                    Text(listOfNotNull(cm.user?.name, commentTime(cm.createdAt)).joinToString(" · "), style = CalType.s12, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                                    Text(cm.content, style = CalType.s14, color = c.foreground)
                                 }
                             }
                         }
@@ -158,7 +158,8 @@ private fun commentTime(iso: String?): String? = iso?.let { runCatching { Instan
 @Composable
 private fun Fact(label: String, value: @Composable () -> Unit) {
     Row(verticalAlignment = Alignment.Top) {
-        Text(label, fontSize = 13.sp, color = Nx.colors.mutedFg, modifier = Modifier.width(84.dp))
+        // At least 84 dp, wider when a large font needs it (audit 3 #2).
+        Text(label, style = CalType.s13, color = Nx.colors.mutedFg, modifier = Modifier.widthIn(min = 84.dp).padding(end = 8.dp))
         value()
     }
 }
