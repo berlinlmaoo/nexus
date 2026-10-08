@@ -2345,4 +2345,19 @@
     <string name="pt_finance_sub">Revenue, OPEX, dan profit per bulan.</string>
     <string name="pt_content_sub">Rencanakan dan jadwalkan konten di semua channel.</string>
     <string name="pt_pipeline_sub">Pantau tiap deal dari kontak pertama sampai lunas.</string>
+    <!-- Z Vault move, gallery, viewer (Berlin, 9 Oct; VAULT-MOVE-DND) -->
+    <string name="vm_menu">Pindahkan ke…</string>
+    <string name="vm_title">Pindahkan “%1$s”</string>
+    <string name="vm_here">Pindah ke sini</string>
+    <string name="vm_already_here">Sudah ada di folder ini.</string>
+    <string name="vm_cant_add">Kamu tidak bisa menambah isi folder ini.</string>
+    <string name="vm_no_folders">Tidak ada folder di sini.</string>
+    <string name="vm_moved">“%1$s” dipindah ke %2$s</string>
+    <string name="vm_failed">Gagal memindahkan</string>
+    <string name="vm_photos_videos">Foto dan video</string>
+    <string name="vv_index">%1$d dari %2$d</string>
+    <string name="vv_cant_play">Video ini tidak bisa diputar di sini. Unduh untuk menontonnya.</string>
+    <plurals name="vm_uploaded">
+        <item quantity="other">%1$d berkas terunggah ke %2$s</item>
+    </plurals>
 </resources>

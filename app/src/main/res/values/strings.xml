@@ -2379,4 +2379,20 @@
     <string name="pt_finance_sub">Revenue, OPEX and profit, month by month.</string>
     <string name="pt_content_sub">Plan and schedule content across your channels.</string>
     <string name="pt_pipeline_sub">Follow every deal from first contact to paid.</string>
+    <!-- Z Vault move, gallery, viewer (Berlin, 9 Oct; VAULT-MOVE-DND) -->
+    <string name="vm_menu">Move to…</string>
+    <string name="vm_title">Move “%1$s”</string>
+    <string name="vm_here">Move here</string>
+    <string name="vm_already_here">It\'s already in this folder.</string>
+    <string name="vm_cant_add">You can\'t add to this folder.</string>
+    <string name="vm_no_folders">No folders in here.</string>
+    <string name="vm_moved">“%1$s” moved to %2$s</string>
+    <string name="vm_failed">Couldn\'t move it</string>
+    <string name="vm_photos_videos">Photos and videos</string>
+    <string name="vv_index">%1$d of %2$d</string>
+    <string name="vv_cant_play">This video can\'t play here. Download it to watch it.</string>
+    <plurals name="vm_uploaded">
+        <item quantity="one">%1$d file uploaded to %2$s</item>
+        <item quantity="other">%1$d files uploaded to %2$s</item>
+    </plurals>
 </resources>

@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.vault
 
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.ui.graphics.Color
 import id.znetworks.nexus.ui.components.PendingConfirm
 import id.znetworks.nexus.ui.components.ConfirmDialog
 import android.app.Application
@@ -143,23 +145,39 @@ class VaultViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     fun restore(i: VaultItem) = act { api.restore(i.id) }
     fun emptyTrash() = act { api.emptyTrash() }
 
-    fun upload(uri: Uri) {
-        val picked = c.uploads.describe(uri)
-        if (picked == null || picked.size > VaultRules.MAX_FILE) {
-            _state.update { it.copy(notice = res.getString(if (picked == null) R.string.td_file_unreadable else R.string.vault_too_big)) }; return
-        }
+    /**
+     * Many files, one after another (the server limits concurrent chunk sessions; VAULT-MOVE-DND). A file
+     * that can't be read or is too big is said and skipped; a server refusal (507 "Vault penuh…") stops the rest.
+     */
+    fun upload(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         viewModelScope.launch {
-            _state.update { it.copy(upload = picked.name to 0f) }
-            try {
-                withContext(Dispatchers.IO) { api.upload(picked, folder) { d, t -> _state.update { it.copy(upload = picked.name to (if (t > 0) d.toFloat() / t else 0f)) } } }
-            } catch (e: ApiError) {
-                // 507: "Vault penuh…" from the server.
-                _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.td_upload_failed)) }
+            var done = 0
+            for (uri in uris) {
+                val picked = c.uploads.describe(uri)
+                if (picked == null || picked.size > VaultRules.MAX_FILE) {
+                    _state.update { it.copy(notice = res.getString(if (picked == null) R.string.td_file_unreadable else R.string.vault_too_big)) }; continue
+                }
+                _state.update { it.copy(upload = picked.name to 0f) }
+                try {
+                    withContext(Dispatchers.IO) { api.upload(picked, folder) { d, t -> _state.update { it.copy(upload = picked.name to (if (t > 0) d.toFloat() / t else 0f)) } } }
+                    done++
+                } catch (e: ApiError) {
+                    _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.td_upload_failed)) }
+                    break
+                }
             }
             _state.update { it.copy(upload = null) }
+            if (done > 1 && _state.value.notice == null) _state.update { it.copy(notice = res.getQuantityString(R.plurals.vm_uploaded, done, done, here())) }
             load()
         }
     }
+
+    /** The folder on screen's name ("Vault" at the top). */
+    fun here(): String = _state.value.list?.breadcrumb?.lastOrNull()?.name ?: "Vault"
+
+    /** After Move to…: "“INTOO (2)” moved to Vault" (the returned name: a clash got a suffix), then the fresh list. */
+    fun moved(item: VaultItem, folderName: String) { _state.update { it.copy(notice = res.getString(R.string.vm_moved, item.name, folderName)) }; load() }
 
     /** Raw bytes need the session: downloaded by the app, never handed to a browser. */
     fun open(i: VaultItem, share: Boolean) {
@@ -185,7 +203,13 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
     var confirm by remember { mutableStateOf<VaultItem?>(null) }
     var confirmEmpty by remember { mutableStateOf(false) }
     var q by rememberSaveable { mutableStateOf("") }
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::upload) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
+    var moving by remember { mutableStateOf<VaultItem?>(null) }
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    // Any vault change in the company (upload, move, trash, …): refetch this folder (VAULT-MOVE-DND). The
+    // screen's own fallback pace covers a server without the ping.
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.folder to vm.trash, liveMs = null, fallbackMs = 60_000,
+        matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.WORKSPACE_CHANGED && it.kind == "vault" }) { vm.load().join() }
     LaunchedEffect(q) { if (q != s.query) { kotlinx.coroutines.delay(300); vm.search(q) } }
     val l = s.list
     Column(Modifier.fillMaxSize().background(c.background)) {
@@ -226,46 +250,77 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
                 l == null -> EmptyState(Icons.Filled.Lock, stringResource(R.string.vault_load_failed), s.error.orEmpty(), stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
                 l.items.isEmpty() -> TabEmpty(Icons.Filled.Folder, stringResource(when { vm.trash -> R.string.vault_trash_empty; s.query.isNotBlank() -> R.string.docs_no_match; else -> R.string.vault_empty }))
                 else -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
-                    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-                        items(VaultRules.sorted(l.items), key = { it.id }) { i ->
+                    // Trash: a plain list. A folder: folders (rows), then pictures and films (a square grid), then other files (rows).
+                    val g = VaultRules.gallery(l.items)
+                    val media = if (vm.trash) emptyList() else g.media
+                    val itemRow: @Composable (VaultItem) -> Unit = { i ->
                             var menu by remember { mutableStateOf(false) }
-                            Row(Modifier.fillMaxWidth().clickable {
-                                when { vm.trash -> Unit; i.isFolder -> onOpenFolder(i.id); else -> vm.open(i, false) }
-                            }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(42.dp).background(if (i.isFolder) c.violet.copy(alpha = 0.14f) else c.muted, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                    if (i.isImage && i.url != null) RemoteImage(i.url, Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)), ContentScale.Crop, maxPx = 160)
-                                    else Icon(if (i.isFolder) Icons.Filled.Folder else Icons.Filled.Description, null, tint = if (i.isFolder) c.violetText else c.mutedFg)
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(i.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(listOfNotNull(if (i.isFolder) stringResource(R.string.vault_items_n, i.childCount ?: 0) else sizeText(i.size),
-                                        chatTime(i.deletedAt ?: i.updatedAt).takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
-                                }
-                                if ((i.shareCount ?: 0) > 0) { Pill("🔗 ${i.shareCount}", c.blue); Spacer(Modifier.width(4.dp)) }
-                                if (s.opening == i.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                                Box {
-                                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = c.mutedFg) }
-                                    DropdownMenu(menu, { menu = false }) {
-                                        if (vm.trash) {
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_restore)) }, onClick = { menu = false; vm.restore(i) })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_delete_forever), color = c.danger) }, onClick = { menu = false; confirm = i })
-                                        } else {
-                                            if (!i.isFolder) {
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.td_open_file)) }, onClick = { menu = false; vm.open(i, false) })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.td_save_share)) }, onClick = { menu = false; vm.open(i, true) })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
-                                            }
-                                            if (i.canModify == true) {
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.vault_rename)) }, onClick = { menu = false; naming = i })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.vault_to_trash), color = c.danger) }, onClick = { menu = false; confirm = i })
-                                            }
+                        Row(Modifier.fillMaxWidth().clickable {
+                            when { vm.trash -> Unit; i.isFolder -> onOpenFolder(i.id); i.isMedia -> viewing = media.indexOf(i); else -> vm.open(i, false) }
+                        }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(42.dp).background(if (i.isFolder) c.violet.copy(alpha = 0.14f) else c.muted, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                                // The server's small thumbnail (never the whole file); without one, the type icon.
+                                    val t = VaultRules.thumb(i, 160)
+                                    if (t != null) RemoteImage(t, Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)), ContentScale.Crop, maxPx = 160)
+                                else Icon(if (i.isFolder) Icons.Filled.Folder else Icons.Filled.Description, null, tint = if (i.isFolder) c.violetText else c.mutedFg)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(i.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(listOfNotNull(if (i.isFolder) stringResource(R.string.vault_items_n, i.childCount ?: 0) else sizeText(i.size),
+                                    chatTime(i.deletedAt ?: i.updatedAt).takeIf { it.isNotBlank() }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
+                            }
+                            if ((i.shareCount ?: 0) > 0) { Pill("🔗 ${i.shareCount}", c.blue); Spacer(Modifier.width(4.dp)) }
+                            if (s.opening == i.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Box {
+                                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = c.mutedFg) }
+                                DropdownMenu(menu, { menu = false }) {
+                                    if (vm.trash) {
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.vault_restore)) }, onClick = { menu = false; vm.restore(i) })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.vault_delete_forever), color = c.danger) }, onClick = { menu = false; confirm = i })
+                                    } else {
+                                        if (!i.isFolder) {
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.td_open_file)) }, onClick = { menu = false; vm.open(i, false) })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.td_save_share)) }, onClick = { menu = false; vm.open(i, true) })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
+                                        }
+                                        if (i.canModify == true) {
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_rename)) }, onClick = { menu = false; naming = i })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_to_trash), color = c.danger) }, onClick = { menu = false; confirm = i })
                                         }
                                     }
                                 }
                             }
-                            HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 70.dp))
                         }
+                        HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 70.dp))
+                    }
+                    if (vm.trash) LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) { items(VaultRules.sorted(l.items), key = { it.id }) { itemRow(it) } }
+                    else androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Fixed(3), contentPadding = PaddingValues(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val full: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> androidx.compose.foundation.lazy.grid.GridItemSpan) = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }
+                        gridItems(g.folders, key = { it.id }, span = { full() }) { itemRow(it) }
+                        if (media.isNotEmpty()) item(key = "media-title", span = { full() }) {
+                            Text(stringResource(R.string.vm_photos_videos), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                        }
+                        gridItems(media, key = { it.id }) { i ->
+                            Box(Modifier.padding(horizontal = 2.dp)) {
+                                VaultTile(i, onOpen = { viewing = media.indexOf(i) }) {
+                                    var menu by remember { mutableStateOf(false) }
+                                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more), tint = Color.White) }
+                                    DropdownMenu(menu, { menu = false }) {
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.td_save_share)) }, onClick = { menu = false; vm.open(i, true) })
+                                        DropdownMenuItem(text = { Text(stringResource(R.string.vault_share_link)) }, onClick = { menu = false; sharing = i })
+                                        if (i.canModify == true) {
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vm_menu)) }, onClick = { menu = false; moving = i })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_rename)) }, onClick = { menu = false; naming = i })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.vault_to_trash), color = c.danger) }, onClick = { menu = false; confirm = i })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        gridItems(g.files, key = { it.id }, span = { full() }) { itemRow(it) }
                     }
                 }
             }
@@ -291,6 +346,11 @@ fun VaultScreen(onBack: () -> Unit, onOpenFolder: (String) -> Unit, onOpenTrash:
         confirmButton = { TextButton(onClick = { confirmEmpty = false; vm.emptyTrash() }) { Text(stringResource(R.string.vault_empty_trash), color = c.danger) } },
         dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text(stringResource(R.string.cancel)) } })
     sharing?.let { ShareDialog(it, vm.api, s.list?.canManageAccess == true || it.canModify == true) { sharing = null } }
+    moving?.let { i -> VaultMoveDialog(i, vm.api, onDismiss = { moving = null }) { item, folderName -> moving = null; vm.moved(item, folderName) } }
+    viewing?.let { start ->
+        val media = s.list?.items?.let { VaultRules.gallery(it).media }.orEmpty()
+        if (media.isNotEmpty()) VaultViewer(media, start, onClose = { viewing = null }, onSave = { vm.open(it, true) }, onShare = { sharing = it })
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

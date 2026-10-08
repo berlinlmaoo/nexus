@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.vault
 
+import kotlinx.serialization.json.JsonPrimitive
+import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import id.znetworks.nexus.core.net.Uploads
@@ -31,9 +33,14 @@ data class VaultItem(
     val deletedAt: String? = null,
     val updatedAt: String? = null,
     val canModify: Boolean? = null,
+    /** `/api/vault/items/:id/thumb?v=…` for pictures the server can shrink (9 Oct); null for the rest. Add `&w=`. */
+    val thumbUrl: String? = null,
 ) {
     val isFolder: Boolean get() = kind == "FOLDER"
     val isImage: Boolean get() = mimeType.orEmpty().startsWith("image/")
+    val isVideo: Boolean get() = mimeType.orEmpty().startsWith("video/")
+    /** Pictures and films: the gallery grid and the viewer. */
+    val isMedia: Boolean get() = !isFolder && (isImage || isVideo)
 }
 
 @Serializable data class Crumb(val id: String, val name: String = "")
@@ -76,6 +83,26 @@ object VaultRules {
 
     /** Folders first, then by name (the server already sorts; kept stable here after local edits). */
     fun sorted(items: List<VaultItem>) = items.sortedWith(compareBy({ !it.isFolder }, { it.name.lowercase() }))
+
+    /** The gallery's three parts, in order: folders (rows), pictures and films (grid), other files (rows). */
+    data class Gallery(val folders: List<VaultItem>, val media: List<VaultItem>, val files: List<VaultItem>)
+    fun gallery(items: List<VaultItem>): Gallery {
+        val s = sorted(items)
+        return Gallery(s.filter { it.isFolder }, s.filter { it.isMedia }, s.filter { !it.isFolder && !it.isMedia })
+    }
+
+    /** A grid tile's picture: the thumbnail at [px] (server rounds to 160/320/640/1280); none → the type icon. */
+    fun thumb(i: VaultItem, px: Int = 320): String? = i.thumbUrl?.let { it + (if ('?' in it) "&" else "?") + "w=$px" }
+
+    /** Logos are often white on transparent: PNG, GIF and WebP are shown whole on a checkerboard; the rest cropped. */
+    fun showWhole(i: VaultItem) = i.mimeType.orEmpty().lowercase() in setOf("image/png", "image/gif", "image/webp")
+
+    /** Move here? Not where it already is, not where the caller can't add. Null = allowed, else the reason. */
+    fun moveBlock(currentParent: String?, target: String?, canWrite: Boolean): Int? = when {
+        currentParent == target -> R.string.vm_already_here
+        !canWrite -> R.string.vm_cant_add
+        else -> null
+    }
 }
 
 class VaultApi(private val api: ApiClient, private val uploads: Uploads) {
@@ -92,6 +119,9 @@ class VaultApi(private val api: ApiClient, private val uploads: Uploads) {
 
     suspend fun createFolder(name: String, parentId: String?) = send("POST", "/api/vault/items", buildJsonObject { put("name", name.trim()); parentId?.let { put("parentId", it) } }, VaultItem.serializer())
     suspend fun rename(id: String, name: String) = send("PATCH", "/api/vault/items/$id", buildJsonObject { put("name", name.trim()) }, VaultItem.serializer())
+    /** Move into [parentId], or to the top level with null (sent as an explicit JSON null; VAULT-MOVE-DND). */
+    suspend fun move(id: String, parentId: String?) =
+        send("PATCH", "/api/vault/items/$id", JsonObject(mapOf("parentId" to (parentId?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull))), VaultItem.serializer())
     suspend fun restore(id: String) = send("PATCH", "/api/vault/items/$id", buildJsonObject { put("restore", true) }, VaultItem.serializer())
     suspend fun delete(id: String, purge: Boolean) =
         api.send(Request.Builder().url(api.url("/api/vault/items/$id" + if (purge) "?purge=1" else "")).delete().build(), JsonObject.serializer())
