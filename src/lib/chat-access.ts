@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import { checkProjectAccess } from "@/lib/rbac"
-import { commonWorkspace, groupRoomAllows } from "@/lib/chat-rules"
+import { canManageGroupMembers, commonWorkspace, groupRoomAllows } from "@/lib/chat-rules"
 
 /**
  * Who may read and write a conversation.
@@ -95,6 +95,47 @@ export async function conversationMemberAccess(userId: string, conversationId: s
   const access = await conversationAccess(userId, conversationId)
   if (access.ok && !access.member) return { ok: false, status: 403 }
   return access
+}
+
+/**
+ * What decides whether someone may add or remove people in a group: their system role and their role
+ * in every workspace they are in. One query, so the conversation list answers `canManageMembers` for
+ * every row from it instead of a lookup per row.
+ */
+export type MemberManagerContext = { systemRole: string | null; roleIn: Map<string, string> }
+
+export async function memberManagerContext(userId: string): Promise<MemberManagerContext> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, workspaceMembers: { select: { workspaceId: true, role: true } } },
+  })
+  return {
+    systemRole: u?.role ?? null,
+    roleIn: new Map((u?.workspaceMembers ?? []).map((m) => [m.workspaceId, m.role] as const)),
+  }
+}
+
+/**
+ * chat-rules canManageGroupMembers for one room, with the caller's role in THAT room's workspace.
+ * `targetIsSelf`: the caller is taking themselves out (leaving), which anyone may.
+ */
+export function canManageMembersIn(
+  ctx: MemberManagerContext,
+  room: { type: string; workspaceId: string | null },
+  targetIsSelf = false,
+): boolean {
+  return canManageGroupMembers({
+    kind: room.type,
+    callerWorkspaceRole: room.workspaceId ? (ctx.roleIn.get(room.workspaceId) ?? null) : null,
+    callerSystemRole: ctx.systemRole,
+    targetIsSelf,
+  })
+}
+
+/** Same, for a single room: no query at all unless the room is a GROUP. */
+export async function canManageMembersOf(userId: string, room: { type: string; workspaceId: string | null }): Promise<boolean> {
+  if (room.type !== "GROUP") return false
+  return canManageMembersIn(await memberManagerContext(userId), room)
 }
 
 /** The workspace a new GROUP/DM between these people belongs to (chat-rules commonWorkspace). */

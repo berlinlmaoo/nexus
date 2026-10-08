@@ -44,6 +44,21 @@ function lastLine(c: NexusConversation): string {
   return m.attachmentUrl || m.attachmentType ? `📷 ${t("Photo")}` : "";
 }
 
+/**
+ * Adding (and removing) people in a group is for Manager and above (owner, 8 Oct 2026); the server
+ * says so per room as canManageMembers. Missing means a server from before the rule: keep the button.
+ */
+function canAddToGroup(c: NexusConversation): boolean {
+  return c.type === "GROUP" && c.canManageMembers !== false;
+}
+
+/** The server's 403 when someone below Manager tries to add or remove people in a group. */
+function isManagerRequired(e: unknown): boolean {
+  if (!(e instanceof ApiError) || e.status !== 403) return false;
+  const p = e.payload as { code?: unknown } | null;
+  return typeof p === "object" && p !== null && p.code === "MANAGER_REQUIRED";
+}
+
 type MuteChoice = "8h" | "1w" | "always" | "off";
 
 function muteValue(choice: MuteChoice): string | "forever" | null {
@@ -220,8 +235,9 @@ function Messages() {
                 {/* Both kinds of room can take people, by different routes. A project room's
                     membership is derived from the project, so adding here really means adding to
                     the project; a plain group owns its own list and has had an endpoint of its own
-                    since /api/conversations/[id]/members. A DM stays closed. */}
-                {(active.type === "GROUP" || (active.type === "PROJECT" && active.projectId)) && (
+                    since /api/conversations/[id]/members — Manager and above only (owner, 8 Oct
+                    2026), which the server reports as canManageMembers. A DM stays closed. */}
+                {(canAddToGroup(active) || (active.type === "PROJECT" && active.projectId)) && (
                   <button onClick={() => setAdding(true)} title={t("Add people")} aria-label={t("Add people")} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><UserPlus className="h-4 w-4" /></button>
                 )}
               </div>
@@ -281,7 +297,7 @@ type AddPeopleTarget =
 function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () => void }) {
   const qc = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const isProject = target.kind === "project";
   const roster = useQuery({ queryKey: ["members"], queryFn: () => nexusApi.members(), staleTime: 300_000 });
   // A project room asks the project who belongs; a group carries its own roster. The two endpoints
@@ -308,7 +324,7 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
   const candidates = all.filter((u) => !already.has(u.id));
 
   const add = async (u: NexusUser) => {
-    setBusyId(u.id); setFailed(false);
+    setBusyId(u.id); setFailed(null);
     try {
       if (target.kind === "project") {
         await nexusApi.addProjectMember(target.projectId, u.id);
@@ -318,8 +334,14 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
         await qc.invalidateQueries({ queryKey: ["conversation", target.conversationId] });
       }
       await qc.invalidateQueries({ queryKey: ["conversations"] });
-    } catch {
-      setFailed(true);
+    } catch (e) {
+      if (isManagerRequired(e)) {
+        setFailed(t("Only managers and above can add or remove members."));
+        // The list was older than the rule (or the role changed): refetch so the button goes away.
+        qc.invalidateQueries({ queryKey: ["conversations"] });
+      } else {
+        setFailed(t("Couldn't add that person."));
+      }
     } finally {
       setBusyId(null);
     }
@@ -344,7 +366,7 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
           </button>
         ))}
       </div>
-      {failed && <p className="mt-2 text-xs font-semibold text-destructive">{t("Couldn't add that person.")}</p>}
+      {failed && <p className="mt-2 text-xs font-semibold text-destructive">{failed}</p>}
     </Shell>
   );
 }

@@ -554,6 +554,11 @@ export type NexusConversation = {
    * "Always" is stored as a far-future date. Servers before the chat contract of 8 Oct 2026 omit it.
    */
   mutedUntil?: string | null;
+  /**
+   * Whether you may add or remove people here: GROUP rooms only, Manager and above (owner, 8 Oct
+   * 2026). Anyone may still leave. Missing = a server from before the rule; keep showing the controls.
+   */
+  canManageMembers?: boolean;
 };
 
 /**

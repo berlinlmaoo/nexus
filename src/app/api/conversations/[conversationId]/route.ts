@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
-import { CHAT_MEMBER_SELECT, conversationAccess } from "@/lib/chat-access"
+import { CHAT_MEMBER_SELECT, canManageMembersOf, conversationAccess } from "@/lib/chat-access"
 
+/**
+ * One conversation. Adds, for the caller: `mutedUntil` (null when not muted) and `canManageMembers`
+ * — whether they may add or remove people (GROUP only, Manager and above; chat-rules
+ * canManageGroupMembers). Clients hide those controls when it is false.
+ */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const session = await auth()
@@ -20,7 +25,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
     const mutedUntil = access.member?.mutedUntil && access.member.mutedUntil.getTime() > Date.now()
       ? access.member.mutedUntil.toISOString()
       : null
-    return NextResponse.json({ conversation: { ...conversation, mutedUntil } })
+    const canManageMembers = await canManageMembersOf(session.user.id, conversation)
+    return NextResponse.json({ conversation: { ...conversation, mutedUntil, canManageMembers } })
   } catch (error) {
     console.error("conversation GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

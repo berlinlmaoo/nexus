@@ -1,7 +1,8 @@
 /**
  * The chat rules that need no database: who gets a push for a new message and what it says, how a
- * page of messages is addressed, how far "read" moves, how unread adds up, and who may stay in a
- * group or DM. Contract: CHAT-CONTRACT (8 Oct 2026), "push + realtime optimal".
+ * page of messages is addressed, how far "read" moves, how unread adds up, who may stay in a group
+ * or DM, and who may add or remove people in a group. Contract: CHAT-CONTRACT (8 Oct 2026), "push +
+ * realtime optimal".
  *
  * Pure on purpose — no imports, no I/O — so chat-rules.test.mjs loads it with plain node, the same
  * loader as fcm-payload.test.mjs. The routes and src/lib/chat-*.ts do the reading and writing.
@@ -350,4 +351,46 @@ export function commonWorkspace(participantsWorkspaceIds: string[][], creatorWor
   const sets = participantsWorkspaceIds.map((ws) => new Set(ws))
   for (const w of creatorWorkspacesOldestFirst) if (sets.every((s) => s.has(w))) return w
   return null
+}
+
+// ── who may add or remove people in a group ────────────────────────────────────────────────────
+
+/** The 403 `code` when someone below Manager tries to add or remove a member (owner, 8 Oct 2026). */
+export const MANAGER_REQUIRED = "MANAGER_REQUIRED"
+
+/**
+ * The 403 `error` sentence. Apps before 0.1.7 show the server's sentence as it is, so it is written
+ * in Indonesian like the other refusals; newer clients recognise `code` and use their own copy.
+ */
+export const MANAGER_REQUIRED_MESSAGE = "Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota."
+
+/** Workspace roles that may add or remove people in a group: Manager and above. */
+const GROUP_MEMBER_MANAGER_ROLES: ReadonlySet<string> = new Set(["MANAGER", "BOD", "ONE_ABOVE_ALL"])
+
+/**
+ * Whether the caller may add someone to, or remove someone from, a room (owner decision 8 Oct 2026:
+ * only Manager and above, in GROUP chats).
+ *
+ *   - GROUP only. A PROJECT room follows the project's members and a DM is two people: neither has
+ *     member management of its own, so both answer false.
+ *   - Leaving is not removing. Taking yourself out of a group (targetIsSelf) is always allowed.
+ *   - Otherwise MANAGER, BOD or ONE_ABOVE_ALL in the ROOM's workspace, or a system ADMIN. A role in
+ *     some other workspace does not count: anyone who signs up is One Above All of a workspace of
+ *     their own. A room without a workspace gives nobody a workspace role (null), so only an admin.
+ *
+ * Creating a group with its first members is not covered: that stays open to everyone.
+ */
+export function canManageGroupMembers(input: {
+  kind: ConversationKind | string | null | undefined
+  /** The caller's role in the room's workspace (Conversation.workspaceId); null when none. */
+  callerWorkspaceRole: string | null | undefined
+  /** User.role: "ADMIN" | "MEMBER". */
+  callerSystemRole: string | null | undefined
+  /** The person being removed is the caller (leaving the group). */
+  targetIsSelf?: boolean
+}): boolean {
+  if (input.kind !== "GROUP") return false
+  if (input.targetIsSelf) return true
+  if (input.callerSystemRole === "ADMIN") return true
+  return GROUP_MEMBER_MANAGER_ROLES.has(input.callerWorkspaceRole ?? "")
 }
