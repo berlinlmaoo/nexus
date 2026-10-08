@@ -3,22 +3,23 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ChevronRight, Copy, Download, ExternalLink, Eye, File as FileIcon, FileText, Film,
-  FolderInput, FolderPlus, Folder, HardDrive, Image as ImageIcon, Link2, Loader2, Lock, Music,
-  MoreVertical, Pencil, Play, RotateCcw, Search, Share2, Trash2, Upload, Users,
+  ChevronRight, Download, ExternalLink, Eye, File as FileIcon, FileText, Film,
+  FolderInput, FolderPlus, Folder, HardDrive, Image as ImageIcon, Loader2, Lock, Music,
+  MoreVertical, Pencil, RotateCcw, Search, Share2, Trash2, Upload,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Switch } from "@/components/ui/switch";
 import { VaultLightbox } from "@/components/vault/VaultLightbox";
 import { VaultMoveDialog } from "@/components/vault/VaultMoveDialog";
+import { VaultShareDialog } from "@/components/vault/VaultShareDialog";
+import { CHECKERBOARD, VaultTilePicture } from "@/components/vault/VaultTilePicture";
 import { cn } from "@/lib/utils";
 import { useDocumentLang, useLang } from "@/lib/lang";
-import { ApiError, nexusApi, type VaultItem, type VaultShare, type VaultShareExpiry } from "@/lib/nexus-api";
-import { fillsTile, formatDuration, mediaKind, thumbSrc } from "@/lib/vault-media";
+import { ApiError, nexusApi, type VaultItem } from "@/lib/nexus-api";
+import { fillsTile, humanSize, isPdf, mediaKind } from "@/lib/vault-media";
 import { VAULT_ITEM_MIME, canMoveInto, dragKind, dropKey, filesOfDrop, type DraggedVaultItem } from "@/lib/vault-dnd";
 
 export const Route = createFileRoute("/_app/vault")({ component: VaultPage });
@@ -37,16 +38,6 @@ export const Route = createFileRoute("/_app/vault")({ component: VaultPage });
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function humanSize(bytes: number | null | undefined): string {
-  if (bytes == null) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let n = bytes / 1024;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
-}
-
 function iconFor(item: VaultItem) {
   if (item.kind === "FOLDER") return Folder;
   const m = item.mimeType || "";
@@ -57,22 +48,8 @@ function iconFor(item: VaultItem) {
   return FileIcon;
 }
 
-const EXPIRY_OPTIONS: { value: VaultShareExpiry; label: string }[] = [
-  { value: "3d", label: "3 days" },
-  { value: "7d", label: "7 days" },
-  { value: "14d", label: "2 weeks" },
-  { value: "30d", label: "1 month" },
-  { value: "permanent", label: "Permanent" },
-];
-
 /** Where something can be dropped or moved to: a folder (null = the top of the vault) and its name. */
 type Destination = { id: string | null; name: string };
-
-/** A light checkerboard behind pictures shown whole, so a white logo on a transparent PNG shows. */
-const CHECKERBOARD = {
-  backgroundImage: "repeating-conic-gradient(color-mix(in srgb, var(--muted-foreground) 13%, transparent) 0 25%, transparent 0 50%)",
-  backgroundSize: "16px 16px",
-};
 
 // ── page ─────────────────────────────────────────────────────────────────────
 
@@ -379,22 +356,22 @@ function VaultPage() {
           </>
         ) : (
           <>
+            <DropdownMenuItem onClick={() => setSharing(item)}>
+              <Share2 className="h-4 w-4 mr-2" /> {t("Share…")}
+            </DropdownMenuItem>
             {item.kind === "FILE" && (
               <>
                 <DropdownMenuItem onClick={() => openItem(item)}>
-                  <Eye className="h-4 w-4 mr-2" /> {t("View")}
+                  <Eye className="h-4 w-4 mr-2" /> {t("Open")}
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href={item.downloadUrl ?? "#"}>
                     <Download className="h-4 w-4 mr-2" /> {t("Download")}
                   </a>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSharing(item)}>
-                  <Share2 className="h-4 w-4 mr-2" /> {t("Share")}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
               </>
             )}
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={!item.canModify}
               onClick={() => { setRenaming(item); setRenameValue(item.name); }}
@@ -416,6 +393,23 @@ function VaultPage() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+
+  /** Share, on every card and tile — not only behind ⋮ (owner, 9 Oct 2026: nobody found it there). */
+  const shareButton = (item: VaultItem, size: "card" | "tile" = "card") =>
+    trash ? null : (
+      <button
+        type="button"
+        onClick={() => setSharing(item)}
+        className={cn(
+          "grid place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "h-8 w-8",
+        )}
+        aria-label={t("Share {name}", { name: item.name })}
+        title={t("Share")}
+      >
+        <Share2 className="h-4 w-4" />
+      </button>
+    );
 
   /** Enter or Space on a focused card opens it, as a click does. */
   const activate = (item: VaultItem) => (e: ReactKeyboardEvent<HTMLElement>) => {
@@ -460,6 +454,7 @@ function VaultPage() {
         </div>
 
         {item.minReadRole && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label={t("restricted")} />}
+        {shareButton(item)}
         {itemMenu(item)}
       </div>
     );
@@ -485,7 +480,7 @@ function VaultPage() {
         onClick={() => openItem(item)}
         onKeyDown={activate(item)}
       >
-        <TilePicture item={item} />
+        <VaultTilePicture item={item} />
       </div>
       <div className="flex items-center gap-1 pl-2.5 pr-1 py-1.5">
         <div className="min-w-0 flex-1">
@@ -496,6 +491,7 @@ function VaultPage() {
           </p>
         </div>
         {item.minReadRole && <Lock className="h-3 w-3 text-muted-foreground shrink-0" aria-label={t("restricted")} />}
+        {shareButton(item, "tile")}
         {itemMenu(item, "tile")}
       </div>
     </div>
@@ -706,7 +702,7 @@ function VaultPage() {
         }}
       />
       <PreviewDialog item={preview} onClose={() => setPreview(null)} onShare={(i) => { setPreview(null); setSharing(i); }} />
-      <ShareDialog item={sharing} onClose={() => setSharing(null)} />
+      <VaultShareDialog item={sharing} onClose={() => setSharing(null)} />
 
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>
         <DialogContent lang={lang}>
@@ -723,78 +719,6 @@ function VaultPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// ── a gallery tile's picture ─────────────────────────────────────────────────
-
-/**
- * The server's thumbnail for a picture. For a film, its first frame (`preload="metadata"`, only once
- * the tile is near the screen, so a folder of films does not start forty downloads) and its length.
- * Whatever cannot be drawn keeps its type icon.
- */
-function TilePicture({ item }: { item: VaultItem }) {
-  const kind = mediaKind(item);
-  const src = kind === "image" ? thumbSrc(item, 320) : null;
-  const [failed, setFailed] = useState(false);
-  const [near, setNear] = useState(false);
-  const [duration, setDuration] = useState<number | null>(null);
-  const box = useRef<HTMLDivElement>(null);
-  const Icon = kind === "video" ? Film : ImageIcon;
-
-  useEffect(() => {
-    if (kind !== "video" || near) return;
-    const el = box.current;
-    if (!el || typeof IntersectionObserver === "undefined") { setNear(true); return; }
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((x) => x.isIntersecting)) { setNear(true); io.disconnect(); }
-    }, { rootMargin: "200px" });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [kind, near]);
-
-  return (
-    <div ref={box} className="absolute inset-0 grid place-items-center">
-      {kind === "image" && src && !failed ? (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onError={() => setFailed(true)}
-          className={cn("h-full w-full", fillsTile(item) ? "object-cover" : "object-contain p-3")}
-        />
-      ) : kind === "video" && near && item.url && !failed ? (
-        <video
-          src={`${item.url}#t=0.1`}
-          preload="metadata"
-          muted
-          playsInline
-          disablePictureInPicture
-          tabIndex={-1}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover pointer-events-none bg-muted"
-        />
-      ) : (
-        <Icon className="h-8 w-8 text-muted-foreground/60" aria-hidden />
-      )}
-      {kind === "video" && (
-        <>
-          <span className="absolute inset-0 grid place-items-center" aria-hidden>
-            <span className="h-10 w-10 grid place-items-center rounded-full bg-black/55 text-white">
-              <Play className="h-4 w-4 translate-x-px fill-current" />
-            </span>
-          </span>
-          {formatDuration(duration) && (
-            <span className="absolute bottom-1.5 right-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[11px] tabular-nums text-white">
-              {formatDuration(duration)}
-            </span>
-          )}
-        </>
-      )}
     </div>
   );
 }
@@ -817,7 +741,7 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
               <video src={item.url ?? ""} controls className="w-full" />
             ) : mime.startsWith("audio/") ? (
               <audio src={item.url ?? ""} controls className="w-full p-4" />
-            ) : mime === "application/pdf" ? (
+            ) : isPdf(item) ? (
               <iframe src={item.url ?? ""} title={item.name} className="w-full h-[65vh]" />
             ) : (
               <div className="p-10 text-center text-sm text-muted-foreground">
@@ -830,7 +754,13 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
           <span className="text-xs text-muted-foreground self-center">
             {humanSize(item?.size)}{item?.uploader ? ` · ${t("uploaded by {name}", { name: item.uploader.name })}` : ""}
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
+            {item && isPdf(item) && item.url && (
+              // An iframe shows only the first page on iPhone Safari: this opens the PDF itself.
+              <Button variant="outline" asChild>
+                <a href={item.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" /> {t("Open PDF")}</a>
+              </Button>
+            )}
             <Button variant="outline" onClick={() => item && onShare(item)}>
               <Share2 className="h-4 w-4 mr-1.5" /> {t("Share")}
             </Button>
@@ -839,131 +769,6 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
             </Button>
           </div>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── sharing ──────────────────────────────────────────────────────────────────
-
-function ShareDialog({ item, onClose }: { item: VaultItem | null; onClose: () => void }) {
-  const qc = useQueryClient();
-  const { t, lang } = useLang();
-  const [requireAuth, setRequireAuth] = useState(true);
-  const [allowDownload, setAllowDownload] = useState(true);
-  const [expires, setExpires] = useState<VaultShareExpiry>("permanent");
-
-  const shares = useQuery({
-    queryKey: ["vault-shares", item?.id],
-    queryFn: () => nexusApi.vaultShares(item!.id),
-    enabled: !!item,
-  });
-
-  const create = useMutation({
-    mutationFn: () => nexusApi.vaultCreateShare({ itemId: item!.id, requireAuth, allowDownload, expires }),
-    onSuccess: async (s) => {
-      await navigator.clipboard.writeText(s.url).catch(() => {});
-      toast.success(t("Link created & copied"));
-      void qc.invalidateQueries({ queryKey: ["vault-shares", item?.id] });
-      void qc.invalidateQueries({ queryKey: ["vault"] });
-    },
-    onError: (e: Error) => toast.error(t("Couldn't create the link"), { description: e.message }),
-  });
-
-  const revoke = useMutation({
-    mutationFn: (id: string) => nexusApi.vaultRevokeShare(id),
-    onSuccess: () => {
-      toast.success(t("Link revoked, effective now"));
-      void qc.invalidateQueries({ queryKey: ["vault-shares", item?.id] });
-    },
-    onError: (e: Error) => toast.error(t("Couldn't revoke the link"), { description: e.message }),
-  });
-
-  const statusLabel = (s: VaultShare) =>
-    s.status === "active" ? (s.requireAuth ? t("internal") : t("external")) : s.status === "expired" ? t("expired") : t("revoked");
-
-  return (
-    <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent lang={lang} className="max-w-lg">
-        <DialogHeader><DialogTitle className="truncate pr-8">{t("Share “{name}”", { name: item?.name ?? "" })}</DialogTitle></DialogHeader>
-
-        <div className="space-y-3">
-          <label className="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer">
-            <Switch checked={requireAuth} onCheckedChange={setRequireAuth} />
-            <span className="text-sm">
-              <span className="font-medium flex items-center gap-1.5">
-                {requireAuth ? <Users className="h-3.5 w-3.5" /> : <ExternalLink className="h-3.5 w-3.5" />}
-                {requireAuth ? t("Internal") : t("External")}
-              </span>
-              <span className="block text-xs text-muted-foreground mt-0.5">
-                {requireAuth
-                  ? t("Requires a NEXUS login. On iPhone and Mac the link opens the app straight to this file.")
-                  : t("Anyone with the link can open it, no account needed. It stays in the browser on purpose and never opens the app.")}
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-center gap-3 rounded-lg border border-border p-3 cursor-pointer">
-            <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
-            <span className="text-sm font-medium">{t("Allow download")}</span>
-          </label>
-
-          <div>
-            <p className="text-xs text-muted-foreground mb-1.5">{t("Expiry")}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {EXPIRY_OPTIONS.map((e) => (
-                <button
-                  key={e.value}
-                  onClick={() => setExpires(e.value)}
-                  aria-pressed={expires === e.value}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs border transition-colors",
-                    expires === e.value ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted",
-                  )}
-                >
-                  {t(e.label)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <Button className="w-full" disabled={create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Link2 className="h-4 w-4 mr-1.5" /> {t("Create link")}</>}
-          </Button>
-        </div>
-
-        {!!shares.data?.shares.length && (
-          <div className="mt-2 border-t border-border pt-3 space-y-2 max-h-48 overflow-y-auto">
-            {shares.data.shares.map((s: VaultShare) => (
-              <div key={s.id} className="flex items-center gap-2 text-xs">
-                <span
-                  className={cn(
-                    "px-1.5 py-0.5 rounded shrink-0",
-                    s.status === "active" ? "bg-emerald-500/15 text-emerald-600" :
-                    s.status === "expired" ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {statusLabel(s)}
-                </span>
-                <span className="truncate flex-1 text-muted-foreground">{s.url}</span>
-                <span className="tabular-nums text-muted-foreground shrink-0">{s.viewCount}×</span>
-                <button
-                  className="p-1 hover:bg-muted rounded"
-                  title={t("Copy")}
-                  aria-label={t("Copy")}
-                  onClick={() => { void navigator.clipboard.writeText(s.url); toast.success(t("Copied")); }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-                {s.status === "active" && (
-                  <button className="p-1 hover:bg-muted rounded text-destructive" title={t("Revoke")} aria-label={t("Revoke")} onClick={() => revoke.mutate(s.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
