@@ -192,6 +192,9 @@ export type OutsideStepInput = {
   stageAt: Date | null
   paused: boolean
   restartAt: Date | null
+  /** The automatic check-out (remote config flags.outsideAutoCheckout). Absent = on, the old rule;
+   *  the cron passes the flag, which is off since 8 Oct 2026. Off: no autoAt, nothing after the warning. */
+  autoCheckout?: boolean
 }
 
 export type OutsideStep = {
@@ -235,9 +238,12 @@ export function decideOutsideStep(i: OutsideStepInput): OutsideStep {
   const elapsed = (i.now.getTime() - clockFrom.getTime()) / MIN
   const at = (m: number) => new Date(clockFrom.getTime() + m * MIN)
   const warnedAt = current === "warned" && i.stageAt ? i.stageAt : null
+  const auto = i.autoCheckout !== false
   const autoAtWarned = (w: Date) => new Date(Math.max(at(OUTSIDE_AUTO_MIN).getTime(), w.getTime() + OUTSIDE_WARN_GRACE_MIN * MIN))
 
   if (rank === 2 && warnedAt) {
+    // Without the automatic check-out the warning is the last word of the episode.
+    if (!auto) return { stage: "warned", clockFrom, minutesOutside, fire: null, nextStoredStage: null, autoAt: null, nextAt: null }
     const autoAt = autoAtWarned(warnedAt)
     if (i.now >= autoAt) {
       return { stage: "warned", clockFrom, minutesOutside, fire: "auto", nextStoredStage: "auto_checked_out", autoAt, nextAt: null }
@@ -246,11 +252,11 @@ export function decideOutsideStep(i: OutsideStepInput): OutsideStep {
   }
   if (elapsed >= OUTSIDE_WARN_MIN) {
     // rank 0 or 1: warn now (skipping the reminder if it was never sent).
-    const autoAt = autoAtWarned(i.now)
+    const autoAt = auto ? autoAtWarned(i.now) : null
     return { stage: current, clockFrom, minutesOutside, fire: "warning", nextStoredStage: "warned", autoAt, nextAt: autoAt }
   }
   if (elapsed >= OUTSIDE_REMIND_MIN && rank < 1) {
-    return { stage: current, clockFrom, minutesOutside, fire: "reminder", nextStoredStage: "reminded", autoAt: at(OUTSIDE_AUTO_MIN), nextAt: at(OUTSIDE_WARN_MIN) }
+    return { stage: current, clockFrom, minutesOutside, fire: "reminder", nextStoredStage: "reminded", autoAt: auto ? at(OUTSIDE_AUTO_MIN) : null, nextAt: at(OUTSIDE_WARN_MIN) }
   }
   return {
     stage: current,
@@ -258,7 +264,7 @@ export function decideOutsideStep(i: OutsideStepInput): OutsideStep {
     minutesOutside,
     fire: null,
     nextStoredStage: null,
-    autoAt: at(OUTSIDE_AUTO_MIN),
+    autoAt: auto ? at(OUTSIDE_AUTO_MIN) : null,
     nextAt: rank < 1 ? at(OUTSIDE_REMIND_MIN) : at(OUTSIDE_WARN_MIN),
   }
 }
@@ -438,7 +444,15 @@ export function outsidePushCopy(
     }
   }
   if (fire === "warning") {
-    const autoAt = o.autoAt ?? new Date(now.getTime() + OUTSIDE_WARN_GRACE_MIN * MIN)
+    // No automatic check-out (the default since 8 Oct 2026): a plain heads-up, no countdown.
+    if (!o.autoAt) {
+      return {
+        type: "attendance_outside_warning",
+        title: "Sudah 2 jam di luar kantor",
+        body: `Sudah ${durationText(o.minutesOutside)} di luar kantor. Ajukan izin kalau ada kegiatan di luar.`,
+      }
+    }
+    const autoAt = o.autoAt
     return {
       type: "attendance_outside_warning",
       title: "30 menit lagi",
@@ -450,6 +464,25 @@ export function outsidePushCopy(
     type: "attendance_auto_offsite_checkout",
     title: "Check-out otomatis",
     body: `Kamu di luar kantor sejak ${clockText(o.outsideSince, tz)}, jadi di-check-out offsite. Menunggu persetujuan ${who}.`,
+  }
+}
+
+/**
+ * The one push a staff member's attendance approvers get per outside episode (owner, 8 Oct 2026): at
+ * 1 h 30, or with the warning when a phone that reported late skipped the reminder. Who receives it is
+ * resolveAttendanceApprovers — the same people who approve that person's attendance.
+ */
+export function outsideApproverCopy(o: { name: string | null; minutesOutside: number; outsideSince: Date; timeZone?: string }): {
+  type: string
+  title: string
+  body: string
+} {
+  const tz = o.timeZone || "Asia/Jakarta"
+  const who = o.name?.trim() || "Staff"
+  return {
+    type: "attendance_outside_approver",
+    title: `${who} di luar kantor`,
+    body: `Di luar kantor sejak ${clockText(o.outsideSince, tz)} (${durationText(o.minutesOutside)}). Jalurnya ada di Absensi.`,
   }
 }
 

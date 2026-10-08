@@ -24,6 +24,11 @@ export type AppConfig = {
     calendar: boolean
     /** The Calendar widgets (Home Screen, Lock Screen) and the Apple Watch calendar. */
     calendarWidgets: boolean
+    /** The automatic offsite check-out after 2 h 30 outside the office. Off since 8 Oct 2026 (owner):
+     *  staff who went out to a meeting after checking in at the office were being checked out. Off =
+     *  the record stays open until they check out; they still get the 1 h 30 and 2 h reminders, and
+     *  their attendance approvers one push at 1 h 30. The apps show no countdown while it is off. */
+    outsideAutoCheckout: boolean
   }
   values: {
     /** Local alert on the phone this many minutes into an outside episode (0 = off). */
@@ -37,7 +42,7 @@ export type AppConfig = {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true },
+  flags: { requireAlwaysLocation: true, blockSignOutDuringWorkday: true, fakeGpsReview: true, calendar: true, calendarWidgets: true, outsideAutoCheckout: false },
   values: { outsideHourAlertMinutes: 60, calendarPollSeconds: 60 },
   texts: {
     en: {

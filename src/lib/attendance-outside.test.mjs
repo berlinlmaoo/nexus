@@ -264,11 +264,11 @@ t("push copy: after a rejected izin the clock restarted, the time outside did no
   const r = M.outsidePushCopy("reminder", { minutesOutside: s.minutesOutside, autoAt: s.autoAt, outsideSince: at(0), now: at(290) })
   assert.equal(r.body, "Sudah 4 jam 50 menit di luar kantor · sisa 1 jam · check-out otomatis 14:50. Ajukan izin kalau ada kegiatan di luar.")
 })
-t("push copy: no autoAt (never from the clock) still reads right", () => {
+t("push copy: no autoAt = no automatic check-out (off since 8 Oct 2026), so no countdown", () => {
   const r = M.outsidePushCopy("reminder", { minutesOutside: 90, autoAt: null, outsideSince: at(0), now: at(90) })
   assert.equal(r.body, "Sudah 1 jam 30 menit di luar kantor. Ajukan izin kalau ada kegiatan di luar.")
   const w = M.outsidePushCopy("warning", { minutesOutside: 120, autoAt: null, outsideSince: at(0), now: at(120) })
-  assert.equal(w.body, "Sudah 2 jam di luar kantor · sisa 30 menit · check-out otomatis 11:30.")
+  assert.equal(w.body, "Sudah 2 jam di luar kantor. Ajukan izin kalau ada kegiatan di luar.")
 })
 t("dense route (iOS 0.1.6: a point per 50 m): 3000 points through classify, spans and hours", () => {
   // Out and back ten times over a 10-hour day, a point every 12 s — far past a real day's density.
@@ -489,6 +489,32 @@ t("an exit far from every office does not restart the clock", () => {
     { at: at(40), cls: "outside", event: "exit", distanceMeters: 5000 },
   ]
   assert.equal(M.currentOutsideSince(pts).getTime(), at(10).getTime())
+})
+
+t("auto check-out off (owner, 8 Oct 2026): reminder and warning without a countdown, nothing after", () => {
+  const r = step({ now: at(90), outsideSince: at(0), stage: "outside", stageAt: at(0), autoCheckout: false })
+  assert.equal(r.fire, "reminder")
+  assert.equal(r.autoAt, null)
+  const w = step({ now: at(120), outsideSince: at(0), stage: "reminded", stageAt: at(90), autoCheckout: false })
+  assert.equal(w.fire, "warning")
+  assert.equal(w.autoAt, null)
+  assert.equal(w.nextAt, null)
+  const after = step({ now: at(400), outsideSince: at(0), stage: "warned", stageAt: at(120), autoCheckout: false })
+  assert.equal(after.fire, null)
+  assert.equal(after.stage, "warned")
+  assert.equal(after.autoAt, null)
+  const late = step({ now: at(130), outsideSince: at(0), stage: "outside", stageAt: at(0), autoCheckout: false })
+  assert.equal(late.fire, "warning")
+  assert.equal(late.stage, "outside")
+  const rc = M.outsidePushCopy("reminder", { minutesOutside: 90, autoAt: null, outsideSince: at(0), now: at(90) })
+  assert.doesNotMatch(rc.body, /otomatis|sisa/)
+  const wc = M.outsidePushCopy("warning", { minutesOutside: 120, autoAt: null, outsideSince: at(0), now: at(120) })
+  assert.equal(wc.title, "Sudah 2 jam di luar kantor")
+  assert.equal(wc.body, "Sudah 2 jam di luar kantor. Ajukan izin kalau ada kegiatan di luar.")
+  const ap = M.outsideApproverCopy({ name: "Budi", minutesOutside: 90, outsideSince: at(0) })
+  assert.equal(ap.type, "attendance_outside_approver")
+  assert.equal(ap.title, "Budi di luar kantor")
+  assert.equal(ap.body, "Di luar kantor sejak 09:00 (1 jam 30 menit). Jalurnya ada di Absensi.")
 })
 
 console.log(`${passed} passed${process.exitCode ? ", some FAILED" : ""}`)

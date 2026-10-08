@@ -19,7 +19,9 @@ import { cn } from "@/lib/utils";
 const primary = [
   { title: "Home", url: "/dashboard", icon: LayoutDashboard },
   { title: "Tasks", url: "/my-tasks", icon: CheckSquare },
-  { title: "Inbox", url: "/inbox", icon: Inbox, badge: true },
+  // Calendar took Inbox's place (owner, 8 Oct 2026); notifications live in More, whose button carries
+  // the unread count instead.
+  { title: "Calendar", url: "/calendar", icon: Calendar },
   { title: "Projects", url: "/projects", icon: FolderKanban },
 ] as const;
 
@@ -139,9 +141,6 @@ export function MobileTabBar() {
               >
                 <span className="relative">
                   <t.icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.5 : 2} />
-                  {"badge" in t && t.badge && unread > 0 && (
-                    <span className="absolute -right-2 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{unread}</span>
-                  )}
                 </span>
                 <span>{t.title}</span>
               </Link>
@@ -160,6 +159,9 @@ export function MobileTabBar() {
             )}
           >
             <Menu className="h-[22px] w-[22px]" strokeWidth={activeIndex === 4 ? 2.5 : 2} />
+            {unread > 0 && (
+              <span className="absolute left-1/2 top-1 ml-2 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{unread}</span>
+            )}
             <span>More</span>
           </button>
           <GlassFilter />
