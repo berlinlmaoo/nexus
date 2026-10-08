@@ -15,7 +15,7 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true },
     })
 
     if (!user) {
@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true },
     })
 
     logAudit({
