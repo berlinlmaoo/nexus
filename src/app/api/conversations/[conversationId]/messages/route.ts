@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { conversationAccess } from "@/lib/chat-access"
+import { CHAT_MESSAGE_INCLUDE, conversationAccess } from "@/lib/chat-access"
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
-import { newerThan, olderThan, parseBefore, parseLimit, shapePage, nextLastReadAt } from "@/lib/chat-rules"
+import {
+  canReplyTo,
+  newerThan,
+  olderThan,
+  parseBefore,
+  parseLimit,
+  shapePage,
+  nextLastReadAt,
+  SYSTEM_MESSAGE_REPLY,
+  SYSTEM_MESSAGE_REPLY_MESSAGE,
+} from "@/lib/chat-rules"
 
-const messageInclude = {
-  user: { select: { id: true, name: true, avatar: true } },
-  // Just enough of the quoted message to render a preview; the client never needs its body.
-  replyTo: {
-    select: {
-      id: true,
-      content: true,
-      attachmentType: true,
-      user: { select: { id: true, name: true } },
-    },
-  },
-} as const
+const messageInclude = CHAT_MESSAGE_INCLUDE
 
 /** CHAT-CONTRACT: at most 30 messages a minute per person (a stuck retry loop, a script, a flood). */
 const SEND_LIMIT = { limit: 30, windowSeconds: 60 }
@@ -34,6 +33,10 @@ const SEND_LIMIT = { limit: 30, windowSeconds: 60 }
  *
  * Every response carries `hasMore` and `nextCursor` (null when there is nothing older, and always null
  * for `after`): the web tells a server that pages this way by the key being present.
+ *
+ * Each message carries `kind` ("USER" | "SYSTEM") and `event` (SYSTEM only): a SYSTEM row is a group's
+ * log line ("Bagas added Mey"), drawn as a centred pill by clients that know it and as a plain message
+ * with an Indonesian `content` by those that don't (chat-system.ts).
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
@@ -123,9 +126,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     if (typeof replyToId === "string" && replyToId) {
       const quoted = await prisma.message.findFirst({
         where: { id: replyToId, conversationId },
-        select: { id: true },
+        select: { id: true, kind: true },
       })
       if (!quoted) return NextResponse.json({ error: "replyToId is not in this conversation" }, { status: 400 })
+      // A system line ("Bagas added Mey") is not something to answer. Apps that don't know `kind` yet
+      // offer Reply on it anyway, and show this sentence as it is.
+      if (!canReplyTo(quoted)) {
+        return NextResponse.json({ error: SYSTEM_MESSAGE_REPLY_MESSAGE, code: SYSTEM_MESSAGE_REPLY }, { status: 400 })
+      }
       quotedId = quoted.id
     }
 

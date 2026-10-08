@@ -2,7 +2,8 @@
  * The chat rules that need no database: who gets a push for a new message and what it says, how a
  * page of messages is addressed, how far "read" moves, how unread adds up, who may stay in a group
  * or DM, and who may add or remove people in a group. Contract: CHAT-CONTRACT (8 Oct 2026), "push +
- * realtime optimal".
+ * realtime optimal". Also the system messages ("Bagas added Mey") and the group info screen:
+ * SYSTEM-MESSAGES (8 Oct 2026).
  *
  * Pure on purpose — no imports, no I/O — so chat-rules.test.mjs loads it with plain node, the same
  * loader as fcm-payload.test.mjs. The routes and src/lib/chat-*.ts do the reading and writing.
@@ -394,3 +395,180 @@ export function canManageGroupMembers(input: {
   if (input.callerSystemRole === "ADMIN") return true
   return GROUP_MEMBER_MANAGER_ROLES.has(input.callerWorkspaceRole ?? "")
 }
+
+// ── system messages: "Bagas added Mey" (SYSTEM-MESSAGES contract, owner 8 Oct 2026) ─────────────
+
+/**
+ * Message.kind. A SYSTEM row is a log line the server writes when a GROUP changes (people added,
+ * removed or leaving, the group created or renamed). Its userId is whoever did it; its `content` is an
+ * Indonesian sentence (systemMessageFallback) for clients that don't know `kind` yet — iOS 0.1.6,
+ * Android, a cached web build — which draw it as an ordinary message from that person.
+ */
+export const MESSAGE_KIND_USER = "USER"
+export const MESSAGE_KIND_SYSTEM = "SYSTEM"
+
+export type SystemEventType = "members_added" | "member_removed" | "member_left" | "group_created" | "group_renamed"
+
+export type SystemPerson = { id: string; name: string }
+
+/**
+ * Message.event on a SYSTEM row. `targets`: the people added / removed (members_added, group_created,
+ * member_removed) — member_left carries the leaver as both actor and its one target. `name`: the group
+ * name (group_created when it has one, group_renamed); `previousName`: the name before (renamed).
+ */
+export type SystemEvent = {
+  type: SystemEventType
+  actor: SystemPerson
+  targets?: SystemPerson[]
+  name?: string
+  previousName?: string
+}
+
+export function isSystemMessage(m: { kind?: string | null } | null | undefined): boolean {
+  return m?.kind === MESSAGE_KIND_SYSTEM
+}
+
+/**
+ * Whether a message counts toward a member's unread: never your own, never a SYSTEM line (being told
+ * that someone joined is not a message waiting for you). chat-unread.ts applies the same rule in SQL.
+ */
+export function countsTowardUnread(m: { kind?: string | null; userId: string }, viewerId: string): boolean {
+  return !isSystemMessage(m) && m.userId !== viewerId
+}
+
+/** Replies (and reactions, mentions) are for people's messages: a SYSTEM line cannot be quoted. */
+export function canReplyTo(m: { kind?: string | null } | null | undefined): boolean {
+  return !!m && !isSystemMessage(m)
+}
+
+/** The 400 `code` when replyToId points at a SYSTEM row, and the sentence older apps show as it is. */
+export const SYSTEM_MESSAGE_REPLY = "SYSTEM_MESSAGE_REPLY"
+export const SYSTEM_MESSAGE_REPLY_MESSAGE = "Pesan sistem tidak bisa dibalas."
+
+/** "Mey" · "Mey dan Yuza" · "Mey, Yuza dan Angela" (Indonesian; the web/iOS render their own). */
+export function joinNames(names: string[], and = "dan"): string {
+  const list = names.map((n) => n.trim()).filter(Boolean)
+  if (list.length <= 1) return list[0] ?? ""
+  return `${list.slice(0, -1).join(", ")} ${and} ${list[list.length - 1]}`
+}
+
+function personName(p: { name?: string | null } | null | undefined): string {
+  return (p?.name ?? "").trim() || "Seseorang"
+}
+
+/**
+ * The Indonesian sentence stored as a SYSTEM row's `content`: what a client that doesn't know `kind`
+ * shows, in third person (no "kamu" — it is the same text for everyone in the room).
+ */
+export function systemMessageFallback(event: SystemEvent): string {
+  const actor = personName(event.actor)
+  const targets = (event.targets ?? []).map(personName)
+  const group = (event.name ?? "").trim()
+  switch (event.type) {
+    case "members_added":
+      return `${actor} menambahkan ${joinNames(targets) || "anggota baru"} ke grup`
+    case "member_removed":
+      return `${actor} mengeluarkan ${joinNames(targets) || "seorang anggota"} dari grup`
+    case "member_left":
+      return `${targets[0] ?? actor} keluar dari grup`
+    case "group_created":
+      return group ? `${actor} membuat grup “${group}”` : `${actor} membuat grup`
+    case "group_renamed":
+      return `${actor} mengubah nama grup jadi “${group}”`
+    default:
+      return actor
+  }
+}
+
+/** A stored event read back (Message.event is JSON): the shape above, or null when it isn't one. */
+export function parseSystemEvent(raw: unknown): SystemEvent | null {
+  if (!raw || typeof raw !== "object") return null
+  const e = raw as Record<string, unknown>
+  const types: SystemEventType[] = ["members_added", "member_removed", "member_left", "group_created", "group_renamed"]
+  if (!types.includes(e.type as SystemEventType)) return null
+  const person = (p: unknown): SystemPerson | null => {
+    if (!p || typeof p !== "object") return null
+    const { id, name } = p as Record<string, unknown>
+    return typeof id === "string" && id ? { id, name: typeof name === "string" ? name : "" } : null
+  }
+  const actor = person(e.actor)
+  if (!actor) return null
+  const out: SystemEvent = { type: e.type as SystemEventType, actor }
+  if (Array.isArray(e.targets)) out.targets = e.targets.map(person).filter((p): p is SystemPerson => p !== null)
+  if (typeof e.name === "string") out.name = e.name
+  if (typeof e.previousName === "string") out.previousName = e.previousName
+  return out
+}
+
+/**
+ * Who a SYSTEM row pushes: only the people it ADDS (members_added, group_created), never whoever did
+ * it. Everything else — a removal, someone leaving, a rename — pushes nobody: the room is not told.
+ */
+export function systemPushRecipients(event: SystemEvent | null | undefined): string[] {
+  if (!event || (event.type !== "members_added" && event.type !== "group_created")) return []
+  const actorId = event.actor?.id
+  return Array.from(new Set((event.targets ?? []).map((t) => t.id).filter((id) => !!id && id !== actorId)))
+}
+
+export type SystemPushDecision = { push: boolean; reason: "added" | "not_added" | "muted" | "dnd" }
+
+/**
+ * One room member, one SYSTEM row: a push only for someone it added. Being added is not a mention, so
+ * Do Not Disturb (or a mute, should one already be set) keeps it quiet like any plain message.
+ */
+export function systemPushDecision(input: {
+  event: SystemEvent | null | undefined
+  userId: string
+  mutedUntil?: When
+  dndUntil?: When
+  now?: Date | number
+}): SystemPushDecision {
+  const now = input.now instanceof Date ? input.now.getTime() : (input.now ?? Date.now())
+  if (!systemPushRecipients(input.event).includes(input.userId)) return { push: false, reason: "not_added" }
+  if (isFuture(input.mutedUntil, now)) return { push: false, reason: "muted" }
+  if (isFuture(input.dndUntil, now)) return { push: false, reason: "dnd" }
+  return { push: true, reason: "added" }
+}
+
+export type SystemPushContent = {
+  title: string
+  body: string
+  type: "MESSAGE"
+  link: string
+  threadId: string
+  data: ChatPushContent["data"] & { kind: "SYSTEM" }
+}
+
+/**
+ * The push someone gets when they are added to a group: title = the group, body "{actor} menambahkan
+ * kamu ke grup", thread-id and link = the conversation, so the tap opens the chat. Same keys as a chat
+ * push (Android builds its notification from them) plus kind "SYSTEM". Not localized: chat pushes are
+ * built in one language today (no per-person language on the server).
+ */
+export function buildSystemPush(input: {
+  conversationId: string
+  messageId: string
+  conversationName?: string | null
+  actorName?: string | null
+}): SystemPushContent {
+  const actor = (input.actorName ?? "").trim() || "Seseorang"
+  const conversationName = chatConversationName("GROUP", input.conversationName, actor)
+  const body = `${actor} menambahkan kamu ke grup`
+  return {
+    title: conversationName,
+    body,
+    type: "MESSAGE",
+    link: chatLink(input.conversationId),
+    threadId: input.conversationId,
+    data: {
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      conversationName,
+      senderName: actor,
+      isGroup: true,
+      text: body,
+      kind: "SYSTEM",
+    },
+  }
+}
+

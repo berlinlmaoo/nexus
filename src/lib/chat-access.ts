@@ -22,6 +22,24 @@ export const CHAT_MEMBER_SELECT = {
   user: { select: { id: true, name: true, avatar: true } },
 } as const
 
+/**
+ * What every message the chat API hands out carries (list pages, a sent message, socket
+ * message-created): the scalars — kind and event included — the author, and just enough of a quoted
+ * message to draw its preview.
+ */
+export const CHAT_MESSAGE_INCLUDE = {
+  user: { select: { id: true, name: true, avatar: true } },
+  // Just enough of the quoted message to render a preview; the client never needs its body.
+  replyTo: {
+    select: {
+      id: true,
+      content: true,
+      attachmentType: true,
+      user: { select: { id: true, name: true } },
+    },
+  },
+} as const
+
 export type ConversationAccess =
   | {
       ok: true
