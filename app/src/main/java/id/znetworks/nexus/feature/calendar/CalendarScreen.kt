@@ -606,7 +606,7 @@ internal fun Controls(d: CalDerived, vm: CalendarViewModel, shortHeight: Boolean
         // Narrow or large text: the view switch gets its own row and the period may wrap, so "October 2026"
         // or "14–20 Sep 2026" is never cut (audit 3 #1). A phone on its side keeps everything in one row and
         // the scope in a menu, so the grid gets the height (audit 3 #4).
-        val roomy = maxWidth >= 400.dp && fontScale <= 1.15f
+        val roomy = maxWidth >= 380.dp && fontScale <= 1.15f // inner width: a 411 dp phone fits one row, a 360 dp one does not
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { vm.shiftMonth(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(if (people) R.string.cal_prev_week else R.string.cal_prev_month)) }
@@ -642,8 +642,10 @@ private fun ViewSwitch(view: CalView, onPick: (CalView) -> Unit) {
             val name = stringResource(label)
             val on = view == v
             SegmentedButton(selected = on, onClick = { onPick(v) }, colors = colors, shape = SegmentedButtonDefaults.itemShape(i, 2),
-                icon = { SegmentedButtonDefaults.Icon(active = on) { Icon(icon, null, Modifier.size(SegmentedButtonDefaults.IconSize)) } },
-                modifier = Modifier.semantics { contentDescription = name }) {}
+                // The icon slot does not show without a label: the content itself is the check or the view's icon.
+                icon = {}, modifier = Modifier.semantics { contentDescription = name }) {
+                Icon(if (on) Icons.Filled.Check else icon, null, Modifier.size(20.dp))
+            }
         }
     }
 }

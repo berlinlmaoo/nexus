@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (410 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (412 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -224,6 +224,23 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 5 Home stat cards | No bottom sheet: the detail grows out of the tapped card as iOS MorphFlip — drawn full size in the middle, a scale+translate starts it exactly on the card and springs to full (response 0.4, damping 0.84), one gradient top to bottom, no scrim, list fading in once landed; tap outside, × or back shrinks it back into the card. Card rects kept outside state (no recomposition while scrolling) | 2bc7765 |
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
+
+## 8 Oct, Calendar — audit round 3, the remaining 8 findings (agents:~/handoff/calendar/AUDIT3-android.md)
+
+NOT published (decision 13).
+
+| # | What changed | Commit |
+|---|---|---|
+| 1 | The period ("October 2026", "14–20 Sep 2026") may wrap and is never cut; under 380 dp inner width or above 1.15× font the Month|People switch takes its own row | 3af6e06 + this step |
+| 2 | People headers: the unit's own name first (two lines at most), the line above it under (start-ellipsis); the dot key wraps (FlowRow); preview labels grow past 84 dp; initials are sized in dp with their circle | 3af6e06 |
+| 3 | Calendar text uses `CalType` roles from NexusTypography (Inter body / Plus Jakarta titles, matching line heights, no inherited 24 sp line or 0.5 sp tracking); `MicroLabel` is Inter | 3af6e06 |
+| 4 | Landscape phones: one control row (‹ period › · switch · scope menu), 40 dp cells, so more weeks show; the filters side panel has no "Show N tasks" (results are live); tablet People person column = 20 % of the width (140–260 dp) | 3af6e06 |
+| 5 | Quadrant widgets: `WidgetFit` counts a two-line title ("Penting dan mendesak") and reserves the "+N" row only when rows don't all fit, so "+N lagi" always shows (tested) | 74f113d |
+| 6 | Month|People switch: the selected one shows a check in place of its icon (first try used the M3 icon slot, which stays empty without a label — caught on the emulator, fixed) | 3af6e06 + this step |
+| 7 | Project colours at night in the app (task rows, filters, quadrant list) go through `NightHues` (moved to ui/theme, shared with the widgets) | 3af6e06 |
+| 8 | Widget list rows 44 dp, "+N" a full-width 48 dp row | 74f113d |
+
+Screens: `agents:/tmp/a3-after` — phone light/dark, 360 dp, font 1.3× and 2×, landscape (914×411 dp), 10.1" tablet at 1280/960/600 dp, widgets ID/EN light/dark.
 
 ## 8 Oct, Calendar — audit round 3: three bugs
 
