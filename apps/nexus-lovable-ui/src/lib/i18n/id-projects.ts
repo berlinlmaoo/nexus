@@ -32,4 +32,18 @@ export const ID_PROJECTS: Record<string, string> = {
   "That tab can't be changed here. Refresh the page and try again.": "Tab itu tidak bisa diubah di sini. Muat ulang halaman lalu coba lagi.",
   "Only BoD and above can turn Finance on or off.": "Hanya BoD ke atas yang bisa menyalakan atau mematikan Finance.",
   "That project type is coming soon. For now you can create a Task Project.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project.",
+  // Mission Control: projects are called projects (owner, 9 Oct 2026 — "kok masih new mission?").
+  // The page names "Mission Control" and "My Mission" stay.
+  "New project": "Proyek baru",
+  "Search projects, owners, lanes…": "Cari proyek, PIC, lane…",
+  "{shown}/{n} projects visible": "{shown}/{n} proyek terlihat",
+  "All projects": "Semua proyek",
+  "Create a new project": "Buat proyek baru",
+  "Project name": "Nama proyek",
+  "What's the project, who owns it, and what should move first?": "Proyek apa, siapa PIC-nya, dan apa yang harus jalan duluan?",
+  "Creating project…": "Membuat proyek…",
+  "Create project + open board": "Buat proyek + buka board",
+  "Click any project card to enter its live board.": "Klik kartu proyek mana pun untuk masuk ke board-nya.",
+  "No project matches that": "Tidak ada proyek yang cocok",
+  "Try another project name, owner or lane — or clear the search to see every project you're part of.": "Coba nama proyek, PIC, atau lane lain — atau hapus pencarian untuk melihat semua proyek yang kamu ikuti.",
 };

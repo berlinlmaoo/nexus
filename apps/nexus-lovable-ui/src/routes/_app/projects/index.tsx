@@ -62,7 +62,7 @@ const statusBadge: Record<string, { label: string; cls: string }> = {
 };
 
 const statusOptions = [
-  { value: "all", label: "All missions" },
+  { value: "all", label: "All projects" },
   { value: "ACTIVE", label: "In play" },
   { value: "PLANNING", label: "Warming up" },
   { value: "ON_HOLD", label: "Paused" },
@@ -334,7 +334,7 @@ function ProjectsPage() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search missions, owners, lanes…"
+                placeholder={tr("Search projects, owners, lanes…")}
                 variant="secondary"
                 className="w-full pl-7 text-sm"
               />
@@ -372,7 +372,7 @@ function ProjectsPage() {
               variant="primary"
               onPress={openCreate}
             >
-              <Plus className="h-3.5 w-3.5" /> New mission
+              <Plus className="h-3.5 w-3.5" /> {tr("New project")}
             </Button>
           </>
         }
@@ -390,7 +390,7 @@ function ProjectsPage() {
                 <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
                   <Sparkles className="h-3.5 w-3.5" /> Real NEXUS project
                 </div>
-                <h2 className="mt-3 text-2xl font-black tracking-tight">Launch a new mission</h2>
+                <h2 className="mt-3 text-2xl font-black tracking-tight">{tr("Create a new project")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Creates a real project, adds default lanes, then drops you into the board.
                 </p>
@@ -423,7 +423,7 @@ function ProjectsPage() {
                   />
                 </label>
                 <label className="text-xs font-semibold text-muted-foreground">
-                  Mission name
+                  {tr("Project name")}
                   <input
                     value={newProjectName}
                     onChange={(e) => setNewProjectName(e.target.value)}
@@ -438,7 +438,7 @@ function ProjectsPage() {
                 <textarea
                   value={newProjectDescription}
                   onChange={(e) => setNewProjectDescription(e.target.value)}
-                  placeholder="What's the mission, who owns it, and what should move first?"
+                  placeholder={tr("What's the project, who owns it, and what should move first?")}
                   className="mt-1 min-h-24 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                 />
               </label>
@@ -477,7 +477,7 @@ function ProjectsPage() {
               {!workspaceOptions.length && (
                 <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
                   No workspace visible yet. Login/session must load projects with workspaceId before
-                  creating a mission.
+                  creating a project.
                 </p>
               )}
               {createProject.isError && (
@@ -494,7 +494,7 @@ function ProjectsPage() {
                 variant="primary"
                 className="w-full font-bold"
               >
-                {createProject.isPending ? "Creating mission…" : "Create mission + open board"}
+                {createProject.isPending ? tr("Creating project…") : tr("Create project + open board")}
               </Button>
             </div>
             )}
@@ -508,8 +508,7 @@ function ProjectsPage() {
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <Sparkles className="h-3.5 w-3.5" /> {visibleProjects.length}/
-                {computedProjects.length} missions visible
+                <Sparkles className="h-3.5 w-3.5" /> {tr("{shown}/{n} projects visible", { shown: visibleProjects.length, n: computedProjects.length })}
               </div>
               <h2 className="mt-3 text-xl font-semibold tracking-tight">
                 Choose the board, then move the cards.
@@ -550,7 +549,7 @@ function ProjectsPage() {
               >
                 {statusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {option.value === "all" ? tr(option.label) : option.label}
                   </option>
                 ))}
               </select>
@@ -576,7 +575,7 @@ function ProjectsPage() {
               )}
             </div>
             <div className="text-xs text-muted-foreground">
-              Click any mission card to enter its live board.
+              {tr("Click any project card to enter its live board.")}
             </div>
           </div>
         </section>
@@ -603,8 +602,8 @@ function ProjectsPage() {
 
           if (visibleProjects.length === 0) {
             return (
-              <EmptyState icon={Search} tone="muted" title="No mission matches that"
-                message="Try another project name, owner or lane — or clear the search to see every mission you're part of." />
+              <EmptyState icon={Search} tone="muted" title={tr("No project matches that")}
+                message={tr("Try another project name, owner or lane — or clear the search to see every project you're part of.")} />
             );
           }
 
