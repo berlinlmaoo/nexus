@@ -52,6 +52,9 @@ data class Score(val shown: Int, val target: Int, val surplus: Int) {
 }
 
 object BoardModel {
+    /** The first column shown: three days before today when today is in [days] (so it sits in view), else the period's first day. */
+    fun startColumn(days: List<java.time.LocalDate>, today: java.time.LocalDate): Int = days.indexOf(today).let { if (it > 3) it - 3 else 0 }
+
     /** After today in the office's time zone. */
     fun isFuture(dayKey: String, today: java.time.LocalDate = id.znetworks.nexus.core.time.OfficeTime.today()): Boolean =
         runCatching { java.time.LocalDate.parse(dayKey.take(10)).isAfter(today) }.getOrDefault(false)

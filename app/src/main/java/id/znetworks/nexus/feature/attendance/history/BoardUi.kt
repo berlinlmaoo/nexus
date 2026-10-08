@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.attendance.history
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.repeatOnLifecycle
@@ -390,16 +391,14 @@ internal fun Grid(
     val gap = 3.dp
     val nameW = if (compact) 72.dp else 96.dp
     val scoreW = if (compact) 52.dp else 60.dp
-    val hScroll = rememberScrollState()
-    val vScroll = rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
+    // Opens on today, not on the 28th of last month (NAV-HOME-GROUP §5, the iOS bug): the position is the
+    // scroll state's own starting value, set before the first frame — no delayed scroll — and each period
+    // gets its own (today for the current one, its first day for a past one). A reload keeps the grid.
+    val hScroll = remember(days) { ScrollState(with(density) { ((cell + gap) * BoardModel.startColumn(days, today)).roundToPx() }) }
+    val vScroll = rememberScrollState()
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val weekday = remember(locale) { DateTimeFormatter.ofPattern("EEE", locale) }
-    // Opens on today, not on the 28th of last month.
-    LaunchedEffect(days) {
-        val idx = days.indexOf(today)
-        if (idx > 3) with(density) { hScroll.scrollTo(((cell + gap) * (idx - 3)).roundToPx()) }
-    }
     // A drag anywhere on the board moves it (iOS 91d7e98): over the names or the Score column it
     // still scrolls the days sideways, and over the date row it still scrolls the rows. The day
     // cells' own scrollers take their drags first; these catch what lands outside them.

@@ -2545,4 +2545,9 @@
     <plurals name="ty_many">
         <item quantity="other">%d orang sedang mengetik…</item>
     </plurals>
+    <string name="tab_chat">Chat</string>
+    <!-- Chat tab, Home tiles, group of two (Berlin, 9 Oct; NAV-HOME-GROUP) -->
+    <string name="ng_make_group">Jadikan grup</string>
+    <string name="ng_forced">Dua orang atau lebih otomatis jadi grup.</string>
+    <string name="ng_one_other">Mulai grup berdua dulu, tambah orang lain nanti.</string>
 </resources>

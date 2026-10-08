@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.home
 
+import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Storage
 import android.app.Application
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -648,17 +650,17 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
     val c = Nx.colors
     val showThreads = id.znetworks.nexus.ui.components.rememberIsCompany() == true
     // The master Calendar's entry follows the server's flags.calendar.
-    val calendarOn = (androidx.compose.ui.platform.LocalContext.current.applicationContext as id.znetworks.nexus.NexusApplication).container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
     // Three across: six tiles two-wide push the agenda a whole screen down.
-    val chatUnread by (androidx.compose.ui.platform.LocalContext.current.applicationContext as id.znetworks.nexus.NexusApplication).container.badges.chatUnread.collectAsStateWithLifecycle()
     val tiles = listOfNotNull(
-        Triple(R.string.home_q_chat, Icons.Filled.Chat, c.blue) to { onOpenWeb("/messages") },
+        // Chat is a tab now: Z Vault takes its place (company only, as in More) — NAV-HOME-GROUP.
+        (Triple(R.string.mt_vault, Icons.Filled.Storage, c.violetText) to { onOpenWeb("/vault") }).takeIf { showThreads },
         Triple(R.string.home_attendance, Icons.Filled.WatchLater, c.success) to onOpenAttendance,
         Triple(R.string.home_q_leaderboard, Icons.Filled.EmojiEvents, c.warning) to { onOpenWeb("/leaderboard") },
         Triple(R.string.home_q_rooms, Icons.Filled.MeetingRoom, c.danger) to { onOpenWeb("/room-booking") },
         // Threads is the company's (iOS 14b086f): no tile until known, none outside Z Networks.
         (Triple(R.string.home_q_threads, Icons.Filled.Forum, c.violetText) to { onOpenWeb("/threads") }).takeIf { showThreads },
-        (Triple(R.string.home_q_calendar, Icons.Filled.CalendarMonth, c.violetText) to { onOpenWeb("/calendar") }).takeIf { calendarOn },
+        // The Calendar is a tab too: Ticket takes its place.
+        Triple(R.string.mt_ticket, Icons.Filled.ConfirmationNumber, c.blue) to { onOpenWeb("/tickets") },
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         tiles.chunked(3).forEach { row ->
@@ -671,10 +673,7 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
                     ) {
                         Box(Modifier.size(44.dp).background(tint.copy(alpha = 0.14f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                            // Chat's unread on its tile (Berlin, 8 Oct).
-                            val badge = if (label == R.string.home_q_chat) id.znetworks.nexus.core.Badges.label(chatUnread) else null
-                            if (badge == null) Icon(icon, null, tint = tint)
-                            else androidx.compose.material3.BadgedBox(badge = { androidx.compose.material3.Badge { Text(badge) } }) { Icon(icon, null, tint = tint) }
+                            Icon(icon, null, tint = tint)
                         }
                         Text(stringResource(label), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textAlign = TextAlign.Center, maxLines = 2, minLines = 2)
                     }

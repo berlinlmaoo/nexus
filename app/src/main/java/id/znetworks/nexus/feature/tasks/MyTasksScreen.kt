@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.tasks
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -103,14 +104,19 @@ class MyTasksViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 @Composable
-fun MyTasksScreen(onOpenTask: (String) -> Unit, onBrowseProjects: () -> Unit, vm: MyTasksViewModel = viewModel()) {
+fun MyTasksScreen(onOpenTask: (String) -> Unit, onBrowseProjects: () -> Unit, onBack: (() -> Unit)? = null, vm: MyTasksViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     // Every visit re-reads: a task finished on its own screen must not stay "hot" here.
     LaunchedEffect(Unit) { vm.load() }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Text(stringResource(R.string.mytasks_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp,
-            color = c.foreground, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp))
+        // Opened from More (no longer a tab): a back arrow beside the title.
+        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            if (onBack != null) androidx.compose.material3.IconButton(onClick = onBack, modifier = Modifier.padding(top = 12.dp)) {
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.mytasks_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 24.sp,
+                color = c.foreground, modifier = Modifier.padding(start = if (onBack != null) 0.dp else 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp))
+        }
         s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
         Box(Modifier.weight(1f)) {
             when {

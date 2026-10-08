@@ -126,10 +126,12 @@ class MessagesViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { ProjectsApi(c.api).roster().members }.getOrNull()?.let { l -> _state.update { it.copy(roster = l) } }
     }
 
-    fun create(userIds: List<String>, groupName: String?, onOpen: (String) -> Unit) = viewModelScope.launch {
+    fun create(userIds: List<String>, groupName: String?, makeGroup: Boolean, onOpen: (String) -> Unit) = viewModelScope.launch {
         _state.update { it.copy(busy = true) }
         try {
-            val conv = api.create(if (userIds.size > 1) "GROUP" else "DM", userIds, groupName)
+            val type = ChatRules.newChatType(userIds.size, makeGroup)
+            // The name only for a group.
+            val conv = api.create(type, userIds, groupName.takeIf { type == "GROUP" })
             load(); onOpen(conv.id)
         } catch (e: ApiError) { _state.update { it.copy(error = e.describe(res)) } }
         _state.update { it.copy(busy = false) }
@@ -144,7 +146,7 @@ internal fun chatTime(iso: String?): String {
 }
 
 @Composable
-fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: MessagesViewModel = viewModel()) {
+fun MessagesScreen(onBack: (() -> Unit)?, onOpenChat: (String) -> Unit, vm: MessagesViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var composing by remember { mutableStateOf(false) }
@@ -161,7 +163,8 @@ fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: Message
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            // A tab now: no back arrow there (null); kept for a pushed copy.
+            if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(stringResource(R.string.chat_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.loadRoster(); composing = true }) { Icon(Icons.Filled.Edit, stringResource(R.string.chat_new), tint = c.violetText) }
         }
@@ -189,8 +192,8 @@ fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: Message
             }
         }
     }
-    if (composing) NewChatDialog(s, vm.meId, onDismiss = { composing = false }) { ids, name ->
-        composing = false; vm.create(ids, name, onOpenChat)
+    if (composing) NewChatDialog(s, vm.meId, onDismiss = { composing = false }) { ids, name, group ->
+        composing = false; vm.create(ids, name, group, onOpenChat)
     }
 }
 
@@ -244,11 +247,12 @@ internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit, onCreate: (List<String>, String?) -> Unit) {
+private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit, onCreate: (List<String>, String?, Boolean) -> Unit) {
     val c = Nx.colors
     var q by rememberSaveable { mutableStateOf("") }
     var picked by remember { mutableStateOf(listOf<RosterMember>()) }
     var groupName by rememberSaveable { mutableStateOf("") }
+    var makeGroup by rememberSaveable { mutableStateOf(false) }
     val people = s.roster.filter { (it.userId ?: it.id) != meId }
         .filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), true) } }
         .sortedBy { it.name.orEmpty().lowercase() }
@@ -260,7 +264,17 @@ private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit
                 if (picked.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     picked.forEach { m -> FilterChip(true, { picked = picked - m }, { Text("${m.name ?: m.email} ✕", fontSize = 12.sp) }) }
                 }
-                if (picked.size > 1) OutlinedTextField(groupName, { groupName = it }, singleLine = true, label = { Text(stringResource(R.string.chat_group_name)) }, modifier = Modifier.fillMaxWidth())
+                // "Make it a group" (NAV-HOME-GROUP): a group with one other person; two or more always are one.
+                val forced = picked.size >= 2
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Groups, null, tint = c.violetText); Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.ng_make_group), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        Text(stringResource(if (forced) R.string.ng_forced else R.string.ng_one_other), fontSize = 11.sp, color = c.mutedFg)
+                    }
+                    androidx.compose.material3.Switch(forced || makeGroup, { makeGroup = it }, enabled = !forced)
+                }
+                if (forced || makeGroup) OutlinedTextField(groupName, { groupName = it }, singleLine = true, label = { Text(stringResource(R.string.chat_group_name)) }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
                 if (s.roster.isEmpty()) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 LazyColumn(Modifier.heightIn(max = 320.dp)) {
@@ -276,8 +290,8 @@ private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(picked.mapNotNull { it.userId ?: it.id }, groupName.ifBlank { null }) }, enabled = picked.isNotEmpty() && !s.busy) {
-                Text(stringResource(if (picked.size > 1) R.string.chat_create_group else R.string.chat_start))
+            TextButton(onClick = { onCreate(picked.mapNotNull { it.userId ?: it.id }, groupName.ifBlank { null }, makeGroup) }, enabled = picked.isNotEmpty() && !s.busy) {
+                Text(stringResource(if (ChatRules.newChatType(picked.size, makeGroup) == "GROUP") R.string.chat_create_group else R.string.chat_start))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },

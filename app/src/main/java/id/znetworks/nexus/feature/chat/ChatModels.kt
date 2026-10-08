@@ -169,6 +169,9 @@ object ChatRules {
     fun showsAddPeople(conv: Conversation?): Boolean =
         conv != null && (conv.projectId != null || (conv.type == "GROUP" && conv.canManageMembers != false))
 
+    /** A group when asked for, or with two or more people (NAV-HOME-GROUP: a group of two is allowed); else a DM. */
+    fun newChatType(picked: Int, makeGroup: Boolean) = if (makeGroup || picked >= 2) "GROUP" else "DM"
+
     /** The server's 403 for someone below Manager, told apart from other 403s by its code, never its sentence. */
     fun managerRequired(e: Throwable): Boolean = (e as? id.znetworks.nexus.core.net.ApiError.Http)?.let { it.status == 403 && it.code == "MANAGER_REQUIRED" } == true
 }

@@ -2586,4 +2586,9 @@
         <item quantity="one">%d person is typing…</item>
         <item quantity="other">%d people are typing…</item>
     </plurals>
+    <string name="tab_chat">Chat</string>
+    <!-- Chat tab, Home tiles, group of two (Berlin, 9 Oct; NAV-HOME-GROUP) -->
+    <string name="ng_make_group">Make it a group</string>
+    <string name="ng_forced">Two or more people always make a group.</string>
+    <string name="ng_one_other">Start a group with just one other person, and add more later.</string>
 </resources>

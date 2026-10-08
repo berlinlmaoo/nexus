@@ -1,5 +1,6 @@
 package id.znetworks.nexus.ui.shell
 
+import androidx.compose.material.icons.automirrored.filled.Chat
 import id.znetworks.nexus.feature.forms.FormBuilderScreen
 import id.znetworks.nexus.feature.chat.ChatSearchScreen
 import id.znetworks.nexus.feature.chat.ChatMediaScreen
@@ -176,6 +177,8 @@ import kotlinx.coroutines.launch
 internal enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
     HOME("home", R.string.tab_home, Icons.Filled.Home, "/dashboard"),
     TASKS("tasks", R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
+    /** The chat list (9 Oct, NAV-HOME-GROUP): a tab with its own back stack, in the slot Tasks had. */
+    CHAT("messages", R.string.tab_chat, Icons.AutoMirrored.Filled.Chat, "/messages"),
     INBOX("inbox", R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
     CALENDAR("calendar", R.string.tab_calendar, Icons.Filled.CalendarMonth, "/calendar"),
     PROJECTS("projects", R.string.tab_projects, Icons.Filled.Folder, "/projects"),
@@ -188,7 +191,7 @@ internal enum class Tab(val route: String, val label: Int, val icon: ImageVector
  */
 internal object ShellTabs {
     fun routes(calendarOn: Boolean): List<String> =
-        if (calendarOn) listOf("home", "tasks", "calendar", "projects", "more") else listOf("home", "tasks", "inbox", "projects", "more")
+        if (calendarOn) listOf("home", "messages", "calendar", "projects", "more") else listOf("home", "messages", "inbox", "projects", "more")
     /** The tab a destination belongs to: "calendar?date={date}…" is the Calendar tab. */
     fun tabOf(route: String?): String? = route?.substringBefore('?')
 }
@@ -261,7 +264,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 // Already in that thread (a push tapped while reading it): stay, no second copy (CHAT-REPORT P0).
                 val here = nav.currentBackStackEntry
                 val inThread = here?.destination?.route == ShellRoutes.CHAT && here.arguments?.getString("id") == t.conversationId
-                if (!inThread) nav.navigate(t.conversationId?.let { "chat/${enc(it)}" } ?: "messages") { launchSingleTop = true }
+                // A chat push or link opens the Chat tab and pushes that chat on it (NAV-HOME-GROUP).
+                if (!inThread) { goTab(Tab.CHAT); t.conversationId?.let { nav.navigate("chat/${enc(it)}") { launchSingleTop = true } } }
             }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
@@ -296,7 +300,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         ?: tabs.firstOrNull { t -> backStack?.destination?.hierarchy?.any { ShellTabs.tabOf(it.route) == t.route } == true }
     // Inbox's unread on whichever entry holds Inbox now: its own tab, or More (Berlin, 8 Oct).
     val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
-    val badgeOn: (Tab) -> String? = { t -> if (t == Tab.INBOX || (t == Tab.MORE && Tab.INBOX !in tabs)) Badges.label(inboxUnread) else null }
+    // Chat carries the chat total (muted rooms left out); More only Inbox's, when Inbox has no tab (NAV-HOME-GROUP).
+    val chatUnread by container.badges.chatUnread.collectAsStateWithLifecycle()
+    val badgeOn: (Tab) -> String? = { t -> when {
+        t == Tab.CHAT -> Badges.label(chatUnread)
+        t == Tab.INBOX || (t == Tab.MORE && Tab.INBOX !in tabs) -> Badges.label(inboxUnread)
+        else -> null
+    } }
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
@@ -326,7 +336,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenSettings = { goTab(Tab.MORE) },
                     // Quick actions built in the app open here; the rest on the web until built.
                     onOpenGideon = { nav.navigate("gideon") },
-                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar", "/calendar" -> nav.navigate("calendar"); else -> openWeb(context, it) } },
+                    onOpenWeb = { when (it) { "/messages" -> goTab(Tab.CHAT); "/vault" -> nav.navigate("vault?folder=&trash="); "/tickets" -> nav.navigate("tickets"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar", "/calendar" -> nav.navigate("calendar"); else -> openWeb(context, it) } },
                 )
             }
             composable("account") {
@@ -422,7 +432,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     RestoreTarget.Kind.VAULT -> "vault"; RestoreTarget.Kind.WIRE -> "threads"; RestoreTarget.Kind.CHAT -> "chat/${t.id}"
                 }) }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
-            composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
+            composable(Tab.CHAT.route) { MessagesScreen(onBack = null, onOpenChat = { nav.navigate("chat/$it") }) }
             // `at`: open on a message (a search hit, SYSTEM-MESSAGES part 2).
             composable(ShellRoutes.CHAT, arguments = listOf(androidx.navigation.navArgument("at") { nullable = true; defaultValue = null })) { e ->
                 val cid = e.arguments?.getString("id").orEmpty()
@@ -457,7 +467,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 )
             }
             composable("attendance") { AttendanceScreen(onBack = { nav.popBackStack() }) }
-            composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }) }
+            // Tasks lives in More now (NAV-HOME-GROUP): a pushed screen with a back arrow.
+            composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") })
@@ -533,7 +544,7 @@ internal object ShellRoutes {
 
 /** The shell's navigation motion (iOS push/pop, point 7). */
 object ShellMotion {
-    private val TABS = setOf("home", "tasks", "inbox", "calendar", "projects", "more")
+    private val TABS = setOf("home", "messages", "inbox", "calendar", "projects", "more")
     private const val MS = 300
     fun betweenTabs(from: String?, to: String?) = ShellTabs.tabOf(from) in TABS && ShellTabs.tabOf(to) in TABS
     val pushIn: EnterTransition = slideInHorizontally(tween(MS)) { it }
@@ -579,7 +590,6 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
     val company = rememberIsCompany() == true
     val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
     val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
-    val chatUnread by container.badges.chatUnread.collectAsStateWithLifecycle()
     // Control Room is drawn for MANAGER and above only (the server re-checks every call).
     val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
     Column(Modifier.fillMaxSize().background(c.background)) {
@@ -590,7 +600,8 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
             MoreSection(stringResource(R.string.more_sec_home), listOfNotNull(
                 // Inbox lives here when the Calendar holds its tab (Berlin, 8 Oct), with its unread.
                 if (calendarOn) MoreItem(R.string.tab_inbox, Icons.Filled.Notifications, c.danger, badge = Badges.label(inboxUnread)) { open("inbox") } else null,
-                MoreItem(R.string.mt_messages, Icons.Filled.Forum, c.blue, badge = Badges.label(chatUnread)) { open("messages") },
+                // Tasks took Messages' place here; Messages is the Chat tab now (NAV-HOME-GROUP).
+                MoreItem(R.string.tab_tasks, Icons.Filled.Checklist, c.blue) { open("tasks") },
                 if (company) MoreItem(R.string.mt_threads, Icons.Filled.ChatBubble, c.violetText) { open("threads") } else null,
                 MoreItem(R.string.mt_submissions, Icons.Filled.Inbox, c.warning) { open("submissions") },
                 MoreItem(R.string.mt_rooms, Icons.Filled.MeetingRoom, c.coral) { open("rooms") },
