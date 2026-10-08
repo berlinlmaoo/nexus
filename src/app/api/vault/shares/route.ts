@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 import { getVaultActor, canReadItem, canModifyItem, newShareSlug } from "@/lib/vault"
 import { EXPIRY_PRESETS, serializeShare } from "@/lib/vault-share"
 
@@ -101,6 +102,8 @@ export async function POST(request: NextRequest) {
       // than the link is meant for.
       metadata: { itemId: item.id, requireAuth, allowDownload: share.allowDownload, expires: preset },
     }).catch(() => {})
+    // The item's "· 1 link" in every open listing.
+    emitVaultChanged(actor.workspaceId, actor.userId)
 
     return NextResponse.json(serializeShare(share), { status: 201 })
   } catch (error) {

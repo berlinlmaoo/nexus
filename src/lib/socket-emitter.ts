@@ -81,7 +81,7 @@ export function emitSheetStructure(sheetId: string, actorId: string) {
   eventBus.emit(BUS_EVENTS.SHEET_STRUCTURE, { sheetId, actorId })
 }
 
-export type WorkspaceChangedKind = "projects" | "folders" | "audit"
+export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault"
 
 /**
  * `workspace-changed` (owner, 8 Oct 2026): WHICH collection of a workspace moved, never what it now
@@ -119,6 +119,17 @@ export function emitWorkspaceChanged(
   if (payload.folderId) ping.folderId = payload.folderId
   if (payload.actorId) ping.actorId = payload.actorId
   publishSafely(BUS_EVENTS.WORKSPACE_CHANGED, { workspaceId: workspaceId || null, userIds, payload: ping })
+}
+
+/**
+ * `workspace-changed` { kind: "vault" } (owner, 9 Oct 2026): something a colleague would see change in
+ * a Z Vault listing — a file uploaded, a folder made, renamed, moved, trashed, restored, purged, its
+ * access changed, a link made. The vault is the company workspace's, so the ping goes to that
+ * workspace's room; it carries the actor and nothing else (not even the item: a locked folder's id is
+ * not for everyone), and the open vault screens refetch through the API, which applies the access rules.
+ */
+export function emitVaultChanged(workspaceId: string | null | undefined, actorId?: string) {
+  emitWorkspaceChanged(workspaceId, { kind: "vault", actorId })
 }
 
 /**

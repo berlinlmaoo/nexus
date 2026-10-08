@@ -5,6 +5,7 @@ import { writeFile, rename, unlink } from "fs/promises"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 import { resolveMime } from "@/lib/mime"
 import {
   getVaultActor,
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
       request,
       metadata: { parentId, size: buffer.byteLength },
     }).catch(() => {})
+    emitVaultChanged(actor.workspaceId, actor.userId)
 
     return NextResponse.json(serializeVaultItem(created as unknown as VaultItemRow, actor), { status: 201 })
   } catch (error) {

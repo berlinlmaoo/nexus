@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 import { restorableDelete, restorableSoftDelete } from "@/lib/deletion-snapshot"
 import {
   getVaultActor,
@@ -166,6 +167,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       request,
       metadata: { changed: Object.keys(data) },
     }).catch(() => {})
+    // A rename, a move (both folders' listings), a restore or an access change: every open vault
+    // screen refetches. Ids only; a colleague who may not see the item gets a listing without it.
+    emitVaultChanged(actor.workspaceId, actor.userId)
 
     return NextResponse.json(serializeVaultItem(updated as unknown as VaultItemRow, actor))
   } catch (error) {
@@ -211,6 +215,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         meta: { open: { type: "vault", id: item.id } },
         apply: (tx) => tx.vaultItem.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt: new Date() } }),
       })
+      emitVaultChanged(actor.workspaceId, actor.userId)
       return NextResponse.json({ trashed: ids.length })
     }
 
@@ -223,6 +228,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       meta: { open: { type: "vault", id: item.id } },
       remove: (tx) => tx.vaultItem.delete({ where: { id: item.id } }),
     })
+    emitVaultChanged(actor.workspaceId, actor.userId)
 
     // `filesUnlinked` stays for older clients: nothing leaves the disk at this point any more.
     return NextResponse.json({ purged: ids.length, filesUnlinked: 0 })

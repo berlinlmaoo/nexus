@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 import {
   getVaultActor,
   canReadItem,
@@ -153,6 +154,8 @@ export async function POST(request: NextRequest) {
       request,
       metadata: { parentId },
     }).catch(() => {})
+    // Every open vault screen of the company refetches (ids only; see emitVaultChanged).
+    emitVaultChanged(actor.workspaceId, actor.userId)
 
     return NextResponse.json(serializeVaultItem(created as unknown as VaultItemRow, actor), { status: 201 })
   } catch (error) {
