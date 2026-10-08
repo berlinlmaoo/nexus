@@ -284,6 +284,31 @@ class CalLaterWidgetReceiver : CalendarWidgetReceiver() { override val glanceApp
 
 // ── Links: every one carries the widget's scope, so the Calendar opens on the same tasks (audit #33) ──
 
+/** How many list rows a widget shows (pure, tested): the "+N" row is reserved only when some rows don't fit (audit 3 #5). */
+object WidgetFit {
+    /** Rows of [rowDp] in [heightDp] under [headerDp]; when [count] does not all fit, room for a [moreDp] "+N" row first. */
+    fun rows(heightDp: Float, headerDp: Float, rowDp: Float, moreDp: Float, count: Int): Int {
+        val all = ((heightDp - headerDp) / rowDp).toInt()
+        if (count <= all) return count.coerceAtLeast(0)
+        return ((heightDp - headerDp - moreDp) / rowDp).toInt().coerceAtLeast(1)
+    }
+    /** Lines a bold title of [chars] characters at [spDrawn] takes in [widthDp] (≈ 0.58 em a character), at most [max]. */
+    fun titleLines(chars: Int, spDrawn: Float, widthDp: Float, max: Int = 2): Int =
+        kotlin.math.ceil(chars * spDrawn * 0.58f / widthDp.coerceAtLeast(1f)).toInt().coerceIn(1, max)
+}
+
+/** List rows and the "+N" row are at least 44–48 dp tall: real targets (audit 3 #8). */
+private fun rowDp(compact: Boolean) = 44f * fontScaleUsed.coerceAtLeast(1f)
+private const val MORE_DP = 48f
+
+/** "+N more" as a full-width 48 dp row. */
+@Composable
+private fun MoreRow(text: String, action: Action, sizeSp: Float) {
+    Row(GlanceModifier.fillMaxWidth().height(MORE_DP.dp).clickable(action), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.primary, fontSize = fs(sizeSp), fontWeight = FontWeight.Medium))
+    }
+}
+
 /** The deep links a widget opens (pure: tested in CalendarWidgetLinksTest). */
 object CalendarWidgetLinks {
     fun calendar(scope: String?) = "nexus://calendar?scope=${scope ?: "me"}"
@@ -507,8 +532,9 @@ private fun Chip(lc: Context, bar: Bar, faded: Float, lines: Int = 1) {
 private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
     val scope = d.saved.snapshot.scope
     val m = CalendarGlance.monthView(d.saved.snapshot, d.nowMs, 3)
-    // Up to 4, as many as fit (~36 dp a row under the title, room kept for a full-width "+N" target).
-    val fit = ((LocalSize.current.height.value - 96 * fontScaleUsed) / (36 * fontScaleUsed)).toInt().coerceIn(1, 4)
+    // As many 44 dp rows as fit under the title (padding, footer, title), up to 4; "+N" only if needed.
+    val total = CalendarGlance.upcoming(d.saved.snapshot, d.nowMs, 4).let { it.rows.size + it.more }
+    val fit = WidgetFit.rows(LocalSize.current.height.value - 20, (lineDp(10f) + 4) + (lineDp(12f) + 4), rowDp(true), MORE_DP, total).coerceIn(1, 4)
     val up = CalendarGlance.upcoming(d.saved.snapshot, d.nowMs, fit)
     val today = CalendarGlance.wibClock(d.nowMs).day
     Row(GlanceModifier.fillMaxSize()) {
@@ -526,8 +552,7 @@ private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
             Spacer(GlanceModifier.height(4.dp))
             if (up.rows.isEmpty()) Text(lc.getString(R.string.wcal_nothing_up, scopeLabel(lc, scope)), style = TextStyle(color = muted(), fontSize = fs(12f)))
             up.rows.forEach { b -> ListRow(lc, b, today, scope, showProject = false, compact = true) }
-            if (up.more > 0) Text(lc.resources.getQuantityString(R.plurals.cal_more_n, up.more, up.more), maxLines = 1,
-                modifier = GlanceModifier.fillMaxWidth().padding(vertical = 8.dp).clickable(open(lc, CalendarWidgetLinks.day(today, scope))), style = TextStyle(color = GlanceTheme.colors.primary, fontSize = fs(11f), fontWeight = FontWeight.Medium))
+            if (up.more > 0) MoreRow(lc.resources.getQuantityString(R.plurals.cal_more_n, up.more, up.more), open(lc, CalendarWidgetLinks.day(today, scope)), 12f)
         }
     }
 }
@@ -535,7 +560,7 @@ private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
 /** One task in a list: colour, title, due (+ project), red when overdue; spoken as one sentence. */
 @Composable
 private fun ListRow(lc: Context, b: Bar, today: String, scope: String?, showProject: Boolean, compact: Boolean) {
-    Row(GlanceModifier.fillMaxWidth().padding(bottom = if (compact) 3.dp else 5.dp).clickable(open(lc, CalendarWidgetLinks.task(b, scope)))
+    Row(GlanceModifier.fillMaxWidth().height(rowDp(compact).dp).clickable(open(lc, CalendarWidgetLinks.task(b, scope)))
         .semantics { contentDescription = rowDescription(lc, b, today) }, verticalAlignment = Alignment.CenterVertically) {
         Box(GlanceModifier.width(3.dp).height(if (compact) 26.dp else 30.dp).cornerRadius(2.dp).background(if (b.overdue == Overdue.RECENT) cp(RED) else hue(b.color))) {}
         Spacer(GlanceModifier.width(6.dp))
@@ -590,8 +615,11 @@ private fun QuadrantWidget(lc: Context, d: WidgetData.Ready, q: Quadrant) {
     val list = CalendarGlance.quadrants(d.saved.snapshot, d.nowMs).first { it.quadrant == q }
     val today = CalendarGlance.wibClock(d.nowMs).day
     val note = quadrantNote(q)
-    // Rows of ~40 dp under the header (+ the note), padding, footer and a "+N" line.
-    val fit = ((size.height.value - (104 + (if (note != null) 14 else 0)) * fontScaleUsed) / (40 * fontScaleUsed)).toInt().coerceIn(1, 8)
+    // The title may take two lines ("Penting dan mendesak" at 2×2): counted, so "+N" is never pushed out (audit 3 #5).
+    val title = lc.getString(quadrantTitle(q))
+    val lines = WidgetFit.titleLines(title.length, 13f * fontScaleUsed, size.width.value - 20 - 14 - 28 * fontScaleUsed)
+    val header = lines * lineDp(13f) + (if (note != null) lineDp(10f) else 0f) + 6
+    val fit = WidgetFit.rows(size.height.value - 20, header + (lineDp(10f) + 4), rowDp(false), MORE_DP, list.count).coerceIn(1, 8)
     val wide = size.width >= 220.dp
     val all = open(lc, CalendarWidgetLinks.quadrant(q, scope))
     Column(GlanceModifier.fillMaxSize()) {
@@ -601,7 +629,7 @@ private fun QuadrantWidget(lc: Context, d: WidgetData.Ready, q: Quadrant) {
                 Box(GlanceModifier.size(8.dp).cornerRadius(4.dp).background(cp(quadrantHue(q)))) {}
                 Spacer(GlanceModifier.width(6.dp))
                 // Two lines: "Penting dan mendesak" fits at 2×2 in Indonesian too (audit 2 #28).
-                Text(lc.getString(quadrantTitle(q)), maxLines = 2, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = quadrantText(q), fontSize = fs(13f), fontWeight = FontWeight.Bold))
+                Text(title, maxLines = 2, modifier = GlanceModifier.defaultWeight(), style = TextStyle(color = quadrantText(q), fontSize = fs(13f), fontWeight = FontWeight.Bold))
                 Text(list.count.toString(), style = TextStyle(color = quadrantText(q), fontSize = fs(16f), fontWeight = FontWeight.Bold))
             }
             if (note != null) Text(lc.getString(note), maxLines = 1, style = TextStyle(color = muted(), fontSize = fs(10f)))
@@ -609,7 +637,6 @@ private fun QuadrantWidget(lc: Context, d: WidgetData.Ready, q: Quadrant) {
         // Empty is an outcome, with the scope it is about (audit #44).
         if (list.rows.isEmpty()) Text(lc.getString(quadrantEmpty(q), scopeLabel(lc, scope)), maxLines = 3, style = TextStyle(color = muted(), fontSize = fs(12f)))
         list.rows.take(fit).forEach { ListRow(lc, it, today, scope, showProject = wide, compact = false) }
-        if (list.count > fit) Text(lc.resources.getQuantityString(R.plurals.cal_more_n, list.count - fit, list.count - fit), maxLines = 1,
-            modifier = GlanceModifier.fillMaxWidth().padding(vertical = 8.dp).clickable(all), style = TextStyle(color = GlanceTheme.colors.primary, fontSize = fs(12f), fontWeight = FontWeight.Medium))
+        if (list.count > fit) MoreRow(lc.resources.getQuantityString(R.plurals.cal_more_n, list.count - fit, list.count - fit), all, 12f)
     }
 }

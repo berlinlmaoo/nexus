@@ -66,4 +66,19 @@ class CalendarWidgetLinksTest {
         assertTrue("appWidgetBackground()" in src && "system_app_widget_background_radius" in src)
         assertFalse("GlanceModifier.size(circle)" in src)
     }
+
+    @Test fun plusNIsNeverPushedOut() {
+        val f = id.znetworks.nexus.feature.calendar.widget.WidgetFit
+        // All fit: no "+N" row reserved.
+        assertEquals(3, f.rows(200f, 50f, 48f, 48f, 3))
+        // Not all fit: room for the 48 dp "+N" row first.
+        assertEquals(2, f.rows(200f, 50f, 48f, 48f, 9))
+        // "Penting dan mendesak" at 13 sp in a 2×2 widget takes two lines; "Penting" one.
+        assertEquals(2, f.titleLines("Penting dan mendesak".length, 13f, 120f))
+        assertEquals(1, f.titleLines("Penting".length, 13f, 120f))
+        // 2×2 (~185 dp) in Indonesian: header two lines + footer, the rows and "+N" fit in the height.
+        val header = 2 * 13f * 1.35f + 10f * 1.35f + 6 + (10f * 1.35f + 4)
+        val n = f.rows(185f - 20, header, 44f, 48f, 5)
+        assertTrue(n >= 1 && header + n * 44f + 48f <= 165f)
+    }
 }
