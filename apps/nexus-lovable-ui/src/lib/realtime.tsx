@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 import { invalidateAuditViews, invalidateProjectViews } from "./invalidate";
+import { bindTypingSocket } from "./chat-typing";
 
 // SOCKET event names → query invalidation.
 //
@@ -279,6 +280,9 @@ export function RealtimeProvider({
           socket.on(evt, handler);
           return () => socket.off(evt, handler);
         });
+
+        // "… is typing" (chat-typing.ts): its own store, read by the thread, its header and the list.
+        cleanups.push(bindTypingSocket(socket, userId));
 
         cleanups.push(() => {
           socket.off("connect", onConnect);
