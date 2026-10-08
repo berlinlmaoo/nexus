@@ -43,6 +43,8 @@ class ProjectsApi(private val api: ApiClient) {
         val body = buildJsonObject {
             put("name", name.trim()); put("workspaceId", workspaceId)
             color?.let { put("color", it) }; icon?.let { put("icon", it) }; folderId?.let { put("folderId", it) }
+            // Only Task Project exists so far; anything else is 400 TYPE_COMING_SOON (PROJECT-TYPES-TABS).
+            put("type", ProjectType.TASK.code)
         }
         return (post("/api/projects", body)["id"] as? JsonPrimitive)?.content.orEmpty()
     }

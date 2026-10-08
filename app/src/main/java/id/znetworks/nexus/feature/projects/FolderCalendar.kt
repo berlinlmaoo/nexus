@@ -281,7 +281,7 @@ private fun MonthCalendar(tasks: List<BoardTask>, colorOf: (String?) -> String, 
                     Column(Modifier.weight(1f)) {
                         Text(t.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (done) c.mutedFg else c.foreground, maxLines = 2,
                             textDecoration = if (done) TextDecoration.LineThrough else null)
-                        byId[pid]?.let { p -> Text(listOfNotNull(p.icon?.takeIf { !it.startsWith("/") }, p.name).joinToString(" "), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = 1) }
+                        byId[pid]?.let { p -> Text(listOfNotNull(ProjectIcon.emoji(p.icon), p.name).joinToString(" "), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = 1) }
                     }
                     t.priority?.takeIf { !it.equals("NONE", true) }?.let { Pill(priorityLabel(it), c.mutedFg); Spacer(Modifier.width(6.dp)) }
                     t.assignees.firstOrNull()?.user?.let { u -> Avatar(u.name, u.avatar, 24.dp) }

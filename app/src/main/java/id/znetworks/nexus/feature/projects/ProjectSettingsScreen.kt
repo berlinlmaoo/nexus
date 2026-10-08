@@ -83,6 +83,11 @@ data class ProjectSettingsState(
     val fields: List<CustomFieldDef> = emptyList(),
     val roster: List<RosterMember> = emptyList(),
     val isBoD: Boolean = false,
+    /** Workspace role known yet, and Manager or above (tabs; PROJECT-TYPES-TABS). */
+    val roleKnown: Boolean = false,
+    val isManager: Boolean = false,
+    /** The hidden tabs as just switched, ahead of the server's answer; null = the project's own. */
+    val hiddenDraft: Set<String>? = null,
     val busy: Boolean = false,
     val toast: String? = null,
     val error: String? = null,
@@ -106,7 +111,8 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
         val r = async { runCatching { api.roster() }.getOrNull() }
         c.viewer.load()
         _state.update {
-            it.copy(detail = d.await() ?: it.detail, fields = f.await() ?: it.fields, roster = r.await()?.members ?: it.roster, isBoD = c.viewer.isBoD)
+            it.copy(detail = d.await() ?: it.detail, fields = f.await() ?: it.fields, roster = r.await()?.members ?: it.roster, isBoD = c.viewer.isBoD,
+                roleKnown = c.viewer.role != null, isManager = c.viewer.canAdminister)
         }
     }
 
@@ -127,6 +133,26 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
     }
 
     fun save(vararg fields: Pair<String, JsonElement>) = act(R.string.ps_saved) { api.updateProject(projectId, JsonObject(fields.toMap())) }
+
+    /** One tab on or off: the WHOLE hidden set goes up; the switch moves at once and goes back on any error. */
+    fun setTab(key: String, show: Boolean) {
+        val now = _state.value.hiddenDraft ?: ProjectTabsLogic.hidden(_state.value.detail?.hiddenTabs)
+        val next = ProjectTabsLogic.toggle(now, key, show)
+        _state.update { it.copy(hiddenDraft = next.toSet()) }
+        viewModelScope.launch {
+            try {
+                val reply = api.updateProject(projectId, JsonObject(mapOf("hiddenTabs" to JsonArray(next.map { JsonPrimitive(it) }))))
+                _state.update { it.copy(hiddenDraft = null, detail = it.detail?.copy(hiddenTabs = reply["hiddenTabs"] ?: JsonArray(next.map { k -> JsonPrimitive(k) }))) }
+            } catch (e: ApiError) {
+                val h = e as? ApiError.Http
+                _state.update { it.copy(hiddenDraft = null, error = when {
+                    h?.code == "TASK_VIEW_REQUIRED" -> res.getString(R.string.ps_tabs_board_or_list)
+                    h?.status == 403 -> res.getString(R.string.ps_tabs_managers)
+                    else -> h?.serverMessage ?: e.describe(res)
+                }) }
+            }
+        }
+    }
 
     fun createField(name: String, type: String, options: List<String>) = act(R.string.ps_saved) { api.createField(projectId, name, type, options) }
     fun deleteField(id: String) = act { api.deleteField(id) }
@@ -193,6 +219,10 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 if (s.isBoD) Flag("P&L Dashboard", stringResource(R.string.ps_pnl_sub), d.enablePnlDashboard == true) {
                     vm.save("enablePnlDashboard" to JsonPrimitive(it))
                 }
+                // Finance is opt-in now, like P&L (9 Oct): BoD+ only; off only hides the tab.
+                if (s.isBoD) Flag("Finance", stringResource(R.string.ps_finance_sub), ProjectTabsLogic.financeOn(d.financeEnabled, d.name)) {
+                    vm.save("financeEnabled" to JsonPrimitive(it))
+                }
                 var autoIds by remember(d.autoAssignAssigneeIds) { mutableStateOf(d.autoAssignAssigneeIds.toSet()) }
                 Flag("Auto assign", stringResource(R.string.ps_auto_sub), d.autoAssignEnabled == true) { on ->
                     if (on && autoIds.isEmpty()) vm.say(R.string.ps_auto_pick_first) else vm.save("autoAssignEnabled" to JsonPrimitive(on), "autoAssignAssigneeIds" to JsonArray(autoIds.map { JsonPrimitive(it) }))
@@ -208,6 +238,19 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                     }
                 }
                 if (autoIds.isEmpty()) Text(stringResource(R.string.ps_auto_pick_first), fontSize = 11.sp, color = c.mutedFg)
+            }
+            // Tabs: which ones this project shows (hiding deletes nothing).
+            Section(stringResource(R.string.ps_tabs)) {
+                Text(stringResource(R.string.ps_tabs_sub), fontSize = 12.sp, color = c.mutedFg)
+                val hidden = s.hiddenDraft ?: ProjectTabsLogic.hidden(d.hiddenTabs)
+                val canChange = s.isManager
+                ProjectTab.entries.forEach { t ->
+                    val key = ProjectTabsLogic.key(t) ?: return@forEach
+                    val locked = ProjectTabsLogic.locked(key, hidden)
+                    Flag(stringResource(t.label), if (locked) stringResource(R.string.ps_tabs_board_or_list) else "", key !in hidden,
+                        enabled = canChange && !locked && !s.busy) { vm.setTab(key, it) }
+                }
+                if (s.roleKnown && !canChange) Text(stringResource(R.string.ps_tabs_managers), fontSize = 11.sp, color = c.mutedFg)
             }
             // Custom fields
             Section(stringResource(R.string.ps_fields), action = { TextButton(onClick = { addingField = true }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.add)) } }) {
@@ -288,14 +331,14 @@ private fun Section(title: String, action: @Composable () -> Unit = {}, content:
 }
 
 @Composable
-private fun Flag(title: String, sub: String, on: Boolean, onChange: (Boolean) -> Unit) {
+private fun Flag(title: String, sub: String, on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     val c = Nx.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-            Text(sub, fontSize = 11.sp, color = c.mutedFg)
+            if (sub.isNotEmpty()) Text(sub, fontSize = 11.sp, color = c.mutedFg)
         }
-        Switch(on, onChange)
+        Switch(on, onChange, enabled = enabled)
     }
 }
 

@@ -118,16 +118,11 @@ data class ProjectDetailState(
     val isBoD: Boolean = false,
 ) {
     /**
-     * The web's tab filter: Finance only on a project whose NAME says finance (no backend flag),
-     * P&L only with the project's flag AND a BoD-tier viewer.
+     * The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out, Finance only when opted in
+     * (older server: the name says finance), P&L only with its flag AND a BoD-tier viewer.
      */
-    val tabs: List<ProjectTab> get() = ProjectTab.entries.filter {
-        when (it) {
-            ProjectTab.FINANCE -> detail?.name.orEmpty().contains("finance", ignoreCase = true)
-            ProjectTab.PNL -> detail?.enablePnlDashboard == true && isBoD
-            else -> true
-        }
-    }
+    val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
+        ProjectTabsLogic.financeOn(detail?.financeEnabled, detail?.name), detail?.enablePnlDashboard == true, isBoD)
 }
 
 class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -221,6 +216,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                 if (s.detail != null) IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, stringResource(R.string.ps_title)) }
             }
             val tabs = s.tabs
+            // The open tab hidden (here or on another device): Board, else List, else the first.
+            LaunchedEffect(tabs) { if (s.detail != null) tab = ProjectTabsLogic.fallback(tab, tabs) }
             ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0), edgePadding = 12.dp, containerColor = c.background) {
                 tabs.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(stringResource(t.label)) }) }
             }

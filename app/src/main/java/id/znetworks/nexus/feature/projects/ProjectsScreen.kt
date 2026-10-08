@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.projects
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.filled.PushPin
@@ -212,7 +215,8 @@ fun IconTile(icon: String?, fallback: String, size: Int = 44) {
         if (icon != null && icon.startsWith("/")) {
             RemoteImage(icon, Modifier.size(size.dp), maxPx = 200) { Text(fallback, fontSize = (size / 2).sp) }
         } else {
-            Text(icon?.takeIf { it.isNotBlank() && !it.first().isLetterOrDigit() } ?: fallback, fontSize = (size / 2).sp)
+            // An emoji, or a name ("briefcase" → 💼; PROJECT-TYPES-TABS).
+            Text(ProjectIcon.emoji(icon) ?: fallback, fontSize = (size / 2).sp)
         }
     }
 }
@@ -378,7 +382,7 @@ private fun MovableCard(p: Project, s: ProjectsState, onOpen: (String) -> Unit, 
             Text(stringResource(R.string.folder_move_to), fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             if (p.folderId != null) DropdownMenuItem(text = { Text(stringResource(R.string.folder_none)) }, onClick = { menu = false; onMove(p, null) })
             s.folders.filter { it.id != p.folderId }.forEach { f ->
-                DropdownMenuItem(text = { Text("${f.icon?.takeIf { !it.startsWith("/") } ?: "📁"} ${f.name}") }, onClick = { menu = false; onMove(p, f.id) })
+                DropdownMenuItem(text = { Text("${ProjectIcon.emoji(f.icon) ?: "📁"} ${f.name}") }, onClick = { menu = false; onMove(p, f.id) })
             }
         }
     }
@@ -480,11 +484,24 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onD
     var icon by rememberSaveable { mutableStateOf(PROJECT_ICONS.first()) }
     var color by rememberSaveable { mutableStateOf("#7B2FBE") }
     var folder by rememberSaveable { mutableStateOf<String?>(null) }
+    // First: what the project is for (9 Oct). Only Task Project is built; the rest say "Coming soon".
+    var type by rememberSaveable { mutableStateOf<ProjectType?>(null) }
+    val c = Nx.colors
+    if (type == null) {
+        AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.pt_question)) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { ProjectType.entries.forEach { t -> TypeCard(t) { type = t } } } },
+            confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
+        return
+    }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(stringResource(R.string.projects_new)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(type!!.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { type = null }, enabled = !busy) { Text(stringResource(R.string.pt_change)) }
+                }
                 OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.project_name)) }, modifier = Modifier.fillMaxWidth())
                 EmojiRow(PROJECT_ICONS, icon) { icon = it }
                 ColorRow(color) { color = it }
@@ -542,11 +559,17 @@ private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -
 @Composable
 internal fun EmojiRow(options: List<String>, selected: String, onPick: (String) -> Unit) {
     val c = Nx.colors
+    // The stored value may be a name ("briefcase") or an emoji not offered here: it shows as its emoji, first,
+    // and tapping what is already chosen changes nothing (the stored value goes back as it was).
+    fun norm(e: String?) = e?.replace("\uFE0F", "")
+    val current = ProjectIcon.emoji(selected)
+    val all = if (current != null && options.none { norm(it) == norm(current) }) listOf(current) + options else options
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        options.forEach { e ->
-            Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(if (e == selected) c.accentBg else c.muted)
-                .border(if (e == selected) 2.dp else 0.dp, if (e == selected) c.violet else Color.Transparent, RoundedCornerShape(10.dp))
-                .clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 18.sp) }
+        all.forEach { e ->
+            val on = norm(e) == norm(current)
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(if (on) c.accentBg else c.muted)
+                .border(if (on) 2.dp else 0.dp, if (on) c.violet else Color.Transparent, RoundedCornerShape(10.dp))
+                .clickable { if (!on) onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 18.sp) }
         }
     }
 }
@@ -561,3 +584,29 @@ internal fun ColorRow(selected: String, onPick: (String) -> Unit) {
         }
     }
 }
+
+/** One project type: Task Project opens the form; the others are muted, dashed and "Coming soon". */
+@Composable
+private fun TypeCard(t: ProjectType, onPick: () -> Unit) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(14.dp)
+    val frame = if (t.ready) Modifier.border(1.dp, c.border, shape)
+        else Modifier.drawBehind {
+            drawRoundRect(c.border, cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
+        }
+    Row(Modifier.fillMaxWidth().clip(shape).background(if (t.ready) c.card else c.muted.copy(alpha = 0.4f)).then(frame)
+        .clickable(enabled = t.ready, onClick = onPick).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(when (t) { ProjectType.TASK -> "✅"; ProjectType.FINANCE -> "💰"; ProjectType.CONTENT -> "🗓️"; ProjectType.PIPELINE -> "🤝" },
+            fontSize = 22.sp, modifier = Modifier.padding(end = 12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (t.ready) c.foreground else c.mutedFg)
+                if (!t.ready) Text(stringResource(R.string.pt_soon), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
+                    modifier = Modifier.padding(start = 6.dp).background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+            Text(stringResource(t.description), fontSize = 12.sp, color = c.mutedFg)
+        }
+    }
+}
+

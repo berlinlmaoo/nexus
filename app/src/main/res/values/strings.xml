@@ -630,7 +630,7 @@
     <string name="outside_hour_body">%1$s left before the automatic check-out (%2$s). File a permit or head back to the office.</string>
     <string name="dur_hm">%1$dh %2$dm</string>
     <string name="dur_m">%1$dm</string>
-    <string name="ptab_sheet">Sheet</string>
+    <string name="ptab_sheet">Spreadsheet</string>
     <string name="ptab_calendar">Calendar</string>
     <string name="ptab_timeline">Timeline</string>
     <string name="ptab_sprints">Sprints</string>
@@ -2366,4 +2366,17 @@
         <item quantity="one">%d message</item>
         <item quantity="other">%d messages</item>
     </plurals>
+    <!-- Project types and tabs (Berlin, 9 Oct; PROJECT-TYPES-TABS, web id-projects.ts) -->
+    <string name="ps_tabs">Tabs</string>
+    <string name="ps_tabs_sub">Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back.</string>
+    <string name="ps_tabs_board_or_list">Board or List stays on</string>
+    <string name="ps_tabs_managers">Only managers and above can change the tabs.</string>
+    <string name="ps_finance_sub">Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&amp;L. Turning it off only hides the tab — the numbers stay.</string>
+    <string name="pt_question">What is this project for?</string>
+    <string name="pt_soon">Coming soon</string>
+    <string name="pt_change">Change type</string>
+    <string name="pt_task_sub">Board, list, calendar and timeline for work with owners and due dates.</string>
+    <string name="pt_finance_sub">Revenue, OPEX and profit, month by month.</string>
+    <string name="pt_content_sub">Plan and schedule content across your channels.</string>
+    <string name="pt_pipeline_sub">Follow every deal from first contact to paid.</string>
 </resources>

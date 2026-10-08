@@ -452,9 +452,9 @@
     <string name="prio_none">Tanpa prioritas</string>
     <string name="task_subtask_of">Subtask · %1$s</string>
     <string name="task_toggle_done">Tandai selesai</string>
-    <string name="ptab_overview">Overview</string>
+    <string name="ptab_overview">Ringkasan</string>
     <string name="ptab_board">Board</string>
-    <string name="ptab_list">List</string>
+    <string name="ptab_list">Daftar</string>
     <string name="back">Kembali</string>
     <string name="board_search">Search tasks in this project…</string>
     <string name="project_locked">Proyek terkunci</string>
@@ -624,13 +624,13 @@
     <string name="outside_hour_body">Sisa %1$s sebelum auto check-out (%2$s). Ajukan izin atau balik ke kantor.</string>
     <string name="dur_hm">%1$dj %2$dm</string>
     <string name="dur_m">%1$dm</string>
-    <string name="ptab_sheet">Sheet</string>
+    <string name="ptab_sheet">Spreadsheet</string>
     <string name="ptab_calendar">Kalender</string>
     <string name="ptab_timeline">Timeline</string>
     <string name="ptab_sprints">Sprint</string>
     <string name="ptab_automations">Otomasi</string>
     <string name="ptab_pages">Halaman</string>
-    <string name="ptab_forms">Form</string>
+    <string name="ptab_forms">Formulir</string>
     <string name="ptab_chat">Chat</string>
     <string name="ptab_finance">Finance</string>
     <string name="ptab_pnl">P&amp;L</string>
@@ -2332,4 +2332,17 @@
     <plurals name="au_n_messages">
         <item quantity="other">%d pesan</item>
     </plurals>
+    <!-- Project types and tabs (Berlin, 9 Oct; PROJECT-TYPES-TABS, web id-projects.ts) -->
+    <string name="ps_tabs">Tab</string>
+    <string name="ps_tabs_sub">Pilih tab yang tampil di project ini. Mematikan tab cuma menyembunyikannya: isinya tidak dihapus, dan begitu dinyalakan lagi semuanya kembali.</string>
+    <string name="ps_tabs_board_or_list">Board atau Daftar tetap nyala</string>
+    <string name="ps_tabs_managers">Hanya manager ke atas yang bisa mengubah tab.</string>
+    <string name="ps_finance_sub">OPEX dan revenue bulanan project ini, per tahun. Mati sampai BoD menyalakannya, sama seperti P&amp;L. Mematikannya cuma menyembunyikan tab — angkanya tetap ada.</string>
+    <string name="pt_question">Project ini untuk apa?</string>
+    <string name="pt_soon">Segera hadir</string>
+    <string name="pt_change">Ganti tipe</string>
+    <string name="pt_task_sub">Board, daftar, kalender, dan timeline untuk pekerjaan yang punya PIC dan tenggat.</string>
+    <string name="pt_finance_sub">Revenue, OPEX, dan profit per bulan.</string>
+    <string name="pt_content_sub">Rencanakan dan jadwalkan konten di semua channel.</string>
+    <string name="pt_pipeline_sub">Pantau tiap deal dari kontak pertama sampai lunas.</string>
 </resources>

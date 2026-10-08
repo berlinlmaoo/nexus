@@ -479,7 +479,7 @@ fun MembershipEditor(userId: String, userName: String, ms: UserMemberships?, can
                 val askAction = stringResource(R.string.tm_leave_project)
                 ConfirmDialog(ask) { ask = null }
                 Box {
-                    Chip((p.icon?.takeIf { !it.startsWith("/") }?.let { "$it " } ?: "") + p.name + (p.viaTeam?.let { " · via $it" } ?: ""), null,
+                    Chip((id.znetworks.nexus.feature.projects.ProjectIcon.emoji(p.icon)?.let { "$it " } ?: "") + p.name + (p.viaTeam?.let { " · via $it" } ?: ""), null,
                         if (canEdit && p.viaTeam == null) ({ open = true }) else null)
                     DropdownMenu(open, { open = false }) {
                         DropdownMenuItem({ Text(stringResource(R.string.tm_leave_project), color = c.danger) }, { open = false; ask = PendingConfirm(askTitle, null, askAction) { run { api.removeProjectMember(p.id, userId) } } })

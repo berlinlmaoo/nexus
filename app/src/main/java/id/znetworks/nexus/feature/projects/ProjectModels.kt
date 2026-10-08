@@ -41,6 +41,7 @@ data class Project(
     val folderId: String? = null,
     val workspaceId: String? = null,
     val position: Int? = null,
+    val type: String? = null,
     @SerialName("_count") val count: ProjectCounts? = null,
     val taskLists: List<LaneSummary> = emptyList(),
     val members: List<ProjectMemberRef> = emptyList(),
@@ -139,6 +140,11 @@ data class ProjectDetail(
     val autoAssignAssigneeIds: List<String> = emptyList(),
     val requireAttachmentForDone: Boolean? = null,
     val disableTaskStatus: Boolean? = null,
+    /** "TASK" | "FINANCE" | "CONTENT" | "PIPELINE" (9 Oct); missing = TASK. */
+    val type: String? = null,
+    /** Tab keys this project hides, and the Finance opt-in: raw, read leniently by ProjectTabsLogic. */
+    val hiddenTabs: kotlinx.serialization.json.JsonElement? = null,
+    val financeEnabled: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /** Custom field options arrive as `[..]`, `{options:[..]}` or `{choices:[..]}` (API.md §2.4). */
