@@ -61,7 +61,18 @@ export async function POST(req: NextRequest) {
       select: { userId: true },
     })
     if (!membership) {
-      return NextResponse.json({ error: "User bukan anggota workspace ini." }, { status: 404 })
+      // Someone offboarded (lib/former-members.ts) can still have the days up to their last working day
+      // put right — those are the days in their final recap. Nothing after it.
+      const former = await prisma.formerMember.findUnique({
+        where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
+        select: { leftAt: true },
+      })
+      if (!former) {
+        return NextResponse.json({ error: "User bukan anggota workspace ini." }, { status: 404 })
+      }
+      if (date.getTime() > former.leftAt.getTime()) {
+        return NextResponse.json({ error: "Orang ini sudah keluar sebelum tanggal itu." }, { status: 400 })
+      }
     }
 
     // Every action wipes the day's penalties: refunds late/no-checkout/alpha XP and removes the
