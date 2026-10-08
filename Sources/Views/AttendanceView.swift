@@ -1458,6 +1458,12 @@ private struct CrewTodayMidX: PreferenceKey {
     static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }
 
+/// The last reported position of today's column. A reference type and deliberately not observable,
+/// so a report on every scroll frame never re-renders the card.
+final class CrewTodayX {
+    var midX: CGFloat?
+}
+
 /// The visible width of the board's days scroll area.
 private struct CrewDaysViewportWidth: PreferenceKey {
     static var defaultValue: CGFloat = 0
@@ -1529,6 +1535,10 @@ struct StreakBoardCard: View {
     /// the days' scroll area: see `landOnToday`.
     @State private var landedOn: String?
     @State private var daysViewportW: CGFloat = 0
+    /// Where today's column was last reported, kept out of SwiftUI's sight (like MorphFrameStore): it
+    /// changes on every scroll frame and must not re-render the card, but the width arriving later must
+    /// be able to look at it.
+    @State private var todayX = CrewTodayX()
     /// Who is outside the office right now is live (owner, 8 Oct 2026): the current period is read
     /// again every minute while the board is on screen and the app is in front, and on coming back.
     @Environment(\.scenePhase) private var scenePhase
@@ -1716,7 +1726,11 @@ struct StreakBoardCard: View {
                 }
             }
             legend
-            if loading {
+            // The spinner only while there is nothing to show yet. A reload (the permissions landing
+            // after the first paint, an attendance change, the minute's refresh) keeps the grid: tearing
+            // it down rebuilt the scroll view at the 28th, after it had already been brought to today —
+            // the board "always" opened on the period's first day (owner, 9 Oct 2026).
+            if loading && members.isEmpty {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 20)
             } else if members.isEmpty {
                 EmptyState(icon: "calendar", title: T("No attendance this month yet"),
@@ -1733,7 +1747,9 @@ struct StreakBoardCard: View {
         // Keyed on the permissions too: /attendance/today lands AFTER the first paint, and a board
         // fetched with `scope=me` before canManage flipped stayed that way until the month changed.
         .task(id: "\(monthOffset)|\(wide)") {
-            periodDays = buildPeriodDays()
+            let days = buildPeriodDays()
+            if days.first?.key != periodDays.first?.key { members = [] }
+            periodDays = days
             await load()
         }
         .onReceive(NotificationCenter.default.publisher(for: .nexusAttendanceChanged)) { _ in
@@ -1774,11 +1790,11 @@ struct StreakBoardCard: View {
     /// every layout pass reports where today's column sits in the days' scroll area, and while it is
     /// off-screen the board is scrolled to it again. Once it has been seen, the board is the
     /// person's to scroll — later reports change nothing until the period (or the day) changes.
-    private func landOnToday(_ midX: CGFloat?, _ proxy: ScrollViewProxy) {
-        guard let midX, let t = todayKey, daysViewportW > 0 else { return }
+    private func landOnToday(_ midX: CGFloat?, _ proxy: ScrollViewProxy, width: CGFloat) {
+        guard let midX, let t = todayKey, width > 0 else { return }
         let key = "\(monthOffset)|\(t)"
         guard landedOn != key else { return }
-        if midX >= 0 && midX <= daysViewportW {
+        if midX >= 0 && midX <= width {
             landedOn = key
             return
         }
@@ -1835,12 +1851,21 @@ struct StreakBoardCard: View {
                 }
                 .coordinateSpace(name: Self.daysSpace)
                 .background(GeometryReader { g in Color.clear.preference(key: CrewDaysViewportWidth.self, value: g.size.width) })
-                .onPreferenceChange(CrewDaysViewportWidth.self) { daysViewportW = $0 }
+                .onPreferenceChange(CrewDaysViewportWidth.self) { w in
+                    daysViewportW = w
+                    // The column may have reported before the width was known: look again now.
+                    landOnToday(todayX.midX, proxy, width: w)
+                }
                 // Land on today, not on the 28th: the column that matters is the one being filled in.
                 // The timed tries below were not enough on a phone with a full crew (owner, 8 Oct 2026:
                 // "selalu rata kiri"); where today's column really is decides now (`landOnToday`).
-                .onPreferenceChange(CrewTodayMidX.self) { x in landOnToday(x, proxy) }
-                .onAppear { scrollToToday(proxy) }
+                .onPreferenceChange(CrewTodayMidX.self) { x in
+                    todayX.midX = x
+                    landOnToday(x, proxy, width: daysViewportW)
+                }
+                // A new scroll view starts at the 28th whatever happened to the previous one.
+                .onAppear { landedOn = nil; scrollToToday(proxy) }
+                .onDisappear { landedOn = nil }
                 .onChange(of: members.count) { _, _ in scrollToToday(proxy) }
                 .onChange(of: periodDays.count) { _, _ in scrollToToday(proxy) }
             }
