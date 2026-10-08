@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Lock, Loader2, Mail, MessageSquare, ScrollText, Undo2, UserRound, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { Avatar } from "@/components/Avatar";
+import { ZoomableAvatar } from "@/components/PhotoLightbox";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
@@ -18,6 +18,7 @@ import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { recTone, sCls, toneFromLetter, toneLabel, type HistRow } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
 import { ApiError, fmtDate, fmtTime, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
+import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 type RecordSearch = { period?: string };
@@ -140,33 +141,48 @@ function Card({ title, hint, right, children }: { title: string; hint?: string; 
   );
 }
 
+// Who this is, then the one thing to do from here (owner, 9 Oct 2026, with the iPhone). The avatar opens
+// the photo full screen. Message is a tonal button that hugs its label: on a phone the card used to stack
+// and stretch it into a full-width black bar, the same slab the iPhone had.
 function HeaderCard({ data }: { data: NexusMemberRecord }) {
+  const { t, locale } = useLang();
   const p = data.person;
   const navigate = useNavigate();
   const chat = useMutation({
     mutationFn: () => nexusApi.createConversation({ type: "DM", userIds: [p.id] }),
     onSuccess: (r) => navigate({ to: "/messages/$conversationId", params: { conversationId: r.conversation.id } }),
-    onError: (e) => alert(errorText(e, "Couldn’t start that chat. Try again.")),
+    onError: (e) => alert(errorText(e, t("Couldn’t start that chat. Try again."))),
   });
+  // Someone who left can no longer sign in: no one to message.
+  const canMessage = !p.isSelf && !leftAtOf(p);
+  const joined = new Date(p.joinedAt).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
   return (
-    <section className="flex flex-col gap-4 rounded-[24px] border border-border bg-card p-4 shadow-soft sm:flex-row sm:items-center md:p-5">
-      <Avatar userId={p.id} name={p.name ?? undefined} avatar={p.avatar ?? undefined} size={64} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-lg font-bold tracking-tight">{p.name ?? "—"}</span>
-          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[p.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[p.role] ?? p.role}</span>
-          {p.isSelf && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">You</span>}
-          <LeftTag leftAt={leftAtOf(p)} className="text-[11px]" />
-        </div>
-        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {p.email && <span className="inline-flex min-w-0 items-center gap-1"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{p.email}</span></span>}
-          <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> Joined {new Date(p.joinedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" })}</span>
+    <section className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-[24px] border border-border bg-card p-4 shadow-soft md:p-5">
+      <div className="flex min-w-0 flex-1 basis-[17rem] items-center gap-4">
+        <ZoomableAvatar userId={p.id} name={p.name} avatar={p.avatar} size={72} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="min-w-0 truncate text-lg font-bold tracking-tight">{p.name ?? "—"}</span>
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[p.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[p.role] ?? p.role}</span>
+            {p.isSelf && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">{t("You")}</span>}
+            <LeftTag leftAt={leftAtOf(p)} className="text-[11px]" />
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+            {p.email && <span className="inline-flex min-w-0 max-w-full items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate text-foreground">{p.email}</span></span>}
+            <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0" /><span className="text-foreground">{t("Joined {date}", { date: joined })}</span></span>
+          </div>
         </div>
       </div>
-      {/* Someone who left can no longer sign in: no one to message. */}
-      {!p.isSelf && !leftAtOf(p) && (
-        <button onClick={() => chat.mutate()} disabled={chat.isPending} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:opacity-60">
-          {chat.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />} Message
+      {canMessage && (
+        <button
+          type="button"
+          onClick={() => chat.mutate()}
+          disabled={chat.isPending}
+          aria-busy={chat.isPending || undefined}
+          className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-60 sm:min-h-10"
+        >
+          {chat.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+          {t("Message")}
         </button>
       )}
     </section>
