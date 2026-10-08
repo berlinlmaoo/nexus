@@ -158,6 +158,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       include: VAULT_ITEM_INCLUDE,
     })
 
+    // A folder comes back WITH what went to the trash with it (9 Oct 2026). Trashing a folder marks
+    // its whole subtree in one statement, so its contents carry the folder's exact deletedAt; before
+    // this, Restore brought back an empty folder and left everything in it behind in the trash.
+    // Things trashed on their own before or after keep their own timestamp and stay where they are.
+    let restoredInside = 0
+    if (body.restore === true && item.kind === "FOLDER" && item.deletedAt) {
+      const inside = (await subtreeIds(item.id)).filter((id) => id !== item.id)
+      if (inside.length) {
+        restoredInside = (await prisma.vaultItem.updateMany({
+          where: { id: { in: inside }, deletedAt: item.deletedAt },
+          data: { deletedAt: null },
+        })).count
+      }
+    }
+
     logAudit({
       action: "update",
       entityType: item.kind === "FOLDER" ? "vault_folder" : "vault_file",
@@ -165,7 +180,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       entityName: updated.name,
       userId: actor.userId,
       request,
-      metadata: { changed: Object.keys(data) },
+      metadata: { changed: Object.keys(data), ...(restoredInside ? { restoredInside } : {}) },
     }).catch(() => {})
     // A rename, a move (both folders' listings), a restore or an access change: every open vault
     // screen refetches. Ids only; a colleague who may not see the item gets a listing without it.
