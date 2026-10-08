@@ -1507,10 +1507,13 @@ struct APIClient {
         try await run(makeRequest("/api/audit/\(encValue(id))"), decode: AuditEntryDetail.self)
     }
 
-    /// POST /api/audit/{id}/restore — puts back what a delete removed (owner, 8 Oct 2026). The four
-    /// refusals come back by `code` and are read out in this app's words and language, not the
-    /// server's English sentence.
-    func auditRestore(id: String) async throws -> AuditRestoreResult {
+    /// POST /api/audit/{id}/restore — puts back what a delete removed (owner, 8 Oct 2026; every kind of
+    /// delete since later that day). The refusals (ALREADY_RESTORED, ALREADY_EXISTS, PARENT_MISSING,
+    /// CONFLICT, NOT_RESTORABLE) come back by `code` and are read out in this app's words and language
+    /// (AuditRestoreKinds.failureText), not the server's English sentence.
+    /// - entityType, soft: what the entry says about the delete. The refusal is worded by kind (CONFLICT,
+    ///   PARENT_MISSING); the server's answer names the kind too, but an older one sends only the code.
+    func auditRestore(id: String, entityType: String? = nil, soft: Bool = false) async throws -> AuditRestoreResult {
         let req = makeRequest("/api/audit/\(encValue(id))/restore", method: "POST")
         let (data, response): (Data, URLResponse)
         do {
@@ -1521,13 +1524,13 @@ struct APIClient {
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
-            switch (try? JSONDecoder().decode(ServerError.self, from: data))?.code {
-            case "ALREADY_RESTORED": throw APIError.transport(T("Someone has restored this already."))
-            case "ALREADY_EXISTS": throw APIError.transport(T("It's already back."))
-            case "PARENT_MISSING": throw APIError.transport(T("Its project was deleted too. Restore the project first, then this task."))
-            case "NOT_RESTORABLE": throw APIError.transport(T("No copy of this delete was kept, so it can't be restored."))
-            default: throw APIError.http(http.statusCode, Self.serverMessage(data))
+            let refusal = try? JSONDecoder().decode(AuditRestoreRefusal.self, from: data)
+            let kind = refusal?.entityType.flatMap { $0.isEmpty ? nil : $0 } ?? entityType
+            if let text = AuditRestoreKinds.failureText(code: refusal?.code, entityType: kind,
+                                                        parent: refusal?.parent, soft: soft) {
+                throw APIError.transport(T(text))
             }
+            throw APIError.http(http.statusCode, Self.serverMessage(data))
         }
         do {
             return try JSONDecoder().decode(AuditRestoreResult.self, from: data)

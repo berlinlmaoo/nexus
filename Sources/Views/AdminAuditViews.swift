@@ -14,6 +14,10 @@ import SwiftUI
 /// someone reloaded by hand. While the list is on screen it now refreshes itself quietly (see
 /// `silentRefresh`), and an open entry re-reads itself the same way.
 struct AdminAuditSection: View {
+    /// Control Room's tabs this viewer has (by id), and how to switch to one: a restored org chart
+    /// unit or announcement opens on its own tab there.
+    var controlRoomTabs: Set<String> = []
+    var openTab: (String) -> Void = { _ in }
     @State private var logs: [AuditLog] = []
     @State private var total: Int?
     @State private var loading = true
@@ -87,7 +91,8 @@ struct AdminAuditSection: View {
         // The only sheet on this view — the detail is the one thing it presents. A restore in it, or
         // one it sees made elsewhere, turns the row's "Restorable" into "Restored".
         .sheet(item: $opened) { log in
-            AuditEntrySheet(log: log, onRestored: { restoredHere(log.id) })
+            AuditEntrySheet(log: log, onRestored: { restoredHere(log.id) },
+                            controlRoomTabs: controlRoomTabs, openTab: openTab)
         }
     }
 
@@ -385,7 +390,9 @@ private struct AuditRow: View {
                         Text("· \(when)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                 }
-                if log.action == "delete", let restore = log.restore {
+                // Whatever the action: a delete, or one logged under its own verb (an extra day
+                // off taken back is a "revoke") — any entry that kept a copy.
+                if let restore = log.restore {
                     AuditRestorePill(available: restore.available)
                 }
             }
@@ -401,7 +408,7 @@ private struct AuditRow: View {
     }
 }
 
-/// On a delete row: whether it can still come back.
+/// On a row that kept a copy: whether it can still come back.
 private struct AuditRestorePill: View {
     let available: Bool
 
@@ -420,11 +427,15 @@ private struct AuditRestorePill: View {
 // MARK: - Detail
 
 /// One entry, read out: what changed, what it touched, and — folded away — the raw evidence. A
-/// deleted project or task that kept a copy also offers to put it back (owner, 8 Oct 2026).
+/// delete that kept a copy also offers to put it back (owner, 8 Oct 2026: projects and tasks first,
+/// then every kind of delete), says what comes back, and links to where it lives once it is back.
 private struct AuditEntrySheet: View {
     let log: AuditLog
     /// The entry went from restorable to restored: here, or — seen by the quiet refresh — elsewhere.
     var onRestored: () -> Void = {}
+    /// See AdminAuditSection.
+    var controlRoomTabs: Set<String> = []
+    var openTab: (String) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var detail: AuditEntryDetail?
     @State private var error: String?
@@ -446,8 +457,10 @@ private struct AuditEntrySheet: View {
                         if let detail {
                             if let restore = detail.restore {
                                 restoreCard(detail.entry, restore)
-                            } else if isDeletedProjectOrTask(detail.entry) {
-                                Text(T("This was deleted before NEXUS started keeping deleted projects and tasks, so it can't be restored."))
+                            } else if deletedWithoutCopy(detail.entry) {
+                                Text(AuditRestoreKinds.isProjectOrTask(detail.entry.entityType)
+                                     ? T("This was deleted before NEXUS started keeping deleted projects and tasks, so it can't be restored.")
+                                     : T("This was deleted before NEXUS started keeping deleted items, so it can't be restored."))
                                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
@@ -472,7 +485,7 @@ private struct AuditEntrySheet: View {
                          refreshOnReturn: true) {
                 await refreshQuietly()
             }
-            .alert(String(format: T("Restore “%@”?"), detail?.entry.entityName ?? log.entityName ?? ""), isPresented: $confirmRestore) {
+            .alert(String(format: T("Restore “%@”?"), confirmName), isPresented: $confirmRestore) {
                 Button(T("Yes, restore")) { Task { await restore() } }
                 Button(T("Cancel"), role: .cancel) {}
             } message: {
@@ -506,8 +519,19 @@ private struct AuditEntrySheet: View {
 
     // MARK: restore
 
-    private func isDeletedProjectOrTask(_ e: AuditEntryDetail.Entry) -> Bool {
-        e.action == "delete" && (e.entityType == "project" || e.entityType == "task")
+    /// The kind of thing the entry is about ("task", "sheet_rows"…), as the entry has it.
+    private var entityType: String? { detail?.entry.entityType ?? log.entityType }
+
+    /// The name in "Restore “…”?": the record's own, else the word for its kind.
+    private var confirmName: String {
+        if let name = detail?.entry.entityName ?? log.entityName, !name.isEmpty { return name }
+        if let label = detail?.restore?.entityLabel ?? log.restore?.entityLabel, !label.isEmpty { return T(label) }
+        return ""
+    }
+
+    /// A delete of a kind NEXUS keeps copies of, with no copy: it happened before NEXUS kept them.
+    private func deletedWithoutCopy(_ e: AuditEntryDetail.Entry) -> Bool {
+        e.action == "delete" && AuditRestoreKinds.restorable.contains(e.entityType ?? "")
     }
 
     private func restore() async {
@@ -515,7 +539,8 @@ private struct AuditEntrySheet: View {
         restoreError = nil
         defer { restoring = false }
         do {
-            let result = try await APIClient.shared.auditRestore(id: log.id)
+            let result = try await APIClient.shared.auditRestore(id: log.id, entityType: entityType,
+                                                                 soft: detail?.restore?.soft == true)
             restoredNow = result
             onRestored()
             // News for a project list on screen elsewhere in the app (another window on iPad or Mac).
@@ -524,6 +549,11 @@ private struct AuditEntrySheet: View {
                 info[RealtimeKey.projectId] = pid
             }
             NotificationCenter.default.post(name: .nexusWorkspaceChanged, object: nil, userInfo: info)
+            // A project folder that came back belongs in the Projects tab's folders too.
+            if result.entityType == "project_folder" {
+                NotificationCenter.default.post(name: .nexusWorkspaceChanged, object: nil,
+                                                userInfo: [RealtimeKey.kind: RealtimeKind.folders])
+            }
             await load()
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? T("Couldn't restore it. Try again in a moment.")
@@ -536,26 +566,19 @@ private struct AuditEntrySheet: View {
         }
     }
 
-    /// "226 tasks, 7 lists and 155 files" — only what there is, joined in the app's language.
-    private static func whatComesBack(_ c: AuditRestoreDetail.Counts, isTask: Bool) -> String {
-        func n(_ v: Int, _ one: String, _ many: String) -> String? {
-            v == 0 ? nil : (v == 1 ? T(one) : String(format: T(many), v))
+    /// "226 tasks, 7 lists and 155 files" — only what there is, joined in the app's language. Which
+    /// counts, in which order and in which words is the kind's (AuditRestoreKinds.countParts).
+    private static func whatComesBack(_ c: AuditRestoreCounts, entityType: String?) -> String {
+        let parts = AuditRestoreKinds.countParts(c, entityType: entityType).map { p in
+            p.n == 1 ? T(p.one) : String(format: T(p.many), p.n)
         }
-        let parts = [
-            isTask ? n(c.tasks, "1 subtask", "%d subtasks") : n(c.tasks, "1 task", "%d tasks"),
-            n(c.lists, "1 list", "%d lists"),
-            n(c.files, "1 file", "%d files"),
-            n(c.comments, "1 comment", "%d comments"),
-            n(c.sheets, "1 sheet", "%d sheets"),
-            n(c.members, "1 member", "%d members"),
-        ].compactMap { $0 }
         let f = ListFormatter()
         f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_US")
         return f.string(from: parts) ?? parts.joined(separator: ", ")
     }
 
     private func explanation(_ r: AuditRestoreDetail, entityType: String?) -> String {
-        let what = Self.whatComesBack(r.counts, isTask: entityType == "task")
+        let what = Self.whatComesBack(r.counts, entityType: entityType)
         if r.fromBackup == true {
             let when = AuditTime.full(r.dataAsOf) ?? ""
             return what.isEmpty
@@ -567,38 +590,103 @@ private struct AuditEntrySheet: View {
             : String(format: T("It comes back as it was when it was deleted: %@."), what)
     }
 
-    private func restoredLine(_ r: AuditRestoreDetail) -> String {
-        if restoredNow != nil { return T("Restored. It's back where it was.") }
+    private func restoredLine(_ r: AuditRestoreDetail, entityType: String?) -> String {
+        if restoredNow != nil {
+            // A Vault item that had been purged from the trash comes back into the trash, not into use.
+            return AuditRestoreKinds.isVault(entityType) && r.soft != true
+                ? T("Restored. It's back in the Vault trash.")
+                : T("Restored. It's back where it was.")
+        }
         let when = AuditTime.full(r.restoredAt) ?? ""
         if let name = r.restoredBy?.name, !name.isEmpty { return String(format: T("Restored by %@ · %@"), name, when) }
         return String(format: T("Restored · %@"), when)
     }
 
+    /// Where "Open …" goes, when this app has a screen for it. Right after a restore here the server's
+    /// answer is the freshest word on that; otherwise the entry's.
+    private func openTarget(_ e: AuditEntryDetail.Entry, _ r: AuditRestoreDetail) -> AuditOpenTarget? {
+        var open = r.open
+        if let done = restoredNow, done.open != .absent { open = done.open }
+        let target = AuditRestoreKinds.openTarget(open, entityType: e.entityType, entityId: restoredNow?.entityId ?? e.entityId)
+        switch target {
+        // Control Room tabs this viewer may not have.
+        case .orgChart?: return controlRoomTabs.contains("org") ? target : nil
+        case .announcements?: return controlRoomTabs.contains("announcements") ? target : nil
+        default: return target
+        }
+    }
+
+    /// A project, task, doc or folder opens inside this sheet, as the entry's other links do. Anything
+    /// else is a screen of its own elsewhere in the app: see `leave(to:)`.
+    @ViewBuilder private func openLink(_ target: AuditOpenTarget, _ e: AuditEntryDetail.Entry) -> some View {
+        let label = HStack(spacing: 4) {
+            Text(T(target.label)).font(NXFont.text(13, .semibold))
+            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(NX.violetText)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+
+        switch target {
+        case .project(let id):
+            // The name is only known when the entry is the project itself; the screen reads it otherwise.
+            NavigationLink {
+                ProjectDetailView(projectId: id, projectName: e.entityType == "project" ? (e.entityName ?? "") : "")
+            } label: { label }.buttonStyle(.plain)
+        case .task(let id):
+            NavigationLink { TaskDetailView(taskId: id) } label: { label }.buttonStyle(.plain)
+        case .doc(let id):
+            NavigationLink {
+                DocReaderView(docId: id, title: e.entityType == "doc" ? (e.entityName ?? "") : "")
+            } label: { label }.buttonStyle(.plain)
+        case .folder(let id):
+            NavigationLink { AuditFolderDestination(folderId: id) } label: { label }.buttonStyle(.plain)
+        default:
+            Button { leave(to: target) } label: { label }.buttonStyle(.plain)
+        }
+    }
+
+    /// Closes the sheet, then goes there the way a tapped notification does, so a record with a
+    /// screen of its own lands in front: the day off with Approve and Reject, the post's thread, the
+    /// Calendar on its day. Control Room's own tabs switch in place. After the sheet is down: a push or
+    /// a tab change made underneath a sheet still on screen stays hidden behind it.
+    private func leave(to target: AuditOpenTarget) {
+        let switchTab = openTab
+        dismiss()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            let router = AppRouter.shared
+            switch target {
+            case .attendance(let request):
+                if let request { router.open(.attendanceRequest(request)) } else { router.go(.attendance) }
+            case .roomBooking:
+                router.go(.roomBooking)
+            case .calendar(let date):
+                if let day = NotificationTarget.calendarDay(date) { router.open(.calendarDay(day)) } else { router.go(.teamCalendar) }
+            case .vault:
+                router.go(.vault)
+            case .threads(let post):
+                if let post { router.open(.post(post)) } else { router.go(.threads) }
+            case .orgChart:
+                switchTab("org")
+            case .announcements:
+                switchTab("announcements")
+            case .project, .task, .doc, .folder:
+                break
+            }
+        }
+    }
+
     @ViewBuilder private func restoreCard(_ e: AuditEntryDetail.Entry, _ r: AuditRestoreDetail) -> some View {
-        let isProject = e.entityType == "project"
         if !r.available || restoredNow != nil {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.success)
-                    Text(restoredLine(r)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    Text(restoredLine(r, entityType: e.entityType)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let id = restoredNow?.entityId ?? e.entityId {
-                    NavigationLink {
-                        if isProject {
-                            ProjectDetailView(projectId: id, projectName: e.entityName ?? "")
-                        } else {
-                            TaskDetailView(taskId: id)
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(T(isProject ? "Open project" : "Open task")).font(NXFont.text(13, .semibold))
-                            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                        }
-                        .foregroundStyle(NX.violetText)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                    }.buttonStyle(.plain)
+                if let target = openTarget(e, r) {
+                    openLink(target, e)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
@@ -607,8 +695,8 @@ private struct AuditEntrySheet: View {
                 SectionLabel(T("Bring it back"))
                 Text(explanation(r, entityType: e.entityType)).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
-                if isProject {
-                    Text(T("Its folder comes back too if it was deleted.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                if let note = AuditRestoreKinds.note(e.entityType, soft: r.soft == true) {
+                    Text(T(note)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let restoreError {
@@ -622,7 +710,7 @@ private struct AuditEntrySheet: View {
                         } else {
                             Image(systemName: "arrow.uturn.backward").font(.system(size: 13, weight: .bold))
                         }
-                        Text(restoring ? T("Restoring…") : T(isProject ? "Restore project" : "Restore task"))
+                        Text(restoring ? T("Restoring…") : T(AuditRestoreKinds.buttonTitle(e.entityType)))
                             .font(NXFont.text(14, .semibold))
                     }
                     .foregroundStyle(.white)
@@ -795,6 +883,52 @@ private struct AuditEntrySheet: View {
                 Text(value).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
                     .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+// MARK: - Folder, by id
+
+/// "Open folder" on a restored project folder. The folder screen draws from the folder, every folder
+/// and every project (it works out which projects sit under it, subfolders included), and the entry
+/// has only the id: they are read first, through the same loaders the folder screen refreshes with.
+private struct AuditFolderDestination: View {
+    let folderId: String
+    @State private var folder: ProjectFolder?
+    @State private var folders: [ProjectFolder] = []
+    @State private var projects: [Project] = []
+    @State private var failed = false
+
+    var body: some View {
+        if let folder {
+            FolderAggregateView(folder: folder, allFolders: folders, allProjects: projects)
+        } else {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                if failed {
+                    ErrorState(message: T("Couldn't load this folder."), icon: "folder") { Task { await load() } }
+                } else {
+                    ProgressView().tint(NX.violetText)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            async let readProjects = APIClient.shared.projects()
+            // No workspace: every folder this person can see, which holds this one wherever it is.
+            async let readFolders = APIClient.shared.projectFolders(workspaceId: nil)
+            let (p, f) = try await (readProjects, readFolders)
+            projects = p
+            folders = f
+            // Not among them: deleted again, or out of this person's reach.
+            if let match = f.first(where: { $0.id == folderId }) { folder = match } else { failed = true }
+        } catch {
+            failed = true
         }
     }
 }

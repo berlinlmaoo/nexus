@@ -182,7 +182,8 @@ struct AdminView: View {
                 // Switched on the tab's id, not its index, so a hidden tab cannot shift the others.
                 switch tabs.indices.contains(section) ? tabs[section].id : "users" {
                 case "attendance": AttendanceAdminSection(workspaceId: workspaceId)
-                case "audit": AdminAuditSection()
+                // A restored org chart unit or announcement opens on its own tab here.
+                case "audit": AdminAuditSection(controlRoomTabs: Set(tabs.map { $0.id }), openTab: { showTab($0) })
                 case "quests": AdminQuestsSection(workspaceId: workspaceId)
                 case "org": AdminOrgChartSection()
                 case "announcements": AdminAnnouncementsSection()
@@ -200,6 +201,12 @@ struct AdminView: View {
             await viewer.loadIfNeeded()
             workspaceId = (try? await APIClient.shared.workspaceInfo())?.workspaceId
         }
+    }
+
+    /// Switches to the tab with this id, when this viewer has it.
+    private func showTab(_ id: String) {
+        guard let i = tabs.firstIndex(where: { $0.id == id }) else { return }
+        withAnimation(.easeOut(duration: 0.18)) { section = i }
     }
 }
 
