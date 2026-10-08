@@ -11,6 +11,7 @@ import {
   type SheetColumn, type LinkCell,
 } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 // POST /api/sheets/[sheetId]/import — multipart { file, mode?: "append" | "replace" }
 //
@@ -234,7 +235,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
 
     const typeById = new Map(finalColumns.map((c) => [c.id, c.type]))
 
-    if (mode === "replace") await prisma.sheetRow.deleteMany({ where: { sheetId } })
+    if (mode === "replace") {
+      // Replacing is deleting every row first: its own "delete" in the audit, and the rows (with their
+      // comments and cell history) kept, so Control Room → Audit can bring them back — after the
+      // imported rows if those have taken their places.
+      const ids = (await prisma.sheetRow.findMany({ where: { sheetId }, select: { id: true } })).map((r) => r.id)
+      if (ids.length) {
+        const project = await prisma.project.findUnique({ where: { id: access.sheet.projectId }, select: { workspaceId: true } })
+        await restorableDelete({
+          entityType: "sheet_rows", entityId: sheetId, rootIds: ids,
+          entityName: `${ids.length} ${ids.length === 1 ? "row" : "rows"} of ${access.sheet.name || "a sheet"} (replaced by an import)`,
+          workspaceId: project?.workspaceId ?? null, userId: session.user.id, request: req,
+          metadata: { sheetId, sheetName: access.sheet.name, projectId: access.sheet.projectId, rows: ids.length, reason: "import_replace", file: file.name },
+          meta: { open: { type: "sheet", id: sheetId, projectId: access.sheet.projectId }, projectId: access.sheet.projectId, sheetId },
+          remove: (tx) => tx.sheetRow.deleteMany({ where: { id: { in: ids }, sheetId } }),
+        })
+      }
+    }
 
     const last = await prisma.sheetRow.findFirst({
       where: { sheetId }, orderBy: { position: "desc" }, select: { position: true },

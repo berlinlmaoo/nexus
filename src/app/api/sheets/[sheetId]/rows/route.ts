@@ -8,6 +8,7 @@ import {
   coerceCellValue, readCells, resolveSheetAccess,
 } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 const MAX_INSERT = 1000
 /** Below this the midpoints have run out of float precision and the sheet needs renumbering. */
@@ -242,7 +243,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     }
 
     // Scoped by sheetId so a row id from another sheet deletes nothing.
-    const { count } = await prisma.sheetRow.deleteMany({ where: { id: { in: rowIds }, sheetId } })
+    const ids = (await prisma.sheetRow.findMany({ where: { id: { in: rowIds }, sheetId }, select: { id: true } })).map((r) => r.id)
+    if (!ids.length) return NextResponse.json({ deleted: 0 })
+    // In the audit, and kept (with their comments and cell history) first, so Control Room → Audit
+    // can put the rows back where they were — all of them or none.
+    let count = 0
+    const projectId = access.sheet.projectId
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
+    await restorableDelete({
+      entityType: "sheet_rows", entityId: sheetId, rootIds: ids,
+      entityName: `${ids.length} ${ids.length === 1 ? "row" : "rows"} of ${access.sheet.name || "a sheet"}`,
+      workspaceId: project?.workspaceId ?? null, userId: session.user.id, request: req,
+      metadata: { sheetId, sheetName: access.sheet.name, projectId, rows: ids.length },
+      meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
+      remove: async (tx) => {
+        count = (await tx.sheetRow.deleteMany({ where: { id: { in: ids }, sheetId } })).count
+      },
+    })
     emitSheetStructure(sheetId, session.user.id)
     return NextResponse.json({ deleted: count })
   } catch (error) {

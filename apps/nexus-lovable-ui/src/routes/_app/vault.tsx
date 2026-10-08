@@ -99,7 +99,7 @@ function VaultPage() {
 
   const emptyTrash = useMutation({
     mutationFn: () => nexusApi.vaultEmptyTrash(),
-    onSuccess: (r) => { toast.success(`Sampah dikosongkan — ${r.purged} item, ${r.filesUnlinked} berkas dihapus dari disk`); refresh(); },
+    onSuccess: (r) => { toast.success(`Sampah dikosongkan — ${r.purged} item`); refresh(); },
     onError: (e: Error) => toast.error("Gagal mengosongkan sampah", { description: e.message }),
   });
 
@@ -220,14 +220,14 @@ function VaultPage() {
         {trash && (
           <div className="mb-3 flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2">
             <p className="text-sm text-muted-foreground">
-              Berkas di sampah masih menghabiskan kuota. Mengosongkannya menghapus byte-nya dari disk dan tidak bisa dibatalkan.
+              Berkas di sampah masih menghabiskan kuota. Mengosongkannya membebaskan kuota; selama 90 hari admin masih bisa memulihkannya dari Control Room → Audit.
             </p>
             <Button
               variant="destructive"
               size="sm"
               disabled={emptyTrash.isPending || !(data?.items.length)}
               onClick={() => {
-                if (window.confirm("Kosongkan sampah? Berkasnya dihapus permanen.")) emptyTrash.mutate();
+                if (window.confirm("Kosongkan sampah? Berkasnya hilang dari Vault; admin masih bisa memulihkannya dari Audit selama 90 hari.")) emptyTrash.mutate();
               }}
             >
               {emptyTrash.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kosongkan"}

@@ -3,8 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
-import { getVaultActor, canModifyItem, deleteStoredFile, isBodPlus } from "@/lib/vault"
+import { getVaultActor, canModifyItem, isBodPlus } from "@/lib/vault"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 // POST /api/vault/trash/empty — permanently destroy trashed items.
 //
@@ -30,30 +30,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ purged: 0, filesUnlinked: 0, bytesFreed: 0 })
     }
 
-    // Delete the rows first. If unlinking then fails halfway, what remains is an orphan file on disk
-    // — wasteful but harmless. The reverse order would leave rows pointing at files that are gone,
-    // which is a download that 500s and a quota that overstates. Prefer the harmless failure.
+    // The rows go (the quota is freed now); they are kept first, files included, so Control Room →
+    // Audit can bring the whole trash back as it was. The files leave the disk with the 90-day purge
+    // of copies (lib/deletion-snapshot.ts), once nothing points at them.
     const ids = mine.map((t) => t.id)
-    await prisma.vaultItem.deleteMany({ where: { id: { in: ids } } })
+    await restorableDelete({
+      entityType: "vault_trash", entityId: actor.workspaceId, rootIds: ids,
+      entityName: `Vault trash · ${ids.length} ${ids.length === 1 ? "item" : "items"}`,
+      workspaceId: actor.workspaceId, userId: actor.userId, request,
+      metadata: { purged: ids.length, scope: isBodPlus(actor.orgRole) ? "all" : "own" },
+      meta: { open: { type: "vault", id: actor.workspaceId } },
+      remove: (tx) => tx.vaultItem.deleteMany({ where: { id: { in: ids } } }),
+    })
 
-    let filesUnlinked = 0
-    for (const item of mine) {
-      if (item.kind !== "FILE" || !item.storageKey) continue
-      await deleteStoredFile(item.storageKey)
-      filesUnlinked++
-    }
-
-    logAudit({
-      action: "delete",
-      entityType: "vault_trash",
-      entityId: actor.workspaceId,
-      entityName: "Vault trash",
-      userId: actor.userId,
-      request,
-      metadata: { purged: ids.length, filesUnlinked, scope: isBodPlus(actor.orgRole) ? "all" : "own" },
-    }).catch(() => {})
-
-    return NextResponse.json({ purged: ids.length, filesUnlinked })
+    // `filesUnlinked` stays for older clients: nothing leaves the disk at this point any more.
+    return NextResponse.json({ purged: ids.length, filesUnlinked: 0 })
   } catch (error) {
     console.error("[vault] empty trash failed:", error)
     return NextResponse.json({ error: "Failed to empty trash" }, { status: 500 })
