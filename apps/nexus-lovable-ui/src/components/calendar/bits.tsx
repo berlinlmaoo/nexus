@@ -35,18 +35,40 @@ export function unitVars(u?: { color: string; colorDark: string } | null): CSSPr
   return (u ? { "--c": u.color, "--cd": u.colorDark } : { "--c": "var(--cal-todo)", "--cd": "var(--cal-todo)" }) as CSSProperties;
 }
 
-/** A unit's dot: filled = something still to do, ring = only done / status-less tasks. */
+/**
+ * A unit's dot: filled = something still to do; a small tick = nothing left to do (only done or
+ * status-less tasks). Owner, 8 Oct 2026: a ring read as "to do" next to the task list's ○, so the
+ * all-done mark is a tick in the unit's colour, the same footprint as a dot.
+ */
 export function UnitDot({ unit, filled = true, size = 7, className }: { unit?: CalUnit | null; filled?: boolean; size?: number; className?: string }) {
+  if (!filled) return <DoneTick unit={unit} size={size} className={className} />;
   return (
     <span
       aria-hidden
       style={{ ...unitVars(unit), width: size, height: size }}
       className={cn(
         "inline-block shrink-0 rounded-full border-[1.5px] border-[var(--c)] transition-opacity dark:border-[var(--cd)]",
-        filled && "bg-[var(--c)] dark:bg-[var(--cd)]",
+        "bg-[var(--c)] dark:bg-[var(--cd)]",
         className,
       )}
     />
+  );
+}
+
+/** The all-done mark: a tick a little larger than a dot so it reads at 6-7 px. */
+export function DoneTick({ unit, size = 7, className, accent = false }: { unit?: CalUnit | null; size?: number; className?: string; accent?: boolean }) {
+  const box = size + 3;
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 10 10"
+      width={box}
+      height={box}
+      style={accent ? undefined : unitVars(unit)}
+      className={cn("inline-block shrink-0 transition-opacity", accent ? "text-cal-accent" : "text-[var(--c)] dark:text-[var(--cd)]", className)}
+    >
+      <path d="M1.6 5.4 4.1 7.8 8.6 2.4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
