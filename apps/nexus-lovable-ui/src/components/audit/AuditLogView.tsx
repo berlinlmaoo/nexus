@@ -496,7 +496,8 @@ type OpenTarget =
   | { kind: "attendance"; request?: string }
   | { kind: "room"; booking: string }
   | { kind: "calendar"; date?: string }
-  | { kind: "vault" | "wire" };
+  | { kind: "vault"; item?: string }
+  | { kind: "wire" };
 
 /** Where "Open …" goes on the web, from the server's `open`; copies from before `open` existed are projects and tasks. */
 function openTargetOf(open: NexusRestoreOpen | null | undefined, entityType: string, entityId: string | null): OpenTarget | null {
@@ -512,7 +513,9 @@ function openTargetOf(open: NexusRestoreOpen | null | undefined, entityType: str
     case "task": return { kind: "task", id: open.id };
     case "doc": return { kind: "doc", id: open.id };
     case "folder": return { kind: "folder", id: open.id };
-    case "vault": return { kind: "vault" };
+    // The item itself (a file opens in its folder, a folder is browsed; /vault?item=). A whole trash is
+    // logged against the workspace, which the vault page answers by showing the top level.
+    case "vault": return { kind: "vault", item: open.id };
     case "attendance_request": return { kind: "attendance", request: open.id };
     case "attendance_record": case "attendance_office": return { kind: "attendance" };
     case "room_booking": return { kind: "room", booking: open.id };
@@ -539,7 +542,7 @@ function OpenLink({ target, children }: { target: OpenTarget; children: ReactNod
     case "attendance": return <Link to="/attendance" search={target.request ? { request: target.request } : {}} className={cls}>{children}{arrow}</Link>;
     case "room": return <Link to="/room-booking" search={{ booking: target.booking }} className={cls}>{children}{arrow}</Link>;
     case "calendar": return <Link to="/calendar" search={target.date ? { date: target.date } : {}} className={cls}>{children}{arrow}</Link>;
-    case "vault": return <Link to="/vault" className={cls}>{children}{arrow}</Link>;
+    case "vault": return <Link to="/vault" search={target.item ? { item: target.item } : {}} className={cls}>{children}{arrow}</Link>;
     case "wire": return <Link to="/threads" className={cls}>{children}{arrow}</Link>;
     case "chat": return <Link to="/messages" search={{ c: target.id }} className={cls}>{children}{arrow}</Link>;
   }

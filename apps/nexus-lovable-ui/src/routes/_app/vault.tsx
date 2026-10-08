@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -10,6 +10,10 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VaultAccessDialog } from "@/components/vault/VaultAccessDialog";
@@ -23,7 +27,20 @@ import { ApiError, nexusApi, type VaultItem } from "@/lib/nexus-api";
 import { fillsTile, humanSize, isPdf, mediaKind } from "@/lib/vault-media";
 import { VAULT_ITEM_MIME, canMoveInto, dragKind, dropKey, filesOfDrop, type DraggedVaultItem } from "@/lib/vault-dnd";
 
-export const Route = createFileRoute("/_app/vault")({ component: VaultPage });
+/**
+ * The vault's address (9 Oct 2026): `?folder=<id>` is the folder on screen, so refresh, Back and a
+ * pasted link all land in the same place; `?trash=1` the trash; `?item=<id>` opens any item from
+ * elsewhere (Control Room → Audit's "Open Vault"): a folder is browsed, a file opens in its folder.
+ */
+type VaultSearch = { folder?: string; trash?: "1"; item?: string };
+export const Route = createFileRoute("/_app/vault")({
+  component: VaultPage,
+  validateSearch: (s: Record<string, unknown>): VaultSearch => ({
+    folder: typeof s.folder === "string" && s.folder ? s.folder : undefined,
+    trash: s.trash === "1" || s.trash === 1 ? "1" : undefined,
+    item: typeof s.item === "string" && s.item ? s.item : undefined,
+  }),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Z Vault — the office's shared drive, one folder at a time.
@@ -64,9 +81,21 @@ function VaultPage() {
   const { t, tn, lang } = useLang();
   useDocumentLang(lang);
 
-  const [parentId, setParentId] = useState<string | null>(null);
-  const [trash, setTrash] = useState(false);
+  const route = Route.useSearch();
+  const navigate = useNavigate({ from: "/vault" });
+  const parentId = route.folder ?? null;
+  const trash = route.trash === "1";
   const [search, setSearch] = useState("");
+  // Opening a folder is a step Back can undo, so each one is a history entry.
+  const setParentId = useCallback((id: string | null) => {
+    setSearch("");
+    void navigate({ search: (id ? { folder: id } : {}) as VaultSearch });
+  }, [navigate]);
+  const setTrash = useCallback((on: boolean) => {
+    void navigate({ search: (on ? { trash: "1" } : parentId ? { folder: parentId } : {}) as VaultSearch });
+  }, [navigate, parentId]);
+  const [newFolder, setNewFolder] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{ kind: "purge"; item: VaultItem } | { kind: "empty" } | null>(null);
   const [preview, setPreview] = useState<VaultItem | null>(null);
   const [sharing, setSharing] = useState<VaultItem | null>(null);
   const [renaming, setRenaming] = useState<VaultItem | null>(null);
@@ -208,11 +237,31 @@ function VaultPage() {
 
   const openItem = (item: VaultItem) => {
     if (trash) return;
-    if (item.kind === "FOLDER") { setParentId(item.id); setSearch(""); return; }
+    if (item.kind === "FOLDER") { setParentId(item.id); return; }
     const at = media.findIndex((m) => m.id === item.id);
     if (at >= 0) setViewer({ items: media, index: at });
     else setPreview(item);
   };
+
+  // `?item=<id>` from elsewhere (Audit's "Open Vault"): find where it lives, go there, open it. Then
+  // the param is dropped, so a refresh shows the folder rather than reopening the file.
+  const deepItem = route.item;
+  useEffect(() => {
+    if (!deepItem) return;
+    let gone = false;
+    nexusApi.vaultItem(deepItem).then(({ item }) => {
+      if (gone) return;
+      if (item.trashed) void navigate({ search: { trash: "1" } as VaultSearch, replace: true });
+      else if (item.kind === "FOLDER") void navigate({ search: { folder: item.id } as VaultSearch, replace: true });
+      else {
+        void navigate({ search: (item.parentId ? { folder: item.parentId } : {}) as VaultSearch, replace: true });
+        setPreview(item);
+      }
+    }).catch(() => {
+      if (!gone) void navigate({ search: {} as VaultSearch, replace: true });
+    });
+    return () => { gone = true; };
+  }, [deepItem, navigate]);
 
   // ── drag and drop ──────────────────────────────────────────────────────────
 
@@ -388,9 +437,7 @@ function VaultPage() {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive"
-              onClick={() => {
-                if (window.confirm(t("Delete “{name}” permanently?", { name: item.name }))) remove.mutate({ id: item.id, purge: true });
-              }}
+              onClick={() => setConfirming({ kind: "purge", item })}
             >
               <Trash2 className="h-4 w-4 mr-2" /> {t("Delete permanently")}
             </DropdownMenuItem>
@@ -400,6 +447,11 @@ function VaultPage() {
             <DropdownMenuItem onClick={() => setSharing(item)}>
               <Share2 className="h-4 w-4 mr-2" /> {t("Share…")}
             </DropdownMenuItem>
+            {!browsing && item.path && (
+              <DropdownMenuItem onClick={() => setParentId(item.parentId)}>
+                <Folder className="h-4 w-4 mr-2" /> {t("Show in its folder")}
+              </DropdownMenuItem>
+            )}
             {item.kind === "FILE" && (
               <>
                 <DropdownMenuItem onClick={() => openItem(item)}>
@@ -444,6 +496,9 @@ function VaultPage() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+
+  /** A search result's folders, from the top: "Vault › LOGO › INTOO". */
+  const pathText = (item: VaultItem) => [t("Vault"), ...(item.path ?? []).map((p) => p.name)].join(" › ");
 
   /** What a lock badge says on hover: who may open it, and for a folder who may add to it. */
   const lockTitle = (item: VaultItem) =>
@@ -509,6 +564,11 @@ function VaultPage() {
               {item.minReadRole && ` · ${t(roleLabel(item.minReadRole))}`}
               {isFolder && item.minWriteRole && ` · ${t("adding: {who}", { who: t(roleLabel(item.minWriteRole)) })}`}
             </span>
+            {item.path && !browsing && (
+              <span className="block truncate text-[11px] text-muted-foreground/80" title={pathText(item)}>
+                {t("in {path}", { path: pathText(item) })}
+              </span>
+            )}
           </span>
         </div>
 
@@ -552,6 +612,9 @@ function VaultPage() {
             {humanSize(item.size)}
             {item.shareCount > 0 && ` · ${tn(item.shareCount, "{n} link", "{n} links")}`}
           </p>
+          {item.path && !browsing && (
+            <p className="truncate text-[11px] text-muted-foreground/80" title={pathText(item)}>{t("in {path}", { path: pathText(item) })}</p>
+          )}
         </div>
         {item.minReadRole && (
           <span className="shrink-0 text-muted-foreground" role="img" aria-label={`${t("Locked")}: ${lockTitle(item)}`} title={lockTitle(item)}>
@@ -587,20 +650,13 @@ function VaultPage() {
                 className="pl-8 w-48"
               />
             </div>
-            <Button variant={trash ? "default" : "outline"} size="sm" onClick={() => setTrash((v) => !v)}>
+            <Button variant={trash ? "default" : "outline"} size="sm" onClick={() => setTrash(!trash)}>
               <Trash2 className="h-4 w-4 mr-1.5" />
               {t("Trash")}
             </Button>
             {!trash && data?.canWrite && (
               <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const name = window.prompt(t("Folder name"));
-                    if (name?.trim()) createFolder.mutate(name.trim());
-                  }}
-                >
+                <Button variant="outline" size="sm" onClick={() => setNewFolder("")}>
                   <FolderPlus className="h-4 w-4 mr-1.5" />
                   {t("Folder")}
                 </Button>
@@ -640,6 +696,19 @@ function VaultPage() {
           fileDrag && !target && "ring-2 ring-inset ring-primary/60 bg-primary/[0.03]",
         )}
       >
+        {/* Search on a phone: the header's field is hidden below sm, so it lives here. */}
+        <div className="relative mb-3 sm:hidden">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("Search files…")}
+            aria-label={t("Search files…")}
+            className="pl-8 w-full"
+          />
+        </div>
+
         {/* quota */}
         {data && (
           <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
@@ -695,9 +764,7 @@ function VaultPage() {
               variant="destructive"
               size="sm"
               disabled={emptyTrash.isPending || !(data?.items.length)}
-              onClick={() => {
-                if (window.confirm(t("Empty the trash? The files leave the Vault; an admin can still bring them back from Audit for 90 days."))) emptyTrash.mutate();
-              }}
+              onClick={() => setConfirming({ kind: "empty" })}
             >
               {emptyTrash.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Empty")}
             </Button>
@@ -719,6 +786,21 @@ function VaultPage() {
         {listing.isLoading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : listing.isError && !data ? (
+          // A failed load is not an empty folder (it used to say "This folder is empty.").
+          <div role="alert" className="flex flex-col items-center justify-center py-20 text-center">
+            <HardDrive className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-medium">
+              {(listing.error as ApiError)?.status === 404 ? t("This folder doesn't exist any more.") : t("Couldn't load the vault.")}
+            </p>
+            <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+              {(listing.error as ApiError)?.status === 403 ? t("It's locked to certain roles.") : t("Check your connection and try again.")}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void listing.refetch()}>{t("Try again")}</Button>
+              {(parentId || trash) && <Button variant="ghost" size="sm" onClick={() => setParentId(null)}>{t("Go to the top of the vault")}</Button>}
+            </div>
           </div>
         ) : !items.length ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -787,6 +869,59 @@ function VaultPage() {
       />
       <PreviewDialog item={preview} onClose={() => setPreview(null)} onShare={(i) => { setPreview(null); setSharing(i); }} />
       <VaultShareDialog item={sharing} onClose={() => setSharing(null)} />
+
+      <Dialog open={newFolder !== null} onOpenChange={(o) => !o && setNewFolder(null)}>
+        <DialogContent lang={lang} className="max-w-sm">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = (newFolder ?? "").trim();
+              if (!name) return;
+              createFolder.mutate(name);
+              setNewFolder(null);
+            }}
+            className="space-y-4"
+          >
+            <DialogHeader>
+              <DialogTitle>{t("New folder")}</DialogTitle>
+              <DialogDescription>{t("In {folder}", { folder: here.name })}</DialogDescription>
+            </DialogHeader>
+            <Input value={newFolder ?? ""} onChange={(e) => setNewFolder(e.target.value)} autoFocus aria-label={t("Folder name")} placeholder={t("Folder name")} maxLength={180} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setNewFolder(null)}>{t("Cancel")}</Button>
+              <Button type="submit" disabled={!(newFolder ?? "").trim() || createFolder.isPending}>{t("Create")}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!confirming} onOpenChange={(o) => !o && setConfirming(null)}>
+        <AlertDialogContent lang={lang}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirming?.kind === "purge" ? t("Delete “{name}” permanently?", { name: confirming.item.name }) : t("Empty the trash?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming?.kind === "purge"
+                ? t("It leaves the Vault and its links stop working. An admin can still bring it back from Control Room → Audit for 90 days.")
+                : t("The files leave the Vault; an admin can still bring them back from Audit for 90 days.")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (confirming?.kind === "purge") remove.mutate({ id: confirming.item.id, purge: true });
+                else if (confirming?.kind === "empty") emptyTrash.mutate();
+                setConfirming(null);
+              }}
+            >
+              {confirming?.kind === "purge" ? t("Delete permanently") : t("Empty")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={!!replacing} onOpenChange={(o) => !o && setReplacing(null)}>
         <DialogContent lang={lang} className="max-w-md">

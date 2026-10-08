@@ -205,4 +205,17 @@ export const ID_VAULT: Record<string, string> = {
   "The file goes back to the version from before it was replaced. Its links keep working and show that version.": "Berkasnya kembali ke versi sebelum diganti. Tautannya tetap jalan dan menampilkan versi itu.",
   // The trash (9 Oct 2026)
   "Only whoever uploaded it, or BoD, can restore it": "Hanya yang mengunggahnya, atau BoD, yang bisa memulihkannya",
+  // The page itself (9 Oct 2026): the folder in the address, a failed load, dialogs, search results
+  "Couldn't load the vault.": "Gagal memuat vault.",
+  "This folder doesn't exist any more.": "Folder ini sudah tidak ada.",
+  "It's locked to certain roles.": "Folder ini dikunci untuk peran tertentu.",
+  "Check your connection and try again.": "Periksa koneksi lalu coba lagi.",
+  "Go to the top of the vault": "Ke tingkat teratas vault",
+  "New folder": "Folder baru",
+  "In {folder}": "Di {folder}",
+  "Empty the trash?": "Kosongkan sampah?",
+  "The files leave the Vault; an admin can still bring them back from Audit for 90 days.": "Berkasnya keluar dari Vault; admin masih bisa memulihkannya dari Audit selama 90 hari.",
+  "It leaves the Vault and its links stop working. An admin can still bring it back from Control Room → Audit for 90 days.": "Berkas ini keluar dari Vault dan tautannya berhenti bekerja. Admin masih bisa memulihkannya dari Control Room → Audit selama 90 hari.",
+  "in {path}": "di {path}",
+  "Show in its folder": "Tampilkan di foldernya",
 };

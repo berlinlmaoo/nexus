@@ -79,8 +79,33 @@ export async function GET(request: NextRequest) {
 
     const usedBytes = await vaultUsedBytes(actor.workspaceId)
 
+    // Search results come from anywhere in the vault, so each says where it lives (9 Oct 2026):
+    // `path` is its folders from the top, without the item. One query for every folder of the vault
+    // (a few hundred rows at most), joined here — not a climb per result. A result the caller may
+    // read sits under folders they may read too: a lock only ever tightens on the way down.
+    let pathOf: ((parentId: string | null) => { id: string; name: string }[]) | null = null
+    if (q && !trash && visible.length) {
+      const folders = await prisma.vaultItem.findMany({
+        where: { workspaceId: actor.workspaceId, kind: "FOLDER", deletedAt: null },
+        select: { id: true, name: true, parentId: true },
+      })
+      const byId = new Map(folders.map((f) => [f.id, f]))
+      pathOf = (parentId) => {
+        const trail: { id: string; name: string }[] = []
+        let cursor = parentId ? byId.get(parentId) : undefined
+        for (let depth = 0; cursor && depth < 32; depth++) {
+          trail.unshift({ id: cursor.id, name: cursor.name })
+          cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined
+        }
+        return trail
+      }
+    }
+
     return NextResponse.json({
-      items: visible.map((r) => serializeVaultItem(r as unknown as VaultItemRow, actor)),
+      items: visible.map((r) => {
+        const item = serializeVaultItem(r as unknown as VaultItemRow, actor)
+        return pathOf ? { ...item, path: pathOf(r.parentId) } : item
+      }),
       breadcrumb: await breadcrumbFor(parentId),
       parentId,
       canWrite: await canWriteItem(actor, parentId),
