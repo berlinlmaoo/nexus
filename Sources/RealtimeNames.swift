@@ -38,6 +38,8 @@ enum RealtimeKey {
     static let auditId = "auditId"
     static let taskId = "taskId"
     static let parentId = "parentId"
+    /// On `.nexusChatPush`: the conversation that moved. Absent = "some chat may have moved".
+    static let conversationId = "conversationId"
 }
 
 /// The values of `RealtimeKey.kind`.

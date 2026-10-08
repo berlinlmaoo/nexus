@@ -51,6 +51,9 @@ struct LiveRefresh: ViewModifier {
     /// The task this screen shows. An event naming another task counts only when that task is a
     /// subtask of this one (its `RealtimeKey.parentId`); an event naming none counts.
     let taskId: String?
+    /// The conversation this screen shows. An event naming another conversation is not for it; an
+    /// event naming none counts.
+    let conversationId: String?
     let refreshOnReturn: Bool
     let action: () async -> Void
 
@@ -132,6 +135,8 @@ struct LiveRefresh: ViewModifier {
         if let projectId, let theirs = info?[RealtimeKey.projectId] as? String, theirs != projectId { return false }
         if let taskId, let theirs = info?[RealtimeKey.taskId] as? String, theirs != taskId,
            info?[RealtimeKey.parentId] as? String != taskId { return false }
+        if let conversationId, let theirs = info?[RealtimeKey.conversationId] as? String,
+           theirs != conversationId { return false }
         return true
     }
 
@@ -155,9 +160,10 @@ extension View {
     /// See `LiveRefresh`. `action` must be quiet: no spinner, no error page, and a failed request
     /// leaves what is on screen alone.
     func liveRefresh(every interval: TimeInterval, on names: [Notification.Name], kinds: Set<String>? = nil,
-                     projectId: String? = nil, taskId: String? = nil,
+                     projectId: String? = nil, taskId: String? = nil, conversationId: String? = nil,
                      refreshOnReturn: Bool = false, perform action: @escaping () async -> Void) -> some View {
         modifier(LiveRefresh(interval: interval, names: names, kinds: kinds, projectId: projectId, taskId: taskId,
+                             conversationId: conversationId,
                              refreshOnReturn: refreshOnReturn, action: action))
     }
 }

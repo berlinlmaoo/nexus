@@ -1859,18 +1859,124 @@ struct APIClient {
     ///   thread recognises (the page still holds the message it asked after) and merges by id.
     /// - `before`: older than an ISO time (both servers) or the newer server's `nextCursor`.
     ///
+    /// - `around`: a page centred on that message (newer server, 8 Oct 2026) — what a search result
+    ///   or a tapped quote jumps to. The old server ignores it and answers the newest page.
+    ///
     /// Only the plain newest page is cached. A delta or an older page saved under the same key would
     /// hand the next cold open a fragment of the conversation instead of its end.
     func conversationMessagesPage(_ id: String, after: String? = nil, before: String? = nil,
-                                  limit: Int? = nil) async throws -> MessagesResponse {
+                                  around: String? = nil, limit: Int? = nil) async throws -> MessagesResponse {
         // Per conversation: reading one thread must never surface another's messages.
         var query: [String] = []
         if let after { query.append("after=" + encValue(after)) }
         if let before { query.append("before=" + encValue(before)) }
+        if let around { query.append("around=" + encValue(around)) }
         if let limit { query.append("limit=\(limit)") }
         let path = "/api/conversations/\(id)/messages" + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
-        let key: String? = (after == nil && before == nil) ? "messages-\(id)" : nil
+        let key: String? = (after == nil && before == nil && around == nil) ? "messages-\(id)" : nil
         return try await run(makeRequest(path), decode: MessagesResponse.self, cache: key)
+    }
+
+    // MARK: - Group info (owner, 8 Oct 2026)
+
+    /// The chat's info screen: the room, its members (admins first, then A–Z) and how much media it
+    /// holds. A server from before the screen has no such route and answers 404 without a sentence
+    /// (`APIClient.isMissingRoute`); the screen then draws what the conversation list already knows.
+    func conversationInfo(_ id: String) async throws -> ChatInfoResponse {
+        try await runChat(makeRequest("/api/conversations/\(enc(id))/info"), decode: ChatInfoResponse.self)
+    }
+
+    /// One page of a chat's photos, links or docs (`type` = "photos" | "links" | "docs"), newest first.
+    func conversationMedia(_ id: String, type: String, cursor: String? = nil) async throws -> ChatMediaPage {
+        var path = "/api/conversations/\(enc(id))/media?type=" + encValue(type)
+        if let cursor { path += "&cursor=" + encValue(cursor) }
+        return try await runChat(makeRequest(path), decode: ChatMediaPage.self)
+    }
+
+    /// The chat's own messages matching `query` (people's messages only, at least 2 characters).
+    func searchConversation(_ id: String, query: String, cursor: String? = nil) async throws -> ChatSearchPage {
+        var path = "/api/conversations/\(enc(id))/search?q=" + encValue(query)
+        if let cursor { path += "&cursor=" + encValue(cursor) }
+        return try await runChat(makeRequest(path), decode: ChatSearchPage.self) { message in
+            (message ?? "").lowercased().contains("longer")
+                ? T("A search can be at most 100 characters.")
+                : T("Type at least 2 characters to search.")
+        }
+    }
+
+    /// Change a group's name and/or description: PATCH `{ name?, description? }`. A nil `name` is
+    /// left out; an empty `description` is sent as null, which clears it. Only a GROUP has either.
+    func updateConversationDetails(_ id: String, name: String?, description: String) async throws {
+        var req = makeRequest("/api/conversations/\(enc(id))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        var payload: [String: Any] = ["description": jsonOrNull(trimmed.isEmpty ? nil : trimmed)]
+        if let name { payload["name"] = name }
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        _ = try await runChat(req, decode: ChatAck.self) { message in
+            let lower = (message ?? "").lowercased()
+            if lower.contains("description") { return T("A description can be at most 500 characters.") }
+            if lower.contains("name") { return T("A group name can be at most 80 characters.") }
+            return T("Couldn't save the group's details.")
+        }
+    }
+
+    /// Take someone out of a GROUP, or leave it yourself (`userId` = your own id). Removing anyone
+    /// else takes Manager and above (403 MANAGER_REQUIRED); leaving is open to every member.
+    func removeConversationMember(_ id: String, userId: String) async throws {
+        var req = makeRequest("/api/conversations/\(enc(id))/members", method: "DELETE")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId])
+        _ = try await runChat(req, decode: ChatAck.self) { message in
+            if (message ?? "").lowercased().contains("at least one member") {
+                return T("You're the only member left, so the group can't be left.")
+            }
+            return T("Couldn't change who is in this group.")
+        }
+    }
+
+    /// True for the 404 an older server gives a route it does not have yet (no sentence in the body),
+    /// as opposed to the 404 of a chat that does not exist (which carries one).
+    static func isMissingRoute(_ error: Error) -> Bool {
+        guard let api = error as? APIError, case .http(404, .none) = api else { return false }
+        return true
+    }
+
+    /// `run` for the group-info routes: every refusal in this app's own words, in its language.
+    /// `badRequest` words a 400 for the route that got it (given the server's sentence, if any).
+    private func runChat<Response: Decodable>(_ req: URLRequest, decode: Response.Type,
+                                              badRequest: ((String?) -> String)? = nil) async throws -> Response {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.nothingAnswered(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            let message = Self.serverMessage(data)
+            switch http.statusCode {
+            case 403 where payload?.code == "MANAGER_REQUIRED":
+                throw APIError.transport(T("Only managers and above can add or remove members."))
+            case 403:
+                throw APIError.http(403, T("You're no longer in this chat."))
+            case 404:
+                // No sentence: the route itself is missing (a server from before this screen).
+                if message == nil { throw APIError.http(404, nil) }
+                throw APIError.http(404, T("This chat no longer exists."))
+            case 400 where badRequest != nil:
+                throw APIError.http(400, badRequest?(message))
+            default:
+                throw APIError.http(http.statusCode, message)
+            }
+        }
+        do {
+            return try JSONDecoder().decode(Response.self, from: data)
+        } catch {
+            throw APIError.decoding
+        }
     }
 
     /// Sends one message and hands back the stored copy (`{ message }`, 201) so the thread can show

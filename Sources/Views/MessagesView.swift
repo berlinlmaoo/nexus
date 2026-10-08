@@ -209,7 +209,13 @@ struct MessagesView: View {
             ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                            members: c.members ?? [], projectId: c.projectId, type: c.type,
                            canManageMembers: c.canManageMembers,
-                           usesInlineHeader: true)
+                           usesInlineHeader: true,
+                           // Left the group from its info screen: nothing to show in this pane any
+                           // more, and the list drops the room.
+                           onLeft: {
+                               selected = nil
+                               Task { await refreshQuietly() }
+                           })
                 // Keyed by id: without it, switching conversations reuses the same view and the
                 // previous chat's messages sit under the new one's title until the fetch lands.
                 .id(c.id)
@@ -344,9 +350,11 @@ struct ConvoRow: View {
     }
 
     /// The last line under the name. A picture sent without a caption has empty content, which
-    /// used to leave the row with a blank second line.
+    /// used to leave the row with a blank second line. A system line ("Bagas Putro added Mey")
+    /// reads the way the thread draws it, in the app's language.
     private var preview: String {
         guard let last = convo.lastMessage else { return T("No message yet") }
+        if last.isSystem { return last.systemSentence(meId: meId) }
         if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty { return T("📷 Photo") }
         return last.content
     }
@@ -439,6 +447,21 @@ extension Conversation.Member {
     var initial: String { String((user?.name ?? "?").first ?? "?").uppercased() }
 }
 
+extension ChatMessage {
+    /// A SYSTEM row's sentence for the person reading, in the app's language (ChatSystemText).
+    func systemSentence(meId: String?) -> String {
+        ChatSystemText.sentence(event, fallback: content, meId: meId,
+                                lang: AppLanguage.shared.lang == .id ? .id : .en)
+    }
+}
+
+/// A jump the thread was asked to make: scroll to this message and flash it. The token makes a
+/// second jump to the same message a change too.
+private struct ChatJump: Equatable {
+    let id: String
+    let token = UUID()
+}
+
 /// Colours for what sits on the sender's own bubble.
 private enum ChatInk {
     /// Type and icons on `NX.onyx`, which is near-black in light mode and near-white in dark. Plain
@@ -478,8 +501,12 @@ struct ChatThreadView: View {
     /// NavigationStack stays — the thread still pushes into a task and into project settings — only
     /// its bar is hidden.
     var usesInlineHeader: Bool = false
+    /// The viewer left this group from its info screen. The split layout clears its selection; nil
+    /// (a pushed thread) closes the thread itself and goes back to the list.
+    var onLeft: (() -> Void)? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
     @State private var store = ChatStore.shared
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
@@ -501,8 +528,20 @@ struct ChatThreadView: View {
     @State private var uploadProgress = UploadProgress()
     @State private var renameDraft = ""
     @State private var shownTitle: String? = nil
+    /// Something went wrong (red, under the thread).
     @State private var notice: String?
+    /// Worth knowing, not a failure (muted). A success never needs one where the thread itself shows
+    /// it: adding people to a group is confirmed by the "… added …" line in the thread.
+    @State private var infoNote: String?
     @State private var viewingPhoto: PhotoRef?
+    /// The chat's info screen, pushed onto this thread's own stack.
+    @State private var showInfo = false
+    /// A jump to one message (a search result, a tapped quote), and the message flashing after it.
+    @State private var jumpRequest: ChatJump?
+    @State private var highlightedId: String?
+    /// Set while a jump replaces the loaded messages, so the "new last message" handler does not
+    /// scroll to the end underneath it.
+    @State private var holdScroll = false
 
     // Paging and live updates.
     /// The server has answered at least once. Its first page REPLACES whatever the cache drew (that
@@ -543,7 +582,6 @@ struct ChatThreadView: View {
     private var mentionable: [Conversation.Member] {
         members.filter { !$0.uid.isEmpty && $0.uid != meId }
     }
-    private var isMuted: Bool { store.isMuted(conversationId: conversationId) }
     /// Hidden once the server has said it cannot mute (404 from the old server).
     private var showsMuteMenu: Bool { store.muteSupported != false }
 
@@ -558,10 +596,24 @@ struct ChatThreadView: View {
     /// actions, drawn inside the column so they sit over the conversation they belong to.
     private var inlineHeader: some View {
         HStack(spacing: 12) {
-            Text(shownTitle ?? title)
-                .font(NXFont.display(17, .bold))
-                .foregroundStyle(NX.foreground)
-                .lineLimit(1)
+            // The title opens the chat's info, as on WhatsApp.
+            Button { showInfo = true } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(shownTitle ?? title)
+                        .font(NXFont.display(17, .bold))
+                        .foregroundStyle(NX.foreground)
+                        .lineLimit(1)
+                    Text(T("Tap for info"))
+                        .font(NXFont.text(11))
+                        .foregroundStyle(NX.mutedFg)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(shownTitle ?? title)
+            .accessibilityHint(T("Opens the chat's info"))
             Spacer(minLength: 8)
             // Same conditions as the toolbar below: a DM can neither grow nor be renamed.
             if showsAddPeople {
@@ -592,6 +644,53 @@ struct ChatThreadView: View {
         .padding(.horizontal, 16)
         .frame(height: 52)
         .background(NX.background)
+    }
+
+    /// The title in the navigation bar, as a button that opens the chat's info.
+    private var titleButton: some View {
+        Button { showInfo = true } label: {
+            VStack(spacing: 0) {
+                Text(shownTitle ?? title)
+                    .font(NXFont.text(15, .semibold))
+                    .foregroundStyle(NX.foreground)
+                    .lineLimit(1)
+                Text(T("Tap for info"))
+                    .font(NXFont.text(10))
+                    .foregroundStyle(NX.mutedFg)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: 260)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(shownTitle ?? title)
+        .accessibilityHint(T("Opens the chat's info"))
+    }
+
+    /// What the info screen is handed: everything this thread already knows about the room.
+    private var infoContext: ChatInfoContext {
+        ChatInfoContext(conversationId: conversationId, title: shownTitle ?? title, type: type,
+                        projectId: projectId, members: members, canManageMembers: canManageMembers)
+    }
+
+    /// Left the group from the info screen: close the info, then the thread, back to the list.
+    private func leftGroup() {
+        showInfo = false
+        // After the info screen's pop has run: two pops in one transaction leave the stack in
+        // between the two.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            if let onLeft { onLeft() } else { dismiss() }
+        }
+    }
+
+    /// A search result was picked on the info screen: back to the thread, then to the message.
+    private func jumpFromInfo(_ id: String) {
+        showInfo = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            await jump(to: id)
+        }
     }
 
     /// The mention token currently being typed, or nil when we aren't in one.
@@ -634,7 +733,16 @@ struct ChatThreadView: View {
                                 Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
                             }
                             ForEach(messages) { m in
-                                bubble(m).id(m.id)
+                                Group {
+                                    if m.isSystem { systemLine(m) } else { bubble(m) }
+                                }
+                                .background {
+                                    // The message a jump landed on flashes, so the eye finds it.
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(NX.violet.opacity(highlightedId == m.id ? 0.16 : 0))
+                                        .padding(.horizontal, -8).padding(.vertical, -3)
+                                }
+                                .id(m.id)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -662,6 +770,10 @@ struct ChatThreadView: View {
                 // page is full, and loading older history changes it without anything new arriving.
                 .onChange(of: messages.last?.id) { old, new in
                     lastMessageChanged(from: old, to: new, proxy: proxy)
+                }
+                .onChange(of: jumpRequest) { _, request in
+                    guard let request else { return }
+                    scrollToJump(request.id, proxy: proxy)
                 }
                 .task { await firstLoad() }
                 // An open thread also refreshes itself — only while it is on screen (.task ends with
@@ -695,7 +807,19 @@ struct ChatThreadView: View {
         })
         .navigationTitle(usesInlineHeader ? "" : (shownTitle ?? title))
         .toolbar(usesInlineHeader ? .hidden : .visible, for: .navigationBar)
+        // Pushed, not a second sheet: the info screen belongs to this chat's own stack, the phone's
+        // or the detail column's.
+        .navigationDestination(isPresented: $showInfo) {
+            ChatInfoView(context: infoContext, usesInlineHeader: usesInlineHeader,
+                         onJump: { id in jumpFromInfo(id) },
+                         onRenamed: { name in shownTitle = name },
+                         onLeft: { leftGroup() })
+        }
         .toolbar {
+            if !usesInlineHeader {
+                // The title opens the chat's info, as on WhatsApp.
+                ToolbarItem(placement: .principal) { titleButton }
+            }
             // See showsAddPeople: project rooms add through the project, a GROUP only for Manager
             // and above, and a DM never.
             if showsAddPeople {
@@ -776,76 +900,44 @@ struct ChatThreadView: View {
             AddProjectPeopleSheet(
                 target: .project(pid),
                 existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
-                onAdded: { notice = T("Added. They'll show up here once they open the app.") }
+                // A project room writes no system line (its members follow the project), so this one
+                // still says what happened — as information, not in the red of a failure.
+                onAdded: {
+                    notice = nil
+                    infoNote = T("Added. They'll show up here once they open the app.")
+                }
             )
         } else if type == "GROUP" {
             AddProjectPeopleSheet(
                 target: .group(conversationId: conversationId),
                 existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
-                // A group owns its member list outright, so the change is immediate — no
-                // waiting for the other person to open the app, unlike a project room.
-                onAdded: { notice = T("Added to the group.") }
+                // No toast (it used to say "Added to the group." in red under the thread): the
+                // server writes "… added …" into the thread, and that line is the confirmation.
+                // Fetch it now rather than waiting for the realtime event.
+                onAdded: {
+                    notice = nil
+                    Task { await pollNewer() }
+                }
             )
         }
     }
 
     // MARK: mute
 
+    /// The bell: the same menu as the info screen's Mute tile (ChatMuteMenu). "Not available yet"
+    /// is information, not a failure, so it is not drawn in red.
     private func muteMenu(iconSize: CGFloat) -> some View {
-        Menu {
-            if let until = store.mutedUntil(conversationId: conversationId) {
-                Section(Self.mutedCaption(until)) {
-                    Button { Task { await setMute(nil) } } label: {
-                        Label(T("Unmute"), systemImage: "bell")
-                    }
-                }
+        ChatMuteMenu(conversationId: conversationId, onNotice: { text, isError in
+            if isError {
+                notice = text
             } else {
-                Button { Task { await setMute(Self.muteUntil(hours: 8)) } } label: {
-                    Label(T("Mute for 8 hours"), systemImage: "bell.slash")
-                }
-                Button { Task { await setMute(Self.muteUntil(hours: 24 * 7)) } } label: {
-                    Label(T("Mute for 1 week"), systemImage: "bell.slash")
-                }
-                Button { Task { await setMute("forever") } } label: {
-                    Label(T("Mute always"), systemImage: "bell.slash.fill")
-                }
+                infoNote = text
+                if text != nil { notice = nil }
             }
-        } label: {
-            Image(systemName: isMuted ? "bell.slash" : "bell")
+        }) { muted in
+            Image(systemName: muted ? "bell.slash" : "bell")
                 .font(.system(size: iconSize, weight: .semibold))
                 .foregroundStyle(NX.violetText)
-        }
-        .accessibilityLabel(isMuted ? T("Muted") : T("Mute notifications"))
-    }
-
-    /// "Muted until 9 Oct, 02:00", or just "Muted" for "Always" (stored as a far-future date).
-    private static func mutedCaption(_ raw: String) -> String {
-        guard let until = ChatStore.parseDate(raw),
-              until.timeIntervalSinceNow < 5 * 365 * 24 * 3600 else { return T("Muted") }
-        return String(format: T("Muted until %@"), until.formatted(date: .abbreviated, time: .shortened))
-    }
-
-    private static func muteUntil(hours: Double) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.string(from: Date().addingTimeInterval(hours * 3600))
-    }
-
-    private func setMute(_ until: String?) async {
-        notice = nil
-        do {
-            let stored = try await APIClient.shared.setConversationMute(conversationId, until: until)
-            // A server that answers without the field still did what was asked.
-            let effective: String? = until == nil ? nil : (stored ?? until)
-            store.setMuted(conversationId, until: effective)
-        } catch APIError.unauthorized {
-            auth.logout()
-        } catch APIError.http(let code, _) where code == 404 {
-            // The old server has no mute route. Take the option away rather than offer it again.
-            store.muteUnavailable()
-            notice = T("Muting isn't available yet. It comes with the next server update.")
-        } catch {
-            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't change notifications for this chat.")
         }
     }
 
@@ -881,6 +973,8 @@ struct ChatThreadView: View {
 
     private func lastMessageChanged(from old: String?, to new: String?, proxy: ScrollViewProxy) {
         guard new != nil else { return }
+        // A jump is replacing what is loaded; it decides where the thread scrolls to.
+        if holdScroll { return }
         guard let old else {
             // First draw, from the cache or the server: start at the end, without sliding down
             // from the top. Again a moment later, once the lazy stack has measured the bubbles it
@@ -896,13 +990,16 @@ struct ChatThreadView: View {
         if atBottom || newestIsMine {
             scrollToBottom(proxy, animated: true)
         } else {
-            let added: Int
+            // Only people's messages count: a system line ("… added …") is the room's log, and it
+            // never counts as unread on the server either.
+            let fresh: ArraySlice<ChatMessage>
             if let i = messages.firstIndex(where: { $0.id == old }) {
-                added = messages.count - 1 - i
+                fresh = messages[(i + 1)...]
             } else {
-                added = 1
+                fresh = messages.suffix(1)
             }
-            unseenCount += max(added, 1)
+            let added = fresh.filter { !$0.isSystem }.count
+            if added > 0 { unseenCount += added }
         }
     }
 
@@ -962,7 +1059,13 @@ struct ChatThreadView: View {
     private var composer: some View {
         VStack(spacing: 0) {
             if let notice {
+                // Red is for what went wrong, and only for that.
                 Text(notice).font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.top, 8)
+            } else if let infoNote {
+                Label(infoNote, systemImage: "info.circle")
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.top, 8)
             }
@@ -993,7 +1096,8 @@ struct ChatThreadView: View {
                         Text(T("Replying to") + " " + (target.user?.name ?? T("Message")))
                             .font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
                         Text(Self.quotePreview(.init(id: target.id, content: target.content,
-                                                     attachmentType: target.attachmentType, user: target.user)))
+                                                     attachmentType: target.attachmentType,
+                                                     attachmentUrl: target.attachmentUrl, user: target.user)))
                             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     }
                     Spacer()
@@ -1005,11 +1109,11 @@ struct ChatThreadView: View {
             }
             if let pending = pendingAttachment {
                 HStack(spacing: 8) {
-                    CachedImage(url: URL(string: Config.baseURL.absoluteString + pending.url)) {
-                        $0.resizable().scaledToFill()
-                    } placeholder: { NX.muted }
-                        .frame(width: 54, height: 54)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    if let url = ChatMessage.fileURL(pending.url) {
+                        ChatPhoto(url: url, style: .thumb)
+                            .frame(width: 54, height: 54)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
                     Button { pendingAttachment = nil } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(NX.mutedFg)
                     }
@@ -1086,21 +1190,21 @@ struct ChatThreadView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }
                     if let quoted = m.replyTo { quoteBlock(quoted, mine: mine) }
-                    if let path = m.attachmentUrl, !path.isEmpty,
-                       let url = URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path) {
-                        CachedImage(url: url) { $0.resizable().scaledToFit() } placeholder: {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
-                                .frame(height: 140)
-                        }
-                        .frame(maxWidth: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        // A tap gesture rather than a Button, because of what is already wrapped
-                        // around this bubble. SwipeToReply's drag waits for 20pt of travel, and a
-                        // button takes the touch down and holds it — every swipe that happened to
-                        // start on the picture would die there. A TapGesture gives the touch back
+                    if let url = ChatMessage.fileURL(m.attachmentUrl) {
+                        // ChatPhoto, not CachedImage: a picture that failed to load used to leave
+                        // CachedImage's placeholder up for good — a 140 pt NX.muted rectangle, a
+                        // blank white slab on the sender's own dark bubble. ChatPhoto retries once,
+                        // then says "Photo couldn't load" with a tap to try again.
+                        //
+                        // Its tap is a TapGesture rather than a Button, because of what is already
+                        // wrapped around this bubble. SwipeToReply's drag waits for 20pt of travel,
+                        // and a button takes the touch down and holds it — every swipe that happened
+                        // to start on the picture would die there. A TapGesture gives the touch back
                         // the moment the finger moves, so the swipe still fires, and it is not the
                         // long-press the context menu below listens for either.
-                        .onTapGesture { viewingPhoto = PhotoRef(url: url, name: nil) }
+                        ChatPhoto(url: url, style: .bubble, ink: ink) {
+                            viewingPhoto = PhotoRef(url: url, name: nil)
+                        }
                     }
                     // A picture can travel without a caption; don't draw an empty text line under it.
                     if !m.content.isEmpty {
@@ -1137,8 +1241,12 @@ struct ChatThreadView: View {
     }
 
     /// The quote drawn inside a reply. Colours follow the bubble it sits in, so it stays legible
-    /// on the dark "mine" bubble as well as the light one.
+    /// on the dark "mine" bubble as well as the light one. A quoted picture shows as a thumbnail,
+    /// resolved exactly as the bubble resolves its own (`ChatMessage.fileURL`); the server's quote
+    /// does not carry the picture's path today, so it is taken from the quoted message when that one
+    /// is loaded, and the quote says "📷 Photo" when it is not. Tapping the quote jumps to it.
     @ViewBuilder private func quoteBlock(_ q: ChatMessage.Quoted, mine: Bool) -> some View {
+        let picture = ChatMessage.fileURL(q.attachmentUrl ?? messages.first(where: { $0.id == q.id })?.attachmentUrl)
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(mine ? ChatInk.onMine.opacity(0.55) : NX.violet)
@@ -1147,22 +1255,66 @@ struct ChatThreadView: View {
                 Text(q.user?.name ?? T("Message"))
                     .font(NXFont.text(10, .bold))
                     .foregroundStyle(mine ? ChatInk.onMine.opacity(0.85) : NX.violetText)
-                Text(Self.quotePreview(q))
+                Text(Self.quotePreview(q, hasPicture: picture != nil))
                     .font(NXFont.text(11))
                     .foregroundStyle(mine ? ChatInk.onMine.opacity(0.7) : NX.mutedFg)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
+            if let picture {
+                ChatPhoto(url: picture, style: .thumb, ink: mine ? ChatInk.onMine : NX.foreground) {
+                    Task { await jump(to: q.id) }
+                }
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.bottom, 1)
+        .contentShape(Rectangle())
+        .onTapGesture { Task { await jump(to: q.id) } }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(T("Shows the message this replies to"))
     }
 
     /// A picture with no caption still has to say something, otherwise the quote renders blank.
-    static func quotePreview(_ q: ChatMessage.Quoted) -> String {
+    static func quotePreview(_ q: ChatMessage.Quoted, hasPicture: Bool = false) -> String {
         let body = (q.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if body.isEmpty { return q.attachmentType != nil ? T("📎 Attachment") : "…" }
+        if body.isEmpty {
+            let isPicture = hasPicture || (q.attachmentUrl?.isEmpty == false)
+                || (q.attachmentType ?? "").lowercased().hasPrefix("image")
+            if isPicture { return T("📷 Photo") }
+            return q.attachmentType != nil ? T("📎 Attachment") : "…"
+        }
         return body.count > 80 ? String(body.prefix(78)) + "…" : body
+    }
+
+    /// A SYSTEM row: "Bagas Putro added Mey", centred and muted, the way WhatsApp draws it. No
+    /// avatar, no bubble, no reply — it is the room's own log, not somebody's message. A long press
+    /// gives its time and Copy, nothing else.
+    @ViewBuilder private func systemLine(_ m: ChatMessage) -> some View {
+        let text = m.systemSentence(meId: meId)
+        if !text.isEmpty {
+            HStack(spacing: 0) {
+                Spacer(minLength: 24)
+                Text(text)
+                    .font(NXFont.text(12, .medium))
+                    .foregroundStyle(NX.mutedFg)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border, lineWidth: 0.5))
+                    .contextMenu {
+                        Section(ChatMute.dateText(m.createdAt) ?? "") {
+                            Button { UIPasteboard.general.string = text } label: {
+                                Label(T("Copy"), systemImage: "doc.on.doc")
+                            }
+                        }
+                    }
+                Spacer(minLength: 24)
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     /// One detector for every bubble: building it is the expensive part, matching is cheap.
@@ -1462,6 +1614,95 @@ struct ChatThreadView: View {
         pollAnchor = rows.last?.id
     }
 
+    // MARK: jump to a message
+
+    /// Brings one message into view and flashes it: a search result picked on the info screen, or
+    /// the message a quote answers.
+    ///
+    /// Already loaded: scroll to it. Otherwise the page centred on it is fetched (`around=`) and
+    /// joined to what the thread holds by walking forward with `after=`, so the conversation on
+    /// screen stays continuous. A message too far back for that walk replaces what is loaded; the
+    /// thread's polling then carries on forward from there, and "Load earlier messages" back.
+    private func jump(to id: String) async {
+        if messages.contains(where: { $0.id == id }) {
+            jumpRequest = ChatJump(id: id)
+            return
+        }
+        notice = nil
+        do {
+            let page = try await APIClient.shared.conversationMessagesPage(conversationId, around: id, limit: Self.pageSize)
+            var rows = page.messages ?? []
+            guard rows.contains(where: { $0.id == id }) else {
+                // A server from before `around=` ignores it and answers the newest page.
+                notice = T("Couldn't find that message. It may be too far back for this server version.")
+                return
+            }
+            let known = Set(messages.map(\.id))
+            let oldestBefore = messages.first?.createdAt
+            // Joined already when the page overlaps what is loaded, or reaches the newest message.
+            var joined = rows.contains { known.contains($0.id) } || page.hasMoreNewer == false
+            var cursor = rows.last?.id
+            var walked = 0
+            while !joined, let c = cursor, walked < Self.maxCatchUpPages {
+                let next = try await APIClient.shared.conversationMessagesPage(conversationId, after: c, limit: 100)
+                let more = (next.messages ?? []).filter { m in !rows.contains { $0.id == m.id } }
+                if more.isEmpty {
+                    // Nothing newer: the page reached the end of the conversation.
+                    joined = true
+                    break
+                }
+                rows += more
+                if more.contains(where: { known.contains($0.id) }) || next.hasMore != true {
+                    joined = true
+                    break
+                }
+                cursor = more.last?.id
+                walked += 1
+            }
+            holdScroll = true
+            if joined {
+                merge(rows)
+            } else {
+                messages = Self.chronological(rows)
+                pollAnchor = rows.last?.id
+            }
+            // The page reaches further back than anything loaded before it: "Load earlier messages"
+            // continues from its oldest row.
+            if !joined || oldestBefore == nil || (rows.first?.createdAt ?? "") < (oldestBefore ?? "") {
+                hasOlder = page.hasMore ?? true
+                olderCursor = page.nextCursor ?? rows.first?.createdAt
+            }
+            jumpRequest = ChatJump(id: id)
+            // In case the scroll never runs (the thread left the screen meanwhile): new messages
+            // must not stay unable to scroll the thread.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                holdScroll = false
+            }
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch APIError.http(let code, _) where code == 400 || code == 404 {
+            notice = T("That message isn't in this chat any more.")
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't open that message.")
+        }
+    }
+
+    private func scrollToJump(_ id: String, proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+        Task { @MainActor in
+            // Again once the lazy stack has measured the rows it only estimated on the way there.
+            try? await Task.sleep(for: .milliseconds(200))
+            proxy.scrollTo(id, anchor: .center)
+            holdScroll = false
+            withAnimation(.easeInOut(duration: 0.25)) { highlightedId = id }
+            try? await Task.sleep(for: .milliseconds(1600))
+            withAnimation(.easeInOut(duration: 0.6)) {
+                if highlightedId == id { highlightedId = nil }
+            }
+        }
+    }
+
     /// One page further back, kept in place on screen.
     private func loadOlder(_ proxy: ScrollViewProxy) async {
         guard !loadingOlder, let cursor = olderCursor ?? messages.first?.createdAt else { return }
@@ -1541,7 +1782,7 @@ struct ChatThreadView: View {
         let mentionedUserIds = pendingMentions.compactMap { v.contains($0.value) ? $0.key : nil }
         let attachment = pendingAttachment
         let replyId = replyingTo?.id
-        sending = true; notice = nil
+        sending = true; notice = nil; infoNote = nil
         defer { sending = false }
         // The composer is cleared AFTER the server says yes. It used to be cleared before, with the
         // send behind `try?` — a 403, a 413 or a dead network made the message vanish with nothing

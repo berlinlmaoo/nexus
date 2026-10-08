@@ -73,13 +73,63 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     /// The message this one answers. Optional because every message sent before replies existed
     /// has none, and the server sends null rather than omitting the key.
     let replyTo: Quoted?
+    /// "USER" or "SYSTEM" (owner, 8 Oct 2026). A row without it is a person's message: that is every
+    /// row an older server sends, so nothing changes against one.
+    let kind: String?
+    /// What a SYSTEM row says happened; the sentence is built from it (ChatSystemText). nil on every
+    /// USER row.
+    let event: ChatSystemEvent?
     struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
     /// Only what a quote needs to draw itself — never the full replied-to message.
     struct Quoted: Decodable, Sendable {
         let id: String
         let content: String?
         let attachmentType: String?
+        /// The quoted picture, when the server sends it. Today's server leaves it out; the thread
+        /// then takes it from the quoted message itself if that one is loaded.
+        let attachmentUrl: String?
         let user: UserRef?
+
+        private enum CodingKeys: String, CodingKey { case id, content, attachmentType, attachmentUrl, user }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            content = try? c.decodeIfPresent(String.self, forKey: .content)
+            attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
+            attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
+            user = try? c.decodeIfPresent(UserRef.self, forKey: .user)
+        }
+
+        init(id: String, content: String?, attachmentType: String?, attachmentUrl: String? = nil, user: UserRef?) {
+            self.id = id
+            self.content = content
+            self.attachmentType = attachmentType
+            self.attachmentUrl = attachmentUrl
+            self.user = user
+        }
+    }
+
+    var isSystem: Bool { kind == "SYSTEM" }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, userId, content, createdAt, user, attachmentUrl, attachmentType, replyTo, kind, event
+    }
+
+    /// Lenient past `id`: one row this build cannot fully read must not empty the whole page, and the
+    /// two new fields in particular may arrive in a shape nobody has seen yet.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        userId = try? c.decodeIfPresent(String.self, forKey: .userId)
+        content = (try? c.decodeIfPresent(String.self, forKey: .content)) ?? ""
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        user = try? c.decodeIfPresent(UserRef.self, forKey: .user)
+        attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
+        replyTo = try? c.decodeIfPresent(Quoted.self, forKey: .replyTo)
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        event = try? c.decodeIfPresent(ChatSystemEvent.self, forKey: .event)
     }
 }
 
@@ -114,8 +164,10 @@ struct MessagesResponse: Decodable, Sendable {
     /// True when the answer carried a `nextCursor` key at all, null included. Only the newer server
     /// writes one, which is how a poll tells an `after=` answer from an old server ignoring it.
     let hasCursorField: Bool
+    /// An `around=` page only: whether there are messages newer than the page.
+    let hasMoreNewer: Bool?
 
-    private enum CodingKeys: String, CodingKey { case messages, hasMore, nextCursor }
+    private enum CodingKeys: String, CodingKey { case messages, hasMore, nextCursor, hasMoreNewer }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -123,6 +175,7 @@ struct MessagesResponse: Decodable, Sendable {
         hasMore = try? c.decodeIfPresent(Bool.self, forKey: .hasMore)
         nextCursor = try? c.decodeIfPresent(String.self, forKey: .nextCursor)
         hasCursorField = c.contains(.nextCursor)
+        hasMoreNewer = try? c.decodeIfPresent(Bool.self, forKey: .hasMoreNewer)
     }
 }
 
@@ -171,5 +224,248 @@ struct ChatMuteResponse: Decodable, Sendable {
         } else {
             mutedUntil = nil
         }
+    }
+}
+
+// MARK: - Group info (owner, 8 Oct 2026)
+//
+// GET /api/conversations/:id/info, /media and /search. Every field is optional and read leniently:
+// these routes were built at the same time as this screen, and a field shaped differently from the
+// contract must cost that one field, not the whole screen.
+
+/// A person as these routes name them: `{ id, name }`.
+struct ChatPersonRef: Decodable, Sendable, Hashable {
+    let id: String?
+    let name: String?
+
+    private enum CodingKeys: String, CodingKey { case id, name }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? c.decodeIfPresent(String.self, forKey: .id)
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+    }
+
+    init(id: String?, name: String?) {
+        self.id = id
+        self.name = name
+    }
+}
+
+/// GET /api/conversations/:id/info → `{ conversation, members, counts }`.
+struct ChatInfoResponse: Decodable, Sendable {
+    let conversation: ChatInfo?
+    let members: [ChatInfoMember]
+    let counts: ChatMediaCounts?
+
+    private enum CodingKeys: String, CodingKey { case conversation, members, counts }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        conversation = try? c.decodeIfPresent(ChatInfo.self, forKey: .conversation)
+        members = c.chatList(ChatInfoMember.self, forKey: .members)
+        counts = try? c.decodeIfPresent(ChatMediaCounts.self, forKey: .counts)
+    }
+
+    init(conversation: ChatInfo?, members: [ChatInfoMember], counts: ChatMediaCounts?) {
+        self.conversation = conversation
+        self.members = members
+        self.counts = counts
+    }
+}
+
+struct ChatInfo: Decodable, Sendable {
+    let id: String?
+    /// "DM" | "GROUP" | "PROJECT".
+    let type: String?
+    let name: String?
+    let description: String?
+    let projectId: String?
+    let createdAt: String?
+    let createdBy: ChatPersonRef?
+    let memberCount: Int?
+    let mutedUntil: String?
+    /// May add and remove people (GROUP, Manager and above).
+    let canManageMembers: Bool?
+    /// May change the name and the description (any member of a GROUP).
+    let canEdit: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, type, name, description, projectId, createdAt, createdBy, memberCount, mutedUntil, canManageMembers, canEdit
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? c.decodeIfPresent(String.self, forKey: .id)
+        type = try? c.decodeIfPresent(String.self, forKey: .type)
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        description = try? c.decodeIfPresent(String.self, forKey: .description)
+        projectId = try? c.decodeIfPresent(String.self, forKey: .projectId)
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        createdBy = try? c.decodeIfPresent(ChatPersonRef.self, forKey: .createdBy)
+        memberCount = try? c.decodeIfPresent(Int.self, forKey: .memberCount)
+        mutedUntil = try? c.decodeIfPresent(String.self, forKey: .mutedUntil)
+        canManageMembers = try? c.decodeIfPresent(Bool.self, forKey: .canManageMembers)
+        canEdit = try? c.decodeIfPresent(Bool.self, forKey: .canEdit)
+    }
+
+    init(id: String?, type: String?, name: String?, description: String?, projectId: String?,
+         memberCount: Int?, canManageMembers: Bool?, canEdit: Bool?) {
+        self.id = id
+        self.type = type
+        self.name = name
+        self.description = description
+        self.projectId = projectId
+        self.createdAt = nil
+        self.createdBy = nil
+        self.memberCount = memberCount
+        self.mutedUntil = nil
+        self.canManageMembers = canManageMembers
+        self.canEdit = canEdit
+    }
+}
+
+struct ChatInfoMember: Decodable, Sendable, Identifiable, Hashable {
+    let userId: String
+    let name: String?
+    let avatar: String?
+    let isMe: Bool
+    /// Manager, BoD or One Above All in the room's workspace — the people who may add and remove.
+    let isAdmin: Bool
+    /// Set for someone who has left the company (offboarding); drawn as LeftTag.
+    let deactivatedAt: String?
+
+    var id: String { userId }
+    var displayName: String { (name?.isEmpty == false ? name : nil) ?? "—" }
+    var initial: String { String(displayName.first ?? "?").uppercased() }
+
+    private enum CodingKeys: String, CodingKey { case userId, name, avatar, isMe, isAdmin, deactivatedAt }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        avatar = try? c.decodeIfPresent(String.self, forKey: .avatar)
+        isMe = ((try? c.decodeIfPresent(Bool.self, forKey: .isMe)) ?? nil) ?? false
+        isAdmin = ((try? c.decodeIfPresent(Bool.self, forKey: .isAdmin)) ?? nil) ?? false
+        deactivatedAt = try? c.decodeIfPresent(String.self, forKey: .deactivatedAt)
+    }
+
+    init(userId: String, name: String?, avatar: String?, isMe: Bool, isAdmin: Bool, deactivatedAt: String?) {
+        self.userId = userId
+        self.name = name
+        self.avatar = avatar
+        self.isMe = isMe
+        self.isAdmin = isAdmin
+        self.deactivatedAt = deactivatedAt
+    }
+}
+
+struct ChatMediaCounts: Decodable, Sendable {
+    let photos: Int
+    let links: Int
+    let docs: Int
+    var total: Int { photos + links + docs }
+
+    private enum CodingKeys: String, CodingKey { case photos, links, docs }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        photos = ((try? c.decodeIfPresent(Int.self, forKey: .photos)) ?? nil) ?? 0
+        links = ((try? c.decodeIfPresent(Int.self, forKey: .links)) ?? nil) ?? 0
+        docs = ((try? c.decodeIfPresent(Int.self, forKey: .docs)) ?? nil) ?? 0
+    }
+}
+
+/// GET /api/conversations/:id/media?type=photos|links|docs&cursor= → `{ items, nextCursor }`.
+struct ChatMediaPage: Decodable, Sendable {
+    let items: [ChatMediaItem]
+    let nextCursor: String?
+
+    private enum CodingKeys: String, CodingKey { case items, nextCursor }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        items = c.chatList(ChatMediaItem.self, forKey: .items)
+        nextCursor = try? c.decodeIfPresent(String.self, forKey: .nextCursor)
+    }
+}
+
+struct ChatMediaItem: Decodable, Sendable, Identifiable {
+    let messageId: String
+    let createdAt: String?
+    let sender: ChatPersonRef?
+    /// The file (server-relative or absolute) for photos and docs; the address for links.
+    let url: String
+    let attachmentType: String?
+    let title: String?
+
+    /// A message can carry several links, one item each: the id has to tell them apart.
+    var id: String { messageId + "|" + url }
+
+    private enum CodingKeys: String, CodingKey { case messageId, createdAt, sender, url, attachmentType, title }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        messageId = try c.decode(String.self, forKey: .messageId)
+        url = try c.decode(String.self, forKey: .url)
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        sender = try? c.decodeIfPresent(ChatPersonRef.self, forKey: .sender)
+        attachmentType = try? c.decodeIfPresent(String.self, forKey: .attachmentType)
+        title = try? c.decodeIfPresent(String.self, forKey: .title)
+    }
+}
+
+/// GET /api/conversations/:id/search?q=&cursor= → `{ results, nextCursor }`.
+struct ChatSearchPage: Decodable, Sendable {
+    let results: [ChatSearchHit]
+    let nextCursor: String?
+
+    private enum CodingKeys: String, CodingKey { case results, nextCursor }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        results = c.chatList(ChatSearchHit.self, forKey: .results)
+        nextCursor = try? c.decodeIfPresent(String.self, forKey: .nextCursor)
+    }
+}
+
+struct ChatSearchHit: Decodable, Sendable, Identifiable {
+    let messageId: String
+    let createdAt: String?
+    let sender: ChatPersonRef?
+    let snippet: String
+
+    var id: String { messageId }
+
+    private enum CodingKeys: String, CodingKey { case messageId, createdAt, sender, snippet }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        messageId = try c.decode(String.self, forKey: .messageId)
+        createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
+        sender = try? c.decodeIfPresent(ChatPersonRef.self, forKey: .sender)
+        snippet = ((try? c.decodeIfPresent(String.self, forKey: .snippet)) ?? nil) ?? ""
+    }
+}
+
+/// A successful answer whose body this app does not need (PATCH, DELETE). Read as nothing, so a body
+/// shaped differently from what was agreed can never turn a change that was made into "Couldn't …".
+struct ChatAck: Decodable, Sendable {
+    init(from decoder: Decoder) throws {}
+}
+
+/// One element of a list that may be unreadable: nil instead of failing the whole list. Never throws,
+/// so a decoder walking an array always moves past it.
+struct ChatLossyElement<Wrapped: Decodable>: Decodable {
+    let value: Wrapped?
+    init(from decoder: Decoder) throws { value = try? Wrapped(from: decoder) }
+}
+
+extension KeyedDecodingContainer {
+    /// An array whose unreadable elements are dropped; empty when absent or not an array.
+    func chatList<Element: Decodable>(_ type: Element.Type, forKey key: Key) -> [Element] {
+        let wrapped = (try? decodeIfPresent([ChatLossyElement<Element>].self, forKey: key)) ?? nil
+        return (wrapped ?? []).compactMap(\.value)
     }
 }
