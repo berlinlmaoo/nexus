@@ -19,7 +19,9 @@ import { cn } from "@/lib/utils";
    "More" glass sheet (replaces the old left slide-out sidebar on mobile). */
 const primary = [
   { title: "Home", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Tasks", url: "/my-tasks", icon: CheckSquare },
+  // Chat took Tasks' place (owner, 9 Oct 2026, as in the app); My Mission stays in More. The Chat tab
+  // carries the unread chats.
+  { title: "Chat", url: "/messages", icon: MessageCircle },
   // Calendar took Inbox's place (owner, 8 Oct 2026); notifications live in More, whose button carries
   // the unread count instead.
   { title: "Calendar", url: "/calendar", icon: Calendar },
@@ -66,6 +68,7 @@ const moreGroups = [
 ] as const;
 
 export function MobileTabBar() {
+  const { t: tr } = useLang();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -73,9 +76,9 @@ export function MobileTabBar() {
 
   const notif = useQuery({ queryKey: ["notifications-unread"], queryFn: () => nexusApi.notifications(), retry: 1 });
   const unread = notif.data?.unreadCount ?? activeNotifications(notif.data?.notifications ?? []).filter((n) => !n.read).length;
-  // Chat lives in the More sheet too, so its unread count rides on the More button with the bell's.
+  // Chat has its own tab and its own count; More carries the notifications'.
   const chatUnread = useChatUnread();
-  const moreBadge = unread + chatUnread;
+  const moreBadge = unread;
 
   // Active slot: a matching primary tab, else "More" (index 4) when you're on a
   // secondary destination reachable through the sheet.
@@ -145,8 +148,11 @@ export function MobileTabBar() {
               >
                 <span className="relative">
                   <t.icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.5 : 2} />
+                  {t.url === "/messages" && chatUnread > 0 && (
+                    <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{chatUnread > 99 ? "99+" : chatUnread}</span>
+                  )}
                 </span>
-                <span>{t.title}</span>
+                <span>{tr(t.title)}</span>
               </Link>
             );
           })}
@@ -166,7 +172,7 @@ export function MobileTabBar() {
             {moreBadge > 0 && (
               <span className="absolute left-1/2 top-1 ml-2 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{moreBadge > 99 ? "99+" : moreBadge}</span>
             )}
-            <span>More</span>
+            <span>{tr("More")}</span>
           </button>
           <GlassFilter />
         </div>
@@ -250,7 +256,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
             <div className="relative max-h-[calc(82vh-3.5rem)] overflow-y-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
               {visibleGroups.map((g) => (
                 <div key={g.label} className="mb-3">
-                  <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</div>
+                  <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t(g.label)}</div>
                   <div className="grid grid-cols-1 gap-0.5">
                     {g.items.filter((item) => isCompany || (item.url !== "/vault" && item.url !== "/threads")).map((item) => {
                       const active = isActive(item.url);
@@ -265,7 +271,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                           )}
                         >
                           <item.icon className="h-[18px] w-[18px] shrink-0" />
-                          <span className="flex-1">{item.title}</span>
+                          <span className="flex-1">{t(item.title)}</span>
                           {item.url === "/inbox" && unread > 0 && (
                             <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{unread}</span>
                           )}

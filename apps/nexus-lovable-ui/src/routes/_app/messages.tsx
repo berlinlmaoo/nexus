@@ -467,9 +467,12 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
   const qc = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
+  // A group on purpose, even with one other person (owner, 9 Oct 2026: a group needed three people,
+  // the creator included). Two or more picked people are a group whatever the switch says.
+  const [groupMode, setGroupMode] = useState(false);
   const membersQuery = useQuery({ queryKey: ["members"], queryFn: () => nexusApi.members(), staleTime: 300_000 });
   const members = (Array.isArray(membersQuery.data) ? membersQuery.data : membersQuery.data?.members ?? []).filter((m: NexusUser) => m.id !== meId);
-  const isGroup = selected.length > 1;
+  const isGroup = groupMode || selected.length > 1;
 
   const create = useMutation({
     mutationFn: () => nexusApi.createConversation({ type: isGroup ? "GROUP" : "DM", userIds: selected, name: isGroup ? (groupName.trim() || undefined) : undefined }),
@@ -482,6 +485,14 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{t("New chat")}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
         <p className="mt-1 text-xs text-muted-foreground">{t("Pick 1 person for a DM, or several for a group.")}</p>
+        <label className={cn("mt-3 flex items-center gap-3 rounded-xl border border-border px-3 py-2.5", selected.length > 1 ? "opacity-60" : "cursor-pointer")}>
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><UsersIcon className="h-4 w-4" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">{t("Make it a group")}</span>
+            <span className="block text-xs text-muted-foreground">{selected.length > 1 ? t("Two or more people always make a group.") : t("Start a group with just one other person, and add more later.")}</span>
+          </span>
+          <input type="checkbox" role="switch" checked={isGroup} disabled={selected.length > 1} onChange={(e) => setGroupMode(e.target.checked)} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
+        </label>
         {isGroup && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={t("Group name (optional)")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />}
         <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border p-1">
           {membersQuery.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{t("Loading…")}</div>}
