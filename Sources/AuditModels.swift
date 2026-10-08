@@ -36,10 +36,59 @@ struct AuditLog: Decodable, Identifiable, Sendable, Hashable {
         let avatar: String?
     }
 
-    /// Hashable by id only: `.sheet(item:)` needs Identifiable, and two decodes of the same row
-    /// are the same entry whatever the rest of the payload says.
-    static func == (a: AuditLog, b: AuditLog) -> Bool { a.id == b.id }
+    /// Hashed by id. Equal only when it is the same entry saying the same thing: SwiftUI can compare
+    /// a row's inputs with `==` to decide whether to draw it again, and with an id-only `==` a row that
+    /// came back from the server as "Restored" could go on reading "Restorable" (owner, 8 Oct 2026).
+    /// Equal values still hash alike, since equal implies the same id.
+    static func == (a: AuditLog, b: AuditLog) -> Bool {
+        a.id == b.id && a.restore == b.restore && a.summary == b.summary && a.entityName == b.entityName
+    }
     func hash(into h: inout Hasher) { h.combine(id) }
+
+    /// This row once its delete has been restored, for the list to show before the server's next
+    /// page says the same. Unchanged when the row offers no restore, or no longer does.
+    func markedRestored(at date: Date = Date()) -> AuditLog {
+        guard let r = restore, r.available else { return self }
+        return AuditLog(id: id, action: action, entityType: entityType, entityId: entityId, entityName: entityName,
+                        createdAt: createdAt, user: user, summary: summary,
+                        restore: AuditRestoreInfo(available: false, restoredAt: ISO8601DateFormatter().string(from: date),
+                                                  dataAsOf: r.dataAsOf, fromBackup: r.fromBackup))
+    }
+}
+
+/// How a quiet refresh of Control Room → Audit folds a fresh read of the head of the log into the rows
+/// on screen (owner, 8 Oct 2026). Here rather than in the view so it can be run and checked on its own.
+enum AuditMerge {
+    struct Outcome: Equatable {
+        let logs: [AuditLog]
+        /// Newer entries were left out because the reader is scrolled down.
+        let newerWaiting: Bool
+        /// The fresh read replaced the list instead of merging into it (the pages below it are gone).
+        let replaced: Bool
+    }
+
+    /// - shown: the rows on screen, newest first.
+    /// - fresh: the head of the log as the server has it now, newest first.
+    /// - window: how many rows were asked for (`fresh` is shorter only at the end of the log).
+    /// - atTop: the top of the list is in view, so rows may go in above what is shown.
+    ///
+    /// Rows on screen are updated in place by id. Newer rows go in on top only while `atTop`;
+    /// otherwise they wait and `newerWaiting` says so. Rows below the window are kept. A fresh read
+    /// with nothing in common with what is shown on a full window means more arrived than one read
+    /// holds: on top it replaces the list (merging would leave a hole), scrolled down it waits.
+    static func merge(shown: [AuditLog], fresh: [AuditLog], window: Int, atTop: Bool) -> Outcome {
+        if shown.isEmpty { return Outcome(logs: fresh, newerWaiting: false, replaced: true) }
+        let shownIds = Set(shown.map(\.id))
+        let newer = fresh.filter { !shownIds.contains($0.id) }
+        let gap = !newer.isEmpty && newer.count == fresh.count && fresh.count >= window
+        if atTop {
+            if gap { return Outcome(logs: fresh, newerWaiting: false, replaced: true) }
+            let freshIds = Set(fresh.map(\.id))
+            return Outcome(logs: fresh + shown.filter { !freshIds.contains($0.id) }, newerWaiting: false, replaced: false)
+        }
+        let byId = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return Outcome(logs: shown.map { byId[$0.id] ?? $0 }, newerWaiting: !newer.isEmpty, replaced: false)
+    }
 }
 
 /// GET /api/audit/{id} — one entry, with the server's reading of it: a title, the field-by-field

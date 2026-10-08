@@ -14,17 +14,34 @@ struct FolderAggregateView: View {
     @State private var configured: [String]
     @State private var colorOverride: [String: String] = [:]   // optimistic recolour from the legend
     @State private var pickerOpen = false
+    /// The tasks have been read once. Later reads (back from a task, a project moved in) are quiet:
+    /// the spinner used to replace the calendar and send it back to this month with no day picked.
+    @State private var loadedOnce = false
+    /// Fresh copies from the quiet refresh (owner, 8 Oct 2026: a project moved into this folder on
+    /// another device must show here). nil until the first one lands; until then the screen draws
+    /// what the projects list handed over when it opened it.
+    @State private var liveProjects: [Project]?
+    @State private var liveFolders: [ProjectFolder]?
+    /// The curated subset as the server last said it, so a change made on another device is picked
+    /// up without undoing one just made here whose save the server has not answered yet.
+    @State private var serverConfigured: [String]
 
     init(folder: ProjectFolder, allFolders: [ProjectFolder], allProjects: [Project]) {
         self.folder = folder; self.allFolders = allFolders; self.allProjects = allProjects
         _configured = State(initialValue: folder.aggregateProjectIds ?? [])
+        _serverConfigured = State(initialValue: folder.aggregateProjectIds ?? [])
     }
+
+    private var projectsNow: [Project] { liveProjects ?? allProjects }
+    private var foldersNow: [ProjectFolder] { liveFolders ?? allFolders }
+    /// This folder as the last refresh has it (a rename shows in the title).
+    private var folderNow: ProjectFolder { foldersNow.first { $0.id == folder.id } ?? folder }
 
     static let palette = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#64748b"]
 
     private var folderProjects: [Project] {
-        var subtree = FolderAggregateView.descendantFolderIds(folder.id, allFolders); subtree.insert(folder.id)
-        return allProjects.filter { ($0.folderId).map(subtree.contains) ?? false }
+        var subtree = FolderAggregateView.descendantFolderIds(folder.id, foldersNow); subtree.insert(folder.id)
+        return projectsNow.filter { ($0.folderId).map(subtree.contains) ?? false }
     }
     private var selectedIds: [String] {
         let all = folderProjects.map(\.id)
@@ -32,7 +49,7 @@ struct FolderAggregateView: View {
         let set = Set(all)
         return configured.filter(set.contains)
     }
-    private var projById: [String: Project] { Dictionary(allProjects.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
+    private var projById: [String: Project] { Dictionary(projectsNow.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
     private var selectedProjects: [Project] { selectedIds.compactMap { projById[$0] } }
 
     func colorHex(_ pid: String?) -> String { colorOverride[pid ?? ""] ?? projById[pid ?? ""]?.color ?? "#7b68ee" }
@@ -59,7 +76,7 @@ struct FolderAggregateView: View {
             .padding(16)
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(folder.name)
+        .navigationTitle(folderNow.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -72,13 +89,48 @@ struct FolderAggregateView: View {
                 Task { await load() }
             }
         }
-        .task { await load() }
+        // Every appearance: the first read with the spinner, later ones (back from a task) quietly.
+        .task { await load(quiet: loadedOnce) }
+        // Which projects are in this folder, live: every 30 s while on screen and the app is in
+        // front, at once on coming back to the front or back to this screen, and on the realtime
+        // client's word once it exists. The tasks are read again only when that set changed.
+        .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects, RealtimeKind.folders],
+                     refreshOnReturn: true) {
+            await refreshQuietly()
+        }
     }
 
-    private func load() async {
-        loading = true
-        tasks = (try? await APIClient.shared.folderTasks(projectIds: selectedIds)) ?? []
+    private func load(quiet: Bool = false) async {
+        if !quiet { loading = true }
+        let fresh = try? await APIClient.shared.folderTasks(projectIds: selectedIds)
+        // A quiet read that fails keeps the calendar as it is.
+        if let fresh { tasks = fresh } else if !quiet { tasks = [] }
         loading = false
+        loadedOnce = true
+    }
+
+    /// Projects and folders re-read without a sound, through the same loaders the projects list
+    /// uses. A failed request changes nothing.
+    private func refreshQuietly() async {
+        guard !loading else { return }
+        guard let projects = try? await APIClient.shared.projects() else { return }
+        // The workspace of a project already in this folder; with none, every folder the person can
+        // see, which still holds this one and everything under it.
+        let workspaceId = projectsNow.first { $0.folderId == folder.id }?.workspaceId
+        let folders = try? await APIClient.shared.projectFolders(workspaceId: workspaceId)
+        let before = selectedIds
+        liveProjects = projects
+        if let folders {
+            liveFolders = folders
+            if let mine = folders.first(where: { $0.id == folder.id }) {
+                let ids = mine.aggregateProjectIds ?? []
+                if ids != serverConfigured {
+                    serverConfigured = ids
+                    configured = ids
+                }
+            }
+        }
+        if selectedIds != before { await load(quiet: true) }
     }
 
     private func recolor(_ projectId: String, _ hex: String) {

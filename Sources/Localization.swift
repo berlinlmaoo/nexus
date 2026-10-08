@@ -2032,6 +2032,8 @@ final class AppLanguage {
         "Not restored: projects, teams, passkeys, devices, and anyone who had them as approver. Set those again by hand.": "Tidak dikembalikan: project, tim, passkey, perangkat, dan orang yang approver-nya dia. Atur ulang secara manual.",
         "%@ is back.": "%@ aktif lagi.",
         "This account has attendance records or requests. Use Offboard instead, so they stay.": "Akun ini punya data absensi/pengajuan. Pakai Offboard supaya datanya tetap ada.",
+        // Task detail: who made the task (8 Oct)
+        "Created by %@": "Dibuat oleh %@",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

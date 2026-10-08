@@ -70,6 +70,13 @@ struct ProjectsView: View {
                 }
                 await load()
             }
+            // Live (owner, 8 Oct 2026): a project moved to another folder on one device showed on the
+            // others only after a manual refresh. Now every 30 s while this list is on screen and the
+            // app is in front, at once on coming back to the front, and on the realtime client's word
+            // once it exists. Coming back to the list from a board is the `.task` above.
+            .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects, RealtimeKind.folders]) {
+                await refreshQuietly()
+            }
         }
     }
 
@@ -143,6 +150,28 @@ struct ProjectsView: View {
         }
         loading = false
         await loadProgress()   // secondary pass — the cards are already on screen
+    }
+
+    /// `load` without a sound: projects and folders only, no skeleton, no error page, and a request
+    /// that fails leaves the list as it is. Rows are keyed by id, so the scroll position and the
+    /// open folders stay; a folder first seen now (made on another device) starts closed, like every
+    /// folder does. The progress tallies — one call over every task of every project — are redone
+    /// only when the set of projects changed, so a new card does not sit on "Calculating…".
+    private func refreshQuietly() async {
+        guard !loading else { return }
+        guard let fresh = try? await APIClient.shared.projects() else { return }
+        if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId }
+        let freshFolders = try? await APIClient.shared.projectFolders(workspaceId: workspaceId)
+        let setChanged = Set(fresh.map(\.id)) != Set(projects.map(\.id))
+        if let freshFolders {
+            let known = Set(folders.map(\.id))
+            let added = freshFolders.map(\.id).filter { !known.contains($0) }
+            if !added.isEmpty { collapsed.formUnion(added) }
+            folders = freshFolders
+        }
+        projects = fresh
+        error = nil
+        if setChanged { await loadProgress() }
     }
 
     private var searchField: some View {

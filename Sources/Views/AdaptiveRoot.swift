@@ -412,6 +412,13 @@ struct SidebarRoot: View {
             // No title: the sidebar is the app's own furniture, and a word repeating the app name
             // above its own menu is a row of pixels that tells the reader nothing.
             .navigationTitle("")
+            // The pinned projects, live (owner, 8 Oct 2026): a pin, rename or new icon made on another
+            // device shows here within 30 s while the sidebar is on screen and the app is in front,
+            // at once on coming back to the front, and on the realtime client's word once it exists.
+            .liveRefresh(every: 30, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.projects]) {
+                await shortcuts.syncPins()
+                keepProjectSelection()
+            }
         } detail: {
             let needsOwnButton = detailHidesNavigationBar
             detail(for: selection ?? .screen(.dashboard))
@@ -523,6 +530,16 @@ struct SidebarRoot: View {
             case .project:            router.sidebarScreen = .projects
             }
         }
+    }
+
+    /// A project shortcut is selected by its whole ref (id, name, icon). When a refresh brings the same
+    /// project back renamed or with a new icon, its row's tag changes and the List would show nothing
+    /// selected while its board is still open: follow it to the new ref. Same id, so the board stays.
+    private func keepProjectSelection() {
+        guard case .project(let ref) = selection,
+              let now = (shortcuts.pinned + shortcuts.recent).first(where: { $0.id == ref.id }),
+              now != ref else { return }
+        selection = .project(now)
     }
 
     /// Whether the detail column draws without a navigation bar, and therefore has nowhere for the

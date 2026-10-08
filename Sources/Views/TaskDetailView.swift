@@ -204,23 +204,29 @@ struct TaskDetailView: View {
     }
 
     private func metaRow(_ t: TaskDetail) -> some View {
-        HStack(spacing: 20) {
-            Button { showAssignee = true } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-                        Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 20) {
+                Button { showAssignee = true } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                            Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
+                        }
+                        if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
+                            assigneeLine(people).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
                     }
-                    if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
-                        assigneeLine(people).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
+                }.buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("DUE").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                    Text(dueText(t.dueDate)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 }
-            }.buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("DUE").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-                Text(dueText(t.dueDate)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                Spacer()
             }
-            Spacer()
+            if let creator = t.creator, let name = creator.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+                Divider().overlay(NX.border)
+                creatorLine(name, creator)
+            }
         }
         .padding(14).nexusCard(padding: 14, radius: 18)
         .sheet(isPresented: $showAssignee) {
@@ -230,6 +236,27 @@ struct TaskDetailView: View {
                 onSave: { ids in await update(t, ["assigneeIds": Array(ids)]) }
             )
         }
+    }
+
+    /// "Created by Rina", with her picture (owner, 8 Oct 2026). Every task has a maker, so this no
+    /// longer depends on the project having a CREATED custom field — which stays as it is. Someone
+    /// who was offboarded keeps the credit and gets the muted "Left", as an assignee does.
+    private func creatorLine(_ name: String, _ creator: TaskDetail.CreatorRef) -> some View {
+        // Split around the name so it can be set in bold in either language's word order.
+        let parts = T("Created by %@").components(separatedBy: "%@")
+        let before = parts.first ?? ""
+        let after = parts.count > 1 ? parts[1] : ""
+        return HStack(spacing: 8) {
+            AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22)
+            (Text(before).foregroundColor(NX.mutedFg)
+                + Text(name).font(NXFont.text(13, .semibold)).foregroundColor(NX.foreground)
+                + Text(after).foregroundColor(NX.mutedFg))
+                .font(NXFont.text(13))
+                .lineLimit(1)
+            if creator.deactivatedAt != nil { LeftTag() }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// "Budi Left, Sari": the names, with a small muted "Left" after anyone offboarded (left the

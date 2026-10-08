@@ -9,6 +9,10 @@ import SwiftUI
 /// changed. This one pages through the whole log (the route's own `limit`/`offset`), searches and
 /// filters on the server so a filter covers the log and not just what happens to be loaded, and
 /// opens every entry into the diff the server reads out of its metadata.
+///
+/// Live (owner, 8 Oct 2026): a project restored on one device read "Restorable" on every other until
+/// someone reloaded by hand. While the list is on screen it now refreshes itself quietly (see
+/// `silentRefresh`), and an open entry re-reads itself the same way.
 struct AdminAuditSection: View {
     @State private var logs: [AuditLog] = []
     @State private var total: Int?
@@ -25,8 +29,23 @@ struct AdminAuditSection: View {
     /// Bumped by every reload. A page that was in flight when the filter changed belongs to the old
     /// filter, and appending it would mix two different queries into one list.
     @State private var generation = 0
+    /// The filter the list on screen was loaded for. Coming back into view with the same one merges
+    /// what changed instead of starting over at page one (which threw away the pages scrolled to).
+    @State private var loadedKey: String?
+    /// The top of the list is on screen. New entries are only put in above the reader while it is:
+    /// rows pushed in over someone reading further down would shove what they are reading down the
+    /// screen at every refresh.
+    @State private var atTop = true
+    /// Newer entries exist that were held back while the reader was scrolled down; fetched again the
+    /// moment the top comes back into view.
+    @State private var newerWaiting = false
+    @State private var refreshing = false
 
     private static let pageSize = 50
+    /// How much of the head of the log a quiet refresh re-reads: what the reader has loaded, up to
+    /// the route's cap of 100. Rows further down keep what they had (a restore made here still
+    /// updates its own row — see `restoredHere`).
+    private static let liveWindow = 100
     private struct ActionFilter { let label: String; let value: String? }
     private static let filters: [ActionFilter] = [
         ActionFilter(label: "All", value: nil), ActionFilter(label: "Create", value: "create"),
@@ -45,17 +64,31 @@ struct AdminAuditSection: View {
             content
         }
         .task(id: queryKey) {
+            // Back in view with the filter it was loaded for (`.task` runs again on every appearance):
+            // keep the pages and the scroll position, and merge in what changed meanwhile.
+            if loadedKey == queryKey {
+                await silentRefresh()
+                return
+            }
             // Typing is debounced here rather than with a timer: `.task(id:)` cancels this closure on
             // the next keystroke, so only the pause after the last one reaches the server.
             if !trimmedQuery.isEmpty {
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 if Task.isCancelled { return }
             }
+            loadedKey = queryKey
             await reload()
         }
-        // The only sheet on this view — the detail is the one thing it presents. A restore in it
-        // turns the row's "Restorable" into "Restored", so the list reloads behind it.
-        .sheet(item: $opened) { AuditEntrySheet(log: $0, onRestored: { Task { await reload() } }) }
+        // Every 15 s while on screen and the app is in front, at once on coming back to the front,
+        // and on the realtime client's word once it exists.
+        .liveRefresh(every: 15, on: [.nexusAuditChanged, .nexusWorkspaceChanged], kinds: [RealtimeKind.audit]) {
+            await silentRefresh()
+        }
+        // The only sheet on this view — the detail is the one thing it presents. A restore in it, or
+        // one it sees made elsewhere, turns the row's "Restorable" into "Restored".
+        .sheet(item: $opened) { log in
+            AuditEntrySheet(log: log, onRestored: { restoredHere(log.id) })
+        }
     }
 
     // MARK: controls
@@ -114,6 +147,14 @@ struct AdminAuditSection: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8, pinnedViews: [.sectionHeaders]) {
+                    // Tells the quiet refresh whether the top is in view. Inside the LazyVStack, so it
+                    // only counts as on screen while it really is.
+                    Color.clear.frame(height: 1)
+                        .onAppear {
+                            atTop = true
+                            if newerWaiting { Task { await silentRefresh() } }
+                        }
+                        .onDisappear { atTop = false }
                     ForEach(dayGroups, id: \.key) { group in
                         Section {
                             ForEach(group.rows) { log in
@@ -174,6 +215,7 @@ struct AdminAuditSection: View {
         generation += 1
         let gen = generation
         loading = true; error = nil
+        newerWaiting = false
         // Only the unfiltered first page is kept on disk: it is the one somebody opens the tab to
         // see, and a filtered page from a week ago shown as "the answer" would be misleading.
         let cacheable = !isFiltering
@@ -227,6 +269,60 @@ struct AdminAuditSection: View {
     private func isLastPage(_ page: AuditLogsResponse, received: Int) -> Bool {
         if let total = page.total { return received >= total }
         return (page.logs ?? []).count < Self.pageSize
+    }
+
+    /// The head of the log, re-read without a sound: no spinner, no error, no offline notice. A
+    /// failed request leaves the list exactly as it was — the next tick or a pull to refresh tries
+    /// again. Rows already on screen are updated in place by id (a "Restorable" that became
+    /// "Restored"); newer rows go in on top only while the top is in view; the pages loaded below
+    /// the window stay as they are.
+    private func silentRefresh() async {
+        // A reload is already fetching (a new filter, a pull to refresh): it brings the same answer.
+        guard !loading, !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        let gen = generation
+        let window = min(max(logs.count, Self.pageSize), Self.liveWindow)
+        let page: AuditLogsResponse
+        do {
+            page = try await APIClient.shared.auditLogs(limit: window, offset: 0, action: action,
+                                                        search: trimmedQuery, cache: !isFiltering)
+        } catch {
+            return
+        }
+        guard gen == generation else { return }
+        let fresh = page.logs ?? []
+
+        // What was on screen came off the disk, or the first load failed and nothing is: the
+        // server's answer simply takes its place.
+        if cachedFrom != nil || logs.isEmpty {
+            logs = fresh
+            total = page.total
+            reachedEnd = isLastPage(page, received: logs.count)
+            cachedFrom = nil
+            error = nil
+            newerWaiting = false
+            return
+        }
+
+        let merged = AuditMerge.merge(shown: logs, fresh: fresh, window: window, atTop: atTop)
+        if merged.logs != logs { logs = merged.logs }
+        newerWaiting = merged.newerWaiting
+        if merged.replaced { reachedEnd = isLastPage(page, received: logs.count) }
+        if let t = page.total { total = t }
+        // Only ever towards "the end": a quiet refresh must not wake the page sentinel back up after
+        // a failed page turned it off. A pull to refresh starts over properly.
+        if !reachedEnd, let t = total, logs.count >= t { reachedEnd = true }
+    }
+
+    /// A restore made in the entry sheet, or one the sheet saw happen elsewhere: the row says
+    /// "Restored" now, without waiting for the server's next page, and the head of the log is
+    /// re-read for the new "restore" entry.
+    private func restoredHere(_ id: String) {
+        if let i = logs.firstIndex(where: { $0.id == id }) {
+            logs[i] = logs[i].markedRestored()
+        }
+        Task { await silentRefresh() }
     }
 }
 
@@ -327,6 +423,7 @@ private struct AuditRestorePill: View {
 /// deleted project or task that kept a copy also offers to put it back (owner, 8 Oct 2026).
 private struct AuditEntrySheet: View {
     let log: AuditLog
+    /// The entry went from restorable to restored: here, or — seen by the quiet refresh — elsewhere.
     var onRestored: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var detail: AuditEntryDetail?
@@ -368,6 +465,13 @@ private struct AuditEntrySheet: View {
                     .padding(16)
                 }
             }
+            // While the entry is open, it re-reads itself every 15 s: a restore made on another
+            // device turns the Restore card into "Restored by …" without closing the sheet. On the
+            // stack's root, so a project or task opened from here stops it until it comes back.
+            .liveRefresh(every: 15, on: [.nexusAuditChanged, .nexusWorkspaceChanged], kinds: [RealtimeKind.audit],
+                         refreshOnReturn: true) {
+                await refreshQuietly()
+            }
             .alert(String(format: T("Restore “%@”?"), detail?.entry.entityName ?? log.entityName ?? ""), isPresented: $confirmRestore) {
                 Button(T("Yes, restore")) { Task { await restore() } }
                 Button(T("Cancel"), role: .cancel) {}
@@ -389,6 +493,17 @@ private struct AuditEntrySheet: View {
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load this entry.") }
     }
 
+    /// `load` without a sound: a failure leaves the entry as it is on screen. Skipped while a restore
+    /// is running here — that one reads the entry back itself when it is done.
+    private func refreshQuietly() async {
+        guard !restoring else { return }
+        guard let fresh = try? await APIClient.shared.auditEntry(id: log.id), !restoring else { return }
+        let wasRestorable = detail?.restore?.available == true
+        detail = fresh
+        error = nil
+        if wasRestorable, fresh.restore?.available == false, restoredNow == nil { onRestored() }
+    }
+
     // MARK: restore
 
     private func isDeletedProjectOrTask(_ e: AuditEntryDetail.Entry) -> Bool {
@@ -400,14 +515,24 @@ private struct AuditEntrySheet: View {
         restoreError = nil
         defer { restoring = false }
         do {
-            restoredNow = try await APIClient.shared.auditRestore(id: log.id)
+            let result = try await APIClient.shared.auditRestore(id: log.id)
+            restoredNow = result
             onRestored()
+            // News for a project list on screen elsewhere in the app (another window on iPad or Mac).
+            var info: [String: Any] = [RealtimeKey.kind: RealtimeKind.projects]
+            if let pid = result.projectId ?? (result.entityType == "project" ? result.entityId : nil) {
+                info[RealtimeKey.projectId] = pid
+            }
+            NotificationCenter.default.post(name: .nexusWorkspaceChanged, object: nil, userInfo: info)
             await load()
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? T("Couldn't restore it. Try again in a moment.")
-            // Someone else may have restored it meanwhile: show the entry as it is now.
+            // Someone else may have restored it meanwhile: show the entry as it is now, and the
+            // list's row with it.
+            let wasRestorable = detail?.restore?.available == true
             await load()
             restoreError = message
+            if wasRestorable, detail?.restore?.available == false { onRestored() }
         }
     }
 

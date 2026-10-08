@@ -121,10 +121,11 @@ struct TaskDetail: Decodable, Sendable {
     let taskList: TaskListInfo?
     let activityLogs: [ActivityLog]?
     let quests: [TaskQuestRef]?   // task-bundle quests this task is in (with total/done) → detail banner
-    /// Who made the task. Read for one thing: whether they were offboarded (`deactivatedAt`), which
-    /// the CREATED custom field marks "Left". Optional, like the field.
+    /// Who made the task: the task detail's "Created by" line (with their picture), and whether they
+    /// were offboarded (`deactivatedAt`), which that line and the CREATED custom field mark "Left".
+    /// GET /api/tasks/:id sends the whole user row; every field is optional.
     let creator: CreatorRef?
-    struct CreatorRef: Decodable, Sendable { let id: String?; let name: String?; let deactivatedAt: String? }
+    struct CreatorRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let deactivatedAt: String? }
 
     struct ActivityLog: Decodable, Identifiable, Sendable {
         let id: String
