@@ -365,7 +365,10 @@ export async function advanceOutsideClock(recordId: string, opts: { now?: Date; 
   return { ...result, fired: true, stage: stageAfter(step) }
 }
 
-/** One push to each of the staff member's attendance approvers (never the staff member themselves). */
+/**
+ * One push to each of the staff member's attendance approvers, plus every One Above All of the
+ * workspace (owner, 8 Oct 2026) — never the staff member themselves, and nobody twice.
+ */
 async function notifyOutsideApprovers(
   record: RecordForClock,
   minutesOutside: number,
@@ -373,7 +376,12 @@ async function notifyOutsideApprovers(
   pushData: Record<string, string | number | boolean | null>,
 ): Promise<void> {
   try {
-    const { userIds } = await resolveAttendanceApprovers(record.userId, record.workspaceId)
+    const { userIds: approvers } = await resolveAttendanceApprovers(record.userId, record.workspaceId)
+    const oaa = await prisma.workspaceMember.findMany({
+      where: { workspaceId: record.workspaceId, role: "ONE_ABOVE_ALL" },
+      select: { userId: true },
+    })
+    const userIds = [...new Set([...approvers, ...oaa.map((m) => m.userId)])].filter((id) => id !== record.userId)
     const copy = outsideApproverCopy({ name: record.user?.name ?? null, minutesOutside, outsideSince: record.outsideSince!, timeZone: tz })
     for (const userId of userIds) {
       if (userId === record.userId) continue
