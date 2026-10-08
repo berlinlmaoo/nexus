@@ -9,7 +9,8 @@ import UIKit
 // the detail column's on iPad and Mac — never a second sheet over the thread. What it shows depends
 // on the room:
 //   GROUP   picture, name, "Group · N members", description; Add / Search / Mute; media; members
-//           (tap one: Message, View profile, Remove); Exit group.
+//           (tap one: Message, View profile, Remove); Exit group; Delete group for whoever may (Manager
+//           and above, or the only member left — who cannot exit, so Delete takes Exit's place).
 //   PROJECT the same without Add, Remove or Exit: "Members follow the project", Open project.
 //   DM      the person's card; Search / Mute; media. No member list.
 //
@@ -49,11 +50,13 @@ private enum ChatInfoRoute: Hashable {
 private enum ChatInfoConfirm: Identifiable {
     case remove(ChatInfoMember)
     case exit
+    case delete
 
     var id: String {
         switch self {
         case .remove(let m): return "remove-" + m.userId
         case .exit: return "exit"
+        case .delete: return "delete"
         }
     }
 }
@@ -72,7 +75,7 @@ struct ChatInfoView: View {
     let onJump: (String) -> Void
     /// The group's name was changed here.
     let onRenamed: (String) -> Void
-    /// The viewer left the group. The thread closes and goes back to the chat list.
+    /// The viewer left the group, or deleted it. The thread closes and goes back to the chat list.
     let onLeft: () -> Void
 
     @Environment(AuthStore.self) private var auth
@@ -89,6 +92,8 @@ struct ChatInfoView: View {
     /// Something worth knowing that is not a failure (muted).
     @State private var infoNote: String?
     @State private var busy = false
+    /// Exit was refused because nobody else is left (LAST_MEMBER): Delete takes its place.
+    @State private var lastRefused = false
 
     @State private var searching = false
     @State private var query = ""
@@ -123,6 +128,15 @@ struct ChatInfoView: View {
     private var canManage: Bool { (conversation?.canManageMembers ?? context.canManageMembers) == true }
     /// Today any member of a GROUP may rename it; the server says so per room once it can.
     private var canEdit: Bool { isGroup && (conversation?.canEdit ?? true) }
+    /// The server says so per room (Manager and above, or the only member left); nil = no such route.
+    private var canDelete: Bool { isGroup && !legacy && conversation?.canDelete == true }
+    /// The viewer is the only one left: a group can't be left by its last member, only deleted.
+    private var onlyMember: Bool {
+        guard isGroup else { return false }
+        if lastRefused { return true }
+        guard memberCount == 1, let only = members.first else { return false }
+        return only.isMe || only.userId == meId
+    }
 
     /// The member list: the server's (admins first, then A–Z), else the chat list's. The viewer first.
     private var members: [ChatInfoMember] {
@@ -169,7 +183,7 @@ struct ChatInfoView: View {
                                 if !legacy { mediaRow }
                                 if isProject { projectSection }
                                 if isDM { dmSection } else { membersSection }
-                                if isGroup { exitSection }
+                                if isGroup { leaveSection }
                                 if legacy {
                                     Text(T("Media, search and member roles come with the next server update."))
                                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -277,6 +291,8 @@ struct ChatInfoView: View {
             Button(T("Remove"), role: .destructive) { Task { await remove(m) } }
         case .exit:
             Button(T("Exit group"), role: .destructive) { Task { await leaveGroup() } }
+        case .delete:
+            Button(T("Delete group"), role: .destructive) { Task { await deleteGroup() } }
         }
         Button(T("Cancel"), role: .cancel) {}
     }
@@ -287,6 +303,8 @@ struct ChatInfoView: View {
             return Text(T("They stop getting this group's messages. A manager can add them back."))
         case .exit:
             return Text(T("You stop getting this group's messages. A manager can add you back."))
+        case .delete:
+            return Text(T("Its messages and members go with it. It can be restored from Control Room → Audit."))
         }
     }
 
@@ -294,6 +312,7 @@ struct ChatInfoView: View {
         switch confirm {
         case .remove(let m): return String(format: T("Remove %@ from %@?"), m.displayName, groupName)
         case .exit: return String(format: T("Exit “%@”?"), groupName)
+        case .delete: return String(format: T("Delete “%@”?"), groupName)
         case nil: return ""
         }
     }
@@ -573,6 +592,42 @@ struct ChatInfoView: View {
         }
     }
 
+    /// Exit, and Delete for whoever may. The only member left can't exit: a muted line says why, and
+    /// Delete takes Exit's place.
+    @ViewBuilder private var leaveSection: some View {
+        VStack(spacing: 10) {
+            if onlyMember {
+                Label(T("You're the only member left, so you can't leave. Delete the group instead."), systemImage: "info.circle")
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                exitSection
+            }
+            if canDelete { deleteSection }
+        }
+    }
+
+    private var deleteSection: some View {
+        Button { confirm = .delete } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "trash").font(.system(size: 15, weight: .semibold))
+                    .frame(width: 24)
+                Text(T("Delete group")).font(NXFont.text(15, .semibold))
+                Spacer(minLength: 8)
+                if busy { ProgressView().controlSize(.small).tint(NX.danger) }
+            }
+            .foregroundStyle(NX.danger)
+            .padding(14)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .hoverEffect(.highlight)
+    }
+
     private var exitSection: some View {
         Button { confirm = .exit } label: {
             HStack(spacing: 12) {
@@ -824,8 +879,35 @@ struct ChatInfoView: View {
             onLeft()
         } catch APIError.unauthorized {
             auth.logout()
+        } catch is ChatLastMemberRefusal {
+            // Nobody else is left (someone left a moment ago): not a failure to shout about. The
+            // muted line and Delete take Exit's place.
+            lastRefused = true
+            await load(spinner: false)
         } catch let failure {
             notice = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't leave this group.")
+        }
+    }
+
+    /// Deletes the group (restorable from Control Room → Audit) and goes back to the chat list, the
+    /// way Exit does.
+    private func deleteGroup() async {
+        busy = true
+        notice = nil
+        defer { busy = false }
+        do {
+            try await APIClient.shared.deleteConversation(context.conversationId)
+            NotificationCenter.default.post(name: .nexusChatPush, object: nil)
+            onLeft()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch APIError.http(let code, _) where code == 404 {
+            // Already gone: deleted on another device, or by someone else a moment ago.
+            NotificationCenter.default.post(name: .nexusChatPush, object: nil)
+            onLeft()
+        } catch let failure {
+            notice = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't delete this group.")
+            await load(spinner: false)
         }
     }
 }

@@ -28,6 +28,11 @@ extension Notification.Name {
 
     /// A new Inbox notification was written for this person.
     static let nexusInboxChanged = Notification.Name("nexus.inbox.changed")
+
+    /// A group chat was deleted (server since 9 Oct 2026: `conversation-updated` with reason
+    /// "deleted"). userInfo: `RealtimeKey.conversationId`. An open thread of it closes with a note;
+    /// the chat list follows `.nexusChatPush`, which is posted for it as well.
+    static let nexusChatDeleted = Notification.Name("nexus.chat.deleted")
 }
 
 /// The userInfo keys of the notifications above.

@@ -289,9 +289,12 @@ struct ChatInfo: Decodable, Sendable {
     let canManageMembers: Bool?
     /// May change the name and the description (any member of a GROUP).
     let canEdit: Bool?
+    /// May delete the group (servers since 9 Oct 2026): Manager and above, or the only member left.
+    /// nil = a server without DELETE /api/conversations/:id — no Delete is offered.
+    let canDelete: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, name, description, projectId, createdAt, createdBy, memberCount, mutedUntil, canManageMembers, canEdit
+        case id, type, name, description, projectId, createdAt, createdBy, memberCount, mutedUntil, canManageMembers, canEdit, canDelete
     }
 
     init(from decoder: Decoder) throws {
@@ -307,6 +310,7 @@ struct ChatInfo: Decodable, Sendable {
         mutedUntil = try? c.decodeIfPresent(String.self, forKey: .mutedUntil)
         canManageMembers = try? c.decodeIfPresent(Bool.self, forKey: .canManageMembers)
         canEdit = try? c.decodeIfPresent(Bool.self, forKey: .canEdit)
+        canDelete = try? c.decodeIfPresent(Bool.self, forKey: .canDelete)
     }
 
     init(id: String?, type: String?, name: String?, description: String?, projectId: String?,
@@ -322,6 +326,7 @@ struct ChatInfo: Decodable, Sendable {
         self.mutedUntil = nil
         self.canManageMembers = canManageMembers
         self.canEdit = canEdit
+        self.canDelete = nil
     }
 }
 

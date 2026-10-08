@@ -258,11 +258,13 @@ struct AuditRestoreCounts: Decodable, Sendable, Hashable {
     var lists = 0, tasks = 0, files = 0, comments = 0, sheets = 0, members = 0, items = 0
     var rows = 0, cells = 0, submissions = 0, values = 0, receipts = 0, payments = 0, milestones = 0
     var pages = 0, people = 0, projects = 0, folders = 0, units = 0, points = 0
+    /// A group chat's messages (9 Oct 2026); its `members` are the people in it.
+    var messages = 0
 
     enum CodingKeys: String, CodingKey {
         case lists, tasks, files, comments, sheets, members, items
         case rows, cells, submissions, values, receipts, payments, milestones
-        case pages, people, projects, folders, units, points
+        case pages, people, projects, folders, units, points, messages
     }
 
     init() {}
@@ -275,7 +277,7 @@ struct AuditRestoreCounts: Decodable, Sendable, Hashable {
         rows = n(.rows); cells = n(.cells); submissions = n(.submissions); values = n(.values)
         receipts = n(.receipts); payments = n(.payments); milestones = n(.milestones)
         pages = n(.pages); people = n(.people); projects = n(.projects); folders = n(.folders)
-        units = n(.units); points = n(.points)
+        units = n(.units); points = n(.points); messages = n(.messages)
     }
 }
 
@@ -384,6 +386,8 @@ enum AuditOpenTarget: Hashable, Sendable {
     case orgChart
     /// Control Room → Announcements.
     case announcements
+    /// A group chat, back from a delete: its thread.
+    case chat(String)
 
     /// The link's words, in English (the view translates them).
     var label: String {
@@ -399,6 +403,7 @@ enum AuditOpenTarget: Hashable, Sendable {
         case .threads: return "Open Threads"
         case .orgChart: return "Open IP & Division Chart"
         case .announcements: return "Open announcements"
+        case .chat: return "Open chat"
         }
     }
 }
@@ -418,7 +423,7 @@ enum AuditRestoreKinds {
         "pnl_category", "pnl_stage", "pnl_recurring", "pnl_expense_attachment", "pnl_budget", "holiday",
         "attendance_request", "attendance_office", "org_unit_member", "vault_file", "vault_folder", "vault_trash",
         "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission", "attendance_record",
-        "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus",
+        "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
     ]
 
     private static let buttons: [String: String] = [
@@ -438,7 +443,7 @@ enum AuditRestoreKinds {
         "org_unit": "Restore unit", "sheet_rows": "Restore rows", "form_submission": "Restore submission",
         "attendance_record": "Restore attendance record", "project_sheet_column": "Restore column",
         "post": "Restore post", "quest": "Restore quest", "calendar_event": "Restore event",
-        "dayoff_bonus": "Restore extra day off",
+        "dayoff_bonus": "Restore extra day off", "chat_group": "Restore group chat",
     ]
 
     static func isProjectOrTask(_ entityType: String?) -> Bool { entityType == "project" || entityType == "task" }
@@ -477,6 +482,7 @@ enum AuditRestoreKinds {
         case "quest": return "The quest becomes active again."
         case "calendar_event": return "The event is no longer cancelled."
         case "dayoff_bonus": return "The extra day off is granted again."
+        case "chat_group": return "It shows in its members' chat lists again. Nothing is posted in the chat about it."
         case "attendance_office": return soft ? "The office is back in the list and open for check-ins." : nil
         default: return nil
         }
@@ -580,6 +586,7 @@ enum AuditRestoreKinds {
             add(c.files, "1 file", "%d files")
             if kind == "comment" { add(c.comments, "1 reply", "%d replies") } else { add(c.comments, "1 comment", "%d comments") }
             add(c.sheets, "1 sheet", "%d sheets")
+            add(c.messages, "1 message", "%d messages")
             add(c.members, "1 member", "%d members")
         }
         return out
@@ -613,6 +620,7 @@ enum AuditRestoreKinds {
             case "post": return .threads(post: id)
             case "org_chart": return .orgChart
             case "announcement": return .announcements
+            case "chat": return id.map { .chat($0) }
             case "goal", "portfolio": return nil
             // A sheet, page, form or P&L entry, or a kind this app does not know: its project.
             default: return o.projectId.map { .project($0) }

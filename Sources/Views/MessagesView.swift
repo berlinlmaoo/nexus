@@ -501,8 +501,9 @@ struct ChatThreadView: View {
     /// NavigationStack stays — the thread still pushes into a task and into project settings — only
     /// its bar is hidden.
     var usesInlineHeader: Bool = false
-    /// The viewer left this group from its info screen. The split layout clears its selection; nil
-    /// (a pushed thread) closes the thread itself and goes back to the list.
+    /// The viewer left this group from its info screen, or deleted it, or closed the note of a group
+    /// deleted elsewhere. The split layout clears its selection; nil (a pushed thread) closes the
+    /// thread itself and goes back to the list.
     var onLeft: (() -> Void)? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
@@ -536,6 +537,12 @@ struct ChatThreadView: View {
     @State private var viewingPhoto: PhotoRef?
     /// The chat's info screen, pushed onto this thread's own stack.
     @State private var showInfo = false
+    /// The group was deleted while this thread was open — elsewhere, or by someone else (the realtime
+    /// connection's word, or the thread's own fetch answering 404). The thread gives way to a note.
+    @State private var roomDeleted = false
+    /// This thread is on its way out (left or deleted from its info screen): its own delete's echo
+    /// must not flash the note on the way.
+    @State private var leaving = false
     /// A jump to one message (a search result, a tapped quote), and the message flashing after it.
     @State private var jumpRequest: ChatJump?
     @State private var highlightedId: String?
@@ -583,21 +590,24 @@ struct ChatThreadView: View {
         members.filter { !$0.uid.isEmpty && $0.uid != meId }
     }
     /// Hidden once the server has said it cannot mute (404 from the old server).
-    private var showsMuteMenu: Bool { store.muteSupported != false }
+    private var showsMuteMenu: Bool { store.muteSupported != false && !roomDeleted }
 
     /// Project rooms add through the project; a plain GROUP owns its own member list and has had an
     /// endpoint of its own since /api/conversations/[id]/members, which only Manager and above may
     /// use. A DM stays closed: two people is what a DM means.
     private var showsAddPeople: Bool {
-        projectId != nil || (type == "GROUP" && canManageMembers != false)
+        guard !roomDeleted else { return false }
+        return projectId != nil || (type == "GROUP" && canManageMembers != false)
     }
+    /// Only a GROUP has a name of its own to change, and only while it exists.
+    private var showsRename: Bool { type == "GROUP" && !roomDeleted }
 
     /// Stands in for the navigation bar in the split layout: the same title and the same two
     /// actions, drawn inside the column so they sit over the conversation they belong to.
     private var inlineHeader: some View {
         HStack(spacing: 12) {
             // The title opens the chat's info, as on WhatsApp.
-            Button { showInfo = true } label: {
+            Button { if !roomDeleted { showInfo = true } } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(shownTitle ?? title)
                         .font(NXFont.display(17, .bold))
@@ -625,7 +635,7 @@ struct ChatThreadView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Add people"))
             }
-            if type == "GROUP" {
+            if showsRename {
                 Button {
                     renameDraft = shownTitle ?? title
                     showRename = true
@@ -648,7 +658,7 @@ struct ChatThreadView: View {
 
     /// The title in the navigation bar, as a button that opens the chat's info.
     private var titleButton: some View {
-        Button { showInfo = true } label: {
+        Button { if !roomDeleted { showInfo = true } } label: {
             VStack(spacing: 0) {
                 Text(shownTitle ?? title)
                     .font(NXFont.text(15, .semibold))
@@ -675,6 +685,7 @@ struct ChatThreadView: View {
 
     /// Left the group from the info screen: close the info, then the thread, back to the list.
     private func leftGroup() {
+        leaving = true
         showInfo = false
         // After the info screen's pop has run: two pops in one transaction leave the stack in
         // between the two.
@@ -682,6 +693,29 @@ struct ChatThreadView: View {
             try? await Task.sleep(for: .milliseconds(450))
             if let onLeft { onLeft() } else { dismiss() }
         }
+    }
+
+    /// The group is gone (deleted elsewhere): the info screen, if open, closes onto the note.
+    private func roomWasDeleted() {
+        guard !leaving, !roomDeleted else { return }
+        showInfo = false
+        sheet = nil
+        roomDeleted = true
+    }
+
+    /// Stands where the thread was once the group has been deleted: why it is empty, what can still be
+    /// done about it, and the way back.
+    private var roomDeletedState: some View {
+        ZStack {
+            NX.background.ignoresSafeArea()
+            EmptyState(icon: "trash", title: T("This group was deleted"),
+                       subtitle: T("Its messages are gone for everyone in it. A manager can restore it from Control Room → Audit."),
+                       tint: NX.mutedFg,
+                       actionTitle: T("Back to chats"), actionIcon: "chevron.left",
+                       action: { if let onLeft { onLeft() } else { dismiss() } })
+                .padding(24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// A search result was picked on the info screen: back to the thread, then to the message.
@@ -723,76 +757,82 @@ struct ChatThreadView: View {
                 inlineHeader
                 Divider().overlay(NX.border)
             }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        LazyVStack(spacing: 6) {
-                            if hasOlder && !messages.isEmpty { olderRow(proxy) }
-                            if loading { ProgressView().tint(NX.violetText).padding(.top, 40) }
-                            else if messages.isEmpty {
-                                Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
-                            }
-                            ForEach(messages) { m in
-                                Group {
-                                    if m.isSystem { systemLine(m) } else { bubble(m) }
+            // Deleted while open (owner, 9 Oct 2026): the thread and its composer give way to a note,
+            // and its polling stops with them.
+            if roomDeleted {
+                roomDeletedState
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            LazyVStack(spacing: 6) {
+                                if hasOlder && !messages.isEmpty { olderRow(proxy) }
+                                if loading { ProgressView().tint(NX.violetText).padding(.top, 40) }
+                                else if messages.isEmpty {
+                                    Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
                                 }
-                                .background {
-                                    // The message a jump landed on flashes, so the eye finds it.
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(NX.violet.opacity(highlightedId == m.id ? 0.16 : 0))
-                                        .padding(.horizontal, -8).padding(.vertical, -3)
+                                ForEach(messages) { m in
+                                    Group {
+                                        if m.isSystem { systemLine(m) } else { bubble(m) }
+                                    }
+                                    .background {
+                                        // The message a jump landed on flashes, so the eye finds it.
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(NX.violet.opacity(highlightedId == m.id ? 0.16 : 0))
+                                            .padding(.horizontal, -8).padding(.vertical, -3)
+                                    }
+                                    .id(m.id)
                                 }
-                                .id(m.id)
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                            bottomMarker
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        bottomMarker
                     }
-                }
-                .coordinateSpace(.named(Self.scrollSpace))
-                .background {
-                    GeometryReader { g in
-                        Color.clear
-                            .onAppear { viewportHeight = g.size.height }
-                            .onChange(of: g.size.height) { old, h in
-                                viewportHeight = h
-                                // The keyboard came up while the end of the thread was in view:
-                                // keep the end in view instead of letting it slide under the keyboard.
-                                if h < old, atBottom { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
-                            }
+                    .coordinateSpace(.named(Self.scrollSpace))
+                    .background {
+                        GeometryReader { g in
+                            Color.clear
+                                .onAppear { viewportHeight = g.size.height }
+                                .onChange(of: g.size.height) { old, h in
+                                    viewportHeight = h
+                                    // The keyboard came up while the end of the thread was in view:
+                                    // keep the end in view instead of letting it slide under the keyboard.
+                                    if h < old, atBottom { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
+                                }
+                        }
                     }
+                    .overlay(alignment: .bottom) {
+                        if unseenCount > 0 { newMessagesPill(proxy) }
+                    }
+                    // Keyed on the newest message's id, not on the count: the count stops moving once a
+                    // page is full, and loading older history changes it without anything new arriving.
+                    .onChange(of: messages.last?.id) { old, new in
+                        lastMessageChanged(from: old, to: new, proxy: proxy)
+                    }
+                    .onChange(of: jumpRequest) { _, request in
+                        guard let request else { return }
+                        scrollToJump(request.id, proxy: proxy)
+                    }
+                    .task { await firstLoad() }
+                    // An open thread also refreshes itself — only while it is on screen (.task ends with
+                    // the view) and only while the app is in front (`id` restarts the loop when the phase
+                    // or the realtime connection changes, and the restart catches up at once).
+                    .task(id: ChatPollPace(active: scenePhase == .active, live: realtime.isConnected)) { await pollWhileActive() }
+                    // A push for this chat while it is open, or the realtime connection's word that it
+                    // moved: fetch now rather than at the next tick.
+                    .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { note in
+                        let target = note.userInfo?["conversationId"] as? String
+                        guard target == nil || target == conversationId else { return }
+                        Task { await pollNewer() }
+                    }
+                    // On the scroll view rather than on the VStack below, which already carries the
+                    // camera's cover: two of these on one view and only the last one ever presents.
+                    .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
                 }
-                .overlay(alignment: .bottom) {
-                    if unseenCount > 0 { newMessagesPill(proxy) }
-                }
-                // Keyed on the newest message's id, not on the count: the count stops moving once a
-                // page is full, and loading older history changes it without anything new arriving.
-                .onChange(of: messages.last?.id) { old, new in
-                    lastMessageChanged(from: old, to: new, proxy: proxy)
-                }
-                .onChange(of: jumpRequest) { _, request in
-                    guard let request else { return }
-                    scrollToJump(request.id, proxy: proxy)
-                }
-                .task { await firstLoad() }
-                // An open thread also refreshes itself — only while it is on screen (.task ends with
-                // the view) and only while the app is in front (`id` restarts the loop when the phase
-                // or the realtime connection changes, and the restart catches up at once).
-                .task(id: ChatPollPace(active: scenePhase == .active, live: realtime.isConnected)) { await pollWhileActive() }
-                // A push for this chat while it is open, or the realtime connection's word that it
-                // moved: fetch now rather than at the next tick.
-                .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { note in
-                    let target = note.userInfo?["conversationId"] as? String
-                    guard target == nil || target == conversationId else { return }
-                    Task { await pollNewer() }
-                }
-                // On the scroll view rather than on the VStack below, which already carries the
-                // camera's cover: two of these on one view and only the last one ever presents.
-                .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
-            }
 
-            composer
+                composer
+            }
         }
         .background(NX.background.ignoresSafeArea())
         // Links in messages: a NEXUS form or vault link opens in the app, the way it does when
@@ -807,6 +847,11 @@ struct ChatThreadView: View {
         })
         .navigationTitle(usesInlineHeader ? "" : (shownTitle ?? title))
         .toolbar(usesInlineHeader ? .hidden : .visible, for: .navigationBar)
+        // The realtime connection's word that this group was deleted (RealtimeClient).
+        .onReceive(NotificationCenter.default.publisher(for: .nexusChatDeleted)) { note in
+            guard (note.userInfo?[RealtimeKey.conversationId] as? String) == conversationId else { return }
+            roomWasDeleted()
+        }
         // Pushed, not a second sheet: the info screen belongs to this chat's own stack, the phone's
         // or the detail column's.
         .navigationDestination(isPresented: $showInfo) {
@@ -832,7 +877,7 @@ struct ChatThreadView: View {
             }
             // Only a GROUP carries a name of its own: a DM is titled after the other person and a
             // PROJECT room follows the project, and the server rejects renaming either.
-            if type == "GROUP" {
+            if showsRename {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         renameDraft = shownTitle ?? title
@@ -1478,6 +1523,11 @@ struct ChatThreadView: View {
             markReadIfNeeded()
         }
         catch APIError.unauthorized { auth.logout() }
+        // The group itself is gone (deleted while the realtime connection was down): a 404 that says
+        // so. A route that is missing says nothing, and a DM or project room is not deleted here.
+        catch APIError.http(let code, let message) where code == 404 && message != nil && type == "GROUP" {
+            roomWasDeleted()
+        }
         // A failed refresh leaves whatever was already read on screen rather than blanking it.
         catch {}
         loading = false

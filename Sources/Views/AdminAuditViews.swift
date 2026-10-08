@@ -671,6 +671,8 @@ private struct AuditEntrySheet: View {
                 switchTab("org")
             case .announcements:
                 switchTab("announcements")
+            case .chat(let id):
+                router.open(.conversation(id))
             case .project, .task, .doc, .folder:
                 break
             }

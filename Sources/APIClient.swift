@@ -1928,11 +1928,23 @@ struct APIClient {
         var req = makeRequest("/api/conversations/\(enc(id))/members", method: "DELETE")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId])
-        _ = try await runChat(req, decode: ChatAck.self) { message in
-            if (message ?? "").lowercased().contains("at least one member") {
-                return T("You're the only member left, so the group can't be left.")
+        // The last member leaving is refused with LAST_MEMBER: runChat throws ChatLastMemberRefusal,
+        // and the info screen offers Delete group instead.
+        _ = try await runChat(req, decode: ChatAck.self) { _ in T("Couldn't change who is in this group.") }
+    }
+
+    /// Delete a GROUP (servers since 9 Oct 2026): Manager and above, or its only member left. Its
+    /// members and messages go with it; Control Room → Audit can restore it. 404 = already gone.
+    func deleteConversation(_ id: String) async throws {
+        let req = makeRequest("/api/conversations/\(enc(id))", method: "DELETE")
+        do {
+            _ = try await runChat(req, decode: ChatAck.self,
+                                  managerRequired: T("Only managers and above can delete this group.")) { _ in
+                T("Only group chats can be deleted.")
             }
-            return T("Couldn't change who is in this group.")
+        } catch APIError.http(let code, _) where code == 405 {
+            // The route has no DELETE yet: a server from before 9 Oct 2026.
+            throw APIError.transport(T("Deleting groups comes with the next server update."))
         }
     }
 
@@ -1944,8 +1956,10 @@ struct APIClient {
     }
 
     /// `run` for the group-info routes: every refusal in this app's own words, in its language.
-    /// `badRequest` words a 400 for the route that got it (given the server's sentence, if any).
+    /// `badRequest` words a 400 for the route that got it (given the server's sentence, if any);
+    /// `managerRequired` the 403 MANAGER_REQUIRED, when the route is about more than adding and removing.
     private func runChat<Response: Decodable>(_ req: URLRequest, decode: Response.Type,
+                                              managerRequired: String? = nil,
                                               badRequest: ((String?) -> String)? = nil) async throws -> Response {
         let (data, response): (Data, URLResponse)
         do {
@@ -1960,13 +1974,17 @@ struct APIClient {
             let message = Self.serverMessage(data)
             switch http.statusCode {
             case 403 where payload?.code == "MANAGER_REQUIRED":
-                throw APIError.transport(T("Only managers and above can add or remove members."))
+                throw APIError.transport(managerRequired ?? T("Only managers and above can add or remove members."))
             case 403:
                 throw APIError.http(403, T("You're no longer in this chat."))
             case 404:
                 // No sentence: the route itself is missing (a server from before this screen).
                 if message == nil { throw APIError.http(404, nil) }
                 throw APIError.http(404, T("This chat no longer exists."))
+            // The last member may not leave (LAST_MEMBER, 9 Oct 2026); a server from before said only
+            // "A group needs at least one member".
+            case 400 where payload?.code == "LAST_MEMBER" || (message ?? "").lowercased().contains("at least one member"):
+                throw ChatLastMemberRefusal()
             case 400 where badRequest != nil:
                 throw APIError.http(400, badRequest?(message))
             default:
@@ -2939,6 +2957,12 @@ extension APIClient {
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return text
     }
+}
+
+/// The server's refusal to let the last member of a group leave it (400 LAST_MEMBER): leaving would
+/// orphan the room with every message in it. The info screen offers Delete group instead.
+struct ChatLastMemberRefusal: LocalizedError {
+    var errorDescription: String? { T("You're the only member left, so you can't leave. Delete the group instead.") }
 }
 
 private struct ServerError: Decodable {

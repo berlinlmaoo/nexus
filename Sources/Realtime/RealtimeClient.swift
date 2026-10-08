@@ -167,6 +167,11 @@ final class RealtimeClient {
         case "message-created", "conversation-updated":
             // `message-created` reaches the room of a thread that is open; `conversation-updated`
             // reaches every member's own room on a message, a read, a mute or a membership change.
+            // Reason "deleted" (9 Oct 2026): the group is gone — an open thread of it closes now.
+            if name == "conversation-updated", payload?["reason"]?.string == "deleted",
+               let id = payload?["conversationId"]?.string {
+                center.post(name: .nexusChatDeleted, object: nil, userInfo: [RealtimeKey.conversationId: id])
+            }
             chatMoved(payload?["conversationId"]?.string)
         case "new-notification":
             Task { await InboxBadge.shared.refresh(force: true) }
