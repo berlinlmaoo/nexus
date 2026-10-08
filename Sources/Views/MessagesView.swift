@@ -130,7 +130,8 @@ struct MessagesView: View {
         .navigationDestination(item: $pushedConvo) { f in
             if let c = convos.first(where: { $0.id == f.id }) ?? focusedConvos[f.id] {
                 ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
-                               members: c.members ?? [], projectId: c.projectId, type: c.type)
+                               members: c.members ?? [], projectId: c.projectId, type: c.type,
+                               canManageMembers: c.canManageMembers)
             }
         }
         .navigationTitle(T("Messages"))
@@ -202,6 +203,7 @@ struct MessagesView: View {
         if let c = selected {
             ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                            members: c.members ?? [], projectId: c.projectId, type: c.type,
+                           canManageMembers: c.canManageMembers,
                            usesInlineHeader: true)
                 // Keyed by id: without it, switching conversations reuses the same view and the
                 // previous chat's messages sit under the new one's title until the fetch lands.
@@ -248,7 +250,7 @@ struct MessagesView: View {
                                         NavigationLink {
                                             ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                                                            members: c.members ?? [], projectId: c.projectId,
-                                                           type: c.type)
+                                                           type: c.type, canManageMembers: c.canManageMembers)
                                         } label: {
                                             ConvoRow(convo: c, meId: meId,
                                                      projectIcon: c.projectId.flatMap { projectIcons[$0] })
@@ -450,6 +452,10 @@ struct ChatThreadView: View {
     var projectId: String? = nil
     /// DM | GROUP | PROJECT. Only a GROUP can be renamed; the server rejects the other two.
     var type: String? = nil
+    /// The server's `canManageMembers` for this room: only Manager and above may add or remove
+    /// people in a GROUP (owner, 8 Oct 2026). nil = a server from before the rule, so the add
+    /// button keeps showing as it always has.
+    var canManageMembers: Bool? = nil
     /// True when the thread is one column of a two-pane layout.
     ///
     /// A navigation bar belongs to a whole screen, not to a column of one: in the split layout it
@@ -524,6 +530,13 @@ struct ChatThreadView: View {
     /// Hidden once the server has said it cannot mute (404 from the old server).
     private var showsMuteMenu: Bool { store.muteSupported != false }
 
+    /// Project rooms add through the project; a plain GROUP owns its own member list and has had an
+    /// endpoint of its own since /api/conversations/[id]/members, which only Manager and above may
+    /// use. A DM stays closed: two people is what a DM means.
+    private var showsAddPeople: Bool {
+        projectId != nil || (type == "GROUP" && canManageMembers != false)
+    }
+
     /// Stands in for the navigation bar in the split layout: the same title and the same two
     /// actions, drawn inside the column so they sit over the conversation they belong to.
     private var inlineHeader: some View {
@@ -533,8 +546,8 @@ struct ChatThreadView: View {
                 .foregroundStyle(NX.foreground)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            // Same conditions as the toolbar above: a DM can neither grow nor be renamed.
-            if projectId != nil || type == "GROUP" {
+            // Same conditions as the toolbar below: a DM can neither grow nor be renamed.
+            if showsAddPeople {
                 Button { sheet = .addPeople } label: {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 16, weight: .semibold))
@@ -665,10 +678,9 @@ struct ChatThreadView: View {
         .navigationTitle(usesInlineHeader ? "" : (shownTitle ?? title))
         .toolbar(usesInlineHeader ? .hidden : .visible, for: .navigationBar)
         .toolbar {
-            // Project rooms add through the project; a plain GROUP owns its own member list and
-            // has had an endpoint of its own since /api/conversations/[id]/members. A DM stays
-            // closed: two people is what a DM means.
-            if projectId != nil || type == "GROUP" {
+            // See showsAddPeople: project rooms add through the project, a GROUP only for Manager
+            // and above, and a DM never.
+            if showsAddPeople {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { sheet = .addPeople } label: {
                         Image(systemName: "person.badge.plus").font(.system(size: 15, weight: .semibold))

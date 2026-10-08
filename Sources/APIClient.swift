@@ -829,11 +829,34 @@ struct APIClient {
     /// Add people to a GROUP chat. The server refuses DMs (two people by definition) and PROJECT
     /// rooms (membership derives from the project), and silently skips anyone outside your
     /// workspace or already in the room.
+    ///
+    /// Only Manager and above may (owner, 8 Oct 2026). Anyone else gets 403 `MANAGER_REQUIRED`,
+    /// which `run` would flatten into the server's own sentence; it is recognised by its code here
+    /// so the person reads this app's copy, in the app's language. Everything else is `run` as-is.
     func addConversationMembers(_ conversationId: String, userIds: [String]) async throws -> Conversation {
         var req = makeRequest("/api/conversations/\(conversationId)/members", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["userIds": userIds])
-        return try await run(req, decode: ConversationResponse.self).conversation
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.nothingAnswered(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            if http.statusCode == 403, payload?.code == "MANAGER_REQUIRED" {
+                throw APIError.transport(T("Only managers and above can add or remove members."))
+            }
+            throw APIError.http(http.statusCode, Self.serverMessage(data))
+        }
+        do {
+            return try JSONDecoder().decode(ConversationResponse.self, from: data).conversation
+        } catch {
+            throw APIError.decoding
+        }
     }
 
     /// Move a project into a folder (or to root with nil).

@@ -12,6 +12,10 @@ struct Conversation: Decodable, Identifiable, Sendable {
     /// When this person's notifications for the chat come back on: an ISO time, or nil when it is
     /// not muted. Only the newer server sends it, and it stores "Always" as a far-future date.
     let mutedUntil: String?
+    /// Whether this person may add or remove people here: GROUP rooms only, Manager and above
+    /// (owner, 8 Oct 2026). Anyone may still leave. nil = a server from before the rule, which
+    /// keeps today's behaviour (the add button stays).
+    let canManageMembers: Bool?
 
     struct Member: Decodable, Sendable {
         let userId: String?
@@ -20,12 +24,13 @@ struct Conversation: Decodable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, name, projectId, members, lastMessage, unreadCount, mutedUntil
+        case id, type, name, projectId, members, lastMessage, unreadCount, mutedUntil, canManageMembers
     }
 
-    /// Written out only so `mutedUntil` can be read leniently. Every other field decodes exactly as
-    /// the synthesized version did; a field the old server never sent must not be able to empty the
-    /// whole chat list if the new one shapes it differently from what was agreed.
+    /// Written out only so `mutedUntil` and `canManageMembers` can be read leniently. Every other
+    /// field decodes exactly as the synthesized version did; a field the old server never sent must
+    /// not be able to empty the whole chat list if the new one shapes it differently from what was
+    /// agreed.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -36,6 +41,7 @@ struct Conversation: Decodable, Identifiable, Sendable {
         lastMessage = try c.decodeIfPresent(ChatMessage.self, forKey: .lastMessage)
         unreadCount = try c.decodeIfPresent(Int.self, forKey: .unreadCount)
         mutedUntil = try? c.decodeIfPresent(String.self, forKey: .mutedUntil)
+        canManageMembers = try? c.decodeIfPresent(Bool.self, forKey: .canManageMembers)
     }
 
     var isGroupish: Bool { type == "PROJECT" || type == "GROUP" }

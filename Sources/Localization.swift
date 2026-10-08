@@ -1941,6 +1941,8 @@ final class AppLanguage {
         "was outside the office radius when it was sent. Open Attendance for what to do next.": "berada di luar radius kantor saat dikirim. Buka Absensi untuk langkah selanjutnya.",
         "Form": "Formulir",
         "OK": "OK",
+        // Chat: only Manager and above add or remove group members (owner, 8 Oct 2026)
+        "Only managers and above can add or remove members.": "Hanya manager ke atas yang bisa menambah atau mengeluarkan anggota.",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",
