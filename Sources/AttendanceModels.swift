@@ -141,7 +141,8 @@ struct AttendanceHistoryResponse: Decodable, Sendable {
     /// day of a period most people have no row yet — without this the board showed a handful of names.
     let roster: [RosterEntry]?
     var all: [AttendanceRow] { rows ?? records ?? [] }
-    struct RosterEntry: Decodable, Sendable { let id: String; let name: String?; let dayOffQuota: Int? }
+    /// `leftAt`: the last working day of someone who left (offboarded, 8 Oct 2026); nil otherwise.
+    struct RosterEntry: Decodable, Sendable { let id: String; let name: String?; let dayOffQuota: Int?; let leftAt: String? }
 }
 struct AttendanceRow: Decodable, Identifiable, Sendable {
     let id: String?
@@ -152,7 +153,9 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let checkOutAt: String?
     let user: UserRef?
     /// `dayOffQuota`: that person's weekly-rest quota (servers from 28 Sep 2026; absent → 4).
-    struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let dayOffQuota: Int? }
+    /// `leftAt` (ISO): the last working day of someone who left the company (offboarding, 8 Oct
+    /// 2026). The recaps keep them for the periods they were part of; nil for everyone else.
+    struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let dayOffQuota: Int?; let leftAt: String? }
     var idv: String { id ?? ((user?.id ?? "") + (attendanceDate ?? "")) }
 
     // The rest of what the history endpoint has always sent and the board never read — the

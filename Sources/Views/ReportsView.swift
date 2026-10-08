@@ -217,7 +217,10 @@ struct ReportRosterRow: View {
             HStack(spacing: 10) {
                 AvatarView(url: row.avatar, initial: String(row.displayName.first ?? "?").uppercased(), size: 38)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(row.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(row.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        if let left = row.leftAt { LeftTag(leftAt: left) }
+                    }
                     if let team = row.teams.first?.name {
                         Text(row.teams.count > 1 ? "\(team) +\(row.teams.count - 1)" : team)
                             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)

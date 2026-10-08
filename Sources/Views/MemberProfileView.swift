@@ -152,6 +152,7 @@ struct MemberProfileView: View {
                     HStack(spacing: 6) {
                         if let role = roleText { RoleChip(role: role) }
                         if isMe { NexusChip(text: T("You"), tone: .accent) }
+                        if let left = record?.person.leftAt { LeftTag(leftAt: left) }
                     }
                 }
                 Spacer(minLength: 0)
@@ -166,7 +167,8 @@ struct MemberProfileView: View {
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
             }
-            if !isMe {
+            // Someone who left can't sign in any more: there is no one to message (the web hides it too).
+            if !isMe && record?.person.leftAt == nil {
                 Button { Task { await startChat() } } label: {
                     Label(T("Message"), systemImage: "bubble.left.fill").font(NXFont.text(14, .bold))
                 }

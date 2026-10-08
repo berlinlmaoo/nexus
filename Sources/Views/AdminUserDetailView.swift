@@ -17,6 +17,9 @@ struct AdminUserDetailView: View {
     let allProjects: [Project]
     /// Semua anggota workspace — calon atasan, dan untuk membaca nama atasan/bawahan.
     let members: [WorkspaceRoster.Member]
+    /// Offboard (someone who left the company): BoD+, never yourself, never someone at or above
+    /// your level. Decided by the list, which knows who is looking.
+    let canOffboard: Bool
     var onChanged: () async -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +33,12 @@ struct AdminUserDetailView: View {
     @State private var addTeamFor: TeamPickTarget?
     @State private var exitTarget: TeamExitTarget?
     @State private var confirmDelete = false
+    /// Why the last delete was refused, shown in the danger card where the button is.
+    @State private var deleteProblem: String?
+    @State private var offboardTarget: OffboardTarget?
+    /// The offboarding went through: once its sheet closes, this person is no longer a member, so
+    /// this screen leaves too.
+    @State private var offboarded = false
     @State private var openProfile: ProfileTarget?
     @State private var openTeamId: String?
     @State private var openAttendance = false
@@ -59,6 +68,7 @@ struct AdminUserDetailView: View {
                 if isBod { workHoursCard }
                 if canEdit { googleCard }
                 membershipCard
+                if canOffboard { offboardCard }
                 if canEdit { dangerCard }
                 Color.clear.frame(height: 8)
             }
@@ -142,8 +152,19 @@ struct AdminUserDetailView: View {
             Button(T("Delete permanently"), role: .destructive) {
                 Task {
                     guard let uid = member.userId else { return }
-                    await run { _ = try await APIClient.shared.deleteUser(uid) }
-                    dismiss()
+                    // Leaves only when it worked: a refusal (an account with attendance history is
+                    // offboarded, never deleted) has to stay on screen to be read.
+                    busy = true
+                    deleteProblem = nil
+                    do {
+                        _ = try await APIClient.shared.deleteUser(uid)
+                        await onChanged()
+                        busy = false
+                        dismiss()
+                    } catch {
+                        deleteProblem = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong. Nothing was changed.")
+                        busy = false
+                    }
                 }
             }
             Button(T("Cancel"), role: .cancel) {}
@@ -496,9 +517,245 @@ struct AdminUserDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
     }
 
+    /// Offboard: rare and heavy, so near the end, and only for those who may. Its sheet hangs off this
+    /// card rather than off the screen, which already carries the other sheets.
+    private var offboardCard: some View {
+        card(T("Offboard"), T("For someone who resigned, whose contract ended, or who was let go. Their history stays.")) {
+            navRow("person.badge.minus", String(format: T("Offboard %@…"), member.displayName), nil, tint: NX.danger) {
+                if let uid = member.userId {
+                    offboardTarget = OffboardTarget(id: uid, name: member.displayName, joinedAt: member.joinedAt)
+                }
+            }
+        }
+        .sheet(item: $offboardTarget, onDismiss: {
+            guard offboarded else { return }
+            offboarded = false
+            dismiss()
+            Task { await onChanged() }
+        }) { t in
+            NavigationStack { OffboardUserSheet(target: t) { offboarded = true } }
+        }
+    }
+
     private var dangerCard: some View {
         card(T("Zona berbahaya")) {
             navRow("trash", T("Delete account"), nil, tint: NX.danger) { confirmDelete = true }
+            if let deleteProblem {
+                Text(deleteProblem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+}
+
+// MARK: - Offboarding (owner, 8 Oct 2026)
+
+/// Who the offboard sheet is for. `id` is the user id.
+struct OffboardTarget: Identifiable {
+    let id: String
+    let name: String
+    /// When they joined the workspace (ISO): the earliest last working day the server accepts.
+    let joinedAt: String?
+}
+
+/// Offboard: someone resigned, their contract ended, or they were let go
+/// (POST /api/admin/users/:id/offboard). Says plainly what happens and what stays before, and what is
+/// left for someone to do after: their pending requests, their open tasks, and the people who lost
+/// them as approver. The web's OffboardUserModal, in the app's sheet structure.
+struct OffboardUserSheet: View {
+    let target: OffboardTarget
+    /// The server confirmed it. Called once, before the result is shown.
+    let onOffboarded: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var day = Date()
+    @State private var reason = "RESIGNED"
+    @State private var note = ""
+    @State private var busy = false
+    @State private var problem: String?
+    @State private var result: OffboardResult?
+
+    /// The attendance calendar's zone: "today" and the last working day are Jakarta dates.
+    private static let jakarta = TimeZone(identifier: "Asia/Jakarta") ?? .current
+    private static let reasons: [(code: String, label: String)] = [
+        ("RESIGNED", "Resigned"), ("CONTRACT_ENDED", "Contract ended"), ("DISMISSED", "Dismissed"), ("OTHER", "Other"),
+    ]
+
+    /// Not before they joined (the server's own floor), not after today.
+    private var range: ClosedRange<Date> {
+        let now = Date()
+        guard let joined = ProjDate.parse(target.joinedAt), joined <= now else { return Date.distantPast...now }
+        return joined...now
+    }
+
+    var body: some View {
+        Group {
+            if let result { resultList(result) } else { form }
+        }
+        .navigationTitle(result == nil ? String(format: T("Offboard %@"), target.name) : T("Offboard"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if result == nil {
+                ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() }.disabled(busy) }
+            }
+            if result != nil {
+                ToolbarItem(placement: .confirmationAction) { Button(T("Done")) { dismiss() }.bold() }
+            }
+        }
+        .interactiveDismissDisabled(busy)
+    }
+
+    // MARK: form
+
+    private var form: some View {
+        Form {
+            Section {
+                Text(T("For someone who resigned, whose contract ended, or who was let go. Their history stays."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
+            Section {
+                DatePicker(T("Last working day"), selection: $day, in: range, displayedComponents: .date)
+                    .environment(\.timeZone, Self.jakarta)
+                    .tint(NX.violetText)
+            }
+            Section(T("Reason")) {
+                Picker(T("Reason"), selection: $reason) {
+                    ForEach(Self.reasons, id: \.code) { r in Text(T(r.label)).tag(r.code) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
+            Section(T("Note (optional)")) {
+                TextField(T("Note (optional)"), text: $note, axis: .vertical)
+                    .lineLimit(2...5)
+            }
+            Section(T("What happens")) {
+                ForEach(happens, id: \.self) { line in
+                    Text(line).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                }
+            }
+            if let problem {
+                Section {
+                    Text(problem).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                }
+            }
+            Section {
+                Button(role: .destructive) { Task { await submit() } } label: {
+                    HStack(spacing: 8) {
+                        Spacer()
+                        if busy { ProgressView() }
+                        Text(busy ? T("Offboarding…") : T("Offboard")).font(NXFont.text(15, .bold))
+                        Spacer()
+                    }
+                }
+                .disabled(busy)
+            }
+        }
+    }
+
+    private var happens: [String] {
+        [
+            T("Can't sign in anymore, on any device."),
+            T("Removed from projects, teams and chats."),
+            T("Their attendance, requests, projects, tasks and messages stay."),
+            T("Their open tasks stay assigned to them."),
+            T("Anyone who had them as approver goes back to the BoD safety net."),
+        ]
+    }
+
+    private func submit() async {
+        busy = true
+        problem = nil
+        defer { busy = false }
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = Self.jakarta
+        f.dateFormat = "yyyy-MM-dd"
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let r = try await APIClient.shared.offboardUser(target.id, lastWorkingDay: f.string(from: day), reason: reason,
+                                                            note: trimmed.isEmpty ? nil : String(trimmed.prefix(500)))
+            onOffboarded()
+            result = r
+        } catch {
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong. Nothing was changed.")
+        }
+    }
+
+    // MARK: result
+
+    private func resultList(_ r: OffboardResult) -> some View {
+        let pending = r.pendingRequests ?? 0
+        let openTasks = r.openTasks ?? 0
+        let lost = r.approverEdgesCleared ?? []
+        let canceled = r.autoDeductionsCanceled ?? 0
+        return List {
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(format: T("%@ is offboarded."), r.user?.name ?? target.name))
+                        .font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+                    if let last = Self.longDay(r.lastWorkingDay) {
+                        let places = (r.workspaces ?? []).joined(separator: ", ")
+                        Text(String(format: T("Last working day: %@"), last) + (places.isEmpty ? "" : " · \(places)"))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            Section {
+                count(pending, T("Pending requests"),
+                      pending > 0 ? T("Still waiting for a decision in Attendance.") : T("Nothing waiting."))
+                count(openTasks, T("Open tasks"),
+                      openTasks > 0 ? T("Still assigned to them. Reassign them if someone should take over.") : T("Nothing open."))
+            }
+            if !lost.isEmpty {
+                Section {
+                    ForEach(lost) { p in
+                        Text(p.name ?? "—").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    }
+                } header: {
+                    Text(String(format: lost.count == 1 ? T("%d person lost their approver") : T("%d people lost their approver"), lost.count))
+                } footer: {
+                    Text(T("Their requests go to the BoD until you set a new approver in the Approval chart."))
+                }
+            }
+            if canceled > 0 {
+                Section {
+                    Text(String(format: canceled == 1
+                                ? T("%d automatic deduction dated after their last day was canceled.")
+                                : T("%d automatic deductions dated after their last day were canceled."), canceled))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                }
+            }
+        }
+    }
+
+    private func count(_ n: Int, _ title: String, _ note: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("\(n)").font(NXFont.display(22, .bold)).monospacedDigit().foregroundStyle(NX.foreground)
+                .frame(minWidth: 28, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                Text(note).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// "10 October 2026" from a "YYYY-MM-DD" attendance date (read in UTC, see LeftTag.dateText).
+    private static func longDay(_ key: String?) -> String? {
+        guard let key, key.count >= 10 else { return nil }
+        let parse = DateFormatter()
+        parse.calendar = Calendar(identifier: .gregorian)
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = TimeZone(identifier: "UTC")
+        parse.dateFormat = "yyyy-MM-dd"
+        guard let d = parse.date(from: String(key.prefix(10))) else { return key }
+        let out = DateFormatter()
+        out.timeZone = TimeZone(identifier: "UTC")
+        out.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
+        out.dateFormat = "d MMMM yyyy"
+        return out.string(from: d)
     }
 }

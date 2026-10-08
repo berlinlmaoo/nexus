@@ -444,7 +444,10 @@ struct APIClient {
             throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
-        if http.statusCode == 401 { throw APIError.unauthorized }
+        if http.statusCode == 401 {
+            if let refusal = Self.deactivatedSignIn(data) { throw refusal }
+            throw APIError.unauthorized
+        }
         guard (200..<300).contains(http.statusCode) else {
             throw APIError.http(http.statusCode, Self.serverMessage(data))
         }
@@ -457,6 +460,16 @@ struct APIClient {
         } catch {
             throw APIError.decoding
         }
+    }
+
+    /// An offboarded account signing in (app-login, passkey verify): the right credentials, refused
+    /// on purpose with `{ error: "AccountDeactivated" }` (owner, 8 Oct 2026). Only those two sign-in
+    /// routes answer this way; every other 401 stays `.unauthorized`. Outside `run` because inside a
+    /// generic whose parameter is called T, `T("…")` means "construct a T".
+    private static func deactivatedSignIn(_ data: Data) -> APIError? {
+        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              (obj["error"] as? String) == "AccountDeactivated" else { return nil }
+        return .http(401, T("This account has been deactivated."))
     }
 
     // MARK: - Endpoints
@@ -1690,10 +1703,77 @@ struct APIClient {
         _ = try await run(makeRequest("/api/announcements/\(id)", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
+    /// A refusal arrives as `AdminRefusal` when it carries a `code` — notably HAS_ATTENDANCE_DATA: an
+    /// account with attendance history is never deleted, it is offboarded (owner, 8 Oct 2026).
     @discardableResult
     func deleteUser(_ userId: String) async throws -> Bool {
-        _ = try await run(makeRequest("/api/admin/users/\(userId)", method: "DELETE"), decode: SuccessResponse.self)
+        _ = try await runAdmin(makeRequest("/api/admin/users/\(userId)", method: "DELETE"), decode: SuccessResponse.self)
         return true
+    }
+
+    // MARK: - Offboarding (owner, 8 Oct 2026)
+
+    /// Everyone with no workspace membership, from GET /api/admin/users (every page; the route caps
+    /// pageSize at 50). Offboarding deletes every membership, so the people who left are all in here,
+    /// with `deactivatedAt` and `formerMemberships`.
+    func adminUsersWithoutWorkspace() async throws -> [AdminUser] {
+        var users: [AdminUser] = []
+        var page = 1
+        var pages = 1
+        repeat {
+            let reply = try await run(makeRequest("/api/admin/users?membershipFilter=non-members&pageSize=50&page=\(page)"),
+                                      decode: AdminUsersPage.self)
+            users += reply.users ?? []
+            pages = max(1, min(reply.pagination?.totalPages ?? 1, 20))
+            page += 1
+        } while page <= pages
+        return users
+    }
+
+    /// POST /api/admin/users/:id/offboard. `lastWorkingDay` is a Jakarta "YYYY-MM-DD", not after today.
+    func offboardUser(_ userId: String, lastWorkingDay: String, reason: String, note: String?) async throws -> OffboardResult {
+        var req = makeRequest("/api/admin/users/\(userId)/offboard", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "lastWorkingDay": lastWorkingDay, "reason": reason, "note": jsonOrNull(note),
+        ])
+        return try await runAdmin(req, decode: OffboardResult.self)
+    }
+
+    /// POST /api/admin/users/:id/reinstate: undo an offboarding. Projects, teams, passkeys and devices
+    /// do not come back.
+    func reinstateUser(_ userId: String) async throws -> ReinstateResult {
+        var req = makeRequest("/api/admin/users/\(userId)/reinstate", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = Data("{}".utf8)
+        return try await runAdmin(req, decode: ReinstateResult.self)
+    }
+
+    /// `run` for the account actions in Control Room, differing in one place: a refusal that carries
+    /// a `code` becomes `AdminRefusal`, so the screen can say it in the app's language rather than
+    /// show the server's Indonesian sentence to everyone.
+    private func runAdmin<Response: Decodable>(_ req: URLRequest, decode: Response.Type) async throws -> Response {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.nothingAnswered(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            // NEXUS_DOWN is the edge answering for an origin it cannot reach, not a refusal.
+            if let code = obj?["code"] as? String, !code.isEmpty, code != "NEXUS_DOWN" {
+                throw AdminRefusal(status: http.statusCode, code: code, message: Self.serverMessage(data))
+            }
+            throw APIError.http(http.statusCode, Self.serverMessage(data))
+        }
+        do {
+            return try JSONDecoder().decode(Response.self, from: data)
+        } catch {
+            throw APIError.decoding
+        }
     }
     private func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s }
     /// Stricter than `enc`, for one VALUE inside a query rather than a whole query. `.urlQueryAllowed`

@@ -1597,6 +1597,9 @@ struct StreakBoardCard: View {
         let id: String; let name: String; let cells: [String: AttTone]; let rowByDay: [String: AttendanceRow]
         /// Weekly-rest quota from the server (4 for most people, 9 for some); 4 when an older server sends none.
         var quota: Int = 4
+        /// The last working day of someone who left the company (offboarding, 8 Oct 2026): the board
+        /// keeps them for the periods they were part of, marked "Left · 10 Oct".
+        var leftAt: String? = nil
         /// Days worked in the period: a check-in, an approved permit or WFH — everything green or blue.
         var workedDays: Int { cells.values.filter { $0 == .present || $0 == .permit || $0 == .wfh }.count }
     }
@@ -1617,13 +1620,14 @@ struct StreakBoardCard: View {
             var rowByDay: [String: AttendanceRow] = [:]
             for r in rs { if let k = Self.dayKey(r.attendanceDate) { cells[k] = AttTone.of(r); rowByDay[k] = r } }
             return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay,
-                          quota: rs.compactMap { $0.user?.dayOffQuota }.first ?? 4)
+                          quota: rs.compactMap { $0.user?.dayOffQuota }.first ?? 4,
+                          leftAt: rs.compactMap { $0.user?.leftAt }.first)
         }
         // Everyone the server lists for the board gets a line, rows or not: on the first day of a
         // period most of the crew has no row yet, and the board used to show only a handful of names.
         for person in roster ?? [] where groups[person.id] == nil {
             members.append(Member(id: person.id, name: person.name ?? T("Unknown"), cells: [:], rowByDay: [:],
-                                  quota: person.dayOffQuota ?? 4))
+                                  quota: person.dayOffQuota ?? 4, leftAt: person.leftAt))
         }
         return members.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -1836,8 +1840,19 @@ struct StreakBoardCard: View {
     private var nameColumn: some View {
         VStack(alignment: .leading, spacing: gap) {
             ForEach(members) { m in
-                Text(m.name).font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
-                    .lineLimit(1).frame(width: nameW, height: cell, alignment: .leading)
+                Self.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
+            }
+        }
+    }
+
+    /// The name, and under it, for someone who left the company, a muted "Left · 10 Oct" (offboarding,
+    /// 8 Oct 2026). Two short lines fit a row; the name keeps its size so the column stays even.
+    static func nameLabel(_ m: Member) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(m.name).font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+            if m.leftAt != nil {
+                Text(LeftTag.label(m.leftAt)).font(NXFont.text(7, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    .accessibilityLabel(LeftTag.accessibilityText(m.leftAt))
             }
         }
     }
@@ -1940,8 +1955,7 @@ struct StreakBoardCard: View {
                 VStack(alignment: .leading, spacing: gap) {
                     Color.clear.frame(height: 26)
                     ForEach(members) { m in
-                        Text(m.name).font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
-                            .lineLimit(1).frame(width: nameW, height: cell, alignment: .leading)
+                        StreakBoardCard.nameLabel(m).frame(width: nameW, height: cell, alignment: .leading)
                     }
                 }
                 VStack(alignment: .leading, spacing: gap) {
@@ -2098,7 +2112,10 @@ struct RecordActionsSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(row.user?.name ?? "Staff").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                        HStack(spacing: 8) {
+                            Text(row.user?.name ?? "Staff").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                            if let left = row.user?.leftAt { LeftTag(leftAt: left) }
+                        }
                         HStack(spacing: 8) {
                             Text(dateLabel).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                             Text(statusLabel).font(NXFont.text(11, .bold)).foregroundStyle(Color.white)

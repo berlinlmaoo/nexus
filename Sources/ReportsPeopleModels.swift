@@ -358,8 +358,11 @@ struct PersonReport: Decodable, Sendable {
         let approverId: String?
         let teams: [ReportTeamRef]
         let isSelf: Bool?
+        /// "YYYY-MM-DD": the last working day of someone who left the company (offboarding, 8 Oct
+        /// 2026). Their report still opens for the periods they were part of. nil for everyone else.
+        let leftAt: String?
 
-        private enum CodingKeys: String, CodingKey { case id, name, email, avatar, role, approverId, teams, isSelf }
+        private enum CodingKeys: String, CodingKey { case id, name, email, avatar, role, approverId, teams, isSelf, leftAt }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             id = c.reportSoft(.id)
@@ -370,6 +373,7 @@ struct PersonReport: Decodable, Sendable {
             approverId = c.reportSoft(.approverId)
             teams = c.reportList(.teams)
             isSelf = c.reportSoft(.isSelf)
+            leftAt = c.reportSoft(.leftAt)
         }
         var displayName: String { name ?? email ?? "—" }
     }
@@ -441,10 +445,12 @@ struct ReportRoster: Decodable, Sendable {
         let previous: ReportHeadline?
         let flags: Flags?
         let flagCount: Double?
+        /// "YYYY-MM-DD": someone who left the company, on the roster for the periods they were part of.
+        let leftAt: String?
         var id: String { userId }
 
         private enum CodingKeys: String, CodingKey {
-            case userId, name, email, avatar, role, approverId, teams, headline, previous, flags, flagCount
+            case userId, name, email, avatar, role, approverId, teams, headline, previous, flags, flagCount, leftAt
         }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -460,6 +466,7 @@ struct ReportRoster: Decodable, Sendable {
             previous = c.reportSoft(.previous)
             flags = c.reportSoft(.flags)
             flagCount = c.reportSoft(.flagCount)
+            leftAt = c.reportSoft(.leftAt)
         }
         var displayName: String { name ?? email ?? "—" }
     }

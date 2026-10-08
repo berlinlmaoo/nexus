@@ -16,6 +16,9 @@ struct MemberRecord: Decodable, Sendable {
         let role: String?
         let joinedAt: String?
         let isSelf: Bool?
+        /// ISO: the last working day of someone who left the company (offboarding, 8 Oct 2026). Their
+        /// record stays readable; nil for everyone still here.
+        let leftAt: String?
     }
     struct ViewerRights: Decodable, Sendable {
         /// ALL (BoD / One Above All), DIRECT_REPORTS (a manager), SELF.

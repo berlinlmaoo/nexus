@@ -220,14 +220,38 @@ struct AdminUsersSection: View {
     @State private var openUser: String?
     @State private var showChart = false
     @State private var joining: Set<String> = []
+    /// People who were offboarded (left the company): no membership any more, so the roster above
+    /// never lists them. From GET /api/admin/users; empty on a server from before offboarding.
+    @State private var leftUsers: [AdminUser] = []
+    @State private var reinstateTarget: AdminUser?
+    @State private var reinstating = false
+    /// What the last reinstatement said: "{name} is back.", or why it was refused.
+    @State private var notice: String?
 
     // A–Z, peka lokal — urutan server adalah urutan bergabung, yang tidak membantu siapa pun
     // mencari nama di daftar 49 orang.
     private var members: [WorkspaceRoster.Member] {
         (roster?.members ?? []).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
+    /// Registered accounts outside the workspace, minus anyone offboarded: "Masukkan" would make a
+    /// leaver a member again behind the BoD's back, so they get Reinstate in their own list instead.
     private var registered: [WorkspaceRoster.Registered] {
-        (roster?.availableUsers ?? []).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        let left = Set(leftUsers.map(\.id))
+        return (roster?.availableUsers ?? []).filter { !left.contains($0.id) }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+    /// Offboarded people matching the search, A–Z.
+    private var leftRows: [AdminUser] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return leftUsers
+            .filter { q.isEmpty || $0.displayName.lowercased().contains(q) || ($0.email ?? "").lowercased().contains(q) }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+    /// Offboard and Reinstate: BoD and One Above All, the web's rule (the server checks again, with
+    /// the rank rule). Never on your own account.
+    private var canOffboard: Bool { viewerRole == "BOD" || viewerRole == "ONE_ABOVE_ALL" }
+    private func mayOffboard(_ m: WorkspaceRoster.Member) -> Bool {
+        canOffboard && m.userId != nil && m.userId != auth.session?.userId && canEditTier(viewerRole, m.role)
     }
     private var viewerRole: String? { roster?.role }
     /// Flexi dan mode Mobile mengubah aturan absensi seseorang, jadi BoD ke atas — aturan
@@ -303,6 +327,11 @@ struct AdminUsersSection: View {
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).nexusShadowSoft()
 
+                        if let notice {
+                            Text(notice).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
                         // Akun yang mendaftar sendiri tanpa kode workspace. Satu tombol, langsung
                         // jadi Staff; perannya bisa diubah sesudahnya dari detail orangnya.
                         if !registered.isEmpty, canManageAttendanceFlags, let wsId = workspaceId {
@@ -338,6 +367,8 @@ struct AdminUsersSection: View {
                                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).nexusShadowSoft()
                             }
                         }
+
+                        if !leftRows.isEmpty { leftSection }
                     }.padding(16)
                 }
             }
@@ -350,7 +381,7 @@ struct AdminUsersSection: View {
                 AdminUserDetailView(
                     member: m, workspaceId: workspaceId, viewerRole: viewerRole,
                     memberships: memberships[uid], allTeams: allTeams, allProjects: allProjects,
-                    members: members
+                    members: members, canOffboard: mayOffboard(m)
                 ) { await load() }
             }
         }
@@ -359,6 +390,82 @@ struct AdminUsersSection: View {
         .fullScreenCover(isPresented: $showChart) {
             ApprovalChartView(members: members, workspaceId: workspaceId ?? "") { await load() }
         }
+        // Reinstate is a decision with consequences the person may not expect, so it is confirmed,
+        // and the confirmation says what does NOT come back.
+        .alert(
+            reinstateTarget.map { String(format: T("Reinstate %@?"), $0.displayName) } ?? "",
+            isPresented: Binding(get: { reinstateTarget != nil }, set: { if !$0 { reinstateTarget = nil } })
+        ) {
+            Button(T("Reinstate")) {
+                if let u = reinstateTarget {
+                    reinstateTarget = nil
+                    Task { await reinstate(u) }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) { reinstateTarget = nil }
+        } message: {
+            Text(reinstateTarget.map { u -> String in
+                let back = u.formerWorkspaceNames.isEmpty
+                    ? T("They can sign in again.")
+                    : String(format: T("They can sign in again and are back in %@ with the role and settings they had."),
+                             u.formerWorkspaceNames.joined(separator: ", "))
+                return back + "\n\n" + T("Not restored: projects, teams, passkeys, devices, and anyone who had them as approver. Set those again by hand.")
+            } ?? "")
+        }
+    }
+
+    /// The people who left: who, since when, and (BoD+) Reinstate. Their history stays everywhere
+    /// else; this is the one place their account is managed from.
+    private var leftSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(T("Left the company")) · \(leftRows.count)")
+                .font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+            VStack(spacing: 0) {
+                ForEach(Array(leftRows.enumerated()), id: \.element.id) { idx, u in
+                    if idx > 0 { Divider().overlay(NX.border) }
+                    HStack(spacing: 12) {
+                        AvatarView(url: u.avatar, initial: u.initial, size: 34)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(u.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            if let e = u.email, !e.isEmpty {
+                                Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            }
+                            LeftTag(leftAt: u.leftAt)
+                        }
+                        Spacer(minLength: 6)
+                        if canOffboard && u.id != auth.session?.userId {
+                            Button { reinstateTarget = u } label: {
+                                Label(T("Reinstate"), systemImage: "arrow.uturn.backward")
+                                    .font(NXFont.text(12, .semibold))
+                                    .padding(.horizontal, 10).padding(.vertical, 6)
+                                    .background(NX.accentBg, in: Capsule())
+                                    .foregroundStyle(NX.violetText)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(reinstating)
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                }
+            }
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).nexusShadowSoft()
+        }
+    }
+
+    private func reinstate(_ u: AdminUser) async {
+        reinstating = true
+        defer { reinstating = false }
+        do {
+            let r = try await APIClient.shared.reinstateUser(u.id)
+            notice = String(format: T("%@ is back."), r.user?.name ?? u.displayName)
+        } catch APIError.unauthorized {
+            auth.logout()
+            return
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong. Nothing was changed.")
+        }
+        await load()
     }
 
     /// Baris ringkas: siapa, perannya, dan keadaan yang perlu dilihat sekilas. Semua pengaturan
@@ -427,6 +534,10 @@ struct AdminUsersSection: View {
         if let r = try? await APIClient.shared.adminUserMemberships() { memberships = r.byUser }
         if let t = try? await APIClient.shared.teams() { allTeams = t }
         if let p = try? await APIClient.shared.projects() { allProjects = p }
+        // Who left. Quietly skipped when refused or on an older server: the roster above still works.
+        if let users = try? await APIClient.shared.adminUsersWithoutWorkspace() {
+            leftUsers = users.filter { $0.deactivatedAt != nil }
+        }
         loading = false
     }
 }

@@ -13,6 +13,8 @@ private func taskCardHeader(_ title: String, _ icon: String) -> some View {
 struct TaskCustomFieldsCard: View {
     let projectId: String
     let taskId: String
+    /// The task's creator was offboarded: the CREATED field marks them "Left".
+    var creatorLeft = false
     @State private var fields: [CustomField] = []
     @State private var values: [String: CFVal] = [:]
     @State private var loaded = false
@@ -39,6 +41,13 @@ struct TaskCustomFieldsCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(f.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
             if type == "CREATED" {
+                // Who made the task, as on the web, tagged "Left" once they were offboarded.
+                if let who = f.createdMeta?.userName, !who.isEmpty {
+                    HStack(spacing: 6) {
+                        Text(who).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        if creatorLeft { LeftTag() }
+                    }
+                }
                 Text(cfText(f.id).isEmpty ? "—" : cfText(f.id)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             } else if type == "NUMBER" {
                 TextField("0", text: binding(f.id)).keyboardType(.decimalPad).font(NXFont.text(15)).padding(10)

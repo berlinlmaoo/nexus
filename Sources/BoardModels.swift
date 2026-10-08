@@ -66,7 +66,9 @@ struct BoardTask: Decodable, Identifiable, Sendable {
 
     struct Assignee: Decodable, Sendable {
         let user: UserRef?
-        struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+        /// `deactivatedAt`: set once the person was offboarded (left the company); their tasks stay
+        /// theirs and the task detail marks them "Left". Sent by GET /api/tasks/:id (8 Oct 2026+).
+        struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let deactivatedAt: String? }
     }
     struct Sub: Decodable, Sendable { let status: String? }
     struct CountRef: Decodable, Sendable { let comments: Int? }
@@ -119,6 +121,10 @@ struct TaskDetail: Decodable, Sendable {
     let taskList: TaskListInfo?
     let activityLogs: [ActivityLog]?
     let quests: [TaskQuestRef]?   // task-bundle quests this task is in (with total/done) → detail banner
+    /// Who made the task. Read for one thing: whether they were offboarded (`deactivatedAt`), which
+    /// the CREATED custom field marks "Left". Optional, like the field.
+    let creator: CreatorRef?
+    struct CreatorRef: Decodable, Sendable { let id: String?; let name: String?; let deactivatedAt: String? }
 
     struct ActivityLog: Decodable, Identifiable, Sendable {
         let id: String
@@ -166,6 +172,9 @@ struct CustomField: Decodable, Identifiable, Sendable {
     let type: String          // SELECT | MULTI_SELECT | STATUS | NUMBER | DATE | PLACE | CREATED
     let options: CFOptions?
     let value: CFFieldValue?   // present only when fetched with taskId
+    /// CREATED only, fetched with taskId: who made the task and when (the web shows the name).
+    let createdMeta: CreatedMeta?
+    struct CreatedMeta: Decodable, Sendable { let userName: String?; let timestamp: String? }
     var choices: [String] { options?.list ?? [] }
 }
 /// A stored custom-field value: plain string, a multi-select array, or a PLACE {label, mapUrl}.

@@ -303,7 +303,10 @@ struct PersonReportSections: View {
         HStack(spacing: 12) {
             AvatarView(url: p.avatar, initial: String(p.displayName.first ?? "?").uppercased(), size: 48)
             VStack(alignment: .leading, spacing: 3) {
-                Text(p.displayName).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(p.displayName).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    if let left = p.leftAt { LeftTag(leftAt: left) }
+                }
                 let teams = p.teams.map(\.name).joined(separator: ", ")
                 if !teams.isEmpty {
                     Text(teams).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)

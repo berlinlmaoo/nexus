@@ -50,7 +50,7 @@ struct TaskDetailView: View {
                         header(task)
                         questBanner(task)
                         metaRow(task)
-                        if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id) }
+                        if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil) }
                         descriptionCard(task)
                         subtasksCard(task)
                         TaskAttachmentsCard(taskId: task.id)
@@ -211,8 +211,8 @@ struct TaskDetailView: View {
                         Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
                         Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
                     }
-                    if let names = t.assignees?.compactMap({ $0.user?.name }), !names.isEmpty {
-                        Text(names.joined(separator: ", ")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
+                        assigneeLine(people).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
                 }
             }.buttonStyle(.plain)
@@ -229,6 +229,19 @@ struct TaskDetailView: View {
                 current: Set((t.assignees ?? []).compactMap { $0.user?.id }),
                 onSave: { ids in await update(t, ["assigneeIds": Array(ids)]) }
             )
+        }
+    }
+
+    /// "Budi Left, Sari": the names, with a small muted "Left" after anyone offboarded (left the
+    /// company). Their tasks stay assigned to them (owner, 8 Oct 2026); one line of text, so the row
+    /// keeps its height and its truncation.
+    private func assigneeLine(_ people: [BoardTask.Assignee.UserRef]) -> Text {
+        people.enumerated().reduce(Text("")) { line, item in
+            var next = line + Text(item.offset == 0 ? "" : ", ") + Text(item.element.name ?? "")
+            if item.element.deactivatedAt != nil {
+                next = next + Text(" " + LeftTag.leftWord).font(NXFont.text(10, .semibold)).foregroundColor(ChipTone.neutral.fg)
+            }
+            return next
         }
     }
 
