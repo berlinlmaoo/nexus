@@ -360,6 +360,8 @@ export type RestoreInfo = {
   /** When the copy was taken: the moment of the delete, or the backup it came from. */
   dataAsOf: string
   fromBackup: boolean
+  /** A delete that only flipped a flag (a post's deletedAt, a trashed Vault item): restoring switches it back. */
+  soft: boolean
   /** English noun for what was deleted ("comment", "sheet rows"); clients translate the ones they know. */
   entityLabel: string
   /** What comes back (see deletion-entities.ts RestoreCounts). */
@@ -391,6 +393,7 @@ function infoOf(r: SnapshotRowLike): RestoreInfo {
     restoredAt: r.restoredAt?.toISOString() ?? null,
     dataAsOf: r.dataAsOf.toISOString(),
     fromBackup: r.source === "backup",
+    soft: r.source === "soft",
     entityLabel: entityLabelOf(r.entityType),
     counts: restoreCountsOf(r.entityType, (r.counts ?? {}) as Record<string, unknown>),
     open,
