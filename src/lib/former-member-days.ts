@@ -11,9 +11,23 @@
  * Date keys are "YYYY-MM-DD" (the attendance date, 00:00 UTC of the Jakarta day).
  */
 
-/** The first day a person can owe attendance: the day they joined, or an earlier first check-in. */
+/**
+ * The first day a person can owe attendance: the day AFTER they joined — or their first check-in when
+ * that came on or before the join day. The join day itself is never an absence (9 Oct 2026: a staff
+ * member added at 21:19 WIB was shown TK for that same evening and the 02:00 cron was about to cut
+ * −150 XP and a day off for it).
+ */
 export function attendanceStartKey(joinKey: string, firstRecordKey: string | null | undefined): string {
-  return firstRecordKey && firstRecordKey < joinKey ? firstRecordKey : joinKey
+  if (firstRecordKey && firstRecordKey <= joinKey) return firstRecordKey
+  return dayAfter(joinKey)
+}
+
+/** "2026-10-08" → "2026-10-09" (date keys are UTC calendar days). */
+export function dayAfter(dateKey: string): string {
+  const d = new Date(`${dateKey}T00:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return dateKey
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
 }
 
 /**

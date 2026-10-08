@@ -48,9 +48,13 @@ const keys = (from, to) => {
 }
 
 check("start: the join day, or an earlier first check-in", () => {
-  assert.equal(m.attendanceStartKey("2026-10-01", null), "2026-10-01")
+  // The join day itself is never owed (9 Oct 2026): someone added in the evening could not have come in.
+  assert.equal(m.attendanceStartKey("2026-10-01", null), "2026-10-02")
+  assert.equal(m.attendanceStartKey("2026-10-31", null), "2026-11-01")
+  // …unless they did check in that day: then it counts like any other.
+  assert.equal(m.attendanceStartKey("2026-10-01", "2026-10-01"), "2026-10-01")
   assert.equal(m.attendanceStartKey("2026-10-01", "2026-09-29"), "2026-09-29")
-  assert.equal(m.attendanceStartKey("2026-10-01", "2026-10-03"), "2026-10-01")
+  assert.equal(m.attendanceStartKey("2026-10-01", "2026-10-03"), "2026-10-02")
 })
 
 check("a current member owes every day from their start, with no end", () => {

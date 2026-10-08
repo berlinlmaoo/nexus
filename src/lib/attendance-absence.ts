@@ -322,7 +322,9 @@ export async function rederiveLatePenaltyForDate(userId: string, workspaceId: st
   if (member.role === "BOD" || member.role === "ONE_ABOVE_ALL") return 0 // exempt from all attendance XP penalties
   if (isRestDayForMember(date, member.restDays)) return 0 // their fixed rest day
   const joinKey = formatAttendanceDateKey(member.joinedAt ?? member.user?.createdAt ?? startFloor())
-  if (dateKey < joinKey) return 0 // never penalize days before this member joined
+  // Never penalize days before this member joined, nor the join day itself: someone added in the
+  // evening could not have checked in that day (9 Oct 2026). Same rule as attendanceStartKey.
+  if (dateKey <= joinKey) return 0
 
   const office = await officeForMemberDate(userId, workspaceId, date)
   if (!office) return 0
@@ -692,7 +694,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
 
         // Pre-join guard: don't penalize days before this member joined the workspace.
         const joinKey = joinKeyByUser.get(userId)
-        if (joinKey && dateKey < joinKey) { result.skipped++; continue }
+        if (joinKey && dateKey <= joinKey) { result.skipped++; continue }
 
         // Any leave/day-off covering this date. A MANUAL one (user-filed) cancels EVERY penalty for the
         // day — refund all XP + drop the auto-deduction. The cron's own AUTO day-off does NOT (it IS the
