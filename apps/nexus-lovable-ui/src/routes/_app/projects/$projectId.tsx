@@ -19,6 +19,8 @@ import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
 import { PnlDashboardView } from "@/components/pnl/PnlDashboardView";
+import { financeTabEnabled, hiddenTabsOf } from "@/components/projects/project-tabs";
+import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -116,6 +118,24 @@ function ProjectDetail() {
     enabled: !!data,
   });
   const isBod = wsm.data?.role === "BOD" || wsm.data?.role === "ONE_ABOVE_ALL";
+  const { t: tr } = useLang();
+  // Which tabs this project shows (owner, 9 Oct 2026): a project hides the ones it doesn't need
+  // (Project settings → Tabs), Finance is opt-in like P&L (it used to follow the project's NAME), and
+  // P&L stays BoD-only. Hiding only hides — nothing in the tab is touched.
+  const hiddenTabs = hiddenTabsOf(data);
+  const visibleTabs = TABS.filter((tab) => {
+    if (tab.id === "finance") return financeTabEnabled(data);
+    if (tab.id === "pnl") return !!data?.enablePnlDashboard && isBod;
+    return !hiddenTabs.has(tab.id);
+  });
+  const visibleKey = visibleTabs.map((tab) => tab.id).join(",");
+  // The open tab was just hidden (here, or live from another device): land on Board, else List.
+  useEffect(() => {
+    if (!data || visibleTabs.some((tab) => tab.id === view)) return;
+    const next = visibleTabs.find((tab) => tab.id === "board" || tab.id === "list") ?? visibleTabs[0];
+    if (next) setView(next.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id, visibleKey, view]);
   const rootQc = useQueryClient();
   // Set a task's due date by dragging it onto a calendar day.
   const setTaskDue = useMutation({
@@ -177,10 +197,10 @@ function ProjectDetail() {
         }
         tabs={
           <div className="flex items-center gap-0.5 -mb-px overflow-x-auto">
-            {TABS.filter((t) => (t.id !== "finance" || /finance/i.test(data?.name ?? "")) && (t.id !== "pnl" || (!!data?.enablePnlDashboard && isBod))).map((t) => (
+            {visibleTabs.map((t) => (
               <button key={t.id} onClick={() => setView(t.id)}
                 className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 border-b-2 transition whitespace-nowrap ${view === t.id ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                <t.icon className="h-3.5 w-3.5" /> {t.label}
+                <t.icon className="h-3.5 w-3.5" /> {tr(t.label)}
               </button>
             ))}
           </div>
@@ -224,7 +244,7 @@ function ProjectDetail() {
           {view === "automations" && <AutomationsView projectId={data.id} />}
           {view === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
           {view === "forms" && <ProjectFormsView projectId={data.id} />}
-          {view === "finance" && <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>}
+          {view === "finance" && financeTabEnabled(data) && <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>}
           {view === "pnl" && !!data.enablePnlDashboard && isBod && <PnlDashboardView projectId={data.id} />}
           {view === "chat" && <ProjectChat projectId={data.id} />}
         </TaskBulkProvider>

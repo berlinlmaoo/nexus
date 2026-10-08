@@ -224,20 +224,10 @@ export function AppSidebar() {
   const renameFolderM = useMutation({ mutationFn: (v: { id: string; name: string }) => nexusApi.projectFolderUpdate(v.id, { name: v.name }), onSuccess: invalidateSidebar, onError: onMutationError });
   const moveFolderM = useMutation({ mutationFn: (v: { id: string; parentFolderId: string | null }) => nexusApi.projectFolderUpdate(v.id, { parentFolderId: v.parentFolderId }), onSuccess: invalidateSidebar, onError: onMutationError });
   const deleteFolderM = useMutation({ mutationFn: (id: string) => nexusApi.projectFolderDelete(id), onSuccess: invalidateSidebar, onError: onMutationError });
-  // Create a new project straight from the sidebar "+" (workspace inferred from existing folders/projects).
+  // New project from the sidebar "+": every project now starts by choosing its type (owner, 9 Oct
+  // 2026), so this opens the Projects page's dialog at that step instead of asking for a bare name.
   const navigate = useNavigate();
-  const createProjectM = useMutation({
-    mutationFn: (v: { workspaceId: string; name: string }) => nexusApi.createProject({ name: v.name, workspaceId: v.workspaceId }),
-    onSuccess: (project) => { invalidateSidebar(); navigate({ to: "/projects/$projectId", params: { projectId: project.id } }); },
-    onError: onMutationError,
-  });
-  const newProjectFromSidebar = () => {
-    const name = window.prompt("New project name:", "");
-    if (!name || !name.trim()) return;
-    const workspaceId = folders[0]?.workspaceId ?? projects.find((p) => p.workspaceId)?.workspaceId;
-    if (!workspaceId) { window.alert("Workspace unknown."); return; }
-    createProjectM.mutate({ workspaceId, name: name.trim() });
-  };
+  const newProjectFromSidebar = () => navigate({ to: "/projects", search: { new: 1 } });
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   const sidebarActions: SidebarActions = {

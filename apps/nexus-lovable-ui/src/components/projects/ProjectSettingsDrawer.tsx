@@ -3,8 +3,11 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Circle, ImagePlus, Loader2, Mail, Trash2, UserPlus, X } from "lucide-react";
-import { nexusApi, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
+import { nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
 import { ProjectCustomFieldsManager } from "@/components/projects/ProjectCustomFieldsManager";
+import { projectEmoji } from "@/components/projects/ProjectIcon";
+import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, financeTabEnabled, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
+import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 // Shared layout id so the modal morphs out of the "Tune" button (same as board task cards).
@@ -50,6 +53,65 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
   );
 }
 
+/**
+ * Project settings → Tabs (owner, 9 Oct 2026: "ada bbrp project yg ga butuh spreadsheets/automation/
+ * list"). One switch per tab. Off only hides the tab: nothing in it is deleted, and switching it back
+ * on brings it all back. Board or List always stays on (the server refuses otherwise). Keys the
+ * project hides that this screen doesn't know are kept as they are.
+ */
+function ProjectTabsSection({ project, canManage, roleKnown }: { project: NexusProject; canManage: boolean; roleKnown: boolean }) {
+  const { t } = useLang();
+  const qc = useQueryClient();
+  const [hidden, setHidden] = useState<string[]>(() => [...hiddenTabsOf(project)]);
+  const [error, setError] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: (next: string[]) => nexusApi.updateProject(project.id, { hiddenTabs: next }),
+    onSuccess: (p) => {
+      if (Array.isArray(p?.hiddenTabs)) setHidden(p.hiddenTabs);
+      qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
+    },
+  });
+  const toggle = (key: string, show: boolean) => {
+    const before = hidden;
+    const next = show ? hidden.filter((k) => k !== key) : [...hidden, key];
+    setError(null);
+    setHidden(next);
+    save.mutate(next, {
+      onError: (e) => {
+        setHidden(before);
+        const known = projectSettingsErrorText((e as { payload?: { code?: unknown } }).payload?.code);
+        setError(known ? t(known) : e instanceof Error ? e.message : t("Couldn't save."));
+      },
+    });
+  };
+  const hiddenSet = new Set(hidden);
+  const shownTaskViews = TASK_VIEW_TAB_KEYS.filter((k) => !hiddenSet.has(k));
+  return (
+    <div className="space-y-3 border-t border-border pt-5">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Tabs")}</span>
+      <p className="text-xs text-muted-foreground">{t("Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back.")}</p>
+      <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
+        {PROJECT_TAB_KEYS.map((key) => {
+          const shown = !hiddenSet.has(key);
+          // The last task view stays on: a task project needs some way to see its tasks.
+          const lastTaskView = shown && shownTaskViews.length === 1 && shownTaskViews[0] === key;
+          return (
+            <div key={key} className="flex items-center justify-between gap-3 px-3 py-2">
+              <div className="min-w-0">
+                <div className={cn("text-sm font-medium", !shown && "text-muted-foreground")}>{t(PROJECT_TAB_LABELS[key])}</div>
+                {lastTaskView && <div className="text-[11px] text-muted-foreground">{t("Board or List stays on")}</div>}
+              </div>
+              <Toggle checked={shown} onChange={(v) => toggle(key, v)} disabled={!canManage || lastTaskView || save.isPending} />
+            </div>
+          );
+        })}
+      </div>
+      {!canManage && roleKnown && <p className="text-xs text-muted-foreground">{t("Only managers and above can change the tabs.")}</p>}
+      {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project: NexusProject; onClose: () => void; onDeleted: () => void }) {
   const qc = useQueryClient();
   const reduce = useReducedMotion();
@@ -65,7 +127,12 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   }, []);
   const [name, setName] = useState(project.name ?? "");
   const [description, setDescription] = useState(project.description ?? "");
-  const [icon, setIcon] = useState(project.icon ?? "🚀");
+  // An icon is an uploaded picture, an emoji, or a NAMED icon ("briefcase", "folder" — the column's
+  // default, and what older screens stored). The field shows the emoji the name stands for; it used to
+  // show the name itself (iOS cut it to "br"). Saving keeps the name unless another emoji is picked.
+  const storedIcon = project.icon ?? "🚀";
+  const shownIcon = /^(\/|https?:)/.test(storedIcon) ? storedIcon : projectEmoji(storedIcon, "🚀");
+  const [icon, setIcon] = useState(shownIcon);
   const [color, setColor] = useState(project.color ?? COLORS[0]);
   const [status, setStatus] = useState(project.status ?? "ACTIVE");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -79,6 +146,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const [enablePnl, setEnablePnl] = useState(!!project.enablePnlDashboard);
   const [reqAttach, setReqAttach] = useState(!!project.requireAttachmentForDone);
   const [noStatus, setNoStatus] = useState(!!project.disableTaskStatus);
+  const [financeOn, setFinanceOn] = useState(financeTabEnabled(project));
+  const { t } = useLang();
   // P&L toggle is BoD-and-above only (financial data) — hidden from managers/staff entirely.
   // Role is checked against THIS project's workspace, not the user's first workspace.
   const wsm = useQuery({
@@ -88,12 +157,14 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     staleTime: 60_000,
   });
   const isBod = wsm.data?.role === "BOD" || wsm.data?.role === "ONE_ABOVE_ALL";
+  // Tabs follow the rule of every other project setting on the server (LEAD = Manager and above).
+  const canManageTabs = (ORG_HIERARCHY[wsm.data?.role ?? ""] ?? 0) >= (ORG_HIERARCHY.MANAGER ?? 2);
 
   const membersQuery = useQuery({ queryKey: ["members"], queryFn: () => nexusApi.members(), enabled: showPicker, staleTime: 300_000 });
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
 
   const save = useMutation({
-    mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, icon, color, status }),
+    mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, icon: icon === shownIcon ? storedIcon : icon, color, status }),
     onSuccess: () => { invalidate(); qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); },
   });
   const addMember = useMutation({
@@ -141,6 +212,10 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const toggleNoStatus = (checked: boolean) => {
     setNoStatus(checked);
     settings.mutate({ disableTaskStatus: checked }, { onError: () => setNoStatus(!checked) });
+  };
+  const toggleFinance = (checked: boolean) => {
+    setFinanceOn(checked);
+    settings.mutate({ financeEnabled: checked }, { onError: () => setFinanceOn(!checked) });
   };
   const toggleAutoAssign = (checked: boolean) => {
     if (checked && autoAssignIds.length === 0) { setAutoAssignError("Pick at least one member before turning on auto assign."); return; }
@@ -253,6 +328,17 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               </div>
             )}
 
+            {/* Finance tab — opt-in exactly like P&L (owner, 9 Oct 2026), BoD-and-above only */}
+            {isBod && (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">Finance</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t("Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&L. Turning it off only hides the tab — the numbers stay.")}</p>
+                </div>
+                <Toggle checked={financeOn} onChange={toggleFinance} disabled={settings.isPending} />
+              </div>
+            )}
+
             {/* Require ≥1 attachment before a task can be marked Done — finance proof-of-completion */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -302,6 +388,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               </div>
             </div>
           </div>
+
+          <ProjectTabsSection project={project} canManage={canManageTabs} roleKnown={!!wsm.data} />
 
           {/* workflow bundle */}
           <div className="space-y-2 border-t border-border pt-5">
