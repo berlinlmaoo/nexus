@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { updateOfficeLocationSchema, validateBody } from "@/lib/validations"
 
@@ -98,18 +99,24 @@ export async function DELETE(
     const records = await prisma.attendanceRecord.count({ where: { officeLocationId: officeId } })
     if (records > 0) {
       await prisma.officeLocation.update({ where: { id: officeId }, data: { isActive: false, archivedAt: new Date() } })
+      await logAudit({
+        action: "delete",
+        entityType: "attendance_office",
+        entityId: existing.id,
+        entityName: existing.name,
+        userId: session.user.id,
+        request,
+        metadata: { workspaceId: context.workspace.id },
+      })
     } else {
-      await prisma.officeLocation.delete({ where: { id: officeId } })
+      // Never used: really deleted, kept first so Control Room → Audit can restore it.
+      await restorableDelete({
+        entityType: "attendance_office", entityId: existing.id, entityName: existing.name, workspaceId: context.workspace.id,
+        userId: session.user.id, request, metadata: { workspaceId: context.workspace.id },
+        meta: { open: { type: "attendance_office", id: existing.id } },
+        remove: (tx) => tx.officeLocation.delete({ where: { id: officeId } }),
+      })
     }
-    await logAudit({
-      action: "delete",
-      entityType: "attendance_office",
-      entityId: existing.id,
-      entityName: existing.name,
-      userId: session.user.id,
-      request,
-      metadata: { workspaceId: context.workspace.id },
-    })
     return NextResponse.json({ ok: true, archived: records > 0, records })
   } catch (error) {
     console.error("Error deleting attendance office:", error)

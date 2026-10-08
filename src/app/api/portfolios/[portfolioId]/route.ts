@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { firstUnlinkableProject, workspaceItemWriteRefusal } from "@/lib/write-access"
 import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 export async function GET(
   _request: NextRequest,
@@ -181,9 +182,12 @@ export async function DELETE(
     const refusal = await workspaceItemWriteRefusal(session.user.id, existing.workspaceId)
     if (refusal) return refusal
 
-    await prisma.portfolio.delete({ where: { id: portfolioId } })
-
-    logAudit({ action: "delete", entityType: "portfolio", entityId: portfolioId, entityName: existing.name, userId: session.user.id })
+    // Kept with its project links first, so Control Room → Audit can restore it.
+    await restorableDelete({
+      entityType: "portfolio", entityId: portfolioId, entityName: existing.name, workspaceId: existing.workspaceId,
+      userId: session.user.id, request: _request, meta: { open: { type: "portfolio", id: portfolioId } },
+      remove: (tx) => tx.portfolio.delete({ where: { id: portfolioId } }),
+    })
 
     return NextResponse.json({ message: "Portfolio deleted" })
   } catch (error) {

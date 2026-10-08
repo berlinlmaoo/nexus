@@ -5,8 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { checkPnlExpenseAccess, parsePnlDate, validAmount } from "@/lib/pnl"
-import { unlink } from "fs/promises"
-import path from "path"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 export async function PATCH(
   request: NextRequest,
@@ -69,20 +68,20 @@ export async function DELETE(
     const gate = await checkPnlExpenseAccess(session.user.id, expenseId)
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    // Remove receipt files from disk best-effort (the DB rows cascade with the expense).
-    const attachments = await prisma.pnlExpenseAttachment.findMany({ where: { expenseId }, select: { url: true } })
-    for (const a of attachments) {
-      try {
-        const rel = a.url.replace(/^\/+/, "").replace(/^api\/files\//, "")
-        await unlink(path.join(process.cwd(), "public", "uploads", rel))
-      } catch {
-        // file may already be gone
-      }
-    }
-
-    await prisma.pnlExpense.delete({ where: { id: expenseId } })
-
-    logAudit({ action: "delete", entityType: "pnl_expense", entityId: expenseId, userId: session.user.id, request, metadata: { projectId: gate.expense.projectId } })
+    // Kept with its receipts first (their files stay on disk), so Control Room → Audit can restore it.
+    // The 90-day purge of copies removes the files once nothing points at them.
+    const expense = await prisma.pnlExpense.findUniqueOrThrow({
+      where: { id: expenseId },
+      select: { description: true, amount: true, project: { select: { workspaceId: true } } },
+    })
+    const projectId = gate.expense.projectId
+    await restorableDelete({
+      entityType: "pnl_expense", entityId: expenseId, entityName: expense.description ?? `Rp ${expense.amount}`,
+      workspaceId: expense.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId, amount: expense.amount },
+      meta: { open: { type: "pnl", id: projectId, projectId: projectId }, projectId: projectId },
+      remove: (tx) => tx.pnlExpense.delete({ where: { id: expenseId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

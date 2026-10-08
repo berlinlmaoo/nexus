@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { attendanceMonthRange, formatAttendanceDateKey } from "@/lib/attendance"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
 import { holidayDateFromKey } from "@/lib/holidays"
@@ -104,10 +105,15 @@ export async function DELETE(req: NextRequest) {
     }
     if (!target) return NextResponse.json({ error: "Tanggal merah tidak ditemukan." }, { status: 404 })
 
-    await prisma.holiday.delete({ where: { id: target.id } })
-    try {
-      await logAudit({ action: "delete", entityType: "holiday", entityId: target.id, userId: g.session.user.id, request: req })
-    } catch { /* best-effort */ }
+    // Named in the audit and kept first, so Control Room → Audit can restore it (refused there if
+    // another holiday has taken the date since).
+    const holiday = await prisma.holiday.findUniqueOrThrow({ where: { id: target.id }, select: { id: true, name: true, date: true } })
+    const dateKey = formatAttendanceDateKey(holiday.date)
+    await restorableDelete({
+      entityType: "holiday", entityId: holiday.id, entityName: `${holiday.name} · ${dateKey}`, workspaceId: g.workspaceId,
+      userId: g.session.user.id, request: req, metadata: { date: dateKey }, meta: { open: null },
+      remove: (tx) => tx.holiday.delete({ where: { id: holiday.id } }),
+    })
 
     return NextResponse.json({ message: "Tanggal merah dihapus." })
   } catch (error) {

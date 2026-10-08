@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 export async function GET() {
   try {
@@ -61,7 +62,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    await prisma.savedSearch.delete({ where: { id } })
+    // In the audit, and kept first so Control Room → Audit can restore it.
+    await restorableDelete({
+      entityType: "saved_search", entityId: id, entityName: saved.name, workspaceId: null,
+      userId: session.user.id, request, meta: { open: null },
+      remove: (tx) => tx.savedSearch.delete({ where: { id } }),
+    })
 
     return NextResponse.json({ message: "Saved search deleted" })
   } catch (error) {

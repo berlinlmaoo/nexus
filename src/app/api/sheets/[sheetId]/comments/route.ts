@@ -5,6 +5,8 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { notifyMention } from "@/lib/notification-service"
 import { resolveSheetAccess } from "@/lib/project-sheets"
+import { restorableDelete } from "@/lib/deletion-snapshot"
+import { auditSnippet } from "@/lib/deletion-entities"
 
 const BODY_MAX = 2000
 
@@ -192,7 +194,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     if (!commentId) return NextResponse.json({ error: "commentId wajib." }, { status: 400 })
 
     const existing = await prisma.sheetComment.findFirst({
-      where: { id: commentId, sheetId }, select: { authorId: true },
+      where: { id: commentId, sheetId }, select: { authorId: true, body: true, sheet: { select: { project: { select: { workspaceId: true } } } } },
     })
     if (!existing) return NextResponse.json({ error: "Komentarnya nggak ketemu." }, { status: 404 })
 
@@ -205,7 +207,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       }
     }
 
-    await prisma.sheetComment.delete({ where: { id: commentId } })
+    // In the audit, and kept first so Control Room → Audit can restore it.
+    const projectId = access.sheet.projectId
+    await restorableDelete({
+      entityType: "sheet_comment", entityId: commentId, entityName: auditSnippet(existing.body),
+      workspaceId: existing.sheet.project.workspaceId, userId: session.user.id, request: req,
+      metadata: { sheetId, sheetName: access.sheet.name, projectId },
+      meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
+      remove: (tx) => tx.sheetComment.delete({ where: { id: commentId } }),
+    })
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error deleting sheet comment:", error)

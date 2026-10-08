@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import {
   getVaultActor,
   canReadItem,
@@ -11,7 +12,6 @@ import {
   canModifyItem,
   cleanItemName,
   uniqueNameInFolder,
-  deleteStoredFile,
   subtreeIds,
   VAULT_ITEM_INCLUDE,
   serializeVaultItem,
@@ -218,32 +218,18 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ trashed: ids.length })
     }
 
-    // Read the storage keys BEFORE the rows go away — the Cascade on parentId takes the children
-    // with the parent, and after that there is nothing left to tell us which files to unlink.
-    const files = await prisma.vaultItem.findMany({
-      where: { id: { in: ids }, kind: "FILE" },
-      select: { storageKey: true },
+    // Deleted for good — but kept first (rows and files), so Control Room → Audit can restore it: it
+    // comes back to the trash, as it was. The files leave the disk with the 90-day purge of copies.
+    await restorableDelete({
+      entityType: item.kind === "FOLDER" ? "vault_folder" : "vault_file",
+      entityId: item.id, entityName: item.name, workspaceId: actor.workspaceId, userId: actor.userId, request,
+      metadata: { purged: ids.length },
+      meta: { open: { type: "vault", id: item.id } },
+      remove: (tx) => tx.vaultItem.delete({ where: { id: item.id } }),
     })
 
-    await prisma.vaultItem.delete({ where: { id: item.id } })
-    let freedFiles = 0
-    for (const f of files) {
-      if (!f.storageKey) continue
-      await deleteStoredFile(f.storageKey)
-      freedFiles++
-    }
-
-    logAudit({
-      action: "delete",
-      entityType: item.kind === "FOLDER" ? "vault_folder" : "vault_file",
-      entityId: item.id,
-      entityName: item.name,
-      userId: actor.userId,
-      request,
-      metadata: { purged: ids.length, filesUnlinked: freedFiles },
-    }).catch(() => {})
-
-    return NextResponse.json({ purged: ids.length, filesUnlinked: freedFiles })
+    // `filesUnlinked` stays for older clients: nothing leaves the disk at this point any more.
+    return NextResponse.json({ purged: ids.length, filesUnlinked: 0 })
   } catch (error) {
     console.error("[vault] delete item failed:", error)
     return NextResponse.json({ error: "Failed to delete item" }, { status: 500 })

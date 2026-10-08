@@ -691,6 +691,33 @@ const NOUNS: Record<string, string> = {
   dayoff_bonus: "extra day off",
   xp_transaction: "XP entry",
   member_record: "member record",
+  // Restorable deletes (lib/deletion-entities.ts), named the way the restore card names them.
+  task_list: "section",
+  project_folder: "folder",
+  project_sheet: "sheet",
+  project_sheet_column: "sheet column",
+  sheet_comment: "sheet comment",
+  sheet_rows: "sheet rows",
+  proof_annotation: "annotation",
+  saved_search: "saved search",
+  room_booking: "room booking",
+  workflow_bundle: "workflow bundle",
+  form_submission: "form submission",
+  org_unit: "org chart unit",
+  org_unit_member: "org chart placement",
+  calendar_event: "calendar event",
+  attendance_office: "office",
+  vault_file: "Vault file",
+  vault_folder: "Vault folder",
+  vault_trash: "Vault trash",
+  pnl_expense: "expense",
+  pnl_income: "income",
+  pnl_payment: "payment",
+  pnl_category: "expense category",
+  pnl_stage: "income stage",
+  pnl_recurring: "recurring expense",
+  pnl_expense_attachment: "receipt",
+  pnl_budget: "budget",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {
@@ -882,7 +909,7 @@ function attendanceRequestTitle(
 ): string {
   // entityName is "<TYPE>:<requester name>" or "auto-dayoff:<name>".
   let reqType = str(meta.type)
-  let requester: string | null = person("targetUserId")
+  let requester: string | null = person("targetUserId") ?? str(meta.requesterName)
   if (entityName) {
     const i = entityName.indexOf(":")
     if (i > 0) {

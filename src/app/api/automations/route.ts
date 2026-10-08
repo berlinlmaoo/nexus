@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { checkProjectAccess } from '@/lib/rbac'
 import { logAudit } from '@/lib/audit'
+import { restorableDelete } from '@/lib/deletion-snapshot'
 
 export async function GET(req: NextRequest) {
   try {
@@ -83,7 +84,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const existing = await prisma.automation.findUnique({ where: { id }, select: { projectId: true, name: true } })
+    const existing = await prisma.automation.findUnique({ where: { id }, select: { projectId: true, name: true, project: { select: { workspaceId: true } } } })
     if (!existing) return NextResponse.json({ error: 'Automation not found' }, { status: 404 })
 
     const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ['LEAD'])
@@ -91,9 +92,13 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: LEAD role required to delete automations' }, { status: 403 })
     }
 
-    await prisma.automation.delete({ where: { id } })
-
-    logAudit({ action: "delete", entityType: "automation", entityId: id, entityName: existing.name, userId: session.user.id, request: req })
+    // Kept first, so Control Room → Audit can restore it.
+    await restorableDelete({
+      entityType: "automation", entityId: id, entityName: existing.name, workspaceId: existing.project.workspaceId,
+      userId: session.user.id, request: req, metadata: { projectId: existing.projectId },
+      meta: { open: { type: "project", id: existing.projectId }, projectId: existing.projectId },
+      remove: (tx) => tx.automation.delete({ where: { id } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

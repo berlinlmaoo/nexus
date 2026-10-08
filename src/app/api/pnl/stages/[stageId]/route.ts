@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkPnlAccess } from "@/lib/pnl"
 
 const HEX = /^#[0-9a-fA-F]{6}$/
@@ -67,10 +68,19 @@ export async function DELETE(
     const gate = await gateStage(session.user.id, stageId)
     if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    // Deals in this stage fall back to "tanpa stage" (stageId SetNull) — money data is untouched.
-    await prisma.pnlIncomeStage.delete({ where: { id: stageId } })
-
-    logAudit({ action: "delete", entityType: "pnl_stage", entityId: stageId, userId: session.user.id, request })
+    // Deals in this stage fall back to "tanpa stage" (stageId SetNull) — money data is untouched. Kept
+    // first: a restore brings the stage back and puts those deals back in it.
+    const stage = await prisma.pnlIncomeStage.findUniqueOrThrow({
+      where: { id: stageId },
+      select: { name: true, projectId: true, project: { select: { workspaceId: true } } },
+    })
+    await restorableDelete({
+      entityType: "pnl_stage", entityId: stageId, entityName: stage.name,
+      workspaceId: stage.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId: stage.projectId },
+      meta: { open: { type: "pnl", id: stage.projectId, projectId: stage.projectId }, projectId: stage.projectId },
+      remove: (tx) => tx.pnlIncomeStage.delete({ where: { id: stageId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

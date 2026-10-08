@@ -5,6 +5,8 @@ import { auth } from '@/lib/auth'
 import { taskWriteRefusal } from '@/lib/write-access'
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
+import { restorableDelete } from '@/lib/deletion-snapshot'
+import { auditSnippet } from '@/lib/deletion-entities'
 
 export async function GET(
   req: NextRequest,
@@ -122,14 +124,27 @@ export async function DELETE(
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Annotation id is required' }, { status: 400 })
 
-    const annotation = await prisma.proofAnnotation.findUnique({ where: { id } })
+    const annotation = await prisma.proofAnnotation.findUnique({
+      where: { id },
+      include: { attachment: { select: { filename: true, taskId: true, task: { select: { taskList: { select: { projectId: true, project: { select: { workspaceId: true } } } } } } } } },
+    })
     if (!annotation) return NextResponse.json({ error: 'Annotation not found' }, { status: 404 })
 
     if (annotation.userId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden: only the author can delete this annotation' }, { status: 403 })
     }
 
-    await prisma.proofAnnotation.delete({ where: { id } })
+    // In the audit, and kept first so Control Room → Audit can restore it.
+    const taskId = annotation.attachment.taskId
+    const projectId = annotation.attachment.task.taskList.projectId
+    await restorableDelete({
+      entityType: 'proof_annotation', entityId: id,
+      entityName: auditSnippet(annotation.comment) ?? `Annotation on ${annotation.attachment.filename}`,
+      workspaceId: annotation.attachment.task.taskList.project.workspaceId, userId: session.user.id, request: req,
+      metadata: { attachmentId: annotation.attachmentId, file: annotation.attachment.filename, taskId, projectId },
+      meta: { open: { type: 'task', id: taskId, projectId }, projectId, taskId },
+      remove: (tx) => tx.proofAnnotation.delete({ where: { id } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

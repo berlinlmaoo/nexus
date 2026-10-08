@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import {
@@ -715,7 +716,7 @@ export async function DELETE(req: NextRequest) {
 
     const existingField = await prisma.customField.findUnique({
       where: { id },
-      select: { id: true, name: true, projectId: true },
+      select: { id: true, name: true, projectId: true, project: { select: { workspaceId: true } } },
     })
 
     if (!existingField) {
@@ -727,17 +728,13 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    await prisma.customField.delete({
-      where: { id },
-    })
-
-    logAudit({
-      action: "delete",
-      entityType: "custom_field",
-      entityId: id,
-      entityName: existingField.name,
-      userId: session.user.id,
-      request: req,
+    // Kept with every task's value first, so Control Room → Audit can restore it.
+    await restorableDelete({
+      entityType: "custom_field", entityId: id, entityName: existingField.name,
+      workspaceId: existingField.project.workspaceId, userId: session.user.id, request: req,
+      metadata: { projectId: existingField.projectId },
+      meta: { open: { type: "project", id: existingField.projectId }, projectId: existingField.projectId },
+      remove: (tx) => tx.customField.delete({ where: { id } }),
     })
 
     return NextResponse.json({ success: true })

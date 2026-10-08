@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { projectWriteRefusal } from "@/lib/write-access"
 import { checkProjectAccess } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 export async function GET(
   request: NextRequest,
@@ -104,7 +105,7 @@ export async function DELETE(
 
     const existing = await prisma.projectPage.findUnique({
       where: { id: (await params).pageId },
-      select: { projectId: true },
+      select: { projectId: true, name: true, project: { select: { workspaceId: true } } },
     })
 
     if (!existing || existing.projectId !== (await params).projectId) {
@@ -114,9 +115,15 @@ export async function DELETE(
     const refusal = await projectWriteRefusal(session.user.id, existing.projectId)
     if (refusal) return refusal
 
-    await prisma.projectPage.delete({ where: { id: (await params).pageId } })
-
-    logAudit({ action: "delete", entityType: "project_page", entityId: (await params).pageId, entityName: (await params).pageId, userId: session.user.id, request, metadata: { projectId: (await params).projectId } })
+    // Kept with its subpages first, so Control Room → Audit can restore it.
+    const pageId = (await params).pageId
+    await restorableDelete({
+      entityType: "project_page", entityId: pageId, entityName: existing.name || "Untitled page",
+      workspaceId: existing.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId: existing.projectId },
+      meta: { open: { type: "page", id: pageId, projectId: existing.projectId }, projectId: existing.projectId },
+      remove: (tx) => tx.projectPage.delete({ where: { id: pageId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

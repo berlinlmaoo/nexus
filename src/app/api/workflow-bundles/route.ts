@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 
 export async function GET() {
@@ -87,9 +88,12 @@ export async function DELETE(req: NextRequest) {
     })
     if (!bundle) return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
 
-    await prisma.workflowBundle.delete({ where: { id } })
-
-    logAudit({ action: "delete", entityType: "workflow_bundle", entityId: id, entityName: bundle.name, userId: session.user.id, request: req })
+    // Kept first, so Control Room → Audit can restore it.
+    await restorableDelete({
+      entityType: "workflow_bundle", entityId: id, entityName: bundle.name, workspaceId: bundle.workspaceId,
+      userId: session.user.id, request: req, meta: { open: null },
+      remove: (tx) => tx.workflowBundle.delete({ where: { id } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

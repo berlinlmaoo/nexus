@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkPnlAccess, parsePnlDate, validAmount } from "@/lib/pnl"
 
 async function gatePayment(userId: string, paymentId: string) {
@@ -68,9 +69,19 @@ export async function DELETE(
     const gate = await gatePayment(session.user.id, paymentId)
     if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    await prisma.pnlIncomePayment.delete({ where: { id: paymentId } })
-
-    logAudit({ action: "delete", entityType: "pnl_payment", entityId: paymentId, userId: session.user.id, request })
+    // Kept first, so Control Room → Audit can restore it (after its income, if that went too).
+    const payment = await prisma.pnlIncomePayment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { amount: true, incomeId: true, income: { select: { title: true, projectId: true, project: { select: { workspaceId: true } } } } },
+    })
+    const projectId = payment.income.projectId
+    await restorableDelete({
+      entityType: "pnl_payment", entityId: paymentId, entityName: `Rp ${payment.amount} · ${payment.income.title}`,
+      workspaceId: payment.income.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId, incomeId: payment.incomeId, amount: payment.amount },
+      meta: { open: { type: "pnl", id: projectId, projectId: projectId }, projectId: projectId },
+      remove: (tx) => tx.pnlIncomePayment.delete({ where: { id: paymentId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
