@@ -341,8 +341,9 @@ struct FormBuilderView: View {
             FormDuplicateView(sourceProjectId: projectId, initialName: name, description: description,
                               fields: fields, isPublic: isPublic, requireAuth: requireAuth, accessSchedule: scheduleJSON)
         }
+        // Only reachable from Manage, which only exists once the form has an id.
         .navigationDestination(isPresented: $showFill) {
-            if let id = currentId { FormFillView(formId: id, title: saved?.name ?? name) }
+            FormFillView(formId: currentId ?? "", title: saved?.name ?? name)
         }
         .alert(alertTitle, isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } }), presenting: alert) { a in
             alertButtons(a)
@@ -713,8 +714,9 @@ struct FormBuilderView: View {
             if let id = currentId {
                 try await APIClient.shared.updateForm(id, payload)
                 baseline = draft
-                NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
+                // Leave first, then tell the lists — never the other way round (see `delete`).
                 dismiss()
+                NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
             } else {
                 payload["projectId"] = projectId
                 let created = try await APIClient.shared.createForm(payload)
@@ -738,8 +740,11 @@ struct FormBuilderView: View {
         defer { deleting = false }
         do {
             try await APIClient.shared.deleteForm(id, force: force)
-            NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
+            // Leave first, then tell the lists: a list that reloaded first would drop the row this
+            // screen was pushed from while it is still on top, and the pop that follows would then
+            // take the screen underneath with it.
             dismiss()
+            NotificationCenter.default.post(name: .nexusFormsChanged, object: nil)
         } catch FormBuilderError.hasSubmissions(let count, _) {
             alert = .forceDelete(submissions: count)
         } catch APIError.unauthorized {
@@ -1274,7 +1279,7 @@ struct FormDuplicateView: View {
                     ForEach(targets) { p in
                         Button { Task { await duplicate(to: p) } } label: {
                             HStack(spacing: 10) {
-                                Text((p.icon.map(isEmojiIcon) ?? false) ? (p.icon ?? "📁") : "📁")
+                                Text(p.emoji)
                                 Text(p.name).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                                 Spacer(minLength: 4)
                                 if busyProjectId == p.id { ProgressView().controlSize(.small) }
@@ -1358,7 +1363,7 @@ struct FormProjectPickerView: View {
                                 FormBuilderView(projectId: p.id, projectName: p.name, formId: nil)
                             } label: {
                                 HStack(spacing: 10) {
-                                    Text((p.icon.map(isEmojiIcon) ?? false) ? (p.icon ?? "📁") : "📁")
+                                    Text(p.emoji)
                                     Text(p.name).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                                 }
                             }
