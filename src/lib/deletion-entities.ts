@@ -154,6 +154,8 @@ export function restoreCountsOf(entityType: string, stored: Record<string, unkno
   ]
   // Projects and tasks keep exactly the counts they always had (plus `items`).
   if (entityType === "project" || entityType === "task") return out
+  // Everywhere else a sheet's cell comments are comments too.
+  out.comments += less("SheetComment")
   for (const [k, n] of extra) if (n > 0) (out as Record<string, number>)[k] = n
   return out
 }
