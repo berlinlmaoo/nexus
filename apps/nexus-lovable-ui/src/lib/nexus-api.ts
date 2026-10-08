@@ -32,6 +32,9 @@ export type VaultItem = {
   /** Always an item URL, never a path. The vault has no client-visible storage layout. */
   url: string | null;
   downloadUrl: string | null;
+  /** `/api/vault/items/<id>/thumb?v=…` for a picture the server can shrink; add `&w=`. Absent from
+   *  servers before 9 Oct 2026, and null for everything that is not such a picture. */
+  thumbUrl?: string | null;
   uploader: VaultPerson | null;
   owner: VaultPerson | null;
   childCount: number;
