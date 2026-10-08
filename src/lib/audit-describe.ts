@@ -718,6 +718,7 @@ const NOUNS: Record<string, string> = {
   pnl_recurring: "recurring expense",
   pnl_expense_attachment: "receipt",
   pnl_budget: "budget",
+  chat_group: "group chat",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { CHAT_MEMBER_SELECT, canManageMembersIn, groupRoomAllowsUser, memberManagerContext } from "@/lib/chat-access"
-import { MANAGER_REQUIRED, MANAGER_REQUIRED_MESSAGE } from "@/lib/chat-rules"
+import { LAST_MEMBER, LAST_MEMBER_MESSAGE, MANAGER_REQUIRED, MANAGER_REQUIRED_MESSAGE } from "@/lib/chat-rules"
 import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
 import { emitConversationMembersRemoved } from "@/lib/socket-emitter"
 
@@ -151,9 +151,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
     if (target !== userId && !manages) return managerRequired()
 
     // A group that loses its last member becomes a room nobody can reach but that still holds every
-    // message ever sent in it. Refuse rather than orphan it.
+    // message ever sent in it. Refuse rather than orphan it — and say what to do instead: the last
+    // member may delete the group (DELETE /api/conversations/:id, restorable; 9 Oct 2026). Clients
+    // recognise the code and offer "Delete group"; older ones show the sentence.
     if (convo.members.length <= 1) {
-      return NextResponse.json({ error: "A group needs at least one member" }, { status: 400 })
+      return NextResponse.json({ error: LAST_MEMBER_MESSAGE, code: LAST_MEMBER }, { status: 400 })
     }
 
     // The removal and its log line ("Bagas removed Mey" / "Mey left") together, or neither.

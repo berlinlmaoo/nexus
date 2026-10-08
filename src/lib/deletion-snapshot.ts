@@ -446,11 +446,16 @@ async function removeKeptFile(kind: string, ref: string): Promise<boolean> {
   }
 }
 
-/** The kept files a copy points at: task attachments, P&L receipts, Vault files. */
+/**
+ * The kept files a copy points at: task attachments, P&L receipts, chat pictures and files (a deleted
+ * group chat, or a deleted project's room — 9 Oct 2026), Vault files.
+ */
 const FILE_REFS_SQL = `
   select 'upload'::text as kind, e->>'url' as ref from jsonb_array_elements(coalesce(s.data->'tables'->'Attachment', '[]'::jsonb)) e
   union all
   select 'upload', e->>'url' from jsonb_array_elements(coalesce(s.data->'tables'->'PnlExpenseAttachment', '[]'::jsonb)) e
+  union all
+  select 'upload', e->>'attachmentUrl' from jsonb_array_elements(coalesce(s.data->'tables'->'Message', '[]'::jsonb)) e
   union all
   select 'vault', e->>'storageKey' from jsonb_array_elements(coalesce(s.data->'tables'->'VaultItem', '[]'::jsonb)) e where e->>'kind' = 'FILE'`
 

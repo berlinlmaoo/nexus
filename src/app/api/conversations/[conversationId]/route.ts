@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { emitConversationUpdated } from "@/lib/socket-emitter"
+import { emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
 import { CHAT_MEMBER_SELECT, canManageMembersOf, conversationAccess } from "@/lib/chat-access"
 import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
-import { parseDescription } from "@/lib/chat-rules"
+import { DELETE_GROUP_MANAGER_MESSAGE, MANAGER_REQUIRED, NOT_A_GROUP, canDeleteGroup, parseDescription } from "@/lib/chat-rules"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 /**
  * One conversation. Adds, for the caller: `mutedUntil` (null when not muted) and `canManageMembers`
@@ -110,6 +111,92 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     return NextResponse.json({ conversation: updated })
   } catch (error) {
     console.error("conversation PATCH error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+/**
+ * Delete a group chat (owner, 9 Oct 2026: "buat opsi untuk hapus group jg dong" — a group "QA" left
+ * with only him in it could be neither left nor deleted).
+ *
+ *   DELETE /api/conversations/:id → 200 { ok: true, conversationId, members, messages }
+ *
+ *   400 { code: "NOT_A_GROUP" }       a DM or a project room (a DM is its two people's, a project room
+ *                                      follows its project).
+ *   403 { code: "MANAGER_REQUIRED" }  neither Manager and above in the room (canManageMembers) nor its
+ *                                      only remaining member (chat-rules canDeleteGroup). GET …/info
+ *                                      says which as `canDelete`.
+ *   403 / 404                         not in the room / no such room (conversationAccess).
+ *
+ * Restorable, like every delete in NEXUS: the audit row first (awaited, entityType "chat_group",
+ * entityName the group's name), then the copy and the delete in one transaction
+ * (deletion-snapshot.ts). The room is the root, so its members and messages go with it and come back
+ * with it from Control Room → Audit. Chat pictures stay on disk for that restore; the 90-day purge
+ * removes the ones nothing points at any more.
+ *
+ * Afterwards every former member gets `conversation-updated` with reason "deleted" (lists drop the
+ * room, an open thread closes with a note) and their sockets leave the room.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const userId = session.user.id
+    const { conversationId } = await params
+
+    const access = await conversationAccess(userId, conversationId)
+    if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
+    const convo = access.convo
+    if (convo.type !== "GROUP") {
+      return NextResponse.json({ error: "Only group chats can be deleted", code: NOT_A_GROUP }, { status: 400 })
+    }
+
+    const [members, messages, canManageMembers] = await Promise.all([
+      prisma.conversationMember.findMany({
+        where: { conversationId },
+        orderBy: { joinedAt: "asc" },
+        select: { userId: true, user: { select: { name: true } } },
+      }),
+      prisma.message.count({ where: { conversationId } }),
+      canManageMembersOf(userId, convo),
+    ])
+    const allowed = canDeleteGroup({ kind: convo.type, canManageMembers, isMember: !!access.member, memberCount: members.length })
+    if (!allowed) return NextResponse.json({ error: DELETE_GROUP_MANAGER_MESSAGE, code: MANAGER_REQUIRED }, { status: 403 })
+
+    // The audit names it as the list does: its name, else (an unnamed group) its first three people.
+    const name = convo.name?.trim()
+      || members.map((m) => m.user.name).filter(Boolean).slice(0, 3).join(", ")
+      || null
+    const memberIds = members.map((m) => m.userId)
+    try {
+      await restorableDelete({
+        entityType: "chat_group",
+        entityId: conversationId,
+        entityName: name,
+        workspaceId: convo.workspaceId,
+        userId,
+        request: req,
+        metadata: { members: members.length, messages },
+        meta: { open: { type: "chat", id: conversationId } },
+        // Held until the copy and the delete commit: a second delete of the same group waits here,
+        // then finds nothing and gets the 404 below.
+        before: async (tx) => {
+          const held = await tx.$queryRawUnsafe<{ id: string }[]>(`select id from "Conversation" where id = $1 for update`, conversationId)
+          if (held.length === 0) throw Object.assign(new Error("conversation gone"), { code: "GONE" })
+        },
+        remove: (tx) => tx.conversation.delete({ where: { id: conversationId } }),
+      })
+    } catch (error) {
+      if ((error as { code?: unknown })?.code === "GONE") return NextResponse.json({ error: "Not found" }, { status: 404 })
+      throw error
+    }
+
+    // Out of the room's socket, and out of every list (the deleter's other tabs and devices too).
+    emitConversationMembersRemoved(conversationId, memberIds)
+    emitConversationUpdated(memberIds, { conversationId, lastMessageAt: null, reason: "deleted" })
+    return NextResponse.json({ ok: true, conversationId, members: members.length, messages })
+  } catch (error) {
+    console.error("conversation DELETE error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

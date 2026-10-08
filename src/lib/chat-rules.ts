@@ -396,6 +396,47 @@ export function canManageGroupMembers(input: {
   return GROUP_MEMBER_MANAGER_ROLES.has(input.callerWorkspaceRole ?? "")
 }
 
+// ── deleting a group (owner, 9 Oct 2026: "buat opsi untuk hapus group jg dong") ─────────────────
+
+/** The 400 `code` of DELETE /api/conversations/:id on a DM or a project room. */
+export const NOT_A_GROUP = "NOT_A_GROUP"
+
+/**
+ * The 400 `code` when the last member of a group tries to leave it (DELETE …/members of yourself).
+ * Leaving would orphan the room with every message in it, so it is refused; clients offer
+ * "Delete group" instead. Until 9 Oct 2026 the refusal had no code and said "A group needs at least
+ * one member".
+ */
+export const LAST_MEMBER = "LAST_MEMBER"
+
+/** The sentence with LAST_MEMBER. Indonesian, like MANAGER_REQUIRED_MESSAGE: older apps show it as it is. */
+export const LAST_MEMBER_MESSAGE = "Kamu anggota terakhir grup ini, jadi tidak bisa keluar. Hapus grupnya saja dari info grup."
+
+/** The 403 sentence when someone below Manager, with others still in the group, tries to delete it. */
+export const DELETE_GROUP_MANAGER_MESSAGE = "Hanya manager ke atas yang bisa menghapus grup."
+
+/**
+ * Whether the caller may delete a room (GET …/info `canDelete`, DELETE /api/conversations/:id):
+ *
+ *   - GROUP only. A DM belongs to its two people and a project room to its project.
+ *   - Whoever may add and remove people in it (canManageGroupMembers: Manager, BoD or One Above All of
+ *     the room's workspace, or a system admin), or
+ *   - its only remaining member — the one person a group can no longer be left by (LAST_MEMBER).
+ *
+ * `isMember`: the caller holds a member row. The routes reach this only through conversationAccess,
+ * which already requires one for a GROUP; it is here so the rule reads whole on its own.
+ */
+export function canDeleteGroup(input: {
+  kind: ConversationKind | string | null | undefined
+  canManageMembers: boolean
+  isMember: boolean
+  memberCount: number
+}): boolean {
+  if (input.kind !== "GROUP" || !input.isMember) return false
+  if (input.canManageMembers) return true
+  return input.memberCount === 1
+}
+
 // ── system messages: "Bagas added Mey" (SYSTEM-MESSAGES contract, owner 8 Oct 2026) ─────────────
 
 /**

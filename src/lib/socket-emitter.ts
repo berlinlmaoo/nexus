@@ -45,8 +45,13 @@ export type ConversationUpdatedPayload = {
   conversationId: string
   /** ISO time of the newest message, or null when the room has none. */
   lastMessageAt: string | null
-  /** Why — additive, for clients that want to tell a new message from a read or a mute elsewhere. */
-  reason?: "message" | "read" | "mute" | "membership"
+  /**
+   * Why — additive, for clients that want to tell a new message from a read or a mute elsewhere.
+   * "deleted" (9 Oct 2026): the group itself is gone (DELETE /api/conversations/:id); sent to every
+   * former member with lastMessageAt null, so lists drop it and an open thread closes. A restore from
+   * Control Room → Audit brings it back with "membership".
+   */
+  reason?: "message" | "read" | "mute" | "membership" | "deleted"
 }
 
 /** `conversation-updated` to each user's own `user:<id>` room (their other tabs and devices). */
