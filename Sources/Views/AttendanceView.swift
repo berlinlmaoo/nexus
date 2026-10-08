@@ -1452,24 +1452,6 @@ enum AttTone {
 
 // MARK: - Crew streak board (month heatmap; web "Crew streak board" grid)
 
-/// Where today's column sits in the board's days scroll area (its midX), reported by the date row.
-private struct CrewTodayMidX: PreferenceKey {
-    static var defaultValue: CGFloat? = nil
-    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
-}
-
-/// The last reported position of today's column. A reference type and deliberately not observable,
-/// so a report on every scroll frame never re-renders the card.
-final class CrewTodayX {
-    var midX: CGFloat?
-}
-
-/// The visible width of the board's days scroll area.
-private struct CrewDaysViewportWidth: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
 /// Today's cell of somebody who is outside the office right now (owner, 8 Oct 2026; the web board
 /// draws the same amber bar). Not colour alone: a walking figure in the corner carries it too, and
 /// VoiceOver reads "Budi, Outside the office since 10:12". Nothing at all when `since` is nil.
@@ -1531,14 +1513,6 @@ struct StreakBoardCard: View {
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
     @State private var monthOffset = 0               // 0 = this month; ◀ ▶ to reach past months
-    /// The period (monthOffset|today) whose board has already been brought to today, and the width of
-    /// the days' scroll area: see `landOnToday`.
-    @State private var landedOn: String?
-    @State private var daysViewportW: CGFloat = 0
-    /// Where today's column was last reported, kept out of SwiftUI's sight (like MorphFrameStore): it
-    /// changes on every scroll frame and must not re-render the card, but the width arriving later must
-    /// be able to look at it.
-    @State private var todayX = CrewTodayX()
     /// Who is outside the office right now is live (owner, 8 Oct 2026): the current period is read
     /// again every minute while the board is on screen and the app is in front, and on coming back.
     @Environment(\.scenePhase) private var scenePhase
@@ -1784,21 +1758,16 @@ struct StreakBoardCard: View {
         await load(silent: true)
     }
 
-    private static let daysSpace = "crewDays"
-
-    /// Brings today's column into view once per period, and keeps at it until it really is there:
-    /// every layout pass reports where today's column sits in the days' scroll area, and while it is
-    /// off-screen the board is scrolled to it again. Once it has been seen, the board is the
-    /// person's to scroll — later reports change nothing until the period (or the day) changes.
-    private func landOnToday(_ midX: CGFloat?, _ proxy: ScrollViewProxy, width: CGFloat) {
-        guard let midX, let t = todayKey, width > 0 else { return }
-        let key = "\(monthOffset)|\(t)"
-        guard landedOn != key else { return }
-        if midX >= 0 && midX <= width {
-            landedOn = key
-            return
-        }
-        DispatchQueue.main.async { proxy.scrollTo("day-\(t)", anchor: .center) }
+    /// Where the days' scroll view opens (see `grid`): today's place along the period, from 0 on its
+    /// first day to 1 on its last. `defaultScrollAnchor` lines that point of the row up with the same
+    /// point of the visible strip, which puts today's column at that fraction of the strip — fully
+    /// inside it on every day of the period, near the left on the 28th and near the right on the
+    /// 27th. Pure arithmetic on what is already known, so it holds on the first frame. A past period
+    /// opens on its first day.
+    private var daysAnchor: UnitPoint {
+        guard let t = todayKey, periodDays.count > 1,
+              let i = periodDays.firstIndex(where: { $0.key == t }) else { return .leading }
+        return UnitPoint(x: CGFloat(i) / CGFloat(periodDays.count - 1), y: 0.5)
     }
 
     /// Tried again as the layout settles: a single call made before the scroll view has its
@@ -1849,25 +1818,15 @@ struct StreakBoardCard: View {
                         cells
                     }
                 }
-                .coordinateSpace(name: Self.daysSpace)
-                .background(GeometryReader { g in Color.clear.preference(key: CrewDaysViewportWidth.self, value: g.size.width) })
-                .onPreferenceChange(CrewDaysViewportWidth.self) { w in
-                    daysViewportW = w
-                    // The column may have reported before the width was known: look again now.
-                    landOnToday(todayX.midX, proxy, width: w)
-                }
-                // Land on today, not on the 28th: the column that matters is the one being filled in.
-                // The timed tries below were not enough on a phone with a full crew (owner, 8 Oct 2026:
-                // "selalu rata kiri"); where today's column really is decides now (`landOnToday`).
-                .onPreferenceChange(CrewTodayMidX.self) { x in
-                    todayX.midX = x
-                    landOnToday(x, proxy, width: daysViewportW)
-                }
-                // A new scroll view starts at the 28th whatever happened to the previous one.
-                .onAppear { landedOn = nil; scrollToToday(proxy) }
-                .onDisappear { landedOn = nil }
-                .onChange(of: members.count) { _, _ in scrollToToday(proxy) }
-                .onChange(of: periodDays.count) { _, _ in scrollToToday(proxy) }
+                // Opens on today, not on the 28th: the column that matters is the one being filled in
+                // (owner, 8 and 9 Oct 2026: "rata kiri", three times). Scrolling there after the fact
+                // — timed tries, then measuring where today's column was — never held on the phone, so
+                // the scroll view now STARTS there: its initial position comes from `daysAnchor`, not
+                // from anything that has to happen after layout. The tries below only centre it.
+                .defaultScrollAnchor(daysAnchor)
+                // One scroll view per period, so another month opens from its own anchor.
+                .id(monthOffset)
+                .onAppear { scrollToToday(proxy) }
             }
             VStack(alignment: .trailing, spacing: gap) {
                 Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
@@ -1891,11 +1850,6 @@ struct StreakBoardCard: View {
                         .background(isToday ? NX.violet : Color.clear, in: Capsule())
                 }
                 .frame(width: cell, height: headerH)
-                .background {
-                    if isToday {
-                        GeometryReader { g in Color.clear.preference(key: CrewTodayMidX.self, value: g.frame(in: .named(Self.daysSpace)).midX) }
-                    }
-                }
                 .id("day-\(pd.key)")
                 // Where the month turns over, so 31 followed by 1 reads as a new
                 // month rather than as a gap.
