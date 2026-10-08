@@ -474,6 +474,18 @@ model Project {
   // Standalone per-project P&L dashboard (transaction-level expenses + income pipeline, BoD-only).
   // Toggled from the Tune drawer; unrelated to the legacy FinanceValue monthly matrix.
   enablePnlDashboard Boolean @default(false)
+  // The legacy Finance tab (FinanceValue monthly OPEX/Revenue matrix) is opt-in per project, exactly
+  // like P&L above (owner, 9 Oct 2026). It used to appear on any project whose NAME contained
+  // "finance". Backfilled true only where FinanceValue rows already existed. Presentational only.
+  financeEnabled Boolean @default(false)
+  // What the project is for (owner, 9 Oct 2026): "TASK" | "FINANCE" | "CONTENT" | "PIPELINE". Every
+  // project before this is TASK, and creation accepts only TASK for now (the rest are "coming soon",
+  // POST /api/projects answers 400 TYPE_COMING_SOON). Rules in src/lib/project-tabs.ts.
+  type String @default("TASK")
+  // Tabs this project hides (owner, 9 Oct 2026), by key — see PROJECT_TAB_KEYS in
+  // src/lib/project-tabs.ts. Hiding never deletes anything. Stored as the HIDDEN set so a tab added
+  // later shows on every existing project by default. Board or List always stays visible.
+  hiddenTabs String[] @default([])
   // Gate: when true, a task in this project can't be moved to DONE until it has ≥1 attachment
   // (finance proof-of-completion). Enforced in the task PATCH; toggled from the Tune drawer.
   requireAttachmentForDone Boolean @default(false)
