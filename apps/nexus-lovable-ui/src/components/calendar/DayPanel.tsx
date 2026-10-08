@@ -8,14 +8,20 @@ import type { CalIndex, CalItem, CalScope, DayTree, PersonRow, TreeNode } from "
 import { dayDiff } from "@/lib/calendar/core";
 import { SLATE } from "@/lib/calendar/tone";
 import {
-  CAPS, Face, FOCUS_PILL, FOCUS_ROW, fmtDay, Heading, ItemRow, TOUCH_ICON, TOUCH_ROW, unitVars, UnitMark, useCollapsed,
-  viewerFirst, YouTag, type PeopleLookup,
+  CAPS, Face, FOCUS_PILL, FOCUS_ROW, fmtDay, Heading, ItemRow, scrollerOf, stickyRoom, TOUCH_ICON, TOUCH_ROW, unitVars, UnitMark,
+  useCollapsed, viewerFirst, YouTag, type PeopleLookup,
 } from "./bits";
 
 export type Lens = "division" | "person";
 
 /** The header stops sticking once it is taller than this share of the screen (large text, a phone on its side). */
 const STICKY_MAX = 0.25;
+/**
+ * Card and group headings stop at h5, so a person (one level under their card) is always an h6 at most
+ * and never lands on the same level as the card itself, however deep the Bagan goes.
+ */
+const UNIT_LEVEL_MAX = 5;
+const subLevel = (level: number) => Math.min(level + 1, UNIT_LEVEL_MAX);
 
 /**
  * The day under the grid (phone) or beside it (desktop): who has what that day, grouped exactly like the
@@ -24,7 +30,7 @@ const STICKY_MAX = 0.25;
  * cards are marked "You".
  *
  * Headings follow the same tree under the day's h2: a card is an h3, a sub-card or group one level
- * deeper, a person one level under their card, so a screen reader can skim the day by heading.
+ * deeper (h5 at most), a person one level under their card, so a screen reader can skim the day by heading.
  * `scope` + `onShowEveryone` (optional) let an empty day say that Show is narrowed to the viewer.
  */
 export const DayPanel = memo(function DayPanel({
@@ -50,12 +56,24 @@ export const DayPanel = memo(function DayPanel({
   // The header sticks only while it is short. At a 200% text size it grew to 45% of a phone screen and
   // covered the very tasks being read; then (or on a phone on its side) it scrolls away with the day.
   // Measured against the layout viewport, which a phone's toolbar does not resize mid-scroll.
+  // While it sticks, the scroller under it (the side panel, or the page below the grid) keeps room for it
+  // at its top: Shift+Tab up a long day never leaves the focused row under the header (WCAG 2.4.11).
+  const sectionRef = useRef<HTMLElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
   useLayoutEffect(() => {
     const el = headRef.current;
-    if (!el) return;
-    const check = () => setPinned(el.offsetHeight <= (document.documentElement.clientHeight || window.innerHeight) * STICKY_MAX);
+    const section = sectionRef.current;
+    if (!el || !section) return;
+    const room = stickyRoom();
+    const check = () => {
+      const sticks = el.offsetHeight <= (document.documentElement.clientHeight || window.innerHeight) * STICKY_MAX;
+      setPinned(sticks);
+      // On the page it sticks under the page header while that sticks (--cal-sticky-top); in the side panel at its top.
+      const scroller = scrollerOf(section);
+      const below = scroller === document.documentElement ? parseFloat(getComputedStyle(el).getPropertyValue("--cal-sticky-top")) || 0 : 0;
+      room.set(scroller, sticks ? below + el.offsetHeight + 8 : null);
+    };
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
@@ -63,6 +81,7 @@ export const DayPanel = memo(function DayPanel({
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", check);
+      room.release();
     };
   }, []);
 
@@ -99,7 +118,7 @@ export const DayPanel = memo(function DayPanel({
       };
 
   return (
-    <section aria-label={t("Day")} className="flex min-h-0 flex-col">
+    <section ref={sectionRef} aria-label={t("Day")} className="flex min-h-0 flex-col">
       {/* Header: stays in reach while the day scrolls, as long as it is short. Beside the grid it sticks to
           the top of the panel; under the grid it sticks below the page header (--cal-sticky-top, set by
           the page when that header is sticky). Solid card: a blur behind 95% opacity cost a filter pass
@@ -132,7 +151,7 @@ export const DayPanel = memo(function DayPanel({
         />
       </div>
 
-      <div className="space-y-3 px-[12px] py-3">
+      <div data-cal-under-sticky="" className="space-y-3 px-[12px] py-3">
         {/* Overdue rail (today only) */}
         {day === today && rail.length > 0 && (
           <div className="rounded-xl border border-cal-overdue/25 bg-cal-overdue/[0.05] p-[6px] dark:bg-cal-overdue/[0.07]">
@@ -251,7 +270,7 @@ function NodeBody({ node, own, lens, level, common }: { node: TreeNode; own?: bo
             {node.loose.map((i) => <ItemRow key={i.key} item={i} unitId={node.unit.id} {...common} showPeople={false} />)}
           </>
         )}
-      {!own && node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={level + 1} common={common} />)}
+      {!own && node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={subLevel(level)} common={common} />)}
     </>
   );
 }
@@ -264,7 +283,7 @@ function SubNode({ node, lens, level, common }: { node: TreeNode; lens: Lens; le
         <Heading level={level} className={cn("px-[6px] pb-0.5 [overflow-wrap:anywhere]", CAPS, SLATE.text)}>
           {node.unit.name}<span aria-hidden> · {node.count}</span><span className="sr-only">, </span><SrCount n={node.count} />
         </Heading>
-        {node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={level + 1} common={common} />)}
+        {node.children.map((k) => <SubNode key={k.unit.id} node={k} lens={lens} level={subLevel(level)} common={common} />)}
       </div>
     );
   }

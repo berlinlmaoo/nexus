@@ -271,6 +271,20 @@ export function dayCell(day: string, items: CalItem[], ix: CalIndex, focusId: st
   }
 }
 
+/**
+ * The day cell as the web grid draws it: DayCell (the shape the golden files and the iOS / Android ports
+ * share, unchanged) plus how many of its tasks are still to do, so the cell can say in words what its
+ * filled dots and ticks show (owner rule 10.31).
+ */
+export type MonthCell = DayCell & {
+  /** Unique tasks that day still to do (not done, in a project with a status). */
+  open: number
+}
+
+export function monthCell(day: string, items: CalItem[], ix: CalIndex, focusId: string, today: string, nowMs: number, windowDays: number): MonthCell {
+  return { ...dayCell(day, items, ix, focusId, today, nowMs, windowDays), open: items.filter(isOpen).length }
+}
+
 export type LegendEntry = { unitId: string; count: number }
 
 /** One chip per unit at the focus level with tasks in `items` (unique count), in Bagan order. */

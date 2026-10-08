@@ -1,4 +1,4 @@
-import { memo, useId, useMemo } from "react";
+import { memo, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { ChevronDown, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -18,10 +18,18 @@ import {
 const COLS = "grid grid-cols-[minmax(170px,clamp(220px,24%,320px))_repeat(7,minmax(0,1fr))]";
 /** The header row's tint, made opaque so rows scrolling under it (and under the name column) stay hidden. */
 const HEAD_BG = "bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))]";
+/**
+ * How many steps a row sits under the focus card. Cards (and "Not in the chart yet") stop at 2 steps, so
+ * their headings stop at h5; a person or "Tasks without a person" row is always exactly one step under
+ * its own card (h6 at most). Before, both stopped at the same depth, and at the deepest Bagan levels a
+ * person was announced and indented at the same level as their card.
+ */
+const UNIT_STEPS_MAX = 2;
+const steps = (r: WeekRow) => (r.kind === "unit" || r.kind === "unplaced" ? Math.min(r.depth, UNIT_STEPS_MAX) : Math.min(r.depth - 1, UNIT_STEPS_MAX) + 1);
 /** Indent per Bagan level, capped: deep rows lost up to 68px of the name column to it. */
-const indent = (depth: number, step: number) => Math.min(depth, 3) * step;
-/** Headings under the view's h2: the focus card is an h3, each level below one deeper (h6 at most). */
-const levelOf = (depth: number) => 3 + Math.min(depth, 3);
+const indent = (r: WeekRow, step: number) => steps(r) * step;
+/** Headings under the view's h2: the focus card is an h3, each level below one deeper. */
+const levelOf = (r: WeekRow) => 3 + steps(r);
 
 /**
  * "People": one week, a row per person under their Bagan card (Bagan order, the viewer first in each
@@ -43,6 +51,28 @@ export const PeopleWeek = memo(function PeopleWeek({
   const headId = useId();
   const [collapsed, toggle] = useCollapsed();
   const ordered = useMemo(() => viewerFirstRows(rows, meId), [rows, meId]);
+  // The table's sticky day row and name column, measured onto its scroller (no re-render): a control the
+  // keyboard brings into view stays clear of both (WCAG 2.4.11). The row's room only counts while a task
+  // row has focus (styles.css); the column's is a plain scroll-padding-left.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const headRowRef = useRef<HTMLDivElement>(null);
+  const nameHeadRef = useRef<HTMLDivElement>(null);
+  const table = !compact && rows.length > 0;
+  useLayoutEffect(() => {
+    const box = scrollerRef.current;
+    const row = headRowRef.current;
+    const name = nameHeadRef.current;
+    if (!table || !box || !row || !name) return;
+    const set = () => {
+      box.style.setProperty("--cal-sticky-room", `${row.offsetHeight + 4}px`);
+      box.style.setProperty("--cal-week-name-w", `${name.offsetWidth}px`);
+    };
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(row);
+    ro.observe(name);
+    return () => ro.disconnect();
+  }, [table]);
   const range = days.length === 7
     ? `${fmtDay(days[0], { day: "numeric", month: "short" }, locale)} – ${fmtDay(days[6], { day: "numeric", month: "short", year: "numeric" }, locale)}`
     : "";
@@ -75,7 +105,8 @@ export const PeopleWeek = memo(function PeopleWeek({
       if (key && collapsed.has(key)) foldedAt = r.depth;
     }
     return (
-      <div className="space-y-2">
+      // Its controls keep clear of the page's sticky week bar (CalendarPage) when the keyboard reaches them.
+      <div data-cal-under-sticky="" className="space-y-2">
         <h2 id={headId} tabIndex={-1} className="sr-only">{range}</h2>
         {shown.map((r) => {
           const key = foldKey(r);
@@ -87,7 +118,7 @@ export const PeopleWeek = memo(function PeopleWeek({
               : <>{r.unit.name}<span aria-hidden> · {r.count}</span><span className="sr-only">, {tn(r.count, "{n} task", "{n} tasks")}</span></>;
             const cls = cn("flex min-h-8 w-full items-center gap-1.5 rounded-lg px-[4px] pb-1 pt-2 text-left", CAPS, r.kind === "unplaced" ? "text-muted-foreground" : SLATE.text);
             return (
-              <Heading key={rowKey(r)} level={levelOf(r.depth)} style={{ marginLeft: indent(r.depth, 10) }}>
+              <Heading key={rowKey(r)} level={levelOf(r)} style={{ marginLeft: indent(r, 10) }}>
                 {key ? (
                   <button type="button" aria-expanded={!closed} onClick={() => toggle(key)} className={cn(cls, TOUCH_ROW, FOCUS_ROW)}>
                     <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
@@ -112,7 +143,7 @@ export const PeopleWeek = memo(function PeopleWeek({
             );
             const card = "flex w-full items-center gap-2 rounded-xl border-l-[3px] border-[var(--c)] bg-card px-[10px] py-2 text-left shadow-soft dark:border-[var(--cd)]";
             return (
-              <Heading key={rowKey(r)} level={levelOf(r.depth)} style={{ ...unitVars(u), marginLeft: indent(r.depth, 10) }}>
+              <Heading key={rowKey(r)} level={levelOf(r)} style={{ ...unitVars(u), marginLeft: indent(r, 10) }}>
                 {/* The focus card frames the whole list and does not fold; every card under it does. */}
                 {!key ? <div className={card}>{head}<span aria-hidden className="h-4 w-4 shrink-0" /></div> : (
                   <button type="button" aria-expanded={!closed} onClick={() => toggle(key)} className={cn(card, "hover:bg-muted/50", TOUCH_ROW, FOCUS_ROW)}>
@@ -127,12 +158,12 @@ export const PeopleWeek = memo(function PeopleWeek({
           const p = r.kind === "person" ? people(r.userId) : null;
           const isViewer = r.kind === "person" && !!meId && r.userId === meId;
           return (
-            <div key={rowKey(r)} style={{ marginLeft: indent(r.depth, 10) }} className="rounded-xl border border-border bg-card px-[10px] py-2">
+            <div key={rowKey(r)} style={{ marginLeft: indent(r, 10) }} className="rounded-xl border border-border bg-card px-[10px] py-2">
               {/* With a large text size the week strip and count drop under the name instead of squeezing it. */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <div className="flex min-w-[9rem] flex-1 items-center gap-2">
                   {p ? <Face name={p.name} avatar={p.avatar} size={24} /> : null}
-                  <Heading level={levelOf(r.depth)} className={cn("flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm", p ? "font-semibold" : "italic text-muted-foreground")}>
+                  <Heading level={levelOf(r)} className={cn("flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm", p ? "font-semibold" : "italic text-muted-foreground")}>
                     <span className="min-w-0 [overflow-wrap:anywhere]">{p ? p.name : t("Tasks without a person")}</span>
                     {isViewer && <YouTag />}
                   </Heading>
@@ -169,11 +200,11 @@ export const PeopleWeek = memo(function PeopleWeek({
   // Its height leaves room for the page header while that sticks (--cal-sticky-top, set by the page)
   // and for the page padding.
   return (
-    <div className="max-h-[max(20rem,calc(100dvh-var(--cal-sticky-top,6.5rem)-3rem))] overflow-auto rounded-2xl border border-border bg-card shadow-soft">
+    <div ref={scrollerRef} data-cal-sticky-room="" className="max-h-[max(20rem,calc(100dvh-var(--cal-sticky-top,6.5rem)-3rem))] scroll-pl-[calc(var(--cal-week-name-w,0px)+4px)] overflow-auto rounded-2xl border border-border bg-card shadow-soft">
       <h2 id={headId} tabIndex={-1} className="sr-only">{range}</h2>
       <div role="table" aria-labelledby={headId} className="min-w-[760px]">
-        <div role="row" className={cn(COLS, "sticky top-0 z-[2] border-b border-border", HEAD_BG)}>
-          <div role="columnheader" className={cn("sticky left-0 z-[1] px-3 py-2 text-muted-foreground", CAPS, HEAD_BG)}>{t("Person")}</div>
+        <div ref={headRowRef} role="row" className={cn(COLS, "sticky top-0 z-[2] border-b border-border", HEAD_BG)}>
+          <div ref={nameHeadRef} role="columnheader" className={cn("sticky left-0 z-[1] px-3 py-2 text-muted-foreground", CAPS, HEAD_BG)}>{t("Person")}</div>
           {days.map((d, i) => (
             <div key={d} role="columnheader" aria-current={d === today ? "date" : undefined} className="flex min-w-0">
               <button type="button" onClick={() => onOpenDay(d)}
@@ -200,7 +231,7 @@ export const PeopleWeek = memo(function PeopleWeek({
             return (
               <div key={rowKey(r)} role="row" style={unitVars(u)} className={cn(COLS, "border-b border-border/70", u.kind === "GROUP" ? "bg-cal-accent-soft/40 dark:bg-cal-accent-soft/30" : "bg-muted/25")}>
                 <div role="rowheader" aria-colspan={8} className="col-span-8 py-1.5">
-                  <Heading level={levelOf(r.depth)} className="sticky left-0 flex w-max max-w-full items-center gap-2 pr-3" style={{ paddingLeft: 12 + indent(r.depth, 14) }}>
+                  <Heading level={levelOf(r)} className="sticky left-0 flex w-max max-w-full items-center gap-2 pr-3" style={{ paddingLeft: 12 + indent(r, 14) }}>
                     {u.kind === "GROUP" ? null : <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-[var(--c)] dark:bg-[var(--cd)]" />}
                     <span className={cn("min-w-0 [overflow-wrap:anywhere]", CAPS, u.kind === "GROUP" && SLATE.text)}>{u.name}</span>
                     <span aria-hidden className="text-2xs font-semibold tabular-nums text-muted-foreground">{r.count}</span>
@@ -213,8 +244,8 @@ export const PeopleWeek = memo(function PeopleWeek({
           const p = r.kind === "person" ? people(r.userId) : null;
           const isViewer = r.kind === "person" && !!meId && r.userId === meId;
           return (
-            <div key={rowKey(r)} role="row" className={cn(COLS, "border-b border-border/60 last:border-b-0")}>
-              <div role="rowheader" className="sticky left-0 z-[1] flex min-w-0 items-center gap-2 bg-card py-1.5 pr-2" style={{ paddingLeft: 12 + indent(r.depth, 14) }}>
+            <div key={rowKey(r)} role="row" data-cal-under-sticky="" className={cn(COLS, "border-b border-border/60 last:border-b-0")}>
+              <div role="rowheader" className="sticky left-0 z-[1] flex min-w-0 items-center gap-2 bg-card py-1.5 pr-2" style={{ paddingLeft: 12 + indent(r, 14) }}>
                 {p ? <Face name={p.name} avatar={p.avatar} size={22} /> : null}
                 <span title={p?.name} className={cn("line-clamp-2 min-w-0 text-sm [overflow-wrap:anywhere]", p ? "font-semibold" : "italic text-muted-foreground")}>{p ? p.name : t("Tasks without a person")}</span>
                 {isViewer && <YouTag />}

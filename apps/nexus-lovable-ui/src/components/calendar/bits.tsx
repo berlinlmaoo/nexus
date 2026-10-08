@@ -129,6 +129,41 @@ export function Heading({ level, className, style, children }: { level: number; 
   return <Tag className={className} style={style}>{children}</Tag>;
 }
 
+// ── What sticks over a scroller ────────────────────────────────────────────────────────────────────
+
+/** The element that scrolls `el`: its nearest ancestor that scrolls on its own, else the page. */
+export function scrollerOf(el: HTMLElement): HTMLElement {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY;
+    if (y === "auto" || y === "scroll") return p;
+  }
+  return document.documentElement;
+}
+
+/**
+ * Room at the top of a scroller for a bar that sticks there (`--cal-sticky-room` + data-cal-sticky-room,
+ * written straight onto the scroller, no re-render). While a control inside [data-cal-under-sticky] has
+ * focus, styles.css turns it into the scroller's scroll-padding-top, so the keyboard never leaves that
+ * control under the bar (WCAG 2.4.11). `set(scroller, px)` (null = no room); `release()` takes it off
+ * again, also when `set` moves to another scroller.
+ */
+export function stickyRoom() {
+  let target: HTMLElement | null = null;
+  const release = () => {
+    target?.removeAttribute("data-cal-sticky-room");
+    target?.style.removeProperty("--cal-sticky-room");
+    target = null;
+  };
+  const set = (scroller: HTMLElement, px: number | null) => {
+    if (px === null || scroller !== target) release();
+    if (px === null) return;
+    target = scroller;
+    scroller.setAttribute("data-cal-sticky-room", "");
+    scroller.style.setProperty("--cal-sticky-room", `${Math.round(px)}px`);
+  };
+  return { set, release };
+}
+
 const COLLAPSE_KEY = "nexus.calendar.collapsed";
 function readCollapsed(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "[]") as string[]); } catch { return new Set(); }

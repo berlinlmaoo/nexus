@@ -140,7 +140,7 @@ export function FilterPanel({ filters, onChange, onReset, onDone, ix, items, peo
           1rem of side padding (hence -mx-4); the popover also pads its bottom by 1rem, which a sticky box
           stops short of, so there it sticks 1rem lower. The drawer's surface is the page background.
           Reset clears the filters only: Show is a view and stays as it is (the page's reset keeps it). */}
-      <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border bg-popover px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 [[data-radix-popper-content-wrapper]_&]:-bottom-4 [[data-vaul-drawer]_&]:bg-background">
+      <div data-cal-sticky-foot="" className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border bg-popover px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 [[data-radix-popper-content-wrapper]_&]:-bottom-4 [[data-vaul-drawer]_&]:bg-background">
         <button type="button" onClick={onReset} className={cn("min-h-9 flex-1 rounded-xl border border-border py-2 text-sm font-semibold hover:bg-muted", TOUCH_ROW, FOCUS_PILL)}>{t("Reset filters")}</button>
         {onDone && (
           <button type="button" onClick={onDone} className={cn("min-h-9 flex-1 rounded-xl bg-cal-accent py-2 text-sm font-semibold text-cal-accent-foreground hover:bg-cal-accent/90", TOUCH_ROW, FOCUS_PILL)}>{t("Done")}</button>
@@ -191,8 +191,9 @@ function CheckBox({ on }: { on: boolean }) {
 
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
-    // The box shows the focus, so the bare input inside can drop its own outline.
-    <label className="flex items-center gap-2 rounded-xl border border-border bg-background px-2.5 py-1.5 transition-colors focus-within:border-cal-accent focus-within:ring-2 focus-within:ring-cal-accent/20">
+    // The box shows the focus, so the bare input inside can drop its own outline. The whole box is the
+    // input's label: a tap anywhere in it (44px tall on a touch screen) puts the caret in the field.
+    <label className={cn("flex items-center gap-2 rounded-xl border border-border bg-background px-2.5 py-1.5 transition-colors focus-within:border-cal-accent focus-within:ring-2 focus-within:ring-cal-accent/20", TOUCH_ROW)}>
       <Search aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
       {/* 16px on phones: iOS zooms into any smaller field on focus. */}
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder}

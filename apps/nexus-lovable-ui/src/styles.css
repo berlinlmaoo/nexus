@@ -200,6 +200,23 @@
 [data-cal-root],
 [data-cal-surface] {
   --ring: var(--cal-accent);
+  /* A primary action of the Calendar (the shared EmptyAction) is its navy too, not the app's black. */
+  --action: var(--cal-accent);
+  --action-foreground: var(--cal-accent-foreground);
+}
+
+/* Keyboard focus is never left under what sticks over the Calendar (WCAG 2.4.11). While a control under a
+   sticky bar has focus, its scroller keeps the bar's room clear (scroll-padding, measured and set by the
+   components), so the keyboard brings the control into view next to the bar instead of under it: the day
+   panel's header, the phone People list's week bar, the People table's day row, the filters' Reset / Done
+   footer. Only then: with focus on the bar itself, the padding would make the browser scroll back to the
+   bar's place in the flow. Not scroll-margin on the controls: Chrome ignores it for a control that is
+   already on screen, even when it is fully under the bar. */
+[data-cal-sticky-room]:has([data-cal-under-sticky] :focus) {
+  scroll-padding-top: var(--cal-sticky-room);
+}
+[data-cal-foot-room]:has(:focus):not(:has([data-cal-sticky-foot] :focus)) {
+  scroll-padding-bottom: var(--cal-foot-room);
 }
 
 /* Overlays under "reduce motion": tooltips, popovers, dialogs and sheets fade, but no longer zoom or
@@ -457,4 +474,10 @@
   box-shadow:
     0 -12px 50px -12px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+/* The phone's floating tab bar (MobileTabBar, md:hidden) covers the bottom of every page: a control
+   reached by Tab is scrolled clear of it instead of landing underneath (WCAG 2.2 SC 2.4.11). */
+@media (max-width: 767.98px) {
+  html { scroll-padding-bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 5rem); }
 }

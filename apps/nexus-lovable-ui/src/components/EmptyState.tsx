@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,9 +44,17 @@ export function EmptyState({
   );
 }
 
-/** The button most empty states carry: same look as the page's primary action. */
+/**
+ * The button most empty states carry: same look as the page's primary action. Its colour is the
+ * `--action` token where a screen sets one (the Calendar: its navy, see styles.css), else the app's
+ * primary. `to` moves within the app through the router, without reloading it. At least 44px tall on a
+ * touch screen.
+ */
 export function EmptyAction({ onClick, children, to }: { onClick?: () => void; children: ReactNode; to?: string }) {
-  const cls = "inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98]";
-  if (to) return <a href={to} className={cls}>{children}</a>;
+  const cls = cn(
+    "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold shadow-soft transition-all active:scale-[0.98] pointer-coarse:min-h-[44px]",
+    "bg-[color:var(--action,var(--primary))] text-[color:var(--action-foreground,var(--primary-foreground))] hover:bg-[color:var(--action,var(--primary))]/90",
+  );
+  if (to) return <Link to={to} className={cls}>{children}</Link>;
   return <button type="button" onClick={onClick} className={cls}>{children}</button>;
 }
