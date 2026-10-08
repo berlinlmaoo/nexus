@@ -47,6 +47,7 @@ class UiPreviewActivity : ComponentActivity() {
                         "account" -> AccountScreen(onBack = {})
                         "nav8" -> Nav8Preview()
                         "restore" -> RestorePreview()
+                        "restore-kinds" -> RestorePreview(kindsOnly = true)
                         // Offboarding (8 Oct): the dialog never submits here (submit throws, nothing is posted).
                         "offboard" -> id.znetworks.nexus.feature.admin.OffboardDialog("Rina Saputri", "2025-02-03T02:00:00.000Z", onDismiss = {}, onOpenChart = {}, onDone = {}) { _, _, _ -> error("preview") }
                         "reinstate" -> id.znetworks.nexus.feature.admin.ReinstateDialog(id.znetworks.nexus.feature.admin.AdminUserRow("a", "Rina Saputri", deactivatedAt = "2026-10-08T09:00:00Z",
@@ -212,7 +213,7 @@ private fun Nav8Preview() {
 
 /** 8 Oct: Restore in Control Room › Audit — pills, the card before and after, the error, the too-old note. Nothing is posted. */
 @androidx.compose.runtime.Composable
-private fun RestorePreview() {
+private fun RestorePreview(kindsOnly: Boolean = false) {
     val e = id.znetworks.nexus.feature.admin.AuditEntry("a1", action = "delete", entityType = "project", entityId = "p1", entityName = "Rindu Alam Papua")
     val counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts(lists = 7, tasks = 226, files = 155)
     val open = id.znetworks.nexus.feature.admin.AuditRestoreDetail(available = true, dataAsOf = "2026-10-07T19:00:00Z", fromBackup = true, counts = counts)
@@ -221,6 +222,7 @@ private fun RestorePreview() {
     val task = e.copy(entityType = "task", entityName = "Brief konten")
     androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+        if (!kindsOnly) {
         androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
             id.znetworks.nexus.feature.admin.RestorePill(true); id.znetworks.nexus.feature.admin.RestorePill(false)
         }
@@ -229,6 +231,7 @@ private fun RestorePreview() {
             restoring = true, error = androidx.compose.ui.res.stringResource(id.znetworks.nexus.R.string.au_err_parent_missing), onRestore = {}, onOpenTarget = {})
         id.znetworks.nexus.feature.admin.RestoreCard(e, done, null, restoring = false, error = null, onRestore = {}, onOpenTarget = {})
         id.znetworks.nexus.feature.admin.RestoreCard(task, open, id.znetworks.nexus.feature.admin.AuditRestoreResult(true, "task", "t1"), restoring = false, error = null, onRestore = {}, onOpenTarget = {})
+        }
         // Other kinds (RESTORE-ALL-TYPES): a sheet's rows, a soft-deleted post, a purged Vault folder just restored.
         id.znetworks.nexus.feature.admin.RestoreCard(e.copy(entityType = "sheet_rows", entityName = "Budget Q4"), open.copy(fromBackup = false, counts = id.znetworks.nexus.feature.admin.AuditRestoreCounts(rows = 3, comments = 1)),
             null, restoring = false, error = null, onRestore = {}, onOpenTarget = {})
