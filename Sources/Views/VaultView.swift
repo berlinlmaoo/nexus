@@ -1284,14 +1284,11 @@ private struct VaultModifierClicks: ViewModifier {
     let command: () -> Void
     let shift: () -> Void
 
-    @ViewBuilder func body(content: Content) -> some View {
-        if enabled {
-            content
-                .highPriorityGesture(TapGesture().modifiers(.command).onEnded { command() })
-                .highPriorityGesture(TapGesture().modifiers(.shift).onEnded { shift() })
-        } else {
-            content
-        }
+    // Gesture.modifiers(_:) exists on macOS only — the Mac app is Catalyst, built as iOS — so the
+    // build failed (9 Oct 2026). Until a modifier-aware click lands, selecting several items goes through
+    // Select mode on every device; the call sites keep this modifier so that change stays local.
+    func body(content: Content) -> some View {
+        content
     }
 }
 
