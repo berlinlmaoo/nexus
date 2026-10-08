@@ -30,7 +30,7 @@ data class Headline(
 @Serializable
 data class RosterRow(val userId: String, val name: String? = null, val email: String? = null, val avatar: String? = null, val role: String? = null,
                      val teams: List<TeamRef> = emptyList(), val headline: Headline = Headline(), val previous: Headline? = null,
-                     val flags: Flags = Flags(), val flagCount: Int = 0)
+                     val flags: Flags = Flags(), val flagCount: Int = 0, val leftAt: String? = null)
 
 @Serializable
 data class ReportRoster(val scope: String? = null, val period: ReportPeriod? = null, val previousPeriod: ReportPeriod? = null,
@@ -53,7 +53,9 @@ data class Work(val assigned: Int = 0, val completed: Int = 0, val overdueNow: I
 data class XpBlock(val periodScore: Int = 0, val level: Level? = null, val streak: StreakInfo? = null, val penalties: List<Penalty> = emptyList(), val penaltyTotal: Int = 0)
 
 @Serializable
-data class PersonRef(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null, val isSelf: Boolean = false)
+data class PersonRef(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null, val isSelf: Boolean = false,
+                     /** Left the workspace (offboarding, 8 Oct): last working day. */
+                     val leftAt: String? = null)
 
 @Serializable
 data class PersonReport(val person: PersonRef = PersonRef(), val period: ReportPeriod? = null, val previousPeriod: ReportPeriod? = null,

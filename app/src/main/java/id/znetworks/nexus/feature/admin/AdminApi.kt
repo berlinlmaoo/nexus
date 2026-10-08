@@ -108,6 +108,17 @@ class AdminApi(private val api: ApiClient) {
 
     suspend fun updateAccount(userId: String, fields: Map<String, JsonElement>) = send("PATCH", "/api/admin/users/$userId", JsonObject(fields))
 
+    /** Control Room user management (BoD/OAA/admin); non-members include offboarded people. */
+    suspend fun adminUsers(page: Int, membershipFilter: String = "non-members") =
+        api.get("/api/admin/users?membershipFilter=$membershipFilter&pageSize=50&page=$page", AdminUsersPage.serializer())
+
+    suspend fun offboard(userId: String, lastWorkingDay: String, reason: String, note: String?) =
+        api.send(Request.Builder().url(api.url("/api/admin/users/${enc(userId)}/offboard")).post(buildJsonObject {
+            put("lastWorkingDay", lastWorkingDay); put("reason", reason); note?.let { put("note", it) }
+        }.toString().toJsonBody()).build(), OffboardResult.serializer())
+
+    suspend fun reinstate(userId: String) = send("POST", "/api/admin/users/${enc(userId)}/reinstate", JsonObject(emptyMap()))
+
     suspend fun deleteUser(userId: String) = api.send(Request.Builder().url(api.url("/api/admin/users/$userId")).delete().build(), JsonObject.serializer())
 
     suspend fun send(method: String, path: String, body: JsonObject): JsonObject =

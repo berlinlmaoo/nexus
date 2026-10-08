@@ -77,7 +77,11 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(password = "") }
             } catch (e: ApiError) {
                 // Wrong credentials: the body only says "CredentialsSignin", no sentence for a person.
-                _state.update { it.copy(error = if (e is ApiError.Http && e.status == 401) res.getString(R.string.login_failed) else e.describe(res)) }
+                _state.update { it.copy(error = when {
+                    LoginErrors.deactivated(e) -> res.getString(R.string.off_deactivated)
+                    e is ApiError.Http && e.status == 401 -> res.getString(R.string.login_failed)
+                    else -> e.describe(res)
+                }) }
             }
         }
     }
@@ -90,7 +94,11 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: NoPasskey) {
             _state.update { it.copy(error = res.getString(R.string.passkey_none)) }
         } catch (e: ApiError) {
-            _state.update { it.copy(error = if (e is ApiError.Http && e.status == 401) res.getString(R.string.passkey_failed) else e.describe(res)) }
+            _state.update { it.copy(error = when {
+                LoginErrors.deactivated(e) -> res.getString(R.string.off_deactivated)
+                e is ApiError.Http && e.status == 401 -> res.getString(R.string.passkey_failed)
+                else -> e.describe(res)
+            }) }
         } catch (e: Exception) {
             _state.update { it.copy(error = res.getString(R.string.passkey_failed)) }
         }
@@ -194,3 +202,15 @@ class LoginViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
+
+/** Sign-in answers that need their own sentence. */
+object LoginErrors {
+    /** An offboarded account (Berlin, 8 Oct): 401 `{ error: "AccountDeactivated" }` from app-login and passkey verify. */
+    fun deactivated(e: Throwable): Boolean {
+        val h = e as? ApiError.Http ?: return false
+        if (h.status != 401) return false
+        val err = (h.body?.get("error") as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        return err == "AccountDeactivated" || h.code == "ACCOUNT_DEACTIVATED"
+    }
+}
+

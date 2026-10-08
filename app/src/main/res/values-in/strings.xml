@@ -2034,4 +2034,61 @@
     <plurals name="au_n_members">
         <item quantity="other">%d anggota</item>
     </plurals>
+    <!-- Offboarding (Berlin, 8 Oct; web id-offboard.ts / id-former.ts) -->
+    <string name="off_left">Keluar</string>
+    <string name="off_left_on">Keluar · %1$s</string>
+    <string name="off_left_desc">Sudah keluar — hari kerja terakhir %1$s</string>
+    <string name="off_left_section">Sudah keluar · %1$d</string>
+    <string name="off_offboard">Offboard</string>
+    <string name="off_offboard_name">Offboard %1$s</string>
+    <string name="off_offboard_name_more">Offboard %1$s…</string>
+    <string name="off_offboarding">Memproses…</string>
+    <string name="off_reinstate">Aktifkan ulang</string>
+    <string name="off_intro">Untuk orang yang resign, habis kontrak, atau diberhentikan. Riwayatnya tetap ada.</string>
+    <string name="off_last_day">Hari kerja terakhir</string>
+    <string name="off_reason">Alasan</string>
+    <string name="off_r_resigned">Resign</string>
+    <string name="off_r_contract">Kontrak habis</string>
+    <string name="off_r_dismissed">Diberhentikan</string>
+    <string name="off_r_other">Lainnya</string>
+    <string name="off_note">Catatan (opsional)</string>
+    <string name="off_what_happens">Yang terjadi</string>
+    <string name="off_h1">Tidak bisa masuk lagi, di perangkat mana pun.</string>
+    <string name="off_h2">Dikeluarkan dari proyek, tim, dan chat.</string>
+    <string name="off_h3">Absensi, pengajuan, proyek, tugas, dan pesannya tetap ada.</string>
+    <string name="off_h4">Tugas yang belum selesai tetap atas namanya.</string>
+    <string name="off_h5">Yang approver-nya dia kembali ke BoD sebagai jaring pengaman.</string>
+    <string name="off_done_title">%1$s sudah di-offboard.</string>
+    <string name="off_done_last">Hari kerja terakhir: %1$s</string>
+    <string name="off_done">Selesai</string>
+    <string name="off_pending">Pengajuan menunggu</string>
+    <string name="off_pending_some">Masih menunggu keputusan di Attendance.</string>
+    <string name="off_pending_none">Tidak ada yang menunggu.</string>
+    <string name="off_open">Tugas belum selesai</string>
+    <string name="off_open_some">Masih atas namanya. Pindahkan kalau perlu ada yang melanjutkan.</string>
+    <string name="off_open_none">Tidak ada yang terbuka.</string>
+    <string name="off_lost_approver_sub">Pengajuan mereka masuk ke BoD sampai kamu atur approver baru di Bagan Approval.</string>
+    <string name="off_open_chart">Buka Bagan Approval</string>
+    <string name="off_err_self">Tidak bisa dilakukan ke akun kamu sendiri.</string>
+    <string name="off_err_rank">Tidak bisa dilakukan ke orang yang setara atau di atas level kamu.</string>
+    <string name="off_err_forbidden">Hanya BoD ke atas yang bisa melakukan ini.</string>
+    <string name="off_err_bad_date">Cek hari kerja terakhir: tidak boleh setelah hari ini, dan tidak sebelum tanggal bergabung.</string>
+    <string name="off_err_not_member">Dia bukan anggota workspace perusahaan.</string>
+    <string name="off_err_already">Akun ini sudah di-offboard.</string>
+    <string name="off_err_not_offboarded">Akun ini tidak sedang di-offboard.</string>
+    <string name="off_err_generic">Ada yang salah. Tidak ada yang diubah.</string>
+    <string name="off_reinstate_q">Aktifkan ulang %1$s?</string>
+    <string name="off_reinstate_body_ws">Dia bisa masuk lagi dan kembali ke %1$s dengan peran dan pengaturan yang sama.</string>
+    <string name="off_reinstate_body">Dia bisa masuk lagi.</string>
+    <string name="off_reinstate_not">Tidak dikembalikan: proyek, tim, passkey, perangkat, dan orang yang approver-nya dia. Atur ulang secara manual.</string>
+    <string name="off_back">%1$s aktif lagi.</string>
+    <string name="off_has_attendance">Akun ini punya data absensi/pengajuan. Pakai Offboard supaya datanya tetap ada.</string>
+    <string name="off_deactivated">Akun ini sudah dinonaktifkan. Hubungi BoD kalau menurutmu ini keliru.</string>
+    <string name="off_task_left">Sudah keluar dari perusahaan. Tugasnya tetap atas namanya.</string>
+    <plurals name="off_lost_approver">
+        <item quantity="other">%d orang kehilangan approver</item>
+    </plurals>
+    <plurals name="off_deductions_canceled">
+        <item quantity="other">%d potongan otomatis setelah hari terakhirnya dibatalkan.</item>
+    </plurals>
 </resources>

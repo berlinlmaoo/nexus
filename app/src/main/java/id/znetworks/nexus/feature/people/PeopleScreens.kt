@@ -189,6 +189,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = c.foreground)
                         if (isMe) { Spacer(Modifier.width(6.dp)); Pill(stringResource(R.string.pf_you), c.violetText) }
+                        id.znetworks.nexus.ui.components.LeftTag(r?.person?.leftAt, Modifier.padding(start = 6.dp))
                     }
                     Text(listOfNotNull(r?.person?.role?.let(::roleLabel), r?.person?.email).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
                     r?.person?.joinedAt?.let { dueDate(it) }?.let { Text(stringResource(R.string.pf_joined, DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it)), fontSize = 12.sp, color = c.mutedFg) }

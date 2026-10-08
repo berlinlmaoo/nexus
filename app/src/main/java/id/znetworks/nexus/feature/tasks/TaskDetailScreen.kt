@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.tasks
 
+import androidx.compose.ui.text.withStyle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -368,9 +369,17 @@ private fun MetaCard(t: TaskDetail, s: TaskDetailState, vm: TaskDetailViewModel,
                 if (people.isEmpty()) Text(stringResource(R.string.td_unassigned), fontSize = 13.sp, color = c.violetText)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
                     people.take(3).forEach { Avatar(it.name, it.avatar, 22.dp); Spacer(Modifier.width(4.dp)) }
-                    Text(people.joinToString(", ") { it.name.orEmpty() }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Someone who left keeps their tasks (Berlin, 8 Oct): their name says so, quietly.
+                    val leftWord = stringResource(R.string.off_left)
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        people.forEachIndexed { i, u ->
+                            if (i > 0) append(", ")
+                            append(u.name.orEmpty())
+                            if (u.deactivatedAt != null) withStyle(androidx.compose.ui.text.SpanStyle(color = c.mutedFg, fontWeight = FontWeight.Normal, fontSize = 11.sp)) { append(" · $leftWord") }
+                        }
+                    }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                if (people.any { it.deactivatedAt != null }) Text(stringResource(R.string.off_task_left), fontSize = 11.sp, color = c.mutedFg)
             }
             t.taskList?.project?.let { p ->
                 Column(Modifier.weight(1f).clickable { p.id?.let(onOpenProject) }, verticalArrangement = Arrangement.spacedBy(6.dp)) {

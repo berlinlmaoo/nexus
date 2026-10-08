@@ -438,8 +438,11 @@ internal fun Grid(
             val periodDays = days.size
             members.forEach { m ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.height(cell).width(nameW), contentAlignment = Alignment.CenterStart) {
-                        Text(m.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.foreground)
+                    Row(Modifier.height(cell).width(nameW), verticalAlignment = Alignment.CenterVertically) {
+                        Text(m.name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (m.leftAt != null) c.mutedFg else c.foreground,
+                            modifier = Modifier.weight(1f, fill = false))
+                        // Left the workspace: still on the periods they were part of (offboarding, 8 Oct).
+                        id.znetworks.nexus.ui.components.LeftTag(m.leftAt, Modifier.padding(start = 3.dp), compact = true)
                     }
                     Row(Modifier.weight(1f).horizontalScroll(hScroll), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         days.forEach { d ->

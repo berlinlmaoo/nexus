@@ -17,7 +17,9 @@ import java.net.URLEncoder
 @Serializable data class Leaderboard(val rows: List<BoardRow> = emptyList(), val period: BoardPeriod? = null)
 
 @Serializable data class RecPerson(val id: String, val name: String? = null, val email: String? = null, val avatar: String? = null,
-                                   val role: String? = null, val joinedAt: String? = null, val isSelf: Boolean = false)
+                                   val role: String? = null, val joinedAt: String? = null, val isSelf: Boolean = false,
+                                   /** Left the workspace (offboarding, 8 Oct): last working day. */
+                                   val leftAt: String? = null)
 @Serializable data class ViewerRights(val scope: String? = null, val canManageAttendance: Boolean = false, val canRemoveXp: Boolean = false)
 @Serializable data class RecPeriod(val key: String = "", val from: String? = null, val to: String? = null, val label: String? = null, val isCurrent: Boolean = false,
                                    val days: Int? = null, val daysElapsed: Int? = null, val previousKey: String? = null, val nextKey: String? = null)

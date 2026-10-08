@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.ui.components.LeftTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -115,7 +116,8 @@ object UsersLogic {
 fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Unit, onOpenOrgChart: () -> Unit = {}) {
     val api = adminApi()
     val c = Nx.colors
-    val res = LocalContext.current.resources
+    val context = LocalContext.current
+    val res = context.resources
     val scope = rememberCoroutineScope()
     var roster by remember { mutableStateOf<WsRoster?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -125,7 +127,11 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     var memberships by remember { mutableStateOf<Map<String, UserMemberships>>(emptyMap()) }
+    // Offboarded people (Berlin, 8 Oct): no membership left, so they'd read as "not in the workspace yet".
+    var left by remember { mutableStateOf<List<AdminUserRow>>(emptyList()) }
+    var reinstating by remember { mutableStateOf<AdminUserRow?>(null) }
     LaunchedEffect(tick) { try { roster = api.roster(); error = null } catch (e: ApiError) { error = e.describe(res) } }
+    LaunchedEffect(tick, isBoD) { left = if (isBoD) api.leftUsers() else emptyList() }
     // One call for everyone (BoD; others get an empty map and no summary line), never one per row.
     LaunchedEffect(tick) { memberships = api.memberships() }
     val r = roster
@@ -196,7 +202,8 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                 }
             }
             // Signed up but not in this workspace yet: one tap brings them in (BoD).
-            val reg = r.availableUsers.filter { q.isBlank() || (it.name.orEmpty() + it.email.orEmpty()).contains(q.trim(), true) }
+            val leftIds = left.map { it.id }.toSet()
+            val reg = r.availableUsers.filter { it.id !in leftIds && (q.isBlank() || (it.name.orEmpty() + it.email.orEmpty()).contains(q.trim(), true)) }
             if (isBoD && reg.isNotEmpty()) {
                 item { Text(stringResource(R.string.ad_not_in_ws, reg.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 10.dp)) }
                 items(reg, key = { "reg-" + it.id }) { u ->
@@ -210,6 +217,22 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                                 try { api.invite(u.email.orEmpty(), "STAFF", ws, absorb = true); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
                             }
                         }) { Text(stringResource(R.string.ad_bring_in)) }
+                    }
+                }
+            }
+            // Left the company: when they left, and Reinstate (never "bring in" as a new Staff).
+            val gone = left.filter { q.isBlank() || (it.name.orEmpty() + it.email.orEmpty()).contains(q.trim(), true) }
+            val me = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
+            if (gone.isNotEmpty()) {
+                item { Text(stringResource(R.string.off_left_section, gone.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(top = 10.dp)) }
+                items(gone, key = { "left-" + it.id }) { u ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(u.name, u.avatar, 30.dp); Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(u.displayName, fontSize = 13.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (u.leftAt != null) LeftTag(u.leftAt) else Text(stringResource(R.string.off_left), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+                        }
+                        if (u.id != me) TextButton(onClick = { reinstating = u }) { Text(stringResource(R.string.off_reinstate)) }
                     }
                 }
             }
@@ -231,13 +254,14 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             }, enabled = email.contains('@')) { Text(stringResource(R.string.ps_send_invite)) } },
             dismissButton = { TextButton(onClick = { inviting = false }) { Text(stringResource(R.string.cancel)) } })
     }
+    reinstating?.let { u -> ReinstateDialog(u, onDismiss = { reinstating = null }, onBack = { msg -> reinstating = null; notice = msg; tick++ }) { api.reinstate(u.id) } }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
 }
 
 /** One member: role, approver, attendance mode, rest days, work hours, account, memberships, danger. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) -> Unit, onOpenTeam: (String) -> Unit = {}) {
+fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) -> Unit, onOpenTeam: (String) -> Unit = {}, onOpenChart: () -> Unit = {}) {
     val api = adminApi()
     val c = Nx.colors
     val context = LocalContext.current
@@ -250,6 +274,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
     var notice by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf<String?>(null) } // "approver" | "role" | "hours"
     var confirm by remember { mutableStateOf<String?>(null) } // "remove" | "delete"
+    var offboarding by remember { mutableStateOf(false) }
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(tick) {
         roster = runCatching { api.roster(includeRegistered = false) }.getOrNull()
@@ -349,6 +374,11 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                 val profiles = remember { ProfileApi((context.applicationContext as NexusApplication).container.api) }
                 AccountCard(m, onPhoto = { jpeg -> if (jpeg == null) notice = res.getString(R.string.chat_photo_unreadable) else run { profiles.uploadMemberAvatar(m.id, jpeg); notice = res.getString(R.string.ad_photo_changed) } }) { f -> run { api.updateAccount(m.userId, f) } }
             }
+            // Offboard (Berlin, 8 Oct): rare and heavy, so last; BoD/OAA on someone below them, never themselves.
+            if (canEdit && viewer.isBoD && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.off_offboard)) {
+                Text(stringResource(R.string.off_intro), fontSize = 12.sp, color = c.mutedFg)
+                OutlinedButton(onClick = { offboarding = true }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.off_offboard_name_more, m.displayName), color = c.dangerText) }
+            }
             if (canEdit && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.ps_danger)) {
                 OutlinedButton(onClick = { confirm = "remove" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_remove_ws), color = c.danger) }
                 if (viewer.isBoD) OutlinedButton(onClick = { confirm = "delete" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_delete_user), color = c.danger) }
@@ -356,6 +386,8 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
         }
     }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
+    if (offboarding && m != null) OffboardDialog(m.displayName, m.joinedAt, onDismiss = { offboarding = false },
+        onOpenChart = { offboarding = false; onOpenChart() }, onDone = { offboarding = false; onBack() }) { day, reason, note -> api.offboard(m.userId, day, reason, note) }
     if (m != null && ws != null) when (picking) {
         "role" -> AlertDialog(onDismissRequest = { picking = null }, title = { Text(stringResource(R.string.ad_role)) },
             text = { Column { Roles.assignable(r?.role).forEach { k -> TextButton(onClick = { picking = null; patch("role" to JsonPrimitive(k)) }) { Text(Roles.label(k)) } } } },
@@ -392,7 +424,8 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                 confirm = null
                 if (m != null && ws != null) scope.launch {
                     try { if (what == "remove") api.removeMember(m.id, ws) else api.deleteUser(m.userId); onBack() }
-                    catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
+                    // Attendance history is never deleted: such an account is offboarded instead (8 Oct).
+                    catch (e: ApiError) { notice = if (Offboarding.hasAttendanceData(e)) res.getString(R.string.off_has_attendance) else (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
                 }
             }) { Text(stringResource(R.string.delete), color = c.danger) } },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } })

@@ -156,7 +156,10 @@ private fun RosterCard(r: RosterRow, onClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(r.name, r.avatar, 32.dp); Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(r.name ?: r.email ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(r.name ?: r.email ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f, fill = false))
+                    id.znetworks.nexus.ui.components.LeftTag(r.leftAt)
+                }
                 Text(r.teams.mapNotNull { it.name }.joinToString(", "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
             }
             Text("${r.headline.xpScore} XP", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.violetText)
@@ -219,6 +222,7 @@ private fun PersonReportBody(userId: String, period: String?, onOpenTask: (Strin
             if (!rep.person.isSelf) Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(rep.person.name, rep.person.avatar, 40.dp); Spacer(Modifier.width(10.dp))
                 Text(rep.person.name ?: "—", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
+                id.znetworks.nexus.ui.components.LeftTag(rep.person.leftAt, Modifier.padding(start = 8.dp))
             }
             val h = rep.headline; val p = rep.previous
             Text(stringResource(R.string.rp_arrows_compare), fontSize = 11.sp, color = c.mutedFg)

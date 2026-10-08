@@ -2047,4 +2047,63 @@
         <item quantity="one">%d member</item>
         <item quantity="other">%d members</item>
     </plurals>
+    <!-- Offboarding (Berlin, 8 Oct; web id-offboard.ts / id-former.ts) -->
+    <string name="off_left">Left</string>
+    <string name="off_left_on">Left · %1$s</string>
+    <string name="off_left_desc">Left the workspace — last working day %1$s</string>
+    <string name="off_left_section">Left the company · %1$d</string>
+    <string name="off_offboard">Offboard</string>
+    <string name="off_offboard_name">Offboard %1$s</string>
+    <string name="off_offboard_name_more">Offboard %1$s…</string>
+    <string name="off_offboarding">Offboarding…</string>
+    <string name="off_reinstate">Reinstate</string>
+    <string name="off_intro">For someone who resigned, whose contract ended, or who was let go. Their history stays.</string>
+    <string name="off_last_day">Last working day</string>
+    <string name="off_reason">Reason</string>
+    <string name="off_r_resigned">Resigned</string>
+    <string name="off_r_contract">Contract ended</string>
+    <string name="off_r_dismissed">Dismissed</string>
+    <string name="off_r_other">Other</string>
+    <string name="off_note">Note (optional)</string>
+    <string name="off_what_happens">What happens</string>
+    <string name="off_h1">Can\'t sign in anymore, on any device.</string>
+    <string name="off_h2">Removed from projects, teams and chats.</string>
+    <string name="off_h3">Their attendance, requests, projects, tasks and messages stay.</string>
+    <string name="off_h4">Their open tasks stay assigned to them.</string>
+    <string name="off_h5">Anyone who had them as approver goes back to the BoD safety net.</string>
+    <string name="off_done_title">%1$s is offboarded.</string>
+    <string name="off_done_last">Last working day: %1$s</string>
+    <string name="off_done">Done</string>
+    <string name="off_pending">Pending requests</string>
+    <string name="off_pending_some">Still waiting for a decision in Attendance.</string>
+    <string name="off_pending_none">Nothing waiting.</string>
+    <string name="off_open">Open tasks</string>
+    <string name="off_open_some">Still assigned to them. Reassign them if someone should take over.</string>
+    <string name="off_open_none">Nothing open.</string>
+    <string name="off_lost_approver_sub">Their requests go to the BoD until you set a new approver in the Approval chart.</string>
+    <string name="off_open_chart">Open Approval chart</string>
+    <string name="off_err_self">You can\'t do this to your own account.</string>
+    <string name="off_err_rank">You can\'t do this to someone at or above your level.</string>
+    <string name="off_err_forbidden">Only BoD and above can do this.</string>
+    <string name="off_err_bad_date">Check the last working day: not after today, and not before they joined.</string>
+    <string name="off_err_not_member">They aren\'t a member of the company workspace.</string>
+    <string name="off_err_already">This account is offboarded already.</string>
+    <string name="off_err_not_offboarded">This account isn\'t offboarded.</string>
+    <string name="off_err_generic">Something went wrong. Nothing was changed.</string>
+    <string name="off_reinstate_q">Reinstate %1$s?</string>
+    <string name="off_reinstate_body_ws">They can sign in again and are back in %1$s with the role and settings they had.</string>
+    <string name="off_reinstate_body">They can sign in again.</string>
+    <string name="off_reinstate_not">Not restored: projects, teams, passkeys, devices, and anyone who had them as approver. Set those again by hand.</string>
+    <string name="off_back">%1$s is back.</string>
+    <string name="off_has_attendance">This account has attendance records or requests. Use Offboard instead, so they stay.</string>
+    <string name="off_deactivated">This account has been deactivated. Ask your BoD if you think this is a mistake.</string>
+    <string name="off_task_left">Left the company. Their tasks stay assigned to them.</string>
+    <plurals name="off_lost_approver">
+        <item quantity="one">%d person lost their approver</item>
+        <item quantity="other">%d people lost their approver</item>
+    </plurals>
+    <plurals name="off_deductions_canceled">
+        <item quantity="one">%d automatic deduction dated after their last day was canceled.</item>
+        <item quantity="other">%d automatic deductions dated after their last day were canceled.</item>
+    </plurals>
 </resources>

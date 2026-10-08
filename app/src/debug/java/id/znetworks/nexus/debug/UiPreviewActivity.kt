@@ -47,6 +47,14 @@ class UiPreviewActivity : ComponentActivity() {
                         "account" -> AccountScreen(onBack = {})
                         "nav8" -> Nav8Preview()
                         "restore" -> RestorePreview()
+                        // Offboarding (8 Oct): the dialog never submits here (submit throws, nothing is posted).
+                        "offboard" -> id.znetworks.nexus.feature.admin.OffboardDialog("Rina Saputri", "2025-02-03T02:00:00.000Z", onDismiss = {}, onOpenChart = {}, onDone = {}) { _, _, _ -> error("preview") }
+                        "reinstate" -> id.znetworks.nexus.feature.admin.ReinstateDialog(id.znetworks.nexus.feature.admin.AdminUserRow("a", "Rina Saputri", deactivatedAt = "2026-10-08T09:00:00Z",
+                            formerMemberships = listOf(id.znetworks.nexus.feature.admin.FormerMembership("w", "Z Networks", "2026-10-10T00:00:00.000Z", "RESIGNED"))), onDismiss = {}, onBack = {}) {}
+                        "lefttags" -> androidx.compose.foundation.layout.Column(Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                            id.znetworks.nexus.ui.components.LeftTag("2026-10-10T00:00:00.000Z")
+                            id.znetworks.nexus.ui.components.LeftTag("2026-10-10", compact = true)
+                        }
                         "addpeople" -> id.znetworks.nexus.feature.chat.AddPeopleDialog(
                             id.znetworks.nexus.feature.chat.Conversation("c", "GROUP", "Tim Kreatif", members = listOf(id.znetworks.nexus.feature.chat.ChatMember(userId = "u1", user = id.znetworks.nexus.feature.chat.ChatUser("u1", "Rina")))),
                             listOf("u1" to "Rina", "u2" to "Dimas Pratama", "u3" to "Sari Wulandari", "u4" to "Bayu").map { (k, n) -> id.znetworks.nexus.feature.projects.RosterMember(userId = k, name = n) },

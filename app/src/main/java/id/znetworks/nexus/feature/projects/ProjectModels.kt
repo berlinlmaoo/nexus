@@ -11,7 +11,9 @@ import kotlinx.serialization.json.contentOrNull
 // API.md §2.4. Everything optional past the id: a field the server renames costs a label, not a screen.
 
 @Serializable
-data class UserRef(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null)
+data class UserRef(val id: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null,
+                   /** Set on task people whose account was offboarded (GET /api/tasks/:id, 8 Oct). */
+                   val deactivatedAt: String? = null)
 
 @Serializable
 data class ProjectMemberRef(val userId: String? = null, val role: String? = null, val user: UserRef? = null) {

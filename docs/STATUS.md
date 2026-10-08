@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (431 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (439 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -225,9 +225,22 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
 
+## 8 Oct, offboarding (agents:~/handoff/chat/ANDROID-OFFBOARD.md, OFFBOARD-CONTRACT.md)
+
+NOT published (decision 13). Server + web LIVE (nexus-prod 70581e8, 416ea7a, edf6773, 0d6bda1). Group admins
+(56e25ff) and Restore (5017bf7) are deployed too (8 Oct afternoon). Nothing was called on production: JSON
+fixtures in JUnit and a debug preview only.
+
+| Part | What changed | Commit |
+|---|---|---|
+| Control Room › Users | Offboard card on a member's screen (BoD/OAA on someone below them, never themselves): dialog with last working day (date picker, today by default, never after today nor before they joined in Jakarta), reason Resigned / Contract ended / Dismissed / Other, note (≤ 500), "What happens" list; after: pending requests and open tasks counts, the people who lost their approver (names + Open Approval chart), canceled automatic deductions. Refusals per code (SELF, RANK, FORBIDDEN, BAD_DATE, NOT_MEMBER, ALREADY_OFFBOARDED, NOT_OFFBOARDED; others = server text). Users list: "Left the company · n" section from GET /api/admin/users (non-members with deactivatedAt) with "Left · 10 Oct" and Reinstate (confirm: workspaces back with the same role; projects, teams, passkeys, devices, approver links NOT restored); they no longer show under "not in the workspace / bring in". Delete account: 409 HAS_ATTENDANCE_DATA → "Use Offboard instead…" | this step |
+| Sign-in | app-login and passkey: 401 `error: AccountDeactivated` → "This account has been deactivated. Ask your BoD…" / "Akun ini sudah dinonaktifkan…" (not "wrong password") | this step |
+| Left tags | Shared `LeftTag` ("Left · 10 Oct", muted; date read from the first 10 characters, never zone-shifted; TalkBack reads the last working day): attendance board name column (compact "Left", name muted), Reports roster cards + person report, member record header. Task detail: assignees with `deactivatedAt` read "Name · Left" + "Left the company. Their tasks stay assigned to them." Android has no deductions screen, so nothing there; the compact history (widgets) is the viewer's own and needs no tag | this step |
+| Tests | OffboardTest (models, codes, date rules, login, recaps, strings) — 439 JVM tests | this step |
+
 ## 8 Oct, group chat admins + Restore in Audit (agents:~/handoff/chat/ANDROID-GROUP-ADMINS.md, ANDROID-RESTORE.md)
 
-NOT published (decision 13). Server: group admins nexus 56e25ff (deploy by the lead), restore LIVE (nexus-prod 5017bf7).
+NOT published (decision 13). Server: group admins nexus 56e25ff (deployed 8 Oct afternoon), restore LIVE (nexus-prod 5017bf7).
 iOS references 1e9190f, ba38cf4. POST /api/audit/{id}/restore was never called on production: checked with JSON
 fixtures in JUnit and a debug preview only.
 

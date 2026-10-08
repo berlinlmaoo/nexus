@@ -398,7 +398,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     openMemberAttendance = { nav.navigate("admin-att/$it") }, openOffices = { nav.navigate("admin-offices") },
                 ))
             }
-            composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }) }
+            composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }, onOpenChart = { nav.navigate("admin-chart") }) }
             composable("folder/{id}") { e -> FolderCalendarScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             // Teams are gone (deleted on the server 30 Sep 2026): a team link opens the Bagan IP & Divisi that replaced them.
             composable("admin-team/{id}") { OrgChartScreen(onBack = { nav.popBackStack() }) }

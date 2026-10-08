@@ -19,6 +19,8 @@ data class PersonRef(
     val avatar: String? = null,
     /** On history rows (server c2ba2a1): that person's EFFECTIVE day-off quota for the period. */
     val dayOffQuota: Int? = null,
+    /** Someone who left (offboarding, 8 Oct): their last working day; they stay on the periods they were part of. */
+    val leftAt: String? = null,
 )
 
 @Serializable

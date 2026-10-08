@@ -39,6 +39,8 @@ data class BoardMember(
     val rows: Map<String, HistoryRow>,
     /** Effective day-off quota for the period (member quota + extra days); 4 when the server sent none. */
     val quota: Int = BoardModel.DEFAULT_QUOTA,
+    /** Their last working day when they left the workspace (offboarding); null for everyone still here. */
+    val leftAt: String? = null,
 ) {
     /** Days worked: present (a check-in), approved permit, or WFH, as on web and iOS. */
     val worked: Int get() = cells.values.count { it == AttTone.PRESENT || it == AttTone.PERMIT || it == AttTone.WFH }
@@ -100,6 +102,7 @@ object BoardModel {
                 cells = rs.associate { it.dayKey to AttTone.of(it) },
                 rows = rs.associateBy { it.dayKey },
                 quota = rs.firstNotNullOfOrNull { it.user?.dayOffQuota } ?: person?.dayOffQuota ?: DEFAULT_QUOTA,
+                leftAt = person?.leftAt ?: rs.firstNotNullOfOrNull { it.user?.leftAt },
             )
         }.sortedBy { it.name.lowercase() }
     }
