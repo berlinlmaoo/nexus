@@ -18,8 +18,10 @@ import Foundation
 //     65 m. Plus one immediately on leaving and on coming back. Uploads are batched, at most about
 //     every 2 minutes, except the exit and the enter, which go at once. No presence checks outside:
 //     the route already says where the phone is;
-//   • leaving is announced on the phone itself at once, and again an hour in, each with the time
-//     left before the automatic check-out (planOutsideAlerts); the server's 1h30 / 2h pushes follow;
+//   • leaving is announced on the phone itself at once, and again an hour in (planOutsideAlerts) —
+//     with the time left before the automatic check-out only while the server has that switched on
+//     (remote config `flags.outsideAutoCheckout`, off since 8 Oct 2026); the server's 1h30 / 2h
+//     pushes follow;
 //   • the server has the last word: `tracking:false` stops everything.
 
 /// An office circle: the one a check-in was made against, or another active office of the workspace.
@@ -699,16 +701,18 @@ struct WorkTrailMachine {
 
 // MARK: - the outside clock, as the Live Activity shows it
 
-/// "Outside the office since 20:59 · auto check-out 23:29" — what the work-session Live Activity
-/// draws while the person is out. The pushes at 1h30 and 2h are banners, and iOS never puts a banner
-/// into a Live Activity, so the Island and the Lock Screen have to be told separately, by the app.
+/// "Outside the office since 20:59" (plus "· auto check-out 23:29" while the server's automatic
+/// check-out is switched on) — what the work-session Live Activity draws while the person is out.
+/// The pushes at 1h30 and 2h are banners, and iOS never puts a banner into a Live Activity, so the
+/// Island and the Lock Screen have to be told separately, by the app.
 struct WorkOutsideStatus: Equatable {
     /// `inside` is also "nothing to show": back inside, an excuse on file, or not tracking at all.
     enum Stage: String { case inside, outside, reminded, warned }
     var stage: Stage
     /// Start of the episode — the time the server's pushes and the automatic check-out quote.
     var outsideSince: Date?
-    /// When the server will check the person out offsite if nothing changes.
+    /// When the server will check the person out offsite if nothing changes. Nil while the automatic
+    /// check-out is switched off (remote config, off since 8 Oct 2026): nothing to count down to.
     var autoCheckoutAt: Date?
     /// When the clock of this episode started: `outsideSince`, or a later restart (an excuse
     /// rejected or withdrawn). The phone's own alerts count from it. Not part of the display.
@@ -773,8 +777,9 @@ extension WorkTrailMachine {
     ///   • the clock runs from that start, or from a later restart the server's `nextAt` reveals (an
     ///     excuse rejected or withdrawn mid-episode restarts it); 90 min → reminded, 120 → warned,
     ///     and never a stage below the one the server reports;
-    ///   • the automatic check-out is the server's own time once it has warned, else start + 150 min.
-    func outsideStatus(now: Date) -> WorkOutsideStatus {
+    ///   • the automatic check-out is the server's own time once it has warned, else start + 150 min —
+    ///     and none at all while `autoCheckout` (remote config `flags.outsideAutoCheckout`) is off.
+    func outsideStatus(now: Date, autoCheckout: Bool = true) -> WorkOutsideStatus {
         let s = state
         guard s.isActive, s.zone != .inside else { return .inside }
         if s.stage == Self.pausedStage || s.stage == "auto_checked_out" { return .inside }
@@ -810,7 +815,7 @@ extension WorkTrailMachine {
         let rank = max(serverRank, elapsed >= Self.warnAfter ? 2 : elapsed >= Self.remindAfter ? 1 : 0)
         let stage: WorkOutsideStatus.Stage = rank == 2 ? .warned : rank == 1 ? .reminded : .outside
         return WorkOutsideStatus(stage: stage, outsideSince: since,
-                                 autoCheckoutAt: warnedAutoAt ?? clockFrom.addingTimeInterval(Self.autoAfter),
+                                 autoCheckoutAt: autoCheckout ? (warnedAutoAt ?? clockFrom.addingTimeInterval(Self.autoAfter)) : nil,
                                  clockFrom: clockFrom)
     }
 }
@@ -818,15 +823,18 @@ extension WorkTrailMachine {
 // MARK: - the phone's own outside alerts
 
 /// Local notifications the phone schedules for itself while outside (owner, 28 Sep 2026): one the
-/// moment it leaves, one an hour in, each with the time left before the automatic check-out. The
+/// moment it leaves, one an hour in, each with the time left before the automatic check-out — or,
+/// while that is switched off (`autoAt` nil, since 8 Oct 2026), without any check-out time. The
 /// server's pushes at 1h30 and 2h are not repeated here. The tracker turns each into a
 /// UNNotificationRequest with a fixed identifier per record, so re-planning replaces, never adds.
 enum WorkOutsideAlert: Equatable {
-    /// "Outside the office since HH:mm · 2 h 30 min left before the automatic check-out (HH:mm)".
+    /// "Outside the office since HH:mm · 2 h 30 min left before the automatic check-out (HH:mm)", or
+    /// just "Outside the office since HH:mm" with no automatic check-out (`autoAt` nil).
     /// `fireAt` is the clock start, or now when the phone learns of the episode late.
-    case left(fireAt: Date, since: Date, autoAt: Date)
-    /// "1 hour outside the office · 1 h 30 min left · automatic check-out HH:mm", at clock start + 1 h.
-    case hour(fireAt: Date, since: Date, autoAt: Date)
+    case left(fireAt: Date, since: Date, autoAt: Date?)
+    /// "1 hour outside the office · 1 h 30 min left · automatic check-out HH:mm", at clock start + 1 h;
+    /// with no automatic check-out, "1 hour outside the office" and the permit hint.
+    case hour(fireAt: Date, since: Date, autoAt: Date?)
     /// The hour alert is no longer right and its moment has passed: drop the pending one.
     case cancelHour
     /// Back inside, an excuse holds the clock, or the clock is over: drop both, pending and shown.
@@ -846,16 +854,20 @@ extension WorkTrailMachine {
     ///   • a new episode → the "left" alert now (skipped when found out only after 1h30, the
     ///     server's reminder has it by then) and the hour alert, unless its time has passed;
     ///   • the same episode with a clock start or auto check-out time that moved (the server's
-    ///     `outsideSince` replacing the phone's exit time, a late warning) → the pending hour alert
-    ///     is replaced. The "left" alert is never sent twice for one episode.
+    ///     `outsideSince` replacing the phone's exit time, a late warning, the automatic check-out
+    ///     switched on or off) → the pending hour alert is replaced. The "left" alert is never sent
+    ///     twice for one episode.
+    /// `autoCheckout` is remote config `flags.outsideAutoCheckout`: off, no alert names a check-out time.
     /// A stop (check-out, logout, `tracking:false`, auto check-out, the shift cap) resets the state,
     /// so nothing is answered here for it: the tracker cancels every alert on each stop itself.
-    mutating func planOutsideAlerts(now: Date) -> [WorkOutsideAlert] {
+    mutating func planOutsideAlerts(now: Date, autoCheckout: Bool = true) -> [WorkOutsideAlert] {
         let s = state
         let over = !s.isActive || s.zone == .inside || s.stage == Self.pausedStage || s.stage == "auto_checked_out"
-        let status = outsideStatus(now: now)
-        guard !over, status.stage != .inside,
-              let since = status.outsideSince, let autoAt = status.autoCheckoutAt else {
+        let status = outsideStatus(now: now, autoCheckout: autoCheckout)
+        // Nil exactly when the automatic check-out is switched off: an episode is still an episode
+        // without one, and its alerts then name no check-out time.
+        let autoAt = status.autoCheckoutAt
+        guard !over, status.stage != .inside, let since = status.outsideSince else {
             guard over, state.alertFrom != nil else { return [] }
             state.alertFrom = nil
             state.alertHourAt = nil
@@ -865,6 +877,14 @@ extension WorkTrailMachine {
         let from = status.clockFrom ?? since
         let hourAt = from.addingTimeInterval(Self.hourAlertAfter)
         func moved(_ a: Date?, _ b: Date) -> Bool { a.map { abs($0.timeIntervalSince(b)) >= 60 } ?? true }
+        /// Both optional: none before and none now is no change; a time appearing or going is one.
+        func movedAuto(_ a: Date?, _ b: Date?) -> Bool {
+            switch (a, b) {
+            case (nil, nil): return false
+            case let (x?, y?): return abs(x.timeIntervalSince(y)) >= 60
+            default: return true
+            }
+        }
 
         guard state.alertFrom != nil else {
             state.alertFrom = from
@@ -875,7 +895,7 @@ extension WorkTrailMachine {
             if hourAt > now { out.append(.hour(fireAt: hourAt, since: since, autoAt: autoAt)) }
             return out
         }
-        guard moved(state.alertHourAt, hourAt) || moved(state.alertAutoAt, autoAt) else { return [] }
+        guard moved(state.alertHourAt, hourAt) || movedAuto(state.alertAutoAt, autoAt) else { return [] }
         let wasPending = state.alertHourAt.map { $0 > now } ?? false
         state.alertFrom = from
         state.alertHourAt = hourAt
@@ -885,6 +905,7 @@ extension WorkTrailMachine {
     }
 
     /// Whole minutes left from `from` to `autoAt`, rounded up: "sisa 2 jam 30 menit" at the exit.
+    /// Only ever asked with an automatic check-out switched on.
     static func minutesLeft(from: Date, to autoAt: Date) -> Int {
         // Less a hair, so an exact 150 minutes computed with a rounding error stays 150, not 151.
         max(0, Int((autoAt.timeIntervalSince(from) / 60 - 0.001).rounded(.up)))

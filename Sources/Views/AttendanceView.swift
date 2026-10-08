@@ -8,6 +8,12 @@ import CoreLocation
 /// locked until the reflection is long enough → done) + offsite-reason flow.
 struct AttendanceView: View {
     @Environment(AuthStore.self) private var auth
+    /// Read for one thing: an approver's "Budi is outside the office" push lands on the crew board
+    /// (`NotificationTarget.crewBoard`), which sits at the bottom of this screen.
+    @Environment(AppRouter.self) private var router
+    /// Only the Attendance screen in front claims that push: another one left mounted under a hidden
+    /// tab (pushed from Home) must not take it and scroll where nobody is looking.
+    @State private var onScreen = false
     @State private var today: AttendanceToday?
     @State private var loading = true
     @State private var error: String?
@@ -119,69 +125,85 @@ struct AttendanceView: View {
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 12) {
-                    hero
-                    if loading { loadingRow }
-                    if serverDown { downCard } else if let error { errorBanner(error) }
-                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
-                    // A Mac cannot take attendance: a check-in needs a selfie through the face
-                    // check and the phone's own position, and a Mac has neither in a form anyone
-                    // should trust. Everything that READS attendance stays exactly as it is — the
-                    // card above, the reflections, the history board, the requests — so a manager
-                    // can do their whole review at a desk.
-                    #if targetEnvironment(macCatalyst)
-                    phoneOnlyCard
-                    reflectionsLink
-                    #else
-                    if needsReflection { reflectionCard }
-                    reflectionsLink
-                    if locationOff { PermissionBanner(kind: .location) }
-                    // One button for the whole day. WHY it is greyed out (the reflection) is written
-                    // on the button itself, with the count.
-                    primaryControl
-                    if showOffsite { offsitePrompt }
-                    #endif
-                    if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
-                    if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
-                    if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
-                    if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
-                    // A queued tap must never be invisible: someone who thinks they clocked in and
-                    // did not would only find out at payroll.
-                    if let refused = queue.lastError, queue.count == 0 {
-                        infoBanner(refused, tone: .danger)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 12) {
+                        hero
+                        if loading { loadingRow }
+                        if serverDown { downCard } else if let error { errorBanner(error) }
+                        if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
+                        // A Mac cannot take attendance: a check-in needs a selfie through the face
+                        // check and the phone's own position, and a Mac has neither in a form anyone
+                        // should trust. Everything that READS attendance stays exactly as it is — the
+                        // card above, the reflections, the history board, the requests — so a manager
+                        // can do their whole review at a desk.
+                        #if targetEnvironment(macCatalyst)
+                        phoneOnlyCard
+                        reflectionsLink
+                        #else
+                        if needsReflection { reflectionCard }
+                        reflectionsLink
+                        if locationOff { PermissionBanner(kind: .location) }
+                        // One button for the whole day. WHY it is greyed out (the reflection) is written
+                        // on the button itself, with the count.
+                        primaryControl
+                        if showOffsite { offsitePrompt }
+                        #endif
+                        if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
+                        if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
+                        if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
+                        if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
+                        // A queued tap must never be invisible: someone who thinks they clocked in and
+                        // did not would only find out at payroll.
+                        if let refused = queue.lastError, queue.count == 0 {
+                            infoBanner(refused, tone: .danger)
+                        }
+                        if queue.count > 0 {
+                            infoBanner(queue.count == 1
+                                       ? T("1 attendance record is on this phone, waiting to be sent.")
+                                       : "\(queue.count) " + T("attendance records are on this phone, waiting to be sent."),
+                                       tone: .warning)
+                        }
+                        metricsGrid
+                        // OR, not a `??` fallback: the web is `canManageAttendance || canReviewAttendanceRequests`.
+                        // With `??`, a server that sends canReviewAttendanceRequests=false stops the chain
+                        // dead and an attendance MANAGER loses the review UI they're entitled to.
+                        let canReview = (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false)
+                        // Offsite check-outs are one queue inside Submissions, on the same test as the
+                        // requests: the server lists them to the BoD (everyone) AND to a manager with
+                        // direct reports (theirs only), and a manager decides them — which is where the
+                        // 2h30 auto offsite check-out sends its approval. Gated on canManageAttendance
+                        // alone, a manager tapped "waiting for your approval" and found nothing.
+                        // Granting a request for somebody else stays BoD-only (`canGrant`).
+                        AttendanceRequestsCard(canReview: canReview,
+                                               canReviewOffsite: canReview,
+                                               canGrant: today?.canManageAttendance ?? false)
+                        StreakBoardCard(canManage: today?.canManageAttendance ?? false,
+                                        canReview: today?.canReviewAttendanceRequests ?? false)
+                            .id(Self.crewBoardAnchor)
+                        if today?.canManageAttendance == true { OfficesCard() }
                     }
-                    if queue.count > 0 {
-                        infoBanner(queue.count == 1
-                                   ? T("1 attendance record is on this phone, waiting to be sent.")
-                                   : "\(queue.count) " + T("attendance records are on this phone, waiting to be sent."),
-                                   tone: .warning)
-                    }
-                    metricsGrid
-                    // OR, not a `??` fallback: the web is `canManageAttendance || canReviewAttendanceRequests`.
-                    // With `??`, a server that sends canReviewAttendanceRequests=false stops the chain
-                    // dead and an attendance MANAGER loses the review UI they're entitled to.
-                    let canReview = (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false)
-                    // Offsite check-outs are one queue inside Submissions, on the same test as the
-                    // requests: the server lists them to the BoD (everyone) AND to a manager with
-                    // direct reports (theirs only), and a manager decides them — which is where the
-                    // 2h30 auto offsite check-out sends its approval. Gated on canManageAttendance
-                    // alone, a manager tapped "waiting for your approval" and found nothing.
-                    // Granting a request for somebody else stays BoD-only (`canGrant`).
-                    AttendanceRequestsCard(canReview: canReview,
-                                           canReviewOffsite: canReview,
-                                           canGrant: today?.canManageAttendance ?? false)
-                    StreakBoardCard(canManage: today?.canManageAttendance ?? false,
-                                    canReview: today?.canReviewAttendanceRequests ?? false)
-                    if today?.canManageAttendance == true { OfficesCard() }
+                    .padding(16)
                 }
-                .padding(16)
+                // Dragging the page down puts the keyboard away too.
+                .scrollDismissesKeyboard(.interactively)
+                // On the ScrollView, not beside `.permissionAlert` further down: two alerts on one view
+                // and one of them never shows.
+                .heldAttendanceNotice(whileLocked: false)
+                // The crew board a push asked for: once today has loaded (the board's permissions come
+                // with it), or at once when it arrives while this screen is already up.
+                .onAppear {
+                    onScreen = true
+                    if !loading, case .crewBoard = router.focus { scrollToCrewBoard(proxy) }
+                }
+                .onDisappear { onScreen = false }
+                .onChange(of: loading) { _, now in
+                    if !now, onScreen, case .crewBoard = router.focus { scrollToCrewBoard(proxy) }
+                }
+                .onChange(of: router.focus) { _, focus in
+                    if !loading, onScreen, case .crewBoard = focus { scrollToCrewBoard(proxy) }
+                }
             }
-            // Dragging the page down puts the keyboard away too.
-            .scrollDismissesKeyboard(.interactively)
-            // On the ScrollView, not beside `.permissionAlert` further down: two alerts on one view
-            // and one of them never shows.
-            .heldAttendanceNotice(whileLocked: false)
         }
         .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
@@ -210,6 +232,20 @@ struct AttendanceView: View {
             // Not the stock camera any more: a face check (straight, side, other side, blink) that
             // takes the selfie itself once it has seen a live person. Chat still uses CameraPicker.
             LivenessCaptureView { data in pendingSelfie = data; Task { await submit(selfie: data) } }
+        }
+    }
+
+    private static let crewBoardAnchor = "crew-board"
+
+    /// Brings the crew board to the top of the screen, once per push. Tried again as the cards above
+    /// it fill in (the requests list, the metrics), each of which pushes the board further down.
+    private func scrollToCrewBoard(_ proxy: ScrollViewProxy) {
+        router.focus = nil
+        Task { @MainActor in
+            for delay in [0, 300, 600, 1200] {
+                if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
+                proxy.scrollTo(Self.crewBoardAnchor, anchor: .top)
+            }
         }
     }
 
@@ -1416,6 +1452,41 @@ enum AttTone {
 
 // MARK: - Crew streak board (month heatmap; web "Crew streak board" grid)
 
+/// Today's cell of somebody who is outside the office right now (owner, 8 Oct 2026; the web board
+/// draws the same amber bar). Not colour alone: a walking figure in the corner carries it too, and
+/// VoiceOver reads "Budi, Outside the office since 10:12". Nothing at all when `since` is nil.
+struct OutsideNowMark: ViewModifier {
+    let since: Date?
+    let name: String
+    var cell: CGFloat = 24
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let since {
+            content
+                .overlay(alignment: .bottom) {
+                    Capsule().fill(NX.warning).frame(width: cell * 0.5, height: 3).padding(.bottom, 2)
+                }
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "figure.walk")
+                        .font(.system(size: cell * 0.3, weight: .bold))
+                        .foregroundStyle(NX.ink)
+                        .frame(width: cell * 0.5, height: cell * 0.5)
+                        .background(NX.warning, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.card, lineWidth: 1))
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: "\(name), \(Self.label(since))"))
+        } else {
+            content
+        }
+    }
+
+    /// "Outside the office since 10:12", on the office clock.
+    static func label(_ since: Date) -> String {
+        String(format: T("Outside the office since %@"), ProjDate.fmt("HH:mm").string(from: since))
+    }
+}
+
 struct StreakBoardCard: View {
     let canManage: Bool
     /// A manager with direct reports: the server scopes the workspace board to them (and, since
@@ -1442,6 +1513,13 @@ struct StreakBoardCard: View {
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
     @State private var monthOffset = 0               // 0 = this month; ◀ ▶ to reach past months
+    /// Who is outside the office right now is live (owner, 8 Oct 2026): the current period is read
+    /// again every minute while the board is on screen and the app is in front, and on coming back.
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var appActive = true
+    /// The day whose open records may carry the "outside right now" mark: today, and only while what
+    /// is drawn came from the server — a copy off the disk cannot say where anybody is now.
+    private var outsideKey: String? { cachedFrom == nil ? todayKey : nil }
 
     private let cell: CGFloat = 24
     private let gap: CGFloat = 3
@@ -1570,6 +1648,13 @@ struct StreakBoardCard: View {
         guard let iso, iso.count >= 10 else { return nil }
         return String(iso.prefix(10))   // "yyyy-MM-dd"
     }
+    /// Since when this person has been outside the office, while they still are: TODAY's record, not
+    /// checked out, with the server's `outsideSince` — the web board's test. nil for every other cell
+    /// (`todayKey` nil = the board is not showing a live today).
+    static func outsideSince(_ row: AttendanceRow?, dayKey: String, todayKey: String?) -> Date? {
+        guard let todayKey, dayKey == todayKey, let row, row.checkOutAt == nil else { return nil }
+        return ProjDate.parse(row.outsideSince)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1591,7 +1676,8 @@ struct StreakBoardCard: View {
                     .accessibilityLabel(T("Open the full board"))
                     .fullScreenCover(isPresented: $showFull) {
                         FullBoard(members: members, periodDays: periodDays, monthLabel: "\(monthLabel.capitalized) · \(periodLabel)", todayKey: todayKey,
-                                  canManage: canManage, legend: AnyView(legend)) { await load() }
+                                  outsideKey: outsideKey, canManage: canManage, legend: AnyView(legend),
+                                  refresh: { await liveRefresh() }) { await load() }
                     }
                     if wide {
                         Button { Task { await exportMonth() } } label: {
@@ -1633,9 +1719,33 @@ struct StreakBoardCard: View {
         .onReceive(NotificationCenter.default.publisher(for: .nexusAttendanceChanged)) { _ in
             Task { await load() }
         }
+        // Every minute while on screen; cancelled with the view. The full-screen board, while it is
+        // up, keeps its own minute instead (`FullBoard`).
+        .task { await liveRefreshLoop() }
+        .onChange(of: scenePhase) { _, phase in
+            appActive = phase == .active
+            if phase == .active, !showFull { Task { await liveRefresh() } }
+        }
         .sheet(item: $selectedRow) { row in
             RecordActionsSheet(row: row, canDelete: canManage, canChangeStatus: canManage) { await load() }
         }
+    }
+
+    private func liveRefreshLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+            if Task.isCancelled { return }
+            guard appActive, !showFull else { continue }
+            await liveRefresh()
+        }
+    }
+
+    /// The current period read again in the background — no spinner, nothing cleared, and a failure
+    /// leaves the board as it was. A past month does not change by the minute, and a load already
+    /// under way is not doubled.
+    private func liveRefresh() async {
+        guard monthOffset == 0, !loading else { return }
+        await load(silent: true)
     }
 
     /// Tried again as the layout settles: a single call made before the scroll view has its
@@ -1747,6 +1857,7 @@ struct StreakBoardCard: View {
     /// here reads the scroll offset, so scrolling never rebuilds a row.
     private var cells: some View {
         let nowKey = ProjDate.fmt("yyyy-MM-dd").string(from: Date())
+        let liveKey = outsideKey
         return VStack(alignment: .leading, spacing: gap) {
             ForEach(members) { m in
                 HStack(spacing: gap) {
@@ -1756,6 +1867,8 @@ struct StreakBoardCard: View {
                             .overlay(alignment: .leading) {
                                 if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
                             }
+                            .modifier(OutsideNowMark(since: Self.outsideSince(m.rowByDay[pd.key], dayKey: pd.key, todayKey: liveKey),
+                                                     name: m.name, cell: cell))
                         // Every cell with a record opens it — a manager reviewing their people
                         // and staff on their own board need the day's detail and its
                         // location trail too. The BoD also opens id-less and empty days to
@@ -1779,10 +1892,17 @@ struct StreakBoardCard: View {
         let periodDays: [PeriodDay]
         let monthLabel: String
         let todayKey: String?
+        /// Today while the card's data is live, else nil: where the "outside right now" mark may go.
+        let outsideKey: String?
         let canManage: Bool
         let legend: AnyView
+        /// The card's quiet re-read, run every minute while this is up and the app is in front: the
+        /// card underneath is covered and keeps no minute of its own meanwhile.
+        let refresh: () async -> Void
         let onChanged: () async -> Void
         @Environment(\.dismiss) private var dismiss
+        @Environment(\.scenePhase) private var scenePhase
+        @State private var appActive = true
         @State private var selectedRow: AttendanceRow?
         private let cell: CGFloat = 22
         private let gap: CGFloat = 3
@@ -1800,6 +1920,17 @@ struct StreakBoardCard: View {
                 .navigationTitle(monthLabel).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
                 .sheet(item: $selectedRow) { row in RecordActionsSheet(row: row, canDelete: canManage, canChangeStatus: canManage) { await onChanged() } }
+            }
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                    if Task.isCancelled { return }
+                    if appActive { await refresh() }
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                appActive = phase == .active
+                if phase == .active { Task { await refresh() } }
             }
         }
 
@@ -1839,6 +1970,8 @@ struct StreakBoardCard: View {
                                     .overlay(alignment: .leading) {
                                         if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
                                     }
+                                    .modifier(OutsideNowMark(since: StreakBoardCard.outsideSince(m.rowByDay[pd.key], dayKey: pd.key, todayKey: outsideKey),
+                                                             name: m.name, cell: cell))
                                 // Same rule as the card grid — see `canOpen`.
                                 if StreakBoardCard.canOpen(m, pd, canManage: canManage, nowKey: nowKey) {
                                     Button { selectedRow = StreakBoardCard.openableRow(m, pd) } label: { fill }.buttonStyle(.plain)
@@ -1875,22 +2008,29 @@ struct StreakBoardCard: View {
         } catch { exportError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't download the file.") }
     }
 
-    private func load() async {
-        loading = true
+    /// `silent`: the minute's re-read (`liveRefresh`) — no spinner, and a failure keeps the board.
+    private func load(silent: Bool = false) async {
+        if !silent { loading = true }
         // Named once: the fetch and the cache key it falls back to have to agree, and a board of
         // the whole crew restored into a personal board would be a quiet, convincing lie.
         let scope = wide ? "workspace" : "me"
+        let month = monthKey
         do {
-            let fetched = try await APIClient.shared.attendanceHistoryResponse(scope: scope, month: monthKey)
+            let fetched = try await APIClient.shared.attendanceHistoryResponse(scope: scope, month: month)
+            // The arrows moved while a quiet re-read was out: its month is no longer the one shown.
+            if silent && month != monthKey { return }
             members = Self.buildMembers(fetched.all, roster: fetched.roster)
             cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }   // leaves the board as it was, same as before
         catch {
+            // A quiet re-read that fails keeps what is drawn; the next minute tries again.
+            if silent { return }
             // A month already drawn is far more use than an empty grid, and unlike today's card
             // this cannot be misread as live: a finished day does not change, and the line
-            // underneath says when the copy was taken.
-            if let hit = ResponseCache.decoded("attendance-history-\(scope)-\(monthKey)",
+            // underneath says when the copy was taken. (Nor are the "outside right now" marks
+            // drawn on it: `outsideKey`.)
+            if let hit = ResponseCache.decoded("attendance-history-\(scope)-\(month)",
                                                as: AttendanceHistoryResponse.self) {
                 members = Self.buildMembers(hit.value.all, roster: hit.value.roster)
                 cachedFrom = hit.savedAt
@@ -1899,7 +2039,7 @@ struct StreakBoardCard: View {
                 cachedFrom = nil
             }
         }
-        loading = false
+        if !silent { loading = false }
     }
 }
 
@@ -1933,6 +2073,12 @@ struct RecordActionsSheet: View {
     }
     private var isRecord: Bool { (row.recordKind ?? (row.checkInAt != nil ? "ATTENDANCE" : "")) == "ATTENDANCE" }
     private var tone: AttTone { AttTone.of(row) }
+    /// Since when the person has been outside the office, if this is today's open record and they
+    /// still are (the crew board's test).
+    private var outsideSince: Date? {
+        StreakBoardCard.outsideSince(row, dayKey: String((row.attendanceDate ?? "").prefix(10)),
+                                     todayKey: ProjDate.fmt("yyyy-MM-dd").string(from: Date()))
+    }
     /// What the cell colour meant, in words — plus the number that decides the penalty.
     private var statusLabel: String {
         switch (row.attendanceDayType ?? "").uppercased() {
@@ -1964,6 +2110,16 @@ struct RecordActionsSheet: View {
                                     .font(NXFont.text(11, .bold)).foregroundStyle(Color.white)
                                     .padding(.horizontal, 9).padding(.vertical, 4).background(NX.danger, in: Capsule())
                             }
+                        }
+                        // Out of the office right now — today's open record (the web's "Outside since"
+                        // chip, owner 8 Oct 2026). Its own line: the row above is full on a phone.
+                        if let since = outsideSince {
+                            Label(String(format: T("Outside since %@"), ProjDate.fmt("HH:mm").string(from: since)),
+                                  systemImage: "figure.walk")
+                                .font(NXFont.text(11, .bold)).foregroundStyle(ChipTone.warning.fg)
+                                .padding(.horizontal, 9).padding(.vertical, 4)
+                                .background(ChipTone.warning.bg, in: Capsule())
+                                .accessibilityLabel(OutsideNowMark.label(since))
                         }
                     }
 

@@ -145,6 +145,7 @@ struct MoreView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
     @State private var viewer = Viewer.shared
+    @State private var badge = InboxBadge.shared
     private let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
@@ -157,12 +158,20 @@ struct MoreView: View {
                         MoreSection(T("Home Base")) {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 MoreTile(T("Messages"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
+                                    // Unread chats (muted ones left out); refreshes itself.
+                                    .overlay(alignment: .topTrailing) { ChatUnreadBadge().padding(12) }
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
                                 }
                                 MoreTile(T("My Submissions"), "tray.full.fill", NX.warning) { SubmissionsView() }
+                                // The Calendar has a tab of its own now and Inbox lives here, with the
+                                // unread count the More tab carries (owner, 8 Oct 2026). While the
+                                // server's `flags.calendar` holds the Calendar back, Inbox keeps its
+                                // tab and neither has a tile.
                                 if RemoteConfig.shared.calendar {
-                                    MoreTile(T("Calendar"), "calendar", NX.violetText) { CalendarView() }
+                                    MoreTile(T("Inbox"), "tray.fill", NX.blue, badge: badge.count) {
+                                        InboxView(providesOwnStack: false)
+                                    }
                                 }
                                 MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
                             }
@@ -224,6 +233,8 @@ struct MoreView: View {
     @ViewBuilder private func pushed(_ screen: NXScreen) -> some View {
         switch screen {
         case .messages: MessagesView()
+        // Inbox builds its own stack as a tab root; pushed here it must not (see above).
+        case .inbox:    InboxView(providesOwnStack: false)
         default:        screen.view
         }
     }
@@ -249,9 +260,13 @@ struct MoreTile<Destination: View>: View {
     let title: String
     let systemImage: String
     let tint: Color
+    /// An unread count drawn on the tile's corner (Inbox); 0 draws nothing.
+    var badge: Int = 0
     @ViewBuilder let destination: () -> Destination
-    init(_ title: String, _ systemImage: String, _ tint: Color, @ViewBuilder destination: @escaping () -> Destination) {
-        self.title = title; self.systemImage = systemImage; self.tint = tint; self.destination = destination
+    init(_ title: String, _ systemImage: String, _ tint: Color, badge: Int = 0,
+         @ViewBuilder destination: @escaping () -> Destination) {
+        self.title = title; self.systemImage = systemImage; self.tint = tint; self.badge = badge
+        self.destination = destination
     }
     var body: some View {
         NavigationLink { destination() } label: {
@@ -270,8 +285,20 @@ struct MoreTile<Destination: View>: View {
                     .nexusShadowSoft()
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
             }
+            .overlay(alignment: .topTrailing) {
+                if badge > 0 {
+                    // The tab bar's red count, on the tile it is about.
+                    Text(badge > 99 ? "99+" : "\(badge)")
+                        .font(NXFont.text(11, .bold)).monospacedDigit().foregroundStyle(Color.white)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(NX.danger, in: Capsule())
+                        .padding(12)
+                }
+            }
         }
         .buttonStyle(.plain)
+        .accessibilityValue(Text(verbatim: badge > 0 ? "\(badge) \(T("unread"))" : ""))
     }
 }
 

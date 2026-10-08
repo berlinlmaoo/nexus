@@ -51,8 +51,9 @@ struct WorkSessionLiveActivity: Widget {
                             .lineLimit(2)
                         Spacer(minLength: 0)
                         if state.isOutside {
-                            // The way out of the countdown that does not involve walking back:
-                            // an excuse for today holds the server's clock the moment it is filed.
+                            // Out for work: an excuse for today holds the server's clock the moment
+                            // it is filed (and, with the automatic check-out on, is the way out of
+                            // the countdown that does not involve walking back).
                             Link(destination: nxPermitTodayURL) {
                                 Text(tr(state, "File a permit", "Ajukan izin"))
                                     .font(.caption.weight(.semibold))
@@ -81,7 +82,8 @@ struct WorkSessionLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: symbol(state)).foregroundStyle(accent(state))
             } compactTrailing: {
-                // Outside: the time left before the automatic check-out, not the time worked.
+                // Outside with the automatic check-out on: the time left before it, not the time
+                // worked. With it off (since 8 Oct 2026) there is nothing to count down to.
                 clock(state)
                     .monospacedDigit()
                     .foregroundStyle(accent(state))
@@ -172,7 +174,8 @@ private func title(_ state: WorkSessionAttributes.ContentState, short: Bool) -> 
         : tr(state, "Outside the office since \(hhmm(since))", "Di luar kantor sejak \(hhmm(since))")
 }
 
-/// Time worked, or — outside the office — the time left before the automatic check-out.
+/// Time worked, or — outside the office, while the server's automatic check-out is switched on — the
+/// time left before it. Never a countdown without an `autoCheckoutAt` (the switch off, 8 Oct 2026).
 @ViewBuilder
 private func clock(_ state: WorkSessionAttributes.ContentState) -> some View {
     if state.isOutside, let since = state.outsideSince, let end = state.autoCheckoutAt, since < end {
@@ -217,6 +220,21 @@ private func caption(_ state: WorkSessionAttributes.ContentState) -> String {
                       "Ajukan izin atau balik ke kantor · check-out otomatis \(hhmm(auto))")
         default:
             return tr(state, "Auto check-out \(hhmm(auto))", "Check-out otomatis \(hhmm(auto))")
+        }
+    }
+    if state.isOutside {
+        // No automatic check-out (switched off since 8 Oct 2026): the server's 1h30 reminder and 2h
+        // heads-up in their own words, no countdown and no check-out time. Before 1h30 the title
+        // ("Outside the office since 20:59") says it all, and the line below stays the usual one.
+        switch state.stage {
+        case .warned:
+            return tr(state, "2 hours outside the office · if it's for work, file a permit",
+                      "Sudah 2 jam di luar kantor · ajukan izin kalau ada kegiatan di luar")
+        case .reminded:
+            return tr(state, "If it's for work, file a permit",
+                      "Ajukan izin kalau ada kegiatan di luar")
+        default:
+            break
         }
     }
     if let out = state.expectedOutAt {

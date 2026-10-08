@@ -12,12 +12,15 @@ import UIKit
 // Outside (owner, 28 Sep 2026), the route itself: GPS-grade fixes, a point per 50 m moved and a
 // heartbeat every 5 minutes standing still, uploaded in batches about every 2 minutes, plus a point on
 // leaving and on coming back sent at once. Leaving is announced on the phone right away and again an
-// hour in, with the time left (local notifications, NotificationManager.outsideAlert). The server
-// turns "outside for 1h30 / 2h" into pushes and at 2h30 checks the person out offsite; managers and
-// the BoD see the path and the hourly checks (LocationTrailView).
+// hour in (local notifications, NotificationManager.outsideAlert). The server turns "outside for
+// 1h30 / 2h" into pushes (and tells the person's approvers at 1h30); at 2h30 it checks the person out
+// offsite only while remote config `flags.outsideAutoCheckout` is on — off since 8 Oct 2026, when the
+// record stays open until they check out. Managers and the BoD see the path and the hourly checks
+// (LocationTrailView).
 //
-// The battery cost is deliberate and bounded: GPS runs continuously only while outside, and an
-// outside episode ends at the latest with the automatic check-out 2h30 in. Inside, nothing changes.
+// The battery cost is deliberate and bounded: GPS runs continuously only while outside, an outside
+// episode ends when the person comes back in or checks out (or, with the switch on, at the automatic
+// check-out 2h30 in), and the shift cap stops tracking either way. Inside, nothing changes.
 //
 // Why a stream, and what it costs. A suspended app runs no timer, and iOS offers no "wake me every
 // hour" for location: region monitoring only fires on a crossing, significant-change and visit
@@ -272,10 +275,14 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     /// `LiveActivityController.updateOutside` only spends an update when what it would draw changes
     /// (a new stage, a new start), the countdown itself is the system's, and `planOutsideAlerts`
     /// only answers with a change.
+    ///
+    /// The automatic check-out is the server's remote-config switch (`flags.outsideAutoCheckout`, off
+    /// since 8 Oct 2026). Off, neither the Island nor an alert names a check-out time or counts down.
     private func publishOutside() {
         let now = Date()
-        LiveActivityController.updateOutside(machine.outsideStatus(now: now))
-        let alerts = machine.planOutsideAlerts(now: now)
+        let autoCheckout = RemoteConfig.shared.outsideAutoCheckout
+        LiveActivityController.updateOutside(machine.outsideStatus(now: now, autoCheckout: autoCheckout))
+        let alerts = machine.planOutsideAlerts(now: now, autoCheckout: autoCheckout)
         guard !alerts.isEmpty else { return }
         persist()
         let recordId = machine.state.recordId

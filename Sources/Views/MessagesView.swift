@@ -6,6 +6,7 @@ import CoreLocation   // "kirim lokasi" reads CLLocationCoordinate2D members off
 /// Port of messages.tsx: conversation list grouped Direct/Groups/Projects → tap → chat thread.
 struct MessagesView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
     @State private var convos: [Conversation] = []
     @State private var loading = true
     @State private var error: String?
@@ -28,6 +29,13 @@ struct MessagesView: View {
     @Environment(AppRouter.self) private var router
     @State private var pushedConvo: FocusedConversation?
     @State private var focusMissing = false
+    /// Conversations fetched one by one because a push pointed at them before the list had them —
+    /// a group somebody added you to a minute ago. Kept apart from `convos` so a list refresh that
+    /// races the fetch cannot pull the open thread out from under the person reading it.
+    @State private var focusedConvos: [String: Conversation] = [:]
+    /// One background refresh at a time: a busy group pushing every second would otherwise stack
+    /// up a list fetch per message.
+    @State private var refreshing = false
 
     /// A chat list and the chat itself are the pair every messaging app puts side by side once
     /// there is room, because the whole job is moving between conversations. Pushing a thread and
@@ -57,32 +65,62 @@ struct MessagesView: View {
         .alert(T("That chat isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
             Text(T("You may have been removed from it, or the list hasn't loaded yet — pull to refresh."))
         }
+        // Runs again every time the list comes back on screen (popping back from a thread), which
+        // is what brings that thread's unread count and mute icon up to date.
         .task {
             await load()
             // An empty right-hand pane on first open is a screen asking to be clicked before it
             // shows anything. The phone has no equivalent: there, nothing is open yet by design.
             if isSplit, selected == nil { selected = convos.first }
-            claimFocus()
+            await claimFocus()
         }
-        .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
-        // Same reason as the thread, at a calmer pace: this only moves badges and previews.
-        .task {
+        .onChange(of: router.focus) { _, _ in
+            if !loading { Task { await claimFocus() } }
+        }
+        // Same reason as the thread, at a calmer pace: this only moves badges and previews. Only
+        // while the app is in front — `.task(id:)` cancels the loop when the phase changes and
+        // starts a fresh one on the way back.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
                 if Task.isCancelled { return }
-                if let fresh = try? await APIClient.shared.conversations() { convos = fresh }
+                await refreshQuietly()
             }
+        }
+        // Back from the background: the list is whatever it was when the phone was put down.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshQuietly() } }
+        }
+        // A chat push while the app is open: some conversation just moved.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { _ in
+            Task { await refreshQuietly() }
         }
     }
 
-    /// The list on its own — the whole screen on a phone, the left column on an iPad.
-    private func claimFocus() {
+    /// Opens the chat a notification asked for.
+    private func claimFocus() async {
         guard case .conversation(let id) = router.focus else { return }
         router.focus = nil
-        guard let c = convos.first(where: { $0.id == id }) else { focusMissing = true; return }
+        // That chat is already on screen (its push was tapped while reading it): bring it up to date
+        // instead of pushing a second copy of it on top.
+        if ChatPresence.visibleConversationId == id {
+            NotificationCenter.default.post(name: .nexusChatPush, object: nil, userInfo: ["conversationId": id])
+            return
+        }
+        var found = convos.first(where: { $0.id == id }) ?? focusedConvos[id]
+        if found == nil, let fetched = try? await APIClient.shared.conversation(id) {
+            // Not in the list this screen has — new, or the list is from before it existed. Ask the
+            // server for that one chat rather than telling the person it does not exist.
+            focusedConvos[fetched.id] = fetched
+            found = fetched
+            Task { await refreshQuietly() }
+        }
+        guard let c = found else { focusMissing = true; return }
         if isSplit { selected = c } else { pushedConvo = FocusedConversation(id: c.id) }
     }
 
+    /// The list on its own — the whole screen on a phone, the left column on an iPad.
     private var listPane: some View {
         ZStack {
             NX.background.ignoresSafeArea()
@@ -90,7 +128,7 @@ struct MessagesView: View {
         }
         // Inside the stack, whichever stack that is: this pane is pushed into Home's, More's, or its own.
         .navigationDestination(item: $pushedConvo) { f in
-            if let c = convos.first(where: { $0.id == f.id }) {
+            if let c = convos.first(where: { $0.id == f.id }) ?? focusedConvos[f.id] {
                 ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
                                members: c.members ?? [], projectId: c.projectId, type: c.type)
             }
@@ -249,6 +287,7 @@ struct MessagesView: View {
         // screen that is empty while the server is down.
         if convos.isEmpty, let hit = ResponseCache.decoded("conversations", as: ConversationsResponse.self) {
             convos = hit.value.conversations ?? []
+            ChatStore.shared.absorbCached(hit.value)
             loading = false
         }
         do { convos = try await APIClient.shared.conversations() }
@@ -259,6 +298,17 @@ struct MessagesView: View {
             }
         }
         loading = false
+    }
+
+    /// The list again, without the skeleton or an error screen: for the timer, a push and a return
+    /// to the app. A failure leaves what is on screen alone.
+    private func refreshQuietly() async {
+        guard !refreshing, !loading else { return }
+        refreshing = true
+        defer { refreshing = false }
+        do { convos = try await APIClient.shared.conversations() }
+        catch APIError.unauthorized { auth.logout() }
+        catch {}
     }
 }
 
@@ -277,6 +327,14 @@ struct ConvoRow: View {
         return URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)
     }
 
+    /// The last line under the name. A picture sent without a caption has empty content, which
+    /// used to leave the row with a blank second line.
+    private var preview: String {
+        guard let last = convo.lastMessage else { return T("No message yet") }
+        if last.content.isEmpty, let path = last.attachmentUrl, !path.isEmpty { return T("📷 Photo") }
+        return last.content
+    }
+
     private var groupGlyph: some View {
         ZStack {
             Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
@@ -285,6 +343,7 @@ struct ConvoRow: View {
     }
 
     var body: some View {
+        let muted = ChatStore.shared.isMuted(convo)
         HStack(spacing: 12) {
             if convo.isGroupish {
                 if let url = projectIconURL {
@@ -299,13 +358,24 @@ struct ConvoRow: View {
                 AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(convo.title(meId: meId)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(convo.lastMessage?.content ?? T("No message yet")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(convo.title(meId: meId)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    if muted {
+                        Image(systemName: "bell.slash.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(NX.mutedFg)
+                            .accessibilityLabel(T("Muted"))
+                    }
+                }
+                Text(preview).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 4)
             if let u = convo.unreadCount, u > 0 {
+                // Grey on a muted chat, the way every messaging app draws it: still counted, no
+                // longer asking for attention.
+                let badgeFill: Color = muted ? NX.mutedFg : NX.danger
                 Text("\(u)").font(NXFont.text(10, .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 3).background(NX.danger, in: Capsule())
+                    .padding(.horizontal, 6).padding(.vertical, 3).background(badgeFill, in: Capsule())
             }
         }
         .padding(14)
@@ -353,6 +423,23 @@ extension Conversation.Member {
     var initial: String { String((user?.name ?? "?").first ?? "?").uppercased() }
 }
 
+/// Colours for what sits on the sender's own bubble.
+private enum ChatInk {
+    /// Type and icons on `NX.onyx`, which is near-black in light mode and near-white in dark. Plain
+    /// white was used before and all but vanished on the dark-mode bubble (about 1.2:1).
+    static let onMine = Color(light: 0xffffff, dark: 0x202023)
+}
+
+/// The thread's sheets. One `.sheet(item:)` for all of them: two `.sheet` modifiers on one view and
+/// only one of them ever presents, which is how a button ends up doing nothing.
+private enum ChatThreadSheet: String, Identifiable {
+    case addPeople, taskPicker
+    var id: String { rawValue }
+}
+
+/// How a poll's attempt to stitch a hole shut ended.
+private enum ChatGapResult { case closed, unreachable, tooFar }
+
 /// Chat thread — message bubbles (mine onyx-right / others muted-left + name) + input.
 struct ChatThreadView: View {
     let conversationId: String
@@ -372,15 +459,18 @@ struct ChatThreadView: View {
     /// its bar is hidden.
     var usesInlineHeader: Bool = false
     @Environment(AuthStore.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var store = ChatStore.shared
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
     @State private var loading = true
     @State private var sending = false
+    /// Only for "Send location". Opening a chat used to ask for location permission on appear;
+    /// `currentFix()` asks by itself the first time somebody actually sends their location.
     @State private var loc = LocationManager()
     @State private var deniedPermission: PermissionKind?
     @State private var pendingMentions: [String: String] = [:]
-    @State private var showTaskPicker = false
-    @State private var showAddPeople = false
+    @State private var sheet: ChatThreadSheet?
     @State private var showRename = false
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var showPhotoPicker = false
@@ -394,10 +484,45 @@ struct ChatThreadView: View {
     @State private var notice: String?
     @State private var viewingPhoto: PhotoRef?
 
+    // Paging and live updates.
+    /// The server has answered at least once. Its first page REPLACES whatever the cache drew (that
+    /// copy may be days old and not continuous with today); every later answer is merged by id.
+    @State private var serverAnswered = false
+    /// The newest message this thread has fetched with nothing missing before it — what the next
+    /// poll asks `after`. Deliberately not `messages.last`: a message just sent is drawn at once,
+    /// and polling after it would skip whatever somebody else posted a moment before it.
+    @State private var pollAnchor: String?
+    @State private var pollInFlight = false
+    /// Whether this server answers `after=` (nil until a poll has shown it either way). Only a
+    /// hint for the page size: every answer is checked on its own, so a server updated while the
+    /// thread is open is picked up by the next poll.
+    @State private var afterSupported: Bool?
+    @State private var hasOlder = false
+    @State private var olderCursor: String?
+    @State private var loadingOlder = false
+    /// The end of the thread is on screen. New messages scroll into view only then; otherwise
+    /// they wait behind the "new messages" pill instead of yanking the person away from what
+    /// they scrolled up to read.
+    @State private var atBottom = true
+    @State private var viewportHeight: CGFloat = 0
+    @State private var unseenCount = 0
+    @State private var markedReadId: String?
+    @State private var readFailed = false
+
+    private static let pageSize = 50
+    private static let maxCatchUpPages = 5
+    private static let bottomId = "chat-bottom"
+    private static let scrollSpace = "chat-scroll"
+    /// How far below the visible area the end may sit and still count as "at the bottom".
+    private static let bottomSlack: CGFloat = 60
+
     private var meId: String? { auth.session?.userId }
     private var mentionable: [Conversation.Member] {
         members.filter { !$0.uid.isEmpty && $0.uid != meId }
     }
+    private var isMuted: Bool { store.isMuted(conversationId: conversationId) }
+    /// Hidden once the server has said it cannot mute (404 from the old server).
+    private var showsMuteMenu: Bool { store.muteSupported != false }
 
     /// Stands in for the navigation bar in the split layout: the same title and the same two
     /// actions, drawn inside the column so they sit over the conversation they belong to.
@@ -410,7 +535,7 @@ struct ChatThreadView: View {
             Spacer(minLength: 8)
             // Same conditions as the toolbar above: a DM can neither grow nor be renamed.
             if projectId != nil || type == "GROUP" {
-                Button { showAddPeople = true } label: {
+                Button { sheet = .addPeople } label: {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(NX.violetText)
@@ -429,6 +554,9 @@ struct ChatThreadView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Rename group"))
+            }
+            if showsMuteMenu {
+                muteMenu(iconSize: 16)
             }
         }
         .padding(.horizontal, 16)
@@ -468,27 +596,53 @@ struct ChatThreadView: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 6) {
-                        if loading { ProgressView().tint(NX.violetText).padding(.top, 40) }
-                        else if messages.isEmpty {
-                            Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
+                    VStack(spacing: 0) {
+                        LazyVStack(spacing: 6) {
+                            if hasOlder && !messages.isEmpty { olderRow(proxy) }
+                            if loading { ProgressView().tint(NX.violetText).padding(.top, 40) }
+                            else if messages.isEmpty {
+                                Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
+                            }
+                            ForEach(messages) { m in
+                                bubble(m).id(m.id)
+                            }
                         }
-                        ForEach(messages) { m in bubble(m) }
-                        Color.clear.frame(height: 1).id("bottom")
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        bottomMarker
                     }
-                    .padding(16)
                 }
-                .onChange(of: messages.count) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .task { await load(); withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
-                // The iOS client has no socket, so an open thread refreshes itself. .task cancels
-                // this loop the moment the screen goes away - no timer to invalidate, and it can
-                // never outlive the view. The existing onChange above handles the scroll.
-                .task {
-                    while !Task.isCancelled {
-                        try? await Task.sleep(for: .seconds(5))
-                        if Task.isCancelled { return }
-                        await load()
+                .coordinateSpace(.named(Self.scrollSpace))
+                .background {
+                    GeometryReader { g in
+                        Color.clear
+                            .onAppear { viewportHeight = g.size.height }
+                            .onChange(of: g.size.height) { old, h in
+                                viewportHeight = h
+                                // The keyboard came up while the end of the thread was in view:
+                                // keep the end in view instead of letting it slide under the keyboard.
+                                if h < old, atBottom { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
+                            }
                     }
+                }
+                .overlay(alignment: .bottom) {
+                    if unseenCount > 0 { newMessagesPill(proxy) }
+                }
+                // Keyed on the newest message's id, not on the count: the count stops moving once a
+                // page is full, and loading older history changes it without anything new arriving.
+                .onChange(of: messages.last?.id) { old, new in
+                    lastMessageChanged(from: old, to: new, proxy: proxy)
+                }
+                .task { await firstLoad() }
+                // The iOS client has no socket, so an open thread refreshes itself — only while it is
+                // on screen (.task ends with the view) and only while the app is in front (`id`
+                // restarts the loop when the phase changes, and the restart catches up at once).
+                .task(id: scenePhase == .active) { await pollWhileActive() }
+                // A push for this chat while it is open: fetch now rather than at the next tick.
+                .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { note in
+                    let target = note.userInfo?["conversationId"] as? String
+                    guard target == nil || target == conversationId else { return }
+                    Task { await pollNewer() }
                 }
                 // On the scroll view rather than on the VStack below, which already carries the
                 // camera's cover: two of these on one view and only the last one ever presents.
@@ -498,6 +652,16 @@ struct ChatThreadView: View {
             composer
         }
         .background(NX.background.ignoresSafeArea())
+        // Links in messages: a NEXUS form or vault link opens in the app, the way it does when
+        // tapped anywhere else; everything else goes to the system (Safari, Maps, Mail).
+        .environment(\.openURL, OpenURLAction { url in
+            let parts = url.pathComponents.filter { $0 != "/" }
+            if Config.isNexusHost(url), parts.count == 2, parts[0] == "f" || parts[0] == "v" {
+                Task { @MainActor in AppRouter.shared.open(url) }
+                return .handled
+            }
+            return .systemAction
+        })
         .navigationTitle(usesInlineHeader ? "" : (shownTitle ?? title))
         .toolbar(usesInlineHeader ? .hidden : .visible, for: .navigationBar)
         .toolbar {
@@ -506,7 +670,7 @@ struct ChatThreadView: View {
             // closed: two people is what a DM means.
             if projectId != nil || type == "GROUP" {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAddPeople = true } label: {
+                    Button { sheet = .addPeople } label: {
                         Image(systemName: "person.badge.plus").font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(NX.violetText)
                     }
@@ -524,6 +688,9 @@ struct ChatThreadView: View {
                             .foregroundStyle(NX.violetText)
                     }
                 }
+            }
+            if showsMuteMenu {
+                ToolbarItem(placement: .topBarTrailing) { muteMenu(iconSize: 15) }
             }
         }
         .alert(T("Rename group"), isPresented: $showRename) {
@@ -549,29 +716,213 @@ struct ChatThreadView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showAddPeople) {
-            if let pid = projectId {
-                AddProjectPeopleSheet(
-                    target: .project(pid),
-                    existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
-                    onAdded: { notice = T("Added. They'll show up here once they open the app.") }
-                )
-            } else if type == "GROUP" {
-                AddProjectPeopleSheet(
-                    target: .group(conversationId: conversationId),
-                    existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
-                    // A group owns its member list outright, so the change is immediate — no
-                    // waiting for the other person to open the app, unlike a project room.
-                    onAdded: { notice = T("Added to the group.") }
-                )
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .addPeople:
+                addPeopleSheet
+            case .taskPicker:
+                TaskLinkPicker(projectId: projectId, meId: meId) { t in Task { await sendTaskLink(t) } }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { loc.requestPermissionIfNeeded() }
         .permissionAlert($deniedPermission)
-        .sheet(isPresented: $showTaskPicker) {
-            TaskLinkPicker(projectId: projectId, meId: meId) { t in Task { await sendTaskLink(t) } }
+        // Which chat is on screen, for the notification delegate: a push for the chat being read
+        // is not shown as a banner. Its banners already in Notification Center go once it opens.
+        .onAppear {
+            ChatPresence.visibleConversationId = conversationId
+            ChatPresence.clearDelivered(conversationId: conversationId)
         }
+        .onDisappear {
+            if ChatPresence.visibleConversationId == conversationId {
+                ChatPresence.visibleConversationId = nil
+            }
+        }
+    }
+
+    @ViewBuilder private var addPeopleSheet: some View {
+        if let pid = projectId {
+            AddProjectPeopleSheet(
+                target: .project(pid),
+                existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
+                onAdded: { notice = T("Added. They'll show up here once they open the app.") }
+            )
+        } else if type == "GROUP" {
+            AddProjectPeopleSheet(
+                target: .group(conversationId: conversationId),
+                existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
+                // A group owns its member list outright, so the change is immediate — no
+                // waiting for the other person to open the app, unlike a project room.
+                onAdded: { notice = T("Added to the group.") }
+            )
+        }
+    }
+
+    // MARK: mute
+
+    private func muteMenu(iconSize: CGFloat) -> some View {
+        Menu {
+            if let until = store.mutedUntil(conversationId: conversationId) {
+                Section(Self.mutedCaption(until)) {
+                    Button { Task { await setMute(nil) } } label: {
+                        Label(T("Unmute"), systemImage: "bell")
+                    }
+                }
+            } else {
+                Button { Task { await setMute(Self.muteUntil(hours: 8)) } } label: {
+                    Label(T("Mute for 8 hours"), systemImage: "bell.slash")
+                }
+                Button { Task { await setMute(Self.muteUntil(hours: 24 * 7)) } } label: {
+                    Label(T("Mute for 1 week"), systemImage: "bell.slash")
+                }
+                Button { Task { await setMute("forever") } } label: {
+                    Label(T("Mute always"), systemImage: "bell.slash.fill")
+                }
+            }
+        } label: {
+            Image(systemName: isMuted ? "bell.slash" : "bell")
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundStyle(NX.violetText)
+        }
+        .accessibilityLabel(isMuted ? T("Muted") : T("Mute notifications"))
+    }
+
+    /// "Muted until 9 Oct, 02:00", or just "Muted" for "Always" (stored as a far-future date).
+    private static func mutedCaption(_ raw: String) -> String {
+        guard let until = ChatStore.parseDate(raw),
+              until.timeIntervalSinceNow < 5 * 365 * 24 * 3600 else { return T("Muted") }
+        return String(format: T("Muted until %@"), until.formatted(date: .abbreviated, time: .shortened))
+    }
+
+    private static func muteUntil(hours: Double) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.string(from: Date().addingTimeInterval(hours * 3600))
+    }
+
+    private func setMute(_ until: String?) async {
+        notice = nil
+        do {
+            let stored = try await APIClient.shared.setConversationMute(conversationId, until: until)
+            // A server that answers without the field still did what was asked.
+            let effective: String? = until == nil ? nil : (stored ?? until)
+            store.setMuted(conversationId, until: effective)
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch APIError.http(let code, _) where code == 404 {
+            // The old server has no mute route. Take the option away rather than offer it again.
+            store.muteUnavailable()
+            notice = T("Muting isn't available yet. It comes with the next server update.")
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't change notifications for this chat.")
+        }
+    }
+
+    // MARK: scroll position
+
+    /// The end of the thread. Outside the lazy stack on purpose: a lazy child only exists near the
+    /// screen, so where it sits cannot be read once it is far away. This one always exists, and its
+    /// position in the scroll view's own coordinates says whether the person is at the end.
+    private var bottomMarker: some View {
+        Color.clear
+            .frame(height: 16)
+            .id(Self.bottomId)
+            .background {
+                GeometryReader { g in
+                    let y = g.frame(in: .named(Self.scrollSpace)).minY
+                    Color.clear
+                        .onAppear { updateAtBottom(markerY: y) }
+                        .onChange(of: y) { _, v in updateAtBottom(markerY: v) }
+                }
+            }
+    }
+
+    /// Called on every scroll frame, so it writes state only when something actually changes.
+    private func updateAtBottom(markerY y: CGFloat) {
+        guard viewportHeight > 0 else { return }
+        let now = y <= viewportHeight + Self.bottomSlack
+        if now != atBottom { atBottom = now }
+        if now {
+            if unseenCount != 0 { unseenCount = 0 }
+            markReadIfNeeded()
+        }
+    }
+
+    private func lastMessageChanged(from old: String?, to new: String?, proxy: ScrollViewProxy) {
+        guard new != nil else { return }
+        guard let old else {
+            // First draw, from the cache or the server: start at the end, without sliding down
+            // from the top. Again a moment later, once the lazy stack has measured the bubbles it
+            // only estimated the first time round.
+            scrollToBottom(proxy, animated: false)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                proxy.scrollTo(Self.bottomId, anchor: .bottom)
+            }
+            return
+        }
+        let newestIsMine = messages.last.map { $0.userId != nil && $0.userId == meId } ?? false
+        if atBottom || newestIsMine {
+            scrollToBottom(proxy, animated: true)
+        } else {
+            let added: Int
+            if let i = messages.firstIndex(where: { $0.id == old }) {
+                added = messages.count - 1 - i
+            } else {
+                added = 1
+            }
+            unseenCount += max(added, 1)
+        }
+    }
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
+        unseenCount = 0
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
+        } else {
+            proxy.scrollTo(Self.bottomId, anchor: .bottom)
+        }
+        // Said here as well as by the geometry: a jump made in code lands before the next layout
+        // pass reports where the end is.
+        atBottom = true
+        markReadIfNeeded()
+    }
+
+    private func newMessagesPill(_ proxy: ScrollViewProxy) -> some View {
+        let label: String = unseenCount == 1 ? T("1 new message") : String(format: T("%d new messages"), unseenCount)
+        return Button {
+            scrollToBottom(proxy, animated: true)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down").font(.system(size: 12, weight: .bold))
+                Text(label).font(NXFont.text(13, .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(NX.violetFill, in: Capsule())
+            .nexusShadowSoft()
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 10)
+    }
+
+    /// The top of what is loaded, when the conversation goes further back.
+    private func olderRow(_ proxy: ScrollViewProxy) -> some View {
+        Button { Task { await loadOlder(proxy) } } label: {
+            HStack(spacing: 6) {
+                if loadingOlder {
+                    ProgressView().controlSize(.small).tint(NX.violetText)
+                } else {
+                    Image(systemName: "arrow.up").font(.system(size: 11, weight: .bold))
+                }
+                Text(T("Load earlier messages")).font(NXFont.text(12, .semibold))
+            }
+            .foregroundStyle(NX.violetText)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(NX.accentBg, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(loadingOlder)
+        .padding(.bottom, 6)
     }
 
     // MARK: composer
@@ -640,7 +991,7 @@ struct ChatThreadView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
                     Button { Task { await sendLocation() } } label: { Label(T("Send location"), systemImage: "mappin.and.ellipse") }
-                    Button { showTaskPicker = true } label: { Label(T("Link to a task"), systemImage: "checklist") }
+                    Button { sheet = .taskPicker } label: { Label(T("Link to a task"), systemImage: "checklist") }
                     // A PhotosPicker nested in a Menu draws its row but never opens: the menu tears
                     // down its content as it dismisses, and the picker's presentation goes with it.
                     // Flip a flag here and present from the composer, which outlives the menu.
@@ -676,7 +1027,7 @@ struct ChatThreadView: View {
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                 Button { Task { await send() } } label: {
-                    Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(ChatInk.onMine)
                         .frame(width: 40, height: 40).background(NX.onyx, in: Circle())
                 // A picture on its own is a message. send() always allowed that; the button did
                 // not, so a photo-only reply looked broken until you typed something.
@@ -692,6 +1043,7 @@ struct ChatThreadView: View {
 
     @ViewBuilder private func bubble(_ m: ChatMessage) -> some View {
         let mine = m.userId != nil && m.userId == meId
+        let ink: Color = mine ? ChatInk.onMine : NX.foreground
         SwipeToReply(onReply: { replyingTo = m }) {
             HStack(alignment: .bottom, spacing: 8) {
                 if mine {
@@ -726,8 +1078,11 @@ struct ChatThreadView: View {
                     case .task(let id, let title):
                         taskCard(id: id, title: title, mine: mine)
                     case .plain:
-                        styledText(m.content).font(NXFont.text(15))
-                            .foregroundStyle(mine ? Color.white : NX.foreground)
+                        Self.richText(m.content, mine: mine).font(NXFont.text(15))
+                            .foregroundStyle(ink)
+                            // Links take the tint. On the sender's own dark bubble the brand
+                            // violet would not read, so there they are the bubble's ink, underlined.
+                            .tint(mine ? ChatInk.onMine : NX.violetText)
                     }
                     }
                 }
@@ -738,6 +1093,11 @@ struct ChatThreadView: View {
                 // a wide grey slab with the bubble floating inside it.
                 .contextMenu {
                     Button { replyingTo = m } label: { Label(T("Reply"), systemImage: "arrowshape.turn.up.left") }
+                    if !m.content.isEmpty {
+                        Button { UIPasteboard.general.string = m.content } label: {
+                            Label(T("Copy"), systemImage: "doc.on.doc")
+                        }
+                    }
                 }
                 if !mine { Spacer(minLength: 50) }
             }
@@ -749,15 +1109,15 @@ struct ChatThreadView: View {
     @ViewBuilder private func quoteBlock(_ q: ChatMessage.Quoted, mine: Bool) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(mine ? Color.white.opacity(0.55) : NX.violet)
+                .fill(mine ? ChatInk.onMine.opacity(0.55) : NX.violet)
                 .frame(width: 2.5)
             VStack(alignment: .leading, spacing: 1) {
                 Text(q.user?.name ?? T("Message"))
                     .font(NXFont.text(10, .bold))
-                    .foregroundStyle(mine ? Color.white.opacity(0.85) : NX.violetText)
+                    .foregroundStyle(mine ? ChatInk.onMine.opacity(0.85) : NX.violetText)
                 Text(Self.quotePreview(q))
                     .font(NXFont.text(11))
-                    .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
+                    .foregroundStyle(mine ? ChatInk.onMine.opacity(0.7) : NX.mutedFg)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
@@ -773,17 +1133,55 @@ struct ChatThreadView: View {
         return body.count > 80 ? String(body.prefix(78)) + "…" : body
     }
 
-    /// Highlights @mention tokens. Concatenating `Text` (not a wrapping view) keeps it one
-    /// selectable, wrapping paragraph — which is why this uses the deprecated `foregroundColor`
-    /// (`foregroundStyle` on Text returns `some View` and can't be concatenated).
-    private func styledText(_ s: String) -> Text {
-        var out = Text("")
+    /// One detector for every bubble: building it is the expensive part, matching is cheap.
+    private static let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
+    /// Web addresses (and email addresses) in a message, in order.
+    static func linkRanges(in s: String) -> [(Range<String.Index>, URL)] {
+        // Every address has a dot or an "@" in it; most messages have neither, and skip the detector.
+        guard s.contains(".") || s.contains("@"), let detector = linkDetector else { return [] }
+        let whole = NSRange(s.startIndex..<s.endIndex, in: s)
+        return detector.matches(in: s, options: [], range: whole).compactMap { match -> (Range<String.Index>, URL)? in
+            guard let url = match.url, let r = Range(match.range, in: s) else { return nil }
+            return (r, url)
+        }
+    }
+
+    /// The message as one Text: links tappable and underlined, @mentions bold. Concatenating
+    /// `Text` (not a wrapping view) keeps it one selectable, wrapping paragraph — which is why the
+    /// mentions use the deprecated `foregroundColor`, the form that still returns a Text. A link is
+    /// a Text built from an AttributedString carrying `.link`, which SwiftUI opens through the
+    /// `openURL` action set on the thread.
+    static func richText(_ s: String, mine: Bool) -> Text {
+        var out = Text(verbatim: "")
+        var cursor = s.startIndex
+        for (range, url) in linkRanges(in: s) {
+            guard range.lowerBound >= cursor else { continue }
+            if cursor < range.lowerBound {
+                out = out + mentionText(String(s[cursor..<range.lowerBound]), mine: mine)
+            }
+            var link = AttributedString(String(s[range]))
+            link.link = url
+            out = out + Text(link).underline()
+            cursor = range.upperBound
+        }
+        if cursor < s.endIndex {
+            out = out + mentionText(String(s[cursor...]), mine: mine)
+        }
+        return out
+    }
+
+    /// Highlights @mention tokens. On the sender's own bubble the mention keeps the bubble's ink
+    /// and only turns bold: the brand violet does not read on onyx.
+    private static func mentionText(_ s: String, mine: Bool) -> Text {
+        let mentionInk: Color = mine ? ChatInk.onMine : NX.violetText
+        var out = Text(verbatim: "")
         var first = true
         for w in s.split(separator: " ", omittingEmptySubsequences: false) {
             let sep = first ? "" : " "
             first = false
             if w.count > 1, w.hasPrefix("@") {
-                out = out + Text(sep) + Text(String(w)).foregroundColor(NX.violetText).fontWeight(.bold)
+                out = out + Text(verbatim: sep) + Text(String(w)).foregroundColor(mentionInk).fontWeight(.bold)
             } else {
                 out = out + Text(sep + String(w))
             }
@@ -795,15 +1193,15 @@ struct ChatThreadView: View {
         Link(destination: url) {
             HStack(spacing: 10) {
                 Image(systemName: "mappin.circle.fill").font(.system(size: 22))
-                    .foregroundStyle(mine ? Color.white : NX.violetText)
+                    .foregroundStyle(mine ? ChatInk.onMine : NX.violetText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Shared location")).font(NXFont.text(13, .bold))
-                        .foregroundStyle(mine ? Color.white : NX.foreground)
+                        .foregroundStyle(mine ? ChatInk.onMine : NX.foreground)
                     Text(String(format: "%.5f, %.5f", lat, lng)).font(NXFont.text(11))
-                        .foregroundStyle(mine ? Color.white.opacity(0.75) : NX.mutedFg)
+                        .foregroundStyle(mine ? ChatInk.onMine.opacity(0.75) : NX.mutedFg)
                 }
                 Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
+                    .foregroundStyle(mine ? ChatInk.onMine.opacity(0.7) : NX.mutedFg)
             }
         }
     }
@@ -812,15 +1210,15 @@ struct ChatThreadView: View {
         NavigationLink { TaskDetailView(taskId: id) } label: {
             HStack(spacing: 10) {
                 Image(systemName: "checklist").font(.system(size: 18))
-                    .foregroundStyle(mine ? Color.white : NX.violetText)
+                    .foregroundStyle(mine ? ChatInk.onMine : NX.violetText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("TASK")).font(NXFont.text(10, .bold)).tracking(0.5)
-                        .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
+                        .foregroundStyle(mine ? ChatInk.onMine.opacity(0.7) : NX.mutedFg)
                     Text(title).font(NXFont.text(13, .bold)).lineLimit(2).multilineTextAlignment(.leading)
-                        .foregroundStyle(mine ? Color.white : NX.foreground)
+                        .foregroundStyle(mine ? ChatInk.onMine : NX.foreground)
                 }
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
+                    .foregroundStyle(mine ? ChatInk.onMine.opacity(0.7) : NX.mutedFg)
             }
         }
         .buttonStyle(.plain)
@@ -853,27 +1251,241 @@ struct ChatThreadView: View {
         }
     }
 
-    private func load() async {
+    // MARK: loading
+
+    /// On appear: the cached end of the thread at once, then the server's.
+    private func firstLoad() async {
         if messages.isEmpty,
            let hit = ResponseCache.decoded("messages-\(conversationId)", as: MessagesResponse.self) {
-            messages = hit.value.messages ?? []
+            let cached = hit.value.messages ?? []
+            messages = cached
+            hasOlder = hit.value.hasMore ?? (cached.count >= Self.pageSize)
+            olderCursor = hit.value.nextCursor ?? cached.first?.createdAt
             loading = false
         }
+        await loadLatest()
+    }
+
+    /// The newest page. The first answer replaces the cached copy; after that it is merged, and if
+    /// it no longer reaches back to what the thread already had, the hole is filled from below.
+    private func loadLatest() async {
         do {
-            messages = try await APIClient.shared.conversationMessages(conversationId)
-            // Read on screen = read on the server, but only when something new arrived: the thread
-            // polls every 5 s and most polls bring nothing.
-            if let last = messages.last?.id, last != markedReadId {
-                markedReadId = last
-                try? await APIClient.shared.markConversationRead(conversationId)
+            let page = try await APIClient.shared.conversationMessagesPage(conversationId)
+            let rows = page.messages ?? []
+            if !serverAnswered {
+                serverAnswered = true
+                messages = rows
+                hasOlder = page.hasMore ?? (rows.count >= Self.pageSize)
+                olderCursor = page.nextCursor ?? rows.first?.createdAt
+                pollAnchor = rows.last?.id
+            } else {
+                let anchor = pollAnchor
+                merge(rows)
+                if let anchor, !rows.isEmpty, !rows.contains(where: { $0.id == anchor }) {
+                    switch await closeGap(below: rows.first, anchor: anchor) {
+                    case .closed: pollAnchor = rows.last?.id
+                    case .unreachable: break
+                    case .tooFar: await restartFromNewest()
+                    }
+                } else if let last = rows.last?.id {
+                    pollAnchor = last
+                }
             }
+            markReadIfNeeded()
         }
         catch APIError.unauthorized { auth.logout() }
         // A failed refresh leaves whatever was already read on screen rather than blanking it.
         catch {}
         loading = false
     }
-    @State private var markedReadId: String?
+
+    /// Runs while the thread is on screen and the app is in front.
+    private func pollWhileActive() async {
+        guard scenePhase == .active else { return }
+        // Back from the background or the lock screen: catch up now rather than five seconds from
+        // now, and take this chat's banners out of Notification Center — they are on screen.
+        if serverAnswered {
+            ChatPresence.clearDelivered(conversationId: conversationId)
+            await pollNewer()
+        }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(5))
+            if Task.isCancelled { return }
+            await pollNewer()
+        }
+    }
+
+    /// Whatever arrived after `pollAnchor`, merged by id. Never replaces the list with the newest
+    /// page: a long chat that has scrolled back keeps what it loaded, and nothing in between goes
+    /// missing however many messages arrived.
+    private func pollNewer() async {
+        guard !pollInFlight else { return }
+        guard serverAnswered, let anchor = pollAnchor else { await loadLatest(); return }
+        pollInFlight = true
+        defer { pollInFlight = false }
+        do {
+            var cursor = anchor
+            pages: for _ in 0..<Self.maxCatchUpPages {
+                let page = try await APIClient.shared.conversationMessagesPage(
+                    conversationId, after: cursor, limit: afterSupported == true ? 100 : Self.pageSize)
+                let rows = page.messages ?? []
+                if rows.contains(where: { $0.id == cursor }) {
+                    // An older server ignores `after` and answers the newest page, as it always
+                    // did. That page still holds the message asked after, so it joins on with
+                    // nothing missing in between.
+                    afterSupported = false
+                    merge(rows)
+                    if let last = rows.last?.id { pollAnchor = last }
+                    break pages
+                }
+                if rows.isEmpty {
+                    // Nothing newer. Only a server that understands `after` ever says that: the
+                    // old one always answers with a page.
+                    afterSupported = true
+                    break pages
+                }
+                merge(rows)
+                if page.hasCursorField { afterSupported = true }
+                if afterSupported == true {
+                    if let last = rows.last?.id {
+                        pollAnchor = last
+                        cursor = last
+                    }
+                    if page.hasMore != true { break pages }
+                } else {
+                    // Can't tell which server this is: an old one with more than a page of new
+                    // messages, or a new one that sent no cursor. Walk back from the oldest message
+                    // just received until the anchor shows up; that is right for both.
+                    switch await closeGap(below: rows.first, anchor: cursor) {
+                    case .closed: if let last = rows.last?.id { pollAnchor = last }
+                    case .unreachable: break
+                    case .tooFar: await restartFromNewest()
+                    }
+                    break pages
+                }
+            }
+            if readFailed {
+                readFailed = false
+                markedReadId = nil
+            }
+            markReadIfNeeded()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch APIError.http(let code, _) where code == 400 || code == 404 {
+            // The message asked after is gone, or `after` was refused outright: the newest page,
+            // merged, is still right.
+            await loadLatest()
+        } catch {}
+    }
+
+    /// Walks back from `oldest` (the oldest message just received) until `anchor` (the newest one
+    /// the thread already had) turns up, merging every page on the way.
+    private func closeGap(below oldest: ChatMessage?, anchor: String) async -> ChatGapResult {
+        var cursor = oldest?.createdAt
+        var firstPage = true
+        for _ in 0..<Self.maxCatchUpPages {
+            guard let c = cursor else { return .unreachable }
+            guard let page = try? await APIClient.shared.conversationMessagesPage(
+                conversationId, before: c, limit: 100) else { return .unreachable }
+            let rows = page.messages ?? []
+            merge(rows)
+            if let i = rows.firstIndex(where: { $0.id == anchor }) {
+                // The anchor was the newest message just under what `after` returned: that answer
+                // joined on exactly, so this server does understand `after`.
+                if firstPage && i == rows.count - 1 { afterSupported = true }
+                return .closed
+            }
+            if rows.isEmpty || page.hasMore == false { return .closed }
+            firstPage = false
+            cursor = page.nextCursor ?? rows.first?.createdAt
+        }
+        return .tooFar
+    }
+
+    /// Hundreds of messages arrived while the phone was away — more than is worth stitching. Start
+    /// again from the newest page so what is on screen is at least continuous; older history is
+    /// still one tap away at the top.
+    private func restartFromNewest() async {
+        guard let page = try? await APIClient.shared.conversationMessagesPage(conversationId) else { return }
+        let rows = page.messages ?? []
+        messages = rows
+        hasOlder = page.hasMore ?? (rows.count >= Self.pageSize)
+        olderCursor = page.nextCursor ?? rows.first?.createdAt
+        pollAnchor = rows.last?.id
+    }
+
+    /// One page further back, kept in place on screen.
+    private func loadOlder(_ proxy: ScrollViewProxy) async {
+        guard !loadingOlder, let cursor = olderCursor ?? messages.first?.createdAt else { return }
+        let keep = messages.first?.id
+        loadingOlder = true
+        defer { loadingOlder = false }
+        do {
+            let page = try await APIClient.shared.conversationMessagesPage(
+                conversationId, before: cursor, limit: Self.pageSize)
+            let rows = page.messages ?? []
+            merge(rows)
+            hasOlder = !rows.isEmpty && (page.hasMore ?? (rows.count >= Self.pageSize))
+            if let next = page.nextCursor ?? rows.first?.createdAt { olderCursor = next }
+            // Stay on the message that was at the top. Prepending leaves the scroll offset where it
+            // was, which would slide the older page in under the finger.
+            if let keep {
+                proxy.scrollTo(keep, anchor: .top)
+                // Again once the new rows have been laid out, which may be after this returns.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    proxy.scrollTo(keep, anchor: .top)
+                }
+            }
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load earlier messages.")
+        }
+    }
+
+    /// Adds what is new, by id, and keeps the thread in time order. A message already on screen is
+    /// left as it is.
+    private func merge(_ incoming: [ChatMessage]) {
+        guard !incoming.isEmpty else { return }
+        var known = Set(messages.map(\.id))
+        var added: [ChatMessage] = []
+        for m in incoming where !known.contains(m.id) {
+            known.insert(m.id)
+            added.append(m)
+        }
+        guard !added.isEmpty else { return }
+        messages = Self.chronological(messages + added)
+    }
+
+    /// Oldest first by `createdAt` (the server's ISO times sort as text), ties kept in arrival order.
+    private static func chronological(_ list: [ChatMessage]) -> [ChatMessage] {
+        list.enumerated().sorted { a, b in
+            let ka = a.element.createdAt ?? ""
+            let kb = b.element.createdAt ?? ""
+            if ka != kb { return ka < kb }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+
+    /// Read on screen = read on the server: only while the end of the thread is in view and the app
+    /// is in front, and only up to the last message actually shown. One request per new last
+    /// message, however often the scroll position reports in.
+    private func markReadIfNeeded() {
+        guard scenePhase == .active, atBottom, let last = messages.last?.id, last != markedReadId else { return }
+        markedReadId = last
+        store.markedRead(conversationId)
+        let id = conversationId
+        Task {
+            do {
+                try await APIClient.shared.markConversationRead(id, upToMessageId: last)
+            } catch {
+                // Retried by the next poll, not on the next scroll frame.
+                readFailed = true
+            }
+        }
+    }
+
     private func send() async {
         let v = input.trimmingCharacters(in: .whitespaces)
         // A picture on its own is a message; text is only required when nothing is attached.
@@ -887,14 +1499,22 @@ struct ChatThreadView: View {
         // send behind `try?` — a 403, a 413 or a dead network made the message vanish with nothing
         // on screen, and the person walked away believing it was delivered.
         do {
-            try await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
-                                                   attachmentUrl: attachment?.url, attachmentType: attachment?.type,
-                                                   replyToId: replyId)
+            let sent = try await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
+                                                              attachmentUrl: attachment?.url, attachmentType: attachment?.type,
+                                                              replyToId: replyId)
             input = ""; pendingMentions = [:]; pendingAttachment = nil; replyingTo = nil
-            await load()
+            await showSent(sent)
         } catch {
             notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send. Your message is still here — try again.")
         }
+    }
+
+    /// Draws the message just sent at once, then fetches whatever else arrived — polling after the
+    /// thread's own anchor, not after the new message, so nothing posted a moment earlier by
+    /// somebody else is skipped.
+    private func showSent(_ sent: ChatMessage?) async {
+        if let sent { merge([sent]) }
+        await pollNewer()
     }
 
     /// The library hands back whatever the camera produced - often HEIC, which the server rejects.
@@ -939,8 +1559,8 @@ struct ChatThreadView: View {
         do {
             let fix = try await loc.currentFix()
             let text = "📍 " + T("My location") + ": https://www.google.com/maps?q=\(fix.latitude),\(fix.longitude)"
-            try await APIClient.shared.sendMessage(conversationId, content: text)
-            await load()
+            let sent = try await APIClient.shared.sendMessage(conversationId, content: text)
+            await showSent(sent)
         } catch LocationManager.LocationError.denied {
             deniedPermission = .location
         } catch {
@@ -951,8 +1571,8 @@ struct ChatThreadView: View {
         sending = true; notice = nil
         defer { sending = false }
         do {
-            try await APIClient.shared.sendMessage(conversationId, content: "📋 Task: \(t.title) [task:\(t.id)]")
-            await load()
+            let sent = try await APIClient.shared.sendMessage(conversationId, content: "📋 Task: \(t.title) [task:\(t.id)]")
+            await showSent(sent)
         } catch {
             notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the task link.")
         }

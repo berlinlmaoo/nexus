@@ -51,7 +51,9 @@ struct WorkSessionAttributes: ActivityAttributes {
 
         /// Start of the episode, as the server's pushes quote it ("di luar kantor sejak 20:59").
         var outsideSince: Date? = nil
-        /// When the server will check the person out offsite if nothing changes. The countdown.
+        /// When the server will check the person out offsite if nothing changes. The countdown. Nil
+        /// while the server's automatic check-out is switched off (remote config, off since 8 Oct
+        /// 2026): the outside look stays, with no check-out time and nothing counting down.
         var autoCheckoutAt: Date? = nil
         /// Nil or `.inside`: the normal session look.
         var stage: OutsideStage? = nil
@@ -59,10 +61,10 @@ struct WorkSessionAttributes: ActivityAttributes {
         /// where the in-app language switch lives, so it travels with the state. Nil = English.
         var lang: String? = nil
 
-        /// Outside, with a countdown to draw. A queued tap still in flight takes precedence
-        /// (`isPending`): that is the more urgent thing to know.
+        /// Outside the office, with or without a countdown (`autoCheckoutAt`). A queued tap still in
+        /// flight takes precedence (`isPending`): that is the more urgent thing to know.
         var isOutside: Bool {
-            guard let stage, stage != .inside, outsideSince != nil, autoCheckoutAt != nil else { return false }
+            guard let stage, stage != .inside, outsideSince != nil else { return false }
             return !isPending
         }
 

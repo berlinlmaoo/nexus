@@ -160,6 +160,24 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     let link: String?
 
     var isRead: Bool { read == true }
+
+    /// "Budi is outside the office" — the one push a staff member's attendance approvers get per
+    /// outside episode, at 1 h 30 (server cd89d72, owner 8 Oct 2026). Its link is "/attendance".
+    static let outsideApproverType = "attendance_outside_approver"
+
+    /// What kind of signal this is, in words, for the few types that have a drawing of their own
+    /// (`symbol`); nil = the raw type, as the Inbox has always shown it.
+    var kindLabel: String? {
+        // The approver's push, and the staff member's own 1 h 30 reminder and 2 h heads-up.
+        (type ?? "").lowercased().hasPrefix("attendance_outside") ? T("Outside the office") : nil
+    }
+    /// SF Symbol for the row's leading circle, for the types that have one; nil = the "N" mark. The
+    /// outside-the-office signals draw a walking figure in amber, the crew board's own mark for
+    /// somebody out of the office right now.
+    var symbol: String? {
+        (type ?? "").lowercased().hasPrefix("attendance_outside") ? "figure.walk" : nil
+    }
+
     var typeLabel: String {
         let t = (type ?? "signal").replacingOccurrences(of: "_", with: " ")
         return t.prefix(1).uppercased() + t.dropFirst()
@@ -192,6 +210,9 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     var tapTarget: NotificationTarget? {
         if let taskId, !taskId.isEmpty { return .task(taskId) }
         if let projectId, !projectId.isEmpty { return .project(projectId) }
+        // "Budi is outside the office" is about the crew board, where that person's today shows it:
+        // the board, not the top of the Attendance screen its "/attendance" link would land on.
+        if (type ?? "").lowercased() == Self.outsideApproverType { return .crewBoard }
         // The link before the type keywords, since 0.1.5 on both clients: the server now puts the
         // record's id in it (`/attendance?request=…`, `/complaints?id=…`, `/messages?c=…`), and
         // matching the type first threw that id away — every attendance signal landed on the top of
@@ -279,12 +300,16 @@ enum NotificationTarget: Hashable {
     /// The Calendar opened on one WIB day — `/calendar?date=YYYY-MM-DD` (also on `/master-calendar`
     /// and `/team-calendar`). The router leaves the day in `AppRouter.calendarDate` for the screen.
     case calendarDay(String)
+    /// The crew streak board on the Attendance screen, scrolled into view — where an approver sees
+    /// who is outside the office right now (`attendance_outside_approver`, owner 8 Oct 2026). Also
+    /// `/attendance?board=1`.
+    case crewBoard
 
     /// The screen that owns the record, for the router to walk to before the screen claims it.
     var hostScreen: NXScreen? {
         switch self {
         case .screen(let s):                     return s
-        case .attendanceRequest, .offsiteCheckout, .permitToday: return .attendance
+        case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard: return .attendance
         case .complaint:                         return .tickets
         case .conversation:                      return .messages
         case .announcement:                      return .dashboard
@@ -318,6 +343,7 @@ enum NotificationTarget: Hashable {
             if let id = Self.queryValue("request", in: path) { self = .attendanceRequest(id) }
             else if let id = Self.queryValue("offsite", in: path) { self = .offsiteCheckout(id) }
             else if Self.queryValue("permit", in: path) == "today" { self = .permitToday }
+            else if Self.queryValue("board", in: path) != nil { self = .crewBoard }
             else { self = .screen(.attendance) }
         case "messages":
             if let rest, !rest.isEmpty { self = .conversation(rest) }

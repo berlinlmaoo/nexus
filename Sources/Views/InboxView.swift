@@ -3,6 +3,10 @@ import SwiftUI
 /// Port of web inbox.tsx ("Signal Inbox"): unread banner + notification rows (icon, title,
 /// message, date·type) + mark-read / mark-all.
 struct InboxView: View {
+    /// False when pushed into another stack — the More tab's, where Inbox lives since the Calendar
+    /// took its place in the phone's tab bar (owner, 8 Oct 2026). A NavigationStack nested inside
+    /// another one loses the back button on everything above it (same rule as MessagesView).
+    var providesOwnStack = true
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
     @State private var items: [NexusNotification] = []
@@ -27,32 +31,38 @@ struct InboxView: View {
     @State private var openSubmission: SubmissionRef?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                content
-            }
-            .navigationDestination(item: $openTarget) { target in
-                switch target {
-                case .task(let id):    TaskDetailView(taskId: id)
-                // A notification carries the project's id and no name; the board fills its own
-                // header in once it loads.
-                case .project(let id): ProjectDetailView(projectId: id, projectName: "")
-                // Never stored: a whole screen goes through the router, and a submission opens as a
-                // sheet over this one — neither travels through this stack.
-                default: EmptyView()
-                }
-            }
-            .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
-            .navigationTitle(T("Signal Inbox"))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }
-                        .disabled(unread == 0)
-                }
-            }
-            .task { await load() }
+        if providesOwnStack {
+            NavigationStack { screen }
+        } else {
+            screen
         }
+    }
+
+    private var screen: some View {
+        ZStack {
+            NX.background.ignoresSafeArea()
+            content
+        }
+        .navigationDestination(item: $openTarget) { target in
+            switch target {
+            case .task(let id):    TaskDetailView(taskId: id)
+            // A notification carries the project's id and no name; the board fills its own
+            // header in once it loads.
+            case .project(let id): ProjectDetailView(projectId: id, projectName: "")
+            // Never stored: a whole screen goes through the router, and a submission opens as a
+            // sheet over this one — neither travels through this stack.
+            default: EmptyView()
+            }
+        }
+        .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
+        .navigationTitle(T("Signal Inbox"))
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }
+                    .disabled(unread == 0)
+            }
+        }
+        .task { await load() }
     }
 
     @ViewBuilder private var content: some View {
@@ -117,6 +127,9 @@ struct InboxView: View {
             let res = try await APIClient.shared.notifications()
             items = res.notifications ?? []
             unread = res.unreadCount ?? items.filter { !$0.isRead }.count
+            // The tab bar's count (More, or the Inbox tab while the Calendar is held back) follows
+            // what this screen just read — a mark-read and Mark all come through here too.
+            InboxBadge.shared.set(unread)
             tabs = notificationFilterTabs(items)
             // The last thing in a bucket can be deleted while its chip is selected, and a filter
             // pinned to a bucket that no longer has a chip shows an empty list with no way back.
@@ -167,9 +180,16 @@ struct NotificationRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
-                Circle().fill(NX.violet.opacity(0.12)).frame(width: 38, height: 38)
-                Text("N").font(NXFont.display(15, .black)).foregroundStyle(NX.violetText)
+                if let symbol = notification.symbol {
+                    // Outside the office: the crew board's own mark, amber.
+                    Circle().fill(ChipTone.warning.bg).frame(width: 38, height: 38)
+                    Image(systemName: symbol).font(.system(size: 16, weight: .bold)).foregroundStyle(ChipTone.warning.fg)
+                } else {
+                    Circle().fill(NX.violet.opacity(0.12)).frame(width: 38, height: 38)
+                    Text("N").font(NXFont.display(15, .black)).foregroundStyle(NX.violetText)
+                }
             }
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text(notification.message ?? T("New NEXUS signal arrived.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
@@ -192,7 +212,7 @@ struct NotificationRow: View {
     /// The web's own meta line, hint included: a row that opens something says so, and a row that
     /// opens nothing must not claim otherwise.
     private var metaText: String {
-        let base = "\(dateText) · \(notification.type ?? "signal")"
+        let base = "\(dateText) · \(notification.kindLabel ?? notification.type ?? "signal")"
         return notification.tapTarget == nil ? base : base + " · " + T("tap to open")
     }
 

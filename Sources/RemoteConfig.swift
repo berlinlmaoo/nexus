@@ -20,6 +20,10 @@ final class RemoteConfig {
         var calendar: Bool?
         /// The Calendar widgets and Watch complication (0.1.7).
         var calendarWidgets: Bool?
+        /// The server's automatic offsite check-out after 2 h 30 outside the office. Off since 8 Oct
+        /// 2026 (owner, server cd89d72): off, the app never promises one or counts down to it — the
+        /// Live Activity and the phone's own alerts say since when, without a check-out time.
+        var outsideAutoCheckout: Bool?
     }
     struct Values: Codable, Equatable, Sendable {
         var outsideHourAlertMinutes: Int?
@@ -58,6 +62,8 @@ final class RemoteConfig {
     var fakeGpsReview: Bool { body.flags?.fakeGpsReview ?? true }
     var calendar: Bool { body.flags?.calendar ?? true }
     var calendarWidgets: Bool { body.flags?.calendarWidgets ?? true }
+    /// Default false, as on the server: an app that never heard the switch promises no check-out.
+    var outsideAutoCheckout: Bool { body.flags?.outsideAutoCheckout ?? false }
     /// Floored at 15 s: a 0 (or a typo) from the server must not turn the Calendar's poll into a busy loop.
     var calendarPollSeconds: Int { max(15, body.values?.calendarPollSeconds ?? 60) }
     var banner: Banner? { body.banner }

@@ -77,7 +77,11 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "location.circle.fill",
             title: T("Where you work, only during work hours"),
-            body: T("Between check-in and check-out, NEXUS checks where you are about once an hour, so a day at the office shows as one. Leave the office area and it records your route while you're out of the office, and tells you straight away how long you have before the automatic check-out. Nothing before check-in, nothing after check-out. Out for a while? You get reminders with a File a permit button. After 2 hours 30 minutes outside without a permit, you are checked out offsite automatically, pending your approver.")
+            // The automatic check-out is the server's switch (flags.outsideAutoCheckout), off since
+            // 8 Oct 2026: with it off these notes must not promise one.
+            body: RemoteConfig.shared.outsideAutoCheckout
+                ? T("Between check-in and check-out, NEXUS checks where you are about once an hour, so a day at the office shows as one. Leave the office area and it records your route while you're out of the office, and tells you straight away how long you have before the automatic check-out. Nothing before check-in, nothing after check-out. Out for a while? You get reminders with a File a permit button. After 2 hours 30 minutes outside without a permit, you are checked out offsite automatically, pending your approver.")
+                : T("Between check-in and check-out, NEXUS checks where you are about once an hour, so a day at the office shows as one. Leave the office area and it records your route while you're out of the office, and your Lock Screen shows since when. Nothing before check-in, nothing after check-out. Out for a while? You get reminders with a File a permit button: if it's for work, file one.")
         ),
         WhatsNewEntry(
             icon: "hand.raised.fill",

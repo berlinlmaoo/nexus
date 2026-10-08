@@ -68,7 +68,8 @@ struct AttendanceRecord: Decodable, Sendable {
     /// Optional so every server before it still decodes.
     let locationTrackingState: String?
     /// Start of the outside-the-office episode the server is timing right now (reminder at 1h30,
-    /// automatic offsite check-out at 2h30), nil while inside. The Live Activity quotes it so the
+    /// heads-up at 2h, and the automatic offsite check-out at 2h30 only while the remote-config
+    /// switch `flags.outsideAutoCheckout` is on — off since 8 Oct 2026), nil while inside. The Live Activity quotes it so the
     /// phone and the pushes name the same time. Optional so every server before it still decodes.
     let outsideSince: String?
     /// Where the check-in was made, reverse-geocoded by the server. What a location-free member's
@@ -190,6 +191,11 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     /// "denied" when the person refused Always location for this record — drawn as a "location
     /// off" badge so an empty trail is not mistaken for a day spent inside. Optional (0.1.6).
     let locationTrackingState: String?
+    /// Start of the outside-the-office episode the person is in right now, while the record is open;
+    /// null inside, after check-out and on synthetic rows. Absent from older servers. Only TODAY's
+    /// open record means "outside right now": the crew board marks that one cell (owner, 8 Oct 2026;
+    /// the web board applies the same test).
+    let outsideSince: String?
 
     /// Files are served by the API behind the session cookie; a relative path needs the base.
     static func fileURL(_ path: String?) -> URL? {

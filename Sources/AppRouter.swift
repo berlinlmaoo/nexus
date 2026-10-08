@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// The five destinations the phone's tab bar can show.
+/// The five destinations the phone's tab bar can show: Home · Tasks · Calendar · Projects · More.
+/// The Calendar took Inbox's place (owner, 8 Oct 2026); while the server's `flags.calendar` holds the
+/// Calendar back, Inbox keeps the slot. Inbox otherwise lives in More, which carries its unread count.
 enum PhoneTab: Hashable {
-    case dashboard, tasks, inbox, projects, more
+    case dashboard, tasks, calendar, inbox, projects, more
 }
 
 /// A destination that means nothing without an argument.
@@ -199,7 +201,7 @@ final class AppRouter {
             go(screen)
         case .task, .project, .submission:
             detail = NXDetailRequest(target: target)
-        case .attendanceRequest, .offsiteCheckout, .permitToday, .complaint, .conversation, .announcement, .post:
+        case .attendanceRequest, .offsiteCheckout, .permitToday, .crewBoard, .complaint, .conversation, .announcement, .post:
             focus = target
             if let screen = target.hostScreen { go(screen) }
         case .calendarDay(let day):
@@ -214,6 +216,9 @@ final class AppRouter {
         let value = { (k: String) -> String? in info[k].flatMap { $0.isEmpty ? nil : $0 } }
         if let id = value("taskId") { open(.task(id)); return }
         if let id = value("projectId") { open(.project(id)); return }
+        // "Budi is outside the office" (approvers, 8 Oct 2026): the crew board, where it shows —
+        // not the top of the Attendance screen its "/attendance" link names. Same rule as the Inbox row.
+        if value("type")?.lowercased() == NexusNotification.outsideApproverType { open(.crewBoard); return }
         // An external link — the App Store, for the "update NEXUS" reminder — leaves the app.
         if let link = value("link"), link.hasPrefix("http"), let url = URL(string: link) { UIApplication.shared.open(url); return }
         if let link = value("link"), let target = NotificationTarget(path: link) { open(target); return }
@@ -226,13 +231,17 @@ final class AppRouter {
     }
 
     /// The phone tab that IS this screen, or nil when the screen lives behind the More launcher.
+    /// The Calendar has the third tab while the server's `flags.calendar` is on, Inbox otherwise
+    /// (owner, 8 Oct 2026) — whichever does not have it is pushed inside More.
     private func tabRoot(for screen: NXScreen) -> PhoneTab? {
+        let calendarTab = RemoteConfig.shared.calendar
         switch screen {
-        case .dashboard: return .dashboard
-        case .tasks:     return .tasks
-        case .inbox:     return .inbox
-        case .projects:  return .projects
-        default:         return nil
+        case .dashboard:    return .dashboard
+        case .tasks:        return .tasks
+        case .teamCalendar: return calendarTab ? .calendar : nil
+        case .inbox:        return calendarTab ? nil : .inbox
+        case .projects:     return .projects
+        default:            return nil
         }
     }
 
@@ -283,6 +292,7 @@ final class AppRouter {
         switch tab {
         case .dashboard: return .dashboard
         case .tasks:     return .tasks
+        case .calendar:  return .teamCalendar
         case .inbox:     return .inbox
         case .projects:  return .projects
         case .more:      return morePush ?? .dashboard

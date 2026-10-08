@@ -218,6 +218,9 @@ struct DashboardView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { attToday = try? await APIClient.shared.attendanceToday() } }
             }
+            // The bell's count, read with the dashboard and struck off by its mark-read buttons, is
+            // the tab bar's too (More since the Calendar took Inbox's tab): no second fetch.
+            .onChange(of: unread) { _, n in InboxBadge.shared.set(n) }
             .onDisappear { router.homeIsRoot = false }
         }
     }
@@ -999,6 +1002,8 @@ if !XpRules.tiers.isEmpty {
     private var quickActions: some View {
         LazyVGrid(columns: quickColumns, spacing: 12) {
             quickTile(T("Chat"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
+                // Unread chats (muted ones left out); refreshes itself.
+                .overlay(alignment: .topTrailing) { ChatUnreadBadge().padding(8) }
             quickTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
             quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
             quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }

@@ -248,12 +248,18 @@ struct AdaptiveRoot: View {
     }
 }
 
-/// Phone shape — unchanged from before, kept verbatim so the iPad work can't regress it.
+/// Phone shape: Home · Tasks · Calendar · Projects · More (owner, 8 Oct 2026 — the Calendar took
+/// Inbox's place, as on the web's phone tab bar). Inbox moved into More, and the More tab carries its
+/// unread count. While the server's `flags.calendar` holds the Calendar back, Inbox keeps the third
+/// tab, with the count on it, as before. The iPad / Mac sidebar is not touched.
 struct TabRoot: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var badge = InboxBadge.shared
 
     var body: some View {
         @Bindable var router = router
+        let calendarTab = RemoteConfig.shared.calendar
         // Tagged and bound so something outside the app can move the tab bar. Without the tags the
         // selection binding matches nothing and every tab silently stops responding to taps.
         TabView(selection: $router.tab) {
@@ -263,17 +269,73 @@ struct TabRoot: View {
             TasksView()
                 .tabItem { Label(T("Tasks"), systemImage: "checklist") }
                 .tag(PhoneTab.tasks)
-            InboxView()
-                .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
-                .tag(PhoneTab.inbox)
+            if calendarTab {
+                // The Calendar was written to be pushed into a stack (More's, Home's tiles), so as
+                // a tab root it gets one of its own — as the sidebar gives it.
+                NavigationStack { CalendarView() }
+                    .tabItem { Label(T("Calendar"), systemImage: "calendar") }
+                    .tag(PhoneTab.calendar)
+            } else {
+                InboxView()
+                    .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
+                    .badge(badge.count)
+                    .tag(PhoneTab.inbox)
+            }
             ProjectsView()
                 .tabItem { Label(T("Projects"), systemImage: "rectangle.stack.fill") }
                 .tag(PhoneTab.projects)
             MoreView()
                 .tabItem { Label(T("More"), systemImage: "ellipsis") }
+                .badge(calendarTab ? badge.count : 0)
                 .tag(PhoneTab.more)
         }
         // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
+        .task { await badge.refresh(force: true) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await badge.refresh() } }
+        }
+        // The server switched the Calendar on or off while the app was open, and the tab that was
+        // selected is gone: the same screen opens inside More instead of the bar selecting nothing.
+        .onChange(of: calendarTab) { _, on in
+            if on, router.tab == .inbox { router.go(.inbox) }
+            if !on, router.tab == .calendar { router.go(.teamCalendar) }
+        }
+    }
+}
+
+/// The unread Inbox count on the phone's tab bar: on More, where Inbox lives since the Calendar took
+/// its tab (owner, 8 Oct 2026), or on the Inbox tab while the Calendar is held back.
+///
+/// Read from GET /api/notifications when the tab bar appears, when the app comes to the front and
+/// when a push arrives in the foreground (NotificationManager.willPresent); the Inbox and Home's bell
+/// hand over what they have just read instead of fetching again.
+@MainActor @Observable
+final class InboxBadge {
+    static let shared = InboxBadge()
+    private(set) var count = 0 {
+        didSet { if count != oldValue { AppIconBadge.sync() } }
+    }
+    private var lastFetch: Date?
+    /// Whose count it is: signing in as somebody else on the same launch starts from zero, never
+    /// from the previous person's number.
+    private var userId: String?
+
+    /// At most every 30 seconds unless forced: coming back to the app twice in a row is one fetch.
+    func refresh(force: Bool = false) async {
+        guard let me = Keychain.load()?.userId else { count = 0; userId = nil; return }
+        if me != userId { count = 0; userId = me; lastFetch = nil }
+        if !force, let lastFetch, Date().timeIntervalSince(lastFetch) < 30 { return }
+        lastFetch = Date()
+        // A failure (offline, a server hiccup) leaves the count as it was rather than clearing it.
+        guard let n = try? await APIClient.shared.unreadCount() else { return }
+        guard Keychain.load()?.userId == me else { return }
+        count = max(0, n)
+    }
+
+    /// What the Inbox or Home's bell has just read — no second fetch.
+    func set(_ n: Int) {
+        userId = Keychain.load()?.userId
+        count = max(0, n)
     }
 }
 

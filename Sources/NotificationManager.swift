@@ -231,8 +231,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     //
     // Scheduled by the phone for itself the moment it leaves the office (WorkTrailMachine.planOutsideAlerts,
     // owner 28 Sep 2026): one at once, one an hour in, each with the time left before the automatic
-    // check-out. NOT a fallback for push like the reminders above — the server sends nothing at those
-    // two moments (its pushes are at 1h30 and 2h), so these run whether push works or not.
+    // check-out — or, while the server has that switched off (remote config `flags.outsideAutoCheckout`,
+    // off since 8 Oct 2026; the alert then carries no `autoAt`), with no check-out time and no
+    // countdown: since when, and at the hour the permit hint the server's own pushes give.
+    // NOT a fallback for push like the reminders above — the server sends nothing at those two
+    // moments (its pushes are at 1h30 and 2h), so these run whether push works or not.
     // Identifiers are fixed per record and per alert: planning again replaces, never adds.
 
     private let outsidePrefix = "nexus.outside-alert."
@@ -254,20 +257,32 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             center.removePendingNotificationRequests(withIdentifiers: [outsideIds(recordId)[1]])
         case let .left(fireAt, since, autoAt):
             guard let recordId else { return }
-            let left = WorkTrailMachine.minutesLeft(from: max(fireAt, now), to: autoAt)
+            let body: String
+            if let autoAt {
+                let left = WorkTrailMachine.minutesLeft(from: max(fireAt, now), to: autoAt)
+                body = String(format: T("Outside the office since %@ · %@ left before the automatic check-out (%@)"),
+                              outsideClock(since), outsideDuration(left), outsideClock(autoAt))
+            } else {
+                // No automatic check-out: since when, and nothing to count down to.
+                body = String(format: T("Outside the office since %@"), outsideClock(since))
+            }
             scheduleOutside(
                 id: outsideIds(recordId)[0], recordId: recordId, fireAt: fireAt, now: now,
-                title: T("Outside the office"),
-                body: String(format: T("Outside the office since %@ · %@ left before the automatic check-out (%@)"),
-                             outsideClock(since), outsideDuration(left), outsideClock(autoAt)))
+                title: T("Outside the office"), body: body)
         case let .hour(fireAt, _, autoAt):
             guard let recordId else { return }
-            let left = WorkTrailMachine.minutesLeft(from: fireAt, to: autoAt)
+            let body: String
+            if let autoAt {
+                let left = WorkTrailMachine.minutesLeft(from: fireAt, to: autoAt)
+                body = String(format: T("1 hour outside the office · %@ left · automatic check-out %@"),
+                              outsideDuration(left), outsideClock(autoAt))
+            } else {
+                // The server's own wording at 1h30 and 2h: a permit if it is work, no countdown.
+                body = T("1 hour outside the office.") + " " + T("If it's for work, file a permit.")
+            }
             scheduleOutside(
                 id: outsideIds(recordId)[1], recordId: recordId, fireAt: fireAt, now: now,
-                title: T("Still outside the office"),
-                body: String(format: T("1 hour outside the office · %@ left · automatic check-out %@"),
-                             outsideDuration(left), outsideClock(autoAt)))
+                title: T("Still outside the office"), body: body)
         }
     }
 
@@ -386,12 +401,38 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        let content = notification.request.content
+        let type = content.userInfo["type"] as? String
         // The server checked this person out while the app was open: the trail must stop now, not
         // at the next upload. Re-reading today is what stops it (the record now has a check-out).
-        if (notification.request.content.userInfo["type"] as? String) == "attendance_auto_offsite_checkout" {
+        if type == "attendance_auto_offsite_checkout" {
             Task { @MainActor in await WorkLocationTracker.shared.reconcileFromServer() }
         }
-        completionHandler([.banner, .sound, .badge])
+        // A chat push (`MESSAGE` / `MESSAGE_MENTION`, a `conversationId`, or a `/messages` link) for
+        // the conversation that is on screen right now: the thread is already showing it, so no
+        // banner and no sound — the way Messages and WhatsApp behave (8 Oct 2026). Plain values only
+        // cross to the main actor, where ChatPresence lives; the answer is given from there.
+        let link = content.userInfo["link"] as? String
+        let isChat = (type?.lowercased().hasPrefix("message") ?? false)
+            || content.userInfo["conversationId"] != nil
+            || (link?.hasPrefix("/messages") ?? false)
+        let conversationId = isChat ? ChatPresence.conversationId(of: content) : nil
+        Task { @MainActor in
+            // A chat push while the app is open is the fastest signal there is: the open thread
+            // fetches what is new at once and the list and badges follow, instead of waiting for
+            // the next poll (owner, 8 Oct 2026: chat must arrive in real time).
+            if isChat {
+                NotificationCenter.default.post(name: .nexusChatPush, object: nil,
+                                                userInfo: conversationId.map { ["conversationId": $0] })
+            }
+            if let conversationId, ChatPresence.visibleConversationId == conversationId {
+                completionHandler([])
+                return
+            }
+            completionHandler([.banner, .sound, .badge])
+            // Anything but a plain chat message may be a new Inbox row: the tab bar's count follows.
+            if type != "MESSAGE" { await InboxBadge.shared.refresh(force: true) }
+        }
     }
 
     /// A tap on a notification. Until 0.1.5 this did nothing at all — the app opened on whatever it

@@ -1663,26 +1663,88 @@ struct APIClient {
     }
 
     func conversations() async throws -> [Conversation] {
-        (try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self,
-                       cache: "conversations")).conversations ?? []
+        try await conversationsPage().conversations ?? []
     }
 
-    /// Sets the caller's `lastReadAt` so the conversation's unread count clears everywhere.
-    func markConversationRead(_ id: String) async throws {
+    /// The conversation list with what the newer server adds around it: `totalUnread`, and each
+    /// item's `mutedUntil`. Every fetch also feeds ChatStore, so the badges on Home and More and the
+    /// muted icons stay in step with whichever screen happened to load the list — including a
+    /// project's Chat tab, which never opens the Messages screen at all.
+    func conversationsPage() async throws -> ConversationsResponse {
+        let page = try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self,
+                                 cache: "conversations")
+        await ChatStore.shared.absorb(page)
+        return page
+    }
+
+    /// One conversation by id. For a chat a push or a link pointed at that the list on screen does
+    /// not have yet — a group somebody added you to a minute ago.
+    func conversation(_ id: String) async throws -> Conversation {
+        try await run(makeRequest("/api/conversations/\(enc(id))"), decode: ConversationResponse.self).conversation
+    }
+
+    /// The unread total behind the badges. Newer server only: the old one routes this path to the
+    /// conversation-by-id handler, finds no conversation called "unread" and answers 404.
+    func chatUnread() async throws -> ChatUnreadResponse {
+        try await run(makeRequest("/api/conversations/unread"), decode: ChatUnreadResponse.self)
+    }
+
+    /// Marks the conversation read. With `upToMessageId` the newer server moves `lastReadAt` to that
+    /// message only — the last one actually on screen — and never backwards, so a message that
+    /// lands while this request is in flight stays unread. The old server ignores the body and marks
+    /// everything read, exactly as before.
+    func markConversationRead(_ id: String, upToMessageId: String? = nil) async throws {
         struct Ack: Decodable { let success: Bool? }
-        _ = try await run(makeRequest("/api/conversations/\(id)/read", method: "POST"), decode: Ack.self)
+        var req = makeRequest("/api/conversations/\(id)/read", method: "POST")
+        if let upToMessageId {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["upToMessageId": upToMessageId])
+        }
+        _ = try await run(req, decode: Ack.self)
+    }
+
+    /// Mute or unmute this person's pushes for one conversation. `until` is an ISO time, "forever",
+    /// or nil to unmute; the answer is the stored value (nil once unmuted). The old server has no
+    /// such route and answers 404, which callers take as "this server cannot mute yet".
+    func setConversationMute(_ id: String, until: String?) async throws -> String? {
+        var req = makeRequest("/api/conversations/\(id)/mute", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["mutedUntil": jsonOrNull(until)])
+        return try await run(req, decode: ChatMuteResponse.self).mutedUntil
     }
 
     func conversationMessages(_ id: String) async throws -> [ChatMessage] {
-        // Per conversation: reading one thread must never surface another's messages.
-        (try await run(makeRequest("/api/conversations/\(id)/messages"), decode: MessagesResponse.self,
-                       cache: "messages-\(id)")).messages ?? []
+        try await conversationMessagesPage(id).messages ?? []
     }
 
+    /// One page of a thread, oldest first.
+    ///
+    /// - `after`: only messages strictly newer than that message id — what an open thread polls
+    ///   with. The old server ignores it and answers the newest page as it always did, which the
+    ///   thread recognises (the page still holds the message it asked after) and merges by id.
+    /// - `before`: older than an ISO time (both servers) or the newer server's `nextCursor`.
+    ///
+    /// Only the plain newest page is cached. A delta or an older page saved under the same key would
+    /// hand the next cold open a fragment of the conversation instead of its end.
+    func conversationMessagesPage(_ id: String, after: String? = nil, before: String? = nil,
+                                  limit: Int? = nil) async throws -> MessagesResponse {
+        // Per conversation: reading one thread must never surface another's messages.
+        var query: [String] = []
+        if let after { query.append("after=" + encValue(after)) }
+        if let before { query.append("before=" + encValue(before)) }
+        if let limit { query.append("limit=\(limit)") }
+        let path = "/api/conversations/\(id)/messages" + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
+        let key: String? = (after == nil && before == nil) ? "messages-\(id)" : nil
+        return try await run(makeRequest(path), decode: MessagesResponse.self, cache: key)
+    }
+
+    /// Sends one message and hands back the stored copy (`{ message }`, 201) so the thread can show
+    /// it at once instead of waiting for the next poll. Nil when the body could not be read — the
+    /// message was still delivered.
     @discardableResult
     func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = [],
                      attachmentUrl: String? = nil, attachmentType: String? = nil,
-                     replyToId: String? = nil) async throws -> Bool {
+                     replyToId: String? = nil) async throws -> ChatMessage? {
         var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var payload: [String: Any] = ["content": content, "mentionedUserIds": mentionedUserIds]
@@ -1690,8 +1752,7 @@ struct APIClient {
         if let attachmentType { payload["attachmentType"] = attachmentType }
         if let replyToId { payload["replyToId"] = replyToId }
         req.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
+        return try await run(req, decode: SentMessageResponse.self).message
     }
 
     /// Upload one chat picture and get back the path to attach to a message. The server checks that
