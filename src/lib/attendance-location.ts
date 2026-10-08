@@ -9,6 +9,7 @@ import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { isCheckInAway, placeLabel } from "@/lib/attendance-place"
 import { createLogger } from "@/lib/logger"
 import { getAppSetting } from "@/lib/app-setting"
+import { getAppConfig } from "@/lib/app-config"
 import {
   OUTSIDE_PERMIT_LINK,
   OUTSIDE_PUSH_CATEGORY,
@@ -19,6 +20,7 @@ import {
   decideOutsideStep,
   excuseEffect,
   outsidePushCopy,
+  outsideApproverCopy,
   outsideSpans,
   presenceHours,
   stageAfter,
@@ -282,6 +284,8 @@ export async function advanceOutsideClock(recordId: string, opts: { now?: Date; 
     orderBy: { at: "desc" },
     select: { at: true },
   })
+  // The automatic check-out is a remote-config switch, off since 8 Oct 2026 (owner).
+  const autoCheckout = (await getAppConfig(null).catch(() => null))?.flags.outsideAutoCheckout === true
   const step = decideOutsideStep({
     now,
     outsideSince: record.outsideSince,
@@ -289,6 +293,7 @@ export async function advanceOutsideClock(recordId: string, opts: { now?: Date; 
     stageAt: record.outsideStageAt,
     paused,
     restartAt,
+    autoCheckout,
   })
   // The phone went quiet while outside. As far as we know they are still out, so the clock keeps
   // running on server time; the pushes say so in their data (`stale`).
@@ -352,7 +357,40 @@ export async function advanceOutsideClock(recordId: string, opts: { now?: Date; 
     pushData,
   }).catch((error) => log.error("outside push failed", { recordId: record.id, fire: step.fire, error: String(error) }))
   log.info("outside stage", { recordId: record.id, userId: record.userId, stage: step.nextStoredStage, minutesOutside: step.minutesOutside, stale })
+  // Their approvers hear about it once per episode (owner, 8 Oct 2026): with the reminder at 1 h 30,
+  // or with the warning when a phone that reported late skipped the reminder.
+  if (step.fire === "reminder" || (step.fire === "warning" && step.stage === "outside")) {
+    await notifyOutsideApprovers(record, step.minutesOutside, tz, pushData)
+  }
   return { ...result, fired: true, stage: stageAfter(step) }
+}
+
+/** One push to each of the staff member's attendance approvers (never the staff member themselves). */
+async function notifyOutsideApprovers(
+  record: RecordForClock,
+  minutesOutside: number,
+  tz: string,
+  pushData: Record<string, string | number | boolean | null>,
+): Promise<void> {
+  try {
+    const { userIds } = await resolveAttendanceApprovers(record.userId, record.workspaceId)
+    const copy = outsideApproverCopy({ name: record.user?.name ?? null, minutesOutside, outsideSince: record.outsideSince!, timeZone: tz })
+    for (const userId of userIds) {
+      if (userId === record.userId) continue
+      await createInAppNotification({
+        userId,
+        type: copy.type,
+        title: copy.title,
+        message: copy.body,
+        link: "/attendance",
+        push: true,
+        pushData: { ...pushData, staffUserId: record.userId },
+      }).catch((error) => log.error("outside approver push failed", { recordId: record.id, approverId: userId, error: String(error) }))
+    }
+    log.info("outside approvers notified", { recordId: record.id, approvers: userIds.length })
+  } catch (error) {
+    log.error("outside approvers lookup failed", { recordId: record.id, error: String(error) })
+  }
 }
 
 /**
