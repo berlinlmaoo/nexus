@@ -42,7 +42,21 @@ const INVALIDATION: Record<string, string[]> = {
  * conversation list and its badge, the bell). Events emitted while the socket was down are gone
  * for good, so without this an open chat would stay frozen at the moment the connection dropped.
  */
-const RECONNECT_TERMS = ["messages", "conversation", "notification"];
+const RECONNECT_TERMS = ["messages", "conversation", "notification", "chat-info"];
+
+/**
+ * Realtime diagnostics: every event received is logged with console.debug in dev builds, or anywhere
+ * after `localStorage.nexusDebugRealtime = "1"` (then reload). Event name and conversation id only —
+ * never message text.
+ */
+function realtimeDebug(): boolean {
+  if (import.meta.env.DEV) return true;
+  try {
+    return localStorage.getItem("nexusDebugRealtime") === "1";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Query keys that must never be blanket-invalidated, matched as a substring like the terms above.
@@ -183,7 +197,9 @@ export function RealtimeProvider({
         // The first connect of this provider is the initial load (queries fetch on their own);
         // every later one is a reconnect after a drop, and must catch up on what was missed.
         let connectedBefore = false;
+        const debug = realtimeDebug();
         const onConnect = () => {
+          if (debug) console.debug("[realtime] connect", { reconnect: connectedBefore, id: socket.id });
           setConnected(true);
           joinAll();
           if (connectedBefore) {
@@ -197,10 +213,17 @@ export function RealtimeProvider({
           }
           connectedBefore = true;
         };
-        const onDisconnect = () => setConnected(false);
+        const onDisconnect = (reason?: unknown) => {
+          if (debug) console.debug("[realtime] disconnect", reason);
+          setConnected(false);
+        };
+        const onConnectError = (error?: unknown) => {
+          if (debug) console.debug("[realtime] connect_error", error instanceof Error ? error.message : error);
+        };
 
         socket.on("connect", onConnect);
         socket.on("disconnect", onDisconnect);
+        socket.on("connect_error", onConnectError);
         socket.on("workspace-changed", onWorkspaceChanged);
         socket.on("audit-changed", onAuditChanged);
         if (socket.connected) onConnect();
@@ -208,7 +231,8 @@ export function RealtimeProvider({
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
           const handler = (payload?: unknown) => {
             const terms = [...(INVALIDATION[evt] ?? [])];
-            const data = (payload && typeof payload === "object" ? payload : {}) as { type?: unknown; conversationId?: unknown };
+            const data = (payload && typeof payload === "object" ? payload : {}) as { type?: unknown; conversationId?: unknown; reason?: unknown; kind?: unknown };
+            if (debug) console.debug("[realtime]", evt, { conversationId: data.conversationId, reason: data.reason, kind: data.kind });
             // Servers before 8 Oct 2026 send no conversation-updated, but do write a bell
             // notification (type MESSAGE / MESSAGE_MENTION) for every chat message — so that is
             // the signal that some other chat moved.
@@ -220,6 +244,17 @@ export function RealtimeProvider({
             // With `after=` this is a near-empty request when the room event already delivered it.
             if (evt === "conversation-updated" && typeof data.conversationId === "string") {
               queryClient.invalidateQueries({ queryKey: ["messages", data.conversationId] });
+              // Someone joined, left, was added or removed, or the group was renamed — possibly me, in a
+              // room this tab has never listed. Refetch the list even when no screen is showing it (an
+              // invalidation alone only refetches what is on screen), and the room's info drawer.
+              if (data.reason === "membership") {
+                void queryClient.refetchQueries({ queryKey: ["conversations"], type: "all" });
+                queryClient.invalidateQueries({ queryKey: ["chat-info", data.conversationId] });
+              }
+            }
+            // A system line ("Bagas added Mey") in an open room: its member list changed too.
+            if (evt === "message-created" && data.kind === "SYSTEM" && typeof data.conversationId === "string") {
+              queryClient.invalidateQueries({ queryKey: ["chat-info", data.conversationId] });
             }
           };
           socket.on(evt, handler);
@@ -229,6 +264,7 @@ export function RealtimeProvider({
         cleanups.push(() => {
           socket.off("connect", onConnect);
           socket.off("disconnect", onDisconnect);
+          socket.off("connect_error", onConnectError);
           socket.off("workspace-changed", onWorkspaceChanged);
           socket.off("audit-changed", onAuditChanged);
           if (flushTimer) clearTimeout(flushTimer);
