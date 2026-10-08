@@ -650,6 +650,7 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
     // The master Calendar's entry follows the server's flags.calendar.
     val calendarOn = (androidx.compose.ui.platform.LocalContext.current.applicationContext as id.znetworks.nexus.NexusApplication).container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
     // Three across: six tiles two-wide push the agenda a whole screen down.
+    val chatUnread by (androidx.compose.ui.platform.LocalContext.current.applicationContext as id.znetworks.nexus.NexusApplication).container.badges.chatUnread.collectAsStateWithLifecycle()
     val tiles = listOfNotNull(
         Triple(R.string.home_q_chat, Icons.Filled.Chat, c.blue) to { onOpenWeb("/messages") },
         Triple(R.string.home_attendance, Icons.Filled.WatchLater, c.success) to onOpenAttendance,
@@ -670,7 +671,10 @@ private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Un
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
                     ) {
                         Box(Modifier.size(44.dp).background(tint.copy(alpha = 0.14f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                            Icon(icon, null, tint = tint)
+                            // Chat's unread on its tile (Berlin, 8 Oct).
+                            val badge = if (label == R.string.home_q_chat) id.znetworks.nexus.core.Badges.label(chatUnread) else null
+                            if (badge == null) Icon(icon, null, tint = tint)
+                            else androidx.compose.material3.BadgedBox(badge = { androidx.compose.material3.Badge { Text(badge) } }) { Icon(icon, null, tint = tint) }
                         }
                         Text(stringResource(label), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textAlign = TextAlign.Center, maxLines = 2, minLines = 2)
                     }

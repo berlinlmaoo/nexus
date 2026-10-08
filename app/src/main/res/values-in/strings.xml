@@ -1975,4 +1975,5 @@
     <string name="chat_mute_week">Bisukan seminggu</string>
     <string name="chat_mute_always">Bisukan selamanya</string>
     <string name="chat_mute_unavailable">Fitur bisukan belum tersedia di server.</string>
+    <string name="tab_calendar">Kalender</string>
 </resources>

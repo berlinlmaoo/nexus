@@ -1981,4 +1981,5 @@
     <string name="chat_mute_week">Mute for a week</string>
     <string name="chat_mute_always">Mute always</string>
     <string name="chat_mute_unavailable">Muting isn\'t available on the server yet.</string>
+    <string name="tab_calendar">Calendar</string>
 </resources>

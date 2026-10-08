@@ -1,5 +1,9 @@
 package id.znetworks.nexus.ui.shell
 
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Badge
+import id.znetworks.nexus.core.Badges
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -168,12 +172,24 @@ private enum class Tab(val route: String, val label: Int, val icon: ImageVector,
     HOME("home", R.string.tab_home, Icons.Filled.Home, "/dashboard"),
     TASKS("tasks", R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
     INBOX("inbox", R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
+    CALENDAR("calendar", R.string.tab_calendar, Icons.Filled.CalendarMonth, "/calendar"),
     PROJECTS("projects", R.string.tab_projects, Icons.Filled.Folder, "/projects"),
     MORE("more", R.string.tab_more, Icons.Filled.Menu, ""),
 }
 
 /**
- * Phone shell: Home · Tasks · Inbox · Projects · More, as on iOS. Screens not built yet say so and
+ * The tabs (Berlin, 8 Oct): Home · Tasks · Calendar · Projects · More; Inbox moved into More, which
+ * carries its unread badge. With the server's `flags.calendar` off, Inbox takes the Calendar's place.
+ */
+internal object ShellTabs {
+    fun routes(calendarOn: Boolean): List<String> =
+        if (calendarOn) listOf("home", "tasks", "calendar", "projects", "more") else listOf("home", "tasks", "inbox", "projects", "more")
+    /** The tab a destination belongs to: "calendar?date={date}…" is the Calendar tab. */
+    fun tabOf(route: String?): String? = route?.substringBefore('?')
+}
+
+/**
+ * Phone shell: the five tabs of [ShellTabs], as on iOS. Screens not built yet say so and
  * open the web page instead (PRD §5 Phase 1).
  */
 @Composable
@@ -190,6 +206,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         launchSingleTop = true
         restoreState = true
     }
+    /** Inbox: its tab when it has one, else a screen pushed over the current one (it lives in More now). */
+    fun openInbox() {
+        if (!container.remoteConfig.current.calendar) goTab(Tab.INBOX) else nav.navigate(Tab.INBOX.route) { launchSingleTop = true }
+    }
 
     // Android 13+: without this, the refused-tap notice and push never show. Asked once.
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -205,7 +225,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         when (val t = pending) {
             // Claimed by the attendance screen itself (focus survives a cold start and a sign-in).
             is Target.Attendance -> nav.navigate("attendance") { launchSingleTop = true }
-            Target.Inbox -> { goTab(Tab.INBOX); container.router.consumed(t) }
+            Target.Inbox -> { openInbox(); container.router.consumed(t) }
             Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
             is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}") }
@@ -265,16 +285,21 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
 
     // Tablets and unfolded phones: the same five tabs as a rail on the left (PRD Phase 5).
     val rail = ShellLayout.useRail(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
-    val current = Tab.entries.firstOrNull { it.route == route }
-        ?: Tab.entries.firstOrNull { t -> backStack?.destination?.hierarchy?.any { it.route == t.route } == true }
+    val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
+    val tabs = ShellTabs.routes(calendarOn).mapNotNull { r -> Tab.entries.firstOrNull { it.route == r } }
+    val current = tabs.firstOrNull { it.route == ShellTabs.tabOf(route) }
+        ?: tabs.firstOrNull { t -> backStack?.destination?.hierarchy?.any { ShellTabs.tabOf(it.route) == t.route } == true }
+    // Inbox's unread on whichever entry holds Inbox now: its own tab, or More (Berlin, 8 Oct).
+    val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
+    val badgeOn: (Tab) -> String? = { t -> if (t == Tab.INBOX || (t == Tab.MORE && Tab.INBOX !in tabs)) Badges.label(inboxUnread) else null }
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
             if (!rail) NavigationBar(containerColor = Nx.colors.card) {
-                Tab.entries.forEach { t ->
+                tabs.forEach { t ->
                     NavigationBarItem(
                         selected = t == current, onClick = { goTab(t) },
-                        icon = { Icon(t.icon, contentDescription = null) },
+                        icon = { TabIcon(t.icon, badgeOn(t)) },
                         label = { TabLabel(stringResource(t.label)) },
                     )
                 }
@@ -285,10 +310,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
       // covers beyond the bottom bar, not the bar again (the gap above the keyboard, point 6).
       androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
         if (rail) androidx.compose.material3.NavigationRail(containerColor = Nx.colors.card) {
-            Tab.entries.forEach { t ->
+            tabs.forEach { t ->
                 androidx.compose.material3.NavigationRailItem(
                     selected = t == current, onClick = { goTab(t) },
-                    icon = { Icon(t.icon, contentDescription = null) },
+                    icon = { TabIcon(t.icon, badgeOn(t)) },
                     label = { TabLabel(stringResource(t.label)) },
                 )
             }
@@ -305,7 +330,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.HOME.route) {
                 HomeScreen(
                     onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } },
-                    onOpenInbox = { goTab(Tab.INBOX) },
+                    onOpenInbox = { openInbox() },
                     onSearch = { nav.navigate("search") },
                     onOpenProject = { nav.navigate("project/$it") },
                     onOpenTask = { nav.navigate("task/$it") },
@@ -450,11 +475,18 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     }
 }
 
+/** A tab's icon with its unread badge (TalkBack reads the count with the label). */
+@Composable
+private fun TabIcon(icon: ImageVector, badge: String?) {
+    if (badge == null) Icon(icon, contentDescription = null)
+    else BadgedBox(badge = { Badge { Text(badge) } }) { Icon(icon, contentDescription = null) }
+}
+
 /** The shell's navigation motion (iOS push/pop, point 7). */
 object ShellMotion {
-    private val TABS = setOf("home", "tasks", "inbox", "projects", "more")
+    private val TABS = setOf("home", "tasks", "inbox", "calendar", "projects", "more")
     private const val MS = 300
-    fun betweenTabs(from: String?, to: String?) = from in TABS && to in TABS
+    fun betweenTabs(from: String?, to: String?) = ShellTabs.tabOf(from) in TABS && ShellTabs.tabOf(to) in TABS
     val pushIn: EnterTransition = slideInHorizontally(tween(MS)) { it }
     val pushOut: ExitTransition = slideOutHorizontally(tween(MS)) { -it / 3 }
     val popIn: EnterTransition = slideInHorizontally(tween(MS)) { -it / 3 }
@@ -497,6 +529,8 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
     // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
     val company = rememberIsCompany() == true
     val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
+    val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
+    val chatUnread by container.badges.chatUnread.collectAsStateWithLifecycle()
     // Control Room is drawn for MANAGER and above only (the server re-checks every call).
     val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
     Column(Modifier.fillMaxSize().background(c.background)) {
@@ -505,11 +539,11 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)) {
             MoreSection(stringResource(R.string.more_sec_home), listOfNotNull(
-                MoreItem(R.string.mt_messages, Icons.Filled.Forum, c.blue) { open("messages") },
+                // Inbox lives here when the Calendar holds its tab (Berlin, 8 Oct), with its unread.
+                if (calendarOn) MoreItem(R.string.tab_inbox, Icons.Filled.Notifications, c.danger, badge = Badges.label(inboxUnread)) { open("inbox") } else null,
+                MoreItem(R.string.mt_messages, Icons.Filled.Forum, c.blue, badge = Badges.label(chatUnread)) { open("messages") },
                 if (company) MoreItem(R.string.mt_threads, Icons.Filled.ChatBubble, c.violetText) { open("threads") } else null,
                 MoreItem(R.string.mt_submissions, Icons.Filled.Inbox, c.warning) { open("submissions") },
-                // The master Calendar; the server's flags.calendar hides the entry.
-                if (calendarOn) MoreItem(R.string.mt_calendar, Icons.Filled.CalendarMonth, c.violetText) { open("calendar") } else null,
                 MoreItem(R.string.mt_rooms, Icons.Filled.MeetingRoom, c.coral) { open("rooms") },
             ))
             MoreSection(stringResource(R.string.more_sec_missions), listOf(
@@ -525,7 +559,7 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
             ))
             MoreSection(stringResource(R.string.more_sec_system), listOfNotNull(
                 MoreItem(R.string.mt_ticket, Icons.Filled.ConfirmationNumber, c.blue) { open("tickets") },
-                MoreItem(R.string.mt_whats_new, Icons.Filled.AutoAwesome, c.violetText, onOpenWhatsNew),
+                MoreItem(R.string.mt_whats_new, Icons.Filled.AutoAwesome, c.violetText, onClick = onOpenWhatsNew),
                 MoreItem(R.string.mt_tuning, Icons.Filled.Settings, c.mutedFg) { open("account") },
                 if (canAdmin) MoreItem(R.string.mt_control, Icons.Filled.Shield, c.danger) { open("admin") } else null,
             ))
@@ -534,7 +568,7 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
     }
 }
 
-private class MoreItem(val title: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: androidx.compose.ui.graphics.Color, val onClick: () -> Unit)
+private class MoreItem(val title: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: androidx.compose.ui.graphics.Color, val badge: String? = null, val onClick: () -> Unit)
 
 /** Section label + a two-column grid of tiles (iOS MoreSection + LazyVGrid). */
 @Composable
@@ -559,7 +593,8 @@ private fun MoreTile(item: MoreItem, modifier: Modifier) {
         .clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = item.onClick)
         .defaultMinSize(minHeight = 110.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(46.dp).background(item.tint.copy(alpha = 0.14f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-            Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(22.dp))
+            if (item.badge == null) Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(22.dp))
+            else BadgedBox(badge = { Badge { Text(item.badge) } }) { Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(22.dp)) }
         }
         Text(stringResource(item.title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2)
     }
