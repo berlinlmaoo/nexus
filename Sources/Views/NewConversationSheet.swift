@@ -4,7 +4,8 @@ import SwiftUI
 ///
 /// The server already does the hard part: `POST /api/conversations` takes `{ type, userIds, name }`
 /// and de-dupes DMs, so picking someone you already have a 1:1 with reopens that thread instead of
-/// creating a second one. Picking two or more people flips this sheet into group mode.
+/// creating a second one. Picking two or more people flips this sheet into group mode, and "Make it a
+/// group" does it with one (owner, 9 Oct 2026: a group needed three people, the creator included).
 struct NewConversationSheet: View {
     let onCreated: (Conversation) -> Void
 
@@ -18,7 +19,9 @@ struct NewConversationSheet: View {
     @State private var creating = false
     @State private var error: String?
 
-    private var isGroup: Bool { picked.count > 1 }
+    /// A group on purpose, even with one other person. Two or more people are a group whatever it says.
+    @State private var groupMode = false
+    private var isGroup: Bool { groupMode || picked.count > 1 }
 
     /// Anyone we could actually open a conversation with: needs a userId, and isn't us.
     private var candidates: [WorkspaceRoster.Member] {
@@ -69,6 +72,8 @@ struct NewConversationSheet: View {
                     .font(NXFont.text(15)).padding(12)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
+                groupToggle
+
                 // Only groups carry a name; a DM's title is always the other person.
                 if isGroup {
                     TextField(T("Group name (optional)"), text: $groupName)
@@ -92,6 +97,30 @@ struct NewConversationSheet: View {
                 }
             }
             .padding(16)
+        }
+    }
+
+    private var groupToggle: some View {
+        Toggle(isOn: Binding(get: { isGroup }, set: { groupMode = $0 })) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.3.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.violetText)
+                    .frame(width: 34, height: 34).background(NX.violet.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(T("Make it a group")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                    Text(picked.count > 1 ? T("Two or more people always make a group.")
+                                          : T("Start a group with just one other person, and add more later."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .tint(NX.violet)
+        // Nothing to switch off once two people are picked: that is a group either way.
+        .disabled(picked.count > 1)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
         }
     }
 
@@ -134,9 +163,9 @@ struct NewConversationSheet: View {
         let name = groupName.trimmingCharacters(in: .whitespaces)
         do {
             let convo = try await APIClient.shared.createConversation(
-                type: ids.count > 1 ? "GROUP" : "DM",
+                type: isGroup ? "GROUP" : "DM",
                 userIds: ids,
-                name: name.isEmpty ? nil : name
+                name: isGroup && !name.isEmpty ? name : nil
             )
             onCreated(convo)
             dismiss()

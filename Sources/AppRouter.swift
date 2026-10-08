@@ -4,7 +4,7 @@ import SwiftUI
 /// The Calendar took Inbox's place (owner, 8 Oct 2026); while the server's `flags.calendar` holds the
 /// Calendar back, Inbox keeps the slot. Inbox otherwise lives in More, which carries its unread count.
 enum PhoneTab: Hashable {
-    case dashboard, tasks, calendar, inbox, projects, more
+    case dashboard, messages, calendar, inbox, projects, more
 }
 
 /// A destination that means nothing without an argument.
@@ -232,12 +232,13 @@ final class AppRouter {
 
     /// The phone tab that IS this screen, or nil when the screen lives behind the More launcher.
     /// The Calendar has the third tab while the server's `flags.calendar` is on, Inbox otherwise
-    /// (owner, 8 Oct 2026) — whichever does not have it is pushed inside More.
+    /// (owner, 8 Oct 2026) — whichever does not have it is pushed inside More. Chat has the second
+    /// tab and Tasks moved into More (owner, 9 Oct 2026).
     private func tabRoot(for screen: NXScreen) -> PhoneTab? {
         let calendarTab = RemoteConfig.shared.calendar
         switch screen {
         case .dashboard:    return .dashboard
-        case .tasks:        return .tasks
+        case .messages:     return .messages
         case .teamCalendar: return calendarTab ? .calendar : nil
         case .inbox:        return calendarTab ? nil : .inbox
         case .projects:     return .projects
@@ -291,7 +292,7 @@ final class AppRouter {
         if let left = calendarLeftAt, Date().timeIntervalSince(left) < 1 { return .teamCalendar }
         switch tab {
         case .dashboard: return .dashboard
-        case .tasks:     return .tasks
+        case .messages:  return .messages
         case .calendar:  return .teamCalendar
         case .inbox:     return .inbox
         case .projects:  return .projects

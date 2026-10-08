@@ -248,14 +248,18 @@ struct AdaptiveRoot: View {
     }
 }
 
-/// Phone shape: Home · Tasks · Calendar · Projects · More (owner, 8 Oct 2026 — the Calendar took
-/// Inbox's place, as on the web's phone tab bar). Inbox moved into More, and the More tab carries its
-/// unread count. While the server's `flags.calendar` holds the Calendar back, Inbox keeps the third
-/// tab, with the count on it, as before. The iPad / Mac sidebar is not touched.
+/// Phone shape: Home · Chat · Calendar · Projects · More. The Calendar took Inbox's place (owner,
+/// 8 Oct 2026), and Chat took Tasks' (owner, 9 Oct 2026) — chat is what the crew opens all day, and
+/// Tasks moved into More beside Inbox. The More tab carries Inbox's unread count, the Chat tab its
+/// own. While the server's `flags.calendar` holds the Calendar back, Inbox keeps the third tab, with
+/// the count on it, as before. The iPad / Mac sidebar is not touched.
 struct TabRoot: View {
     @Environment(AppRouter.self) private var router
+    @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
     @State private var badge = InboxBadge.shared
+    /// The Chat tab's count. Home's Chat tile used to keep it fresh; the tab does now.
+    @State private var chat = ChatStore.shared
 
     var body: some View {
         @Bindable var router = router
@@ -266,9 +270,11 @@ struct TabRoot: View {
             DashboardView()
                 .tabItem { Label(T("Home"), systemImage: "house.fill") }
                 .tag(PhoneTab.dashboard)
-            TasksView()
-                .tabItem { Label(T("Tasks"), systemImage: "checklist") }
-                .tag(PhoneTab.tasks)
+            // Its own stack as a tab root, as the sidebar gives it (MoreView pushes the no-stack form).
+            MessagesView(providesOwnStack: true)
+                .tabItem { Label(T("Chat"), systemImage: "bubble.left.and.bubble.right.fill") }
+                .badge(chat.totalUnread)
+                .tag(PhoneTab.messages)
             if calendarTab {
                 // The Calendar was written to be pushed into a stack (More's, Home's tiles), so as
                 // a tab root it gets one of its own — as the sidebar gives it.
@@ -291,8 +297,16 @@ struct TabRoot: View {
         }
         // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
         .task { await badge.refresh(force: true) }
+        .task(id: auth.session?.userId) { await chat.refreshUnread(userId: auth.session?.userId) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await badge.refresh() } }
+            if phase == .active {
+                Task { await badge.refresh() }
+                Task { await chat.refreshUnread(userId: auth.session?.userId) }
+            }
+        }
+        // A chat push in the foreground or the realtime connection's word: the count moved.
+        .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { _ in
+            Task { await chat.refreshUnread(userId: auth.session?.userId, force: true) }
         }
         // The server switched the Calendar on or off while the app was open, and the tab that was
         // selected is gone: the same screen opens inside More instead of the bar selecting nothing.

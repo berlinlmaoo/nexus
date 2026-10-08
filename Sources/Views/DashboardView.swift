@@ -59,6 +59,10 @@ struct DashboardView: View {
     @State private var morphExpanded = false
     @State private var morphTarget: CGRect = .zero
     @State private var shortcuts = ProjectShortcuts.shared
+    /// Z Vault's tile is for company members, as in More.
+    @State private var viewer = Viewer.shared
+    /// The whole Inbox, pushed from the bell panel's "Open Inbox" (owner, 9 Oct 2026).
+    @State private var showInbox = false
     /// A morph modal holds one column of content, so its width is set by reading comfort rather
     /// than by the screen. Uncapped it spanned a full iPad in landscape - a quests panel with one
     /// line in it stretched a metre wide. Never binds on a phone, which is narrower than this.
@@ -195,6 +199,7 @@ struct DashboardView: View {
                 default: EmptyView()
                 }
             }
+            .navigationDestination(isPresented: $showInbox) { InboxView(providesOwnStack: false) }
             .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
             .coordinateSpace(.named(morphSpace))
             .onChange(of: morphTarget) { _, t in
@@ -206,6 +211,7 @@ struct DashboardView: View {
                 if !loaded { await load() }
                 await refreshPasskeyNudge()
             }
+            .task { await viewer.loadIfNeeded() }
             .refreshable { await load() }
             // Home telling the app it is the thing on screen, so the floating GIDEON launcher —
             // drawn above the whole app, outside this stack — can be Home-only rather than
@@ -771,7 +777,7 @@ struct DashboardView: View {
                     .overlay(Image(systemName: "bell.fill").font(.system(size: 18)).foregroundStyle(NX.violetText))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Notifications")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                    Text(unread > 0 ? "\(unread) \(T("unread"))" : "Semua kebaca").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    Text(unread > 0 ? "\(unread) \(T("unread"))" : T("All read")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 if unread > 0 {
@@ -829,6 +835,21 @@ struct DashboardView: View {
                 }
             }
             .opacity(morphReady ? 1 : 0)   // detail fades in just after the card lands (web: delay 0.15)
+            // The bell and the Inbox are the same notifications: the panel is the newest few, the
+            // Inbox all of them with its filters. The bell stays a quick look and leads on to the
+            // full screen (owner, 9 Oct 2026; the web panel has the same button).
+            Button { Haptics.tap(); toggleBell(false) { showInbox = true } } label: {
+                HStack(spacing: 6) {
+                    Text(T("Open Inbox")).font(NXFont.text(14, .semibold))
+                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 12, weight: .bold))
+                }
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity).frame(height: 44)
+                .background(NX.violet, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .opacity(morphReady ? 1 : 0)
         }
         .padding(18).frame(maxWidth: Self.bellMaxWidth)
         .background {
@@ -1001,16 +1022,16 @@ if !XpRules.tiers.isEmpty {
 
     private var quickActions: some View {
         LazyVGrid(columns: quickColumns, spacing: 12) {
-            quickTile(T("Chat"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
-                // Unread chats (muted ones left out); refreshes itself.
-                .overlay(alignment: .topTrailing) { ChatUnreadBadge().padding(8) }
+            // Chat and the Calendar each have a tab, so their tiles went to Z Vault and Ticket (owner,
+            // 9 Oct 2026), in the same places.
+            if viewer.isCompanyMember {
+                quickTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
+            }
             quickTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
             quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
             quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
             quickTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
-            if RemoteConfig.shared.calendar {
-                quickTile(T("Calendar"), "calendar", NX.violetText) { CalendarView() }
-            }
+            quickTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
         }
     }
 

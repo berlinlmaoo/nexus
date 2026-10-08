@@ -2645,6 +2645,11 @@ final class AppLanguage {
         "PROJECTS": "PROYEK",
         "PROJECT NAME": "NAMA PROYEK",
         "Create project": "Buat proyek",
+        // Tab bar, Home and new chat (owner, 9 Oct 2026)
+        "Open Inbox": "Buka Kotak Masuk",
+        "Make it a group": "Jadikan grup",
+        "Two or more people always make a group.": "Dua orang atau lebih otomatis jadi grup.",
+        "Start a group with just one other person, and add more later.": "Mulai grup berdua dulu, tambah orang lain nanti.",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

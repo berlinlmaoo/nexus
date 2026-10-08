@@ -161,9 +161,8 @@ struct MoreView: View {
                     VStack(alignment: .leading, spacing: 22) {
                         MoreSection(T("Home Base")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile(T("Messages"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
-                                    // Unread chats (muted ones left out); refreshes itself.
-                                    .overlay(alignment: .topTrailing) { ChatUnreadBadge().padding(12) }
+                                // Chat has a tab of its own and Tasks lives here (owner, 9 Oct 2026).
+                                MoreTile(T("Tasks"), "checklist", NX.success) { TasksView(providesOwnStack: false) }
                                 if viewer.isCompanyMember {
                                     MoreTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
                                 }
@@ -237,8 +236,9 @@ struct MoreView: View {
     @ViewBuilder private func pushed(_ screen: NXScreen) -> some View {
         switch screen {
         case .messages: MessagesView()
-        // Inbox builds its own stack as a tab root; pushed here it must not (see above).
+        // Inbox and Tasks build their own stack as tab roots; pushed here they must not (see above).
         case .inbox:    InboxView(providesOwnStack: false)
+        case .tasks:    TasksView(providesOwnStack: false)
         default:        screen.view
         }
     }

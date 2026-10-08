@@ -11,9 +11,21 @@ struct TasksView: View {
 
     @State private var actionError: String?
     @Environment(AppRouter.self) private var router
+    /// False when pushed into another stack — More's, where Tasks lives since Chat took its tab
+    /// (owner, 9 Oct 2026). A NavigationStack nested inside another one loses the back button on
+    /// everything above it (same rule as InboxView and MessagesView).
+    var providesOwnStack = true
 
     var body: some View {
-        NavigationStack {
+        if providesOwnStack {
+            NavigationStack { screen }
+        } else {
+            screen
+        }
+    }
+
+    private var screen: some View {
+        Group {
             ZStack {
                 NX.background.ignoresSafeArea()
                 content
