@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, BellOff, Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
+import { ArrowLeft, BellOff, Loader2, MessageCircle, Pencil, Plus, Trash2, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ChatInfoPanel, chatInfoKey } from "@/components/messages/ChatInfoPanel";
@@ -106,7 +106,10 @@ function Messages() {
   const [jump, setJump] = useState<{ id: string; seq: number } | null>(null);
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const meId = me.data?.user?.id;
-  const { connected } = useRealtime();
+  const { connected, socket } = useRealtime();
+  // The open group was deleted while it was on screen (by someone else, or in another tab): the thread
+  // closes and this note stands in its place until another chat is opened.
+  const [goneId, setGoneId] = useState<string | null>(null);
   const visible = usePageVisible();
   // Other rooms move through the socket (`conversation-updated` on servers since 8 Oct 2026).
   // The poll is the fallback: every 30 s while this page is in front (never in a background tab),
@@ -127,16 +130,36 @@ function Messages() {
   // first" would otherwise swap the open chat under the reader. Not on a phone: there the list comes
   // first and a room opens only when tapped — a thread mounted out of sight would mark it read.
   const phone = useIsMobile();
-  useEffect(() => { if (!activeId && rows[0] && !phone) setActiveId(rows[0].id); }, [activeId, rows, phone]);
-  const active = phone && !phoneThread ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
+  useEffect(() => { if (!activeId && !goneId && rows[0] && !phone) setActiveId(rows[0].id); }, [activeId, goneId, rows, phone]);
+  const active = goneId || (phone && !phoneThread) ? null : rows.find((c) => c.id === activeId) ?? (phone ? null : rows[0] ?? null);
   const activeKey = active?.id ?? null;
+  const activeKeyRef = useRef<string | null>(null);
+  activeKeyRef.current = activeKey;
+
+  // A group deleted elsewhere (server since 9 Oct 2026: conversation-updated, reason "deleted"). The
+  // list drops it in realtime.tsx; the room on screen closes here.
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdated = (payload?: unknown) => {
+      const data = (payload && typeof payload === "object" ? payload : {}) as { conversationId?: unknown; reason?: unknown };
+      if (data.reason !== "deleted" || typeof data.conversationId !== "string") return;
+      if (data.conversationId !== activeKeyRef.current) return;
+      setGoneId(data.conversationId);
+      setInfoOpen(false);
+      setAdding(false);
+      setRenaming(false);
+      setActiveId(null);
+    };
+    socket.on("conversation-updated", onUpdated);
+    return () => { socket.off("conversation-updated", onUpdated); };
+  }, [socket]);
 
   const threadMembers = useMemo(
     () => (active?.members ?? []).map((m) => m.user).filter(Boolean) as NexusUser[],
     [active],
   );
 
-  const openRoom = useCallback((id: string) => { setActiveId(id); setPhoneThread(true); setJump(null); }, []);
+  const openRoom = useCallback((id: string) => { setGoneId(null); setActiveId(id); setPhoneThread(true); setJump(null); }, []);
 
   // From the info panel: show a message in the thread. On a narrow screen the panel covers the
   // thread, so it steps aside.
@@ -157,8 +180,9 @@ function Messages() {
     }
   }, [qc, openRoom]);
 
-  // Left the group: it leaves the list at once, and the screen goes back to the list.
+  // Left the group, or deleted it: it leaves the list at once, and the screen goes back to the list.
   const leftRoom = useCallback((id: string) => {
+    setGoneId(null);
     qc.setQueryData<ConversationList>(["conversations"], (cur) => (cur ? { ...cur, conversations: cur.conversations.filter((c) => c.id !== id) } : cur));
     qc.removeQueries({ queryKey: chatInfoKey(id) });
     qc.invalidateQueries({ queryKey: ["conversations"] });
@@ -274,6 +298,14 @@ function Messages() {
                 composerClassName={infoOpen ? undefined : "pr-[4.75rem] md:pr-[5.25rem]"}
               /></div>
             </>
+          ) : goneId ? (
+            <div className="relative grid h-full place-items-center px-6 text-center text-muted-foreground">
+              <button onClick={() => { setGoneId(null); setPhoneThread(false); }} title={t("Back to chats")} aria-label={t("Back to chats")} className="absolute left-2 top-2.5 rounded-lg p-2 transition-colors hover:bg-accent md:hidden"><ArrowLeft className="h-4 w-4" /></button>
+              <div role="status">
+                <Trash2 className="mx-auto mb-3 h-9 w-9 opacity-40" />
+                <p className="text-sm">{t("This group was deleted")}</p>
+              </div>
+            </div>
           ) : convos.isLoading ? (
             <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
           ) : (
@@ -290,6 +322,7 @@ function Messages() {
             onJump={jumpTo}
             onMessage={(userId) => { void messagePerson(userId); }}
             onLeft={() => leftRoom(active.id)}
+            onDeleted={() => leftRoom(active.id)}
           />
         )}
       </div>

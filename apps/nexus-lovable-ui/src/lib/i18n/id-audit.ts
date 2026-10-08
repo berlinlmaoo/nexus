@@ -234,4 +234,11 @@ export const ID_AUDIT: Record<string, string> = {
   "Open calendar": "Buka kalender",
   "Open Vault": "Buka Vault",
   "Open Threads": "Buka Utas",
+
+  // A deleted group chat (9 Oct 2026)
+  "Restore group chat": "Pulihkan grup chat",
+  "It shows in its members' chat lists again. Nothing is posted in the chat about it.": "Grupnya muncul lagi di daftar chat anggotanya. Tidak ada pesan yang dikirim soal ini.",
+  "{n} message": "{n} pesan",
+  "{n} messages": "{n} pesan",
+  "Open chat": "Buka chat",
 }

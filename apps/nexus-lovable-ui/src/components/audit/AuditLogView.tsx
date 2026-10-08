@@ -339,7 +339,7 @@ const RESTORABLE_TYPES = new Set([
   "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
   "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
   "vault_file", "vault_folder", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
-  "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus",
+  "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
 ]);
 
 /** The button, per kind. A kind this list doesn't know (a newer server) gets plain "Restore". */
@@ -357,6 +357,7 @@ const RESTORE_BUTTON: Record<string, string> = {
   project_folder: "Restore folder", org_unit: "Restore unit", sheet_rows: "Restore rows", form_submission: "Restore submission",
   attendance_record: "Restore attendance record", project_sheet_column: "Restore column", post: "Restore post",
   quest: "Restore quest", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
+  chat_group: "Restore group chat",
 };
 
 /** One line under the explanation, where the kind needs it said. `soft`: the delete only flipped a flag. */
@@ -382,6 +383,7 @@ function restoreNote(entityType: string, soft: boolean): string | null {
     case "quest": return "The quest becomes active again.";
     case "calendar_event": return "The event is no longer cancelled.";
     case "dayoff_bonus": return "The extra day off is granted again.";
+    case "chat_group": return "It shows in its members' chat lists again. Nothing is posted in the chat about it.";
     case "attendance_office": return soft ? "The office is back in the list and open for check-ins." : null;
     default: return null;
   }
@@ -480,6 +482,7 @@ function whatComesBack(r: NonNullable<NexusAuditEntryDetail["restore"]>, entityT
     add(c.files, "{n} file", "{n} files");
     add(c.comments, entityType === "comment" ? "{n} reply" : "{n} comment", entityType === "comment" ? "{n} replies" : "{n} comments");
     add(c.sheets, "{n} sheet", "{n} sheets");
+    add(c.messages, "{n} message", "{n} messages");
     add(c.members, "{n} member", "{n} members");
   }
   if (parts.length < 2) return parts.join("");
@@ -487,7 +490,7 @@ function whatComesBack(r: NonNullable<NexusAuditEntryDetail["restore"]>, entityT
 }
 
 type OpenTarget =
-  | { kind: "project" | "task" | "doc" | "folder"; id: string }
+  | { kind: "project" | "task" | "doc" | "folder" | "chat"; id: string }
   | { kind: "attendance"; request?: string }
   | { kind: "room"; booking: string }
   | { kind: "calendar"; date?: string }
@@ -513,13 +516,14 @@ function openTargetOf(open: NexusRestoreOpen | null | undefined, entityType: str
     case "room_booking": return { kind: "room", booking: open.id };
     case "calendar": case "calendar_event": return { kind: "calendar", date: open.date };
     case "post": return { kind: "wire" };
+    case "chat": return { kind: "chat", id: open.id };
     default: return open.projectId ? { kind: "project", id: open.projectId } : null; // a sheet, page, form, P&L…: its project
   }
 }
 
 const OPEN_LABEL: Record<OpenTarget["kind"], string> = {
   project: "Open project", task: "Open task", doc: "Open doc", folder: "Open folder", attendance: "Open attendance",
-  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open Threads",
+  room: "Open room booking", calendar: "Open calendar", vault: "Open Vault", wire: "Open Threads", chat: "Open chat",
 };
 
 function OpenLink({ target, children }: { target: OpenTarget; children: ReactNode }) {
@@ -535,6 +539,7 @@ function OpenLink({ target, children }: { target: OpenTarget; children: ReactNod
     case "calendar": return <Link to="/calendar" search={target.date ? { date: target.date } : {}} className={cls}>{children}{arrow}</Link>;
     case "vault": return <Link to="/vault" className={cls}>{children}{arrow}</Link>;
     case "wire": return <Link to="/threads" className={cls}>{children}{arrow}</Link>;
+    case "chat": return <Link to="/messages" search={{ c: target.id }} className={cls}>{children}{arrow}</Link>;
   }
 }
 
