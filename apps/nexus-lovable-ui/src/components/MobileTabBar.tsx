@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
 import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
+import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 
 /* Primary destinations live in the floating bar; everything else lives in the
@@ -72,6 +73,9 @@ export function MobileTabBar() {
 
   const notif = useQuery({ queryKey: ["notifications-unread"], queryFn: () => nexusApi.notifications(), retry: 1 });
   const unread = notif.data?.unreadCount ?? activeNotifications(notif.data?.notifications ?? []).filter((n) => !n.read).length;
+  // Chat lives in the More sheet too, so its unread count rides on the More button with the bell's.
+  const chatUnread = useChatUnread();
+  const moreBadge = unread + chatUnread;
 
   // Active slot: a matching primary tab, else "More" (index 4) when you're on a
   // secondary destination reachable through the sheet.
@@ -159,8 +163,8 @@ export function MobileTabBar() {
             )}
           >
             <Menu className="h-[22px] w-[22px]" strokeWidth={activeIndex === 4 ? 2.5 : 2} />
-            {unread > 0 && (
-              <span className="absolute left-1/2 top-1 ml-2 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{unread}</span>
+            {moreBadge > 0 && (
+              <span className="absolute left-1/2 top-1 ml-2 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">{moreBadge > 99 ? "99+" : moreBadge}</span>
             )}
             <span>More</span>
           </button>
@@ -168,7 +172,7 @@ export function MobileTabBar() {
         </div>
       </nav>
 
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} isActive={isActive} unread={unread} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} isActive={isActive} unread={unread} chatUnread={chatUnread} />
     </>
   );
 }
@@ -189,7 +193,7 @@ function GlassFilter() {
   );
 }
 
-function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose: () => void; isActive: (p: string) => boolean; unread: number }) {
+function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: boolean; onClose: () => void; isActive: (p: string) => boolean; unread: number; chatUnread: number }) {
   const reduce = useReducedMotion();
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 }).data?.user;
   const { isDark, toggle: toggleTheme } = useTheme();
@@ -264,6 +268,9 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
                           <span className="flex-1">{item.title}</span>
                           {item.url === "/inbox" && unread > 0 && (
                             <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{unread}</span>
+                          )}
+                          {item.url === "/messages" && chatUnread > 0 && (
+                            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{chatUnread > 99 ? "99+" : chatUnread}</span>
                           )}
                         </Link>
                       );

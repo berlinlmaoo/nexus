@@ -126,4 +126,29 @@ test("token errors disable the device; payload/config/transient errors do not", 
   assert.equal(classifyFcmError(404, { error: { status: "UNREGISTERED" } }).invalidToken, true)
 })
 
+// CHAT-CONTRACT (8 Oct 2026): a chat push carries type, conversationId, messageId, link, conversationName,
+// senderName, title, body, isGroup and badge, all as strings, on the `messages` channel.
+test("chat push: contract keys as strings, badge, messages channel; data cannot override title/body/type", () => {
+  const d = buildFcmMessage("TOK", {
+    title: "Tim Kreatif", body: "Budi: rapat jam 3", type: "MESSAGE", link: "/messages?c=conv1", badge: 7,
+    data: { conversationId: "conv1", messageId: "msg1", conversationName: "Tim Kreatif", senderName: "Budi", isGroup: true, text: "rapat jam 3", title: "spoof", type: "spoof" },
+  }).message.data
+  assert.equal(d.type, "MESSAGE")
+  assert.equal(d.title, "Tim Kreatif")
+  assert.equal(d.body, "Budi: rapat jam 3")
+  assert.equal(d.conversationId, "conv1")
+  assert.equal(d.messageId, "msg1")
+  assert.equal(d.conversationName, "Tim Kreatif")
+  assert.equal(d.senderName, "Budi")
+  assert.equal(d.isGroup, "true")
+  assert.equal(d.text, "rapat jam 3")
+  assert.equal(d.link, "/messages?c=conv1")
+  assert.equal(d.badge, "7")
+  assert.equal(d.channel, "messages")
+  assert.ok(Object.values(d).every((v) => typeof v === "string"))
+  assert.equal(buildFcmMessage("TOK", { title: "T", body: "B", type: "MESSAGE_MENTION", badge: 0 }).message.data.badge, "0")
+  assert.ok(!("badge" in buildFcmMessage("TOK", { title: "T", body: "B", type: "task_assigned" }).message.data), "no badge unless given")
+  assert.ok(!("badge" in buildFcmMessage("TOK", { title: "T", body: "B", type: "MESSAGE", badge: null }).message.data))
+})
+
 console.log(`fcm-payload: ${passed} passed`)

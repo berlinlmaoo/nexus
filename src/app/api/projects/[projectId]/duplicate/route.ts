@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 import { logAudit } from "@/lib/audit"
+import { syncProjectRoomSafe } from "@/lib/chat-membership"
 
 // POST /api/projects/[projectId]/duplicate
 //
@@ -79,6 +80,7 @@ export async function POST(
       memberRows.push({ projectId: newProject.id, userId: me, role: "LEAD" as const })
     }
     await prisma.projectMember.createMany({ data: memberRows, skipDuplicates: true })
+    await syncProjectRoomSafe(newProject.id, "project-duplicated")
 
     // Custom fields, keeping old id -> new id so task values and tableColumns can be remapped.
     const fieldIdMap = new Map<string, string>()

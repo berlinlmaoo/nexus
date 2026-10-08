@@ -15,6 +15,7 @@ import { AppStoreModal } from "@/components/AppStoreModal";
 import { XpPenaltyModal } from "@/components/XpPenaltyModal";
 import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
+import { ChatUnreadTitle } from "@/lib/chat-unread";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -116,6 +117,8 @@ function AppLayout() {
         <AppStoreModal />
         <XpPenaltyModal />
         <PhoneNumberPrompt />
+        {/* "(3) NEXUS Phaëthon" in the browser tab while chats are unread. */}
+        <ChatUnreadTitle />
       </SidebarProvider>
     </RealtimeProvider>
   );

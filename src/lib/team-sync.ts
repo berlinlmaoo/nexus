@@ -1,5 +1,6 @@
 import prisma from "./prisma"
 import { Prisma } from "../generated/prisma"
+import { syncProjectRoomSafe, syncUserRoomsSafe } from "./chat-membership"
 
 /**
  * Team ↔ Project access propagation.
@@ -8,7 +9,15 @@ import { Prisma } from "../generated/prisma"
  * records. When a member is added to a team, they get access to all the team's
  * linked projects. Source is tracked as "team:{teamId}" so revocation knows
  * which records were team-propagated vs. directly assigned.
+ *
+ * Every change here also moves the project's chat room (lib/chat-membership.ts), but only when rows
+ * actually changed, and only outside a transaction — inside one the room would be synced against rows
+ * that are not committed yet (no caller passes one today).
  */
+
+function chatFollows(db: DbClient): boolean {
+  return db === prisma
+}
 
 const ROLE_HIERARCHY: Record<string, number> = {
   LEAD: 4,
@@ -69,6 +78,7 @@ export async function syncTeamProjectAccess(teamId: string, projectId: string, d
       data: toCreate,
       skipDuplicates: true,
     })
+    if (chatFollows(db)) await syncProjectRoomSafe(projectId, `team-linked:${teamId}`)
   }
 }
 
@@ -135,6 +145,7 @@ export async function syncTeamMemberAccess(teamId: string, userId: string, db: D
       data: toCreate,
       skipDuplicates: true,
     })
+    if (chatFollows(db)) await syncUserRoomsSafe(userId, `team-joined:${teamId}`)
   }
 }
 
@@ -151,13 +162,14 @@ export async function revokeTeamProjectAccess(teamId: string, projectId: string,
   if (teamMembers.length === 0) return
 
   // Only remove ProjectMember records that were team-propagated
-  await db.projectMember.deleteMany({
+  const { count } = await db.projectMember.deleteMany({
     where: {
       projectId,
       userId: { in: teamMembers.map((m) => m.userId) },
       source: `team:${teamId}`,
     },
   })
+  if (count > 0 && chatFollows(db)) await syncProjectRoomSafe(projectId, `team-unlinked:${teamId}`)
 }
 
 /**
@@ -172,11 +184,12 @@ export async function revokeTeamMemberAccess(teamId: string, userId: string, db:
 
   if (teamProjects.length === 0) return
 
-  await db.projectMember.deleteMany({
+  const { count } = await db.projectMember.deleteMany({
     where: {
       userId,
       projectId: { in: teamProjects.map((tp) => tp.projectId) },
       source: `team:${teamId}`,
     },
   })
+  if (count > 0 && chatFollows(db)) await syncUserRoomsSafe(userId, `team-left:${teamId}`)
 }

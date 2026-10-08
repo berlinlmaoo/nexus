@@ -227,6 +227,8 @@ model Workspace {
   updatedAt   DateTime          @updatedAt
 
   members         WorkspaceMember[]
+  /// Group/DM and project chat rooms that belong to this workspace (Conversation.workspaceId).
+  conversations   Conversation[]
   projects        Project[]
   projectFolders  ProjectFolder[]
   vaultItems      VaultItem[]
@@ -942,6 +944,8 @@ model Notification {
   projectId String?
 
   @@index([userId])
+  /// The bell count and the push badge: unread rows per person, newest first.
+  @@index([userId, read, createdAt])
 }
 
 model DeviceInstallation {
@@ -2146,8 +2150,18 @@ model Conversation {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
+  /// The workspace the room belongs to (8 Oct 2026): a project room's project workspace, a group/DM the
+  /// workspace every participant was in when it was created. Leaving that workspace takes a person out
+  /// of the room (src/lib/chat-membership.ts). Null = a group/DM that spans workspaces or predates
+  /// this; those fall back to "shares a workspace with another member" (chat-rules groupRoomAllows).
+  /// SetNull: deleting a workspace must not delete the conversations that mention it.
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
   members  ConversationMember[]
   messages Message[]
+
+  @@index([workspaceId])
 }
 
 model ConversationMember {
@@ -2158,6 +2172,10 @@ model ConversationMember {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   joinedAt       DateTime @default(now())
   lastReadAt     DateTime?
+  /// Muted for this member until then (PATCH /api/conversations/:id/mute; "forever" = 9999-12-31).
+  /// No push for plain messages and only mentions count toward totalUnread; an @mention still pushes.
+  /// Private to the member: never part of the roster other people receive.
+  mutedUntil     DateTime?
 
   @@unique([conversationId, userId])
   @@index([userId])

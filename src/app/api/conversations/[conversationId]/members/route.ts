@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { createInAppNotification } from "@/lib/notification-service"
+import { CHAT_MEMBER_SELECT, groupRoomAllowsUser } from "@/lib/chat-access"
+import { emitConversationMembersRemoved, emitConversationUpdated } from "@/lib/socket-emitter"
 
 const memberInclude = {
-  members: { include: { user: { select: { id: true, name: true, avatar: true, email: true } } } },
+  members: { select: CHAT_MEMBER_SELECT },
 }
 
 /**
@@ -23,7 +25,7 @@ const memberInclude = {
 async function loadGroup(conversationId: string, userId: string) {
   const convo = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, type: true, name: true, members: { select: { userId: true } } },
+    select: { id: true, type: true, name: true, workspaceId: true, updatedAt: true, members: { select: { userId: true } } },
   })
   if (!convo) return { error: "Not found", status: 404 as const }
   if (convo.type !== "GROUP") {
@@ -32,12 +34,21 @@ async function loadGroup(conversationId: string, userId: string) {
   if (!convo.members.some((m) => m.userId === userId)) {
     return { error: "Forbidden", status: 403 as const }
   }
+  // A member who has since left the group's workspace has no say over it either.
+  if (!(await groupRoomAllowsUser(conversationId, convo.workspaceId, userId))) {
+    return { error: "Forbidden", status: 403 as const }
+  }
   return { convo }
 }
 
-/** The set of users the caller shares a workspace with — nobody else may be added. */
-async function reachableUserIds(userId: string) {
-  const mine = await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } })
+/**
+ * Who may be added: people in the group's own workspace when it has one; otherwise (groups from before
+ * 8 Oct 2026) anyone the caller shares a workspace with.
+ */
+async function reachableUserIds(userId: string, groupWorkspaceId: string | null) {
+  const mine = groupWorkspaceId
+    ? [{ workspaceId: groupWorkspaceId }]
+    : await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } })
   if (mine.length === 0) return new Set<string>()
   const peers = await prisma.workspaceMember.findMany({
     where: { workspaceId: { in: mine.map((m) => m.workspaceId) } },
@@ -63,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       : []
     if (requested.length === 0) return NextResponse.json({ error: "userIds required" }, { status: 400 })
 
-    const reachable = await reachableUserIds(userId)
+    const reachable = await reachableUserIds(userId, convo.workspaceId)
     const already = new Set(convo.members.map((m) => m.userId))
     const toAdd = Array.from(new Set(requested)).filter((id) => reachable.has(id) && !already.has(id))
 
@@ -83,9 +94,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
             message: "Open Messages to see the conversation.",
             link: `/messages?c=${conversationId}`,
             push: true,
+            // So a phone can open the room straight from the push, as with a chat message.
+            pushData: { conversationId },
           }),
         ),
       )
+      emitConversationUpdated([...convo.members.map((m) => m.userId), ...toAdd], {
+        conversationId,
+        lastMessageAt: convo.updatedAt.toISOString(),
+        reason: "membership",
+      })
     }
 
     const conversation = await prisma.conversation.findUnique({
@@ -120,7 +138,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
       return NextResponse.json({ error: "A group needs at least one member" }, { status: 400 })
     }
 
-    await prisma.conversationMember.deleteMany({ where: { conversationId, userId: target } })
+    const { count } = await prisma.conversationMember.deleteMany({ where: { conversationId, userId: target } })
+    if (count > 0) {
+      // Out of the room's socket at once, and every member's list (theirs included) refreshes.
+      emitConversationMembersRemoved(conversationId, [target])
+      emitConversationUpdated(convo.members.map((m) => m.userId), {
+        conversationId,
+        lastMessageAt: convo.updatedAt.toISOString(),
+        reason: "membership",
+      })
+    }
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },

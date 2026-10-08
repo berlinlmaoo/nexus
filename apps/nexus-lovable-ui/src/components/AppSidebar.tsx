@@ -19,6 +19,7 @@ import { canMoveInto } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
 import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
+import { useChatUnread } from "@/lib/chat-unread";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -168,8 +169,11 @@ export function AppSidebar() {
   // pending offsite-checkout approvals (BoD only). Both refresh every 45s + on relevant mutations.
   const notifQuery = useQuery({ queryKey: ["nexus", "notifications"], queryFn: () => nexusApi.notifications(false), retry: false, refetchInterval: 45_000 });
   const offsiteQuery = useQuery({ queryKey: ["offsite-checkouts"], queryFn: () => nexusApi.offsiteCheckouts("PENDING"), enabled: canManageAttendance, retry: false, refetchInterval: 45_000 });
+  // Messages = unread chat over rooms that aren't muted (lib/chat-unread.ts), live via the socket.
+  const chatUnread = useChatUnread();
   const badgeFor = (url: string): number => {
     if (url === "/inbox") return notifQuery.data?.unreadCount ?? 0;
+    if (url === "/messages") return chatUnread;
     if (url === "/attendance") return canManageAttendance ? (offsiteQuery.data?.pendingCount ?? 0) : 0;
     return 0;
   };

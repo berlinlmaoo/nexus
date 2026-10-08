@@ -1,49 +1,87 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { checkProjectAccess } from "@/lib/rbac"
-import { emitMessageCreated } from "@/lib/socket-emitter"
-import { createInAppNotification } from "@/lib/notification-service"
+import { conversationAccess } from "@/lib/chat-access"
+import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
+import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
+import { checkRateLimitByKey } from "@/lib/rate-limit"
+import { newerThan, olderThan, parseBefore, parseLimit, shapePage, nextLastReadAt } from "@/lib/chat-rules"
 
-async function assertAccess(userId: string, conversationId: string) {
-  const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true, type: true, projectId: true } })
-  if (!convo) return { ok: false, status: 404 }
-  if (convo.type === "PROJECT" && convo.projectId) {
-    const { allowed } = await checkProjectAccess(userId, convo.projectId, ["MEMBER"])
-    return { ok: allowed, status: allowed ? 200 : 403, convo }
-  }
-  const member = await prisma.conversationMember.findUnique({ where: { conversationId_userId: { conversationId, userId } }, select: { id: true } })
-  return { ok: !!member, status: member ? 200 : 403, convo }
-}
+const messageInclude = {
+  user: { select: { id: true, name: true, avatar: true } },
+  // Just enough of the quoted message to render a preview; the client never needs its body.
+  replyTo: {
+    select: {
+      id: true,
+      content: true,
+      attachmentType: true,
+      user: { select: { id: true, name: true } },
+    },
+  },
+} as const
 
+/** CHAT-CONTRACT: at most 30 messages a minute per person (a stuck retry loop, a script, a flood). */
+const SEND_LIMIT = { limit: 30, windowSeconds: 60 }
+
+/**
+ * A page of messages, oldest first.
+ *
+ *   (no cursor)         the newest `limit` (default 50, max 100).
+ *   before=<cursor>     older than that message — the `nextCursor` of the previous page.
+ *   before=<ISO date>   older than that instant, as every client sent until 8 Oct 2026.
+ *   after=<messageId>   strictly newer than that message, oldest first — what phones poll with.
+ *                       An empty array means nothing new; `hasMore` means poll again straight away.
+ *
+ * Every response carries `hasMore` and `nextCursor` (null when there is nothing older, and always null
+ * for `after`): the web tells a server that pages this way by the key being present.
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const { conversationId } = await params
-    const access = await assertAccess(session.user.id, conversationId)
+    const access = await conversationAccess(session.user.id, conversationId)
     if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
 
-    const before = req.nextUrl.searchParams.get("before")
-    const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50", 10), 100)
+    const sp = req.nextUrl.searchParams
+    const limit = parseLimit(sp.get("limit"))
+    const afterId = sp.get("after")
+    const before = parseBefore(sp.get("before"))
+
+    if (afterId) {
+      if (before.kind !== "none") {
+        return NextResponse.json({ error: "Use either before or after, not both", code: "BAD_CURSOR" }, { status: 400 })
+      }
+      const anchor = await prisma.message.findFirst({
+        where: { id: afterId, conversationId },
+        select: { id: true, createdAt: true },
+      })
+      if (!anchor) {
+        return NextResponse.json({ error: "after is not a message of this conversation", code: "UNKNOWN_MESSAGE" }, { status: 400 })
+      }
+      const rows = await prisma.message.findMany({
+        where: { conversationId, ...newerThan(anchor.createdAt, anchor.id) },
+        include: messageInclude,
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: limit + 1,
+      })
+      return NextResponse.json(shapePage(rows, limit, "newer"))
+    }
+
+    if (before.kind === "invalid") {
+      return NextResponse.json({ error: "before must be a cursor or an ISO date", code: "BAD_CURSOR" }, { status: 400 })
+    }
+    const where =
+      before.kind === "cursor" ? { conversationId, ...olderThan(before.createdAt, before.id) }
+      : before.kind === "date" ? { conversationId, createdAt: { lt: before.date } }
+      : { conversationId }
     const rows = await prisma.message.findMany({
-      where: { conversationId, ...(before ? { createdAt: { lt: new Date(before) } } : {}) },
-      include: {
-        user: { select: { id: true, name: true, avatar: true } },
-        // Just enough of the quoted message to render a preview; the client never needs its body.
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            attachmentType: true,
-            user: { select: { id: true, name: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
+      where,
+      include: messageInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
     })
-    return NextResponse.json({ messages: rows.reverse(), hasMore: rows.length === limit })
+    return NextResponse.json(shapePage(rows, limit, "older"))
   } catch (error) {
     console.error("messages GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -56,7 +94,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id
     const { conversationId } = await params
-    const access = await assertAccess(userId, conversationId)
+
+    const rate = checkRateLimitByKey("chat-send", userId, SEND_LIMIT)
+    if (!rate.allowed) {
+      const retryAfter = Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))
+      return NextResponse.json(
+        { error: "Terlalu banyak pesan dalam satu menit. Tunggu sebentar, lalu kirim lagi.", code: "RATE_LIMITED", retryAfter },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } },
+      )
+    }
+
+    const access = await conversationAccess(userId, conversationId)
     if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
 
     const { content, mentionedUserIds, attachmentUrl, attachmentType, replyToId } = await req.json()
@@ -90,63 +138,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         attachmentType: attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null,
         replyToId: quotedId,
       },
-      include: {
-        user: { select: { id: true, name: true, avatar: true } },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            attachmentType: true,
-            user: { select: { id: true, name: true } },
-          },
-        },
-      },
+      include: messageInclude,
     })
     await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
-
-    emitMessageCreated(conversationId, message as unknown as Record<string, unknown>)
-
-    // Mentions are structured user IDs from the conversation roster, never inferred from display
-    // names. That makes @tags unambiguous even when two people share a name.
-    const members = await prisma.conversationMember.findMany({
-      where: { conversationId, userId: { not: userId } },
-      select: { userId: true, user: { select: { name: true } } },
-    })
-    const memberIds = new Set(members.map((member) => member.userId))
-    const mentions = new Set(
-      (Array.isArray(mentionedUserIds) ? mentionedUserIds : [])
-        .filter((id): id is string => typeof id === "string" && memberIds.has(id)),
-    )
-    // Compatibility for the web client, which still sends text only. Accept a textual tag only
-    // when its no-space display name identifies exactly one room member.
-    const textTags = new Set(Array.from(String(content).matchAll(/@([\p{L}\p{N}._-]+)/gu), (match) => match[1].toLocaleLowerCase()))
-    const membersByTag = new Map<string, string[]>()
-    for (const member of members) {
-      const tag = member.user.name.replace(/\s+/g, "").toLocaleLowerCase()
-      if (!tag) continue
-      membersByTag.set(tag, [...(membersByTag.get(tag) ?? []), member.userId])
+    // Writing in a room means you have seen it: your read position moves to your own message.
+    if (access.member) {
+      await prisma.conversationMember.update({
+        where: { id: access.member.id },
+        data: { lastReadAt: nextLastReadAt(access.member.lastReadAt, message.createdAt) },
+      })
     }
-    for (const tag of textTags) {
-      const matches = membersByTag.get(tag) ?? []
-      if (matches.length === 1) mentions.add(matches[0])
-    }
-    const preview = message.content.length > 80 ? message.content.slice(0, 78) + "…" : message.content
-    await Promise.allSettled(members.map((member) => createInAppNotification({
-      userId: member.userId,
-      type: mentions.has(member.userId) ? "MESSAGE_MENTION" : "MESSAGE",
-      title: mentions.has(member.userId)
-        ? `${message.user?.name ?? "Someone"} mentioned you`
-        : `New message from ${message.user?.name ?? "someone"}`,
-      message: preview,
-      // `?c=`, not `/messages/<id>`: the web has no `/messages/$id` route, so the old link opened
-      // the list and lost the conversation. Both clients read the query form (iOS also still
-      // accepts the path form for rows created before this).
-      link: `/messages?c=${conversationId}`,
-      // Every message pushes, not just mentions. A chat app where a plain message reaches you
-      // only after you happen to open it is not a chat app; the mention still differs in the
-      // title and type so a direct @ is distinguishable on the lock screen.
-      push: true,
-    })))
+
+    const memberIds = (
+      await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } })
+    ).map((m) => m.userId)
+    emitMessageCreated(conversationId, message as unknown as Record<string, unknown>, memberIds)
+    emitConversationUpdated(memberIds, { conversationId, lastMessageAt: message.createdAt.toISOString(), reason: "message" })
+
+    // Push (and the Inbox row for a mention) after the reply is on its way — chat-fanout.ts.
+    runAfterResponse("chat fan-out", () => fanOutChatMessage({
+      conversationId,
+      message,
+      senderId: userId,
+      mentionedUserIds,
+      rawContent: content,
+    }))
 
     return NextResponse.json({ message }, { status: 201 })
   } catch (error) {

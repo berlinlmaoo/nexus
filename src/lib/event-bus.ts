@@ -23,6 +23,10 @@ export const BUS_EVENTS = {
   NOTIFICATION: "notification",
   SPRINT_UPDATED: "sprint-updated",
   MESSAGE_CREATED: "message-created",
+  /** A conversation changed for these users (new message, read, mute, membership) → `user:<id>` rooms. */
+  CONVERSATION_UPDATED: "conversation-updated",
+  /** People left a conversation: their sockets must leave `conversation:<id>`. */
+  CONVERSATION_MEMBERSHIP: "conversation-membership",
   SHEET_CELLS: "sheet-cells",
   SHEET_STRUCTURE: "sheet-structure",
 } as const

@@ -10,6 +10,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
 import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { sessionVersionRejects } from "@/lib/session-version"
+import { conversationMemberAccess } from "@/lib/chat-access"
 
 const log = createLogger("socket")
 
@@ -96,13 +97,10 @@ export function initializeSocketServer(
         return id === userId
       case "project":
         return (await checkProjectAccess(userId, id, ["VIEWER"])).allowed
+      // A member row, and for a group/DM still being in its workspace (lib/chat-access.ts) — the
+      // row alone outlived a removal from the company until 8 Oct 2026.
       case "conversation":
-        return Boolean(
-          await prisma.conversationMember.findUnique({
-            where: { conversationId_userId: { conversationId: id, userId } },
-            select: { id: true },
-          }),
-        )
+        return (await conversationMemberAccess(userId, id)).ok
       case "sheet":
         return (await resolveSheetAccess(userId, id, ["VIEWER"])).allowed
       default:
@@ -345,8 +343,44 @@ export function initializeSocketServer(
     io.to(`project:${data.projectId}`).emit("sprint-updated", data.sprint)
   })
 
-  eventBus.on(BUS_EVENTS.MESSAGE_CREATED, (data: { conversationId: string; message: unknown }) => {
-    io.to(`conversation:${data.conversationId}`).emit("message-created", data.message)
+  // Re-checked per socket against the roster the route sent along: a socket that joined while its user
+  // was a member keeps sitting in the room after a removal, and would otherwise keep receiving every
+  // message. Anyone not on the roster is taken out of the room instead of being sent the message.
+  eventBus.on(BUS_EVENTS.MESSAGE_CREATED, (data: { conversationId: string; message: unknown; memberIds?: string[] }) => {
+    const room = `conversation:${data.conversationId}`
+    if (!Array.isArray(data.memberIds)) {
+      io.to(room).emit("message-created", data.message)
+      return
+    }
+    const allowed = new Set(data.memberIds)
+    io.in(room).fetchSockets()
+      .then((sockets) => {
+        for (const s of sockets) {
+          if (allowed.has(s.data?.userId as string)) s.emit("message-created", data.message)
+          else s.leave(room)
+        }
+      })
+      .catch((error) => {
+        log.warn("message-created: could not list the room, sent to it as is", { room, error: String(error) })
+        io.to(room).emit("message-created", data.message)
+      })
+  })
+
+  // The chat list of every member, wherever it is open: `conversation-updated` to each user's own room.
+  eventBus.on(BUS_EVENTS.CONVERSATION_UPDATED, (data: { userIds: string[]; payload: unknown }) => {
+    for (const userId of data.userIds ?? []) io.to(`user:${userId}`).emit("conversation-updated", data.payload)
+  })
+
+  // Removed from a conversation (project/workspace/group change): out of its room immediately.
+  eventBus.on(BUS_EVENTS.CONVERSATION_MEMBERSHIP, (data: { conversationId: string; removedUserIds: string[] }) => {
+    const room = `conversation:${data.conversationId}`
+    const removed = new Set(data.removedUserIds ?? [])
+    if (removed.size === 0) return
+    io.in(room).fetchSockets()
+      .then((sockets) => {
+        for (const s of sockets) if (removed.has(s.data?.userId as string)) s.leave(room)
+      })
+      .catch((error) => log.warn("conversation-membership: could not list the room", { room, error: String(error) }))
   })
 
   eventBus.on(BUS_EVENTS.SHEET_CELLS, (data: { sheetId: string; rows: unknown; actorId: string }) => {

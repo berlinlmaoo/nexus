@@ -1176,5 +1176,408 @@ export function buildFixtures(profile, world, media) {
     })
   }
 
+  // ---- chat (CHAT-CONTRACT 8 Oct 2026): what every released client does, plus the new routes ----
+  if (!p.legacy) chatFixtures(p, world, add)
+
   return steps
+}
+
+// ---------- chat ----------
+//
+// Released clients (all non-legacy profiles), from their pinned sources:
+//   iOS     APIClient.swift: GET /api/conversations · GET …/messages (no query) · POST …/messages
+//           {content, mentionedUserIds[, replyToId]} → decodes nothing it needs · POST …/read with NO body ·
+//           POST /api/conversations {type, userIds}. Conversation.members[].user {id,name,avatar} drives the
+//           DM title and the @mention picker, so the roster must stay in the list.
+//   Android ChatApi.kt: GET …/messages?limit=50 · …&before=<ISO createdAt of the oldest> · send {content
+//           [, mentionedUserIds]} · read with body {} · MessagesResponse {messages, hasMore}.
+//   web     nexus-api.ts: conversations() · conversationMessages(id, before?) · sendMessage {content, …extra}
+//           · markConversationRead POST without a body.
+// The contract steps (web and the iOS 0.1.6 profile, i.e. a cookie session and a token session) are what
+// the next builds send: after=, before=<cursor>, upToMessageId, PATCH mute, GET unread, and the server's
+// own guarantees (own messages never unread, read never moves back, 30/min, membership follows the
+// project and the workspace). Every conversation here is a DM between this profile's own two staff
+// users, so no profile's counts depend on another's; the shared project room is only read, and written
+// to once per profile without any exact count on it.
+function chatFixtures(p, world, add) {
+  const contract = p.style === "web" || p.id === "ios-0.1.6"
+  const list = (j) => (Array.isArray(j?.conversations) ? j.conversations : null)
+  const find = (j, id) => list(j)?.find((c) => c.id === id)
+  const projectRoom = (j) => list(j)?.find((c) => c.type === "PROJECT" && c.projectId === world.projectId)
+  const msgsOf = (j) => (Array.isArray(j?.messages) ? j.messages : null)
+  const msgOk = (m) => isStr(m?.id) && typeof m?.content === "string"
+  const send = (content, extra = {}) => (p.style === "ios" ? { content, mentionedUserIds: [], ...extra } : { content, ...extra })
+  const messagesPath = (id, q = "") => {
+    const base = `/api/conversations/${id}/messages`
+    const parts = [p.style === "android" ? "limit=50" : "", q].filter(Boolean)
+    return parts.length ? `${base}?${parts.join("&")}` : base
+  }
+  const dmNeeded = (ctx) => (ctx.flags.dmId ? null : "the DM was not created")
+  const msgsNeeded = (ctx) => (ctx.flags.dmId && ctx.flags.m3 ? null : "the DM messages were not sent")
+  const unreadOf = (j, ctx) => find(j, ctx.flags.dmId)?.unreadCount
+
+  add({ id: "chat-login-b", title: "login (2nd staff, chat partner)", as: "b", kind: "compat", login: true, expect: { status: 200 } })
+
+  add({
+    id: "chat-list", title: "GET /api/conversations → project room with roster", as: "a", kind: "compat",
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: {
+      status: 200,
+      check: (j) => {
+        const arr = list(j)
+        if (!arr) return "conversations not an array"
+        const pr = projectRoom(j)
+        return firstError(
+          need(arr.every((c) => isStr(c.id) && isStr(c.type)), "item without id/type"),
+          need(pr, "the seeded project's room is missing"),
+          need(Array.isArray(pr?.members) && pr.members.length > 0 && pr.members.every((m) => isStr(m.userId) && isStr(m.user?.id) && isStr(m.user?.name)), "roster without userId/user.id/user.name (iOS @mention picker)"),
+          need(pr && typeof pr.unreadCount === "number", "unreadCount missing"),
+        )
+      },
+    },
+    after: (j, ctx) => { ctx.flags.projectRoomId = projectRoom(j)?.id },
+  })
+  add({
+    id: "chat-list-new-keys", title: "GET /api/conversations → totalUnread, mutedUntil, memberCount, no email", as: "a", kind: "compat",
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: {
+      status: 200,
+      check: (j) => {
+        const arr = list(j) ?? []
+        return firstError(
+          need(typeof j?.totalUnread === "number", "totalUnread missing"),
+          need(arr.every((c) => "mutedUntil" in c && typeof c.memberCount === "number"), "item without mutedUntil/memberCount"),
+          need(keysNamed(j, ["email", "mutedUntil"]).filter((k) => /members/.test(k)).length === 0, "a roster entry carries email or someone's mute"),
+        )
+      },
+    },
+  })
+  add({
+    id: "chat-dm-create", title: "POST /api/conversations {type:DM, userIds:[b]}", as: "a", kind: "compat",
+    request: (ctx) => ({ method: "POST", path: "/api/conversations", json: { type: "DM", userIds: [ctx.users.b.id] } }),
+    expect: { status: "2xx", check: (j) => need(isStr(j?.conversation?.id) && j.conversation.type === "DM", "conversation.id/type missing") },
+    after: (j, ctx) => { ctx.flags.dmId = j.conversation.id },
+  })
+  add({
+    id: "chat-dm-dedupe", title: "POST the same DM again → the same conversation", as: "a", kind: "compat",
+    needs: dmNeeded,
+    request: (ctx) => ({ method: "POST", path: "/api/conversations", json: { type: "DM", userIds: [ctx.users.b.id] } }),
+    expect: { status: "2xx", check: (j, ctx) => need(j?.conversation?.id === ctx.flags.dmId, "a second DM was created") },
+  })
+  for (const [i, text] of [[1, "Halo, rapat jam 3?"], [2, "Bawa laptop ya"], [3, "Siap"]]) {
+    add({
+      id: `chat-send-${i}`, title: `POST …/messages (${p.style} body) #${i}`, as: "a", kind: "compat",
+      needs: dmNeeded,
+      request: (ctx) => ({
+        method: "POST", path: `/api/conversations/${ctx.flags.dmId}/messages`,
+        json: send(`${text} [${p.id}]`, i === 3 && ctx.flags.m1 ? { replyToId: ctx.flags.m1 } : {}),
+      }),
+      expect: {
+        status: 201,
+        check: (j, ctx) => firstError(
+          need(msgOk(j?.message), "message.id/content missing"),
+          need(i !== 3 || j?.message?.replyTo?.id === ctx.flags.m1, "replyTo preview missing"),
+        ),
+      },
+      after: (j, ctx) => { ctx.flags[`m${i}`] = j.message.id; ctx.flags[`m${i}At`] = j.message.createdAt },
+    })
+  }
+  add({
+    id: "chat-send-project", title: "POST …/messages into the project room", as: "a", kind: "compat",
+    needs: (ctx) => (ctx.flags.projectRoomId ? null : "no project room"),
+    request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.projectRoomId}/messages`, json: send(`Update dari ${p.id}`) }),
+    expect: { status: 201, check: (j) => need(msgOk(j?.message), "message.id/content missing") },
+  })
+  add({
+    id: "chat-unread-b", title: "GET /api/conversations (b) → DM unread 3", as: "b", kind: "compat",
+    needs: msgsNeeded,
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j, ctx) => need(unreadOf(j, ctx) === 3, `DM unreadCount ${unreadOf(j, ctx)}, want 3`) },
+  })
+  add({
+    id: "chat-own-not-unread", title: "GET /api/conversations (a) → own messages are not unread", as: "a", kind: "compat",
+    needs: msgsNeeded,
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j, ctx) => need(unreadOf(j, ctx) === 0, `sender's DM unreadCount ${unreadOf(j, ctx)}, want 0`) },
+  })
+  add({
+    id: "chat-read-page", title: `GET ${p.style === "android" ? "…/messages?limit=50" : "…/messages"} (b) → oldest first`, as: "b", kind: "compat",
+    needs: msgsNeeded,
+    request: (ctx) => ({ method: "GET", path: messagesPath(ctx.flags.dmId) }),
+    expect: {
+      status: 200,
+      check: (j, ctx) => {
+        const ms = msgsOf(j)
+        if (!ms) return "messages not an array"
+        return firstError(
+          need(ms.every(msgOk), "message without id/content"),
+          need(sameJson(ms.map((m) => m.id), [ctx.flags.m1, ctx.flags.m2, ctx.flags.m3]), "not the three messages, oldest first"),
+          need(j.hasMore === false, `hasMore ${j.hasMore}`),
+        )
+      },
+    },
+  })
+  if (p.style === "android" || p.style === "web") {
+    add({
+      id: "chat-before-iso", title: "GET …/messages?before=<ISO createdAt> (older page, old clients)", as: "b", kind: "compat",
+      needs: msgsNeeded,
+      request: (ctx) => ({ method: "GET", path: messagesPath(ctx.flags.dmId, `before=${encodeURIComponent(ctx.flags.m2At)}`) }),
+      expect: { status: 200, check: (j, ctx) => need(sameJson((msgsOf(j) ?? []).map((m) => m.id), [ctx.flags.m1]), "before=<ISO> is not 'strictly older'") },
+    })
+  }
+  if (p.style === "ios") {
+    // Released iOS never sends a body; old server and new both read it as "everything".
+    add({
+      id: "chat-mark-read-old", title: "POST …/read with no body (b) → all read", as: "b", kind: "compat",
+      needs: msgsNeeded,
+      request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.dmId}/read` }),
+      expect: { status: "2xx" },
+    })
+  } else {
+    add({
+      id: "chat-mark-read-old", title: `POST …/read ${p.style === "android" ? "{}" : "(no body)"} (b) → all read`, as: "b", kind: "compat",
+      needs: msgsNeeded,
+      request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.dmId}/read`, ...(p.style === "android" ? { json: {} } : {}) }),
+      expect: { status: "2xx" },
+    })
+  }
+  add({
+    id: "chat-read-cleared", title: "GET /api/conversations (b) → DM unread 0", as: "b", kind: "compat",
+    needs: msgsNeeded,
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j, ctx) => need(unreadOf(j, ctx) === 0, `DM unreadCount ${unreadOf(j, ctx)} after read`) },
+  })
+  add({
+    id: "chat-outsider", title: "GET a DM's messages as someone not in it → 403", as: "manager", kind: "compat",
+    needs: (ctx) => dmNeeded(ctx) ?? (ctx.sessions.manager ? null : "manager not signed in"),
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages` }),
+    expect: { status: 403 },
+  })
+
+  if (!contract) return
+
+  // ---- contract steps (new clients) ----
+  add({
+    id: "chat-cursor-1", title: "GET …/messages?limit=2 → hasMore + nextCursor", as: "b", kind: "compat",
+    needs: msgsNeeded,
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages?limit=2` }),
+    expect: {
+      status: 200,
+      check: (j, ctx) => firstError(
+        need(sameJson((msgsOf(j) ?? []).map((m) => m.id), [ctx.flags.m2, ctx.flags.m3]), "not the newest two, oldest first"),
+        need(j.hasMore === true, `hasMore ${j.hasMore}`),
+        need(isStr(j.nextCursor), "nextCursor missing"),
+      ),
+    },
+    after: (j, ctx) => { ctx.flags.cursor = j.nextCursor },
+  })
+  add({
+    id: "chat-cursor-2", title: "GET …/messages?before=<nextCursor> → the rest, nextCursor null", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.cursor ? null : "no cursor"),
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages?limit=2&before=${encodeURIComponent(ctx.flags.cursor)}` }),
+    expect: {
+      status: 200,
+      check: (j, ctx) => firstError(
+        need(sameJson((msgsOf(j) ?? []).map((m) => m.id), [ctx.flags.m1]), "not the oldest message"),
+        need(j.hasMore === false, `hasMore ${j.hasMore}`),
+        need("nextCursor" in (j ?? {}) && j.nextCursor === null, "nextCursor must be present and null"),
+      ),
+    },
+  })
+  add({
+    id: "chat-after", title: "GET …/messages?after=<m1> → newer ones, oldest first", as: "b", kind: "compat",
+    needs: msgsNeeded,
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages?after=${ctx.flags.m1}` }),
+    expect: {
+      status: 200,
+      check: (j, ctx) => firstError(
+        need(sameJson((msgsOf(j) ?? []).map((m) => m.id), [ctx.flags.m2, ctx.flags.m3]), "not m2, m3"),
+        need(j.hasMore === false, `hasMore ${j.hasMore}`),
+        need("nextCursor" in (j ?? {}), "nextCursor key missing"),
+      ),
+    },
+  })
+  add({
+    id: "chat-after-none", title: "GET …/messages?after=<newest> → [] (nothing new)", as: "b", kind: "compat",
+    needs: msgsNeeded,
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages?after=${ctx.flags.m3}` }),
+    expect: { status: 200, check: (j) => need(Array.isArray(j?.messages) && j.messages.length === 0 && j.hasMore === false, "not an empty page") },
+  })
+  add({
+    id: "chat-after-foreign", title: "GET …/messages?after=<id from another room> → 400", as: "b", kind: "policy",
+    needs: msgsNeeded,
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages?after=not-a-message` }),
+    expect: { status: 400 },
+  })
+  add({
+    id: "chat-send-4", title: "POST …/messages #4 (a) for the read-up-to steps", as: "a", kind: "compat",
+    needs: msgsNeeded,
+    request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.dmId}/messages`, json: send(`Satu lagi [${p.id}]`) }),
+    expect: { status: 201 },
+    after: (j, ctx) => { ctx.flags.m4 = j.message.id },
+  })
+  add({
+    id: "chat-send-5", title: "POST …/messages #5 (a)", as: "a", kind: "compat",
+    needs: (ctx) => (ctx.flags.m4 ? null : "m4 missing"),
+    request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.dmId}/messages`, json: send(`Terakhir [${p.id}]`) }),
+    expect: { status: 201 },
+    after: (j, ctx) => { ctx.flags.m5 = j.message.id },
+  })
+  add({
+    id: "chat-read-upto", title: "POST …/read {upToMessageId: m4} → only m5 stays unread", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.m5 ? null : "m5 missing"),
+    request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.dmId}/read`, json: { upToMessageId: ctx.flags.m4 } }),
+    expect: { status: "2xx", check: (j) => need(j?.success === true && isStr(j?.lastReadAt), "success/lastReadAt missing") },
+  })
+  add({
+    id: "chat-read-upto-list", title: "GET /api/conversations (b) → DM unread 1", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.m5 ? null : "m5 missing"),
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j, ctx) => need(unreadOf(j, ctx) === 1, `DM unreadCount ${unreadOf(j, ctx)}, want 1`) },
+  })
+  add({
+    id: "chat-read-backwards", title: "POST …/read {upToMessageId: m1} → never moves back", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.m5 ? null : "m5 missing"),
+    request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.dmId}/read`, json: { upToMessageId: ctx.flags.m1 } }),
+    expect: { status: "2xx" },
+  })
+  add({
+    id: "chat-unread-endpoint", title: "GET /api/conversations/unread → {totalUnread ≥ 1, mentions}", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.m5 ? null : "m5 missing"),
+    request: () => ({ method: "GET", path: "/api/conversations/unread" }),
+    expect: {
+      status: 200,
+      check: (j) => firstError(
+        need(typeof j?.totalUnread === "number" && j.totalUnread >= 1, `totalUnread ${j?.totalUnread} (the DM still has 1)`),
+        need(typeof j?.mentions === "number", "mentions missing"),
+      ),
+    },
+  })
+  add({
+    id: "chat-mute", title: 'PATCH …/mute {mutedUntil:"forever"} → stored', as: "b", kind: "compat",
+    needs: dmNeeded,
+    request: (ctx) => ({ method: "PATCH", path: `/api/conversations/${ctx.flags.dmId}/mute`, json: { mutedUntil: "forever" } }),
+    expect: { status: 200, check: (j) => need(j?.mutedUntil === "9999-12-31T23:59:59.000Z", `mutedUntil ${j?.mutedUntil}`) },
+  })
+  add({
+    id: "chat-mute-list", title: "GET /api/conversations (b) → DM mutedUntil set, its unread out of totalUnread", as: "b", kind: "compat",
+    needs: dmNeeded,
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: {
+      status: 200,
+      check: (j, ctx) => {
+        const dm = find(j, ctx.flags.dmId)
+        const rest = (list(j) ?? []).filter((c) => c.id !== ctx.flags.dmId && !c.mutedUntil).reduce((n, c) => n + (c.unreadCount ?? 0), 0)
+        return firstError(
+          need(isStr(dm?.mutedUntil), "mutedUntil not reported"),
+          need(dm?.unreadCount === 1, `unreadCount ${dm?.unreadCount} (still 1: muting does not read)`),
+          need(j?.totalUnread === rest, `totalUnread ${j?.totalUnread} ≠ ${rest} (the muted DM must not count)`),
+        )
+      },
+    },
+  })
+  add({
+    id: "chat-unmute", title: "PATCH …/mute {mutedUntil:null} → null", as: "b", kind: "compat",
+    needs: dmNeeded,
+    request: (ctx) => ({ method: "PATCH", path: `/api/conversations/${ctx.flags.dmId}/mute`, json: { mutedUntil: null } }),
+    expect: { status: 200, check: (j) => need(j && "mutedUntil" in j && j.mutedUntil === null, `mutedUntil ${j?.mutedUntil}`) },
+  })
+  add({
+    id: "chat-mute-bad", title: 'PATCH …/mute {mutedUntil:"soon"} → 400', as: "b", kind: "policy",
+    needs: dmNeeded,
+    request: (ctx) => ({ method: "PATCH", path: `/api/conversations/${ctx.flags.dmId}/mute`, json: { mutedUntil: "soon" } }),
+    expect: { status: 400 },
+  })
+  add({
+    id: "chat-mute-outsider", title: "PATCH …/mute on a DM one is not in → 403", as: "manager", kind: "compat",
+    needs: (ctx) => dmNeeded(ctx) ?? (ctx.sessions.manager ? null : "manager not signed in"),
+    request: (ctx) => ({ method: "PATCH", path: `/api/conversations/${ctx.flags.dmId}/mute`, json: { mutedUntil: "forever" } }),
+    expect: { status: 403 },
+  })
+
+  if (p.style !== "web") return
+
+  // ---- membership follows the project and the workspace (web profile only: it changes who is where) ----
+  add({ id: "chat-login-bod", title: "login (BoD, membership changes)", as: "bod", kind: "compat", login: true, expect: { status: 200 } })
+  add({
+    id: "chat-project-remove", title: "DELETE /api/projects/:id/members {b} (BoD)", as: "bod", kind: "compat",
+    request: (ctx) => ({ method: "DELETE", path: `/api/projects/${world.projectId}/members`, json: { userId: ctx.users.b.id } }),
+    expect: { status: "2xx" },
+  })
+  add({
+    id: "chat-project-gone", title: "GET /api/conversations (b) → project room gone", as: "b", kind: "compat",
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j) => need(list(j) && !projectRoom(j), "still in the project room after leaving the project") },
+  })
+  add({
+    id: "chat-project-readd", title: "POST /api/projects/:id/members {b} (BoD)", as: "bod", kind: "compat",
+    request: (ctx) => ({ method: "POST", path: `/api/projects/${world.projectId}/members`, json: { userId: ctx.users.b.id, role: "MEMBER" } }),
+    expect: { status: "2xx" },
+  })
+  add({
+    id: "chat-project-back", title: "GET /api/conversations (b) → project room back at once", as: "b", kind: "compat",
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j) => need(projectRoom(j), "not back in the project room after rejoining the project") },
+  })
+  add({
+    id: "chat-ws-members", title: "GET /api/workspaces/members (BoD) → b's membership id", as: "bod", kind: "compat",
+    request: () => ({ method: "GET", path: "/api/workspaces/members" }),
+    expect: { status: 200, check: (j, ctx) => need((j?.members ?? []).some((m) => m.userId === ctx.users.b.id && isStr(m.id)), "b not listed") },
+    after: (j, ctx) => { ctx.flags.bMembershipId = j.members.find((m) => m.userId === ctx.users.b.id)?.id },
+  })
+  add({
+    id: "chat-ws-remove", title: "DELETE /api/workspaces/members?memberId=<b> (BoD)", as: "bod", kind: "compat",
+    needs: (ctx) => (ctx.flags.bMembershipId ? null : "b's membership id unknown"),
+    request: (ctx) => ({ method: "DELETE", path: `/api/workspaces/members?memberId=${ctx.flags.bMembershipId}` }),
+    expect: { status: "2xx" },
+  })
+  add({
+    id: "chat-ws-removed-dm", title: "GET the DM's messages as b after leaving the workspace → 403", as: "b", kind: "compat",
+    needs: (ctx) => dmNeeded(ctx) ?? (ctx.flags.bMembershipId ? null : "b was not removed"),
+    request: (ctx) => ({ method: "GET", path: `/api/conversations/${ctx.flags.dmId}/messages` }),
+    expect: { status: 403 },
+  })
+  add({
+    id: "chat-ws-removed-list", title: "GET /api/conversations (b) → neither the DM nor the project room", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.bMembershipId ? null : "b was not removed"),
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j, ctx) => need(list(j) && !find(j, ctx.flags.dmId) && !projectRoom(j), "rooms of the workspace still listed") },
+  })
+  add({
+    id: "chat-ws-dm-kept", title: "GET /api/conversations (a) → the DM stays, titled after b", as: "a", kind: "compat",
+    needs: (ctx) => dmNeeded(ctx) ?? (ctx.flags.bMembershipId ? null : "b was not removed"),
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: {
+      status: 200,
+      check: (j, ctx) => {
+        const dm = find(j, ctx.flags.dmId)
+        return firstError(
+          need(dm, "the DM disappeared for the one who stayed"),
+          need(dm && !dm.members.some((m) => m.userId === ctx.users.b.id), "b still in the DM roster"),
+          need(dm?.name === ctx.users.b.name, `DM name ${dm?.name}, want ${ctx.users.b.name}`),
+        )
+      },
+    },
+  })
+  add({
+    id: "chat-ws-readd", title: "POST /api/workspaces/members {b's email} (BoD) → back in", as: "bod", kind: "compat",
+    needs: (ctx) => (ctx.flags.bMembershipId ? null : "b was not removed"),
+    request: (ctx) => ({ method: "POST", path: "/api/workspaces/members", json: { email: ctx.users.b.email, role: "STAFF" } }),
+    expect: { status: 201 },
+  })
+  add({
+    id: "chat-ws-readd-room", title: "GET /api/conversations (b) → project room back (still a project member)", as: "b", kind: "compat",
+    needs: (ctx) => (ctx.flags.bMembershipId ? null : "b was not removed"),
+    request: () => ({ method: "GET", path: "/api/conversations" }),
+    expect: { status: 200, check: (j) => need(projectRoom(j), "project room not restored") },
+  })
+
+  // ---- 30 messages a minute (last: it locks b out of sending for a minute) ----
+  add({
+    id: "chat-rate-limit", title: "31st message within a minute → 429 with a sentence", as: "b", kind: "policy",
+    needs: (ctx) => (ctx.flags.projectRoomId ? null : "no project room"),
+    repeat: 30,
+    request: (ctx) => ({ method: "POST", path: `/api/conversations/${ctx.flags.projectRoomId}/messages`, json: send("flood") }),
+    expect: { status: 429, check: (j) => need(isStr(j?.error), "429 without a sentence") },
+  })
 }

@@ -30,9 +30,35 @@ export function emitSprintUpdated(projectId: string, sprint: Record<string, unkn
   eventBus.emit(BUS_EVENTS.SPRINT_UPDATED, { projectId, sprint })
 }
 
-/** Emit a chat message to everyone in a conversation room */
-export function emitMessageCreated(conversationId: string, message: Record<string, unknown>) {
-  eventBus.emit(BUS_EVENTS.MESSAGE_CREATED, { conversationId, message })
+/**
+ * Emit a chat message to everyone in a conversation room.
+ *
+ * `memberIds` is the room's roster at send time. With it the socket server re-checks every socket in
+ * the room against it, so someone removed from the room after joining it stops receiving messages even
+ * if their socket never left (pages/api/socket.ts). Without it (older callers) the room gets it as is.
+ */
+export function emitMessageCreated(conversationId: string, message: Record<string, unknown>, memberIds?: string[]) {
+  eventBus.emit(BUS_EVENTS.MESSAGE_CREATED, { conversationId, message, memberIds })
+}
+
+export type ConversationUpdatedPayload = {
+  conversationId: string
+  /** ISO time of the newest message, or null when the room has none. */
+  lastMessageAt: string | null
+  /** Why — additive, for clients that want to tell a new message from a read or a mute elsewhere. */
+  reason?: "message" | "read" | "mute" | "membership"
+}
+
+/** `conversation-updated` to each user's own `user:<id>` room (their other tabs and devices). */
+export function emitConversationUpdated(userIds: string[], payload: ConversationUpdatedPayload) {
+  if (userIds.length === 0) return
+  eventBus.emit(BUS_EVENTS.CONVERSATION_UPDATED, { userIds: Array.from(new Set(userIds)), payload })
+}
+
+/** These users are no longer in the conversation: their sockets leave `conversation:<id>` now. */
+export function emitConversationMembersRemoved(conversationId: string, userIds: string[]) {
+  if (userIds.length === 0) return
+  eventBus.emit(BUS_EVENTS.CONVERSATION_MEMBERSHIP, { conversationId, removedUserIds: Array.from(new Set(userIds)) })
 }
 
 /**

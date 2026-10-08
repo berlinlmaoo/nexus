@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
+import { Bell, BellOff, Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ChatThread } from "@/components/messages/ChatThread";
-import { nexusApi, type NexusConversation, type NexusUser } from "@/lib/nexus-api";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ApiError, nexusApi, type NexusConversation, type NexusUser } from "@/lib/nexus-api";
+import { isMuted, isMutedForever, usePageVisible } from "@/lib/chat-unread";
+import { useRealtime } from "@/lib/realtime";
+import { localeOf, t, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/messages")({
@@ -25,22 +30,116 @@ function convoTitle(c: NexusConversation, meId?: string): string {
   if (c.name) return c.name;
   if (c.type === "DM") {
     const other = (c.members ?? []).find((m) => (m.userId || m.user?.id) !== meId);
-    return other?.user?.name ?? "Direct message";
+    return other?.user?.name ?? t("Direct message");
   }
-  return (c.members ?? []).map((m) => m.user?.name).filter(Boolean).slice(0, 3).join(", ") || "Conversation";
+  return (c.members ?? []).map((m) => m.user?.name).filter(Boolean).slice(0, 3).join(", ") || t("Conversation");
+}
+
+/** The list's second line: the last message, a marker for a bare picture, or nothing yet. */
+function lastLine(c: NexusConversation): string {
+  const m = c.lastMessage;
+  if (!m) return t("No messages yet");
+  const text = (m.content ?? "").trim();
+  if (text) return text;
+  return m.attachmentUrl || m.attachmentType ? `📷 ${t("Photo")}` : "";
+}
+
+type MuteChoice = "8h" | "1w" | "always" | "off";
+
+function muteValue(choice: MuteChoice): string | "forever" | null {
+  if (choice === "off") return null;
+  if (choice === "always") return "forever";
+  const hours = choice === "8h" ? 8 : 24 * 7;
+  return new Date(Date.now() + hours * 3600_000).toISOString();
+}
+
+/** "Muted" for Always, "Muted until Fri 17:30" otherwise. */
+function mutedLabel(c: NexusConversation): string {
+  if (isMutedForever(c)) return t("Muted");
+  const until = new Date(c.mutedUntil ?? "");
+  if (Number.isNaN(until.getTime())) return t("Muted");
+  const when = until.toLocaleString(localeOf(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+  return t("Muted until {when}", { when });
+}
+
+type ConversationList = { conversations: NexusConversation[]; totalUnread?: number };
+
+/**
+ * Bell menu in the thread header: silence a room for 8 hours, a week or for good, or undo it.
+ * Muted rooms stop pushing (an @mention still gets through) and leave the badge count.
+ */
+function MuteMenu({ conversation }: { conversation: NexusConversation }) {
+  const qc = useQueryClient();
+  const muted = isMuted(conversation);
+  const mute = useMutation({
+    mutationFn: (choice: MuteChoice) => nexusApi.muteConversation(conversation.id, muteValue(choice)),
+    onSuccess: (res, choice) => {
+      const value = res && "mutedUntil" in res ? res.mutedUntil : muteValue(choice);
+      qc.setQueryData<ConversationList>(["conversations"], (cur) =>
+        cur ? { ...cur, conversations: cur.conversations.map((c) => (c.id === conversation.id ? { ...c, mutedUntil: value } : c)) } : cur,
+      );
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+      toast.success(choice === "off" ? t("Notifications back on for this chat.") : t("Chat muted. You'll still hear about @mentions."));
+    },
+    onError: (e) => {
+      // A server from before 8 Oct 2026 has no mute route at all.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) toast(t("Muting isn't available yet. It comes with the next server update."));
+      else toast.error(t("Couldn't change the mute. Try again."));
+    },
+  });
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          title={muted ? mutedLabel(conversation) : t("Mute notifications")}
+          aria-label={muted ? mutedLabel(conversation) : t("Mute notifications")}
+          disabled={mute.isPending}
+          className={cn("rounded-lg p-2 transition-colors hover:bg-accent disabled:opacity-50", muted ? "text-primary" : "text-muted-foreground")}
+        >
+          {mute.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">{muted ? mutedLabel(conversation) : t("Mute notifications")}</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => mute.mutate("8h")}>{t("For 8 hours")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => mute.mutate("1w")}>{t("For 1 week")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => mute.mutate("always")}>{t("Always")}</DropdownMenuItem>
+        {muted && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => mute.mutate("off")}>{t("Unmute")}</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function Messages() {
+  const { lang, tn } = useLang();
   const [composer, setComposer] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const meId = me.data?.user?.id;
-  const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false });
+  const { connected } = useRealtime();
+  const visible = usePageVisible();
+  // Other rooms move through the socket (`conversation-updated` on servers since 8 Oct 2026).
+  // The poll is the fallback: every 30 s while this page is in front (never in a background tab),
+  // relaxed to 2 min once the server is known to push list updates and the socket is up.
+  const convos = useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => nexusApi.conversations(),
+    retry: false,
+    refetchInterval: (q) => (connected && typeof q.state.data?.totalUnread === "number" ? 120_000 : 30_000),
+  });
   const rows = convos.data?.conversations ?? [];
   const search = Route.useSearch();
   const [activeId, setActiveId] = useState<string | null>(search.c ?? null);
   useEffect(() => { if (search.c) setActiveId(search.c); }, [search.c]);
+  // Hold on to the room opened by default: the list re-sorts as messages arrive, and "whichever is
+  // first" would otherwise swap the open chat under the reader.
+  useEffect(() => { if (!activeId && rows[0]) setActiveId(rows[0].id); }, [activeId, rows]);
   const active = rows.find((c) => c.id === activeId) ?? rows[0] ?? null;
   const activeKey = active?.id ?? null;
 
@@ -56,9 +155,9 @@ function Messages() {
   };
 
   return (
-    <div>
-      <PageHeader title="Messages" subtitle="Chat with your crew + per-project rooms." actions={
-        <button onClick={() => setComposer(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> New chat</button>
+    <div lang={lang}>
+      <PageHeader title={t("Messages")} subtitle={t("Chat with your crew + per-project rooms.")} actions={
+        <button onClick={() => setComposer(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New chat")}</button>
       } />
       <div className="grid h-[calc(100vh-9rem)] grid-cols-1 md:grid-cols-[300px_1fr]">
         {/* conversation list */}
@@ -66,24 +165,37 @@ function Messages() {
           {convos.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
           {!convos.isLoading && rows.length === 0 && (
             <div className="p-3">
-              <EmptyState icon={MessageSquare} title="No chats yet" compact
-                message="Direct messages and group chats with colleagues live here, and every project has a room of its own."
-                action={<EmptyAction onClick={() => setComposer(true)}>New chat</EmptyAction>} />
+              <EmptyState icon={MessageSquare} title={t("No chats yet")} compact
+                message={t("Direct messages and group chats with colleagues live here, and every project has a room of its own.")}
+                action={<EmptyAction onClick={() => setComposer(true)}>{t("New chat")}</EmptyAction>} />
             </div>
           )}
-          {(["DM", "GROUP", "PROJECT"] as const).map((t) => groups[t].length > 0 && (
-            <div key={t} className="py-1">
-              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t === "DM" ? "Direct" : t === "GROUP" ? "Groups" : "Projects"}</div>
-              {groups[t].map((c) => (
-                <button key={c.id} onClick={() => setActiveId(c.id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-accent", activeKey === c.id && "bg-accent")}>
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{c.type === "PROJECT" || c.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(c, meId))}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{convoTitle(c, meId)}</div>
-                    <div className="truncate text-xs text-muted-foreground">{c.lastMessage?.content ?? "No messages yet"}</div>
-                  </div>
-                  {(c.unreadCount ?? 0) > 0 && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{c.unreadCount}</span>}
-                </button>
-              ))}
+          {(["DM", "GROUP", "PROJECT"] as const).map((kind) => groups[kind].length > 0 && (
+            <div key={kind} className="py-1">
+              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{kind === "DM" ? t("Direct") : kind === "GROUP" ? t("Groups") : t("Projects")}</div>
+              {groups[kind].map((c) => {
+                const muted = isMuted(c);
+                // The open room is being read as it arrives; its count would only flicker.
+                const unread = activeKey === c.id && visible ? 0 : c.unreadCount ?? 0;
+                return (
+                  <button key={c.id} onClick={() => setActiveId(c.id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-accent", activeKey === c.id && "bg-accent")}>
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{c.type === "PROJECT" || c.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(c, meId))}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className={cn("truncate text-sm", unread > 0 && !muted ? "font-bold" : "font-semibold")}>{convoTitle(c, meId)}</span>
+                        {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t("Muted")} />}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">{lastLine(c)}</div>
+                    </div>
+                    {/* A muted room still counts its unread, quietly: grey, and left out of the nav badge. */}
+                    {unread > 0 && (
+                      <span className={cn("grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1 text-[10px] font-bold", muted ? "bg-muted text-muted-foreground ring-1 ring-border" : "bg-destructive text-destructive-foreground")}>
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </aside>
@@ -95,23 +207,28 @@ function Messages() {
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">{active.type === "PROJECT" || active.type === "GROUP" ? <UsersIcon className="h-4 w-4" /> : initialsOf(convoTitle(active, meId))}</span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{convoTitle(active, meId)}</div>
-                  <div className="text-xs text-muted-foreground">{(active.members?.length ?? 0)} member{(active.members?.length ?? 0) === 1 ? "" : "s"}{active.type === "PROJECT" ? " · project room" : ""}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {tn(active.members?.length ?? 0, "{n} member", "{n} members")}
+                    {active.type === "PROJECT" ? ` · ${t("project room")}` : ""}
+                    {isMuted(active) ? ` · ${mutedLabel(active)}` : ""}
+                  </div>
                 </div>
+                <MuteMenu conversation={active} />
                 {active.type === "GROUP" && (
-                  <button onClick={() => setRenaming(true)} title="Rename group" className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => setRenaming(true)} title={t("Rename group")} aria-label={t("Rename group")} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><Pencil className="h-4 w-4" /></button>
                 )}
                 {/* Both kinds of room can take people, by different routes. A project room's
                     membership is derived from the project, so adding here really means adding to
                     the project; a plain group owns its own list and has had an endpoint of its own
                     since /api/conversations/[id]/members. A DM stays closed. */}
                 {(active.type === "GROUP" || (active.type === "PROJECT" && active.projectId)) && (
-                  <button onClick={() => setAdding(true)} title="Add people" className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><UserPlus className="h-4 w-4" /></button>
+                  <button onClick={() => setAdding(true)} title={t("Add people")} aria-label={t("Add people")} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><UserPlus className="h-4 w-4" /></button>
                 )}
               </div>
               <div className="h-[calc(100%-3.5rem)]"><ChatThread conversationId={active.id} meId={meId} members={threadMembers} /></div>
             </>
           ) : (
-            <div className="grid h-full place-items-center text-center text-muted-foreground"><div><MessageCircle className="mx-auto mb-3 h-10 w-10 opacity-40" /><p className="text-sm">Pick a conversation or start a new chat.</p></div></div>
+            <div className="grid h-full place-items-center text-center text-muted-foreground"><div><MessageCircle className="mx-auto mb-3 h-10 w-10 opacity-40" /><p className="text-sm">{t("Pick a conversation or start a new chat.")}</p></div></div>
           )}
         </section>
       </div>
@@ -130,7 +247,7 @@ function Shell({ title, hint, onClose, children }: { title: string; hint?: strin
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{title}</h2><button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
+        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{title}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
         {children}
       </div>
@@ -147,11 +264,11 @@ function RenameGroup({ conversation, onClose }: { conversation: NexusConversatio
   });
   const valid = name.trim().length > 0 && name.trim().length <= 80;
   return (
-    <Shell title="Rename group" hint="Everyone in the room sees the new name." onClose={onClose}>
-      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Group name" className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" onKeyDown={(e) => { if (e.key === "Enter" && valid && !rename.isPending) rename.mutate(); }} />
+    <Shell title={t("Rename group")} hint={t("Everyone in the room sees the new name.")} onClose={onClose}>
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={t("Group name")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" onKeyDown={(e) => { if (e.key === "Enter" && valid && !rename.isPending) rename.mutate(); }} />
       <div className="mt-4 flex items-center gap-2">
-        <button disabled={!valid || rename.isPending} onClick={() => rename.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{rename.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save</button>
-        {rename.isError && <span className="text-xs font-semibold text-destructive">Couldn't rename it.</span>}
+        <button disabled={!valid || rename.isPending} onClick={() => rename.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{rename.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save")}</button>
+        {rename.isError && <span className="text-xs font-semibold text-destructive">{t("Couldn't rename it.")}</span>}
       </div>
     </Shell>
   );
@@ -210,15 +327,15 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
 
   return (
     <Shell
-      title="Add people"
+      title={t("Add people")}
       hint={isProject
-        ? "They join the project too — a project room's membership follows the project."
-        : "They join this chat straight away."}
+        ? t("They join the project too — a project room's membership follows the project.")
+        : t("They join this chat straight away.")}
       onClose={onClose}
     >
       <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border p-1">
-        {(roster.isLoading || current.isLoading) && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
-        {!roster.isLoading && !current.isLoading && candidates.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{isProject ? "Everyone is already in this project." : "Everyone is already in this chat."}</div>}
+        {(roster.isLoading || current.isLoading) && <div className="px-3 py-2 text-xs text-muted-foreground">{t("Loading…")}</div>}
+        {!roster.isLoading && !current.isLoading && candidates.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{isProject ? t("Everyone is already in this project.") : t("Everyone is already in this chat.")}</div>}
         {candidates.map((u) => (
           <button key={u.id} disabled={busyId !== null} onClick={() => add(u)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
             <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(u.name)}</span>
@@ -227,7 +344,7 @@ function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () =
           </button>
         ))}
       </div>
-      {failed && <p className="mt-2 text-xs font-semibold text-destructive">Couldn't add that person.</p>}
+      {failed && <p className="mt-2 text-xs font-semibold text-destructive">{t("Couldn't add that person.")}</p>}
     </Shell>
   );
 }
@@ -249,11 +366,11 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">New chat</h2><button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
-        <p className="mt-1 text-xs text-muted-foreground">Pick 1 person for a DM, or several for a group.</p>
-        {isGroup && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name (optional)" className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />}
+        <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold tracking-tight">{t("New chat")}</h2><button onClick={onClose} title={t("Close")} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button></div>
+        <p className="mt-1 text-xs text-muted-foreground">{t("Pick 1 person for a DM, or several for a group.")}</p>
+        {isGroup && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={t("Group name (optional)")} className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />}
         <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border p-1">
-          {membersQuery.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
+          {membersQuery.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">{t("Loading…")}</div>}
           {members.map((m: NexusUser) => (
             <button key={m.id} onClick={() => toggle(m.id)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors", selected.includes(m.id) ? "bg-primary/10 text-primary" : "hover:bg-accent")}>
               <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(m.name)}</span>
@@ -263,8 +380,8 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
           ))}
         </div>
         <div className="mt-4 flex items-center gap-2">
-          <button disabled={selected.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Start {isGroup ? "group" : "chat"}</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">Couldn't start the chat.</span>}
+          <button disabled={selected.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {isGroup ? t("Start group") : t("Start chat")}</button>
+          {create.isError && <span className="text-xs font-semibold text-destructive">{t("Couldn't start the chat.")}</span>}
         </div>
       </div>
     </div>

@@ -235,13 +235,23 @@ for (const profile of PROFILES) {
       r = out.r
       if (out.session) ctx.sessions[step.as] = out.session
     } else {
+      // `repeat: n` (the chat rate limit): the same request n times first, each of which must be 2xx;
+      // only the (n+1)th response is judged.
+      let warmup = null
+      for (let i = 0; i < (step.repeat ?? 0) && !blocked; i++) {
+        const pre = await send(profile, ctx.sessions[step.as], reqSpec)
+        if (pre.status < 200 || pre.status >= 300) { warmup = `request ${i + 1} of ${step.repeat} before it got ${pre.status}`; break }
+      }
       r = await send(profile, ctx.sessions[step.as], reqSpec)
+      if (warmup) r = { ...r, warmup }
     }
     row.got = String(r.status)
     row.ms = r.ms
 
-    let problem = null
-    if (!statusMatches(expected.status, r.status)) problem = `status ${r.status}${short(r) ? ` — ${short(r)}` : ""}`
+    // A repeat step whose warm-up already failed is judged on that, not on its last response.
+    let problem = r.warmup ?? null
+    if (problem) problem = String(problem)
+    else if (!statusMatches(expected.status, r.status)) problem = `status ${r.status}${short(r) ? ` — ${short(r)}` : ""}`
     else if (expected.code && r.json?.code !== expected.code) problem = `code ${r.json?.code ?? "none"} ≠ ${expected.code}`
     else if (!blocked && !expected.raw && r.json === undefined && r.status >= 200 && r.status < 300) problem = "2xx but body is not JSON (iOS decode would fail)"
     else if (!blocked && expected.check) problem = expected.check(r.json, ctx, r)
