@@ -25,6 +25,7 @@ import {
 import learner from "@/assets/philearn/learner.png";
 import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/lang";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -255,7 +256,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
             {/* footer */}
             <div className="border-t border-border p-3">
               <Link to="/inbox" onClick={onClose} className="flex h-10 items-center justify-center gap-1 rounded-xl bg-primary text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                Open Inbox <ChevronRight className="h-4 w-4" />
+                {t("Open Inbox")} <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
           </motion.div>

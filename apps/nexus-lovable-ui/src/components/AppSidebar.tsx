@@ -430,15 +430,15 @@ export function AppSidebar() {
       <SidebarContent>
         {visibleGroups.map((g) => (
           <SidebarGroup key={g.label}>
-            <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {g.items.filter((item) => orgRoleQuery.data?.isCompany === true || (item.url !== "/vault" && item.url !== "/threads")).map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={t(item.title)}>
                       <Link to={item.url} className="flex items-center gap-2">
                         <item.icon className="h-4 w-4 shrink-0" />
-                        <span className="flex-1 truncate">{item.title}</span>
+                        <span className="flex-1 truncate">{t(item.title)}</span>
                         {badgeFor(item.url) > 0 ? (
                           <span className={cn("ml-auto rounded-full text-[10px] font-bold px-1.5 py-0.5", item.url === "/attendance" ? "bg-amber-500 text-white" : "bg-primary/10 text-primary")}>{badgeText(badgeFor(item.url))}</span>
                         ) : null}
