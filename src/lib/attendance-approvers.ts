@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { getAttendanceWorkspaceContext } from "@/lib/attendance"
+import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
 
 /**
  * Siapa yang menyetujui request absensi siapa — Bagan Approval.
@@ -107,11 +108,17 @@ export type ReportScope = {
   mode: "ALL" | "DIRECT_REPORTS" | "SELF"
   /** Every userId whose report the viewer may open. Always includes the viewer. */
   userIds: string[]
-  /** The viewer's direct reports (empty unless mode is DIRECT_REPORTS). */
+  /** The viewer's direct reports (empty unless mode is DIRECT_REPORTS), former ones included. */
   directReportIds: string[]
   /** BoD / One Above All of the workspace — left out of workspace-wide lists by default, as on the
-   *  attendance board and the leaderboard (they are exempt from attendance). */
+   *  attendance board and the leaderboard (they are exempt from attendance). Former ones included. */
   exemptUserIds: string[]
+  /**
+   * The people in `userIds` who LEFT the workspace (offboarding, 8 Oct 2026) → their last working day.
+   * They stay in scope so the periods they were part of can still be opened; a list of a period drops
+   * those who left before it began.
+   */
+  formerLeftAt: Map<string, Date>
 }
 
 /**
@@ -122,22 +129,35 @@ export type ReportScope = {
 export async function reportableUserIds(viewerId: string): Promise<ReportScope> {
   const context = await getAttendanceWorkspaceContext(viewerId)
   const workspaceId = context.workspace?.id ?? null
-  const base = { viewerId, workspaceId, directReportIds: [] as string[], exemptUserIds: [] as string[] }
+  const base = { viewerId, workspaceId, directReportIds: [] as string[], exemptUserIds: [] as string[], formerLeftAt: new Map<string, Date>() }
   if (!workspaceId) return { ...base, mode: "SELF", userIds: [viewerId] }
 
+  // People who left keep their past: BoD sees every former member, a manager those whose approver they
+  // were when they left (FormerMember.approverId). Approval itself never reads this — it is history only.
   if (context.canManageAttendance) {
-    const members = await prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true, role: true } })
+    const [members, formers] = await Promise.all([
+      prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true, role: true } }),
+      formerMembersOf(workspaceId),
+    ])
     return {
       ...base,
       mode: "ALL",
-      userIds: [...new Set([viewerId, ...members.map((m) => m.userId)])],
-      exemptUserIds: members.filter((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL").map((m) => m.userId),
+      userIds: [...new Set([viewerId, ...members.map((m) => m.userId), ...formers.map((f) => f.userId)])],
+      exemptUserIds: [...members, ...formers].filter((m) => isExemptRole(m.role)).map((m) => m.userId),
+      formerLeftAt: new Map(formers.map((f) => [f.userId, f.leftAt])),
     }
   }
 
-  const direct = context.directReportIds.filter((id) => id !== viewerId)
+  const formerDirect = (await formerMembersOf(workspaceId, { approverId: viewerId })).filter((f) => f.userId !== viewerId)
+  const direct = [...new Set([...context.directReportIds, ...formerDirect.map((f) => f.userId)])].filter((id) => id !== viewerId)
   if (direct.length > 0) {
-    return { ...base, mode: "DIRECT_REPORTS", userIds: [viewerId, ...direct], directReportIds: direct }
+    return {
+      ...base,
+      mode: "DIRECT_REPORTS",
+      userIds: [viewerId, ...direct],
+      directReportIds: direct,
+      formerLeftAt: new Map(formerDirect.map((f) => [f.userId, f.leftAt])),
+    }
   }
   return { ...base, mode: "SELF", userIds: [viewerId] }
 }

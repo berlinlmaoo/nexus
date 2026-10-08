@@ -6,12 +6,15 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
 import { buildPeopleReports, publicPeriod, resolveReportWindows } from "@/lib/people-reports"
+import { leftKeyOf } from "@/lib/former-members"
 
 /**
  * GET /api/reports/people/[userId] — one person's report ("Saya" when userId = "me").
  *
  * Staff only ever get themselves; a manager their direct reports (one level); BoD / OAA / system
  * ADMIN anyone in the workspace. Anything else → 403. Opening somebody else's report is audit-logged.
+ * Someone who left (offboarding, 8 Oct 2026) can still be opened by the same people, for any period;
+ * `person.leftAt` ("YYYY-MM-DD", additive) is their last working day.
  * No peer comparison of any kind is in the payload: no rank, no team median, no other person's number.
  *
  * Query: period=YYYY-MM (the 28→27 attendance period ending that month; default: current)
@@ -36,7 +39,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const workspaceId = scope.workspaceId
 
-    const [reports, user, member, teamLinks] = await Promise.all([
+    const leftAt = scope.formerLeftAt.get(targetId) ?? null
+    const [reports, user, currentMember, teamLinks] = await Promise.all([
       buildPeopleReports({ workspaceId, userIds: [targetId], current: windows.current, previous: windows.previous, detail: true }),
       prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, email: true, avatar: true } }),
       prisma.workspaceMember.findUnique({
@@ -45,6 +49,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }),
       prisma.teamMember.findMany({ where: { userId: targetId, team: { workspaceId } }, select: { team: { select: { id: true, name: true } } } }),
     ])
+    // Someone who left: what their member row said.
+    const member = currentMember ?? (leftAt
+      ? await prisma.formerMember.findUnique({ where: { userId_workspaceId: { userId: targetId, workspaceId } }, select: { role: true, approverId: true } })
+      : null)
     const report = reports.get(targetId)
     if (!user || !report) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
@@ -71,6 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         approverId: member?.approverId ?? null,
         teams: teamLinks.map((t) => t.team).sort((a, b) => a.name.localeCompare(b.name)),
         isSelf,
+        ...(leftAt && !currentMember ? { leftAt: leftKeyOf(leftAt) } : {}),
       },
       viewerScope: scope.mode,
       period: publicPeriod(windows.current),

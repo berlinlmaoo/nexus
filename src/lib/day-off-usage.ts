@@ -86,8 +86,10 @@ export interface EffectiveDayOffQuotaDetail extends EffectiveDayOffQuota {
  * extra days granted for exactly that period. Keyed like `dayOffUsageKey`. Two queries in total,
  * whatever the number of people and periods.
  *
- * A person who is not (or no longer) a member of the workspace gets the default base, as every
- * caller did before with `?? 4`; their grants in this workspace still count.
+ * Someone who LEFT the workspace (offboarding, 8 Oct 2026) keeps the quota their member row had
+ * (FormerMember.dayOffQuota), so the recaps of the periods they were part of count them as they were.
+ * Anyone else who is not a member gets the default base, as every caller did before with `?? 4`; their
+ * grants in this workspace still count.
  */
 export async function effectiveDayOffQuotas(
   workspaceId: string,
@@ -108,7 +110,16 @@ export async function effectiveDayOffQuotas(
       orderBy: { createdAt: "asc" },
     }),
   ])
-  const baseByUser = new Map(members.map((m) => [m.userId, m.dayOffQuota]))
+  const baseByUser = new Map<string, number | null>(members.map((m) => [m.userId, m.dayOffQuota]))
+  // Only asked for when someone has no member row — the usual call is all current members.
+  const notMembers = userIds.filter((id) => !baseByUser.has(id))
+  if (notMembers.length > 0) {
+    const formers = await prisma.formerMember.findMany({
+      where: { workspaceId, userId: { in: notMembers } },
+      select: { userId: true, dayOffQuota: true },
+    })
+    for (const f of formers) baseByUser.set(f.userId, f.dayOffQuota)
+  }
   const bonusByKey = sumBonusDays(bonuses)
   const grantsByKey = new Map<string, DayOffBonusGrantSummary[]>()
   for (const b of bonuses) {

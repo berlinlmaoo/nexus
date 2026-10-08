@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
+import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { recTone, sCls, toneFromLetter, toneLabel, type HistRow } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
 import { ApiError, fmtDate, fmtTime, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
@@ -155,13 +156,15 @@ function HeaderCard({ data }: { data: NexusMemberRecord }) {
           <span className="truncate text-lg font-bold tracking-tight">{p.name ?? "—"}</span>
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[p.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[p.role] ?? p.role}</span>
           {p.isSelf && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">You</span>}
+          <LeftTag leftAt={leftAtOf(p)} className="text-[11px]" />
         </div>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {p.email && <span className="inline-flex min-w-0 items-center gap-1"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{p.email}</span></span>}
           <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> Joined {new Date(p.joinedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" })}</span>
         </div>
       </div>
-      {!p.isSelf && (
+      {/* Someone who left can no longer sign in: no one to message. */}
+      {!p.isSelf && !leftAtOf(p) && (
         <button onClick={() => chat.mutate()} disabled={chat.isPending} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:opacity-60">
           {chat.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />} Message
         </button>

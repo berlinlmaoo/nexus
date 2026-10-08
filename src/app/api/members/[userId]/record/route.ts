@@ -23,6 +23,9 @@ import { memberRecordQuerySchema } from "@/lib/validations"
  *
  * The person themself sees their own XP log in full (the same rows /api/gamification/xp-log gives
  * any colleague); only the BoD gets `canRemove` on a deduction.
+ *
+ * Someone who left (offboarding, 8 Oct 2026) keeps their record: role and join date come from what their
+ * member row said (FormerMember), and `person.leftAt` (ISO, additive) is their last working day.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
@@ -57,14 +60,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ period: period.key, xp: { entries: xp.entries, totals: xp.totals, hasOlder: xp.hasOlder, olderPeriod: xp.olderPeriod } })
     }
 
-    const [user, member, record] = await Promise.all([
+    const leftAt = scope.formerLeftAt.get(targetId) ?? null
+    const [user, currentMember, former, record] = await Promise.all([
       prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, email: true, avatar: true } }),
       prisma.workspaceMember.findUnique({
         where: { userId_workspaceId: { userId: targetId, workspaceId } },
         select: { role: true, joinedAt: true },
       }),
+      leftAt
+        ? prisma.formerMember.findUnique({ where: { userId_workspaceId: { userId: targetId, workspaceId } }, select: { role: true, joinedAt: true } })
+        : Promise.resolve(null),
       buildMemberRecord({ workspaceId, userId: targetId, periodKey: period.key, viewerId, canManage }),
     ])
+    const member = currentMember ?? former
     if (!user || !member) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
 
     if (!isSelf) {
@@ -88,6 +96,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         role: member.role,
         joinedAt: member.joinedAt.toISOString(),
         isSelf,
+        ...(leftAt && !currentMember ? { leftAt: leftAt.toISOString() } : {}),
       },
       viewer: {
         scope: scope.mode,

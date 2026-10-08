@@ -24,6 +24,7 @@ import { PERIOD_BASELINE_XP } from "@/lib/levels";
 import { recTone, sCls, toneLabel } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
+import { LeftTag, leftAtOf } from "@/components/LeftTag";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -469,6 +470,7 @@ function Attendance() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", sCls[tone])} />
                         <span className="truncate font-medium">{r.user?.name || "PATS Crew"}</span>
+                        <LeftTag leftAt={leftAtOf(r.user)} />
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
                         {r.checkInAway === true && <span title="Checked in away from the office" className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">Away</span>}
                         {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
@@ -533,7 +535,7 @@ function Attendance() {
                           >
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
-                              <div className="truncate font-medium">{u.name || "PATS Crew"}</div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || "PATS Crew"}</span><LeftTag leftAt={leftAtOf(u)} /></div>
                               <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
                             </div>
                           </button>
@@ -541,7 +543,7 @@ function Attendance() {
                           <>
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
-                              <div className="truncate font-medium">{u.name || "PATS Crew"}</div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || "PATS Crew"}</span><LeftTag leftAt={leftAtOf(u)} /></div>
                               <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
                             </div>
                           </>
@@ -780,7 +782,10 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
         className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
         <div className="flex items-start justify-between gap-2 border-b border-border px-5 py-4">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-black">{name ?? "Crew"}</h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="truncate text-base font-black">{name ?? "Crew"}</h2>
+              <LeftTag leftAt={leftAtOf(q.data)} />
+            </div>
             <p className="text-xs text-muted-foreground">Potongan XP &amp; day-off · periode {monthKey}</p>
           </div>
           <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
