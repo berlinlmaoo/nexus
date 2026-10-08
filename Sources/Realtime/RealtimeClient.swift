@@ -61,6 +61,9 @@ final class RealtimeClient {
 
     // MARK: lifecycle
 
+    /// Set while the app is in the background, so the next return to the front may retry a refusal.
+    private var wasBackground = false
+
     /// Called by NexusApp whenever the session or the app's phase changes.
     func reconcile(session: Session?, phase: ScenePhase) {
         guard let session else {
@@ -76,7 +79,13 @@ final class RealtimeClient {
         }
         if phase == .background {
             engine.stop()
+            wasBackground = true
         } else if LiveRefresh.inFront(phase) {
+            // Back from the background: a refusal gets one fresh try. It is not always the session's
+            // fault — on 8 Oct 2026 the server read the wrong cookie name and refused everyone, and
+            // the apps stayed "off" after the fix until they were killed. One attempt per return.
+            if wasBackground { engine.clearRefusal() }
+            wasBackground = false
             engine.start()
         }
         // `.inactive` on a phone (Control Centre, the app switcher, a call): neither. A link that is
