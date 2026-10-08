@@ -136,6 +136,10 @@ data class ThreadState(
     /** The workspace people for Add people; null until asked for. */
     val roster: List<RosterMember>? = null,
     val adding: Boolean = false,
+    /** A search result or quote opened the thread on this message (around=); auto-scroll to the bottom waits. */
+    val anchorId: String? = null,
+    /** After a jump, newer messages are still coming in through the polls. */
+    val newerPending: Boolean = false,
 )
 
 class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -155,7 +159,9 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
             runCatching { api.conversations().value.conversations.firstOrNull { it.id == id } }.getOrNull()?.let { conv -> _state.update { it.copy(conversation = conv) } }
         }
         // The first page once; after that the screen polls only while it is visible (CHAT-REPORT P0).
-        viewModelScope.launch { firstPage() }
+        // Opened on a message (a search result): the page around it instead.
+        val at: String? = handle["at"]
+        viewModelScope.launch { if (at.isNullOrBlank()) firstPage() else jumpTo(at) }
     }
 
     private suspend fun firstPage() {
@@ -178,6 +184,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         val last = held.lastOrNull()?.id ?: return firstPage()
         try {
             val page = api.newer(id, last).messages
+            if (_state.value.newerPending && page.size < 100) _state.update { it.copy(newerPending = false) }
             var merged = ChatMerge.merge(held, page)
             if (ChatMerge.gap(held, page, 50)) {
                 var before = page.minByOrNull { it.createdAt.orEmpty() }?.createdAt
@@ -204,12 +211,12 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         if (runCatching { api.markRead(id, last) }.isSuccess) c.badges.refresh()
     }
 
-    fun loadEarlier() {
+    fun loadEarlier(): kotlinx.coroutines.Job? {
         val s0 = _state.value
-        val before = ChatMerge.before(s0.messages, s0.nextCursor) ?: return
-        if (s0.loadingEarlier) return
+        val before = ChatMerge.before(s0.messages, s0.nextCursor) ?: return null
+        if (s0.loadingEarlier) return null
         _state.update { it.copy(loadingEarlier = true) }
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 val r = api.earlier(id, before)
                 _state.update { s -> s.copy(messages = ChatMerge.merge(s.messages, r.messages), hasMore = r.hasMore, nextCursor = r.nextCursor) }
@@ -222,13 +229,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
 
     /** PATCH mute (CHAT-CONTRACT). A 404 = the server has no mute yet: the option goes away. */
     fun mute(m: Mute) = viewModelScope.launch {
-        val now = java.time.Instant.now()
-        val until = when (m) {
-            Mute.HOURS_8 -> now.plusSeconds(8 * 3600L).toString()
-            Mute.WEEK -> now.plusSeconds(7 * 86_400L).toString()
-            Mute.ALWAYS -> "forever"
-            Mute.OFF -> null
-        }
+        val until = ChatMute.until(m)
         try {
             val r = api.mute(id, until)
             _state.update { s -> s.copy(conversation = s.conversation?.copy(mutedUntil = r.mutedUntil)) }
@@ -338,6 +339,34 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         _state.update { it.copy(adding = false) }
     }
 
+    /**
+     * Show [messageId] (a search hit): the page centred on it (`around=`), newer ones then arrive with the
+     * polls. An older server without `around` gets older pages until it shows up (at most 5).
+     */
+    suspend fun jumpTo(messageId: String) {
+        if (_state.value.messages.any { it.id == messageId }) { _state.update { it.copy(anchorId = messageId, loading = false) }; return }
+        try {
+            val r = api.around(id, messageId)
+            _state.update { it.copy(messages = r.messages, hasMore = r.hasMore, nextCursor = r.nextCursor, loading = false,
+                anchorId = messageId.takeIf { mid -> r.messages.any { m -> m.id == mid } }, newerPending = r.hasMoreNewer) }
+            if (r.messages.none { it.id == messageId }) _state.update { it.copy(notice = res.getString(R.string.ci_err_jump_gone)) }
+        } catch (e: ApiError) {
+            val h = e as? ApiError.Http
+            if (h?.status == 400 && h.code == "UNKNOWN_MESSAGE") { firstPage(); _state.update { it.copy(notice = res.getString(R.string.ci_err_jump_gone)) }; return }
+            // No `around` (older server): page back from the newest until it shows up.
+            if (_state.value.messages.isEmpty()) firstPage()
+            repeat(5) {
+                if (_state.value.messages.any { m -> m.id == messageId }) { _state.update { it.copy(anchorId = messageId) }; return }
+                if (!_state.value.hasMore) return@repeat
+                (loadEarlier() ?: return@repeat).join()
+            }
+            if (_state.value.messages.any { m -> m.id == messageId }) _state.update { it.copy(anchorId = messageId) }
+            else _state.update { it.copy(notice = res.getString(R.string.ci_err_jump)) }
+        }
+    }
+
+    fun clearAnchor() = _state.update { it.copy(anchorId = null) }
+
     fun rename(name: String) = viewModelScope.launch {
         try { val conv = api.rename(id, name); _state.update { it.copy(conversation = conv) } }
         catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
@@ -346,7 +375,7 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatThreadViewModel = viewModel()) {
+fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInfo: () -> Unit = {}, vm: ChatThreadViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
@@ -362,7 +391,17 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
     val camera = rememberCameraCapture("chat") { vm.attach(it) }
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.sendLocation() }
     val lastId = s.messages.lastOrNull()?.id
-    LaunchedEffect(lastId) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
+    // To the newest, unless a jump (a search hit) is being shown: then to that message, until the bottom is reached.
+    LaunchedEffect(lastId) { if (s.messages.isNotEmpty() && s.anchorId == null) list.animateScrollToItem(s.messages.size) }
+    LaunchedEffect(s.anchorId) {
+        val a = s.anchorId ?: return@LaunchedEffect
+        val i = s.messages.indexOfFirst { it.id == a }
+        if (i >= 0) list.scrollToItem(i + (if (s.hasMore) 1 else 0))
+    }
+    LaunchedEffect(list, s.anchorId, s.newerPending) {
+        if (s.anchorId == null || s.newerPending) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { list.isScrollInProgress to list.canScrollForward }.collect { (moving, more) -> if (moving && !more) vm.clearAnchor() }
+    }
     // Only while this thread is on screen and the app in front (CHAT-REPORT P0): it is "the open
     // conversation" (its pushes are not shown, its card is cleared), it polls every 5 s with `after=`,
     // refreshes at once on a push for it, and marks read up to the last message shown.
@@ -391,7 +430,9 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Column(Modifier.weight(1f)) {
+            // The header opens the chat's info, like WhatsApp (SYSTEM-MESSAGES part 2).
+            val infoHint = stringResource(R.string.ci_open_info)
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = conv != null, onClickLabel = infoHint, onClick = onOpenInfo)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(conv?.title(vm.meId) ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -440,6 +481,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
                     Box {
                         Column(
                             Modifier.widthIn(max = 290.dp).clip18().background(if (mine) c.violet else c.card)
+                                .let { if (m.id == s.anchorId) it.border(2.dp, c.warning, RoundedCornerShape(18.dp)) else it }
                                 .let { if (!mine) it.border(1.dp, c.border, RoundedCornerShape(18.dp)) else it }
                                 .combinedClickable(onClick = {}, onLongClick = { msgMenu = true }).padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
@@ -452,9 +494,8 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
                                 }
                             }
                             if (m.isImage) {
-                                RemoteImage(m.attachmentUrl, Modifier.padding(vertical = 4.dp).size(220.dp).clip18().clickable { viewing = m.attachmentUrl }, ContentScale.Crop, maxPx = 900) {
-                                    Box(Modifier.size(220.dp).background(c.muted))
-                                }
+                                ChatPhoto(m.attachmentUrl, Modifier.padding(vertical = 4.dp).size(220.dp).clip18(), ContentScale.Crop, maxPx = 900,
+                                    ink = if (mine) Color.White else c.mutedFg) { viewing = m.attachmentUrl }
                             }
                             when (val p = ChatPayload.parse(m.content)) {
                                 is ChatPayload.Location -> Row(Modifier.clickable {
@@ -642,7 +683,7 @@ internal fun AddPeopleDialog(conv: Conversation, roster: List<RosterMember>?, me
 }
 
 @Composable
-private fun SystemPill(m: Message, meId: String?) {
+internal fun SystemPill(m: Message, meId: String?) {
     val c = Nx.colors
     val res = LocalContext.current.resources
     val text = remember(m.id, m.event, meId) { ChatSystemText.sentence(m.event, m.content, meId, ChatSystemText.Words.of(res)) }

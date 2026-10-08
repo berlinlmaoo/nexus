@@ -1,5 +1,8 @@
 package id.znetworks.nexus.ui.shell
 
+import id.znetworks.nexus.feature.chat.ChatSearchScreen
+import id.znetworks.nexus.feature.chat.ChatMediaScreen
+import id.znetworks.nexus.feature.chat.ChatInfoScreen
 import id.znetworks.nexus.feature.admin.RestoreTarget
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.BadgedBox
@@ -256,7 +259,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 container.router.consumed(t)
                 // Already in that thread (a push tapped while reading it): stay, no second copy (CHAT-REPORT P0).
                 val here = nav.currentBackStackEntry
-                val inThread = here?.destination?.route == "chat/{id}" && here.arguments?.getString("id") == t.conversationId
+                val inThread = here?.destination?.route == ShellRoutes.CHAT && here.arguments?.getString("id") == t.conversationId
                 if (!inThread) nav.navigate(t.conversationId?.let { "chat/${enc(it)}" } ?: "messages") { launchSingleTop = true }
             }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
@@ -419,7 +422,28 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 }) }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
-            composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
+            // `at`: open on a message (a search hit, SYSTEM-MESSAGES part 2).
+            composable(ShellRoutes.CHAT, arguments = listOf(androidx.navigation.navArgument("at") { nullable = true; defaultValue = null })) { e ->
+                val cid = e.arguments?.getString("id").orEmpty()
+                ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }, onOpenInfo = { nav.navigate("chat-info/$cid") })
+            }
+            composable("chat-info/{id}") { e ->
+                val cid = e.arguments?.getString("id").orEmpty()
+                ChatInfoScreen(cid, onBack = { nav.popBackStack() },
+                    onOpenChat = { nav.navigate("chat/$it") }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenProject = { nav.navigate("project/$it") },
+                    onOpenMedia = { nav.navigate("chat-media/$cid") }, onOpenSearch = { nav.navigate("chat-search/$cid") },
+                    // Left the group: back past its thread to the chat list.
+                    onLeft = { if (!nav.popBackStack(ShellRoutes.CHAT, inclusive = true)) nav.popBackStack() })
+            }
+            composable("chat-media/{id}") { e -> ChatMediaScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("chat-search/{id}") { e ->
+                val cid = e.arguments?.getString("id").orEmpty()
+                ChatSearchScreen(cid, onBack = { nav.popBackStack() }, onOpenMessage = { mid ->
+                    // The thread again, opened on that message (its old copy goes, so back still leads to the list).
+                    nav.popBackStack(ShellRoutes.CHAT, inclusive = true)
+                    nav.navigate("chat/$cid?at=$mid")
+                })
+            }
             composable("search") {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
@@ -495,6 +519,11 @@ internal fun ShellBar(tabs: List<Tab>, current: Tab?, badge: (Tab) -> String?, r
 private fun TabIcon(icon: ImageVector, badge: String?) {
     if (badge == null) Icon(icon, contentDescription = null)
     else BadgedBox(badge = { Badge { Text(badge) } }) { Icon(icon, contentDescription = null) }
+}
+
+/** Route patterns more than one place compares against. */
+internal object ShellRoutes {
+    const val CHAT = "chat/{id}?at={at}"
 }
 
 /** The shell's navigation motion (iOS push/pop, point 7). */

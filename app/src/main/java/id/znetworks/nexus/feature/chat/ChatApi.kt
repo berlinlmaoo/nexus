@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.chat
 
+import kotlinx.serialization.json.JsonNull
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
 import kotlinx.serialization.json.JsonObject
@@ -30,6 +31,24 @@ class ChatApi(private val api: ApiClient) {
      */
     suspend fun newer(id: String, afterId: String) =
         api.get("/api/conversations/$id/messages?limit=100&after=${URLEncoder.encode(afterId, "UTF-8")}", MessagesResponse.serializer())
+
+    // Group info (8 Oct): an older server answers 404 to each; the screens fall back (ChatInfoLogic.missingRoute).
+    suspend fun info(id: String) = api.get("/api/conversations/$id/info", ChatInfo.serializer())
+    suspend fun media(id: String, type: String, cursor: String?) = api.get("/api/conversations/$id/media?type=$type" +
+        (cursor?.let { "&cursor=" + URLEncoder.encode(it, "UTF-8") } ?: ""), ChatMediaPage.serializer())
+    suspend fun search(id: String, q: String, cursor: String?) = api.get("/api/conversations/$id/search?q=" + URLEncoder.encode(q, "UTF-8") +
+        (cursor?.let { "&cursor=" + URLEncoder.encode(it, "UTF-8") } ?: ""), ChatSearchPage.serializer())
+    /** A page centred on [messageId] (a search result, a reply quote). */
+    suspend fun around(id: String, messageId: String) =
+        api.get("/api/conversations/$id/messages?limit=50&around=${URLEncoder.encode(messageId, "UTF-8")}", MessagesResponse.serializer())
+    /** Name and/or description (null clears it); an older server knows only the name ([rename]). */
+    suspend fun updateDetails(id: String, name: String?, description: String?) =
+        api.send(Request.Builder().url(api.url("/api/conversations/$id")).patch(buildJsonObject {
+            name?.let { put("name", it.trim()) }; put("description", description?.trim()?.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
+        }.toString().toJsonBody()).build(), JsonObject.serializer())
+    /** Remove someone (Manager+), or leave when [userId] is you (anyone). */
+    suspend fun removeMember(id: String, userId: String) =
+        api.send(Request.Builder().url(api.url("/api/conversations/$id/members")).delete(buildJsonObject { put("userId", userId) }.toString().toJsonBody()).build(), JsonObject.serializer())
 
     /** Badges: `{ totalUnread, mentions }`; null when the server has no such route yet (the caller sums the list). */
     suspend fun unread(): UnreadResponse? = runCatching { api.get("/api/conversations/unread", UnreadResponse.serializer()) }.getOrNull()

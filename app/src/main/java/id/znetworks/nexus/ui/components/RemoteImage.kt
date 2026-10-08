@@ -48,16 +48,13 @@ object ImageMemory {
     fun clear() = cache.evictAll()
 }
 
-@Composable
-fun RemoteImage(url: String?, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop, maxPx: Int = 512, placeholder: @Composable () -> Unit = {}) {
-    val context = LocalContext.current
-    var img by remember(url) { mutableStateOf(url?.let(ImageMemory::get)) }
-    LaunchedEffect(url) {
-        if (url == null || img != null) return@LaunchedEffect
+/** One picture: memory, then the offline copy (warmed by OfflineSync), then the network with the session, kept on disk after. Null on failure. */
+object RemoteImages {
+    suspend fun load(context: android.content.Context, url: String, maxPx: Int): androidx.compose.ui.graphics.ImageBitmap? {
+        ImageMemory.get(url)?.let { return it }
         val api = (context.applicationContext as NexusApplication).container.api
-        img = withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             runCatching {
-                // The offline copy first (warmed by OfflineSync), then the network, kept on disk after.
                 val bytes = id.znetworks.nexus.core.offline.DiskFiles.existing(url)?.readBytes()
                     ?: api.bytes(url).also { b -> runCatching { id.znetworks.nexus.core.offline.DiskFiles.fileFor(url, "img")?.writeBytes(b) } }
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -67,6 +64,16 @@ fun RemoteImage(url: String?, modifier: Modifier, contentScale: ContentScale = C
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
             }.getOrNull()
         }?.also { ImageMemory.put(url, it) }
+    }
+}
+
+@Composable
+fun RemoteImage(url: String?, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop, maxPx: Int = 512, placeholder: @Composable () -> Unit = {}) {
+    val context = LocalContext.current
+    var img by remember(url) { mutableStateOf(url?.let(ImageMemory::get)) }
+    LaunchedEffect(url) {
+        if (url == null || img != null) return@LaunchedEffect
+        img = RemoteImages.load(context, url, maxPx)
     }
     val i = img
     if (i != null) Image(i, null, modifier, contentScale = contentScale) else Box(modifier) { placeholder() }

@@ -2252,4 +2252,66 @@
     <string name="sys_created">%1$s membuat grup</string>
     <string name="sys_created_named">%1$s membuat grup “%2$s”</string>
     <string name="sys_renamed">%1$s mengubah nama grup jadi “%2$s”</string>
+    <!-- Chat info, media, search (Berlin, 8 Oct; SYSTEM-MESSAGES part 2, iOS 7029ba5) -->
+    <string name="ci_group_info">Info grup</string>
+    <string name="ci_contact_info">Info kontak</string>
+    <string name="ci_open_info">Buka info obrolan</string>
+    <string name="ci_add_desc">Tambah deskripsi grup</string>
+    <string name="ci_edit">Edit grup</string>
+    <string name="ci_name">Nama grup</string>
+    <string name="ci_description">Deskripsi</string>
+    <string name="ci_admin">Admin</string>
+    <string name="ci_mute">Bisukan</string>
+    <string name="ci_muted_until">Dibisukan sampai %1$s</string>
+    <string name="ci_search">Cari</string>
+    <string name="ci_media">Media, tautan, dan dokumen</string>
+    <string name="ci_photos">Foto</string>
+    <string name="ci_links">Tautan</string>
+    <string name="ci_docs">Dokumen</string>
+    <string name="ci_no_photos">Belum ada foto</string>
+    <string name="ci_no_photos_sub">Foto yang dikirim di obrolan ini muncul di sini.</string>
+    <string name="ci_no_links">Belum ada tautan</string>
+    <string name="ci_no_links_sub">Tautan yang dikirim di obrolan ini muncul di sini.</string>
+    <string name="ci_no_docs">Belum ada dokumen</string>
+    <string name="ci_no_docs_sub">File yang dikirim di obrolan ini muncul di sini.</string>
+    <string name="ci_legacy">Media, pencarian, dan peran anggota hadir di pembaruan server berikutnya.</string>
+    <string name="ci_search_hint">Cari di obrolan ini</string>
+    <string name="ci_no_results">Pesan tidak ditemukan</string>
+    <string name="ci_no_results_sub">Tidak ada yang cocok dengan “%1$s” di obrolan ini. Cek ejaannya, atau coba kata yang lebih pendek.</string>
+    <string name="ci_load_more">Muat lagi</string>
+    <string name="ci_follow_project">Anggota mengikuti proyek</string>
+    <string name="ci_follow_project_sub">Tambah atau keluarkan orang di proyeknya; ruang obrolan ini ikut.</string>
+    <string name="ci_message">Kirim pesan</string>
+    <string name="ci_view_profile">Lihat profil</string>
+    <string name="ci_remove">Keluarkan dari grup</string>
+    <string name="ci_remove_q">Keluarkan %1$s dari %2$s?</string>
+    <string name="ci_remove_body">Dia tidak akan menerima pesan grup ini lagi. Manager bisa menambahkannya kembali.</string>
+    <string name="ci_exit">Keluar dari grup</string>
+    <string name="ci_exit_q">Keluar dari “%1$s”?</string>
+    <string name="ci_exit_body">Kamu tidak akan menerima pesan grup ini lagi. Manager bisa menambahkanmu kembali.</string>
+    <string name="ci_photo_failed">Foto gagal dimuat. Ketuk untuk coba lagi.</string>
+    <string name="ci_err_jump">Pesan itu tidak ketemu. Mungkin terlalu lama untuk versi server ini.</string>
+    <string name="ci_err_jump_gone">Pesan itu sudah tidak ada di obrolan ini.</string>
+    <string name="ci_err_info">Info obrolan ini gagal dimuat.</string>
+    <string name="ci_err_media">Media obrolan ini gagal dimuat.</string>
+    <string name="ci_err_search">Gagal mencari di obrolan ini.</string>
+    <string name="ci_err_dm">Gagal membuka obrolan dengan orang ini.</string>
+    <string name="ci_err_save">Detail grup gagal disimpan.</string>
+    <string name="ci_err_members">Anggota grup ini gagal diubah.</string>
+    <string name="ci_err_leave">Gagal keluar dari grup ini.</string>
+    <string name="ci_err_gone_member">Kamu sudah tidak ada di obrolan ini.</string>
+    <string name="ci_err_gone_chat">Obrolan ini sudah tidak ada.</string>
+    <string name="ci_err_last">Kamu satu-satunya anggota, jadi tidak bisa keluar dari grup ini.</string>
+    <string name="ci_err_desc_len">Deskripsi maksimal 500 karakter.</string>
+    <string name="ci_err_name_len">Nama grup maksimal 80 karakter.</string>
+    <string name="ci_err_q_len">Kata pencarian maksimal 100 karakter.</string>
+    <plurals name="ci_group_members">
+        <item quantity="other">Grup · %d anggota</item>
+    </plurals>
+    <plurals name="ci_project_members">
+        <item quantity="other">Ruang proyek · %d anggota</item>
+    </plurals>
+    <plurals name="ci_members">
+        <item quantity="other">%d anggota</item>
+    </plurals>
 </resources>

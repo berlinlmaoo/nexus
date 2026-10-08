@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import id.znetworks.nexus.ui.shell.Tab
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +48,21 @@ class UiPreviewActivity : ComponentActivity() {
                         "account" -> AccountScreen(onBack = {})
                         "nav8" -> Nav8Preview()
                         "restore" -> RestorePreview()
+                        // Chat log lines (SYSTEM-MESSAGES) and a picture that failed (ChatPhoto); nothing is fetched but a bogus URL.
+                        "chat-sys" -> androidx.compose.foundation.layout.Column(Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                            fun p(i: String, n: String) = id.znetworks.nexus.feature.chat.ChatSystemEvent.Person(i, n)
+                            listOf(
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("group_created", p("b", "Bagas Putro"), listOf(p("m", "Mey")), name = "Tim Kreatif"),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("members_added", p("b", "Bagas Putro"), listOf(p("me", "Me"), p("y", "Yuza"), p("a", "Angela"))),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_removed", p("me", "Me"), listOf(p("y", "Yuza"))),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("member_left", p("a", "Angela")),
+                                id.znetworks.nexus.feature.chat.ChatSystemEvent("group_renamed", p("b", "Bagas Putro"), name = "Tim Kreatif 2026"),
+                            ).forEachIndexed { i, e ->
+                                id.znetworks.nexus.feature.chat.SystemPill(id.znetworks.nexus.feature.chat.Message("m$i", content = "fallback", kind = "SYSTEM", event = e,
+                                    createdAt = java.time.Instant.now().toString()), "me")
+                            }
+                            id.znetworks.nexus.feature.chat.ChatPhoto("/api/files/does-not-exist.jpg", Modifier.padding(top = 12.dp).size(220.dp))
+                        }
                         "restore-kinds" -> RestorePreview(kindsOnly = true)
                         // Offboarding (8 Oct): the dialog never submits here (submit throws, nothing is posted).
                         "offboard" -> id.znetworks.nexus.feature.admin.OffboardDialog("Rina Saputri", "2025-02-03T02:00:00.000Z", onDismiss = {}, onOpenChart = {}, onDone = {}) { _, _, _ -> error("preview") }
