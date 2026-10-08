@@ -16,6 +16,8 @@ struct ProjectDetailView: View {
     @State private var openProfile: ProfileTarget?
     @State private var tab: ProjectTab = .board
     @State private var showCreate = false
+    /// "+" on the Forms tab (owner, 9 Oct 2026): a pushed form builder, not a third sheet here.
+    @State private var newFormOpen = false
     @State private var showSettings = false
     @State private var prefillDue: Date?
     @State private var isBod = false
@@ -158,6 +160,9 @@ struct ProjectDetailView: View {
             if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon)) }
         }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
+        .navigationDestination(isPresented: $newFormOpen) {
+            FormBuilderView(projectId: projectId, projectName: displayName, formId: nil)
+        }
         .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
     }
 
@@ -209,10 +214,16 @@ struct ProjectDetailView: View {
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
                 }
             }
-            Button { prefillDue = nil; showCreate = true } label: {
-                Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(canCreate ? NX.violetText : NX.mutedFg)
+            // On the Forms tab "+" means New form, as on the web's Forms tab; on every other tab it is
+            // New task. It used to open New task on the Forms tab too (owner, 9 Oct 2026).
+            Button {
+                if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
+            } label: {
+                Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(tab == .forms || canCreate ? NX.violetText : NX.mutedFg)
                     .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
-            }.disabled(!canCreate)
+            }
+            .disabled(tab != .forms && !canCreate)
+            .accessibilityLabel(tab == .forms ? T("New form") : T("New task"))
         }
         .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 8)
     }
@@ -278,7 +289,7 @@ struct ProjectDetailView: View {
     @ViewBuilder private var content: some View {
         switch tab {
         case .pages: ProjectPagesTab(projectId: projectId)
-        case .forms: ProjectFormsTab(projectId: projectId, projectName: projectName)
+        case .forms: ProjectFormsBuilderTab(projectId: projectId, projectName: displayName, onNewForm: { newFormOpen = true })
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
         case .sprints: SprintsTab(projectId: projectId, onOpen: { openTaskId = $0 })
         case .automations: AutomationsTab(projectId: projectId)

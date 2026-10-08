@@ -23,8 +23,11 @@ struct NexusForm: Decodable, Identifiable, Sendable {
     let projectId: String?
     let count: CountRef?
     struct CountRef: Decodable, Sendable { let submissions: Int? }
+    /// The readable part of the public link (`/f/<slug>`); older rows may have none, and the
+    /// link then falls back to the id, which the public route also resolves.
+    var slug: String? = nil
     enum CodingKeys: String, CodingKey {
-        case id, name, description, isPublic, projectId
+        case id, name, description, isPublic, projectId, slug
         case count = "_count"
     }
     var submissionCount: Int { count?.submissions ?? 0 }

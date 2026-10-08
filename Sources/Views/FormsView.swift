@@ -1,12 +1,17 @@
 import SwiftUI
 
 /// Port of forms.tsx ("Forms"): intake-form cards aggregated across the user's projects.
+///
+/// A card opens the form to fill in. Building one — New form in the toolbar, Edit form on a card's
+/// context menu — opens the same builder as a project's Forms tab (FormBuilderView.swift).
 struct FormsView: View {
     @Environment(AuthStore.self) private var auth
     @State private var forms: [NexusForm] = []
     @State private var projectNames: [String: String] = [:]
     @State private var loading = true
     @State private var error: String?
+    @State private var pickProject = false
+    @State private var editTarget: FormEditTarget?
 
     var body: some View {
         ZStack {
@@ -15,7 +20,20 @@ struct FormsView: View {
         }
         .navigationTitle("Forms")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { pickProject = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel(T("New form"))
+            }
+        }
+        .navigationDestination(isPresented: $pickProject) { FormProjectPickerView() }
+        .navigationDestination(item: $editTarget) { t in
+            FormBuilderView(projectId: t.projectId, projectName: t.projectName, formId: t.formId)
+        }
         .task { await load() }
+        .onReceive(NotificationCenter.default.publisher(for: .nexusFormsChanged)) { _ in
+            Task { await load() }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -25,7 +43,8 @@ struct FormsView: View {
             ErrorState(message: error, icon: "doc.text.magnifyingglass") { Task { await load() } }
         } else if forms.isEmpty {
             EmptyState(icon: "doc.text", title: T("No forms yet"),
-                       subtitle: T("A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it's submitted. BoD builds them on the web; once one is published it appears here for you to fill in."))
+                       subtitle: T("A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it's submitted. Build the first one and it appears here for everyone to fill in."),
+                       actionTitle: T("New form"), actionIcon: "plus", action: { pickProject = true })
         } else {
             ScrollView {
                 // The explanation stays outside the grid: it describes the whole screen, and as a
@@ -40,12 +59,31 @@ struct FormsView: View {
                             }
                             .buttonStyle(.plain)
                             .hoverEffect(.highlight)
+                            .contextMenu { menu(for: f) }
                         }
                     }
                 }
                 .padding(16)
             }
             .refreshable { await load() }
+        }
+    }
+
+    /// The same actions a form has on the web's card: edit it, and its public link.
+    @ViewBuilder private func menu(for f: NexusForm) -> some View {
+        if let pid = f.projectId {
+            Button {
+                editTarget = FormEditTarget(projectId: pid, projectName: projectNames[pid] ?? "", formId: f.id)
+            } label: {
+                Label(T("Edit form"), systemImage: "slider.horizontal.3")
+            }
+        }
+        if f.isPublic == true {
+            let url = FormLink.url(slug: f.slug, id: f.id)
+            Button { UIPasteboard.general.string = url.absoluteString } label: {
+                Label(T("Copy public link"), systemImage: "doc.on.doc")
+            }
+            ShareLink(item: url) { Label(T("Share link"), systemImage: "square.and.arrow.up") }
         }
     }
 
@@ -57,7 +95,7 @@ struct FormsView: View {
             var all: [NexusForm] = []
             for p in projects {
                 if let fs = try? await APIClient.shared.forms(projectId: p.id) {
-                    all += fs.map { f in NexusForm(id: f.id, name: f.name, description: f.description, isPublic: f.isPublic, projectId: f.projectId ?? p.id, count: f.count) }
+                    all += fs.map { f in NexusForm(id: f.id, name: f.name, description: f.description, isPublic: f.isPublic, projectId: f.projectId ?? p.id, count: f.count, slug: f.slug) }
                 }
             }
             forms = all
