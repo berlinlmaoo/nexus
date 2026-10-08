@@ -17,4 +17,8 @@ export const ID_CALENDAR_EXTRA: Record<string, string> = {
   "Arrow keys, [ ], Home / End and PgUp / PgDn work while a date in the month has keyboard focus.": "Tombol panah, [ ], Home / End, dan PgUp / PgDn berfungsi selama fokus keyboard ada di salah satu tanggal kalender.",
   "Single-key shortcuts": "Pintasan satu tombol",
   "Turn them off if they clash with a screen reader or voice control.": "Matikan jika bentrok dengan pembaca layar atau kontrol suara.",
+  // A day of the month, read out: "8 tugas, 3 belum selesai" (the filled dots vs the ticks).
+  "{n} still to do": "{n} belum selesai",
+  // After a division in a day's description, where the month shows a tick instead of a filled dot.
+  "all done or without a status": "semua selesai atau tanpa status",
 }

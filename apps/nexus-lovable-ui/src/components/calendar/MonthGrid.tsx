@@ -1,8 +1,8 @@
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject } from "react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { addDays, mondayOf, shiftMonth, type CalIndex, type DayCell } from "@/lib/calendar/core";
+import { addDays, mondayOf, shiftMonth, type CalIndex, type MonthCell } from "@/lib/calendar/core";
 import { CAPS, fmtDay, UnitDot, weekdayNames } from "./bits";
 
 /** A public holiday's day number where its name does not fit: a dotted underline, so colour is not the only cue. */
@@ -41,11 +41,15 @@ function weekdays(locale: string, weekday: "narrow" | "long"): string[] {
  * `fill` = the grid stretches its six rows over the height it is given (the desktop pane), so a whole
  * month fits a laptop screen; otherwise each row has a fixed minimum height and the page scrolls.
  * Hovering a legend chip dims the other units' dots through CSS (CalendarPage), via data-unit.
+ *
+ * A screen reader hears what the marks show: the label gives the count and how many are still to do,
+ * and a description (aria-describedby, on every screen size) names each division with its count, saying
+ * which ones only have done or status-less tasks (the ticks). The tooltip is for the pointer only.
  */
 export const MonthGrid = memo(function MonthGrid({
   days, month, cells, selected, today, holidays, ix, onSelect, busy, compact, fill = false, refocus,
 }: {
-  days: string[]; month: string; cells: Map<string, DayCell>; selected: string; today: string
+  days: string[]; month: string; cells: Map<string, MonthCell>; selected: string; today: string
   holidays: Map<string, string>; ix: CalIndex
   onSelect: (day: string) => void; busy: boolean; compact: boolean; fill?: boolean
   /** The page sets it before a shortcut pressed on a day (T, J / K) selects another one: focus follows. */
@@ -57,6 +61,8 @@ export const MonthGrid = memo(function MonthGrid({
   const long = useMemo(() => weekdays(locale, "long"), [locale]);
   const maxDots = compact ? 3 : 4;
   const gridRef = useRef<HTMLDivElement>(null);
+  const descId = useId();
+  const unitName = (unitId: string) => (unitId === "other" ? t("Other") : (ix.byId.get(unitId)?.name ?? "?"));
   // A key pressed on a day keeps the keyboard focus on the newly selected day, also when that day is in
   // another month (the days are keyed by date, so the cell that had focus is gone then).
   const ownRefocus = useRef(false);
@@ -123,11 +129,12 @@ export const MonthGrid = memo(function MonthGrid({
           const tip = !compact && !!cell && cell.count > 0;
           const label = [
             fmtDay(day, { weekday: "long", day: "numeric", month: "long" }, locale),
-            cell?.count ? tn(cell.count, "{n} task", "{n} tasks") : t("No tasks"),
+            cell?.count ? `${tn(cell.count, "{n} task", "{n} tasks")}, ${t("{n} still to do", { n: cell.open })}` : t("No tasks"),
             cell?.overdue ? t("Overdue") : "",
             holiday ?? "",
             isToday ? t("Today") : "",
           ].filter(Boolean).join(", ");
+          const described = !!cell && cell.dots.length > 0;
           return (
             <div key={day} className="contents">
               <Tooltip delayDuration={350} open={tip && tipDay === day} onOpenChange={(o) => setTipDay((cur) => (o && tip ? day : cur === day ? null : cur))}>
@@ -138,6 +145,9 @@ export const MonthGrid = memo(function MonthGrid({
                     aria-selected={isSel}
                     tabIndex={isSel ? 0 : -1}
                     aria-label={label}
+                    // Wins over the tooltip's own describedby (the child's props win in Radix's Slot): the
+                    // same names and counts, and the done-only divisions too.
+                    aria-describedby={described ? `${descId}${day}` : undefined}
                     data-day={day}
                     onClick={() => onSelect(day)}
                     className={cn(
@@ -182,7 +192,7 @@ export const MonthGrid = memo(function MonthGrid({
                   <TooltipContent lang={lang} side="top" className="max-w-[16.25rem]">
                     <div className="text-xs font-semibold">{fmtDay(day, { weekday: "short", day: "numeric", month: "short" }, locale)} · {tn(cell.count, "{n} task", "{n} tasks")}</div>
                     <div className="mt-0.5 text-2xs opacity-80">
-                      {cell.dots.map((d) => `${d.unitId === "other" ? t("Other") : (ix.byId.get(d.unitId)?.name ?? "?")} ${d.count}`).join(" · ")}
+                      {cell.dots.map((d) => `${unitName(d.unitId)} ${d.count}`).join(" · ")}
                     </div>
                   </TooltipContent>
                 )}
@@ -192,6 +202,23 @@ export const MonthGrid = memo(function MonthGrid({
         })}
         </div>
         ))}
+      </div>
+      {/* The days' descriptions: hidden, so they are read only through each day's aria-describedby (a
+          hidden element still gives its text that way), never a second time while browsing, and they
+          stay out of the grid's rows, which may hold cells only. */}
+      <div hidden>
+        {days.map((day) => {
+          const cell = day.slice(0, 7) === month ? cells.get(day) : undefined;
+          if (!cell || cell.dots.length === 0) return null;
+          return (
+            <span key={day} id={`${descId}${day}`}>
+              {cell.dots.map((d) => {
+                const part = tn(d.count, "{unit}, {n} task", "{unit}, {n} tasks", { unit: unitName(d.unitId) });
+                return d.filled ? part : `${part}, ${t("all done or without a status")}`;
+              }).join("; ")}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

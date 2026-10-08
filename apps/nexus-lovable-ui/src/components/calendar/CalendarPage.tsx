@@ -15,11 +15,11 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from 
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  addDays, bucketOf, byDay, clearFilters, dayCell, dayTree, filterCount, filterItems, gridRange, indexStructure, legend,
-  monthGrid, mondayOf, overdueRail, shiftMonth, underFocus, weekRows,
+  addDays, bucketOf, byDay, clearFilters, dayTree, filterCount, filterItems, gridRange, indexStructure, legend,
+  monthCell, monthGrid, mondayOf, overdueRail, shiftMonth, underFocus, weekRows,
   type CalFilters, type CalItem, type CalScope,
 } from "@/lib/calendar/core";
-import { CAL_SWITCH, DoneTick, FOCUS_PILL, fmtDay, TOUCH_ICON, TOUCH_ROW, UnitDot, wibToday, type PeopleLookup } from "./bits";
+import { CAL_SWITCH, DoneTick, FOCUS_PILL, fmtDay, scrollerOf, stickyRoom, TOUCH_ICON, TOUCH_ROW, UnitDot, wibToday, type PeopleLookup } from "./bits";
 import { HOLIDAY_CUE, MonthGrid } from "./MonthGrid";
 import { DayPanel, type Lens } from "./DayPanel";
 import { PeopleWeek } from "./PeopleWeek";
@@ -259,7 +259,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const visible = useMemo(() => underFocus(filterItems(items ?? [], filters, fctx), ix, focusId), [items, filters, fctx, ix, focusId]);
   const perDay = useMemo(() => byDay(visible), [visible]);
   const days = useMemo(() => monthGrid(date), [date]);
-  const cells = useMemo(() => new Map(days.map((d) => [d, dayCell(d, perDay.get(d) ?? [], ix, focusId, today, nowMs, windowDays)])), [days, perDay, ix, focusId, today, nowMs, windowDays]);
+  const cells = useMemo(() => new Map(days.map((d) => [d, monthCell(d, perDay.get(d) ?? [], ix, focusId, today, nowMs, windowDays)])), [days, perDay, ix, focusId, today, nowMs, windowDays]);
   const monthItems = useMemo(() => visible.filter((i) => i.day.startsWith(month)), [visible, month]);
   const legendRows = useMemo(() => legend(monthItems, ix, focusId), [monthItems, ix, focusId]);
   const tree = useMemo(() => dayTree(perDay.get(date) ?? [], ix, focusId, today, nowMs, windowDays), [perDay, date, ix, focusId, today, nowMs, windowDays]);
@@ -479,6 +479,23 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
     ro.observe(head);
     return () => ro.disconnect();
   }, [headerSticky]);
+  // While the week bar sticks over the People list, the page keeps room for it at its top: a control the
+  // keyboard brings into view never ends up under the bar (WCAG 2.4.11).
+  const weekBarRef = useRef<HTMLDivElement>(null);
+  const showWeekBar = weekBar && !failed && access !== "none" && access !== "off" && !firstLoad;
+  useLayoutEffect(() => {
+    const bar = weekBarRef.current;
+    if (!showWeekBar || !bar) return;
+    const room = stickyRoom();
+    const set = () => room.set(scrollerOf(bar), bar.offsetHeight + 8);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(bar);
+    return () => {
+      ro.disconnect();
+      room.release();
+    };
+  }, [showWeekBar]);
 
   const iconButton = cn("grid size-8 shrink-0 place-items-center rounded-lg hover:bg-muted", coarseIcon, FOCUS_PILL);
   const atToday = date === today;
@@ -524,8 +541,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       <DrawerTrigger asChild><FilterButton count={nFilters} /></DrawerTrigger>
       <DrawerContent lang={lang} data-cal-surface="" aria-describedby={undefined} className="max-h-[92dvh]">
         <DrawerHeader><DrawerTitle>{t("Filters")}</DrawerTitle></DrawerHeader>
-        {/* The drawer body is the one scroller; the panel's Reset / Done footer sticks to its bottom. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
+        {/* The drawer body is the one scroller; the panel's Reset / Done footer sticks to its bottom, and
+            a row the keyboard brings into view stays above it (--cal-foot-room, styles.css). */}
+        <div data-cal-foot-room="" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 [--cal-foot-room:calc(5rem+env(safe-area-inset-bottom,0px))]">
           <FilterPanel filters={filters} onChange={setFilters} onReset={resetFilters} onDone={closeFilters} ix={ix} items={items ?? []} people={people} />
         </div>
       </DrawerContent>
@@ -533,7 +551,8 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   ) : (
     <Popover open={filterOpen} onOpenChange={setFilterOpen}>
       <PopoverTrigger asChild><FilterButton count={nFilters} /></PopoverTrigger>
-      <PopoverContent lang={lang} data-cal-surface="" aria-label={t("Filters")} align="end" className="max-h-[78vh] w-90 overflow-y-auto overscroll-contain rounded-2xl p-4">
+      {/* --cal-foot-room: a row the keyboard brings into view stays above the sticky Reset footer (styles.css). */}
+      <PopoverContent lang={lang} data-cal-surface="" data-cal-foot-room="" aria-label={t("Filters")} align="end" className="max-h-[78vh] w-90 overflow-y-auto overscroll-contain rounded-2xl p-4 [--cal-foot-room:5rem]">
         <FilterPanel filters={filters} onChange={setFilters} onReset={resetFilters} ix={ix} items={items ?? []} people={people} />
       </PopoverContent>
     </Popover>
@@ -661,7 +680,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       <div data-cal-region="people" className="flex flex-col">
         {weekBar && (
           // The week's ‹ › stay in reach while the list (several screens long on a phone) scrolls.
-          <div className="sticky top-0 z-20 border-b border-border bg-background px-[12px] py-1.5 md:px-8">{dateNav}</div>
+          <div ref={weekBarRef} className="sticky top-0 z-20 border-b border-border bg-background px-[12px] py-1.5 md:px-8">{dateNav}</div>
         )}
         <div className="space-y-3 px-[12px] py-3 md:px-8 md:py-6">
           <PeopleWeek rows={rows} days={weekDays} today={today} nowMs={nowMs} windowDays={windowDays} ix={ix} people={people} meId={meId}
@@ -747,7 +766,7 @@ function Banner({ text, action }: { text: string; action?: { label: string; onCl
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-3 py-2 text-xs text-muted-foreground">
       <span className="min-w-0 flex-1">{text}</span>
       {action && (
-        <button type="button" onClick={action.onClick} className={cn("inline-flex h-7 items-center rounded-lg bg-primary px-2.5 text-xs font-semibold text-primary-foreground", coarseText, FOCUS_PILL)}>{action.label}</button>
+        <button type="button" onClick={action.onClick} className={cn("inline-flex h-7 items-center rounded-lg bg-cal-accent px-2.5 text-xs font-semibold text-cal-accent-foreground hover:bg-cal-accent/90", coarseText, FOCUS_PILL)}>{action.label}</button>
       )}
     </div>
   );

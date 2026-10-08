@@ -42,6 +42,10 @@ const NAVY_ICON = "grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-cal-ac
 // The border turns accent on focus (that is the visible focus, ≥3:1); the faint ring only softens it.
 const INPUT = "w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-base outline-none transition placeholder:text-muted-foreground focus:border-cal-accent focus:ring-2 focus:ring-cal-accent/15 sm:text-sm";
 const CARD = "min-w-0 space-y-4 rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5";
+// While a save is in flight the controls are aria-disabled, never disabled: a disabled control drops the
+// keyboard focus it has (Chrome moves it to <body>), so every save threw the keyboard back to the top of
+// the page. Their handlers ignore input meanwhile; the look is the same as disabled.
+const BUSY = "aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
 
 export function CalendarSettingsAdmin() {
   const { t, lang } = useLang();
@@ -72,8 +76,8 @@ export function CalendarSettingsAdmin() {
         <CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
         <div className="text-lg font-bold">{t("Couldn't load the calendar settings.")}</div>
         {q.error instanceof ApiError && lang === "id" && <p className="mt-2 text-sm text-muted-foreground">{q.error.message}</p>}
-        <button type="button" onClick={() => q.refetch()} disabled={q.isFetching}
-          className={cn("mt-4 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50", TOUCH_ROW, FOCUS_PILL)}>
+        <button type="button" onClick={() => { if (!q.isFetching) void q.refetch(); }} aria-disabled={q.isFetching || undefined}
+          className={cn("mt-4 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold transition hover:bg-accent aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-background", TOUCH_ROW, FOCUS_PILL)}>
           {q.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Try again")}
         </button>
       </div>
@@ -160,18 +164,23 @@ function PrivateProjects({ data, save }: { data: Payload; save: Save }) {
               ? p.privateBy === "prefix" ? t("by name") : p.privateBy === "list" ? t("set by hand") : null
               : byPrefix(p) ? t("turned off by hand") : null;
             return (
-              <li key={p.id} className="flex items-center gap-3 py-2.5">
-                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", SWATCH_EDGE)} style={{ background: p.color || "var(--cal-todo)" }} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium [overflow-wrap:anywhere]">{p.name}</div>
-                  {why && (
-                    <div className={cn("mt-0.5 inline-flex items-center gap-1 text-2xs", p.private ? "font-semibold text-cal-accent" : "text-muted-foreground")}>
-                      {p.private && <Lock className="h-2.5 w-2.5" />} {why}
-                    </div>
-                  )}
-                </div>
-                {saving && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
-                <Switch checked={checked} onCheckedChange={(v) => toggle(p, v)} disabled={save.isPending} aria-label={p.name} className={CAL_SWITCH} />
+              // The row is the switch's label, like the Calendar's filter switches: the whole row (at least
+              // 44px on a touch screen) flips it, not only the 36x20px switch.
+              <li key={p.id}>
+                <label className={cn("flex cursor-pointer items-center gap-3 py-2.5", TOUCH_ROW)}>
+                  <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", SWATCH_EDGE)} style={{ background: p.color || "var(--cal-todo)" }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium [overflow-wrap:anywhere]">{p.name}</span>
+                    {why && (
+                      <span className={cn("mt-0.5 inline-flex items-center gap-1 text-2xs", p.private ? "font-semibold text-cal-accent" : "text-muted-foreground")}>
+                        {p.private && <Lock className="h-2.5 w-2.5" />} {why}
+                      </span>
+                    )}
+                  </span>
+                  {saving && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
+                  <Switch checked={checked} onCheckedChange={(v) => { if (!save.isPending) toggle(p, v); }} aria-disabled={save.isPending || undefined}
+                    aria-label={p.name} className={cn(CAL_SWITCH, BUSY)} />
+                </label>
               </li>
             );
           })}
@@ -314,7 +323,7 @@ function ProjectDivisions({ data, save }: { data: Payload; save: Save }) {
             {p.unitBy && <span className={cn(p.unitBy === "top" ? "font-medium text-cal-readonly-foreground" : "text-muted-foreground")}>{whyLabel(p.unitBy, t)}</span>}
           </div>
         </div>
-        <UnitSelect value={override} units={data.units} disabled={save.isPending} onChange={(u) => setProject(p, u)} label={t("Division of {name}", { name: p.name })} />
+        <UnitSelect value={override} units={data.units} busy={save.isPending} onChange={(u) => setProject(p, u)} label={t("Division of {name}", { name: p.name })} />
       </Row>
     );
   };
@@ -329,7 +338,7 @@ function ProjectDivisions({ data, save }: { data: Payload; save: Save }) {
       <div key={f.id}>
         <Row depth={depth} folder>
           <FolderToggle open={open} name={f.name} count={n} onClick={() => flip(f.id)} disabled={!!hits} busy={busyRow === f.id} />
-          <UnitSelect value={override} units={data.units} disabled={save.isPending} onChange={(u) => setFolder(f, u)} label={t("Division of {name}", { name: f.name })} />
+          <UnitSelect value={override} units={data.units} busy={save.isPending} onChange={(u) => setFolder(f, u)} label={t("Division of {name}", { name: f.name })} />
         </Row>
         {open && (
           <>
@@ -432,12 +441,18 @@ function FolderToggle({ open, name, count, onClick, disabled, busy, muted }: { o
   );
 }
 
-function UnitSelect({ value, units, disabled, onChange, label }: { value: string | null; units: Unit[]; disabled?: boolean; onChange: (unitId: string | null) => void; label: string }) {
+/**
+ * A card picker. `busy` (a save in flight): it neither opens nor takes a typed choice, but keeps the
+ * keyboard focus (aria-disabled, see BUSY). 44px tall on a touch screen.
+ */
+function UnitSelect({ value, units, busy, onChange, label }: { value: string | null; units: Unit[]; busy?: boolean; onChange: (unitId: string | null) => void; label: string }) {
   const { t } = useLang();
+  const [open, setOpen] = useState(false);
   return (
-    <Select value={value ?? AUTO} onValueChange={(v) => { if (v !== (value ?? AUTO)) onChange(v === AUTO ? null : v); }} disabled={disabled}>
-      <SelectTrigger aria-label={label}
-        className={cn("h-9 w-full min-w-0 rounded-lg bg-background text-xs sm:w-56 sm:shrink-0",
+    <Select value={value ?? AUTO} open={open} onOpenChange={(o) => setOpen(o && !busy)}
+      onValueChange={(v) => { if (!busy && v !== (value ?? AUTO)) onChange(v === AUTO ? null : v); }}>
+      <SelectTrigger aria-label={label} aria-disabled={busy || undefined}
+        className={cn("h-9 w-full min-w-0 rounded-lg bg-background text-xs sm:w-56 sm:shrink-0 pointer-coarse:h-auto", TOUCH_ROW, BUSY,
           value ? "border-cal-accent/50 font-semibold text-cal-accent" : "text-muted-foreground")}>
         <SelectValue />
       </SelectTrigger>
