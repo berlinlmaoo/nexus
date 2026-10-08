@@ -446,39 +446,45 @@ async function removeKeptFile(kind: string, ref: string): Promise<boolean> {
   }
 }
 
-async function stillUsed(ref: string, cutoff: Date): Promise<boolean> {
-  const [row] = await prisma.$queryRaw<{ used: boolean }[]>`
-    select (
-      exists (select 1 from "Attachment" a where a.url = ${ref})
-      or exists (select 1 from "PnlExpenseAttachment" p where p.url = ${ref})
-      or exists (select 1 from "Message" m where m."attachmentUrl" = ${ref})
-      or exists (select 1 from "VaultItem" v where v."storageKey" = ${ref})
-      or exists (select 1 from "DeletionSnapshot" s where s."createdAt" >= ${cutoff} and strpos(s.data::text, ${ref}) > 0)
-    ) as used`
-  return Boolean(row?.used)
-}
+/** The kept files a copy points at: task attachments, P&L receipts, Vault files. */
+const FILE_REFS_SQL = `
+  select 'upload'::text as kind, e->>'url' as ref from jsonb_array_elements(coalesce(s.data->'tables'->'Attachment', '[]'::jsonb)) e
+  union all
+  select 'upload', e->>'url' from jsonb_array_elements(coalesce(s.data->'tables'->'PnlExpenseAttachment', '[]'::jsonb)) e
+  union all
+  select 'vault', e->>'storageKey' from jsonb_array_elements(coalesce(s.data->'tables'->'VaultItem', '[]'::jsonb)) e where e->>'kind' = 'FILE'`
 
 /**
  * Drops copies older than `cutoff` (restored or not), then the files only they still pointed at.
  * Deletes no longer unlink task attachments, P&L receipts or Vault files (a restore needs them); this
- * is where they go: a file is removed only when no live row and no newer copy refers to it.
+ * is where they go: a file is removed only when no live row and no newer copy refers to it. Which
+ * files are still in use is worked out after the old copies are gone, so a restore that ran just
+ * before is seen, and in one statement for all of them.
  */
 export async function purgeDeletionSnapshots(cutoff: Date): Promise<{ deleted: number; filesRemoved: number }> {
-  const refs = await prisma.$queryRaw<{ kind: string; ref: string }[]>`
-    with old as (select data from "DeletionSnapshot" where "createdAt" < ${cutoff})
-    select distinct x.kind, x.ref from old, lateral (
-      select 'upload'::text as kind, e->>'url' as ref from jsonb_array_elements(coalesce(old.data->'tables'->'Attachment', '[]'::jsonb)) e
-      union all
-      select 'upload', e->>'url' from jsonb_array_elements(coalesce(old.data->'tables'->'PnlExpenseAttachment', '[]'::jsonb)) e
-      union all
-      select 'vault', e->>'storageKey' from jsonb_array_elements(coalesce(old.data->'tables'->'VaultItem', '[]'::jsonb)) e where e->>'kind' = 'FILE'
-    ) x
-    where x.ref is not null`
+  const refs = await prisma.$queryRawUnsafe<{ kind: string; ref: string }[]>(
+    `select distinct x.kind, x.ref from "DeletionSnapshot" s, lateral (${FILE_REFS_SQL}) x
+     where s."createdAt" < $1 and x.ref is not null`,
+    cutoff,
+  )
   const deleted = (await prisma.deletionSnapshot.deleteMany({ where: { createdAt: { lt: cutoff } } })).count
+  if (!refs.length) return { deleted, filesRemoved: 0 }
+  const candidates = Array.from(new Set(refs.map((r) => r.ref)))
+  const used = await prisma.$queryRawUnsafe<{ ref: string }[]>(
+    `with c as (select unnest($1::text[]) as ref)
+     select c.ref from c where
+       exists (select 1 from "Attachment" a where a.url = c.ref)
+       or exists (select 1 from "PnlExpenseAttachment" p where p.url = c.ref)
+       or exists (select 1 from "Message" m where m."attachmentUrl" = c.ref)
+       or exists (select 1 from "VaultItem" v where v."storageKey" = c.ref)
+     union
+     select x.ref from "DeletionSnapshot" s, lateral (${FILE_REFS_SQL}) x where x.ref = any($1::text[])`,
+    candidates,
+  )
+  const keep = new Set(used.map((u) => u.ref))
   let filesRemoved = 0
   for (const r of refs) {
-    // Checked after the copies are gone and right before each unlink: a restore in between wins.
-    if (await stillUsed(r.ref, cutoff)) continue
+    if (keep.has(r.ref)) continue
     if (await removeKeptFile(r.kind, r.ref)) filesRemoved++
   }
   return { deleted, filesRemoved }
