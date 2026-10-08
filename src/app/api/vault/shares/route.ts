@@ -8,7 +8,8 @@ import { emitVaultChanged } from "@/lib/socket-emitter"
 import { getVaultActor, canReadItem, canModifyItem, newShareSlug } from "@/lib/vault"
 import { EXPIRY_PRESETS, serializeShare } from "@/lib/vault-share"
 
-// GET /api/vault/shares?itemId=<id> — every link ever made for one item.
+// GET /api/vault/shares?itemId=<id> — every link ever made for one item (a file or, since
+// 9 Oct 2026, a folder). Each carries `canRevoke` for the person asking.
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     const item = await prisma.vaultItem.findFirst({
       where: { id: itemId, workspaceId: actor.workspaceId },
-      select: { id: true },
+      select: { id: true, uploaderId: true, ownerId: true },
     })
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (!(await canReadItem(actor, item.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -31,14 +32,24 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
       include: { createdBy: { select: { id: true, name: true } } },
     })
-    return NextResponse.json({ shares: shares.map(serializeShare) })
+    // The same rule DELETE /api/vault/shares/<id> applies: its maker, the item's owner, or BoD.
+    const owns = canModifyItem(actor, item)
+    return NextResponse.json({
+      shares: shares.map((s) => serializeShare(s, { canRevoke: owns || s.createdById === actor.userId })),
+      // Whether this person may make an EXTERNAL link for this item (see POST below), so a client can
+      // say so before anybody picks it rather than after the server refuses.
+      canShareExternally: owns,
+    })
   } catch (error) {
     console.error("[vault] list shares failed:", error)
     return NextResponse.json({ error: "Failed to list shares" }, { status: 500 })
   }
 }
 
-// POST /api/vault/shares — mint a link.
+// POST /api/vault/shares — mint a link to a file or a folder.
+//
+// A folder link (9 Oct 2026) opens that folder's subtree and nothing else: lib/vault-share.ts
+// itemInShare is the boundary, checked on every request behind the link.
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -56,8 +67,8 @@ export async function POST(request: NextRequest) {
       select: { id: true, kind: true, name: true, uploaderId: true, ownerId: true },
     })
     if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 })
-    if (item.kind !== "FILE") {
-      return NextResponse.json({ error: "Folder belum bisa dibagikan, baru berkas" }, { status: 400 })
+    if (item.kind !== "FILE" && item.kind !== "FOLDER") {
+      return NextResponse.json({ error: "This can't be shared" }, { status: 400 })
     }
     if (!(await canReadItem(actor, item.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
@@ -67,7 +78,7 @@ export async function POST(request: NextRequest) {
     // standing as deleting the file.
     if (!requireAuth && !canModifyItem(actor, item)) {
       return NextResponse.json(
-        { error: "Tautan eksternal cuma bisa dibuat oleh yang mengunggah atau BoD" },
+        { error: "Tautan eksternal cuma bisa dibuat oleh yang mengunggah atau BoD", code: "EXTERNAL_NOT_ALLOWED" },
         { status: 403 },
       )
     }
@@ -100,12 +111,12 @@ export async function POST(request: NextRequest) {
       request,
       // The slug is the key. It is not written to the audit log, which is readable by more people
       // than the link is meant for.
-      metadata: { itemId: item.id, requireAuth, allowDownload: share.allowDownload, expires: preset },
+      metadata: { itemId: item.id, kind: item.kind, requireAuth, allowDownload: share.allowDownload, expires: preset },
     }).catch(() => {})
     // The item's "· 1 link" in every open listing.
     emitVaultChanged(actor.workspaceId, actor.userId)
 
-    return NextResponse.json(serializeShare(share), { status: 201 })
+    return NextResponse.json(serializeShare(share, { canRevoke: true }), { status: 201 })
   } catch (error) {
     console.error("[vault] create share failed:", error)
     return NextResponse.json({ error: "Failed to create share" }, { status: 500 })

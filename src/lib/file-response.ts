@@ -21,6 +21,11 @@ export const MIME_TYPES: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  // Phone photos (HEIC/HEIF) and AVIF: Safari draws all three inline, so they are named as what they
+  // are instead of falling through to octet-stream and being downloaded (9 Oct 2026).
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".avif": "image/avif",
   ".svg": "image/svg+xml",
   ".pdf": "application/pdf",
   ".txt": "text/plain; charset=utf-8",
@@ -33,24 +38,87 @@ export const MIME_TYPES: Record<string, string> = {
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".mp4": "video/mp4",
   ".mov": "video/quicktime",
+  ".m4v": "video/x-m4v",
   ".webm": "video/webm",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
   ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
 }
 
 // Only these may render inline in the browser. Everything else (notably .svg/.html/.xml, which can
 // carry active content) is served as a download so a direct navigation to a random .svg can't execute
 // script in the app origin. nosniff is also set so the browser never re-interprets the type.
 export const INLINE_OK = new Set<string>([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf",
-  ".mp4", ".mov", ".webm", ".mp3", ".wav", ".m4a",
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif", ".avif", ".pdf",
+  ".mp4", ".mov", ".m4v", ".webm", ".mp3", ".wav", ".m4a", ".aac",
   ".txt", ".csv",
 ])
 
 export function extensionOf(filePath: string): string {
   const i = filePath.lastIndexOf(".")
   return i === -1 ? "" : filePath.substring(i).toLowerCase()
+}
+
+/** A type as stored or sent, bare and lower-case: "Text/Plain; charset=utf-8" → "text/plain". */
+export function normalizeMime(raw: string | null | undefined): string {
+  return (raw || "").split(";")[0].trim().toLowerCase()
+}
+
+/** Other spellings phones and browsers send for a type in the table above. */
+const MIME_ALIASES: Record<string, string> = {
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "audio/x-m4a": "audio/mp4",
+  "audio/m4a": "audio/mp4",
+  "audio/x-wav": "audio/wav",
+  "audio/wave": "audio/wav",
+  "audio/mp3": "audio/mpeg",
+  "audio/x-aac": "audio/aac",
+  "video/mov": "video/quicktime",
+}
+
+/** Every type the table knows, by its bare name → the exact header value to send for it. */
+const KNOWN_MIME = new Map<string, string>(Object.values(MIME_TYPES).map((v) => [normalizeMime(v), v]))
+for (const [alias, canonical] of Object.entries(MIME_ALIASES)) KNOWN_MIME.set(alias, canonical)
+
+/** The bare types that may render inline: exactly the INLINE_OK extensions' types, nothing more. */
+const INLINE_MIME = new Set<string>(Array.from(INLINE_OK, (ext) => normalizeMime(MIME_TYPES[ext])))
+
+/**
+ * What to send a file as, and whether it may render inline.
+ *
+ * A stored type (the vault keeps one per file) wins over the extension, but ONLY when it is a type
+ * the table above already knows: the stored value came from whoever uploaded the file, and an
+ * arbitrary "text/html" from a client must never become the header. Anything unknown falls back to
+ * the extension exactly as before, and inline-or-not is decided by the type actually sent — so a
+ * ".png" uploaded as "image/svg+xml" goes out as an SVG attachment, and an ".html" uploaded as
+ * "image/png" goes out as a PNG that nosniff stops anybody reading as a page.
+ */
+export function servedTypeOf(filePath: string, storedMime?: string | null): { contentType: string; inlineOk: boolean } {
+  const stored = KNOWN_MIME.get(normalizeMime(storedMime))
+  if (stored) return { contentType: stored, inlineOk: INLINE_MIME.has(normalizeMime(stored)) }
+  const ext = extensionOf(filePath)
+  return { contentType: MIME_TYPES[ext] || "application/octet-stream", inlineOk: INLINE_OK.has(ext) }
+}
+
+export type PreviewKind = "image" | "video" | "audio" | "pdf"
+
+/**
+ * Whether a browser can SHOW this file rather than only save it: a picture, a film, a sound or a PDF
+ * that may be served inline. Text is inline-safe but has no viewer, and SVG is never inline here.
+ * A view-only share link serves only these (vault-share.ts); everything else would be a download by
+ * another name.
+ */
+export function previewKindOf(filePath: string, storedMime?: string | null): PreviewKind | null {
+  const { contentType, inlineOk } = servedTypeOf(filePath, storedMime)
+  if (!inlineOk) return null
+  const type = normalizeMime(contentType)
+  if (type === "application/pdf") return "pdf"
+  if (type.startsWith("image/")) return "image"
+  if (type.startsWith("video/")) return "video"
+  if (type.startsWith("audio/")) return "audio"
+  return null
 }
 
 /** Stream a byte range straight off disk (constant memory) instead of buffering the whole file.
@@ -72,6 +140,9 @@ export interface ServeFileOptions {
   cacheControl?: string
   /** Override the extension-derived Content-Type (e.g. an APK, which MIME_TYPES deliberately lacks). */
   contentType?: string
+  /** The type stored with the file (Z Vault). Preferred over the extension when MIME_TYPES knows it;
+   *  see servedTypeOf. Unlike `contentType` it also decides inline-or-attachment. */
+  mimeType?: string | null
   /** Strong validator. When given, ETag is sent and an `If-Range` that does not match it (nor
    *  lastModified) turns a Range request into a full 200 — a resumed download never splices two files. */
   etag?: string
@@ -96,8 +167,8 @@ export async function serveFile(
     const stats = await stat(filePath)
     if (!stats.isFile()) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const fileSize = stats.size
-    const ext = extensionOf(filePath)
-    const contentType = opts.contentType || MIME_TYPES[ext] || "application/octet-stream"
+    const served = servedTypeOf(filePath, opts.mimeType)
+    const contentType = opts.contentType || served.contentType
     // `?download=<name>` is the app's existing "save this" link. It carries the real name AND means
     // attachment — that second half is load-bearing: today it is the only way to download an image
     // instead of opening it. `opts.filename` is the newer, weaker form: a real name that leaves the
@@ -107,10 +178,10 @@ export async function serveFile(
     const explicitName = opts.filename ?? null
     const downloadParam =
       opts.forceInline || explicitName ? null : req.nextUrl.searchParams.get("download")
-    const asAttachment = !INLINE_OK.has(ext) || Boolean(opts.forceDownload) || Boolean(downloadParam)
+    const asAttachment = !served.inlineOk || Boolean(opts.forceDownload) || Boolean(downloadParam)
     // forceInline (a view-only vault link) never makes an unsafe type inline: an SVG/HTML served
     // inline on this origin runs its script with the viewer's session (security audit, 29 Sep 2026).
-    const kind = (opts.forceInline && INLINE_OK.has(ext)) || !asAttachment ? "inline" : "attachment"
+    const kind = (opts.forceInline && served.inlineOk) || !asAttachment ? "inline" : "attachment"
 
     // Strip CRLF/quotes to avoid header injection; add an ASCII fallback + RFC 5987 filename* so a
     // unicode name survives.

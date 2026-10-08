@@ -69,3 +69,47 @@ export function formatDuration(seconds: number | null | undefined): string {
   const ss = String(s).padStart(2, "0");
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
+
+/** 512 B, 3.4 KB, 12 MB, 1.2 GB — the size line every vault screen shows. */
+export function humanSize(bytes: number | null | undefined): string {
+  if (bytes == null) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let n = bytes / 1024;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+}
+
+/** A PDF, by its type or its name. */
+export function isPdf(item: Pick<VaultItem, "mimeType" | "name">): boolean {
+  return (item.mimeType || "").toLowerCase() === "application/pdf" || /\.pdf$/i.test(item.name);
+}
+
+/**
+ * Copy text, and say whether it worked. `navigator.clipboard` refuses outside a click (Safari, after an
+ * awaited request) and on insecure origins; the old execCommand path covers some of those. The caller
+ * shows a Copy button when this returns false, instead of claiming "copied" (9 Oct 2026).
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through */ }
+  try {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}

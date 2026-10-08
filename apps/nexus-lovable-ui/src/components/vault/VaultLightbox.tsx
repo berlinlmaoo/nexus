@@ -14,6 +14,9 @@ import { mediaKind, thumbSrc, viewerSrc } from "@/lib/vault-media";
 //
 // Radix's Dialog underneath for the parts that are easy to get wrong by hand: focus moves in and
 // back out, the page behind is inert to a screen reader, and Esc closes.
+//
+// Also the viewer of a shared folder's page (/s/, /v/, 9 Oct 2026): there it has no Share button
+// (`onShare` absent), and Download only shows when the link allows downloads (`downloadUrl` set).
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -21,7 +24,8 @@ type Props = {
   index: number | null;
   onIndexChange: (index: number) => void;
   onClose: () => void;
-  onShare: (item: VaultItem) => void;
+  /** Absent: no Share button (a share link's own page). */
+  onShare?: (item: VaultItem) => void;
 };
 
 const MAX_SCALE = 6;
@@ -85,23 +89,28 @@ export function VaultLightbox({ items, index, onIndexChange, onClose, onShare }:
                     {count > 1 ? t("{index} of {total}", { index: (index ?? 0) + 1, total: count }) : t("Preview")}
                   </DialogPrimitive.Description>
                 </div>
-                <a
-                  href={item.downloadUrl ?? "#"}
-                  className="h-10 w-10 grid place-items-center rounded-full hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-                  aria-label={t("Download")}
-                  title={t("Download")}
-                >
-                  <Download className="h-5 w-5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => onShare(item)}
-                  className="h-10 w-10 grid place-items-center rounded-full hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-                  aria-label={t("Share")}
-                  title={t("Share")}
-                >
-                  <Share2 className="h-5 w-5" />
-                </button>
+                {item.downloadUrl && (
+                  <a
+                    href={item.downloadUrl}
+                    className="h-10 w-10 grid place-items-center rounded-full hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                    aria-label={t("Download")}
+                    title={t("Download")}
+                  >
+                    <Download className="h-5 w-5" />
+                  </a>
+                )}
+                {onShare && (
+                  <button
+                    type="button"
+                    onClick={() => onShare(item)}
+                    className="h-10 inline-flex items-center gap-1.5 rounded-full px-3 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white text-sm font-medium"
+                    aria-label={t("Share")}
+                    title={t("Share")}
+                  >
+                    <Share2 className="h-5 w-5" />
+                    <span className="hidden sm:inline">{t("Share")}</span>
+                  </button>
+                )}
                 <DialogPrimitive.Close
                   className="h-10 w-10 grid place-items-center rounded-full hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                   aria-label={t("Close")}
@@ -285,10 +294,14 @@ function ImageStage({ item, onSwipe }: { item: VaultItem; onSwipe: (delta: numbe
     return (
       <div className="absolute inset-0 grid place-items-center p-8 text-center">
         <div className="max-w-sm space-y-3">
-          <p className="text-sm text-white/80">{t("This picture can't be shown in the browser. Download it to open it.")}</p>
-          <a href={item.downloadUrl ?? "#"} className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 text-sm">
-            <Download className="h-4 w-4" /> {t("Download")}
-          </a>
+          <p className="text-sm text-white/80">
+            {item.downloadUrl ? t("This picture can't be shown in the browser. Download it to open it.") : t("This picture can't be shown in this browser.")}
+          </p>
+          {item.downloadUrl && (
+            <a href={item.downloadUrl} className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 text-sm">
+              <Download className="h-4 w-4" /> {t("Download")}
+            </a>
+          )}
         </div>
       </div>
     );
@@ -358,10 +371,14 @@ function VideoStage({ item }: { item: VaultItem }) {
     return (
       <div className="absolute inset-0 grid place-items-center p-8 text-center">
         <div className="max-w-sm space-y-3">
-          <p className="text-sm text-white/80">{t("This video can't play in the browser. Download it to watch it.")}</p>
-          <a href={item.downloadUrl ?? "#"} className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 text-sm">
-            <Download className="h-4 w-4" /> {t("Download")}
-          </a>
+          <p className="text-sm text-white/80">
+            {item.downloadUrl ? t("This video can't play in the browser. Download it to watch it.") : t("This video can't play in this browser.")}
+          </p>
+          {item.downloadUrl && (
+            <a href={item.downloadUrl} className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white/25 px-4 py-2 text-sm">
+              <Download className="h-4 w-4" /> {t("Download")}
+            </a>
+          )}
         </div>
       </div>
     );

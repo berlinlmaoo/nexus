@@ -46,6 +46,10 @@ export type VaultItem = {
   createdAt: string;
   updatedAt: string;
   canModify: boolean;
+  /** Content version carried in `url`/`thumbUrl` as `?v=`; changes on Replace file… (since 9 Oct 2026). */
+  fileVersion?: string | null;
+  /** Search results only: the folders it sits in, from the top, without the item (since 9 Oct 2026). */
+  path?: { id: string; name: string }[];
 };
 export type VaultListing = {
   items: VaultItem[];
@@ -70,14 +74,51 @@ export type VaultShare = {
   lastViewedAt: string | null;
   createdAt: string;
   createdBy: { id: string; name: string | null } | null;
+  /** Whether this viewer may revoke it (its maker, the item's owner, BoD). Absent from older servers. */
+  canRevoke?: boolean;
+};
+/** What a picture/film/sound/PDF behind a link can be shown as; null = nothing a browser can show. */
+export type VaultPreviewKind = "image" | "video" | "audio" | "pdf";
+/** One file or folder as a share link's page sees it (since 9 Oct 2026). Every URL points back at the link. */
+export type VaultPublicItem = {
+  id: string;
+  kind: "FILE" | "FOLDER";
+  name: string;
+  mimeType: string | null;
+  size: number | null;
+  width: number | null;
+  height: number | null;
+  childCount: number;
+  previewKind: VaultPreviewKind | null;
+  /** Null on a view-only link for a file nothing can preview. */
+  previewUrl: string | null;
+  downloadUrl: string | null;
+  thumbUrl: string | null;
+  fileVersion: string | null;
 };
 export type VaultPublicFile = {
   slug: string;
+  /** "FOLDER" since 9 Oct 2026; absent (a file) from older servers. */
+  kind?: "FILE" | "FOLDER";
   requireAuth: boolean;
   allowDownload: boolean;
+  expiresAt?: string | null;
+  sharedBy?: { name: string } | null;
   file: { name: string; mimeType: string | null; size: number | null; width: number | null; height: number | null };
   previewUrl: string;
   downloadUrl: string | null;
+  previewKind?: VaultPreviewKind | null;
+  thumbUrl?: string | null;
+  item?: VaultPublicItem;
+  folder?: { id: string; name: string } | null;
+  zipUrl?: string | null;
+};
+export type VaultPublicListing = {
+  folder: { id: string; name: string };
+  /** From the shared folder down to this one — never above what the link opens. */
+  breadcrumb: { id: string; name: string }[];
+  allowDownload: boolean;
+  items: VaultPublicItem[];
 };
 
 // --- The Wire (Feed) ---
@@ -2603,12 +2644,16 @@ export const nexusApi = {
   vaultEmptyTrash: () =>
     apiFetch<{ purged: number; filesUnlinked: number }>("/api/vault/trash/empty", { method: "POST" }),
   vaultShares: (itemId: string) =>
-    apiFetch<{ shares: VaultShare[] }>(`/api/vault/shares?itemId=${encodeURIComponent(itemId)}`),
+    apiFetch<{ shares: VaultShare[]; canShareExternally?: boolean }>(`/api/vault/shares?itemId=${encodeURIComponent(itemId)}`),
   vaultCreateShare: (body: { itemId: string; requireAuth: boolean; allowDownload: boolean; expires: VaultShareExpiry }) =>
     apiFetch<VaultShare>("/api/vault/shares", { method: "POST", body: JSON.stringify(body) }),
   vaultRevokeShare: (shareId: string) =>
     apiFetch<VaultShare>(`/api/vault/shares/${shareId}`, { method: "DELETE" }),
   vaultPublic: (slug: string) => apiFetch<VaultPublicFile>(`/api/vault/public/${encodeURIComponent(slug)}`),
+  vaultPublicItems: (slug: string, folderId?: string | null) =>
+    apiFetch<VaultPublicListing>(
+      `/api/vault/public/${encodeURIComponent(slug)}/items${folderId ? `?folderId=${encodeURIComponent(folderId)}` : ""}`,
+    ),
   androidRelease: () => apiFetch<AndroidReleaseInfo>("/api/app/android/release"),
 
   // Small files go single-shot; anything larger rides the shared chunked transport with target=vault,
@@ -2637,6 +2682,34 @@ export const nexusApi = {
       });
     }
     return uploadChunked<VaultItem>(file, { target: "vault", ...(parentId ? { parentId } : {}) }, onProgress);
+  },
+
+  // Replace file… (9 Oct 2026): new bytes for the same item — same id, same links. Small files go to
+  // /api/vault/items/<id>/replace; larger ones ride the chunked transport with `replaceItemId`.
+  vaultReplace: (itemId: string, file: File, onProgress: (pct: number) => void): Promise<VaultItem> => {
+    if (file.size <= UPLOAD_CHUNK_THRESHOLD) {
+      return new Promise<VaultItem>((resolve, reject) => {
+        const fd = new FormData();
+        fd.set("file", file);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `/api/vault/items/${encodeURIComponent(itemId)}/replace`);
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText) as VaultItem); } catch { reject(new ApiError(0, "Upload failed.", null)); }
+          } else {
+            let msg = "Upload failed.";
+            let payload: unknown = null;
+            try { payload = JSON.parse(xhr.responseText); msg = String((payload as { error?: string }).error || msg); } catch { /* non-JSON */ }
+            reject(new ApiError(xhr.status, msg, payload));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed."));
+        xhr.send(fd);
+      });
+    }
+    return uploadChunked<VaultItem>(file, { target: "vault", replaceItemId: itemId }, onProgress);
   },
 
   // --- Attachments ---

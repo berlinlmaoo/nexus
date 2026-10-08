@@ -1,5 +1,5 @@
 import path from "path"
-import { randomUUID, randomBytes } from "crypto"
+import { randomUUID, randomBytes, createHash } from "crypto"
 import { mkdir, unlink } from "fs/promises"
 import { prisma } from "@/lib/prisma"
 import { getUserOrgRole, isManagerRole, isBodPlus } from "@/lib/feed"
@@ -72,6 +72,20 @@ export async function deleteStoredFile(storageKey: string | null | undefined): P
     await unlink(thumb).catch(() => {})
     await unlink(`${thumb}.failed`).catch(() => {})
   }
+}
+
+/**
+ * A short token that changes exactly when a file's BYTES change (Replace file…, 9 Oct 2026), and not
+ * on a rename or a move. Every byte address the server hands out carries it as `?v=`, because the
+ * clients cache by URL — the iOS AttachmentCache and image cache key on it, and an item id is stable
+ * on purpose — so a replaced logo must arrive at a new URL or a phone keeps showing the old one.
+ *
+ * A hash of the storage key rather than the key itself: the key is where the bytes live on disk,
+ * and that stays off the wire. Every replace writes a new key, so a new token.
+ */
+export function fileVersion(storageKey: string | null | undefined): string | null {
+  if (!storageKey) return null
+  return createHash("sha256").update(storageKey).digest("hex").slice(0, 12)
 }
 
 // ── thumbnails ───────────────────────────────────────────────────────────────
@@ -301,6 +315,7 @@ export interface VaultItemRow {
   parentId: string | null
   uploaderId: string
   ownerId: string | null
+  storageKey?: string | null
   minReadRole: string | null
   minWriteRole: string | null
   deletedAt: Date | null
@@ -313,6 +328,9 @@ export interface VaultItemRow {
 
 export function serializeVaultItem(row: VaultItemRow, actor: VaultActor) {
   const isFile = row.kind === "FILE"
+  // `v` is the content version (fileVersion). Rows read without their storage key fall back to
+  // updatedAt, which also moves on a replace — only more often than it has to.
+  const version = fileVersion(row.storageKey) ?? String(row.updatedAt.getTime())
   return {
     id: row.id,
     kind: row.kind,
@@ -326,13 +344,15 @@ export function serializeVaultItem(row: VaultItemRow, actor: VaultActor) {
     height: row.height,
     parentId: row.parentId,
     // The ONLY address a client ever gets for the bytes. There is no path anywhere in this payload.
-    url: isFile ? `/api/vault/items/${row.id}/raw` : null,
-    downloadUrl: isFile ? `/api/vault/items/${row.id}/raw?download=1` : null,
-    // Pictures only; the client adds `&w=`. `v` changes whenever the row does, so a cached thumbnail
-    // can never outlive what it shows. Absent from servers before 9 Oct 2026: clients draw the icon.
+    // `?v=` changes when the file is replaced, so nothing cached by URL outlives the bytes it holds.
+    url: isFile ? `/api/vault/items/${row.id}/raw?v=${version}` : null,
+    downloadUrl: isFile ? `/api/vault/items/${row.id}/raw?download=1&v=${version}` : null,
+    // Pictures only; the client adds `&w=`. Absent from servers before 9 Oct 2026: clients draw the icon.
     thumbUrl: isFile && row.deletedAt === null && canThumbnail(row.mimeType, row.name)
-      ? `/api/vault/items/${row.id}/thumb?v=${row.updatedAt.getTime()}`
+      ? `/api/vault/items/${row.id}/thumb?v=${version}`
       : null,
+    /** The content version in the URLs above (since 9 Oct 2026). Changes on Replace file…, only then. */
+    fileVersion: isFile ? version : null,
     uploader: row.uploader ?? null,
     owner: row.owner ?? null,
     childCount: row._count?.children ?? 0,

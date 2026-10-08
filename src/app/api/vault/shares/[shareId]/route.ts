@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { getVaultActor, canReadItem, canModifyItem } from "@/lib/vault"
 import { serializeShare } from "@/lib/vault-share"
+import { emitVaultChanged } from "@/lib/socket-emitter"
 
 // DELETE /api/vault/shares/<id> — revoke.
 //
@@ -35,7 +36,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
     // Whoever made the link may pull it back; so may whoever owns the file, and BoD.
     if (share.createdById !== actor.userId && !canModifyItem(actor, share.item)) {
-      return NextResponse.json({ error: "Tidak bisa mencabut tautan orang lain" }, { status: 403 })
+      return NextResponse.json({ error: "Tidak bisa mencabut tautan orang lain", code: "NOT_YOURS" }, { status: 403 })
     }
 
     const updated = await prisma.vaultShare.update({
@@ -54,7 +55,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       metadata: { itemId: share.item.id },
     }).catch(() => {})
 
-    return NextResponse.json(serializeShare(updated))
+    // The item's "· 1 link" and the link list in every open screen.
+    emitVaultChanged(actor.workspaceId, actor.userId)
+
+    return NextResponse.json(serializeShare(updated, { canRevoke: true }))
   } catch (error) {
     console.error("[vault] revoke share failed:", error)
     return NextResponse.json({ error: "Failed to revoke share" }, { status: 500 })
