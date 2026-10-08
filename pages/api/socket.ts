@@ -4,6 +4,7 @@ import type { Server as HTTPServer } from "http"
 import type { Socket as NetSocket } from "net"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { getToken } from "next-auth/jwt"
+import { getSessionCookieName, shouldUseSecureAuthCookies } from "@/lib/session-cookie"
 import { createLogger } from "@/lib/logger"
 import { resolveSheetAccess } from "@/lib/project-sheets"
 import { checkProjectAccess } from "@/lib/rbac"
@@ -183,9 +184,18 @@ export function initializeSocketServer(
         ),
       }
 
+      // The cookie name is also the JWT salt, and in production it is "__Secure-authjs.session-token".
+      // getToken's own default is the unprefixed name, so without these three lines every browser
+      // and app session was refused here as "Invalid session" — realtime was dead in production
+      // while every test (which faked the session) passed (8 Oct 2026). lib/session-cookie is the one
+      // rule every place that reads or mints a session must use.
+      const cookieName = getSessionCookieName()
       const token = await getToken({
         req: fakeReq as unknown as Parameters<typeof getToken>[0]["req"],
         secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+        cookieName,
+        salt: cookieName,
+        secureCookie: shouldUseSecureAuthCookies(),
       })
 
       if (!token?.id) return next(new Error("Invalid session"))
