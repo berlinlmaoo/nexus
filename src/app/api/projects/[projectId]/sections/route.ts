@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 export async function GET(
   _request: NextRequest,
@@ -175,25 +176,33 @@ export async function DELETE(
       return NextResponse.json({ error: "Section not found" }, { status: 404 })
     }
 
-    // Move tasks to first remaining section
+    // Move tasks to first remaining section, delete, re-normalize positions — one transaction, after
+    // keeping the section and where each task came from, so Control Room → Audit can restore it: the
+    // section returns at its old place and its tasks move back (unless someone has moved them since).
     const firstRemaining = allSections.find((s) => s.id !== id)!
-    await prisma.task.updateMany({
-      where: { taskListId: id },
-      data: { taskListId: firstRemaining.id },
+    const projectId = (await params).projectId
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
+    const tasksMoved = await prisma.task.count({ where: { taskListId: id } })
+    await restorableDelete({
+      entityType: "task_list", entityId: id, entityName: target.name || "Untitled section",
+      workspaceId: project?.workspaceId ?? null, userId: session.user.id!, request,
+      metadata: { projectId, movedTo: firstRemaining.id, movedToName: firstRemaining.name, tasksMoved },
+      meta: { open: { type: "project", id: projectId }, projectId },
+      before: async (tx) => {
+        const moved = await tx.task.findMany({ where: { taskListId: id }, select: { id: true } })
+        await tx.task.updateMany({ where: { taskListId: id }, data: { taskListId: firstRemaining.id } })
+        return moved.map((t) => ({ table: "Task", column: "taskListId", key: t.id, value: id, movedTo: firstRemaining.id }))
+      },
+      remove: async (tx) => {
+        await tx.taskList.delete({ where: { id } })
+        const remaining = allSections.filter((s) => s.id !== id)
+        for (let i = 0; i < remaining.length; i++) {
+          if (remaining[i].position !== i) {
+            await tx.taskList.update({ where: { id: remaining[i].id }, data: { position: i } })
+          }
+        }
+      },
     })
-
-    await prisma.taskList.delete({ where: { id } })
-
-    // Re-normalize positions
-    const remaining = allSections.filter((s) => s.id !== id)
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i].position !== i) {
-        await prisma.taskList.update({
-          where: { id: remaining[i].id },
-          data: { position: i },
-        })
-      }
-    }
 
     return NextResponse.json({ message: "Section deleted", movedTo: firstRemaining.id })
   } catch (error) {

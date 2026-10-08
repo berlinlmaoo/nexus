@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { Prisma } from "@/generated/prisma/client"
 import { cleanName, descendantIds, effectiveParentId, findUnit, insideGroup, isUnitKind, ORG_CHART_WORKSPACE, orgChartGuard, wouldLoop } from "@/lib/org-chart"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 const LOGO_PREFIX = "/api/files/attachments/org-units/"
 
@@ -131,12 +132,26 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const unit = await findUnit(unitId)
     if (!unit) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
-    const [moved, released] = await prisma.$transaction([
-      prisma.orgUnit.updateMany({ where: { workspaceId: ORG_CHART_WORKSPACE, parentId: unitId }, data: { parentId: unit.parentId } }),
-      prisma.orgUnitMember.deleteMany({ where: { unitId } }),
-      prisma.orgUnit.delete({ where: { id: unitId } }),
-    ])
-    return NextResponse.json({ ok: true, movedUp: moved.count, released: released.count })
+    // Child units move up to this unit's parent and its people leave the card, as before — one
+    // transaction, after keeping the unit, its people and where each child unit was: Control Room →
+    // Audit restores the card with its people and moves the child units back under it (unless they
+    // have been moved since). In the audit since 8 Oct 2026.
+    let movedUp = 0
+    const released = await prisma.orgUnitMember.count({ where: { unitId } })
+    await restorableDelete({
+      entityType: "org_unit", entityId: unitId, entityName: unit.name, workspaceId: ORG_CHART_WORKSPACE,
+      userId: g.userId, request: _req, metadata: { kind: unit.kind, parentId: unit.parentId, people: released },
+      meta: { open: { type: "org_chart", id: unitId } },
+      before: async (tx) => {
+        const children = await tx.orgUnit.findMany({ where: { workspaceId: ORG_CHART_WORKSPACE, parentId: unitId }, select: { id: true } })
+        await tx.orgUnit.updateMany({ where: { workspaceId: ORG_CHART_WORKSPACE, parentId: unitId }, data: { parentId: unit.parentId } })
+        movedUp = children.length
+        return children.map((c) => ({ table: "OrgUnit", column: "parentId", key: c.id, value: unitId, movedTo: unit.parentId }))
+      },
+      // The unit's OrgUnitMember rows cascade with it (and are in the copy).
+      remove: (tx) => tx.orgUnit.delete({ where: { id: unitId } }),
+    })
+    return NextResponse.json({ ok: true, movedUp, released })
   } catch (error) {
     console.error("[admin/org-chart] DELETE unit", error)
     return NextResponse.json({ error: "Gagal menghapus." }, { status: 500 })
