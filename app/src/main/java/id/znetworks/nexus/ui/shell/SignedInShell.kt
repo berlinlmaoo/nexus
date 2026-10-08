@@ -168,7 +168,7 @@ import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.feature.update.startUpdate
 import kotlinx.coroutines.launch
 
-private enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
+internal enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
     HOME("home", R.string.tab_home, Icons.Filled.Home, "/dashboard"),
     TASKS("tasks", R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
     INBOX("inbox", R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
@@ -295,29 +295,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
-            if (!rail) NavigationBar(containerColor = Nx.colors.card) {
-                tabs.forEach { t ->
-                    NavigationBarItem(
-                        selected = t == current, onClick = { goTab(t) },
-                        icon = { TabIcon(t.icon, badgeOn(t)) },
-                        label = { TabLabel(stringResource(t.label)) },
-                    )
-                }
-            }
+            if (!rail) ShellBar(tabs, current, badgeOn, rail = false) { goTab(it) }
         },
     ) { padding ->
       // The bars' padding is consumed here: a screen's imePadding then adds only what the keyboard
       // covers beyond the bottom bar, not the bar again (the gap above the keyboard, point 6).
       androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-        if (rail) androidx.compose.material3.NavigationRail(containerColor = Nx.colors.card) {
-            tabs.forEach { t ->
-                androidx.compose.material3.NavigationRailItem(
-                    selected = t == current, onClick = { goTab(t) },
-                    icon = { TabIcon(t.icon, badgeOn(t)) },
-                    label = { TabLabel(stringResource(t.label)) },
-                )
-            }
-        }
+        if (rail) ShellBar(tabs, current, badgeOn, rail = true) { goTab(it) }
         // iOS push/pop (Berlin, 29 Sep, point 7): a screen slides in from the right and, on back, out to
         // the right while the one below comes back from the left; never a scale/zoom. The predictive
         // back gesture drives the same pop transition. Switching tabs has no animation, as the iOS tab bar.
@@ -472,6 +456,28 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
         }
       }
+    }
+}
+
+/** The tab bar on phones, the rail from 600 dp; [badge] is a tab's unread label or null. */
+@Composable
+internal fun ShellBar(tabs: List<Tab>, current: Tab?, badge: (Tab) -> String?, rail: Boolean, onTab: (Tab) -> Unit) {
+    if (rail) androidx.compose.material3.NavigationRail(containerColor = Nx.colors.card) {
+        tabs.forEach { t ->
+            androidx.compose.material3.NavigationRailItem(
+                selected = t == current, onClick = { onTab(t) },
+                icon = { TabIcon(t.icon, badge(t)) },
+                label = { TabLabel(stringResource(t.label)) },
+            )
+        }
+    } else NavigationBar(containerColor = Nx.colors.card) {
+        tabs.forEach { t ->
+            NavigationBarItem(
+                selected = t == current, onClick = { onTab(t) },
+                icon = { TabIcon(t.icon, badge(t)) },
+                label = { TabLabel(stringResource(t.label)) },
+            )
+        }
     }
 }
 

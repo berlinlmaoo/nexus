@@ -187,7 +187,7 @@ fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: Message
 }
 
 @Composable
-private fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> Unit) {
+internal fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> Unit) {
     val c = Nx.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         when (conv.type) {
@@ -199,10 +199,13 @@ private fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> Un
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(conv.title(meId), fontSize = 15.sp, fontWeight = if (conv.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
-                    color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (conv.muted()) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 4.dp).size(14.dp))
-                Spacer(Modifier.weight(1f))
+                // Title (+ bell-off) takes the room; the time stays at the end of the row.
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(conv.title(meId), fontSize = 15.sp, fontWeight = if (conv.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                        color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (conv.muted()) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 4.dp).size(14.dp))
+                }
+                Spacer(Modifier.width(8.dp))
                 Text(chatTime(conv.lastMessage?.createdAt), fontSize = 11.sp, color = if (conv.unreadCount > 0) c.violetText else c.mutedFg)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -219,7 +222,7 @@ private fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> Un
                 val who = if (conv.type != "DM" && last?.user?.name != null) "${last.user.name.substringBefore(' ')}: " else ""
                 Text(who + preview, fontSize = 13.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 // A muted conversation still counts its unread, quietly (grey).
-                if (conv.unreadCount > 0) Text("${conv.unreadCount}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = androidx.compose.ui.graphics.Color.White,
+                if (conv.unreadCount > 0) Text("${conv.unreadCount}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (conv.muted()) c.background else androidx.compose.ui.graphics.Color.White,
                     modifier = Modifier.background(if (conv.muted()) c.mutedFg else c.danger, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }

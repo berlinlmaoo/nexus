@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.dp
+import id.znetworks.nexus.ui.shell.Tab
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -42,6 +44,7 @@ class UiPreviewActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(Nx.colors.background).safeDrawingPadding()) {
                     when (screen) {
                         "account" -> AccountScreen(onBack = {})
+                        "nav8" -> Nav8Preview()
                         "board" -> SubmissionBoardView(sampleBoard, onOpen = {})
                         "composer" -> id.znetworks.nexus.feature.admin.AnnouncementComposer(
                             id.znetworks.nexus.feature.admin.AdminMoreApi((application as id.znetworks.nexus.NexusApplication).container.api), onDismiss = {}, onPosted = {})
@@ -151,3 +154,45 @@ class UiPreviewActivity : ComponentActivity() {
             lens = if (screen == "cal-person") id.znetworks.nexus.feature.calendar.CalLens.PERSON else id.znetworks.nexus.feature.calendar.CalLens.DIVISION)
     }
 }
+
+/** 8 Oct: the new tab bar (and its old-server fallback), More's badges, the crew board's
+ *  "outside now" cell, the outside-approver inbox row, muted/unread conversations and links. */
+@androidx.compose.runtime.Composable
+private fun Nav8Preview() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val badges = (ctx.applicationContext as id.znetworks.nexus.NexusApplication).container.badges
+    androidx.compose.runtime.LaunchedEffect(Unit) { badges.setInbox(5); badges.setChat(12) }
+    val inbox by badges.inboxUnread.collectAsStateWithLifecycle()
+    val today = java.time.LocalDate.now()
+    val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
+    val t = id.znetworks.nexus.feature.attendance.history.AttTone.PRESENT
+    fun member(key: String, name: String, outside: Boolean) = id.znetworks.nexus.feature.attendance.history.BoardMember(
+        key, name, days.associate { it.toString() to t },
+        mapOf(today.toString() to id.znetworks.nexus.feature.attendance.history.HistoryRow(attendanceDate = today.toString(),
+            checkInAt = today.atTime(8, 2).atZone(java.time.ZoneId.of("Asia/Jakarta")).toInstant().toString(),
+            outsideSince = if (outside) today.atTime(10, 12).atZone(java.time.ZoneId.of("Asia/Jakarta")).toInstant().toString() else null)))
+    val me = id.znetworks.nexus.feature.chat.ChatMember(userId = "me", user = id.znetworks.nexus.feature.chat.ChatUser("me", "Staff"))
+    fun conv(key: String, name: String, unread: Int, muted: Boolean, text: String) = id.znetworks.nexus.feature.chat.Conversation(
+        key, "GROUP", name, members = listOf(me), unreadCount = unread,
+        mutedUntil = if (muted) "2099-01-01T00:00:00Z" else null,
+        lastMessage = id.znetworks.nexus.feature.chat.Message("m$key", content = text, createdAt = java.time.Instant.now().toString(),
+            user = id.znetworks.nexus.feature.chat.ChatUser("u", "Rina")))
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+        id.znetworks.nexus.ui.shell.ShellBar(id.znetworks.nexus.ui.shell.ShellTabs.routes(true).map { r -> Tab.entries.first { it.route == r } }, Tab.CALENDAR,
+            { if (it == Tab.MORE) id.znetworks.nexus.core.Badges.label(inbox) else null }, rail = false) {}
+        androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+        id.znetworks.nexus.ui.shell.ShellBar(id.znetworks.nexus.ui.shell.ShellTabs.routes(false).map { r -> Tab.entries.first { it.route == r } }, Tab.HOME,
+            { if (it == Tab.INBOX) id.znetworks.nexus.core.Badges.label(inbox) else null }, rail = false) {}
+        id.znetworks.nexus.feature.attendance.history.Grid(listOf(member("a", "Rina", true), member("b", "Dimas", false)), days, today, { _, _ -> }, compact = false,
+            modifier = Modifier.padding(12.dp).height(110.dp))
+        id.znetworks.nexus.feature.inbox.InboxRow(id.znetworks.nexus.feature.inbox.InboxItem("i1", "attendance_outside_approver",
+            "Rina is outside the office", "Since 10:12 · 2 hours", createdAt = java.time.Instant.now().toString())) {}
+        id.znetworks.nexus.feature.chat.ConversationRow(conv("c1", "Tim Kreatif", 3, false, "📷 Foto"), "me") {}
+        id.znetworks.nexus.feature.chat.ConversationRow(conv("c2", "Pengumuman kantor", 9, true, "Rapat jam 3"), "me") {}
+        Box(Modifier.padding(12.dp).background(Nx.colors.card, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp)) {
+            androidx.compose.material3.Text(id.znetworks.nexus.feature.chat.highlight("@Dimas cek brief di https://nexus.znetworks.id/calendar ya", Nx.colors.violetText, Nx.colors.foreground), color = Nx.colors.foreground)
+        }
+        Box(Modifier.weight(1f)) { MoreScreen(Session("t", "c", "u", "Staff Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {}) }
+    }
+}
+

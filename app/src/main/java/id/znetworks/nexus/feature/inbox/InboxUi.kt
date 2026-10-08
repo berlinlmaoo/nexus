@@ -197,7 +197,7 @@ internal fun inboxIcon(type: String?): ImageVector = when {
 }
 
 @Composable
-private fun InboxRow(item: InboxItem, onClick: () -> Unit) {
+internal fun InboxRow(item: InboxItem, onClick: () -> Unit) {
     val c = Nx.colors
     Row(
         Modifier.fillMaxWidth().background(if (item.read) c.card else c.accentBg, RoundedCornerShape(16.dp))

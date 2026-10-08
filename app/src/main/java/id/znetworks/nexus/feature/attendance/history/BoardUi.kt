@@ -377,7 +377,7 @@ fun BoardDaySheets(vm: BoardViewModel) {
  * all rows together. Today is highlighted.
  */
 @Composable
-private fun Grid(
+internal fun Grid(
     members: List<BoardMember>,
     days: List<LocalDate>,
     today: LocalDate,
