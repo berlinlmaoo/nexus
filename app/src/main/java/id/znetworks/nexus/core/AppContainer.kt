@@ -125,9 +125,17 @@ class AppContainer(private val context: Context) {
             val chat = id.znetworks.nexus.feature.chat.ChatApi(api)
             chat.unread()?.totalUnread ?: runCatching { chat.conversations().value.unread() }.getOrNull()
         })
+    /** "… is typing" per conversation, fed only by the socket; cleared when it drops (TYPING.md). */
+    val typing = id.znetworks.nexus.feature.chat.TypingStore()
+
     init {
+        appScope.launch { realtime.state.collect { if (it != id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED) typing.clear() } }
+        appScope.launch { while (true) { kotlinx.coroutines.delay(1_000); if (!typing.isEmpty()) typing.expire() } }
         appScope.launch {
             realtime.events.collect { e ->
+                // Who is typing where (TYPING.md); a message from them ends it.
+                if (e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.TYPING || e.name == id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED)
+                    typing.apply(e, sessionStore.current?.userId)
                 when (e.name) {
                     id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED,
                     id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED -> { chatEvents.tryEmit(e.conversationId); badges.refresh() }

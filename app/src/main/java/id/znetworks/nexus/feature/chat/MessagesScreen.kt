@@ -150,6 +150,7 @@ fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: Message
     var composing by remember { mutableStateOf(false) }
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val typingRooms by container.typing.rooms.collectAsStateWithLifecycle()
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             launch { container.chatEvents.collect { vm.load() } }
@@ -181,7 +182,7 @@ fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: Message
                                 Text(stringResource(label).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
                                     color = c.mutedFg, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
                             }
-                            items(list, key = { it.id }) { conv -> ConversationRow(conv, vm.meId) { onOpenChat(conv.id) } }
+                            items(list, key = { it.id }) { conv -> ConversationRow(conv, vm.meId, typing = typingRooms[conv.id].orEmpty().isNotEmpty()) { onOpenChat(conv.id) } }
                         }
                     }
                 }
@@ -194,7 +195,7 @@ fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: Message
 }
 
 @Composable
-internal fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> Unit) {
+internal fun ConversationRow(conv: Conversation, meId: String?, typing: Boolean = false, onClick: () -> Unit) {
     val c = Nx.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         when (conv.type) {
@@ -229,7 +230,9 @@ internal fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> U
                 }
                 // A log line reads as its own sentence, not "Bagas: Bagas Putro menambahkan …" (SYSTEM-MESSAGES).
                 val who = if (conv.type != "DM" && last?.user?.name != null && !last.isSystem) "${last.user.name.substringBefore(' ')}: " else ""
-                Text(who + preview, fontSize = 13.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                // "typing…" in place of the last message while anyone types in that room (TYPING.md).
+                if (typing) Text(stringResource(R.string.ty_typing), fontSize = 13.sp, color = c.violetText, maxLines = 1, modifier = Modifier.weight(1f))
+                else Text(who + preview, fontSize = 13.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 // A muted conversation still counts its unread, quietly (grey).
                 if (conv.unreadCount > 0) Text("${conv.unreadCount}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (conv.muted()) c.background else androidx.compose.ui.graphics.Color.White,
                     modifier = Modifier.background(if (conv.muted()) c.mutedFg else c.danger, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp))

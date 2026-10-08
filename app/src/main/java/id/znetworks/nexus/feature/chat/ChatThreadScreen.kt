@@ -1,5 +1,10 @@
 package id.znetworks.nexus.feature.chat
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.filled.PersonAdd
@@ -435,6 +440,19 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
         }
     }
 
+    // "… is typing" (TYPING.md): who types here, and what this phone says while its person types.
+    val typers = container.typing.rooms.collectAsStateWithLifecycle().value[vm.id].orEmpty()
+    val typingSender = remember(vm.id) { TypingSender(vm.id, container.realtime::sendTyping) }
+    LaunchedEffect(input) { typingSender.onText(input); if (input.isNotBlank()) { delay(TypingSender.IDLE_MS); typingSender.stop() } }
+    val rtState by container.realtime.state.collectAsStateWithLifecycle()
+    LaunchedEffect(rtState) { if (rtState != id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED) typingSender.forget() }
+    androidx.compose.runtime.DisposableEffect(vm.id) { onDispose { typingSender.stop() } }
+    // Kept in view only when the list was already at its end.
+    LaunchedEffect(typers.isNotEmpty()) {
+        val lastShown = list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (typers.isNotEmpty() && lastShown >= list.layoutInfo.totalItemsCount - 2) list.animateScrollToItem(list.layoutInfo.totalItemsCount)
+    }
+
     val conv = s.conversation
     val members = conv?.members.orEmpty().filter { it.uid != vm.meId }
     val mentionQuery = Mentions.query(input)
@@ -451,7 +469,9 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (conv?.muted() == true) Icon(Icons.Filled.NotificationsOff, stringResource(R.string.chat_muted), tint = c.mutedFg, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                 }
-                if (conv != null && conv.type != "DM") Text(stringResource(R.string.chat_members_n, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
+                // "typing…" in place of the member count while anyone types here (TYPING.md).
+                if (typers.isNotEmpty()) Text(stringResource(R.string.ty_typing), fontSize = 11.sp, color = c.violetText)
+                else if (conv != null && conv.type != "DM") Text(stringResource(R.string.chat_members_n, conv.members.size), fontSize = 11.sp, color = c.mutedFg)
             }
             // Add people: project rooms through the project, a GROUP for Manager and above (ChatRules).
             if (ChatRules.showsAddPeople(conv) && !s.deleted) IconButton(onClick = { vm.loadRoster(); addingPeople = true }, enabled = !s.adding) {
@@ -535,6 +555,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     }
                 }
             }
+            if (typers.isNotEmpty()) item(key = "typing") { TypingIndicator(typers, conv?.type == "DM") }
         }
         s.notice?.let {
             Row(Modifier.fillMaxWidth().background(c.danger.copy(alpha = 0.08f)).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -591,8 +612,8 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenInf
                     Icon(Icons.Filled.AlternateEmail, stringResource(R.string.chat_mention), tint = c.mutedFg)
                 }
                 OutlinedTextField(input, { input = it }, placeholder = { Text(stringResource(R.string.chat_placeholder)) }, maxLines = 5,
-                    shape = RoundedCornerShape(22.dp), modifier = Modifier.weight(1f))
-                IconButton(onClick = { vm.send(input) { input = "" } }, enabled = !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
+                    shape = RoundedCornerShape(22.dp), modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused) typingSender.stop() })
+                IconButton(onClick = { typingSender.stop(); vm.send(input) { input = "" } }, enabled = !s.sending && !s.uploading && (input.isNotBlank() || s.attachment != null)) {
                     if (s.sending) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.td_send), tint = c.violetText)
                 }
@@ -723,6 +744,45 @@ private fun ColumnScope.DeletedGroup(onBack: () -> Unit) {
             modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(16.dp))
         androidx.compose.material3.Button(onClick = onBack) { Text(stringResource(R.string.dg_back_to_chats)) }
+    }
+}
+
+/**
+ * The typers' photos (up to 3 overlapping, then "+N") beside one incoming bubble of three dots rising in turn;
+ * in a group, "Bagas is typing…" / "2 people are typing…" under it. Still dots when animations are off.
+ */
+@Composable
+private fun TypingIndicator(typers: List<Typer>, isDm: Boolean) {
+    val c = Nx.colors
+    val context = LocalContext.current
+    val someone = stringResource(R.string.ty_someone)
+    val one = { n: String -> context.getString(R.string.ty_one, n) }
+    val many = { n: Int -> context.resources.getQuantityString(R.plurals.ty_many, n, n) }
+    val sentence = TypingText.sentence(typers, isDm, one, someone, many)
+    val label = sentence ?: one(typers.firstOrNull()?.name ?: someone)
+    val still = remember { runCatching { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = label }) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Box {
+                typers.take(3).forEachIndexed { i, t ->
+                    Box(Modifier.padding(start = (i * 16).dp).border(1.5.dp, c.background, CircleShape)) { Avatar(t.name, t.avatar, 26.dp) }
+                }
+                if (typers.size > 3) Box(Modifier.padding(start = (3 * 16).dp).size(26.dp).background(c.muted, CircleShape).border(1.5.dp, c.background, CircleShape),
+                    contentAlignment = Alignment.Center) { Text("+${typers.size - 3}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg) }
+            }
+            Spacer(Modifier.width(6.dp))
+            Row(Modifier.clip18().background(c.card).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val cycle = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
+                repeat(3) { k ->
+                    val lift by cycle.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+                        androidx.compose.animation.core.keyframes { durationMillis = 1200; 0f at 0 + k * 150; 1f at 300 + k * 150; 0f at 600 + k * 150; 0f at 1200 }), label = "dot$k")
+                    val l = if (still) 0f else lift
+                    Box(Modifier.size(7.dp).graphicsLayer { translationY = -4.dp.toPx() * l; alpha = 0.45f + 0.55f * l }.background(c.mutedFg, CircleShape))
+                }
+            }
+        }
+        sentence?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(start = 2.dp, top = 3.dp)) }
     }
 }
 

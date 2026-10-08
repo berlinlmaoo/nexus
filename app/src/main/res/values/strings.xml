@@ -2578,4 +2578,12 @@
         <item quantity="one">It has 1 submission. Deleting the form removes it and its My Submissions history too.</item>
         <item quantity="other">It has %d submissions. Deleting the form removes them and their My Submissions history too.</item>
     </plurals>
+    <!-- Typing indicator (Berlin, 9 Oct; TYPING.md) -->
+    <string name="ty_typing">typing…</string>
+    <string name="ty_one">%1$s is typing…</string>
+    <string name="ty_someone">Someone</string>
+    <plurals name="ty_many">
+        <item quantity="one">%d person is typing…</item>
+        <item quantity="other">%d people are typing…</item>
+    </plurals>
 </resources>

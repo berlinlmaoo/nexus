@@ -2538,4 +2538,11 @@
     <plurals name="fb_delete_count">
         <item quantity="other">Ada %d pengajuan. Menghapus form ikut menghapus semuanya beserta riwayatnya di Pengajuan Saya.</item>
     </plurals>
+    <!-- Typing indicator (Berlin, 9 Oct; TYPING.md) -->
+    <string name="ty_typing">mengetik…</string>
+    <string name="ty_one">%1$s sedang mengetik…</string>
+    <string name="ty_someone">Seseorang</string>
+    <plurals name="ty_many">
+        <item quantity="other">%d orang sedang mengetik…</item>
+    </plurals>
 </resources>

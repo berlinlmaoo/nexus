@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.net.URI
@@ -43,6 +44,11 @@ data class RealtimeEvent(
     val taskId: String? = null,
     /** conversation-updated: "message" | "read" | "mute" | "membership" | "deleted" (9 Oct). */
     val reason: String? = null,
+    /** typing (9 Oct, TYPING.md) and message-created: who; typing also says name, avatar and on/off. */
+    val userId: String? = null,
+    val personName: String? = null,
+    val avatar: String? = null,
+    val typing: Boolean? = null,
 )
 
 /** The wire: event names and how their payloads read (pages/api/socket.ts, lib/socket-emitter.ts). */
@@ -56,8 +62,10 @@ object RealtimeEvents {
     const val NEW_NOTIFICATION = "new-notification"
     val TASK = setOf("task-created", "task-updated", "task-deleted", "comment-added")
     const val SPRINT_UPDATED = "sprint-updated"
+    /** "… is typing" (TYPING.md): realtime only, nothing stored or pushed. */
+    const val TYPING = "typing"
 
-    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED) + TASK
+    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED, TYPING) + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -81,7 +89,11 @@ object RealtimeEvents {
             // { kind: projects|folders|audit, projectId?, folderId? }
             WORKSPACE_CHANGED, AUDIT_CHANGED -> RealtimeEvent(name, kind = o.str("kind"), projectId = o.str("projectId"), folderId = o.str("folderId"))
             // { conversationId, lastMessageAt, reason? } / the message itself
-            CONVERSATION_UPDATED, MESSAGE_CREATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), reason = o.str("reason"))
+            CONVERSATION_UPDATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), reason = o.str("reason"))
+            // The message itself: its sender ends their "typing".
+            MESSAGE_CREATED -> RealtimeEvent(name, conversationId = o.str("conversationId"), userId = o.str("userId") ?: (o["user"] as? JsonObject)?.str("id"))
+            TYPING -> RealtimeEvent(name, conversationId = o.str("conversationId"), userId = o.str("userId"), personName = o.str("name"), avatar = o.str("avatar"),
+                typing = (o["typing"] as? JsonPrimitive)?.booleanOrNull)
             // the task itself / { taskId } / { taskId, comment }
             "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"))
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
@@ -241,6 +253,17 @@ class Realtime(
     private fun emitJoin(sock: Socket, room: String) {
         // The server takes who we are from the session, never from this payload.
         sock.emit("join-room", JSONObject().put("room", room).put("userId", me ?: "").put("name", ""))
+    }
+
+    /**
+     * `typing` for a room this socket sits in (the thread's `conversation:<id>`). Nothing goes out while the
+     * socket is down (TYPING.md: realtime only, never queued). Returns whether it was sent.
+     */
+    @Synchronized
+    fun sendTyping(conversationId: String, typing: Boolean): Boolean {
+        val sock = socket?.takeIf { connected } ?: return false
+        sock.emit(RealtimeEvents.TYPING, JSONObject().put("conversationId", conversationId).put("typing", typing))
+        return true
     }
 
     @Synchronized
