@@ -198,6 +198,9 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     // Back from settings or a task: what changed there shows here.
     var entered by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (entered) vm.load() else entered = true }
+    // Its tasks change on another device: the project room while this board is open (Berlin, 8 Oct).
+    id.znetworks.nexus.core.realtime.RealtimeRoom("project:${vm.projectId}")
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(it, vm.projectId) }) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }

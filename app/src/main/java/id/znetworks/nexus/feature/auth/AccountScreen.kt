@@ -255,6 +255,13 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
             }
             val identity = (context.applicationContext as NexusApplication).container.identity
+            // The live connection (ANDROID-REALTIME): connected / reconnecting / off.
+            val rt by (context.applicationContext as NexusApplication).container.realtime.state.collectAsStateWithLifecycle()
+            Text(stringResource(R.string.rt_line, stringResource(when (rt) {
+                id.znetworks.nexus.core.realtime.Realtime.State.CONNECTED -> R.string.rt_connected
+                id.znetworks.nexus.core.realtime.Realtime.State.CONNECTING, id.znetworks.nexus.core.realtime.Realtime.State.RECONNECTING -> R.string.rt_reconnecting
+                id.znetworks.nexus.core.realtime.Realtime.State.OFF -> R.string.rt_off
+            })), fontSize = 11.sp, color = c.mutedFg.copy(alpha = 0.7f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("${stringResource(R.string.set_footer)} · ${identity.versionName} (${identity.versionCode})", fontSize = 11.sp, color = c.mutedFg.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }

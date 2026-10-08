@@ -44,3 +44,13 @@ fun LeftTag(leftAt: String?, modifier: Modifier = Modifier, compact: Boolean = f
         fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Clip,
         modifier = modifier.semantics { contentDescription = desc }.background(c.muted, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp))
 }
+
+/** "Left" with no date (task people carry `deactivatedAt`, not a last working day; web PersonLeftTag). */
+@Composable
+fun LeftPill(modifier: Modifier = Modifier) {
+    val c = Nx.colors
+    val desc = stringResource(R.string.off_task_left)
+    Text(stringResource(R.string.off_left), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1,
+        modifier = modifier.semantics { contentDescription = desc }.background(c.muted, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp))
+}
+

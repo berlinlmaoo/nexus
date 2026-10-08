@@ -2106,4 +2106,10 @@
         <item quantity="one">%d automatic deduction dated after their last day was canceled.</item>
         <item quantity="other">%d automatic deductions dated after their last day were canceled.</item>
     </plurals>
+    <!-- Realtime + task creator (Berlin, 8 Oct) -->
+    <string name="rt_line">Realtime: %1$s</string>
+    <string name="rt_connected">connected</string>
+    <string name="rt_reconnecting">reconnecting</string>
+    <string name="rt_off">off</string>
+    <string name="td_created_by">Created by %1$s</string>
 </resources>

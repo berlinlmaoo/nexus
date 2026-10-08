@@ -366,13 +366,15 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
     // refreshes at once on a push for it, and marks read up to the last message shown.
     val container = (context.applicationContext as NexusApplication).container
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    // message-created goes to the conversation's own room (pages/api/socket.ts): sit in it while open.
+    id.znetworks.nexus.core.realtime.RealtimeRoom("conversation:${vm.id}")
     LaunchedEffect(lifecycle, vm.id) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             ChatPresence.openConversationId = vm.id
             ChatNotifier.cancel(context, vm.id)
             try {
                 launch { container.chatEvents.collect { cid -> if (cid == null || cid == vm.id) { vm.poll(); vm.markReadVisible() } } }
-                while (true) { vm.poll(); vm.markReadVisible(); delay(ChatApi.THREAD_POLL_MS) }
+                while (true) { vm.poll(); vm.markReadVisible(); delay(id.znetworks.nexus.core.realtime.RealtimeEvents.interval(container.realtime.connected, ChatApi.THREAD_POLL_LIVE_MS, ChatApi.THREAD_POLL_MS)) }
             } finally {
                 if (ChatPresence.openConversationId == vm.id) ChatPresence.openConversationId = null
             }

@@ -90,5 +90,8 @@ class ChatApi(private val api: ApiClient) {
         const val MAX_IMAGE = 8L shl 20
         const val THREAD_POLL_MS = 5_000L
         const val LIST_POLL_MS = 15_000L
+        /** While the socket is up (ANDROID-REALTIME): pings bring the news, these only catch a missed one. */
+        const val THREAD_POLL_LIVE_MS = 30_000L
+        const val LIST_POLL_LIVE_MS = 60_000L
     }
 }

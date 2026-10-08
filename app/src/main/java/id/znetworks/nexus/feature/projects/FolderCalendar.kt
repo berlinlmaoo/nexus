@@ -124,6 +124,11 @@ fun FolderCalendarScreen(folderId: String, onBack: () -> Unit, onOpenTask: (Stri
         projects = runCatching { api.projects().value }.getOrDefault(emptyList())
         configured = folders.firstOrNull { it.id == folderId }?.aggregateProjectIds.orEmpty()
     }
+    // A folder renamed or a project moved on another device (Berlin, 8 Oct).
+    id.znetworks.nexus.core.realtime.LiveRefresh(folderId, liveMs = 120_000, fallbackMs = 30_000, matches = id.znetworks.nexus.core.realtime.RealtimeEvents::isProjectsOrFolders) {
+        runCatching { api.folders().value }.getOrNull()?.let { folders = it }
+        runCatching { api.projects().value }.getOrNull()?.let { projects = it }
+    }
     LaunchedEffect(configured, projects, tick) {
         if (configured == null) return@LaunchedEffect
         loading = true

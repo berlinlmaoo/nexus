@@ -151,6 +151,8 @@ class InboxViewModel(app: Application) : AndroidViewModel(app) {
 @Composable
 fun InboxScreen(vm: InboxViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
+    // A new notification while the Inbox is open (user room, Berlin 8 Oct).
+    id.znetworks.nexus.core.realtime.LiveRefresh(Unit, liveMs = null, fallbackMs = 60_000, matches = { it.name == id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION }) { vm.load().join() }
     val c = Nx.colors
     val shown = remember(s.items, s.group) { if (s.group == InboxGroup.ALL) s.items else s.items.filter { InboxGroup.of(it.type) == s.group } }
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {

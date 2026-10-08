@@ -102,7 +102,10 @@ class MessagesViewModel(app: Application) : AndroidViewModel(app) {
 
     // Polled by the screen only while it is visible and the app in front (CHAT-REPORT: no background polling).
     /** Every [ChatApi.LIST_POLL_MS], and at once on resume or when a chat push arrives. */
-    suspend fun pollWhileVisible() { while (true) { load(); delay(ChatApi.LIST_POLL_MS) } }
+    suspend fun pollWhileVisible() {
+        // Pings (conversation-updated) arrive through chatEvents; the poll is the fallback (Berlin, 8 Oct).
+        while (true) { load(); delay(id.znetworks.nexus.core.realtime.RealtimeEvents.interval(c.realtime.connected, ChatApi.LIST_POLL_LIVE_MS, ChatApi.LIST_POLL_MS)) }
+    }
 
     suspend fun load() {
         try {

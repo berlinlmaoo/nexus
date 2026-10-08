@@ -40,6 +40,8 @@ class NexusApplication : Application() {
                 if (container.sessionStore.current != null) container.refreshCalendarWidgets()
                 // Unread counts for More and Messages; an open chat list or thread refreshes itself.
                 if (container.sessionStore.current != null) { container.badges.refresh(); container.chatEvents.tryEmit(null) }
+                // The live connection: up while in front (ANDROID-REALTIME); push covers the background.
+                container.realtime.start()
                 container.appScope.launch {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.
@@ -49,6 +51,10 @@ class NexusApplication : Application() {
                     // The offline copy, when it is getting old (never in front of the person).
                     container.offline.warmIfStale()
                 }
+            }
+
+            override fun onStop(owner: LifecycleOwner) {
+                container.realtime.stop()
             }
         })
     }

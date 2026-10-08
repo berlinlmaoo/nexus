@@ -121,6 +121,9 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     LaunchedEffect(s.deleted) { if (s.deleted) onBack() }
+    // The task's project room while it is open: an edit or a comment elsewhere shows up here (Berlin, 8 Oct).
+    id.znetworks.nexus.core.realtime.RealtimeRoom(s.task?.projectId?.let { "project:$it" })
+    id.znetworks.nexus.core.realtime.LiveRefresh(vm.taskId, liveMs = null, fallbackMs = 60_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesTask(it, vm.taskId) }) { vm.load().join() }
 
     Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -148,6 +151,8 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                         Header(t, vm, onOpenTask)
                         QuestBanner(t, s.isBoD, vm)
                         MetaCard(t, s, vm, onOpenProject)
+                        // Who made it, on every task (web c1809a0, iOS c61edb6), and whether they have since left.
+                        t.creator?.let { u -> CreatedBy(u) }
                         t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError) }
                         DescriptionCard(t, vm)
                         SubtasksCard(t, vm, onOpenTask)
@@ -701,3 +706,15 @@ internal fun activityText(a: ActivityLog): String {
     }
     return if (detail.isNullOrBlank()) action else "$action — ${detail.take(140)}"
 }
+
+@Composable
+private fun CreatedBy(u: id.znetworks.nexus.feature.projects.UserRef) {
+    val c = Nx.colors
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
+        Avatar(u.name, u.avatar, 20.dp); Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.td_created_by, u.name ?: u.email ?: "—"), fontSize = 12.sp, color = c.mutedFg,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (u.deactivatedAt != null) id.znetworks.nexus.ui.components.LeftPill(Modifier.padding(start = 6.dp))
+    }
+}
+

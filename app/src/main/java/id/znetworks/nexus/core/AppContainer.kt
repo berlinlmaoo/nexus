@@ -111,6 +111,13 @@ class AppContainer(private val context: Context) {
      */
     val chatEvents = kotlinx.coroutines.flow.MutableSharedFlow<String?>(extraBufferCapacity = 16)
 
+    /**
+     * The live connection (Socket.IO, Berlin 8 Oct): on while signed in and in front. Chat pings feed
+     * [chatEvents] (the list and an open thread refresh), anything unread-related refreshes [badges];
+     * every screen listens for its own pings through LiveRefresh.
+     */
+    val realtime = id.znetworks.nexus.core.realtime.Realtime(api.http, id.znetworks.nexus.core.net.NexusConfig.PUBLIC_BASE) { sessionStore.current }
+
     /** Unread counts for More (Inbox) and the Messages entry points (chat) (Berlin, 8 Oct). */
     val badges = Badges(appScope,
         inbox = { runCatching { id.znetworks.nexus.feature.inbox.InboxApi(api).list().unreadCount }.getOrNull() },
@@ -118,6 +125,19 @@ class AppContainer(private val context: Context) {
             val chat = id.znetworks.nexus.feature.chat.ChatApi(api)
             chat.unread()?.totalUnread ?: runCatching { chat.conversations().value.unread() }.getOrNull()
         })
+    init {
+        appScope.launch {
+            realtime.events.collect { e ->
+                when (e.name) {
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.MESSAGE_CREATED,
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.CONVERSATION_UPDATED -> { chatEvents.tryEmit(e.conversationId); badges.refresh() }
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.NEW_NOTIFICATION -> badges.refresh()
+                    id.znetworks.nexus.core.realtime.RealtimeEvents.RECONNECTED -> { chatEvents.tryEmit(null); badges.refresh() }
+                }
+            }
+        }
+    }
+
     /** The calendar widgets' three glance snapshots (phase 4); deleted on sign-out and when the server turns widgets off. */
     val calendarSnapshots = CalendarSnapshots(File(context.filesDir, "calendar-glance"),
         fetch = { calendar.glance(it).value },
@@ -180,6 +200,9 @@ class AppContainer(private val context: Context) {
                 // Pins made on the web or another device, and this phone's old local ones sent up once.
                 appScope.launch { shortcuts.syncPins() }
                 badges.refresh()
+                // A new session may connect (a refused one is forgotten); only while the app is in front.
+                realtime.reset()
+                if (androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) realtime.start()
                 // The calendar widgets: this person's snapshots now, then hourly.
                 CalendarWidgetWork.schedulePeriodic(context)
                 refreshCalendarWidgets(force = true)
@@ -188,6 +211,7 @@ class AppContainer(private val context: Context) {
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
                 calendar.clear()
                 badges.clear()
+                realtime.reset()
                 id.znetworks.nexus.feature.chat.ChatNotifier.clearAll(context)
                 // No previous person's tasks may survive on a widget (expired or deliberate alike).
                 calendarSnapshots.wipe()

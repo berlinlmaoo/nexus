@@ -1,5 +1,7 @@
 package id.znetworks.nexus.feature.admin
 
+import id.znetworks.nexus.core.realtime.RealtimeEvents
+import id.znetworks.nexus.core.realtime.LiveRefresh
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material.icons.filled.CheckCircle
@@ -159,7 +161,7 @@ object AuditRestore {
 }
 
 class AuditApi(private val api: ApiClient) {
-    suspend fun page(offset: Int, action: String?, search: String?) = api.get("/api/audit?limit=${AuditLogic.PAGE}&offset=$offset" +
+    suspend fun page(offset: Int, action: String?, search: String?, limit: Int = AuditLogic.PAGE) = api.get("/api/audit?limit=$limit&offset=$offset" +
         (action?.let { "&action=$it" } ?: "") + (search?.takeIf { it.isNotBlank() }?.let { "&search=${URLEncoder.encode(it.trim(), "UTF-8")}" } ?: ""), AuditPage.serializer())
     suspend fun entry(id: String) = api.get("/api/audit/$id", AuditEntryResponse.serializer())
     /** Really restores — never call it on production to test (ANDROID-RESTORE rules). */
@@ -201,6 +203,12 @@ fun AuditTab(onOpen: (String) -> Unit) {
     LaunchedEffect(action, q, restored) {
         if (q.isNotBlank()) delay(350) // typing: only the pause after the last key reaches the server
         try { val p = api.page(0, action, q); logs = p.logs; total = p.total; error = null } catch (e: ApiError) { error = e.describe(res) }
+    }
+    // Live (Berlin, 8 Oct): a write anywhere (a restore elsewhere turns its row to Restored). The pages
+    // already loaded are fetched again in one call, so "load more" is not lost; a failure keeps what is shown.
+    LiveRefresh(action to q, liveMs = 120_000, fallbackMs = 15_000, matches = RealtimeEvents::isAudit) {
+        val held = logs?.size ?: 0
+        runCatching { api.page(0, action, q, limit = held.coerceIn(AuditLogic.PAGE, 200)) }.onSuccess { p -> logs = p.logs; total = p.total; error = null }
     }
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.au_search)) },
@@ -261,6 +269,8 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
     var restoredNow by remember { mutableStateOf<AuditRestoreResult?>(null) }
     suspend fun load() { try { r = api.entry(id) } catch (e: ApiError) { if (r == null) error = e.describe(res) } }
     LaunchedEffect(id) { load() }
+    // Restored on another device while this entry is open: the card turns to "Restored by …".
+    LiveRefresh(id, liveMs = 120_000, fallbackMs = 15_000, matches = RealtimeEvents::isAudit) { if (!restoring) load() }
     fun restore() = scope.launch {
         restoring = true; restoreError = null
         try { restoredNow = api.restore(id); AuditRestore.changed.value++; load() }

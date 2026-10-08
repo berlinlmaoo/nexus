@@ -124,6 +124,8 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.okhttp)
+    // Realtime (Socket.IO v4 server, 8 Oct): the client runs on the app's own OkHttp; its okhttp/json deps are the app's.
+    implementation(libs.socket.io.client) { exclude(group = "com.squareup.okhttp3"); exclude(group = "org.json") }
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)

@@ -2091,4 +2091,10 @@
     <plurals name="off_deductions_canceled">
         <item quantity="other">%d potongan otomatis setelah hari terakhirnya dibatalkan.</item>
     </plurals>
+    <!-- Realtime + task creator (Berlin, 8 Oct) -->
+    <string name="rt_line">Realtime: %1$s</string>
+    <string name="rt_connected">terhubung</string>
+    <string name="rt_reconnecting">menyambung ulang</string>
+    <string name="rt_off">mati</string>
+    <string name="td_created_by">Dibuat oleh %1$s</string>
 </resources>
