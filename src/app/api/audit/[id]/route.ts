@@ -66,8 +66,9 @@ export async function GET(
       title,
       changes,
       details,
-      // A delete that kept a copy: what comes back and whether it already did. POST …/restore does it.
-      restore: row.action === 'delete' ? await restoreDetailFor(row.id) : null,
+      // An entry that kept a copy (a delete, or a revoke): what comes back and whether it already did.
+      // POST …/restore does it.
+      restore: row.action !== 'restore' ? await restoreDetailFor(row.id) : null,
     })
   } catch (error) {
     console.error('Audit entry API error:', error)

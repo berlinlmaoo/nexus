@@ -66,8 +66,9 @@ export async function GET(request: NextRequest) {
       prisma.auditLog.count({ where: where as any }),
     ])
 
-    // `restore`: on a delete that kept a copy (lib/deletion-snapshot.ts), null otherwise. One query.
-    const restore = await restoreInfoFor(logs.filter((row) => row.action === 'delete').map((row) => row.id))
+    // `restore`: on an entry that kept a copy (lib/deletion-snapshot.ts) — deletes, and the few
+    // deletes logged under their own verb (an extra day off is "revoke") — null otherwise. One query.
+    const restore = await restoreInfoFor(logs.filter((row) => row.action !== 'restore').map((row) => row.id))
 
     // `summary`: one English sentence per row, from the row alone (no per-row query). Additive — the
     // rest of each row is unchanged. GET /api/audit/[id] has the full explanation.
