@@ -134,6 +134,13 @@ struct ProjectDetailView: View {
             }
         }
         .task { await load() }
+        // Live (owner, 8 Oct 2026): a task created, moved, edited or deleted on another device — or
+        // the project itself renamed or changed — shows on the board, list, sheet, calendar and
+        // timeline without a reload. The server sends task events only to the project's room, which
+        // this screen holds while it is up; the timer is the fallback for when the connection is down.
+        .realtimeRoom("project:\(projectId)")
+        .liveRefresh(every: 60, on: [.nexusProjectTasksChanged, .nexusWorkspaceChanged],
+                     kinds: [RealtimeKind.projects], projectId: projectId) { await reloadQuietly() }
         .alert(T("Couldn't update the board"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
@@ -358,6 +365,20 @@ struct ProjectDetailView: View {
             }
         }
         loading = false
+    }
+
+    /// The live reload: the same two requests as `load`, quietly. Nothing on screen changes unless
+    /// both answer — no spinner, no error page, and no saved copy swapped in for a board that was
+    /// live a moment ago. A board that never loaded is left to its own retry button.
+    private func reloadQuietly() async {
+        guard detail != nil, !loading else { return }
+        guard let d = try? await APIClient.shared.project(projectId),
+              let all = try? await APIClient.shared.projectTasks(projectId) else { return }
+        detail = d
+        lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
+        if !visibleTabs.contains(tab) { tab = .board }
+        cachedFrom = nil
+        error = nil
     }
 
     /// The board as it stood the last time the server answered. Lanes and tasks are merged by the

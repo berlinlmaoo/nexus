@@ -41,6 +41,8 @@ final class ChatStore {
     @ObservationIgnored private var lastRefresh: Date?
     @ObservationIgnored private var refreshing = false
     @ObservationIgnored private var ownerId: String?
+    /// A forced refresh that arrived inside the throttle window, run when the window ends.
+    @ObservationIgnored private var trailing: Task<Void, Never>?
 
     private init() {}
 
@@ -132,9 +134,10 @@ final class ChatStore {
     }
 
     /// Re-count the badge. Throttled to one request per 20 seconds, because it runs on every
-    /// appearance of Home and More and on every return to the app; `force` (a chat push arrived)
-    /// shortens that to 3 seconds, so a busy group pushing every second costs one request, not
-    /// one per message per badge on screen.
+    /// appearance of Home and More and on every return to the app; `force` (a chat push or a realtime
+    /// event arrived) shortens that to 3 seconds, so a busy group pushing every second costs one
+    /// request, not one per message per badge on screen — plus one at the end of the window, so the
+    /// last message of the burst is counted.
     func refreshUnread(userId: String? = nil, force: Bool = false) async {
         if let userId, userId != ownerId {
             // Somebody else signed in on this launch: nothing of the previous person's may show.
@@ -144,8 +147,13 @@ final class ChatStore {
             mutedUntilById = [:]
             lastRefresh = nil
         }
-        if refreshing { return }
-        if let last = lastRefresh, Date().timeIntervalSince(last) < (force ? 3 : 20) { return }
+        let throttled = lastRefresh.map { Date().timeIntervalSince($0) < (force ? 3 : 20) } ?? false
+        if refreshing || throttled {
+            // A forced refresh is owed rather than dropped: the second message of a burst must be
+            // counted too, and with the realtime connection up nothing else may come along to count it.
+            if force { refreshWhenWindowEnds() }
+            return
+        }
         refreshing = true
         defer { refreshing = false }
         if unreadEndpoint != false {
@@ -166,6 +174,17 @@ final class ChatStore {
         // The old server: the whole list is the only place the counts live. `conversationsPage`
         // feeds `absorb`, which sets the total.
         _ = try? await APIClient.shared.conversationsPage()
+    }
+
+    private func refreshWhenWindowEnds() {
+        guard trailing == nil else { return }
+        let wait = max(0.2, 3 - (lastRefresh.map { Date().timeIntervalSince($0) } ?? 0))
+        trailing = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard let self else { return }
+            self.trailing = nil
+            await self.refreshUnread(force: true)
+        }
     }
 
     private func localTotal() -> Int {

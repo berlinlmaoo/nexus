@@ -36,6 +36,9 @@ struct MessagesView: View {
     /// One background refresh at a time: a busy group pushing every second would otherwise stack
     /// up a list fetch per message.
     @State private var refreshing = false
+    /// A refresh was asked for while one was running: one more pass follows it.
+    @State private var refreshAgain = false
+    @State private var realtime = RealtimeClient.shared
 
     /// A chat list and the chat itself are the pair every messaging app puts side by side once
     /// there is room, because the whole job is moving between conversations. Pushing a thread and
@@ -79,11 +82,12 @@ struct MessagesView: View {
         }
         // Same reason as the thread, at a calmer pace: this only moves badges and previews. Only
         // while the app is in front — `.task(id:)` cancels the loop when the phase changes and
-        // starts a fresh one on the way back.
-        .task(id: scenePhase == .active) {
+        // starts a fresh one on the way back. Stretched while the realtime connection is up: it
+        // brings every chat's news itself (`.nexusChatPush` below), and the timer is a safety net.
+        .task(id: ChatPollPace(active: scenePhase == .active, live: realtime.isConnected)) {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(LiveRefreshPolicy.interval(15)))
                 if Task.isCancelled { return }
                 await refreshQuietly()
             }
@@ -92,7 +96,8 @@ struct MessagesView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refreshQuietly() } }
         }
-        // A chat push while the app is open: some conversation just moved.
+        // A chat push while the app is open, or the realtime connection's word: some conversation
+        // just moved.
         .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { _ in
             Task { await refreshQuietly() }
         }
@@ -305,12 +310,21 @@ struct MessagesView: View {
     /// The list again, without the skeleton or an error screen: for the timer, a push and a return
     /// to the app. A failure leaves what is on screen alone.
     private func refreshQuietly() async {
-        guard !refreshing, !loading else { return }
+        guard !loading else { return }
+        // Not dropped while one is running: news that lands mid-fetch may be newer than what that
+        // fetch will return, and with the realtime connection up the next timer is minutes away.
+        if refreshing {
+            refreshAgain = true
+            return
+        }
         refreshing = true
         defer { refreshing = false }
-        do { convos = try await APIClient.shared.conversations() }
-        catch APIError.unauthorized { auth.logout() }
-        catch {}
+        repeat {
+            refreshAgain = false
+            do { convos = try await APIClient.shared.conversations() }
+            catch APIError.unauthorized { auth.logout(); return }
+            catch {}
+        } while refreshAgain
     }
 }
 
@@ -499,6 +513,9 @@ struct ChatThreadView: View {
     /// and polling after it would skip whatever somebody else posted a moment before it.
     @State private var pollAnchor: String?
     @State private var pollInFlight = false
+    /// A poll was asked for while one was out: one more follows it (see `pollNewer`).
+    @State private var pollAgain = false
+    @State private var realtime = RealtimeClient.shared
     /// Whether this server answers `after=` (nil until a poll has shown it either way). Only a
     /// hint for the page size: every answer is checked on its own, so a server updated while the
     /// thread is open is picked up by the next poll.
@@ -647,11 +664,12 @@ struct ChatThreadView: View {
                     lastMessageChanged(from: old, to: new, proxy: proxy)
                 }
                 .task { await firstLoad() }
-                // The iOS client has no socket, so an open thread refreshes itself — only while it is
-                // on screen (.task ends with the view) and only while the app is in front (`id`
-                // restarts the loop when the phase changes, and the restart catches up at once).
-                .task(id: scenePhase == .active) { await pollWhileActive() }
-                // A push for this chat while it is open: fetch now rather than at the next tick.
+                // An open thread also refreshes itself — only while it is on screen (.task ends with
+                // the view) and only while the app is in front (`id` restarts the loop when the phase
+                // or the realtime connection changes, and the restart catches up at once).
+                .task(id: ChatPollPace(active: scenePhase == .active, live: realtime.isConnected)) { await pollWhileActive() }
+                // A push for this chat while it is open, or the realtime connection's word that it
+                // moved: fetch now rather than at the next tick.
                 .onReceive(NotificationCenter.default.publisher(for: .nexusChatPush)) { note in
                     let target = note.userInfo?["conversationId"] as? String
                     guard target == nil || target == conversationId else { return }
@@ -744,6 +762,8 @@ struct ChatThreadView: View {
             ChatPresence.visibleConversationId = conversationId
             ChatPresence.clearDelivered(conversationId: conversationId)
         }
+        // `message-created` goes only to the conversation's room, as on the web (ChatThread.tsx).
+        .realtimeRoom("conversation:\(conversationId)")
         .onDisappear {
             if ChatPresence.visibleConversationId == conversationId {
                 ChatPresence.visibleConversationId = nil
@@ -1321,7 +1341,9 @@ struct ChatThreadView: View {
             await pollNewer()
         }
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(5))
+            // Every 5 s on its own; every 30 s while the realtime connection is up, which brings this
+            // chat's messages the moment they are sent and leaves the poll as a safety net.
+            try? await Task.sleep(for: .seconds(realtime.isConnected ? 30 : 5))
             if Task.isCancelled { return }
             await pollNewer()
         }
@@ -1331,6 +1353,20 @@ struct ChatThreadView: View {
     /// page: a long chat that has scrolled back keeps what it loaded, and nothing in between goes
     /// missing however many messages arrived.
     private func pollNewer() async {
+        // One poll at a time, but one asked for while another is out is not dropped: a message's
+        // realtime event can land while a poll that left before the message was saved is still on
+        // its way back without it, and with the connection up the next tick is 30 s off.
+        if pollInFlight {
+            pollAgain = true
+            return
+        }
+        repeat {
+            pollAgain = false
+            await pollNewerOnce()
+        } while pollAgain
+    }
+
+    private func pollNewerOnce() async {
         guard !pollInFlight else { return }
         guard serverAnswered, let anchor = pollAnchor else { await loadLatest(); return }
         pollInFlight = true
@@ -1702,4 +1738,11 @@ private struct SwipeToReply<Content: View>: View {
                     }
             )
     }
+}
+
+/// What restarts a chat screen's polling loop: the app coming to the front or leaving it, and the
+/// realtime connection coming up or going down (the pace changes with it).
+private struct ChatPollPace: Equatable {
+    let active: Bool
+    let live: Bool
 }

@@ -63,6 +63,9 @@ struct InboxView: View {
             }
         }
         .task { await load() }
+        // A notification written for this person while the Inbox is open shows up in it, as it does
+        // on the web: RealtimeClient posts this on the server's `new-notification`.
+        .liveRefresh(every: 60, on: [.nexusInboxChanged]) { await reloadQuietly() }
     }
 
     @ViewBuilder private var content: some View {
@@ -137,6 +140,18 @@ struct InboxView: View {
         } catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Login required to open the inbox.") }
         loading = false
+    }
+
+    /// The live reload: the list as the server has it now. Quiet — a failure leaves the list alone,
+    /// and a screen showing an error keeps its own retry.
+    private func reloadQuietly() async {
+        guard !loading, error == nil else { return }
+        guard let res = try? await APIClient.shared.notifications() else { return }
+        items = res.notifications ?? []
+        unread = res.unreadCount ?? items.filter { !$0.isRead }.count
+        InboxBadge.shared.set(unread)
+        tabs = notificationFilterTabs(items)
+        if !tabs.contains(where: { $0.group == group }) { group = .all }
     }
 
     /// Tapping a row: mark it read, and go where the web's inbox would go.

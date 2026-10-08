@@ -2034,6 +2034,12 @@ final class AppLanguage {
         "This account has attendance records or requests. Use Offboard instead, so they stay.": "Akun ini punya data absensi/pengajuan. Pakai Offboard supaya datanya tetap ada.",
         // Task detail: who made the task (8 Oct)
         "Created by %@": "Dibuat oleh %@",
+        // Tuning Room: the realtime connection's status line (8 Oct)
+        "Realtime: connected": "Realtime: tersambung",
+        "Realtime: connecting…": "Realtime: menyambungkan…",
+        "Realtime: reconnecting…": "Realtime: menyambung ulang…",
+        "Realtime: off": "Realtime: mati",
+        "Realtime: off — sign in again": "Realtime: mati — masuk lagi untuk menyambung",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

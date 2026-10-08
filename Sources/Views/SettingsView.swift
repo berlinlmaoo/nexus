@@ -170,6 +170,9 @@ struct SettingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.danger.opacity(0.3)))
                     .padding(.top, 10)
 
+                    // Whether this device is live, so a Mac that shows nothing new can be told apart
+                    // from a Mac that is not connected.
+                    RealtimeStatusLine()
                     Text("NEXUS by Z Networks").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
                 }
                 .padding(16)

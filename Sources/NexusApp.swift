@@ -109,6 +109,16 @@ struct NexusApp: App {
             // finding out here beats finding out from the first refused request.
             .task { await versionGate.checkPolicy(force: true) }
             .task { await RemoteConfig.shared.refresh(force: true) }
+            // The realtime connection (Sources/Realtime) follows the session and whether the app is in
+            // front: open while signed in and active (on the Mac, while a window is visible), closed in
+            // the background and on sign-out. Here on the outer stack rather than on RootView, so it
+            // keeps following both while the update gate stands in RootView's place.
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                RealtimeClient.shared.reconcile(session: auth.session, phase: phase)
+            }
+            .onChange(of: auth.session?.token, initial: true) { _, _ in
+                RealtimeClient.shared.reconcile(session: auth.session, phase: scenePhase)
+            }
         }
         // The Calendar's keyboard commands, as a Calendar menu (CalendarView.swift): in the menu bar on
         // the Mac and from iPadOS 26, in the ⌘ overlay on earlier iPads. The iPhone shows no menu; the

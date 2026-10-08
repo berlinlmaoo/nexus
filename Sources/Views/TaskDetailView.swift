@@ -86,6 +86,13 @@ struct TaskDetailView: View {
             if let task { QuestComposerSheet(taskId: task.id, taskTitle: task.title) { await load() } }
         }
         .task { await load() }
+        // Live (owner, 8 Oct 2026): a comment, a status or assignee change, a new subtask made on
+        // another device shows here without a reload. Task events go only to the project's room, so
+        // the screen holds it once the task has said which project it lives in.
+        .realtimeRoom(task?.projectId.map { "project:\($0)" })
+        .liveRefresh(every: 60, on: [.nexusProjectTasksChanged], projectId: task?.projectId, taskId: taskId) {
+            await reloadQuietly()
+        }
     }
 
     /// Quest membership banner ("+N XP" per quest) + the BoD "Make it a quest" button.
@@ -408,6 +415,22 @@ struct TaskDetailView: View {
             }
         }
         loading = false
+    }
+    /// The live reload: the task as the server has it now, quietly, and careful with what is being
+    /// typed. The title and description boxes follow the server only while they still hold what was
+    /// last loaded; the comment and subtask boxes are never touched.
+    private func reloadQuietly() async {
+        guard task != nil, !loading else { return }
+        guard let t = try? await APIClient.shared.taskDetail(taskId) else { return }
+        let titleUntouched = editTitle == (task?.title ?? "")
+        let descriptionUntouched = descDraft == descOriginal
+        task = t
+        if titleUntouched { editTitle = t.title }
+        if descriptionUntouched {
+            descDraft = blockText(t.description)
+            descOriginal = descDraft
+        }
+        cachedFrom = nil
     }
     private func update(_ t: TaskDetail, _ fields: [String: Any]) async {
         try? await APIClient.shared.updateTask(t.id, fields); await load()

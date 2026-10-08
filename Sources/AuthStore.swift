@@ -126,6 +126,10 @@ final class AuthStore {
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         Viewer.shared.reset()
+        // Nor the realtime connection: it is authenticated as this person, and the next one to sign in
+        // must not hear a single event meant for them. NexusApp would close it on the next render too;
+        // this closes it now.
+        RealtimeClient.shared.reset()
         // Nor a conversation. GIDEON's transcript outlives the panel that draws it, so without this
         // the next person to sign in on the same phone opens it onto somebody else's questions —
         // and onto the file they attached to one.
