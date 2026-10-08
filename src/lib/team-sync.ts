@@ -1,6 +1,8 @@
 import prisma from "./prisma"
 import { Prisma } from "../generated/prisma"
 import { syncProjectRoomSafe, syncUserRoomsSafe } from "./chat-membership"
+import { emitWorkspaceChanged } from "./socket-emitter"
+import { emitProjectChanged } from "./workspace-realtime"
 
 /**
  * Team ↔ Project access propagation.
@@ -12,7 +14,8 @@ import { syncProjectRoomSafe, syncUserRoomsSafe } from "./chat-membership"
  *
  * Every change here also moves the project's chat room (lib/chat-membership.ts), but only when rows
  * actually changed, and only outside a transaction — inside one the room would be synced against rows
- * that are not committed yet (no caller passes one today).
+ * that are not committed yet (no caller passes one today). The same changes ping open project views
+ * (`workspace-changed`, lib/socket-emitter.ts) under the same two conditions: who sees which project moved.
  */
 
 function chatFollows(db: DbClient): boolean {
@@ -78,7 +81,10 @@ export async function syncTeamProjectAccess(teamId: string, projectId: string, d
       data: toCreate,
       skipDuplicates: true,
     })
-    if (chatFollows(db)) await syncProjectRoomSafe(projectId, `team-linked:${teamId}`)
+    if (chatFollows(db)) {
+      await syncProjectRoomSafe(projectId, `team-linked:${teamId}`)
+      await emitProjectChanged(projectId, { userIds: toCreate.map((row) => row.userId) })
+    }
   }
 }
 
@@ -145,7 +151,10 @@ export async function syncTeamMemberAccess(teamId: string, userId: string, db: D
       data: toCreate,
       skipDuplicates: true,
     })
-    if (chatFollows(db)) await syncUserRoomsSafe(userId, `team-joined:${teamId}`)
+    if (chatFollows(db)) {
+      await syncUserRoomsSafe(userId, `team-joined:${teamId}`)
+      emitWorkspaceChanged(null, { kind: "projects" }, [userId])
+    }
   }
 }
 
@@ -169,7 +178,10 @@ export async function revokeTeamProjectAccess(teamId: string, projectId: string,
       source: `team:${teamId}`,
     },
   })
-  if (count > 0 && chatFollows(db)) await syncProjectRoomSafe(projectId, `team-unlinked:${teamId}`)
+  if (count > 0 && chatFollows(db)) {
+    await syncProjectRoomSafe(projectId, `team-unlinked:${teamId}`)
+    await emitProjectChanged(projectId, { userIds: teamMembers.map((m) => m.userId) })
+  }
 }
 
 /**
@@ -191,5 +203,8 @@ export async function revokeTeamMemberAccess(teamId: string, userId: string, db:
       source: `team:${teamId}`,
     },
   })
-  if (count > 0 && chatFollows(db)) await syncUserRoomsSafe(userId, `team-left:${teamId}`)
+  if (count > 0 && chatFollows(db)) {
+    await syncUserRoomsSafe(userId, `team-left:${teamId}`)
+    emitWorkspaceChanged(null, { kind: "projects" }, [userId])
+  }
 }

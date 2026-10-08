@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { syncProjectRoomSafe } from '@/lib/chat-membership'
+import { emitWorkspaceChanged } from '@/lib/socket-emitter'
 
 const NOTION_BASE = 'https://api.notion.com/v1'
 
@@ -200,6 +201,8 @@ async function importFromNotion(
         },
       })
       await syncProjectRoomSafe(project.id, 'import-notion')
+      // In the workspace's sidebars as soon as it exists; its tasks keep arriving after this.
+      emitWorkspaceChanged(workspaceId, { kind: 'projects', projectId: project.id, actorId: userId })
 
       // Create default task list
       const taskList = await prisma.taskList.create({

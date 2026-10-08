@@ -6,6 +6,7 @@ import { resolveUploadedImageType } from "@/lib/image-sniff"
 import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 
@@ -92,10 +93,12 @@ export async function POST(request: NextRequest) {
     await writeFile(path.join(uploadDir, fileName), buffer)
 
     const url = `/api/files/project-icons/${fileName}?v=${Date.now()}`
-    await prisma.projectFolder.update({
+    const updated = await prisma.projectFolder.update({
       where: { id: folderId },
       data: { icon: url },
+      select: { workspaceId: true },
     })
+    emitWorkspaceChanged(updated.workspaceId, { kind: "folders", folderId, actorId: session.user.id })
 
     logAudit({ action: "update", entityType: "project_folder_icon", entityId: folderId, userId: session.user.id, request })
 

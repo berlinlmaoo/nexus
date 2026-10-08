@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
+import { invalidateAuditViews, invalidateProjectViews } from "./invalidate";
 
 // SOCKET event names → query invalidation.
 //
@@ -56,6 +57,19 @@ const RECONNECT_TERMS = ["messages", "conversation", "notification"];
  * setQueryData patches after each save).
  */
 const NEVER_BLANKET_INVALIDATE = ["sheet"];
+
+/**
+ * `workspace-changed` and `audit-changed` (server since 8 Oct 2026) are pings with no data: the server
+ * sends them to rooms it put this socket in by itself (`workspace:<id>` per workspace the user is in,
+ * `audit` if they may read the audit log, plus their own `user:<id>`). They name what moved, and the
+ * views refetch it through the normal API. Older servers never send them; nothing else depends on them.
+ *
+ * A burst is folded into one refetch: a drag reorder of 20 folders is 20 PATCHes and 20 pings. Trailing
+ * debounce, capped so a steady stream (an import) still refreshes every couple of seconds. The actor's
+ * own pings are NOT skipped: their other tabs and devices have to move too.
+ */
+const PING_DEBOUNCE_MS = 500;
+const PING_MAX_WAIT_MS = 2_000;
 
 function keyHasTerm(key: unknown, terms: string[]): boolean {
   const parts = Array.isArray(key) ? key.map((k) => String(k).toLowerCase()) : [String(key).toLowerCase()];
@@ -128,6 +142,44 @@ export function RealtimeProvider({
             socket.emit("join-room", { room, userId, name: userName }),
           );
         };
+        // What the pending workspace/audit pings ask for, flushed as one invalidation per burst.
+        const pending = { tree: false, allProjects: false, audit: false, projectIds: new Set<string>() };
+        let flushTimer: ReturnType<typeof setTimeout> | null = null;
+        let burstStartedAt = 0;
+        const flushPings = () => {
+          if (flushTimer) clearTimeout(flushTimer);
+          flushTimer = null;
+          burstStartedAt = 0;
+          if (pending.tree) invalidateProjectViews(queryClient, pending.allProjects ? "all" : new Set(pending.projectIds));
+          if (pending.audit) invalidateAuditViews(queryClient);
+          pending.tree = false;
+          pending.allProjects = false;
+          pending.audit = false;
+          pending.projectIds.clear();
+        };
+        const schedulePings = () => {
+          const now = Date.now();
+          if (!burstStartedAt) burstStartedAt = now;
+          if (flushTimer) clearTimeout(flushTimer);
+          flushTimer = setTimeout(flushPings, Math.max(0, Math.min(PING_DEBOUNCE_MS, burstStartedAt + PING_MAX_WAIT_MS - now)));
+        };
+        const onWorkspaceChanged = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { kind?: unknown; projectId?: unknown };
+          if (data.kind === "audit") {
+            pending.audit = true;
+          } else {
+            // "projects" or "folders" (or a kind a newer server adds): the tree refetches either way, since
+            // a folder change moves projects and a project change moves what a folder holds.
+            pending.tree = true;
+            if (typeof data.projectId === "string") pending.projectIds.add(data.projectId);
+          }
+          schedulePings();
+        };
+        const onAuditChanged = () => {
+          pending.audit = true;
+          schedulePings();
+        };
+
         // The first connect of this provider is the initial load (queries fetch on their own);
         // every later one is a reconnect after a drop, and must catch up on what was missed.
         let connectedBefore = false;
@@ -136,6 +188,12 @@ export function RealtimeProvider({
           joinAll();
           if (connectedBefore) {
             queryClient.invalidateQueries({ predicate: (q) => keyHasTerm(q.queryKey, RECONNECT_TERMS) });
+            // Workspace and audit pings sent while offline are gone too: the project tree, every open
+            // project header and the audit catch up now.
+            pending.tree = true;
+            pending.allProjects = true;
+            pending.audit = true;
+            flushPings();
           }
           connectedBefore = true;
         };
@@ -143,6 +201,8 @@ export function RealtimeProvider({
 
         socket.on("connect", onConnect);
         socket.on("disconnect", onDisconnect);
+        socket.on("workspace-changed", onWorkspaceChanged);
+        socket.on("audit-changed", onAuditChanged);
         if (socket.connected) onConnect();
 
         const eventHandlers = REALTIME_EVENTS.map((evt) => {
@@ -169,6 +229,9 @@ export function RealtimeProvider({
         cleanups.push(() => {
           socket.off("connect", onConnect);
           socket.off("disconnect", onDisconnect);
+          socket.off("workspace-changed", onWorkspaceChanged);
+          socket.off("audit-changed", onAuditChanged);
+          if (flushTimer) clearTimeout(flushTimer);
           eventHandlers.forEach((off) => off());
         });
       })

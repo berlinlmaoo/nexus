@@ -11,6 +11,7 @@ import prisma from "@/lib/prisma"
 import { isDeletedAccountEmail } from "@/lib/account-deletion"
 import { sessionVersionRejects } from "@/lib/session-version"
 import { conversationMemberAccess } from "@/lib/chat-access"
+import { resolveAuditAccess } from "@/lib/audit-query"
 
 const log = createLogger("socket")
 
@@ -25,6 +26,20 @@ interface SocketWithIO extends NetSocket {
 export interface NextApiResponseWithSocket extends NextApiResponse {
   socket: SocketWithIO
 }
+
+/**
+ * Rooms the SERVER puts a socket in on connect, worked out from the database (serverAssignedRooms).
+ * A client can never `join-room` any of them: canJoinRoom has no case for `workspace:` and refuses a
+ * name without a `<kind>:` prefix.
+ *
+ *   workspace:<id>  every workspace the user is a WorkspaceMember of
+ *   workspace-all   system admins (User.role ADMIN), whose project and folder lists span every workspace
+ *   audit           users who pass resolveAuditAccess, i.e. may open Control Room → Audit
+ */
+const ALL_WORKSPACES_ROOM = "workspace-all"
+const AUDIT_ROOM = "audit"
+/** A burst of audit writes (a bulk action, a reorder) reaches the audit room as one ping. */
+const AUDIT_PING_COALESCE_MS = 250
 
 const ALLOWED_ORIGINS = [
   process.env.NEXTAUTH_URL || "http://localhost:3000",
@@ -85,6 +100,8 @@ export function initializeSocketServer(
    * the only rooms either app actually joins (grep `useRealtimeRoom` / `join-room`).
    */
   async function canJoinRoom(userId: string, room: string): Promise<boolean> {
+    // `workspace:<id>`, `workspace-all` and `audit` are not joinable here on purpose: membership in
+    // those comes from the database at connect time (serverAssignedRooms), never from a client request.
     const sep = room.indexOf(":")
     if (sep < 1) return false
     const kind = room.slice(0, sep)
@@ -105,6 +122,30 @@ export function initializeSocketServer(
         return (await resolveSheetAccess(userId, id, ["VIEWER"])).allowed
       default:
         return false
+    }
+  }
+
+  /**
+   * The rooms this user belongs in by who they are, not by what they asked for: one per workspace
+   * they are a member of (for `workspace-changed`), every workspace for a system admin (their project
+   * list spans them all), and `audit` when they may read the audit log (for `audit-changed`).
+   *
+   * Best effort: if the lookup fails the socket still connects, just without these rooms, and the
+   * views fall back to refetching on their own (focus, navigation, the reconnect catch-up).
+   */
+  async function serverAssignedRooms(userId: string, isSystemAdmin: boolean): Promise<string[]> {
+    try {
+      const [memberships, audit] = await Promise.all([
+        prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } }),
+        resolveAuditAccess(userId),
+      ])
+      const rooms = memberships.map((m) => `workspace:${m.workspaceId}`)
+      if (isSystemAdmin) rooms.push(ALL_WORKSPACES_ROOM)
+      if (audit.ok) rooms.push(AUDIT_ROOM)
+      return rooms
+    } catch (error) {
+      log.warn("could not work out workspace/audit rooms; connected without them", { userId, error: String(error) })
+      return []
     }
   }
 
@@ -152,7 +193,7 @@ export function initializeSocketServer(
       // leftover JWT must not be allowed back into those rooms.
       const owner = await prisma.user.findUnique({
         where: { id: token.id as string },
-        select: { email: true, sessionVersion: true, deactivatedAt: true },
+        select: { email: true, sessionVersion: true, deactivatedAt: true, role: true },
       })
       if (!owner || isDeletedAccountEmail(owner.email)) return next(new Error("Invalid session"))
       // Offboarded (lib/offboarding.ts): out of the company, so out of its chat rooms too.
@@ -163,6 +204,10 @@ export function initializeSocketServer(
 
       socket.data.userId = token.id as string
       socket.data.userName = token.name as string
+      // Only now, after every refusal above: a deleted, offboarded or revoked session never gets here.
+      // Joined synchronously on "connection" below, so the rooms are in place before the client's
+      // connect event fires and nothing emitted after that can miss it.
+      socket.data.serverRooms = await serverAssignedRooms(token.id as string, owner.role === "ADMIN")
       next()
     } catch {
       next(new Error("Authentication failed"))
@@ -170,6 +215,9 @@ export function initializeSocketServer(
   })
 
   io.on("connection", (socket) => {
+    const serverRooms = socket.data.serverRooms as string[] | undefined
+    if (serverRooms?.length) socket.join(serverRooms)
+
     let currentRoom: string | null = null
     let currentUser: { userId: string; name: string; avatar: string | null } | null = null
 
@@ -391,6 +439,26 @@ export function initializeSocketServer(
 
   eventBus.on(BUS_EVENTS.SHEET_STRUCTURE, (data: { sheetId: string; actorId: string }) => {
     io.to(`sheet:${data.sheetId}`).emit("sheet-structure", { actorId: data.actorId })
+  })
+
+  // Projects/folders of a workspace changed (lib/socket-emitter.ts emitWorkspaceChanged). The payload is
+  // ids only and already stripped to its four fields there. One emit to the union of rooms, so a socket
+  // in several of them (its workspace and its own user room) gets it once.
+  eventBus.on(BUS_EVENTS.WORKSPACE_CHANGED, (data: { workspaceId: string | null; userIds?: string[]; payload: unknown }) => {
+    const rooms = (data.userIds ?? []).map((id) => `user:${id}`)
+    if (data.workspaceId) rooms.push(`workspace:${data.workspaceId}`, ALL_WORKSPACES_ROOM)
+    if (rooms.length > 0) io.to(rooms).emit("workspace-changed", data.payload)
+  })
+
+  // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes
+  // out once, after the last write in the window has committed. Nothing is looked up per write.
+  let auditPing: ReturnType<typeof setTimeout> | null = null
+  eventBus.on(BUS_EVENTS.AUDIT_CHANGED, () => {
+    if (auditPing) return
+    auditPing = setTimeout(() => {
+      auditPing = null
+      io.to(AUDIT_ROOM).emit("audit-changed", { kind: "audit" })
+    }, AUDIT_PING_COALESCE_MS)
   })
 
   res.socket.server.io = io

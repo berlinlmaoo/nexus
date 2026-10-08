@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma'
 import crypto from 'crypto'
 import { logAudit } from '@/lib/audit'
 import { syncProjectRoomSafe } from '@/lib/chat-membership'
+import { emitProjectChanged } from '@/lib/workspace-realtime'
 
 export async function GET(
   _req: Request,
@@ -148,6 +149,7 @@ export async function POST(
         data: { accepted: true },
       })
       await syncProjectRoomSafe(projectId, 'project-invite')
+      await emitProjectChanged(projectId, { actorId: session.user.id, userIds: [existingUser.id] })
 
       logAudit({ action: "create", entityType: "invite", entityId: invite.id, entityName: email, userId: session.user.id, metadata: { projectId, role, accepted: true } })
 
@@ -175,6 +177,7 @@ export async function POST(
     })
 
     await syncProjectRoomSafe(projectId, 'project-invite-new-user')
+    await emitProjectChanged(projectId, { actorId: session.user.id })
 
     logAudit({ action: "create", entityType: "invite", entityId: invite.id, entityName: email, userId: session.user.id, metadata: { projectId, role, newUserCreated: true } })
 

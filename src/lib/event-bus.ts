@@ -29,4 +29,8 @@ export const BUS_EVENTS = {
   CONVERSATION_MEMBERSHIP: "conversation-membership",
   SHEET_CELLS: "sheet-cells",
   SHEET_STRUCTURE: "sheet-structure",
+  /** Projects or folders of a workspace changed → `workspace:<id>` (+ named `user:<id>`) rooms. An invalidation ping, no data. */
+  WORKSPACE_CHANGED: "workspace-changed",
+  /** An audit row was written (or a restore landed) → the server-assigned `audit` room. No data. */
+  AUDIT_CHANGED: "audit-changed",
 } as const

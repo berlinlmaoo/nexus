@@ -10,6 +10,7 @@ import {
   type RestoreResult,
   type SnapshotData,
 } from "@/lib/deletion-snapshot-core"
+import { emitAuditChanged } from "@/lib/socket-emitter"
 
 /**
  * Restorable deletes (owner, 8 Oct 2026: Control Room → Audit → Restore). How rows are collected and
@@ -73,6 +74,9 @@ export async function deleteKeepingSnapshot(input: {
     })
     await input.remove(tx)
   }, TX)
+  // The route wrote the audit row BEFORE this copy existed, so an audit view that refetched on that
+  // write saw the delete without its Restore block. Ping again now that the copy is committed.
+  emitAuditChanged()
 }
 
 export type RestoreFailure = "NOT_RESTORABLE" | "ALREADY_RESTORED" | "ALREADY_EXISTS" | "PARENT_MISSING"

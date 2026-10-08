@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 // If the FolderPin table doesn't exist yet (migration not applied to this DB), behave as "no pins"
 // instead of 500ing — mirrors the graceful degradation in project-folders/route.ts (duck-typed, since
@@ -71,6 +72,8 @@ export async function POST(req: NextRequest) {
     } else {
       await prisma.folderPin.deleteMany({ where: { userId: user.id, folderId } })
     }
+    // Pins are per person, so nobody else's view changes: only this user's other tabs and devices.
+    emitWorkspaceChanged(null, { kind: "folders", folderId, actorId: user.id }, [user.id])
     return NextResponse.json({ pinned })
   } catch (error) {
     if (isMissingSchemaError(error)) {

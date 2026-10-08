@@ -12,6 +12,7 @@ import {
   ProjectAutoAssignConfigError,
 } from "@/lib/project-auto-assign"
 import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
+import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 
 async function canManageProject(userId: string, projectId: string) {
   if (await isSystemAdminUser(userId)) {
@@ -276,6 +277,15 @@ export async function PATCH(
       userId: session.user.id!, request, metadata: { changes: body },
     })
 
+    // Any PATCH (folder, name, colour, icon, status/archive, position, settings) shows up live for everyone
+    // with the sidebar, the projects page, a folder page or this project open. Its members' own rooms too:
+    // a guest added from outside the workspace is not in the workspace room.
+    emitWorkspaceChanged(
+      existing.workspaceId,
+      { kind: "projects", projectId: project.id, actorId: session.user.id! },
+      existing.members.map((m) => m.userId),
+    )
+
     // Webhook: project.updated
     dispatchWebhookEvent("project.updated", {
       projectId: (await params).projectId,
@@ -300,6 +310,8 @@ export async function DELETE(
 
     const existing = await prisma.project.findUnique({
       where: { id: (await params).projectId },
+      // Only for the realtime ping below: members outside the workspace get it in their own room.
+      include: { members: { select: { userId: true } } },
     })
 
     if (!existing) {
@@ -323,6 +335,13 @@ export async function DELETE(
       deletedById: session.user.id!, auditLogId,
       remove: (tx) => tx.project.delete({ where: { id: projectId } }),
     })
+
+    // Gone from every open sidebar / projects page / folder page, and an open project page refetches into its 404.
+    emitWorkspaceChanged(
+      existing.workspaceId,
+      { kind: "projects", projectId, actorId: session.user.id! },
+      existing.members.map((m) => m.userId),
+    )
 
     return NextResponse.json({ message: "Project deleted" })
   } catch (error) {
