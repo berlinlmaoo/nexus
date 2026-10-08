@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { findUnit, ORG_CHART_WORKSPACE, orgChartGuard } from "@/lib/org-chart"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 async function isOrgMember(userId: string) {
   return Boolean(await prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId: ORG_CHART_WORKSPACE } }, select: { id: true } }))
@@ -41,9 +42,23 @@ export async function DELETE(req: NextRequest) {
     const userId = req.nextUrl.searchParams.get("userId") ?? ""
     const unitId = req.nextUrl.searchParams.get("unitId") ?? ""
     if (!userId || !unitId) return NextResponse.json({ error: "userId dan unitId wajib ada." }, { status: 400 })
-    if (!(await findUnit(unitId))) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
-    const r = await prisma.orgUnitMember.deleteMany({ where: { unitId, userId, workspaceId: ORG_CHART_WORKSPACE } })
-    return NextResponse.json({ ok: true, removed: r.count })
+    const unit = await findUnit(unitId)
+    if (!unit) return NextResponse.json({ error: "IP/Team tidak ditemukan." }, { status: 404 })
+    const rows = await prisma.orgUnitMember.findMany({
+      where: { unitId, userId, workspaceId: ORG_CHART_WORKSPACE },
+      select: { id: true, user: { select: { name: true } } },
+    })
+    if (!rows.length) return NextResponse.json({ ok: true, removed: 0 })
+    // In the audit, and kept first so Control Room → Audit can put them back on the card.
+    const ids = rows.map((r) => r.id)
+    await restorableDelete({
+      entityType: "org_unit_member", entityId: ids[0], rootIds: ids,
+      entityName: `${rows[0].user?.name ?? "Someone"} · ${unit.name}`, workspaceId: ORG_CHART_WORKSPACE,
+      userId: g.userId, request: req, metadata: { unitId, targetUserId: userId },
+      meta: { open: { type: "org_chart", id: unitId } },
+      remove: (tx) => tx.orgUnitMember.deleteMany({ where: { id: { in: ids } } }),
+    })
+    return NextResponse.json({ ok: true, removed: ids.length })
   } catch (error) {
     console.error("[admin/org-chart] DELETE member", error)
     return NextResponse.json({ error: "Gagal melepas." }, { status: 500 })

@@ -6,6 +6,7 @@ import { docWriteRefusal } from '@/lib/write-access'
 import { canReadProjectContent } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { restorableDelete } from '@/lib/deletion-snapshot'
 import { extractTextFromTipTap } from '@/lib/tiptap-utils'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
@@ -92,14 +93,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ d
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const existing = await prisma.doc.findUnique({ where: { id: (await params).docId }, select: { title: true, projectId: true } })
+    const existing = await prisma.doc.findUnique({ where: { id: (await params).docId }, select: { title: true, projectId: true, project: { select: { workspaceId: true } } } })
     // Signed in is not enough (writes batch): the doc page's own rule, as for PATCH.
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const refusal = await docWriteRefusal(session.user.id, existing.projectId)
     if (refusal) return refusal
-    logAudit({ action: "delete", entityType: "doc", entityId: (await params).docId, entityName: existing?.title, userId: session.user.id, request: req })
-
-    await prisma.doc.delete({ where: { id: (await params).docId } })
+    // Kept first (its child docs only lose their parent and get it back), so Control Room → Audit can restore it.
+    const docId = (await params).docId
+    await restorableDelete({
+      entityType: "doc", entityId: docId, entityName: existing.title, workspaceId: existing.project?.workspaceId ?? null,
+      userId: session.user.id, request: req, metadata: { projectId: existing.projectId },
+      meta: { open: { type: "doc", id: docId, projectId: existing.projectId }, projectId: existing.projectId },
+      remove: (tx) => tx.doc.delete({ where: { id: docId } }),
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting doc:', error)

@@ -220,3 +220,10 @@ export function conflictMessage(entityType: string, soft = false): string {
     ? "It was changed or removed after it was deleted, so it can't be put back."
     : "Something has taken its place since, so it can't come back as it was."
 }
+
+/** A readable audit name from free text (a comment, a post): first line, trimmed, at most `max` characters. */
+export function auditSnippet(text: string | null | undefined, max = 80): string | null {
+  const line = String(text ?? "").replace(/\s+/g, " ").trim()
+  if (!line) return null
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line
+}

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkProjectAccess } from "@/lib/rbac"
 import { generateUniqueFormSlug } from "@/lib/form-slugs"
 import { normalizeFormAccessSchedule } from "@/lib/form-access-schedule"
@@ -100,7 +101,7 @@ export async function DELETE(
 
     const existing = await prisma.form.findUnique({
       where: { id: formId },
-      select: { projectId: true, name: true, _count: { select: { submissions: true } } },
+      select: { projectId: true, name: true, project: { select: { workspaceId: true } }, _count: { select: { submissions: true } } },
     })
 
     if (!existing) return NextResponse.json({ error: "Form not found" }, { status: 404 })
@@ -118,9 +119,14 @@ export async function DELETE(
       )
     }
 
-    await prisma.form.delete({ where: { id: formId } })
-
-    logAudit({ action: "delete", entityType: "form", entityId: formId, entityName: existing.name, userId: session.user.id, request, metadata: { submissionCount } })
+    // Kept with its submissions first, so Control Room → Audit can restore it (the force=1 guard
+    // above still asks first: a restore is a way back, not a reason to delete without looking).
+    await restorableDelete({
+      entityType: "form", entityId: formId, entityName: existing.name, workspaceId: existing.project.workspaceId,
+      userId: session.user.id, request, metadata: { submissionCount, projectId: existing.projectId },
+      meta: { open: { type: "form", id: formId, projectId: existing.projectId }, projectId: existing.projectId },
+      remove: (tx) => tx.form.delete({ where: { id: formId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -4,9 +4,11 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import {
   attendancePeriodKey,
   attendancePeriodRange,
+  formatAttendanceDateKey,
   enumerateAttendanceDates,
   getAttendanceWorkspaceContext,
   getPrimaryAttendanceTeam,
@@ -233,24 +235,26 @@ export async function DELETE(req: NextRequest) {
     const id = (req.nextUrl.searchParams.get("id") ?? "").trim()
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
 
-    const target = await prisma.attendanceRequest.findUnique({ where: { id }, select: { id: true, workspaceId: true, type: true, userId: true } })
+    const target = await prisma.attendanceRequest.findUnique({
+      where: { id },
+      select: { id: true, workspaceId: true, type: true, userId: true, startDate: true, endDate: true, user: { select: { name: true } } },
+    })
     if (!target || target.workspaceId !== workspaceId || target.type !== "DAY_OFF") {
       return NextResponse.json({ error: "Day-off tidak ditemukan." }, { status: 404 })
     }
 
-    await prisma.attendanceRequest.delete({ where: { id } })
-
-    try {
-      await logAudit({
-        action: "delete",
-        entityType: "attendance_request",
-        entityId: id,
-        entityName: `dayoff:${target.userId}`,
-        userId: session.user.id,
-        request: req,
-        metadata: { reason: "admin_dayoff_delete" },
-      })
-    } catch { /* audit best-effort */ }
+    // Named in the audit and kept first, so Control Room → Audit can restore it.
+    const start = formatAttendanceDateKey(target.startDate)
+    const end = formatAttendanceDateKey(target.endDate)
+    const who = target.user?.name ?? "Someone"
+    await restorableDelete({
+      entityType: "attendance_request", entityId: id,
+      entityName: `${who} · day off ${start}${end !== start ? ` → ${end}` : ""}`,
+      workspaceId, userId: session.user.id, request: req,
+      metadata: { reason: "admin_dayoff_delete", type: "DAY_OFF", targetUserId: target.userId, requesterName: who, startDate: start, endDate: end },
+      meta: { open: { type: "attendance_request", id } },
+      remove: (tx) => tx.attendanceRequest.delete({ where: { id } }),
+    })
 
     return NextResponse.json({ message: "Day-off dihapus." })
   } catch (error) {

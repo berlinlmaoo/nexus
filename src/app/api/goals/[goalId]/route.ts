@@ -6,6 +6,7 @@ import { firstUnlinkableProject, taskWriteRefusal, workspaceItemWriteRefusal } f
 import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { restorableDelete } from '@/lib/deletion-snapshot'
 
 const goalInclude = {
   owner: { select: { id: true, name: true, avatar: true } },
@@ -222,12 +223,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     // Signed in is not enough (writes batch): members of the goal's workspace (or a system admin).
-    const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { workspaceId: true } })
+    const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { workspaceId: true, title: true } })
     if (!goalRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const refusal = await workspaceItemWriteRefusal(session.user.id, goalRef.workspaceId)
     if (refusal) return refusal
-    await prisma.goal.delete({ where: { id: (await params).goalId } })
-    logAudit({ action: 'delete', entityType: 'goal', entityId: (await params).goalId, userId: session.user.id, request: req })
+    // Kept with its milestones and links first (sub-goals only lose their parent and get it back), so
+    // Control Room → Audit can restore it.
+    const goalId = (await params).goalId
+    await restorableDelete({
+      entityType: 'goal', entityId: goalId, entityName: goalRef.title, workspaceId: goalRef.workspaceId,
+      userId: session.user.id, request: req, meta: { open: { type: 'goal', id: goalId } },
+      remove: (tx) => tx.goal.delete({ where: { id: goalId } }),
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting goal:', error)

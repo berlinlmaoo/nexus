@@ -3,10 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
 import { checkPnlAccess } from "@/lib/pnl"
-import { unlink } from "fs/promises"
-import path from "path"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 export async function DELETE(
   request: NextRequest,
@@ -19,22 +17,23 @@ export async function DELETE(
     const { attachmentId } = await params
     const attachment = await prisma.pnlExpenseAttachment.findUnique({
       where: { id: attachmentId },
-      select: { id: true, url: true, filename: true, expense: { select: { projectId: true } } },
+      select: { id: true, url: true, filename: true, expenseId: true, expense: { select: { projectId: true, project: { select: { workspaceId: true } } } } },
     })
     if (!attachment) return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
 
     const gate = await checkPnlAccess(session.user.id, attachment.expense.projectId)
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    try {
-      const rel = attachment.url.replace(/^\/+/, "").replace(/^api\/files\//, "")
-      await unlink(path.join(process.cwd(), "public", "uploads", rel))
-    } catch {
-      // file may already be gone
-    }
-    await prisma.pnlExpenseAttachment.delete({ where: { id: attachmentId } })
-
-    logAudit({ action: "delete", entityType: "pnl_expense_attachment", entityId: attachmentId, entityName: attachment.filename, userId: session.user.id, request })
+    // Kept first and the file stays on disk, so Control Room → Audit can restore it. The 90-day purge
+    // of copies removes the file once nothing points at it.
+    const projectId = attachment.expense.projectId
+    await restorableDelete({
+      entityType: "pnl_expense_attachment", entityId: attachmentId, entityName: attachment.filename,
+      workspaceId: attachment.expense.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId, expenseId: attachment.expenseId },
+      meta: { open: { type: "pnl", id: projectId, projectId: projectId }, projectId: projectId },
+      remove: (tx) => tx.pnlExpenseAttachment.delete({ where: { id: attachmentId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { orgRoleOf } from "@/lib/org"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 async function isBoD(userId: string): Promise<boolean> {
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
@@ -76,7 +77,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!(await isBoD(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const { id } = await params
-    await prisma.announcement.delete({ where: { id } })
+    const existing = await prisma.announcement.findUnique({ where: { id }, select: { title: true, kind: true } })
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    // In the audit, and kept with who has seen it first, so Control Room → Audit can restore it.
+    await restorableDelete({
+      entityType: "announcement", entityId: id, entityName: existing.title, workspaceId: null,
+      userId: session.user.id, request: _req, metadata: { kind: existing.kind },
+      meta: { open: { type: "announcement", id } },
+      remove: (tx) => tx.announcement.delete({ where: { id } }),
+    })
     return NextResponse.json({ ok: true })
   } catch (error) {
     // Prisma P2025 = no row with this id: the caller asked for something that does not exist.

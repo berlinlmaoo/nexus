@@ -3,22 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
-import { unlink } from "fs/promises"
-import path from "path"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkProjectAccess } from "@/lib/rbac"
-
-function resolveAttachmentFilePath(url: string) {
-  const normalizedUrl = url.replace(/^\/+/, "")
-
-  const uploadRelativePath = normalizedUrl.startsWith("api/files/")
-    ? normalizedUrl.slice("api/files/".length)
-    : normalizedUrl.startsWith("uploads/")
-      ? normalizedUrl.slice("uploads/".length)
-      : normalizedUrl
-
-  return path.join(process.cwd(), "public", "uploads", uploadRelativePath)
-}
 
 export async function DELETE(
   request: NextRequest,
@@ -32,7 +18,7 @@ export async function DELETE(
 
     const attachment = await prisma.attachment.findUnique({
       where: { id: attachmentId },
-      include: { task: { select: { taskList: { select: { projectId: true } } } } },
+      include: { task: { select: { title: true, taskList: { select: { projectId: true, project: { select: { workspaceId: true } } } } } } },
     })
     if (!attachment) return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
 
@@ -43,17 +29,15 @@ export async function DELETE(
       if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Delete file from disk
-    try {
-      const filePath = resolveAttachmentFilePath(attachment.url)
-      await unlink(filePath)
-    } catch {
-      // File may already be gone
-    }
-
-    await prisma.attachment.delete({ where: { id: attachmentId } })
-
-    logAudit({ action: "delete", entityType: "attachment", entityId: attachmentId, entityName: attachment.filename, userId: session.user.id, request })
+    // The row (and its proof annotations) is kept first, and the file stays on disk, so Control Room →
+    // Audit can restore it. The 90-day purge of copies removes the file once nothing points at it.
+    await restorableDelete({
+      entityType: "attachment", entityId: attachmentId, entityName: attachment.filename,
+      workspaceId: attachment.task?.taskList?.project?.workspaceId ?? null, userId: session.user.id, request,
+      metadata: { taskId: attachment.taskId, taskTitle: attachment.task?.title ?? null, projectId: projectId ?? null },
+      meta: { open: { type: "task", id: attachment.taskId, ...(projectId ? { projectId } : {}) }, projectId: projectId ?? null, taskId: attachment.taskId },
+      remove: (tx) => tx.attachment.delete({ where: { id: attachmentId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

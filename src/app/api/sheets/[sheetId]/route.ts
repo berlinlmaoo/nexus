@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
-import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { normalizeColumns, readCells, resolveSheetAccess } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
 
@@ -99,15 +99,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       )
     }
 
-    const row = await prisma.projectSheet.findUnique({ where: { id: sheetId }, select: { position: true, name: true } })
+    const row = await prisma.projectSheet.findUnique({ where: { id: sheetId }, select: { position: true, name: true, project: { select: { workspaceId: true } } } })
     if (row?.position === 0) {
       return NextResponse.json({ error: "Sheet utama nggak bisa dihapus." }, { status: 422 })
     }
 
-    await prisma.projectSheet.delete({ where: { id: sheetId } })
-    logAudit({
-      action: "delete", entityType: "project_sheet", entityId: sheetId, entityName: row?.name ?? undefined,
-      userId: session.user.id, request: req, metadata: { projectId: access.sheet.projectId },
+    // Kept with its rows, comments and cell history first, so Control Room → Audit can restore it.
+    const projectId = access.sheet.projectId
+    await restorableDelete({
+      entityType: "project_sheet", entityId: sheetId, entityName: row?.name ?? access.sheet.name,
+      workspaceId: row?.project.workspaceId ?? null, userId: session.user.id, request: req,
+      metadata: { projectId },
+      meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
+      remove: (tx) => tx.projectSheet.delete({ where: { id: sheetId } }),
     })
     emitSheetStructure(sheetId, session.user.id)
     return NextResponse.json({ ok: true })

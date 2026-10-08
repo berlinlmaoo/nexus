@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkPnlAccess } from "@/lib/pnl"
 
 const HEX = /^#[0-9a-fA-F]{6}$/
@@ -67,10 +68,19 @@ export async function DELETE(
     const gate = await gateCategory(session.user.id, categoryId)
     if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    // Expenses keep their amounts; they just become "tanpa kategori" (categoryId SetNull).
-    await prisma.pnlCategory.delete({ where: { id: categoryId } })
-
-    logAudit({ action: "delete", entityType: "pnl_category", entityId: categoryId, userId: session.user.id, request })
+    // Expenses keep their amounts; they just become "tanpa kategori" (categoryId SetNull). Kept first:
+    // a restore brings the category back and puts those expenses (and recurring ones) back in it.
+    const category = await prisma.pnlCategory.findUniqueOrThrow({
+      where: { id: categoryId },
+      select: { name: true, projectId: true, project: { select: { workspaceId: true } } },
+    })
+    await restorableDelete({
+      entityType: "pnl_category", entityId: categoryId, entityName: category.name,
+      workspaceId: category.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId: category.projectId },
+      meta: { open: { type: "pnl", id: category.projectId, projectId: category.projectId }, projectId: category.projectId },
+      remove: (tx) => tx.pnlCategory.delete({ where: { id: categoryId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

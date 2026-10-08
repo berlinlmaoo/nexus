@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkPnlAccess, pnlRecurringCursorForNow, validAmount } from "@/lib/pnl"
 
 async function gateRecurring(userId: string, recurringId: string) {
@@ -83,10 +84,19 @@ export async function DELETE(
     const gate = await gateRecurring(session.user.id, recurringId)
     if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    // Template removal keeps already-posted expense entries (their recurringId goes SetNull).
-    await prisma.pnlRecurringExpense.delete({ where: { id: recurringId } })
-
-    logAudit({ action: "delete", entityType: "pnl_recurring", entityId: recurringId, userId: session.user.id, request })
+    // Template removal keeps already-posted expense entries (their recurringId goes SetNull). Kept
+    // first: a restore relinks them and resumes posting from this month (lib/deletion-restore-rules.ts).
+    const template = await prisma.pnlRecurringExpense.findUniqueOrThrow({
+      where: { id: recurringId },
+      select: { description: true, projectId: true, amount: true, project: { select: { workspaceId: true } } },
+    })
+    await restorableDelete({
+      entityType: "pnl_recurring", entityId: recurringId, entityName: template.description,
+      workspaceId: template.project.workspaceId, userId: session.user.id, request,
+      metadata: { projectId: template.projectId, amount: template.amount },
+      meta: { open: { type: "pnl", id: template.projectId, projectId: template.projectId }, projectId: template.projectId },
+      remove: (tx) => tx.pnlRecurringExpense.delete({ where: { id: recurringId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

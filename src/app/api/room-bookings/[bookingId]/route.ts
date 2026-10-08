@@ -8,6 +8,7 @@ import { isWorkspaceManagerRole } from "@/lib/rbac"
 import { updateRoomBookingSchema, validateBody } from "@/lib/validations"
 import { createInAppNotification } from "@/lib/notification-service"
 import { formatBookingSlot } from "@/lib/room-booking-format"
+import { restorableDelete } from "@/lib/deletion-snapshot"
 
 /** A booking can be edited/deleted by its creator, or by a workspace MANAGER/BoD/One-Above-All. */
 async function canManageBooking(userId: string, workspaceId: string, createdById: string): Promise<boolean> {
@@ -137,7 +138,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         push: true,
       }).catch(() => null)
     }
-    await prisma.roomBooking.delete({ where: { id: bookingId } })
+    // In the audit, and kept first so Control Room → Audit can restore it (refused there if the
+    // room has been booked for that time since).
+    await restorableDelete({
+      entityType: "room_booking", entityId: bookingId,
+      entityName: `${existing.room} · ${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)}`,
+      workspaceId: existing.workspaceId, userId: session.user.id, request: _req,
+      metadata: { room: existing.room, createdById: existing.createdById },
+      meta: { open: { type: "room_booking", id: bookingId } },
+      remove: (tx) => tx.roomBooking.delete({ where: { id: bookingId } }),
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Room booking DELETE error:", error)

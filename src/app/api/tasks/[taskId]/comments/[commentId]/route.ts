@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { restorableDelete } from "@/lib/deletion-snapshot"
+import { auditSnippet } from "@/lib/deletion-entities"
 
 export async function PATCH(
   request: NextRequest,
@@ -87,9 +89,16 @@ export async function DELETE(
       return NextResponse.json({ error: "You can only delete your own comments or be a project lead" }, { status: 403 })
     }
 
-    await prisma.comment.delete({ where: { id: (await params).commentId } })
-
-    logAudit({ action: "delete", entityType: "comment", entityId: (await params).commentId, userId: session.user.id!, request })
+    // Kept with its replies and reactions first, so Control Room → Audit can restore it.
+    const commentId = (await params).commentId
+    const projectId = comment.task.taskList.projectId
+    await restorableDelete({
+      entityType: "comment", entityId: commentId, entityName: auditSnippet(comment.content),
+      workspaceId: comment.task.taskList.project.workspaceId, userId: session.user.id!, request,
+      metadata: { taskId: comment.taskId, taskTitle: comment.task.title, projectId },
+      meta: { open: { type: "task", id: comment.taskId, projectId }, projectId, taskId: comment.taskId },
+      remove: (tx) => tx.comment.delete({ where: { id: commentId } }),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
