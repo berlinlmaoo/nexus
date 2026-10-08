@@ -102,11 +102,12 @@ enum NX {
     static let background  = Color(light: 0xf8f9fb, dark: 0x0d1017)
     static let card        = Color(light: 0xffffff, dark: 0x1c2130)
     static let foreground  = Color(light: 0x292d34, dark: 0xe8eaef)
-    //   • Increase Contrast: secondary text goes a step further from the surface, and the border
-    //     becomes a line you can actually see (the Calendar's hairlines use the same values).
+    //   • Increase Contrast: secondary text goes a step further from the surface. The border keeps
+    //     its faint value there too: owner, 8 Oct 2026, a darker card outline on every screen was
+    //     not wanted.
     static let mutedFg     = Color(light: 0x656d76, dark: 0xa6b0bd, lightHC: 0x4b525a, darkHC: 0xc4cbd4)
     static let muted       = Color(light: 0xf1f3f6, dark: 0x252c3d)
-    static let border      = Color(light: 0xe6e8ec, dark: 0x333b52, lightHC: 0x9aa1ab, darkHC: 0x6b7591)
+    static let border      = Color(light: 0xe6e8ec, dark: 0x333b52)
     static let onyx        = Color(light: 0x202023, dark: 0xe8eaef)   // web --primary (high-contrast CTA/text)
 
     // The brand violet is TWO tokens because one colour cannot do both jobs: a fill needs to be
