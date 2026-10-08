@@ -77,9 +77,10 @@ extension APIClient {
 
     // MARK: Sharing
 
-    func vaultShares(itemId: String) async throws -> [VaultShare] {
+    /// Every link made for one file or folder, plus whether this person may make an external one.
+    func vaultShares(itemId: String) async throws -> VaultSharesResponse {
         let path = "/api/vault/shares?itemId=\(vaultEnc(itemId))"
-        return (try await vaultRun(makeRequest(path), decode: VaultSharesResponse.self)).shares
+        return try await vaultRun(makeRequest(path), decode: VaultSharesResponse.self)
     }
 
     func vaultCreateShare(itemId: String, requireAuth: Bool, allowDownload: Bool,
@@ -105,6 +106,13 @@ extension APIClient {
     /// needs it, and an external link ignores it.
     func vaultPublic(slug: String) async throws -> VaultPublicFile {
         try await vaultRun(makeRequest("/api/vault/public/\(vaultEnc(slug))"), decode: VaultPublicFile.self)
+    }
+
+    /// One folder of a shared folder (since 9 Oct 2026). nil = the shared folder itself. The server
+    /// answers 404 for anything outside what the link opens, so a stale id simply fails.
+    func vaultPublicItems(slug: String, folderId: String?) async throws -> VaultPublicListing {
+        let path = "/api/vault/public/\(vaultEnc(slug))/items" + (folderId.map { "?folderId=\(vaultEnc($0))" } ?? "")
+        return try await vaultRun(makeRequest(path), decode: VaultPublicListing.self)
     }
 
     // MARK: Bytes
@@ -237,12 +245,35 @@ extension APIClient {
     }
 
     private static func vaultRefusal(_ body: Data, status: Int) -> APIError {
-        if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-           let message = obj["error"] as? String, !message.isEmpty {
+        guard let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            return .http(status, nil)
+        }
+        // A share link's reason, or a refusal's code, in the app's language (since 9 Oct 2026). The
+        // server's own sentence is Indonesian whatever the app is set to.
+        if let key = (obj["reason"] as? String) ?? (obj["code"] as? String), let text = vaultReasonText[key] {
+            return .transport(T(text))
+        }
+        if let message = obj["error"] as? String, !message.isEmpty {
             return .transport(message)
         }
         return .http(status, nil)
     }
+
+    /// English source text per `reason` (share links) or `code` (refusals); T() translates.
+    private static let vaultReasonText: [String: String] = [
+        "missing": "This link doesn't exist. Ask the sender for a new link.",
+        "revoked": "The person who shared this link has turned it off. Ask the sender for a new link.",
+        "expired": "This link has expired. Ask the sender for a new link.",
+        "gone": "What this link opened is no longer available. Ask the sender for a new link.",
+        "not_member": "This link is only for people at the company that shared it.",
+        "forbidden": "This folder is locked to certain roles, and yours isn't one of them.",
+        "PREVIEW_ONLY": "This file can't be previewed, and the sender turned downloads off.",
+        "VIEW_ONLY": "This link is view-only. The sender turned downloads off.",
+        "EXTERNAL_NOT_ALLOWED": "Only the person who uploaded this, or BoD, can make a link for people outside NEXUS.",
+        "NOT_YOURS": "Only the person who uploaded this, or BoD, can do that.",
+        "TRASHED": "This file is in the trash. Restore it first.",
+        "QUOTA": "The vault is full.",
+    ]
 
     private func vaultEnc(_ s: String) -> String {
         s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s

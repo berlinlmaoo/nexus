@@ -293,6 +293,19 @@ struct VaultView: View {
                 Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
             }
 
+            // Share, in plain sight on every row (owner, 9 Oct 2026: behind "…" nobody found it).
+            if !trash {
+                Button { sheet = .shareLink(item) } label: {
+                    Image(systemName: "link")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(NX.violetText)
+                        .frame(width: 40, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: T("Share link to %@"), item.name))
+            }
+
             Menu { menuItems(item) } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 15))
@@ -364,10 +377,16 @@ struct VaultView: View {
                 Button(role: .destructive) { vaultAlert = .delete(item) } label: { Label(T("Delete forever"), systemImage: "trash") }
             }
         } else {
+            // A LINK to the item, and a COPY of the file, are two different things to hand somebody:
+            // they sit in separate groups and say which is which (owner, 9 Oct 2026).
+            Section {
+                Button { sheet = .shareLink(item) } label: { Label(T("Share link…"), systemImage: "link") }
+            }
             if !item.isFolder {
-                Button { open(item) } label: { Label(T("Open"), systemImage: "eye") }
-                Button { Task { await save(item) } } label: { Label(T("Save / Share"), systemImage: "square.and.arrow.up") }
-                Button { sheet = .shareLink(item) } label: { Label(T("Share link"), systemImage: "link") }
+                Section {
+                    Button { open(item) } label: { Label(T("Open"), systemImage: "eye") }
+                    Button { Task { await save(item) } } label: { Label(T("Send a copy…"), systemImage: "square.and.arrow.up") }
+                }
             }
             if item.canModify {
                 Button { renameText = item.name; vaultAlert = .rename(item) } label: { Label(T("Rename"), systemImage: "pencil") }
@@ -990,122 +1009,5 @@ enum VaultDropReader {
         } catch {
             return nil
         }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Making and revoking links for one file.
-struct VaultShareSheet: View {
-    let item: VaultItem
-    var onClose: () -> Void
-
-    @State private var requireAuth = true
-    @State private var allowDownload = true
-    @State private var expires: VaultExpiry = .permanent
-    @State private var shares: [VaultShare] = []
-    @State private var busy = false
-    @State private var problem: String?
-    @State private var copied = false
-
-    var body: some View {
-        List {
-            Section {
-                Toggle(isOn: $requireAuth) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(requireAuth ? T("Internal") : T("External")).font(NXFont.text(14, .bold))
-                        Text(requireAuth
-                             ? T("Needs a NEXUS account. On iPhone and Mac the link opens the app straight to this file.")
-                             : T("Anyone with the link can open it, no account. That link deliberately stays in the browser."))
-                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                    }
-                }
-                Toggle(T("Allow download"), isOn: $allowDownload)
-                Picker(T("Expires"), selection: $expires) {
-                    ForEach(VaultExpiry.allCases) { Text($0.label).tag($0) }
-                }
-            }
-
-            Section {
-                Button {
-                    Task { await create() }
-                } label: {
-                    HStack {
-                        Image(systemName: "link")
-                        Text(copied ? T("Link copied") : T("Create link"))
-                    }
-                }
-                .disabled(busy)
-            }
-
-            if !shares.isEmpty {
-                Section(T("Existing links")) {
-                    ForEach(shares) { share in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(Self.statusLabel(share)).font(NXFont.text(11, .bold))
-                                    .foregroundStyle(share.status == "active" ? NX.success : NX.mutedFg)
-                                Spacer()
-                                Text("\(share.viewCount)×").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                            }
-                            Text(share.url).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                            HStack(spacing: 14) {
-                                Button(T("Copy")) { UIPasteboard.general.string = share.url }
-                                    .font(NXFont.text(12))
-                                if share.status == "active" {
-                                    Button(T("Revoke"), role: .destructive) { Task { await revoke(share) } }
-                                        .font(NXFont.text(12))
-                                }
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-            }
-
-            if let problem {
-                Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) }
-            }
-        }
-        .navigationTitle(item.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { onClose() } }
-        }
-        .task { await loadShares() }
-    }
-
-    private static func statusLabel(_ share: VaultShare) -> String {
-        switch share.status {
-        case "revoked": return T("Revoked")
-        case "expired": return T("Expired")
-        default:        return share.requireAuth ? T("Internal") : T("External")
-        }
-    }
-
-    private func loadShares() async {
-        do { shares = try await APIClient.shared.vaultShares(itemId: item.id) }
-        catch { problem = (error as? LocalizedError)?.errorDescription }
-    }
-
-    private func create() async {
-        busy = true
-        defer { busy = false }
-        problem = nil
-        do {
-            let share = try await APIClient.shared.vaultCreateShare(
-                itemId: item.id, requireAuth: requireAuth, allowDownload: allowDownload, expires: expires)
-            UIPasteboard.general.string = share.url
-            copied = true
-            await loadShares()
-        } catch {
-            problem = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong.")
-        }
-    }
-
-    private func revoke(_ share: VaultShare) async {
-        do { try await APIClient.shared.vaultRevokeShare(share.id) }
-        catch { problem = (error as? LocalizedError)?.errorDescription }
-        await loadShares()
     }
 }

@@ -35,17 +35,28 @@ struct VaultItem: Codable, Identifiable, Hashable {
     let childCount: Int
     let shareCount: Int
     let minReadRole: String?
+    /// Who may add files here ("MANAGER_PLUS" | "BOD_PLUS"), set on this item itself; nil = no lock of
+    /// its own (it follows the folder above). Decoded since 9 Oct 2026; the server always sent it.
+    let minWriteRole: String?
     let trashed: Bool
     let createdAt: String?
     let canModify: Bool
     /// `/api/vault/items/<id>/thumb?v=…` for a picture the server can make a small copy of; nil for
     /// everything else and from servers before 9 Oct 2026. Ask for a size with `thumbURL(width:)`.
     let thumbUrl: String?
+    /// The content version the server puts in `url`/`thumbUrl` as `?v=` (since 9 Oct 2026). It changes
+    /// when the file is replaced, which is what keeps URL-keyed caches (AttachmentCache, ImageLoader)
+    /// from ever serving the old bytes under the same item id.
+    let fileVersion: String?
+    /// Search results only: the folders the item sits in, from the top (since 9 Oct 2026).
+    let path: [VaultCrumb]?
 
     var isFolder: Bool { kind == "FOLDER" }
-    /// Locked by a role threshold somewhere up the tree. Shown as a small padlock, never used to
-    /// decide anything — the server decides, on every request.
+    /// Locked by a role threshold set on this item. Shown as a small padlock, never used to decide
+    /// anything — the server decides, on every request.
     var isRestricted: Bool { minReadRole != nil }
+    /// Only some roles may add files here (a lock of its own).
+    var isWriteLocked: Bool { minWriteRole != nil }
 }
 
 struct VaultCrumb: Codable, Identifiable, Hashable {
@@ -97,9 +108,56 @@ struct VaultShare: Codable, Identifiable, Hashable {
     let status: String
     let viewCount: Int
     let createdAt: String?
+    // Since 9 Oct 2026 — optional, so an older server's answer still decodes.
+    let lastViewedAt: String?
+    let createdBy: Maker?
+    /// Whether THIS viewer may revoke it (its maker, the item's owner, BoD). nil from older servers:
+    /// offer Revoke and let the server say no.
+    let canRevoke: Bool?
+
+    struct Maker: Codable, Hashable { let id: String; let name: String? }
+
+    var isActive: Bool { status == "active" }
 }
 
-struct VaultSharesResponse: Codable { let shares: [VaultShare] }
+struct VaultSharesResponse: Codable {
+    let shares: [VaultShare]
+    /// Whether this person may make an EXTERNAL link for the item (the uploader, its owner, BoD).
+    /// nil from servers before 9 Oct 2026; the item's own `canModify` is the same rule.
+    let canShareExternally: Bool?
+}
+
+/// One file or folder as a share link sees it (since 9 Oct 2026). Every URL points back at the
+/// link's slug plus an item id — never a path — and is re-checked by the server on every use.
+struct VaultPublicItem: Codable, Identifiable, Hashable {
+    let id: String
+    let kind: String
+    let name: String
+    let mimeType: String?
+    let size: Int?
+    let width: Int?
+    let height: Int?
+    let childCount: Int?
+    /// "image" | "video" | "audio" | "pdf", or nil when nothing can preview it.
+    let previewKind: String?
+    /// nil on a view-only link for a file nothing can preview: there is nothing to fetch.
+    let previewUrl: String?
+    let downloadUrl: String?
+    let thumbUrl: String?
+    let fileVersion: String?
+
+    var isFolder: Bool { kind == "FOLDER" }
+}
+
+/// One folder inside a shared folder: its live children the link may show, and the path from the
+/// shared folder down to it (never above it).
+struct VaultPublicListing: Codable {
+    struct Folder: Codable, Hashable { let id: String; let name: String }
+    let folder: Folder
+    let breadcrumb: [VaultCrumb]
+    let allowDownload: Bool
+    let items: [VaultPublicItem]
+}
 
 /// What a share link resolves to for somebody who may not have an account at all.
 struct VaultPublicFile: Codable {
@@ -108,12 +166,26 @@ struct VaultPublicFile: Codable {
         let mimeType: String?
         let size: Int?
     }
+    struct Person: Codable, Hashable { let name: String }
+    struct FolderInfo: Codable, Hashable { let id: String; let name: String }
     let slug: String
     let requireAuth: Bool
     let allowDownload: Bool
     let file: FileInfo
     let previewUrl: String
     let downloadUrl: String?
+    // Since 9 Oct 2026 — all optional.
+    /// "FILE" or "FOLDER"; nil (a file) from older servers.
+    let kind: String?
+    let expiresAt: String?
+    let sharedBy: Person?
+    let previewKind: String?
+    let thumbUrl: String?
+    let item: VaultPublicItem?
+    let folder: FolderInfo?
+    let zipUrl: String?
+
+    var isFolder: Bool { kind == "FOLDER" }
 }
 
 
@@ -195,4 +267,17 @@ struct CreatedGoogleAccount: Codable, Sendable {
 
     struct Account: Codable, Sendable { let email: String; let fullName: String; let temporaryPassword: String }
     struct Notified: Codable, Sendable { let inApp: Bool; let email: Bool; let emailTo: String? }
+}
+
+extension VaultItem {
+    /// A file or folder seen through a share link, in the shape the vault's own tiles and viewer
+    /// take. Its addresses are the LINK's (slug + item id), not the member routes', and it can do
+    /// nothing a member can: no renaming, no moving, no links of its own.
+    static func fromLink(_ p: VaultPublicItem) -> VaultItem {
+        VaultItem(id: p.id, kind: p.kind, name: p.name, mimeType: p.mimeType, size: p.size, width: p.width,
+                  height: p.height, parentId: nil, url: p.previewUrl, downloadUrl: p.downloadUrl, uploader: nil,
+                  owner: nil, childCount: p.childCount ?? 0, shareCount: 0, minReadRole: nil, minWriteRole: nil,
+                  trashed: false, createdAt: nil, canModify: false, thumbUrl: p.thumbUrl,
+                  fileVersion: p.fileVersion, path: nil)
+    }
 }

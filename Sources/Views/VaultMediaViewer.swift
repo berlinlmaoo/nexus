@@ -18,6 +18,10 @@ import AVKit
 
 struct VaultMediaViewer: View {
     let items: [VaultItem]
+    /// Off when opened from a share link (VaultSharedFileView): a link's viewer makes no links of its
+    /// own, and a view-only link offers no download (9 Oct 2026).
+    let allowsShareLink: Bool
+    let allowsDownload: Bool
     @State private var index: Int
     @Environment(\.dismiss) private var dismiss
 
@@ -33,8 +37,10 @@ struct VaultMediaViewer: View {
     /// How far an unzoomed picture follows the finger during a swipe.
     @State private var swipe: CGFloat = 0
 
-    init(items: [VaultItem], startIndex: Int) {
+    init(items: [VaultItem], startIndex: Int, allowsShareLink: Bool = true, allowsDownload: Bool = true) {
         self.items = items
+        self.allowsShareLink = allowsShareLink
+        self.allowsDownload = allowsDownload
         _index = State(initialValue: min(max(0, startIndex), max(0, items.count - 1)))
     }
 
@@ -119,13 +125,17 @@ struct VaultMediaViewer: View {
                 }
             }
             Spacer(minLength: 0)
-            chromeButton("link", label: T("Share link")) {
-                if let item = current { sheet = .shareLink(item) }
+            if allowsShareLink {
+                chromeButton("link", label: T("Share link")) {
+                    if let item = current { sheet = .shareLink(item) }
+                }
             }
-            chromeButton("square.and.arrow.down", label: T("Download")) {
-                Task { await save() }
+            if allowsDownload && current?.downloadUrl != nil {
+                chromeButton("square.and.arrow.down", label: T("Download")) {
+                    Task { await save() }
+                }
+                .disabled(saving.isActive)
             }
-            .disabled(saving.isActive)
             chromeButton("xmark", label: T("Close")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
