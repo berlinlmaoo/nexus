@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (408 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (410 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -224,6 +224,18 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 5 Home stat cards | No bottom sheet: the detail grows out of the tapped card as iOS MorphFlip — drawn full size in the middle, a scale+translate starts it exactly on the card and springs to full (response 0.4, damping 0.84), one gradient top to bottom, no scrim, list fading in once landed; tap outside, × or back shrinks it back into the card. Card rects kept outside state (no recomposition while scrolling) | 2bc7765 |
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
+
+## 8 Oct, Calendar — audit round 3: three bugs
+
+NOT published (decision 13).
+
+| Bug | Fix | Commit |
+|---|---|---|
+| P1 widget dots grids (3×3 month, mini month) lost every dot/check at font 1.3× and up, and showed half marks at 1.0× | Rows share the grid by weight; each dots cell has a fixed 7 dp mark strip and the day number takes the rest, its size worked out from the widget size × the font scale (capped), so the marks are never clipped | this step |
+| P2 Today, or a second tap on the selected day, did nothing | `RevealDay` read `dayRequests` from the remembered screen handle (not keyed on it): now passed straight from the live state; `CalState.withDay` counts a request even for the same day (JVM test `todayOnTodayStillReveals`) | this step |
+| Rule 10.31 check too thin (~0.67 dp) | Own vector `ic_cal_check`: a 1.5 dp stroked check with round caps in a 10 dp box, small on screen (10 dp grid, 7 dp widget, 12 dp legend) | this step |
+
+Emulator: `agents:/tmp/a3` (widgets ID/EN, light/dark, font 1.0/1.3/2.0; month and person grids).
 
 ## 8 Oct, Calendar — rule 10.31 changed (Berlin): month marks (web 59eae9d, iOS 7648528)
 

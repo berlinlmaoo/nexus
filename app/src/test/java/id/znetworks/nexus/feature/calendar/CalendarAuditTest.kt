@@ -153,10 +153,33 @@ class CalendarAuditTest {
         // Berlin, 8 Oct: full dot = still to do; small check in the division colour = all done / no status. No rings.
         val screen = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt").readText()
         assertTrue("if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))" in screen)
-        assertTrue("else Icon(Icons.Filled.Check, null, tint = col" in screen)
+        assertTrue("else Icon(painterResource(R.drawable.ic_cal_check), null, tint = col" in screen)
         assertFalse("border(1.dp, col, CircleShape)" in screen)
         assertFalse("border(1.dp, c.foreground, CircleShape)); Text(\" \" + stringResource(R.string.cal_legend_done)" in screen)
         val widget = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/widget/CalendarWidgets.kt").readText()
         assertTrue("Dot(hue(it.color, faded), done = it.dim)" in widget && "R.drawable.ic_cal_check" in widget)
+    }
+
+    @Test fun todayOnTodayStillReveals() {
+        // Audit 3 #2: Today while today is selected, or a second tap on the selected day, must count as a request.
+        val s0 = CalState(day = "2026-10-05")
+        val s1 = s0.withDay("2026-10-05", reveal = true)
+        assertEquals(s0.dayRequests + 1, s1.dayRequests)
+        assertEquals(s1.dayRequests + 1, s1.withDay("2026-10-05", reveal = true).dayRequests)
+        // Paging months is not a request.
+        assertEquals(s1.dayRequests, s1.withDay("2026-11-05", reveal = false).dayRequests)
+        // The screen reads the count from the live state, not from the remembered handle.
+        val screen = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/CalendarScreen.kt").readText()
+        assertTrue("LaunchedEffect(dayRequests)" in screen && "dayRequests = s.dayRequests" in screen)
+        assertFalse("LaunchedEffect(d.s.dayRequests)" in screen)
+    }
+
+    @Test fun checkMarkIsAStroke() {
+        // Audit 3 #3: a 1.5 dp stroked check with round caps, not a 0.67 dp hairline.
+        val v = File(root, "app/src/main/res/drawable/ic_cal_check.xml").readText()
+        assertTrue("android:strokeWidth=\"1.5\"" in v && "android:strokeLineCap=\"round\"" in v && "android:viewportWidth=\"10\"" in v)
+        val widget = File(root, "app/src/main/java/id/znetworks/nexus/feature/calendar/widget/CalendarWidgets.kt").readText()
+        // Audit 3 #1: dots grids get exact row heights and a fixed mark strip.
+        assertTrue("dotsRows(" in widget && "GlanceModifier.height(MARK_STRIP)" in widget)
     }
 }

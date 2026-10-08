@@ -83,6 +83,12 @@ data class CalState(
     val today get() = items?.today ?: OfficeTime.today().toString()
     val nowMs get() = items?.nowInstant()?.toEpochMilli() ?: Instant.now().toEpochMilli()
     val windowDays get() = items?.rulesOrDefault?.overdueWindowDays ?: 14
+    /**
+     * The day on screen; [reveal] (the person asked for it: cell, Today, day arrows) counts a request even
+     * when that day is already selected, so Today and a second tap still bring its tasks into view.
+     */
+    fun withDay(day: String, reveal: Boolean) = copy(day = day, dayRequests = if (reveal) dayRequests + 1 else dayRequests)
+
     /** The days asked from /items: the 6-week grid of the month, or the Monday–Sunday week in People. */
     val range: Pair<String, String> get() = if (view == CalView.PEOPLE) CalendarCore.mondayOf(day).let { it to CalendarCore.addDays(it, 6) } else CalendarCore.gridRange(day)
 }
@@ -275,7 +281,7 @@ class CalendarViewModel(app: Application, private val handle: SavedStateHandle) 
     /** [reveal]: the person asked for this day (cell, Today, day arrows), so the screen shows its tasks. */
     fun selectDay(day: String, reveal: Boolean = false) {
         val before = _state.value.range
-        _state.update { it.copy(day = day, dayRequests = if (reveal) it.dayRequests + 1 else it.dayRequests) }
+        _state.update { it.withDay(day, reveal) }
         keep()
         if (_state.value.range != before) { _state.update { it.copy(loading = true, rangeError = null) }; refresh() }
     }

@@ -97,6 +97,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -426,8 +427,8 @@ internal fun CalendarContent(s: CalState, vm: CalendarViewModel, onBack: () -> U
                         @OptIn(ExperimentalMaterial3Api::class)
                         PullToRefreshBox(isRefreshing = s.refreshing, onRefresh = { vm.refresh(pulled = true) }, modifier = Modifier.fillMaxSize()) {
                             if (s.view == CalView.PEOPLE) PeopleView(d, vm, tablet = layout != CalLayout.COMPACT, onFilters = { filtersOpen = true })
-                            else if (layout == CalLayout.EXPANDED) TwoPane(d, vm, panelWidth, showDay = !filtersOpen || threePanes, shortHeight = shortHeight)
-                            else OnePane(d, vm, medium = layout == CalLayout.MEDIUM, shortHeight = shortHeight)
+                            else if (layout == CalLayout.EXPANDED) TwoPane(d, vm, panelWidth, showDay = !filtersOpen || threePanes, shortHeight = shortHeight, dayRequests = s.dayRequests)
+                            else OnePane(d, vm, medium = layout == CalLayout.MEDIUM, shortHeight = shortHeight, dayRequests = s.dayRequests)
                         }
                     }
                 }
@@ -467,14 +468,16 @@ private fun Header(d: CalDerived?, onBack: () -> Unit, onToday: () -> Unit, onFi
  * the day header into view, then move focus to it so its live region announces the day (audit 2 #3, #12).
  */
 @Composable
-private fun RevealDay(d: CalDerived, list: LazyListState, head: Int, focus: FocusRequester, animate: Boolean) {
+private fun RevealDay(d: CalDerived, dayRequests: Int, list: LazyListState, head: Int, focus: FocusRequester, animate: Boolean) {
     var firstOpenDone by rememberSaveable { mutableStateOf(false) }
     suspend fun reveal() {
         if (animate) list.animateScrollToItem(head) else list.scrollToItem(head)
         withTimeoutOrNull(1_000) { snapshotFlow { list.layoutInfo.visibleItemsInfo.any { it.key == "dayhead" } }.first { it } }
         runCatching { focus.requestFocus() }
     }
-    LaunchedEffect(d.s.dayRequests) { if (d.s.dayRequests > 0) reveal() }
+    // [dayRequests] comes straight from the live state: the remembered handle `d` is not keyed on it, so
+    // Today or a tap on the selected day (same day, nothing else changed) would read a stale count (audit 3 #2).
+    LaunchedEffect(dayRequests) { if (dayRequests > 0) reveal() }
     LaunchedEffect(d.ready) {
         if (d.ready && !firstOpenDone) { firstOpenDone = true; if (d.s.day == d.s.today) { list.scrollToItem(head) } }
     }
@@ -482,12 +485,12 @@ private fun RevealDay(d: CalDerived, list: LazyListState, head: Int, focus: Focu
 
 /** Compact and medium: one list; medium caps it at 680 dp so day cells still get titles (audit 2 #20). */
 @Composable
-private fun OnePane(d: CalDerived, vm: CalendarViewModel, medium: Boolean, shortHeight: Boolean) {
+private fun OnePane(d: CalDerived, vm: CalendarViewModel, medium: Boolean, shortHeight: Boolean, dayRequests: Int) {
     val list = rememberLazyListState()
     val dayFocus = remember { FocusRequester() }
     val showHint = !shortHeight
     val head = remember(d.data, showHint, d.filterCount) { 4 + (if (showHint) 1 else 0) + noticeKeys(d.data).size }
-    RevealDay(d, list, head, dayFocus, animate = true)
+    RevealDay(d, dayRequests, list, head, dayFocus, animate = true)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.fillMaxHeight().then(if (medium) Modifier.widthIn(max = 680.dp) else Modifier.fillMaxWidth()), state = list,
             contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -508,11 +511,11 @@ private fun OnePane(d: CalDerived, vm: CalendarViewModel, medium: Boolean, short
  * its place to the filters (audit 2 #1).
  */
 @Composable
-private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp, showDay: Boolean, shortHeight: Boolean) {
+private fun TwoPane(d: CalDerived, vm: CalendarViewModel, panelWidth: Dp, showDay: Boolean, shortHeight: Boolean, dayRequests: Int) {
     val c = Nx.colors
     val dayFocus = remember { FocusRequester() }
     val panel = rememberLazyListState()
-    RevealDay(d, panel, 0, dayFocus, animate = false)
+    RevealDay(d, dayRequests, panel, 0, dayFocus, animate = false)
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f).fillMaxHeight().semantics { isTraversalGroup = true }, contentPadding = PaddingValues(bottom = 24.dp)) {
             item(key = "controls") { Controls(d, vm) }
@@ -709,7 +712,7 @@ private fun LegendHint(hintSeen: Boolean) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).clearAndSetSemantics {}, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(c.foreground)); Text(" " + stringResource(R.string.cal_legend_open) + "   ", fontSize = 12.sp, color = c.mutedFg)
-            Icon(Icons.Filled.Check, null, tint = c.foreground, modifier = Modifier.size(10.dp)); Text(" " + stringResource(R.string.cal_legend_done) + "   ", fontSize = 12.sp, color = c.mutedFg)
+            Icon(painterResource(R.drawable.ic_cal_check), null, tint = c.foreground, modifier = Modifier.size(12.dp)); Text(" " + stringResource(R.string.cal_legend_done) + "   ", fontSize = 12.sp, color = c.mutedFg)
             Box(Modifier.width(10.dp).height(2.dp).background(c.danger)); Text(" " + stringResource(R.string.cal_legend_overdue), fontSize = 12.sp, color = c.mutedFg)
         }
         if (!hintSeen) Text(stringResource(R.string.cal_legend_hint), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(top = 2.dp))
@@ -799,7 +802,7 @@ private fun androidx.compose.foundation.layout.RowScope.DayCell(data: CalData, i
                 val col = index.color(dot.unitId.takeIf { it != CalendarCore.OTHER })
                 // Rule 10.31 (Berlin, 8 Oct): a full dot = still something to do; a small check in the division's colour = all done / no status.
                 if (dot.filled) Box(Modifier.size(6.dp).clip(CircleShape).background(col))
-                else Icon(Icons.Filled.Check, null, tint = col, modifier = Modifier.size(8.dp))
+                else Icon(painterResource(R.drawable.ic_cal_check), null, tint = col, modifier = Modifier.size(10.dp))
             }
             if ((cell?.dots?.size ?: 0) > 3) Text("+", fontSize = 9.sp, color = c.mutedFg, lineHeight = 9.sp)
         }

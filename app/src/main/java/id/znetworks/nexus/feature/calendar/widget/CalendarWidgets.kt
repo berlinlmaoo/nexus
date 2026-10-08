@@ -8,6 +8,8 @@ import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -105,6 +107,24 @@ private fun quadrantEmpty(q: Quadrant) = when (q) { Quadrant.DO -> R.string.wcal
 private fun fs(sp: Float) = (sp * fontFactor).sp
 /** The font scale the widget text is actually drawn at (system scale, capped): row heights grow with it. */
 @Volatile private var fontScaleUsed = 1f
+/** The system font scale: a Glance `sp` is drawn at sp × this. */
+@Volatile private var systemFontScale = 1f
+/** Height of one line of text drawn at [sp] (before the cap), with the TextView's own padding. */
+private fun lineDp(sp: Float) = sp * fontScaleUsed * 1.35f
+/** The strip under a day number in the dots grids: fixed, so its dots and checks are never clipped (audit 3 #1). */
+private val MARK_STRIP = 7.dp
+
+/**
+ * The dots grids (3×3 month, mini month): each row gets an exact height from the widget's size and the font
+ * scale, the mark strip keeps its 7 dp, and the day number takes what is left — shrinking at large font
+ * sizes instead of pushing the marks out (audit 3 #1). Returns the row height and the number's font size.
+ */
+private fun dotsRows(gridHeightDp: Float): Pair<Dp, TextUnit> {
+    // An estimate on the safe side: it only sizes the number; the rows themselves are laid out by weight.
+    val row = (gridHeightDp / 6f - 2f).coerceAtLeast(12f)
+    val numberDp = minOf(10f * fontScaleUsed, (row - MARK_STRIP.value - 2f) / 1.45f).coerceAtLeast(6f)
+    return row.dp to (numberDp / systemFontScale).sp
+}
 private const val WIDGET_MAX_FONT_SCALE = 1.3f
 
 /** Night colours for the task colours (WidgetHues), from the Calendar's cached structure of the person signed in. */
@@ -212,6 +232,7 @@ abstract class CalendarWidget(private val kind: CalWidgetKind) : GlanceAppWidget
         val scale = context.resources.configuration.fontScale.coerceAtLeast(1f)
         fontFactor = minOf(scale, WIDGET_MAX_FONT_SCALE) / scale
         fontScaleUsed = minOf(scale, WIDGET_MAX_FONT_SCALE)
+        systemFontScale = scale
         val data = dataFor(context, lc, CalendarWidgetPrefs.scope(context, appWidgetId))
         // The Bagan's dark colours, as the app shows them (audit 2 #10).
         val uid = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
@@ -388,8 +409,10 @@ private fun MonthWidget(lc: Context, d: WidgetData.Ready) {
         Spacer(GlanceModifier.height(4.dp))
         // Dots: cells of ~23 dp are no targets (audit 2 #5): the whole grid is one, opening today in the Calendar.
         val grid = GlanceModifier.fillMaxWidth().defaultWeight()
+        // padding 20, title + spacer, footer, weekday row.
+        val rows = if (detail == Detail.DOTS) dotsRows(size.height.value - 20 - (lineDp(14f) + 4) - (lineDp(10f) + 4) - lineDp(10f)) else null
         MonthGrid(lc, m, detail, compact = detail == Detail.DOTS, scope = scope,
-            modifier = if (detail == Detail.DOTS) grid.clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))) else grid, cellTargets = detail != Detail.DOTS)
+            modifier = if (detail == Detail.DOTS) grid.clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))) else grid, cellTargets = detail != Detail.DOTS, rows = rows)
     }
 }
 
@@ -397,7 +420,8 @@ private fun monthTitle(lc: Context, today: String) =
     DateTimeFormatter.ofPattern("MMMM yyyy", locale(lc)).format(LocalDate.parse(today)).replaceFirstChar { it.titlecase(locale(lc)) }
 
 @Composable
-private fun MonthGrid(lc: Context, m: CalendarGlance.MonthView, detail: Detail, compact: Boolean, scope: String?, modifier: GlanceModifier, cellTargets: Boolean) {
+private fun MonthGrid(lc: Context, m: CalendarGlance.MonthView, detail: Detail, compact: Boolean, scope: String?, modifier: GlanceModifier, cellTargets: Boolean,
+                      rows: Pair<Dp, TextUnit>? = null) {
     // "Sn Sl Rb Km Jm Sb Mg": two letters, so Senin, Selasa and Sabtu are told apart (audit #41).
     val names = lc.resources.getStringArray(R.array.wcal_weekdays)
     Column(modifier) {
@@ -407,15 +431,17 @@ private fun MonthGrid(lc: Context, m: CalendarGlance.MonthView, detail: Detail, 
             }
         }
         (0 until 6).forEach { w ->
+            // Rows share the grid by weight (always exactly the room there is); in a dots row the mark strip is
+            // fixed and the number takes the rest, so the marks are the last thing to go (audit 3 #1).
             Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                (0 until 7).forEach { k -> DayCell(lc, m.cells[w * 7 + k], detail, compact, scope, cellTargets) }
+                (0 until 7).forEach { k -> DayCell(lc, m.cells[w * 7 + k], detail, compact, scope, cellTargets, rows?.second) }
             }
         }
     }
 }
 
 @Composable
-private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail: Detail, compact: Boolean, scope: String?, target: Boolean) {
+private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail: Detail, compact: Boolean, scope: String?, target: Boolean, numberSize: TextUnit? = null) {
     val b = cell.bars
     val red = b.sunday || b.holiday != null
     val numberColor = when {
@@ -427,11 +453,11 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
     val faded = if (cell.inMonth) 1f else 0.4f
     val cellMod = GlanceModifier.defaultWeight().fillMaxHeight().padding(horizontal = 1.dp).semantics { contentDescription = dayDescription(lc, b) }
     Column(if (target) cellMod.clickable(open(lc, CalendarWidgetLinks.day(b.day, scope))) else cellMod, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(if (detail == Detail.DOTS) GlanceModifier.defaultWeight() else GlanceModifier, verticalAlignment = Alignment.CenterVertically) {
             // One line, no fixed box: at large font sizes the number grows instead of wrapping; the disc only behind today (audit 2 #6).
             val number = b.day.takeLast(2).trimStart('0')
-            val style = TextStyle(color = numberColor, fontSize = fs(10f), fontWeight = if (b.today) FontWeight.Bold else FontWeight.Medium)
-            if (b.today) Box(GlanceModifier.cornerRadius(if (compact) 7.dp else 9.dp).background(GlanceTheme.colors.primary).padding(horizontal = 3.dp, vertical = 1.dp)) {
+            val style = TextStyle(color = numberColor, fontSize = numberSize ?: fs(10f), fontWeight = if (b.today) FontWeight.Bold else FontWeight.Medium)
+            if (b.today) Box(GlanceModifier.cornerRadius(if (compact) 7.dp else 9.dp).background(GlanceTheme.colors.primary).padding(horizontal = 3.dp, vertical = if (compact) 0.dp else 1.dp)) {
                 Text(number, maxLines = 1, style = style)
             } else Text(number, maxLines = 1, style = style)
             if (b.overdue && detail != Detail.DOTS) Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(cp(RED))) {}
@@ -439,7 +465,7 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
             if (detail != Detail.DOTS && b.more > 0) Text("+${b.more}", style = TextStyle(color = muted(), fontSize = fs(10f)))
         }
         when (detail) {
-            Detail.DOTS -> Row {
+            Detail.DOTS -> Row(GlanceModifier.height(MARK_STRIP), verticalAlignment = Alignment.CenterVertically) {
                 if (b.overdue) Dot(cp(RED.copy(alpha = faded)))
                 // Rule 10.31: a full dot = to do; done or status-less = a small check in its colour.
                 b.bars.take(if (b.overdue) 2 else 3).forEach { Dot(hue(it.color, faded), done = it.dim) }
@@ -459,7 +485,7 @@ private fun RowScope.DayCell(lc: Context, cell: CalendarGlance.MonthCell, detail
 
 @Composable
 private fun Dot(c: ColorProvider, done: Boolean = false) {
-    if (done) Image(ImageProvider(R.drawable.ic_cal_check), null, GlanceModifier.size(6.dp), colorFilter = ColorFilter.tint(c))
+    if (done) Image(ImageProvider(R.drawable.ic_cal_check), null, GlanceModifier.size(7.dp), colorFilter = ColorFilter.tint(c))
     else Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(c)) {}
     Spacer(GlanceModifier.width(1.dp))
 }
@@ -488,7 +514,9 @@ private fun MonthUpcomingWidget(lc: Context, d: WidgetData.Ready) {
         Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
             Text(monthTitle(lc, m.today), maxLines = 1, modifier = GlanceModifier.clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))), style = TextStyle(color = fg(), fontSize = fs(12f), fontWeight = FontWeight.Bold))
             // The mini month is one target (its cells are far below 48 dp, audit 2 #5): today in the Calendar.
-            MonthGrid(lc, m, Detail.DOTS, compact = true, scope = scope, cellTargets = false,
+            // padding 20, footer, title, weekday row.
+            val rows = dotsRows(LocalSize.current.height.value - 20 - (lineDp(10f) + 4) - lineDp(12f) - lineDp(10f))
+            MonthGrid(lc, m, Detail.DOTS, compact = true, scope = scope, cellTargets = false, rows = rows,
                 modifier = GlanceModifier.fillMaxWidth().defaultWeight().clickable(open(lc, CalendarWidgetLinks.day(m.today, scope))))
         }
         Spacer(GlanceModifier.width(10.dp))
