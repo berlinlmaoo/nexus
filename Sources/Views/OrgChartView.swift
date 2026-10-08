@@ -985,8 +985,10 @@ private struct OrgUnitSheet: View {
         .onChange(of: pickedLogo) { _, item in
             if let item { Task { await pick(item) } }
         }
-        .confirmationDialog(T("Delete this card?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+        // A centred alert, never a confirmationDialog (owner, 29 Sep 2026 — 173ffff).
+        .alert(T("Delete this card?"), isPresented: $confirmDelete) {
             Button(T("Delete"), role: .destructive) { Task { await remove() } }
+            Button(T("Cancel"), role: .cancel) {}
         } message: {
             Text(T("Its people are removed from this card (they stay in their other IP/Teams) and what is inside it moves up to its parent. No project access changes."))
         }

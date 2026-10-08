@@ -183,6 +183,13 @@ struct ChatInfoView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .refreshable { await load(spinner: false) }
+                    // A centred alert, never a confirmationDialog: iOS 26 draws those as a bubble pinned
+                    // to the row with big glass buttons, which the owner turned down on 29 Sep 2026
+                    // (173ffff) and again here on 9 Oct. On the scroll view, not the screen, so it never
+                    // shares a view with the Remove / Exit alert below.
+                    .alert(memberActions?.displayName ?? "", isPresented: memberActionsShown, presenting: memberActions) { m in
+                        memberActionButtons(m)
+                    }
                 }
             }
         }
@@ -197,10 +204,6 @@ struct ChatInfoView: View {
         }
         .sheet(item: $sheet) { which in sheetContent(which) }
         .navigationDestination(item: $route) { r in destination(r) }
-        .confirmationDialog(memberActions?.displayName ?? "", isPresented: memberActionsShown,
-                            titleVisibility: .visible, presenting: memberActions) { m in
-            memberActionButtons(m)
-        }
         .alert(confirmTitle, isPresented: confirmShown, presenting: confirm) { c in
             confirmButtons(c)
         } message: { c in
@@ -260,7 +263,10 @@ struct ChatInfoView: View {
             route = .profile(ProfileTarget(userId: m.userId, name: m.name, avatar: m.avatar))
         }
         if isGroup && canManage && !(m.isMe || m.userId == meId) {
-            Button(T("Remove from group"), role: .destructive) { confirm = .remove(m) }
+            Button(T("Remove from group"), role: .destructive) {
+                // One alert at a time: the confirmation opens once this one has finished closing.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { confirm = .remove(m) }
+            }
         }
         Button(T("Cancel"), role: .cancel) {}
     }
