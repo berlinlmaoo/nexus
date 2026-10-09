@@ -64,7 +64,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
-import id.znetworks.nexus.feature.admin.WsMember
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
 import kotlinx.serialization.json.JsonArray
@@ -81,10 +80,10 @@ private fun str(s: String?) = s?.let(::JsonPrimitive) ?: JsonNull
 
 /**
  * One deal, full screen (the web's drawer; iOS PipelineDealView): the GM's division sections, each field saved
- * when it is left, BD / PM from the project's workspace, links, who changed it last, its History, Delete.
+ * when it is left, BD / PM from the board project's members, payment terms, links, who changed it last, its History, Delete.
  */
 @Composable
-fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<WsMember>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onClose: () -> Unit) {
+fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerson>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onClose: () -> Unit) {
     val c = Nx.colors
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -141,16 +140,28 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<WsMember>, vm
                 }
                 Group(stringResource(R.string.pl_s_billing), "Finance") {
                     Money(stringResource(R.string.pl_f_invoice_value), deal.invoiceValue) { save(one("invoiceValue", JsonPrimitive(it))) }
-                    Pick(stringResource(R.string.pl_f_payment_status), deal.text("paymentStatus"), v.paymentStatuses) { save(one("paymentStatus", JsonPrimitive(it))) }
-                    Money(stringResource(R.string.pl_f_receivable), deal.outstandingReceivable) { save(one("outstandingReceivable", JsonPrimitive(it))) }
-                    DateSave(stringResource(R.string.pl_f_due_date), deal.date("paymentDueDate")) { save(one("paymentDueDate", str(it))) }
-                    // A due date keeps the days true; without one, the GM's typed number.
-                    if (deal.date("paymentDueDate") != null) Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
-                        else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
-                    else TextSave(stringResource(R.string.pl_f_days_typed), deal.maxDaysOverdue.toString(), number = true) { t ->
-                        t.trim().toIntOrNull()?.takeIf { it >= 0 }?.let { save(one("maxDaysOverdue", JsonPrimitive(it))) } }
+                    val ts = deal.termSummary
+                    if (ts != null) {
+                        // With terms these are the terms' (server-computed), read-only (§11.2).
+                        ReadOnly(stringResource(R.string.pl_f_payment_status), ts.paymentStatus)
+                        ReadOnly(stringResource(R.string.pl_f_receivable), PipelineFormat.idrFull(ts.outstanding))
+                        ReadOnly(stringResource(R.string.pl_t_next_due), ts.nextDueDate?.let(::dayLabel) ?: "–")
+                        Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
+                            else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
+                        Text(stringResource(R.string.pl_t_from_terms), fontSize = 11.sp, color = c.mutedFg)
+                    } else {
+                        Pick(stringResource(R.string.pl_f_payment_status), deal.text("paymentStatus"), v.paymentStatuses) { save(one("paymentStatus", JsonPrimitive(it))) }
+                        Money(stringResource(R.string.pl_f_receivable), deal.outstandingReceivable) { save(one("outstandingReceivable", JsonPrimitive(it))) }
+                        DateSave(stringResource(R.string.pl_f_due_date), deal.date("paymentDueDate")) { save(one("paymentDueDate", str(it))) }
+                        // A due date keeps the days true; without one, the GM's typed number.
+                        if (deal.date("paymentDueDate") != null) Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
+                            else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
+                        else TextSave(stringResource(R.string.pl_f_days_typed), deal.maxDaysOverdue.toString(), number = true) { t ->
+                            t.trim().toIntOrNull()?.takeIf { it >= 0 }?.let { save(one("maxDaysOverdue", JsonPrimitive(it))) } }
+                    }
                     Money(stringResource(R.string.pl_f_net_cash), deal.netCash, allowNegative = true) { save(one("netCash", JsonPrimitive(it))) }
                 }
+                Group(stringResource(R.string.pl_t_terms), "Finance") { PaymentTerms(deal, vm) }
                 Group(stringResource(R.string.pl_ph_closing), "Finance") {
                     Pick(stringResource(R.string.pl_f_closing_status), deal.text("closingStatus"), v.closingStatuses) { save(one("closingStatus", JsonPrimitive(it))) }
                 }
@@ -173,13 +184,27 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<WsMember>, vm
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } })
 }
 
+/** "9 Okt 2026" for a yyyy-MM-dd day. */
+internal fun dayLabel(iso: String): String =
+    runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(LocalDate.parse(iso.take(10))) }.getOrDefault(iso)
+
+/** A value the server works out: shown, not edited. */
+@Composable
+internal fun ReadOnly(label: String, value: String) {
+    val c = Nx.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+    }
+}
+
 /** "9 Okt 2026, 15:35" in Jakarta time. */
 internal fun stamp(iso: String?): String = iso?.let { runCatching {
     java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE))
 }.getOrNull() }.orEmpty()
 
 @Composable
-private fun Group(title: String, who: String?, content: @Composable () -> Unit) {
+internal fun Group(title: String, who: String?, content: @Composable () -> Unit) {
     val c = Nx.colors
     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -193,7 +218,7 @@ private fun Group(title: String, who: String?, content: @Composable () -> Unit) 
 
 /** Saved when the field is left (or Done), only if it changed. */
 @Composable
-private fun TextSave(label: String, value: String, big: Boolean = false, multiline: Boolean = false, number: Boolean = false, onSave: (String) -> Unit) {
+internal fun TextSave(label: String, value: String, big: Boolean = false, multiline: Boolean = false, number: Boolean = false, onSave: (String) -> Unit) {
     var t by remember(value) { mutableStateOf(value) }
     var focused by remember { mutableStateOf(false) }
     fun commit() { if (t != value) onSave(t) }
@@ -206,14 +231,14 @@ private fun TextSave(label: String, value: String, big: Boolean = false, multili
 
 /** Rupiah: typed with any grouping, saved as a plain number; a negative only where allowed (net cash). */
 @Composable
-private fun Money(label: String, value: Double, allowNegative: Boolean = false, onSave: (Double) -> Unit) {
+internal fun Money(label: String, value: Double, allowNegative: Boolean = false, onSave: (Double) -> Unit) {
     TextSave(label, if (value == 0.0) "" else PipelineFormat.idrFull(value).removePrefix("Rp").removePrefix("-Rp").let { if (value < 0) "-$it" else it }, number = !allowNegative) { t ->
         PipelineFormat.parseMoney(t)?.takeIf { allowNegative || it >= 0 }?.let(onSave)
     }
 }
 
 @Composable
-private fun Pick(title: String, current: String, options: List<String>, label: (@Composable (String) -> String)? = null, onPick: (String) -> Unit) {
+internal fun Pick(title: String, current: String, options: List<String>, label: (@Composable (String) -> String)? = null, onPick: (String) -> Unit) {
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,7 +258,7 @@ private fun Pick(title: String, current: String, options: List<String>, label: (
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
+internal fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -250,9 +275,9 @@ private fun DateSave(label: String, iso: String?, onSave: (String?) -> Unit) {
     }
 }
 
-/** BD or PM: a workspace member, nobody, or someone outside NEXUS by name (a user id wins over the text). */
+/** BD or PM: a member of the board project, nobody, or someone outside NEXUS by name (a user id wins over the text). */
 @Composable
-private fun PersonPick(label: String, userId: String?, shown: String?, people: List<WsMember>, role: String, save: (JsonObject) -> Unit) {
+private fun PersonPick(label: String, userId: String?, shown: String?, people: List<PipelinePerson>, role: String, save: (JsonObject) -> Unit) {
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     var typing by remember { mutableStateOf(false) }
@@ -260,15 +285,16 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
         Text(label, fontSize = 13.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
         Box {
             OutlinedButton(onClick = { open = true }) {
-                val inWs = userId == null || people.isEmpty() || people.any { it.userId == userId }
-                Text((shown ?: stringResource(R.string.pl_not_assigned)) + if (!inWs) " " + stringResource(R.string.pl_not_in_ws) else "", maxLines = 1,
+                // Set earlier, before the lead added them (or since removed): the server still keeps them.
+                val member = userId == null || people.isEmpty() || people.any { it.id == userId }
+                Text((shown ?: stringResource(R.string.pl_not_assigned)) + if (!member) " " + stringResource(R.string.pl_not_member) else "", maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
                 Icon(Icons.Filled.KeyboardArrowDown, null)
             }
             DropdownMenu(open, { open = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.pl_not_assigned)) }, onClick = { open = false; save(JsonObject(mapOf("${role}UserId" to JsonNull, "${role}Name" to JsonNull))) })
-                people.sortedBy { it.displayName.lowercase() }.forEach { p ->
-                    DropdownMenuItem(text = { Text(p.displayName) }, onClick = { open = false; save(JsonObject(mapOf("${role}UserId" to JsonPrimitive(p.userId), "${role}Name" to JsonNull))) })
+                people.sortedBy { (it.name ?: "").lowercase() }.forEach { p ->
+                    DropdownMenuItem(text = { Text(p.name ?: "–") }, onClick = { open = false; save(JsonObject(mapOf("${role}UserId" to JsonPrimitive(p.id), "${role}Name" to JsonNull))) })
                 }
                 DropdownMenuItem(text = { Text(stringResource(R.string.pl_outside)) }, onClick = { open = false; typing = true })
             }
@@ -328,10 +354,30 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
             l == null -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             else -> {
                 l.forEach { ch ->
-                    val field = PipelineText.field(ch.field)?.let { stringResource(it) } ?: ch.field
+                    val who = ch.user?.name ?: stringResource(R.string.pl_someone)
+                    val tf = ch.termField
+                    val term = ch.termLabel?.takeIf { it.isNotBlank() } ?: stringResource(R.string.pl_t_term)
                     Column {
-                        Text("${ch.user?.name ?: stringResource(R.string.pl_someone)} ${stringResource(R.string.pl_changed)} $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                        Text("${shown(ch.before)} → ${shown(ch.after)}", fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        when (tf) {
+                            null -> {
+                                val field = PipelineText.field(ch.field)?.let { stringResource(it) } ?: ch.field
+                                Text("$who ${stringResource(R.string.pl_changed)} $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                                Text("${shown(ch.before)} → ${shown(ch.after)}", fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            }
+                            // A payment term (§11.2): added / deleted / restored with its amount, or one of its fields.
+                            "created", "deleted", "restored" -> {
+                                Text(stringResource(when (tf) { "created" -> R.string.pl_t_h_added; "deleted" -> R.string.pl_t_h_deleted; else -> R.string.pl_t_h_restored }, who, term),
+                                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                                ((if (tf == "deleted") ch.before else ch.after) as? JsonObject)?.get("amount").num()?.let {
+                                    Text(PipelineFormat.idrFull(it), fontSize = 12.sp, color = c.mutedFg) }
+                            }
+                            else -> {
+                                val field = PipelineText.termField(tf)?.let { stringResource(it) } ?: tf
+                                val money = tf == "amount" || tf == "paidAmount"
+                                Text("$who ${stringResource(R.string.pl_changed)} $term · $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                                Text("${shown(ch.before, money)} → ${shown(ch.after, money)}", fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                         Text(stamp(ch.createdAt), fontSize = 11.sp, color = c.mutedFg)
                     }
                 }
@@ -344,8 +390,9 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
 }
 
 @Composable
-private fun shown(e: JsonElement?): String = when {
+private fun shown(e: JsonElement?, money: Boolean = false): String = when {
     e == null || e is JsonNull -> stringResource(R.string.pl_empty_value)
+    money && e.num() != null -> PipelineFormat.idrFull(e.num()!!)
     e is JsonPrimitive && e.isString -> e.content.ifBlank { stringResource(R.string.pl_empty_value) }.let { PipelineText.stage(it)?.let { r -> stringResource(r) } ?: it }
     e is JsonPrimitive -> e.content
     e is JsonArray -> e.size.toString()

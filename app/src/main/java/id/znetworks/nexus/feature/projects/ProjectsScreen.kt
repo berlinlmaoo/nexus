@@ -165,13 +165,14 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
     fun createProject(name: String, icon: String, color: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
         val id = try { api.createProject(name, ws, color, icon, folderId, type) } catch (e: ApiError) {
-            // One board for the company (PIPELINE-DASHBOARD §10.1): when it exists, open it instead of an error.
+            // One board for the company (PIPELINE-DASHBOARD §10.1): when it exists, open it instead of an error —
+            // but only someone who may open it gets its id (§11.1, members only); anyone else reads the server's sentence.
             val h = e as? ApiError.Http
             val existing = (h?.body?.get("projectId") as? kotlinx.serialization.json.JsonPrimitive)?.content
             when {
                 h?.code == "PIPELINE_EXISTS" && existing != null -> existing
+                h?.code == "PIPELINE_EXISTS" -> { _state.update { it.copy(message = h.serverMessage ?: res.getString(R.string.pl_exists_ask)) }; return@act }
                 h?.code == "PIPELINE_COMPANY_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.pl_company_only)) }; return@act }
-                h?.code == "PIPELINE_FORBIDDEN" -> { _state.update { it.copy(message = res.getString(R.string.pl_no_access)) }; return@act }
                 else -> throw e
             }
         }

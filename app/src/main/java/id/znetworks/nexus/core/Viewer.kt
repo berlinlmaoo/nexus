@@ -22,8 +22,9 @@ class Viewer(private val api: ApiClient) {
         private set
     val isCompanyMember: Boolean get() = isCompany == true
     /**
-     * The company's one Pipeline board (PIPELINE-DASHBOARD §10): whether this person may see it (BoD+, Agency, IT,
-     * Legal, Finance — server-decided) and its project id. Absent on an older server = no entry.
+     * The company's one Pipeline board (PIPELINE-DASHBOARD §10, §11.1): the id comes only to a project member of
+     * it; canAccessPipeline = member, or anyone of the company while no board exists. Server-decided; absent on an
+     * older server = no entry.
      */
     @Volatile var canAccessPipeline: Boolean = false
         private set

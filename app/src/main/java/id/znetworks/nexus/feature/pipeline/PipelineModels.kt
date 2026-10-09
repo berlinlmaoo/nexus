@@ -75,6 +75,18 @@ data class PipelineDeal(val raw: JsonObject) {
     /** The TASK project made for a won deal (§10.3); null until there is one. */
     val executionProjectId get() = raw["executionProjectId"].str() ?: (raw["executionProject"] as? JsonObject)?.get("id").str()
     val executionProjectName get() = (raw["executionProject"] as? JsonObject)?.get("name").str()
+    /** Payments per term (§11.2), in order; empty on a deal without terms and from an older server. */
+    val terms: List<PipelineTerm> get() = (raw["terms"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::PipelineTerm)?.takeIf { t -> t.id.isNotEmpty() } }
+        .sortedBy { it.position }
+    /** The payment worked out from the terms; null when there are none — then the manual fields count. */
+    val termSummary: PipelineTermSummary? get() = (raw["termSummary"] as? JsonObject)?.let(::PipelineTermSummary)
+    /** With terms the receivable, payment status and next due date are the terms' (server-computed). */
+    val receivable get() = termSummary?.outstanding ?: outstandingReceivable
+    val paymentStatusShown get() = termSummary?.paymentStatus ?: text("paymentStatus")
+    val paymentDueShown get() = termSummary.let { if (it != null) it.nextDueDate else date("paymentDueDate") }
+    /** What the terms are checked against: the invoice value, else the contract value (as the web). */
+    val termsReference get() = if (invoiceValue > 0) invoiceValue else contractValue
+
     /** Won: Pre-Execution, Execution or Closed — the stages an execution project belongs to. */
     val isWon get() = stageGroup in setOf("Pre-Execution", "Execution", "Closed")
 
@@ -91,6 +103,48 @@ data class PipelineDeal(val raw: JsonObject) {
         /** Inside a column: most urgent first, then the biggest (the GM's order). */
         val SEVERITY = mapOf("CRITICAL" to 0, "ATTENTION" to 1, "HEALTHY" to 2, "NOT_STARTED" to 3, "NONE" to 4)
         val bySeverity = compareBy<PipelineDeal>({ SEVERITY[it.healthKey] ?: 9 }, { -it.netValue })
+    }
+}
+
+/** One payment term ("DP", "Termin 1" …). Status, outstanding and days overdue are the server's. */
+data class PipelineTerm(val raw: JsonObject) {
+    val id get() = raw["id"].str().orEmpty()
+    val position get() = raw["position"].num() ?: 0.0
+    val label get() = raw["label"].str().orEmpty()
+    val amount get() = raw["amount"].num() ?: 0.0
+    val dueDate get() = raw["dueDate"].str()?.takeIf { it.isNotBlank() }?.take(10)
+    val invoiceNo get() = raw["invoiceNo"].str().orEmpty()
+    val invoiceDate get() = raw["invoiceDate"].str()?.takeIf { it.isNotBlank() }?.take(10)
+    val paidAmount get() = raw["paidAmount"].num() ?: 0.0
+    val paidAt get() = raw["paidAt"].str()?.takeIf { it.isNotBlank() }?.take(10)
+    val note get() = raw["note"].str().orEmpty()
+    /** Not Invoiced | Invoiced | Partial | Paid | Overdue (an unknown one is shown as-is). */
+    val status get() = raw["status"].str() ?: "Not Invoiced"
+    val outstanding get() = raw["outstanding"].num() ?: maxOf(0.0, amount - paidAmount)
+    val daysOverdue get() = (raw["daysOverdue"].num() ?: 0.0).toInt()
+    val isPaid get() = status == "Paid"
+}
+
+/** The deal's payment from its terms (server: termSummaryOf). */
+data class PipelineTermSummary(val raw: JsonObject) {
+    private fun n(k: String) = raw[k].num() ?: 0.0
+    val count get() = n("count").toInt()
+    val paidCount get() = n("paidCount").toInt()
+    val totalAmount get() = n("totalAmount")
+    val totalPaid get() = n("totalPaid")
+    val outstanding get() = n("outstanding")
+    val maxDaysOverdue get() = n("maxDaysOverdue").toInt()
+    val paymentStatus get() = raw["paymentStatus"].str() ?: "Not Yet"
+    val nextDueDate get() = raw["nextDueDate"].str()?.takeIf { it.isNotBlank() }?.take(10)
+}
+
+object PipelineTerms {
+    /** "Add term" starts at what is left of the invoice value (else the contract value), never below zero. */
+    fun suggestedAmount(deal: PipelineDeal): Double = maxOf(0.0, deal.termsReference - deal.terms.sumOf { it.amount })
+    /** Σ terms ≠ the reference: worth a warning (only once there are terms and a reference). */
+    fun mismatch(deal: PipelineDeal): Boolean {
+        val terms = deal.terms
+        return terms.isNotEmpty() && deal.termsReference > 0 && kotlin.math.abs(terms.sumOf { it.amount } - deal.termsReference) >= 0.5
     }
 }
 
@@ -117,6 +171,7 @@ data class PipelineVocab(val raw: JsonObject) {
     val paymentStatuses get() = l("paymentStatuses", listOf("Not Yet", "Upcoming", "Due", "Overdue", "Partial", "Paid"))
     val closingStatuses get() = l("closingStatuses", listOf("Not Ready", "In Progress", "Waiting BAST", "Waiting Client Payment", "Waiting Vendor Settlement",
         "Waiting Deliverables", "Ready to Close", "Closed"))
+    val termStatuses get() = l("termStatuses", listOf("Not Invoiced", "Invoiced", "Partial", "Paid", "Overdue"))
     val linkTypes get() = l("linkTypes", listOf("SPK", "Kontrak", "MOU", "Invoice", "Lainnya"))
 
     companion object {
@@ -133,7 +188,11 @@ data class PipelineVocab(val raw: JsonObject) {
     }
 }
 
-data class PipelineChange(val id: String, val field: String, val before: JsonElement?, val after: JsonElement?, val createdAt: String?, val user: PipelinePerson?)
+data class PipelineChange(val id: String, val field: String, val before: JsonElement?, val after: JsonElement?, val createdAt: String?, val user: PipelinePerson?,
+                          val termId: String? = null, val termLabel: String? = null) {
+    /** "term.amount" → "amount" (also "created" / "deleted" / "restored"); null for a change to the deal itself. */
+    val termField get() = if (field.startsWith("term.")) field.removePrefix("term.") else null
+}
 
 /** GET …/pipeline: everything the tab draws. */
 data class PipelineData(val deals: List<PipelineDeal>, val summary: PipelineSummary, val vocab: PipelineVocab, val today: String, val workspaceId: String?) {
@@ -226,6 +285,17 @@ object PipelineText {
         "BLOCKER" -> Words.Str(R.string.pl_r_blocker, r.text.orEmpty())
         "VREG_PENDING" -> Words.Str(R.string.pl_r_vreg)
         else -> Words.Raw(r.code)
+    }
+    /** A payment term's status (server: TERM_STATUSES); an unknown key is shown as stored. */
+    fun termStatus(k: String): Int? = when (k) {
+        "Not Invoiced" -> R.string.pl_t_not_invoiced; "Invoiced" -> R.string.pl_t_invoiced; "Partial" -> R.string.pl_t_partial
+        "Paid" -> R.string.pl_t_paid; "Overdue" -> R.string.pl_t_overdue; else -> null
+    }
+    /** A payment term's fields in the History tab. */
+    fun termField(k: String): Int? = when (k) {
+        "label" -> R.string.pl_f_name; "amount" -> R.string.pl_t_amount; "dueDate" -> R.string.pl_f_due_date; "invoiceNo" -> R.string.pl_t_invoice_no
+        "invoiceDate" -> R.string.pl_t_invoice_date; "paidAmount" -> R.string.pl_t_paid_amount; "paidAt" -> R.string.pl_t_paid_at; "note" -> R.string.pl_t_note
+        else -> null
     }
     /** Field names for the History tab. */
     fun field(k: String): Int? = when (k) {

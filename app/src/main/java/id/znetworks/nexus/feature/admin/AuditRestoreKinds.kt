@@ -45,6 +45,7 @@ object RestoreKinds {
         "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus",
         "chat_group", // DELETE-GROUP, 9 Oct
         "pipeline_deal", // PIPELINE-DASHBOARD, 9 Oct
+        "pipeline_term", // PIPELINE-DASHBOARD §11.2, 9 Oct (opens its deal's board)
     )
     private val VAULT = setOf("vault_file", "vault_folder", "vault_trash")
 
@@ -67,6 +68,7 @@ object RestoreKinds {
         "quest" -> R.string.au_rb_quest; "calendar_event" -> R.string.au_rb_event; "dayoff_bonus" -> R.string.au_rb_extra_day_off
         "chat_group" -> R.string.au_rb_chat_group
         "pipeline_deal" -> R.string.au_rb_deal
+        "pipeline_term" -> R.string.au_rb_term
         else -> R.string.au_restore
     }
 
@@ -83,6 +85,7 @@ object RestoreKinds {
         "dayoff_bonus" -> R.string.au_note_bonus; "attendance_office" -> if (soft) R.string.au_note_office else null
         "chat_group" -> R.string.au_note_chat_group
         "pipeline_deal" -> R.string.au_note_deal
+        "pipeline_term" -> R.string.au_note_term
         else -> null
     }
 

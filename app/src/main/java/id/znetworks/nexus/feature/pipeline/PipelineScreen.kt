@@ -77,7 +77,6 @@ import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.realtime.LiveRefresh
 import id.znetworks.nexus.core.realtime.RealtimeEvents
-import id.znetworks.nexus.feature.admin.WsMember
 import id.znetworks.nexus.ui.components.Avatar
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.describe
@@ -97,7 +96,8 @@ data class PipelineState(
     val error: String? = null,
     val notice: String? = null,
     val busy: Boolean = false,
-    val people: List<WsMember> = emptyList(),
+    /** The board project's members: who the BD / PM pickers offer (§11.1). */
+    val people: List<PipelinePerson> = emptyList(),
     val openDealId: String? = null,
 )
 
@@ -116,14 +116,25 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         try {
             val d = api.load(projectId)
             _state.update { it.copy(data = d, loading = false, error = null, forbidden = false) }
-            if (_state.value.people.isEmpty()) runCatching { api.people(d.workspaceId) }.getOrNull()?.let { p -> _state.update { it.copy(people = p) } }
+            if (_state.value.people.isEmpty()) people()
         } catch (e: ApiError) {
             val h = e as? ApiError.Http
             _state.update { it.copy(loading = false, forbidden = h?.status == 403, error = if (it.data == null) e.describe(res) else null) }
         }
     }
 
-    fun open(id: String?) = _state.update { it.copy(openDealId = id) }
+    private var peopleAt = 0L
+
+    /** Read fresh when a deal opens (at most once a minute), so someone the lead just added is offered at once. */
+    private fun people() = viewModelScope.launch {
+        peopleAt = System.currentTimeMillis()
+        runCatching { api.people(projectId) }.getOrNull()?.let { p -> _state.update { it.copy(people = p) } }
+    }
+
+    fun open(id: String?) {
+        _state.update { it.copy(openDealId = id) }
+        if (id != null && System.currentTimeMillis() - peopleAt > 60_000) people()
+    }
     fun dismiss() = _state.update { it.copy(notice = null) }
 
     /** New deal (optionally in a stage); opens it. */
@@ -179,6 +190,27 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         catch (e: ApiError) { _state.update { it.copy(notice = res.getString(R.string.pl_export_failed)) } }
         _state.update { it.copy(busy = false) }
     }
+
+    // Payment terms (§11.2): every answer carries the whole deal (receivable, health), which replaces ours.
+    private fun term(failed: Int, call: suspend () -> PipelineDeal?, onDone: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        try {
+            call()?.let { d -> replace(d.id) { d } }
+            onDone(true); load() // KPIs come from the server
+        } catch (e: ApiError) {
+            val h = e as? ApiError.Http
+            _state.update { it.copy(notice = when (h?.code) {
+                "TOO_MANY_TERMS" -> res.getString(R.string.pl_t_too_many)
+                "INVALID_FIELD" -> h.serverMessage ?: res.getString(R.string.pl_save_failed)
+                else -> res.getString(failed)
+            }) }
+            onDone(false)
+        }
+    }
+
+    fun addTerm(dealId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) = term(R.string.pl_t_add_failed, { api.addTerm(projectId, dealId, fields) }, onDone)
+    fun updateTerm(dealId: String, termId: String, fields: JsonObject, onDone: (Boolean) -> Unit = {}) =
+        term(R.string.pl_save_failed, { api.updateTerm(projectId, dealId, termId, fields) }, onDone)
+    fun deleteTerm(dealId: String, termId: String) = term(R.string.pl_t_delete_failed, { api.deleteTerm(projectId, dealId, termId) })
 
     private fun replace(id: String, f: (PipelineDeal) -> PipelineDeal) =
         _state.update { s -> s.copy(data = s.data?.copy(deals = s.data.deals.map { if (it.id == id) f(it) else it })) }
@@ -416,6 +448,9 @@ private fun ByStage(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineV
                     Column(horizontalAlignment = Alignment.End) {
                         Text(if (d.value > 0) PipelineFormat.idr(d.value) else "–", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                         HealthPill(d.healthKey)
+                        // The receivable: the terms' when the deal has them (§11.2), else the typed one.
+                        if (d.receivable > 0) Text(stringResource(R.string.pl_t_outstanding, PipelineFormat.idr(d.receivable)), fontSize = 10.sp,
+                            color = if (d.daysOverdue > 0) c.danger else c.mutedFg, maxLines = 1)
                     }
                 }
             }
@@ -461,7 +496,7 @@ private fun HealthView(deals: List<PipelineDeal>, data: PipelineData, vm: Pipeli
             late.forEach { d ->
                 Row(Modifier.fillMaxWidth().clickable { vm.open(d.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(d.name, fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text(PipelineFormat.idr(d.outstandingReceivable) + " · " + pluralStringResource(R.plurals.pl_n_days, d.daysOverdue, d.daysOverdue), fontSize = 12.sp, color = c.danger)
+                    Text(PipelineFormat.idr(d.receivable) + " · " + pluralStringResource(R.plurals.pl_n_days, d.daysOverdue, d.daysOverdue), fontSize = 12.sp, color = c.danger)
                 }
             }
         }
