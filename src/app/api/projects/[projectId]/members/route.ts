@@ -10,6 +10,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { emitProjectChanged } from "@/lib/workspace-realtime"
+import type { Prisma, ProjectRole } from "@/generated/prisma/client"
 
 export async function GET(
   _request: NextRequest,
@@ -34,6 +35,15 @@ export async function GET(
   }
 }
 
+// POST takes one person — `{ userId, role }`, what every shipped app sends — or several at once —
+// `{ userIds: string[], role }` (owner, 9 Oct 2026: "gabisa select multiple org"; the searchable
+// multi-select on web and iOS/Mac). Same permission rule either way; each person added gets their own
+// audit entry and their own "added to project" notification, exactly as one-by-one adds did.
+// The single form answers as before (the member, 201; 400 when already in). The bulk form answers
+// `{ success, added: Member[], alreadyMembers: string[], unknown: string[] }`: people already in are
+// skipped rather than failing the whole batch.
+const MAX_BULK = 200
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -42,71 +52,100 @@ export async function POST(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const body = await request.json()
-    const { userId, role } = body
+    const { projectId } = await params
+    const body = await request.json().catch(() => ({}))
+    const ROLES: ProjectRole[] = ["LEAD", "MEMBER", "VIEWER", "GUEST"]
+    const role: ProjectRole = ROLES.includes(body?.role) ? body.role : "MEMBER"
+    const bulk = Array.isArray(body?.userIds)
+    const requested: string[] = bulk
+      ? Array.from(new Set((body.userIds as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)))
+      : (typeof body?.userId === "string" && body.userId ? [body.userId] : [])
 
-    if (!userId) {
-      return NextResponse.json({ error: "userId is required" }, { status: 400 })
+    if (requested.length === 0) {
+      return NextResponse.json({ error: bulk ? "userIds is required" : "userId is required" }, { status: 400 })
+    }
+    if (requested.length > MAX_BULK) {
+      return NextResponse.json({ error: `At most ${MAX_BULK} people at once` }, { status: 400 })
     }
 
     // Only project managers (BoD / Manager-member / system admin) may add members.
-    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
+    const { allowed } = await checkProjectAccess(session.user.id!, projectId, ["LEAD"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: manage access required to add members" }, { status: 403 })
     }
 
-    const existing = await prisma.projectMember.findUnique({
-      where: {
-        userId_projectId: {
-          userId,
-          projectId: (await params).projectId,
-        },
-      },
+    const existingRows = await prisma.projectMember.findMany({
+      where: { projectId, userId: { in: requested } },
+      select: { userId: true },
     })
+    const already = new Set(existingRows.map((r) => r.userId))
 
-    if (existing) {
+    if (!bulk && already.size > 0) {
       return NextResponse.json({ error: "User is already a member" }, { status: 400 })
     }
 
     const project = await prisma.project.findUnique({
-      where: { id: (await params).projectId },
+      where: { id: projectId },
       select: { name: true, workspaceId: true },
     })
 
-    const member = await prisma.projectMember.create({
-      data: {
-        userId,
-        projectId: (await params).projectId,
-        role: role || "MEMBER",
-      },
-      include: { user: true },
-    })
-
-    // Into the project's chat room now, not whenever they next open the chat list.
-    await syncProjectRoomSafe((await params).projectId, "project-member-added")
-
-    // Who sees the project changed: the workspace's open views refetch, and so does the new member's
-    // sidebar (their own room: they may not be in this workspace).
-    emitWorkspaceChanged(
-      project?.workspaceId,
-      { kind: "projects", projectId: (await params).projectId, actorId: session.user.id! },
-      [userId],
-    )
-
-    // Notify the invited user
-    if (userId !== session.user.id) {
-      notifyProjectInvite({
-        userId,
-        projectId: (await params).projectId,
-        projectName: project?.name || "Unknown Project",
-        invitedByName: session.user.name || "Someone",
-        role: role || "MEMBER",
-      }).catch((err) => console.error("Project invite notification error:", err))
+    // Bulk: ids that are no account at all are reported, not thrown on (the single form keeps its
+    // old behaviour).
+    let toAdd = requested.filter((id) => !already.has(id))
+    let unknown: string[] = []
+    if (bulk && toAdd.length > 0) {
+      const real = await prisma.user.findMany({ where: { id: { in: toAdd } }, select: { id: true } })
+      const realIds = new Set(real.map((u) => u.id))
+      unknown = toAdd.filter((id) => !realIds.has(id))
+      toAdd = toAdd.filter((id) => realIds.has(id))
     }
 
-    logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || userId, userId: session.user.id!, request, metadata: { projectId: (await params).projectId, role: role || "MEMBER" } })
+    const added: Array<Prisma.ProjectMemberGetPayload<{ include: { user: true } }>> = []
+    for (const userId of toAdd) {
+      try {
+        added.push(await prisma.projectMember.create({
+          data: { userId, projectId, role },
+          include: { user: true },
+        }))
+      } catch (e) {
+        // Added by someone else a moment ago (unique userId+projectId): already in, not an error.
+        if (bulk && (e as { code?: string })?.code === "P2002") { already.add(userId); continue }
+        throw e
+      }
+    }
 
-    return NextResponse.json(member, { status: 201 })
+    if (added.length > 0) {
+      // Into the project's chat room now, not whenever they next open the chat list.
+      await syncProjectRoomSafe(projectId, "project-member-added")
+
+      // Who sees the project changed: the workspace's open views refetch, and so does each new
+      // member's sidebar (their own room: they may not be in this workspace).
+      emitWorkspaceChanged(
+        project?.workspaceId,
+        { kind: "projects", projectId, actorId: session.user.id! },
+        added.map((m) => m.userId),
+      )
+    }
+
+    for (const member of added) {
+      // Notify the invited user
+      if (member.userId !== session.user.id) {
+        notifyProjectInvite({
+          userId: member.userId,
+          projectId,
+          projectName: project?.name || "Unknown Project",
+          invitedByName: session.user.name || "Someone",
+          role,
+        }).catch((err) => console.error("Project invite notification error:", err))
+      }
+      logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || member.userId, userId: session.user.id!, request, metadata: { projectId, role } })
+    }
+
+    if (!bulk) return NextResponse.json(added[0], { status: 201 })
+    return NextResponse.json(
+      { success: true, added, alreadyMembers: requested.filter((id) => already.has(id)), unknown },
+      { status: added.length > 0 ? 201 : 200 },
+    )
   } catch (error) {
     console.error("Error adding project member:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

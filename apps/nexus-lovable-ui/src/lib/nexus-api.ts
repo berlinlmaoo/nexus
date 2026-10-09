@@ -2211,6 +2211,8 @@ export const nexusApi = {
   setFolderPin: (folderId: string, pinned: boolean) => apiFetch<{ pinned: boolean }>("/api/project-folders/pins", { method: "POST", body: JSON.stringify({ folderId, pinned }) }),
   projectMembers: (projectId: string) => apiFetch<{ members?: Array<{ userId?: string; role?: string; user?: NexusUser }> } | Array<{ userId?: string; role?: string; user?: NexusUser }>>(`/api/projects/${projectId}/members`),
   addProjectMember: (projectId: string, userId: string, role = "MEMBER") => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ userId, role }) }),
+  // Several at once (servers from 9 Oct 2026). People already in are skipped, not an error.
+  addProjectMembers: (projectId: string, userIds: string[], role = "MEMBER") => apiFetch<{ success?: boolean; added?: Array<{ userId: string; user?: NexusUser }>; alreadyMembers?: string[]; unknown?: string[] }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ userIds, role }) }),
   removeProjectMember: (projectId: string, userId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/members`, { method: "DELETE", body: JSON.stringify({ userId }) }),
   inviteToProject: (projectId: string, email: string, role = "GUEST") => apiFetch<{ success?: boolean; invite?: unknown }>(`/api/projects/${projectId}/invite`, { method: "POST", body: JSON.stringify({ email, role }) }),
   projectRollups: (projectId: string) => apiFetch<{ totalTasks?: number; completedTasks?: number; completionRate?: number; avgCompletionDays?: number; byStatus?: Record<string, number>; byPriority?: Record<string, number> }>(`/api/projects/${projectId}/rollups`),

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Circle, ImagePlus, Loader2, Mail, Trash2, UserPlus, X } from "lucide-react";
 import { nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
 import { ProjectCustomFieldsManager } from "@/components/projects/ProjectCustomFieldsManager";
+import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { projectEmoji } from "@/components/projects/ProjectIcon";
 import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, financeTabEnabled, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
@@ -27,11 +28,6 @@ function MiniAvatar({ user, size = 26 }: { user?: NexusUser | null; size?: numbe
       {initialsOf(user?.name)}
     </span>
   );
-}
-
-function toMembers(data: { members?: NexusUser[] } | NexusUser[] | undefined): NexusUser[] {
-  if (!data) return [];
-  return Array.isArray(data) ? data : data.members ?? [];
 }
 
 /** Pill switch matching the core-NEXUS "Customize Project" toggles. */
@@ -160,20 +156,16 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   // Tabs follow the rule of every other project setting on the server (LEAD = Manager and above).
   const canManageTabs = (ORG_HIERARCHY[wsm.data?.role ?? ""] ?? 0) >= (ORG_HIERARCHY.MANAGER ?? 2);
 
-  const membersQuery = useQuery({ queryKey: ["members"], queryFn: () => nexusApi.members(), enabled: showPicker, staleTime: 300_000 });
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
 
   const save = useMutation({
     mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, icon: icon === shownIcon ? storedIcon : icon, color, status }),
     onSuccess: () => { invalidate(); qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); },
   });
-  const addMember = useMutation({
-    mutationFn: (userId: string) => nexusApi.addProjectMember(project.id, userId),
-    onSuccess: () => { setShowPicker(false); invalidate(); },
-  });
   const removeMember = useMutation({
     mutationFn: (userId: string) => nexusApi.removeProjectMember(project.id, userId),
-    onSuccess: invalidate,
+    // The pipeline's BD / PM pickers read the same members under their own key.
+    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ["nexus", "project-members", project.id] }); },
   });
   const invite = useMutation({
     mutationFn: () => nexusApi.inviteToProject(project.id, inviteEmail.trim()),
@@ -238,7 +230,6 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
   const currentMembers = project.members ?? [];
   const memberIds = useMemo(() => new Set(currentMembers.map((m) => m.userId || m.user?.id).filter(Boolean) as string[]), [currentMembers]);
-  const assignable = useMemo(() => toMembers(membersQuery.data).filter((m) => !memberIds.has(m.id)), [membersQuery.data, memberIds]);
 
   if (typeof document === "undefined") return null;
 
@@ -412,7 +403,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
           {/* members */}
           <div className="space-y-2 border-t border-border pt-5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Members · {currentMembers.length}</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Members · {n}", { n: currentMembers.length })}</span>
             <div className="space-y-1.5">
               {currentMembers.map((m) => (
                 <div key={m.userId || m.user?.id} className="flex items-center gap-2 rounded-xl bg-muted/50 px-2 py-1.5">
@@ -422,18 +413,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 </div>
               ))}
             </div>
-            <div className="relative">
-              <button onClick={() => setShowPicker((v) => !v)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><UserPlus className="h-3.5 w-3.5" /> Add member</button>
-              {showPicker && (
-                <div className="absolute z-20 mt-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
-                  {membersQuery.isLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
-                  {!membersQuery.isLoading && assignable.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No more members</div>}
-                  {assignable.map((m) => (
-                    <button key={m.id} onClick={() => addMember.mutate(m.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"><MiniAvatar user={m} size={22} /><span className="truncate">{m.name ?? m.email}</span></button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <button onClick={() => setShowPicker(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><UserPlus className="h-3.5 w-3.5" /> {t("Add members")}</button>
+            {showPicker && <AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setShowPicker(false)} onAdded={() => setShowPicker(false)} />}
           </div>
 
           {/* invite by email */}
