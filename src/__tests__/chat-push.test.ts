@@ -68,6 +68,17 @@ describe("APNs body", () => {
     // Every other push is unchanged: no thread-id, no badge.
     expect(buildApnsBody({ title: "T", body: "B", type: "task_assigned" }).aps).toEqual({ alert: { title: "T", body: "B" }, sound: "default" })
   })
+
+  it("Threads photo: aps.mutable-content 1 + top-level image, only when an image is given", async () => {
+    const { buildApnsBody } = await import("@/lib/apns")
+    const url = "https://nexus.znetworks.id/api/feed/push-image/img1?exp=1&sig=x"
+    const body = buildApnsBody({ title: "Budi posted on Threads", body: "📷 Foto", type: "feed_post", link: "/threads?post=p1", threadId: "feed", image: url })
+    expect(body.aps).toEqual({ alert: { title: "Budi posted on Threads", body: "📷 Foto" }, sound: "default", "thread-id": "feed", "mutable-content": 1 })
+    expect(body).toMatchObject({ type: "feed_post", link: "/threads?post=p1", image: url })
+    const plain = buildApnsBody({ title: "T", body: "B", type: "feed_post" })
+    expect(plain.aps).not.toHaveProperty("mutable-content")
+    expect(plain).not.toHaveProperty("image")
+  })
 })
 
 describe("APNs sender", () => {

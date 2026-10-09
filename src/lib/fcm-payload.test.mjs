@@ -42,7 +42,7 @@ const R1 = {
   attendance_reminders: ["attendance_checkin_reminder", "attendance_checkout_reminder", "attendance_absent_recorded", "dayoff_quota_low", "dayoff_bonus_granted", "red_date_quota_low", "attendance_override"],
   attendance_location: ["attendance_outside_reminder", "attendance_outside_warning", "attendance_auto_offsite_checkout"],
   approvals: ["attendance_request_pending", "attendance_request_reviewed", "attendance_request_escalated", "offsite_checkout_pending", "offsite_checkout_reviewed"],
-  messages: ["MESSAGE", "MESSAGE_MENTION", "feed_mention", "feed_comment"],
+  messages: ["MESSAGE", "MESSAGE_MENTION", "feed_mention", "feed_comment", "feed_post", "feed_like"],
   tasks: ["task_assigned", "task_completed", "task_due_now", "task_status_changed", "comment_added", "comment_mention", "project_invite", "status_update", "automation", "submission_status", "streak_at_risk", "quest_claimable", "booking_soon", "booking_changed", "booking_confirmed"],
   tickets: ["complaint_filed", "complaint_reply", "complaint_status", "system_gideon", "peer_report_filed", "peer_report_decided", "peer_report_rebuttal", "violation_announcement"],
   announcements: ["announcement"],
@@ -149,6 +149,14 @@ test("chat push: contract keys as strings, badge, messages channel; data cannot 
   assert.equal(buildFcmMessage("TOK", { title: "T", body: "B", type: "MESSAGE_MENTION", badge: 0 }).message.data.badge, "0")
   assert.ok(!("badge" in buildFcmMessage("TOK", { title: "T", body: "B", type: "task_assigned" }).message.data), "no badge unless given")
   assert.ok(!("badge" in buildFcmMessage("TOK", { title: "T", body: "B", type: "MESSAGE", badge: null }).message.data))
+})
+
+test("Threads photo: data image only when given, still data-only", () => {
+  const url = "https://nexus.znetworks.id/api/feed/push-image/img1?exp=1&sig=x"
+  const m = buildFcmMessage("TOK", { title: "T", body: "B", type: "feed_post", image: url }).message
+  assert.equal(m.data.image, url)
+  assert.ok(!("notification" in m), "no system-drawn notification block")
+  assert.ok(!("image" in buildFcmMessage("TOK", { title: "T", body: "B", type: "feed_post" }).message.data))
 })
 
 console.log(`fcm-payload: ${passed} passed`)

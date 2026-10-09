@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { resolveMime } from "@/lib/mime"
-import { notifyFeedMention } from "@/lib/notification-service"
+import { notifyFeedMention, notifyFeedPost } from "@/lib/notification-service"
 import {
   POST_TEXT_MAX, IMG_MAX, IMG_SIZE_MAX, MENTION_MAX, RATE_MIN_GAP_MS, RATE_HOURLY_MAX,
   POST_INCLUDE, type PostRow, serializePost, getUserOrgRole, isBodPlus, encodeCursor, decodeCursor,
@@ -153,9 +153,17 @@ export async function POST(request: NextRequest) {
 
     // After-commit notifications (don't block the response on delivery).
     const myName = session.user.name || "Seseorang"
+    // The first photo goes on the push (long-press preview on iOS, data `image` on Android).
+    const firstImageId = post.images[0]?.id ?? null
     void Promise.all(validMentions.map((u) =>
-      notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, postId: post.id, snippet: text }).catch(() => {})
+      notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, postId: post.id, snippet: text, imageId: firstImageId }).catch(() => {})
     ))
+    // Everyone else in the company hears about the post itself (owner, 9 Oct 2026). The people tagged
+    // above are left out here so a mention is one notification, not two.
+    void notifyFeedPost({
+      postId: post.id, authorId: me, authorName: myName, text, imageId: firstImageId,
+      skipUserIds: validMentions.map((u) => u.id),
+    }).catch((error) => console.error("Error notifying feed post:", error))
 
     return NextResponse.json(serializePost(post as unknown as PostRow, me, new Set(), false), { status: 201 })
   } catch (error) {

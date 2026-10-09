@@ -13,6 +13,30 @@ import {
   serializePost, getUserOrgRole, isBodPlus,
 } from "@/lib/feed"
 
+// GET /api/feed/posts/[id] — one post, shaped like a feed row, with the viewer's own likedByMe. What
+// a notification opens (`/threads?post=<id>`): the post may be far down the feed or not loaded yet.
+// 410 when it was deleted, so the client can say so instead of showing nothing.
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // The Wire is the company feed: members of the company workspace only.
+    const role = await orgRoleOf(session.user.id)
+    if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    const me = session.user.id
+    const { id } = await params
+
+    const post = await prisma.post.findUnique({ where: { id }, include: POST_INCLUDE })
+    if (!post) return NextResponse.json({ error: "Post tidak ditemukan." }, { status: 404 })
+    if (post.deletedAt) return NextResponse.json({ error: "Post ini sudah dihapus." }, { status: 410 })
+    const liked = await prisma.postLike.findUnique({ where: { postId_userId: { postId: id, userId: me } }, select: { id: true } })
+    return NextResponse.json(serializePost(post as unknown as PostRow, me, liked ? new Set([id]) : new Set(), isBodPlus(role)))
+  } catch (error) {
+    console.error("Error fetching post:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
 // DELETE /api/feed/posts/[id] — soft delete. Author OR workspace manager (BoD/Manager moderation).
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -91,7 +115,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const myName = session.user.name || "Seseorang"
     void Promise.all(added.map((u) => notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, postId: id, snippet: text }).catch(() => {})))
 
-    return NextResponse.json(serializePost(updated as unknown as PostRow, me, new Set(), false))
+    // The viewer's own like, read back: an empty set here turned the heart grey after every edit.
+    const liked = await prisma.postLike.findUnique({ where: { postId_userId: { postId: id, userId: me } }, select: { id: true } })
+    return NextResponse.json(serializePost(updated as unknown as PostRow, me, liked ? new Set([id]) : new Set(), false))
   } catch (error) {
     console.error("Error editing post:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -1,7 +1,9 @@
 import prisma from "@/lib/prisma"
 import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey } from "@/lib/day-off-usage"
-import { sendPushToUser } from "@/lib/apns"
+import { sendPushToUser, sendPushToUsers, type PushPayload } from "@/lib/apns"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
+import { pushImageUrl } from "@/lib/feed-push-image"
 import { emitNotification } from "@/lib/socket-emitter"
 import { postWaBridge } from "@/lib/wa-bridge"
 import {
@@ -258,6 +260,10 @@ export async function createInAppNotification(data: {
   pushCategory?: string
   /** Extra custom keys in the APNs payload. Push only. */
   pushData?: Record<string, string | number | boolean | null>
+  /** aps.thread-id, so related pushes stack. Push only. */
+  pushThreadId?: string
+  /** Absolute picture URL for the expanded notification (apns.ts PushPayload.image). Push only. */
+  pushImage?: string | null
 }) {
   if (await isDeactivatedRecipient(data.userId)) {
     log.info("notification skipped: recipient offboarded", { userId: data.userId, type: data.type })
@@ -307,6 +313,8 @@ export async function createInAppNotification(data: {
       link: data.link,
       category: data.pushCategory,
       data: data.pushData,
+      threadId: data.pushThreadId,
+      image: data.pushImage,
       notificationId: notification.id,
     }).catch((error) => log.error("APNs delivery failed", { error: String(error) }))
   }
@@ -661,11 +669,23 @@ export async function notifyMention(data: {
 // Feed mentions/comments reuse the `commentMention` preference (no new flag → no migration).
 // No taskId is set (a postId isn't a Task); the link points at /threads?post=<id>.
 
+/** aps.thread-id for new posts and mentions: they stack as one "Threads" group on the lock screen. */
+const FEED_THREAD_ID = "feed"
+const FEED_BODY_MAX = 180
+/** What a push says about a post: its text, or "📷 Foto" for a photo with no words. */
+export function feedPushBody(text: string, hasPhoto: boolean, max = FEED_BODY_MAX): string {
+  const clean = text.replace(/\s+/g, " ").trim()
+  if (!clean) return hasPhoto ? "📷 Foto" : ""
+  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean
+}
+
 export async function notifyFeedMention(data: {
   mentionedUserId: string
   mentionedByName: string
   postId: string
   snippet: string
+  /** The post's first PostImage id: its photo rides on the push like a new-post push's does. */
+  imageId?: string | null
 }) {
   if (await isUserDnd(data.mentionedUserId)) return
   const user = await prisma.user.findUnique({ where: { id: data.mentionedUserId }, select: { name: true, phoneNumber: true } })
@@ -681,6 +701,8 @@ export async function notifyFeedMention(data: {
     message: `${data.mentionedByName} mentioned you in a post`,
     link,
     push: prefs.commentMention,
+    pushThreadId: FEED_THREAD_ID,
+    pushImage: pushImageUrl(data.imageId, base),
   })
 
   if (!prefs.commentMention) return
@@ -692,6 +714,117 @@ export async function notifyFeedMention(data: {
   if (prefs.slackEnabled && prefs.slackWebhook) {
     await sendSlack(prefs.slackWebhook, `*Threads*: ${data.mentionedByName} mentioned ${user.name} in a post`)
   }
+}
+
+/**
+ * A new post on Threads, to everyone in the company (owner, 9 Oct 2026: "push notif untuk semua orang
+ * yang ada di workspace Z Networks kalo ada orang yang bikin threads ... keliatan isi threads nya apa
+ * dan kalo ada foto muncul di notif pas di teken lama").
+ *
+ * Audience = the members of the company workspace — the same people orgRoleOf lets read the feed —
+ * minus the author, minus anyone offboarded, minus `skipUserIds` (the people @mentioned in the post,
+ * who get their own "mentioned you" notification instead of two pushes for one post).
+ *
+ * Built for 50+ people per post, and run after the response (the caller does not await it): the
+ * in-app rows go in with one createManyAndReturn per chunk instead of one INSERT per person, and the
+ * pushes go through sendPushToUsers — one device query, one log line, the shared in-flight limiter.
+ * Each person still gets their own row id on the push, so Android can mark it read on tap.
+ *
+ * Preferences: the in-app row is always written (it is the bell, and the post is there either way).
+ * The push respects Do Not Disturb and the same switch every Threads notification already reads
+ * (`commentMention`); there is no separate "new posts" switch, so turning that off silences Threads
+ * on the phone entirely. No WhatsApp or Slack: a message per post per person would be spam.
+ */
+export async function notifyFeedPost(data: {
+  postId: string
+  authorId: string
+  authorName: string
+  text: string
+  /** The first PostImage id, if the post has photos. */
+  imageId?: string | null
+  skipUserIds?: string[]
+}) {
+  const skip = new Set([data.authorId, ...(data.skipUserIds ?? [])])
+  const members = await prisma.workspaceMember.findMany({
+    where: { workspaceId: ORG_WORKSPACE_ID, user: { deactivatedAt: null } },
+    select: { userId: true },
+  })
+  const recipients = [...new Set(members.map((m) => m.userId))].filter((id) => !skip.has(id))
+  if (recipients.length === 0) return
+
+  const link = `/threads?post=${data.postId}`
+  const title = `${data.authorName} posted on Threads`
+  const message = feedPushBody(data.text, Boolean(data.imageId)) || "New post"
+  const image = pushImageUrl(data.imageId, publicBaseUrl())
+
+  const CHUNK = 200
+  for (let i = 0; i < recipients.length; i += CHUNK) {
+    const ids = recipients.slice(i, i + CHUNK)
+    const rows = await prisma.notification.createManyAndReturn({
+      data: ids.map((userId) => ({ userId, type: "feed_post", title, message, link })),
+    })
+    for (const row of rows) emitNotification(row.userId, JSON.parse(JSON.stringify(row)))
+
+    const [dnd, prefs] = await Promise.all([getBatchDndStatus(ids), getBatchPrefs(ids)])
+    const items: Array<{ userId: string; payload: PushPayload }> = rows
+      .filter((row) => !dnd.has(row.userId) && prefs.get(row.userId)?.commentMention !== false)
+      .map((row) => ({
+        userId: row.userId,
+        payload: { title, body: message, type: "feed_post", link, threadId: FEED_THREAD_ID, image, notificationId: row.id },
+      }))
+    await sendPushToUsers(items, "feed_post").catch((error) => log.error("feed post push failed", { error: String(error) }))
+  }
+}
+
+// Likes already told, per (post, liker), for this process: a double-tap that lands as like-unlike-like
+// inside the same second must not race the database check below into two notifications.
+const recentLikeNotices = new Map<string, number>()
+
+/**
+ * "{name} liked your post" to the post's author (owner, 9 Oct 2026: "push notif pas gw like post
+ * threads nya gmn ke org yg punya threads? ... biar kaya x/twitter").
+ *
+ * At most ONE per (post, liker), ever: liking, unliking and liking again must not ping the author
+ * twice. There is no column for "who did this" on Notification, and adding one is a migration, so the
+ * existing row is the marker: same recipient, type feed_like, the post's link, and the liker's name in
+ * the title. (Caveats, accepted: a liker who renames themselves between the two likes, or an author
+ * who deleted the first notification, can be told a second time.)
+ */
+export async function notifyFeedLike(data: {
+  postId: string
+  authorId: string
+  likerId: string
+  likerName: string
+  postText: string
+  hasPhoto: boolean
+}) {
+  if (data.authorId === data.likerId) return
+  const key = `${data.postId}:${data.likerId}`
+  const now = Date.now()
+  if ((recentLikeNotices.get(key) ?? 0) > now - 60_000) return
+  if (recentLikeNotices.size > 5000) recentLikeNotices.clear()
+  recentLikeNotices.set(key, now)
+
+  const link = `/threads?post=${data.postId}`
+  const title = `${data.likerName} liked your post`
+  const already = await prisma.notification.findFirst({
+    where: { userId: data.authorId, type: "feed_like", link, title },
+    select: { id: true },
+  })
+  if (already) return
+
+  const dnd = await isUserDnd(data.authorId)
+  const prefs = await getUserPrefs(data.authorId)
+  await createInAppNotification({
+    userId: data.authorId,
+    type: "feed_like",
+    title,
+    message: feedPushBody(data.postText, data.hasPhoto, 140) || "Your post on Threads",
+    link,
+    push: !dnd && prefs.commentMention,
+    // Likes on one post stack together, apart from new posts.
+    pushThreadId: `feed:${data.postId}`,
+  })
 }
 
 export async function notifyFeedComment(data: {
@@ -715,6 +848,7 @@ export async function notifyFeedComment(data: {
     message: data.snippet ? data.snippet.slice(0, 140) : (data.reason === "author" ? "New comment on your post" : "Mentioned in a comment on Threads"),
     link,
     push: prefs.commentMention,
+    pushThreadId: `feed:${data.postId}`,
   })
 
   if (!prefs.commentMention) return
