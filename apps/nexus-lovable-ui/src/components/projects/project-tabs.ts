@@ -58,12 +58,15 @@ export function financeTabEnabled(project?: Pick<NexusProject, "financeEnabled" 
   return /finance/i.test(project.name ?? "");
 }
 
-/** Project types offered when creating a project. Only TASK can be created today. */
+/**
+ * Project types offered when creating a project. TASK and, since 9 Oct 2026, PIPELINE (the GM's pipeline
+ * board — components/pipeline). Finance Dashboard and Content Planner wait for Berlin's references.
+ */
 export const PROJECT_TYPES = [
   { id: "TASK", available: true },
   { id: "FINANCE", available: false },
   { id: "CONTENT", available: false },
-  { id: "PIPELINE", available: false },
+  { id: "PIPELINE", available: true },
 ] as const;
 export type ProjectTypeId = (typeof PROJECT_TYPES)[number]["id"];
 
@@ -78,7 +81,7 @@ export function projectSettingsErrorText(code: unknown): string | null {
     case "BOD_REQUIRED":
       return "Only BoD and above can turn Finance on or off.";
     case "TYPE_COMING_SOON":
-      return "That project type is coming soon. For now you can create a Task Project.";
+      return "That project type is coming soon. For now you can create a Task Project or a Pipeline Dashboard.";
     default:
       return null;
   }

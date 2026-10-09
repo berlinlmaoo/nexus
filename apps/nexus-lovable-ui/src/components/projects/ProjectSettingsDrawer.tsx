@@ -389,7 +389,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             </div>
           </div>
 
-          <ProjectTabsSection project={project} canManage={canManageTabs} roleKnown={!!wsm.data} />
+          {/* A Pipeline Dashboard shows its pipeline, not task tabs (owner, 9 Oct 2026): nothing to choose. */}
+          {project.type !== "PIPELINE" && <ProjectTabsSection project={project} canManage={canManageTabs} roleKnown={!!wsm.data} />}
 
           {/* workflow bundle */}
           <div className="space-y-2 border-t border-border pt-5">

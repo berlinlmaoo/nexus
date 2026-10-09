@@ -31,7 +31,7 @@ export const ID_PROJECTS: Record<string, string> = {
   "Board or List has to stay on — at least one way to see the tasks.": "Board atau Daftar harus tetap nyala — minimal satu cara untuk melihat task.",
   "That tab can't be changed here. Refresh the page and try again.": "Tab itu tidak bisa diubah di sini. Muat ulang halaman lalu coba lagi.",
   "Only BoD and above can turn Finance on or off.": "Hanya BoD ke atas yang bisa menyalakan atau mematikan Finance.",
-  "That project type is coming soon. For now you can create a Task Project.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project.",
+  "That project type is coming soon. For now you can create a Task Project or a Pipeline Dashboard.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project atau Pipeline Dashboard.",
   // Mission Control: projects are called projects (owner, 9 Oct 2026 — "kok masih new mission?").
   // The page names "Mission Control" and "My Mission" stay.
   "New project": "Proyek baru",

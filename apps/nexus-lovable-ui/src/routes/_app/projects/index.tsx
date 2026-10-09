@@ -494,7 +494,7 @@ function ProjectsPage() {
                 variant="primary"
                 className="w-full font-bold"
               >
-                {createProject.isPending ? tr("Creating project…") : tr("Create project + open board")}
+                {createProject.isPending ? tr("Creating project…") : newProjectType === "PIPELINE" ? tr("Create project + open pipeline") : tr("Create project + open board")}
               </Button>
             </div>
             )}
