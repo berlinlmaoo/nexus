@@ -1,4 +1,4 @@
-import { apiFetch, downloadFile } from "@/lib/nexus-api";
+import { apiFetch, downloadFile, uploadChunked, type UploadControl } from "@/lib/nexus-api";
 import type { DealHealth, DealPhase, PipelineSummary, StageGroup, TermStatus, TermSummary } from "@/lib/pipeline";
 
 /**
@@ -8,7 +8,22 @@ import type { DealHealth, DealPhase, PipelineSummary, StageGroup, TermStatus, Te
 
 export type PipelinePerson = { id: string; name: string | null; avatar: string | null };
 
-export type PipelineLink = { id: string; type: string; label: string; url: string };
+/**
+ * A deal's document: a pasted link, or (owner, 9 Oct 2026) an attached file — then `url` is its
+ * members-only download route and fileName / mimeType / size describe it. Older servers send links only
+ * (no `kind`). A file goes back in a PATCH of `links` as it came (the server keeps it by id).
+ */
+export type PipelineLink = {
+  id: string;
+  type: string;
+  label: string;
+  url: string;
+  kind?: "link" | "file";
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+  uploadedAt?: string;
+};
 
 /**
  * One payment term of a deal (owner, 9 Oct 2026: "perlu per termin"). status / outstanding / daysOverdue
@@ -44,6 +59,8 @@ export type PipelineDeal = {
   name: string;
   brand: string;
   service: string;
+  /** Every service, presets and typed ones (owner, 9 Oct 2026); `service` is the first. Older servers omit it. */
+  services?: string[];
   bdUserId: string | null;
   bdName: string | null;
   bd: PipelinePerson | null;
@@ -134,9 +151,26 @@ export const pipelineApi = {
     apiFetch<{ deal: PipelineDeal; term: PipelineTerm }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms/${encodeURIComponent(termId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
   removeTerm: (projectId: string, dealId: string, termId: string) =>
     apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms/${encodeURIComponent(termId)}`, { method: "DELETE" }),
+  /** Attach a file (9 Oct 2026): the shared chunked transport with target=pipeline; the server adds the
+   *  entry to the deal and answers the whole deal. */
+  uploadDocument: (projectId: string, dealId: string, file: File, meta: { type: string; label: string }, onProgress: (pct: number) => void, control?: UploadControl) =>
+    uploadChunked<{ id: string; document: PipelineLink; deal: PipelineDeal | null }>(
+      file,
+      { target: "pipeline", projectId, dealId, docType: meta.type, ...(meta.label ? { label: meta.label } : {}) },
+      onProgress,
+      control,
+    ),
+  /** Take a document (link or file) off the deal; the file itself stays until the 90-day purge. */
+  removeDocument: (projectId: string, dealId: string, docId: string) =>
+    apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/documents/${encodeURIComponent(docId)}`, { method: "DELETE" }),
   exportXlsx: (projectId: string, lang: "id" | "en") =>
     downloadFile(`${base(projectId)}/export?lang=${lang}`, "pipeline.xlsx"),
 };
+
+/** A deal's services: the list, or the single `service` from an older server. */
+export function servicesOf(d: Pick<PipelineDeal, "service" | "services">): string[] {
+  return d.services ?? (d.service ? [d.service] : []);
+}
 
 /** Query keys: the list, and one deal's detail (history). Realtime invalidates both by prefix. */
 export const pipelineKey = (projectId: string) => ["nexus", "pipeline", projectId] as const;

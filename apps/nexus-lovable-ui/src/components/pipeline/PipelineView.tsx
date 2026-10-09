@@ -8,7 +8,7 @@ import { nexusApi } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { PIPELINE_STAGES, stageGroupOf, summarize, type HealthKey } from "@/lib/pipeline";
-import { pipelineApi, pipelineKey, type PipelineDeal, type PipelineDealPatch, type PipelineResponse } from "@/lib/pipeline-api";
+import { pipelineApi, pipelineKey, servicesOf, type PipelineDeal, type PipelineDealPatch, type PipelineResponse } from "@/lib/pipeline-api";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
 import { PipelineTable } from "./PipelineTable";
@@ -85,6 +85,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   const [search, setSearch] = useState("");
   const [pm, setPm] = useState(ALL);
   const [bd, setBd] = useState(ALL);
+  const [service, setService] = useState(ALL);
   const [health, setHealth] = useState<HealthKey | "">("");
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -98,6 +99,11 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
     Array.from(new Set(list.map(pick).filter((x): x is string => !!x))).sort((a, b) => a.localeCompare(b));
   const pmNames = useMemo(() => personFilter(deals, (d) => personName(d.pm, d.pmName)), [deals]);
   const bdNames = useMemo(() => personFilter(deals, (d) => personName(d.bd, d.bdName)), [deals]);
+  // Every service in use, typed ones included (owner, 9 Oct 2026: a deal has several).
+  const serviceNames = useMemo(
+    () => Array.from(new Set(deals.flatMap((d) => servicesOf(d)))).sort((a, b) => a.localeCompare(b)),
+    [deals],
+  );
 
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -105,15 +111,16 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
       if (health && d.health.key !== health) return false;
       if (pm && personName(d.pm, d.pmName) !== pm) return false;
       if (bd && personName(d.bd, d.bdName) !== bd) return false;
+      if (service && !servicesOf(d).includes(service)) return false;
       if (needle) {
-        const hay = `${d.code} ${d.name} ${d.brand} ${personName(d.pm, d.pmName) ?? ""} ${personName(d.bd, d.bdName) ?? ""}`.toLowerCase();
+        const hay = `${d.code} ${d.name} ${d.brand} ${servicesOf(d).join(" ")} ${personName(d.pm, d.pmName) ?? ""} ${personName(d.bd, d.bdName) ?? ""}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [deals, search, pm, bd, health]);
-  const filtering = !!(search.trim() || pm || bd || health);
-  const resetFilters = () => { setSearch(""); setPm(ALL); setBd(ALL); setHealth(""); };
+  }, [deals, search, pm, bd, service, health]);
+  const filtering = !!(search.trim() || pm || bd || service || health);
+  const resetFilters = () => { setSearch(""); setPm(ALL); setBd(ALL); setService(ALL); setHealth(""); };
 
   const personOf = useCallback((id: string | null | undefined) => {
     if (!id) return null;
@@ -282,6 +289,12 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                 <option value={ALL}>{t("All BDs")}</option>
                 {bdNames.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
+              {serviceNames.length > 1 && (
+                <select aria-label={t("Filter by service")} value={service} onChange={(e) => setService(e.target.value)} className={cn(control, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-primary/60 text-foreground")}>
+                  <option value={ALL}>{t("All services")}</option>
+                  {serviceNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              )}
               <button
                 type="button"
                 onClick={exportXlsx}

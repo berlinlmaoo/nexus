@@ -9,7 +9,7 @@ import {
   PIPELINE_STAGES,
   PROBABILITY_OPTIONS,
 } from "@/lib/pipeline";
-import type { PipelineDeal, PipelineDealPatch } from "@/lib/pipeline-api";
+import { servicesOf, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
 import { CELL, DateField, MoneyField, SelectField } from "./fields";
 import { HEALTH_ORDER, HealthPill, dealPayment, fmtIdr, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
 
@@ -90,6 +90,7 @@ export function PipelineTable({
           <tr>
             {th("code", t("Code"), "hidden w-24 pl-4 sm:table-cell")}
             {th("name", t("Deal"), "sticky left-0 z-10 min-w-56 bg-muted")}
+            {plainTh(t("Services"), "min-w-40")}
             {th("stage", t("Stage"), "min-w-48")}
             {th("probability", t("Prob."), "w-24")}
             {th("netValue", t("Net value"), "min-w-40 text-right")}
@@ -118,6 +119,9 @@ export function PipelineTable({
                   {d.name || t("Untitled deal")}
                 </button>
                 {d.brand && <span className="block max-w-40 truncate sm:max-w-72 text-xs text-muted-foreground">{d.brand}</span>}
+              </td>
+              <td className="max-w-56 px-2 text-sm text-muted-foreground" title={servicesOf(d).join(", ")}>
+                <span className="line-clamp-2">{servicesOf(d).join(", ")}</span>
               </td>
               <td className="px-1"><SelectField cell className="min-w-[11.5rem]" label={t("Stage")} value={d.stage} options={PIPELINE_STAGES} labelOf={labels.stage} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { stage: v })} /></td>
               <td className="px-1"><SelectField cell className="min-w-[5.5rem]" label={t("Probability")} value={d.probability} options={PROBABILITY_OPTIONS as readonly number[]} labelOf={fmtPct} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { probability: v })} /></td>
@@ -156,7 +160,7 @@ export function PipelineTable({
           <tr>
             <td className="hidden pl-4 sm:table-cell" />
             <td className="sticky left-0 z-10 bg-muted px-2 py-2">{t("{n} deals", { n: rows.length })}</td>
-            <td colSpan={2} />
+            <td colSpan={3} />
             <td className="px-2 text-right" title={new Intl.NumberFormat(locale).format(totals.net)}>{fmtIdr(totals.net, lang)}</td>
             <td colSpan={3} />
             <td className="px-2 text-right">{fmtIdr(totals.outstanding, lang)}</td>
