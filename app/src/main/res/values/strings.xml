@@ -728,12 +728,12 @@
     <string name="ps_ft_place">Place / Map</string>
     <string name="ps_members">Project members</string>
     <string name="ps_remove">Remove</string>
-    <string name="ps_add_member">Add member</string>
+    <string name="ps_add_member">Add members</string>
     <string name="ps_invite">Invite by email</string>
     <string name="ps_send_invite">Send invite</string>
     <string name="ps_invite_sent">Invite sent ✓</string>
     <string name="ps_search_people">Search people</string>
-    <string name="ps_everyone_here">Every workspace member is already in this project.</string>
+    <string name="ps_everyone_here">Everyone is already in this project.</string>
     <string name="ps_danger">Danger zone</string>
     <string name="ps_duplicate">Duplicate project</string>
     <string name="ps_duplicated">Project duplicated ✓</string>
@@ -2824,5 +2824,21 @@
     <plurals name="pl_stage_n">
         <item quantity="one">%1$s, %2$d deal</item>
         <item quantity="other">%1$s, %2$d deals</item>
+    </plurals>
+    <!-- Add members picker (9 Oct) -->
+    <string name="ps_search_name_email">Search by name or email</string>
+    <string name="ps_add_n">Add (%d)</string>
+    <string name="ps_n_selected">%d selected</string>
+    <string name="ps_pick_people">Pick one or more people</string>
+    <string name="ps_clear">Clear</string>
+    <string name="ps_everyone_hint">To bring in someone from outside the workspace, use Invite by email.</string>
+    <string name="ps_no_match">No one matches that search</string>
+    <string name="ps_no_match_hint">Try part of their name or their email.</string>
+    <string name="ps_add_failed">Couldn\'t add them. Try again.</string>
+    <string name="ps_already_in">They\'re already in this project.</string>
+    <string name="ps_only_managers_add">Only the project\'s managers can add members.</string>
+    <plurals name="ps_n_added">
+        <item quantity="one">%d member added</item>
+        <item quantity="other">%d members added</item>
     </plurals>
 </resources>

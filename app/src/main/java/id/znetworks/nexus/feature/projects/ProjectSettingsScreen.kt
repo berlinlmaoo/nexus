@@ -4,6 +4,10 @@ import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -156,7 +160,20 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
 
     fun createField(name: String, type: String, options: List<String>) = act(R.string.ps_saved) { api.createField(projectId, name, type, options) }
     fun deleteField(id: String) = act { api.deleteField(id) }
-    fun addMembers(ids: Set<String>) = act(R.string.ps_saved) { ids.forEach { api.addMember(projectId, it) } }
+    /** Everyone picked in one request; a refusal stays in the picker ([onDone] gets its sentence), success says how many. */
+    fun addMembers(ids: Set<String>, onDone: (String?) -> Unit) = viewModelScope.launch {
+        _state.update { it.copy(busy = true) }
+        try {
+            val n = api.addMembers(projectId, ids)
+            id.znetworks.nexus.feature.pipeline.PipelineViewModel.membersChanged() // BD / PM pickers read them again
+            _state.update { it.copy(busy = false, toast = if (n > 0) res.getQuantityString(R.plurals.ps_n_added, n, n) else res.getString(R.string.ps_already_in)) }
+            onDone(null); load()
+        } catch (e: ApiError) {
+            val h = e as? ApiError.Http
+            _state.update { it.copy(busy = false) }
+            onDone(when { h?.status == 403 -> res.getString(R.string.ps_only_managers_add); else -> h?.serverMessage ?: res.getString(R.string.ps_add_failed) })
+        }
+    }
     fun removeMember(userId: String) = act { api.removeMember(projectId, userId) }
     fun invite(email: String, role: String) = act(R.string.ps_invite_sent) { api.invite(projectId, email, role) }
     fun duplicate() = act(R.string.ps_duplicated) { val id = api.duplicateProject(projectId); _state.update { it.copy(duplicatedId = id.ifBlank { null }) } }
@@ -311,7 +328,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
     )
     if (addingField) FieldEditorDialog(onDismiss = { addingField = false }) { n, t, o -> addingField = false; vm.createField(n, t, o) }
-    if (addingPeople) AddPeopleDialog(s, onDismiss = { addingPeople = false }) { addingPeople = false; vm.addMembers(it) }
+    if (addingPeople) AddPeopleDialog(s, onDismiss = { addingPeople = false }) { ids, done -> vm.addMembers(ids) { err -> done(err); if (err == null) addingPeople = false } }
     if (inviting) InviteDialog(onDismiss = { inviting = false }) { e, r -> inviting = false; vm.invite(e, r) }
     (s.error ?: s.toast)?.let { msg ->
         AlertDialog(onDismissRequest = vm::dismiss, text = { Text(msg) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } })
@@ -376,41 +393,77 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
     )
 }
 
+/**
+ * "Add members" (MEMBER-PICKER.md, web 70a8fe6, iOS bf96669): full height, search by name or email, tick several,
+ * one request. Same screen for task projects and the Pipeline Dashboard.
+ */
 @Composable
-private fun AddPeopleDialog(s: ProjectSettingsState, onDismiss: () -> Unit, onAdd: (Set<String>) -> Unit) {
+private fun AddPeopleDialog(s: ProjectSettingsState, onDismiss: () -> Unit, onAdd: (Set<String>, (String?) -> Unit) -> Unit) {
     val c = Nx.colors
     val inProject = s.detail?.members.orEmpty().mapNotNull { it.userId ?: it.user?.id }.toSet()
     var q by rememberSaveable { mutableStateOf("") }
     var picked by remember { mutableStateOf(setOf<String>()) }
-    val candidates = s.roster.filter { (it.userId ?: it.id) !in inProject }
-        .filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), ignoreCase = true) } }
-        .sortedBy { it.name.orEmpty().lowercase() }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.ps_add_member)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
-                if (candidates.isEmpty()) Text(stringResource(R.string.ps_everyone_here), fontSize = 13.sp, color = c.mutedFg)
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    items(candidates, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
+    var adding by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val candidates = s.roster.filter { m -> (m.userId ?: m.id).let { it != null && it !in inProject } }.sortedBy { (it.name ?: it.email).orEmpty().lowercase() }
+    val results = candidates.filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), ignoreCase = true) } }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                Text(stringResource(R.string.ps_add_member), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
+                TextButton(onClick = { adding = true; error = null; onAdd(picked) { err -> adding = false; error = err } }, enabled = picked.isNotEmpty() && !adding) {
+                    if (adding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text(stringResource(R.string.ps_add_n, picked.size), fontWeight = FontWeight.Bold)
+                }
+            }
+            OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                placeholder = { Text(stringResource(R.string.ps_search_name_email)) }, shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(focus))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (picked.isEmpty()) stringResource(R.string.ps_pick_people) else stringResource(R.string.ps_n_selected, picked.size),
+                    fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
+                if (picked.isNotEmpty()) TextButton(onClick = { picked = emptySet() }) { Text(stringResource(R.string.ps_clear)) }
+            }
+            error?.let { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
+            when {
+                candidates.isEmpty() -> EmptyNote(stringResource(R.string.ps_everyone_here), stringResource(R.string.ps_everyone_hint))
+                results.isEmpty() -> EmptyNote(stringResource(R.string.ps_no_match), stringResource(R.string.ps_no_match_hint))
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+                    items(results, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
                         val uid = m.userId ?: m.id ?: return@items
-                        Row(Modifier.fillMaxWidth().clickable { picked = if (uid in picked) picked - uid else picked + uid }.padding(vertical = 6.dp),
+                        val on = uid in picked
+                        Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                            Avatar(m.name ?: m.email, m.avatar, 32.dp); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(m.name ?: "—", fontSize = 14.sp, color = c.foreground)
-                                m.email?.let { Text(it, fontSize = 11.sp, color = c.mutedFg) }
+                                Text(m.name ?: m.email ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
+                                m.email?.takeIf { it != m.name }?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1) }
                             }
-                            Checkbox(uid in picked, { picked = if (uid in picked) picked - uid else picked + uid })
+                            m.role?.takeIf { it.isNotBlank() }?.let { r ->
+                                Text(r.lowercase().replaceFirstChar(Char::titlecase).replace('_', ' '), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
+                                    modifier = Modifier.background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Checkbox(on, { picked = if (on) picked - uid else picked + uid })
                         }
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = { onAdd(picked) }, enabled = picked.isNotEmpty()) { Text(stringResource(R.string.add)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
+        }
+    }
+}
+
+@Composable
+private fun EmptyNote(title: String, hint: String) {
+    val c = Nx.colors
+    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(hint, fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -727,7 +727,7 @@
     <string name="ps_send_invite">Kirim undangan</string>
     <string name="ps_invite_sent">Undangan terkirim ✓</string>
     <string name="ps_search_people">Cari orang</string>
-    <string name="ps_everyone_here">Semua anggota workspace sudah ada di project ini.</string>
+    <string name="ps_everyone_here">Semua orang sudah ada di project ini.</string>
     <string name="ps_danger">Zona bahaya</string>
     <string name="ps_duplicate">Duplikat project</string>
     <string name="ps_duplicated">Project diduplikat ✓</string>
@@ -2776,5 +2776,20 @@
     <string name="pl_fold_note">Diisi Legal, PM, dan Finance setelah deal won.</string>
     <plurals name="pl_stage_n">
         <item quantity="other">%1$s, %2$d deal</item>
+    </plurals>
+    <!-- Picker tambah member (9 Okt) -->
+    <string name="ps_search_name_email">Cari nama atau email</string>
+    <string name="ps_add_n">Tambah (%d)</string>
+    <string name="ps_n_selected">%d dipilih</string>
+    <string name="ps_pick_people">Pilih satu orang atau lebih</string>
+    <string name="ps_clear">Hapus pilihan</string>
+    <string name="ps_everyone_hint">Untuk mengajak orang dari luar workspace, pakai Undang lewat email.</string>
+    <string name="ps_no_match">Tidak ada yang cocok</string>
+    <string name="ps_no_match_hint">Coba sebagian nama atau email-nya.</string>
+    <string name="ps_add_failed">Gagal menambahkan. Coba lagi.</string>
+    <string name="ps_already_in">Mereka sudah ada di project ini.</string>
+    <string name="ps_only_managers_add">Hanya manager project yang bisa menambah member.</string>
+    <plurals name="ps_n_added">
+        <item quantity="other">%d member ditambahkan</item>
     </plurals>
 </resources>

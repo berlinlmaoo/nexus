@@ -153,6 +153,17 @@ class ProjectsApi(private val api: ApiClient) {
 
     suspend fun addMember(projectId: String, userId: String) = post("/api/projects/$projectId/members", buildJsonObject { put("userId", userId); put("role", "MEMBER") })
 
+    /**
+     * Several people in one request (MEMBER-PICKER.md): `{ userIds }` → `{ added, alreadyMembers, unknown }`; anyone
+     * already in is skipped, not an error. Answers how many were added.
+     */
+    suspend fun addMembers(projectId: String, userIds: Collection<String>): Int {
+        val o = post("/api/projects/$projectId/members", buildJsonObject {
+            put("userIds", kotlinx.serialization.json.JsonArray(userIds.map { JsonPrimitive(it) })); put("role", "MEMBER")
+        })
+        return (o["added"] as? kotlinx.serialization.json.JsonArray)?.size ?: if (o["userId"] != null || o["id"] != null) 1 else 0
+    }
+
     /** A JSON body on a DELETE (the route reads it). */
     suspend fun removeMember(projectId: String, userId: String): JsonObject =
         api.send(Request.Builder().url(api.url("/api/projects/$projectId/members")).delete(buildJsonObject { put("userId", userId) }.toString().toJsonBody()).build(), JsonObject.serializer())

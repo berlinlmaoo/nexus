@@ -136,6 +136,12 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
 
     private var peopleAt = 0L
 
+    companion object {
+        @Volatile private var membersChangedAt = 0L
+        /** Project settings added people: the BD / PM pickers read the members again on the next open. */
+        fun membersChanged() { membersChangedAt = System.currentTimeMillis() }
+    }
+
     /** Read fresh when a deal opens (at most once a minute), so someone the lead just added is offered at once. */
     private fun people() = viewModelScope.launch {
         peopleAt = System.currentTimeMillis()
@@ -144,7 +150,7 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
 
     fun open(id: String?) {
         _state.update { it.copy(openDealId = id) }
-        if (id != null && System.currentTimeMillis() - peopleAt > 60_000) people()
+        if (id != null && (System.currentTimeMillis() - peopleAt > 60_000 || membersChangedAt >= peopleAt)) people()
     }
     fun dismiss() = _state.update { it.copy(notice = null) }
 
