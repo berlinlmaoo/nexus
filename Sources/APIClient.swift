@@ -709,7 +709,9 @@ struct APIClient {
 
     func projectFolders(workspaceId: String?) async throws -> [ProjectFolder] {
         let path = "/api/project-folders" + (workspaceId.map { "?workspaceId=\(enc($0))" } ?? "")
-        return try await run(makeRequest(path), decode: [ProjectFolder].self)
+        // Cached like the project list, so the first paint can group projects into their folders
+        // instead of flashing them flat until this answers.
+        return try await run(makeRequest(path), decode: [ProjectFolder].self, cache: "project-folders")
     }
     /// Creates a folder and returns its id (needed to upload a photo icon afterward).
     func projectFolderCreate(workspaceId: String, name: String, icon: String, color: String, parentFolderId: String? = nil) async throws -> String {
@@ -1241,7 +1243,7 @@ struct APIClient {
     /// Limits mirror src/lib/feed.ts (IMG_MAX 4, 8MB each). Enforced here as well as there so a
     /// fifth photo is refused before it is uploaded rather than after.
     @discardableResult
-    func createPost(text: String, images: [Data] = [], imageMeta: [(w: Int, h: Int)?] = [],
+    func createPost(text: String, mentions: [String] = [], images: [Data] = [], imageMeta: [(w: Int, h: Int)?] = [],
                     progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/feed/posts", method: "POST")
@@ -1258,10 +1260,13 @@ struct APIClient {
         for (i, img) in images.enumerated() {
             files.append((name: "images", filename: "photo-\(i + 1).jpg", data: img))
         }
+        // User ids, JSON-encoded, exactly like the web's JSON.stringify(mentions). The route checks
+        // they are real users, drops the author and notifies the rest.
+        let mentionsJSON = (try? JSONSerialization.data(withJSONObject: mentions))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         req.httpBody = Self.multipartBody(
             boundary: boundary,
-            // "mentions" JSON-encoded, exactly like the web's JSON.stringify([]).
-            fields: ["text": text, "mentions": "[]", "imageMeta": metaJSON],
+            fields: ["text": text, "mentions": mentionsJSON, "imageMeta": metaJSON],
             files: files)
 
         let (data, response): (Data, URLResponse)
@@ -1282,10 +1287,12 @@ struct APIClient {
         return true
     }
     @discardableResult
-    func addPostComment(postId: String, text: String) async throws -> Bool {
+    func addPostComment(postId: String, text: String, mentions: [String] = []) async throws -> Bool {
         var req = makeRequest("/api/feed/posts/\(postId)/comments", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "mentions": []])
+        // `mentions` = user ids. Each one gets a "mentioned you" notification from the route; an
+        // empty array is what made @tags in a comment a plain bold word that told nobody.
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "mentions": mentions] as [String: Any])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
@@ -1300,11 +1307,17 @@ struct APIClient {
         return true
     }
 
-    /// Toggle-like. Body-less POST, so nothing to guess about the payload.
+    /// Toggle-like. Body-less POST; the route answers `{ liked, likeCount }` recounted from the
+    /// like rows, which the feed adopts as the truth after its optimistic flip.
     @discardableResult
-    func likePost(_ postId: String) async throws -> Bool {
-        _ = try await run(makeRequest("/api/feed/posts/\(postId)/like", method: "POST"), decode: SuccessResponse.self)
-        return true
+    func likePost(_ postId: String) async throws -> FeedLikeResult {
+        try await run(makeRequest("/api/feed/posts/\(postId)/like", method: "POST"), decode: FeedLikeResult.self)
+    }
+
+    /// Who can be @mentioned on Threads: GET /api/members, the same roster the web's composer uses
+    /// (a bare array of {id, name, email, avatar}).
+    func mentionRoster() async throws -> [MentionUser] {
+        try await run(makeRequest("/api/members"), decode: [MentionUser].self, cache: "mention-roster")
     }
 
     // MARK: - Ticket (web calls this "complaints" — a private line to the BoD)

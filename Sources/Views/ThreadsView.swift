@@ -26,9 +26,13 @@ struct FeedPost: Decodable, Identifiable, Hashable, Sendable {
     let createdAt: String?
     let author: Author?
     let images: [FeedImage]?
-    let likeCount: Int?
+    /// `var` so a like can flip them in place: the heart is drawn from the post itself, which is
+    /// what the server says on every load. It used to be drawn from a screen-local set that started
+    /// empty, so a post you had liked came back grey after leaving Threads and opening it again
+    /// (owner, 9 Oct 2026).
+    var likeCount: Int?
     let commentCount: Int?
-    let likedByMe: Bool?
+    var likedByMe: Bool?
     /// The server's answer to "may THIS viewer remove this post" — their own, or anyone's if they
     /// are BoD. Read rather than re-derived: the app does not know the viewer's role here, and
     /// guessing it is how a button appears that the route then refuses.
@@ -41,6 +45,91 @@ struct FeedPost: Decodable, Identifiable, Hashable, Sendable {
     var likes: Int { likeCount ?? 0 }
     var comments: Int { commentCount ?? 0 }
     var photos: [String] { (images ?? []).compactMap(\.url) }
+}
+
+/// POST /api/feed/posts/[id]/like — the state after the toggle, recounted by the server.
+struct FeedLikeResult: Decodable, Sendable {
+    let liked: Bool
+    let likeCount: Int
+}
+
+/// One person who can be @mentioned (GET /api/members).
+struct MentionUser: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String?
+    let email: String?
+    let avatar: String?
+    var displayName: String { (name?.isEmpty == false ? name : nil) ?? email ?? "—" }
+    var initial: String { String(displayName.first ?? "?").uppercased() }
+    /// "@Nama" with the spaces taken out, so it stays one token `mentionText` can highlight — the
+    /// same shape the chat composer inserts.
+    var tag: String { "@" + displayName.replacingOccurrences(of: " ", with: "") }
+}
+
+/// The @mention typing rules shared by the Threads post and comment composers. Same rules as the
+/// chat composer: SwiftUI's TextField hides the caret, so the token being typed is read from the
+/// tail of the draft.
+enum MentionDraft {
+    /// The text after a word-opening "@" at the end of the draft, or nil when not in a mention.
+    /// The "@" must start a word, otherwise every email address would open the picker.
+    static func query(in text: String) -> String? {
+        guard let at = text.lastIndex(of: "@") else { return nil }
+        if at > text.startIndex {
+            let before = text[text.index(before: at)]
+            guard before == " " || before == "\n" else { return nil }
+        }
+        let tail = text[text.index(after: at)...]
+        guard !tail.contains(" "), !tail.contains("\n") else { return nil }
+        return String(tail)
+    }
+
+    static func matches(_ roster: [MentionUser], in text: String) -> [MentionUser] {
+        guard let q = query(in: text) else { return [] }
+        let hits = q.isEmpty ? roster : roster.filter { $0.displayName.localizedCaseInsensitiveContains(q) }
+        return Array(hits.prefix(20))
+    }
+
+    /// Replaces the half-typed "@ali" (or appends) with the person's tag and remembers who it was.
+    static func insert(_ u: MentionUser, into text: inout String, picked: inout [String: String]) {
+        if query(in: text) != nil, let at = text.lastIndex(of: "@") {
+            text.replaceSubrange(at..., with: u.tag + " ")
+        } else {
+            if !text.isEmpty && !text.hasSuffix(" ") && !text.hasSuffix("\n") { text += " " }
+            text += u.tag + " "
+        }
+        picked[u.id] = u.tag
+    }
+
+    /// The ids to send: only people picked from the list whose tag is still in the text, so a tag
+    /// deleted before sending notifies nobody.
+    static func ids(in text: String, picked: [String: String]) -> [String] {
+        picked.compactMap { text.contains($0.value) ? $0.key : nil }
+    }
+}
+
+/// The row of people to tag, shown above a composer while an "@" is being typed.
+struct MentionSuggestions: View {
+    let matches: [MentionUser]
+    let onPick: (MentionUser) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(matches) { m in
+                    Button { onPick(m) } label: {
+                        HStack(spacing: 6) {
+                            AvatarView(url: m.avatar, initial: m.initial, size: 22)
+                            Text(m.displayName).font(NXFont.text(12, .semibold))
+                                .foregroundStyle(NX.foreground).lineLimit(1)
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .background(NX.muted, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
 }
 
 struct FeedImage: Decodable, Hashable, Sendable {
@@ -88,7 +177,9 @@ struct ThreadsView: View {
     /// Mirrors IMG_MAX in src/lib/feed.ts. Enforced here too so the fifth photo is refused before
     /// it is uploaded rather than after.
     private static let maxPhotos = 4
-    @State private var liked: Set<String> = []      // optimistic, so a tap reacts instantly
+    /// Everyone who can be tagged, and who was picked for the draft (userId → "@Tag").
+    @State private var roster: [MentionUser] = []
+    @State private var pickedMentions: [String: String] = [:]
     @State private var openPost: FeedPost?
     /// Held rather than deleted on the spot: removing somebody's post in front of everyone is not a
     /// thing to do on one accidental tap.
@@ -102,7 +193,7 @@ struct ThreadsView: View {
         }
         .navigationTitle(T("Threads"))
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load(); claimFocus() }
+        .task { await load(); claimFocus(); await loadRoster() }
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .navigationDestination(item: $openPost) { p in PostThreadView(post: p) }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
@@ -148,6 +239,10 @@ struct ThreadsView: View {
                 .font(NXFont.text(15)).lineLimit(2...6)
                 .padding(10)
                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            let tagMatches = MentionDraft.matches(roster, in: draft)
+            if !tagMatches.isEmpty {
+                MentionSuggestions(matches: tagMatches) { MentionDraft.insert($0, into: &draft, picked: &pickedMentions) }
+            }
             if !photos.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -283,10 +378,11 @@ struct ThreadsView: View {
             }
             HStack(spacing: 16) {
                 Button { Task { await like(p) } } label: {
-                    let on = liked.contains(p.id)
-                    Label("\(p.likes + (on ? 1 : 0))", systemImage: on ? "heart.fill" : "heart")
+                    let on = p.likedByMe == true
+                    Label("\(p.likes)", systemImage: on ? "heart.fill" : "heart")
                         .font(NXFont.text(12, .semibold))
                         .foregroundStyle(on ? NX.danger : NX.mutedFg)
+                        .contentTransition(.numericText())
                 }
                 .buttonStyle(.plain)
                 Button { openPost = p } label: {
@@ -329,8 +425,10 @@ struct ThreadsView: View {
         posting = true
         defer { posting = false }
         do {
-            try await APIClient.shared.createPost(text: v, images: photos, imageMeta: photoSizes)
+            try await APIClient.shared.createPost(text: v, mentions: MentionDraft.ids(in: v, picked: pickedMentions),
+                                                  images: photos, imageMeta: photoSizes)
             draft = ""
+            pickedMentions = [:]
             photos = []
             photoSizes = []
             await load()
@@ -351,16 +449,47 @@ struct ThreadsView: View {
         await load()
     }
 
+    /// Like X: the heart and the count flip on the tap, then the server's `{liked, likeCount}`
+    /// replaces the guess — it recounts from the like rows, so it is also right when someone else
+    /// liked in between.
     private func like(_ p: FeedPost) async {
         Haptics.tap()
-        let wasLiked = liked.contains(p.id)
-        if wasLiked { liked.remove(p.id) } else { liked.insert(p.id) }
-        do { _ = try await APIClient.shared.likePost(p.id) }
-        catch {
+        guard let i = posts.firstIndex(where: { $0.id == p.id }) else { return }
+        let before = (liked: posts[i].likedByMe, count: posts[i].likeCount)
+        let nowLiked = posts[i].likedByMe != true
+        withAnimation(.snappy(duration: 0.2)) {
+            posts[i].likedByMe = nowLiked
+            posts[i].likeCount = max(0, posts[i].likes + (nowLiked ? 1 : -1))
+        }
+        do {
+            let r = try await APIClient.shared.likePost(p.id)
+            // Looked up again: a reload while the request was out may have rebuilt the list.
+            if let j = posts.firstIndex(where: { $0.id == p.id }) {
+                posts[j].likedByMe = r.liked
+                posts[j].likeCount = r.likeCount
+            }
+        } catch {
             // Optimistic, so put it back: a heart that stays lit after the server said no is a lie
             // the next refresh quietly corrects, and the person never learns why.
-            if wasLiked { liked.insert(p.id) } else { liked.remove(p.id) }
+            if let j = posts.firstIndex(where: { $0.id == p.id }) {
+                posts[j].likedByMe = before.liked
+                posts[j].likeCount = before.count
+            }
         }
+    }
+
+    private func loadRoster() async {
+        guard roster.isEmpty else { return }
+        roster = await Self.mentionRoster(excluding: auth.session?.userId)
+    }
+
+    /// The cached roster first (instant), then the network. Yourself left out: the route drops a
+    /// self-mention anyway.
+    static func mentionRoster(excluding me: String?) async -> [MentionUser] {
+        let all = (try? await APIClient.shared.mentionRoster())
+            ?? ResponseCache.decoded("mention-roster", as: [MentionUser].self)?.value ?? []
+        return all.filter { $0.id != me }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 }
 
@@ -409,6 +538,8 @@ struct PostThreadView: View {
     @State private var sendError: String?
     @State private var viewingPhoto: PhotoRef?
     @FocusState private var replying: Bool
+    @State private var roster: [MentionUser] = []
+    @State private var pickedMentions: [String: String] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -456,6 +587,12 @@ struct PostThreadView: View {
                 .padding(16)
             }
 
+            let tagMatches = MentionDraft.matches(roster, in: draft)
+            if !tagMatches.isEmpty {
+                MentionSuggestions(matches: tagMatches) { MentionDraft.insert($0, into: &draft, picked: &pickedMentions) }
+                    .padding(.horizontal, 12).padding(.top, 8)
+                    .background(NX.card)
+            }
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(T("Reply… (@ to mention)"), text: $draft, axis: .vertical)
                     .font(NXFont.text(15)).lineLimit(1...4)
@@ -476,7 +613,10 @@ struct PostThreadView: View {
         .background(NX.background.ignoresSafeArea())
         .navigationTitle(T("Thread"))
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            await load()
+            if roster.isEmpty { roster = await ThreadsView.mentionRoster(excluding: auth.session?.userId) }
+        }
         .alert(T("Couldn't post"), isPresented: Binding(get: { sendError != nil }, set: { if !$0 { sendError = nil } })) {
             Button("OK") { sendError = nil }
         } message: { Text(sendError ?? "") }
@@ -515,8 +655,10 @@ struct PostThreadView: View {
         sending = true
         defer { sending = false }
         do {
-            _ = try await APIClient.shared.addPostComment(postId: post.id, text: v)
+            _ = try await APIClient.shared.addPostComment(postId: post.id, text: v,
+                                                          mentions: MentionDraft.ids(in: v, picked: pickedMentions))
             draft = ""
+            pickedMentions = [:]
             await load()
         } catch {
             sendError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post the comment. It's still in the box.")
