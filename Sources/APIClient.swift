@@ -2189,6 +2189,14 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// Several people in one request (servers from 9 Oct 2026). People already in are skipped,
+    /// not an error; the answer carries only the rows that were created.
+    func addProjectMembers(projectId: String, userIds: [String], role: String = "MEMBER") async throws -> [ProjectDetail.ProjectMember] {
+        var req = makeRequest("/api/projects/\(projectId)/members", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userIds": userIds, "role": role] as [String: Any])
+        return try await run(req, decode: AddProjectMembersResult.self).added ?? []
+    }
     @discardableResult
     func removeProjectMember(projectId: String, userId: String) async throws -> Bool {
         var req = makeRequest("/api/projects/\(projectId)/members", method: "DELETE")

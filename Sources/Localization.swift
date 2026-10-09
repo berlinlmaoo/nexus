@@ -2850,6 +2850,19 @@ final class AppLanguage {
         "%@ · %@ of %@ still owed": "%@ · sisa %@ dari %@",
         "DP, Termin 1, Pelunasan…": "DP, Termin 1, Pelunasan…",
         "Type the amount as a number.": "Tulis jumlahnya sebagai angka.",
+        // Project settings → Add members: searchable multi-select (owner, 9 Oct)
+        "Add members": "Tambah member",
+        "Add (%d)": "Tambah (%d)",
+        "Search by name or email": "Cari nama atau email",
+        "Pick one or more people": "Pilih satu orang atau lebih",
+        "Everyone is already in this project.": "Semua orang sudah ada di project ini.",
+        "To bring in someone from outside the workspace, use Invite by email.": "Untuk mengajak orang dari luar workspace, pakai Undang lewat email.",
+        "No one matches that search": "Tidak ada yang cocok",
+        "Try part of their name or their email.": "Coba sebagian nama atau email-nya.",
+        "Couldn't add them. Try again.": "Gagal menambahkan. Coba lagi.",
+        "They're already in this project.": "Mereka sudah ada di project ini.",
+        "1 member added": "1 member ditambahkan",
+        "%d members added": "%d member ditambahkan",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

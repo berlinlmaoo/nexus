@@ -36,6 +36,7 @@ struct ProjectSettingsView: View {
     @State private var fields: [CustomField] = []
     @State private var roster: [WorkspaceRoster.Member] = []
     @State private var projectMembers: [ProjectDetail.ProjectMember] = []
+    @State private var showAddMembers = false
 
     // danger
     @State private var confirmDelete = false
@@ -231,14 +232,14 @@ struct ProjectSettingsView: View {
                 }
                 .padding(.vertical, 2)
             }
-            let addable = roster.filter { r in !projectMembers.contains { $0.uid == (r.userId ?? r.idv) } }
-            if !addable.isEmpty {
-                Menu {
-                    ForEach(addable) { r in
-                        Button(r.displayName) { Task { await addMember(r) } }
-                    }
-                } label: {
-                    Label(T("Add member"), systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+            // A searchable multi-select sheet, not a long menu of names (owner, 9 Oct 2026).
+            Button { showAddMembers = true } label: {
+                Label(T("Add members"), systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+            }
+            .disabled(busy)
+            .sheet(isPresented: $showAddMembers) {
+                AddProjectMembersSheet(projectId: projectId, roster: roster, memberIds: Set(projectMembers.map(\.uid))) { added in
+                    await membersAdded(added)
                 }
             }
             NavigationLink { InviteByEmailView(projectId: projectId) } label: {
@@ -376,6 +377,14 @@ struct ProjectSettingsView: View {
             projectMembers.append(.init(userId: uid, user: .init(id: uid, name: r.displayName, avatar: r.avatarURL)))
         }
         busy = false; await onChange()
+    }
+    private func membersAdded(_ added: [ProjectDetail.ProjectMember]) async {
+        let known = Set(projectMembers.map(\.uid))
+        projectMembers.append(contentsOf: added.filter { !known.contains($0.uid) })
+        if added.isEmpty { show(T("They're already in this project.")) }
+        else if added.count == 1 { show(T("1 member added")) }
+        else { show(String(format: T("%d members added"), added.count)) }
+        await onChange()
     }
     private func removeMember(_ m: ProjectDetail.ProjectMember) async {
         busy = true
