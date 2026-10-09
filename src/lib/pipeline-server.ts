@@ -17,6 +17,7 @@ import {
   healthOf,
   isWonStage,
   phasesOf,
+  pipelineToday,
   stageGroupOf,
 } from "@/lib/pipeline"
 
@@ -36,6 +37,7 @@ export const dealInclude = {
   pm: personSelect,
   updatedBy: personSelect,
   createdBy: personSelect,
+  executionProject: { select: { id: true, name: true } },
 } satisfies Prisma.PipelineDealInclude
 
 type DealRow = Prisma.PipelineDealGetPayload<{ include: typeof dealInclude }>
@@ -45,10 +47,11 @@ export type PipelineGate =
   | { ok: false; response: NextResponse }
 
 /**
- * The project's own access rule (checkProjectAccess, the board's): read = VIEWER, write = MEMBER — system
- * admin, One Above All / BoD / Manager of the workspace, and staff who are members of the project. The
- * GM's board is "editable antar divisi", so no money field is held back from members (open question in
- * the spec). Only a PIPELINE project has deals: anything else answers 400 NOT_PIPELINE.
+ * The project's access rule (checkProjectAccess): read = VIEWER, write = MEMBER. For a PIPELINE project
+ * that rule is the board's own since 9 Oct 2026 (owner/GM: BoD + Agency + IT/Legal/Finance, without
+ * project membership; lib/pipeline-access.ts) — everyone else gets 403 on every route here. Within those
+ * people the GM's board stays "editable antar divisi": no field is held back. Only a PIPELINE project has
+ * deals: anything else answers 400 NOT_PIPELINE.
  */
 export async function pipelineGate(userId: string, projectId: string, need: "read" | "write"): Promise<PipelineGate> {
   const project = await prisma.project.findUnique({
@@ -119,6 +122,9 @@ export function serializeDeal(row: DealRow, today: string) {
     nextActionDate: dateOut(row.nextActionDate),
     notes: row.notes,
     links: linksOut(row.links),
+    // The Task project made when the deal was won (lib/pipeline-execution.ts); null = none (yet).
+    executionProjectId: row.executionProjectId,
+    executionProject: row.executionProject,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt.toISOString(),
@@ -315,10 +321,12 @@ export function defaultProbability(stage: string): number {
 /**
  * The next free code in the project: "TZN-" + 2-digit year + 3-digit sequence. Counts the codes of
  * deals that exist AND of deals ever created here (their audit rows), so a deleted deal's code is never
- * handed out again — its restore from Audit would otherwise collide with the newcomer.
+ * handed out again — its restore from Audit would otherwise collide with the newcomer. The company has
+ * one board (POST /api/projects refuses a second, owner/GM 9 Oct 2026), so this is its one series.
  */
 export async function nextDealCode(projectId: string, now: Date = new Date()): Promise<string> {
-  const yy = String(now.getUTCFullYear()).slice(-2)
+  // The year of the company's day (WIB), so a deal added at 01:00 on 1 January is already "27…".
+  const yy = pipelineToday(now).slice(2, 4)
   const head = `${DEAL_CODE_PREFIX}${yy}`
   const [live, created] = await Promise.all([
     prisma.pipelineDeal.findMany({ where: { projectId, code: { startsWith: head } }, select: { code: true } }),

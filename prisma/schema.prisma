@@ -540,7 +540,9 @@ model Project {
   pnlIncomes         PnlIncome[]
   pnlBudgets         PnlBudget[]
   pnlRecurring       PnlRecurringExpense[]
-  pipelineDeals      PipelineDeal[]
+  pipelineDeals      PipelineDeal[] @relation("PipelineDealProject")
+  /// When this is the execution project of a won deal (owner/GM, 9 Oct 2026), that deal.
+  pipelineExecutionOf PipelineDeal?  @relation("PipelineDealExecution")
 
   @@index([folderId, position])
 }
@@ -3210,7 +3212,7 @@ model OrgUnitMember {
 model PipelineDeal {
   id        String  @id @default(cuid())
   projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project @relation("PipelineDealProject", fields: [projectId], references: [id], onDelete: Cascade)
   /// "TZN-26001": prefix + 2-digit year + per-project sequence. Read-only, unique per project.
   code      String
   /// Order inside its stage column (drag on the board).
@@ -3264,6 +3266,17 @@ model PipelineDeal {
   updatedBy   User?    @relation("PipelineDealUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  /// Won → execution (owner/GM, 9 Oct 2026: "after udah won lebih enak kalo kebentuk Master Calendar sama
+  /// Master Task buat projectnya"). The Task project made for the deal when it first entered a Won stage
+  /// (or by hand from the deal), and when that happened — so deleting the project does not make the next
+  /// stage move build another. lib/pipeline-execution.ts. SQL: prisma/sql/2026-10-09-pipeline-execution.sql.
+  executionProjectId String?   @unique
+  executionProject   Project?  @relation("PipelineDealExecution", fields: [executionProjectId], references: [id], onDelete: SetNull)
+  executionCreatedAt DateTime?
+  /// The task in the execution project that puts mainDate on the Master Calendar (a plain id: the task may
+  /// be deleted by hand, and the next mainDate change then makes a new one).
+  mainDateTaskId     String?
 
   changes PipelineDealChange[]
 

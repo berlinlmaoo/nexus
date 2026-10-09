@@ -16,6 +16,7 @@ import { canonicalEmail } from '@/lib/email-auth'
 import { sendEmail, workspaceAddedEmail, workspaceInviteNewUserEmail } from '@/lib/email'
 import type { WorkspaceRole } from '@/generated/prisma/client'
 import { syncUserRoomsSafe } from '@/lib/chat-membership'
+import { canAccessPipeline, companyPipelineProject } from '@/lib/pipeline-access'
 
 // Caller's effective tier (system super-admin = top). Used to gate who can assign which role.
 function callerTier(role: string | null | undefined, isSystemAdmin: boolean) {
@@ -73,6 +74,8 @@ export async function GET(req: NextRequest) {
     // work contact detail, and no screen below that tier displays it.
     const canSeePhoneNumbers = callerTier(member.role, isSystemAdmin) >= 3
 
+    const pipelineAccess = await canAccessPipeline(session.user.id)
+
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: member.workspaceId },
       include: {
@@ -88,6 +91,12 @@ export async function GET(req: NextRequest) {
       role: string
       /** Member of the company workspace: Z Vault, the NAS and Threads are shown only then. */
       isCompany: boolean
+      /** May open the Pipeline Dashboard (BoD + Agency + IT/Legal/Finance, owner/GM 9 Oct 2026). Draws the
+       *  "Pipeline" nav entry; every pipeline route checks it again. */
+      canAccessPipeline: boolean
+      /** The company's one Pipeline board, for that entry — null when it does not exist yet or for
+       *  someone without access. */
+      pipelineProjectId: string | null
       members: Array<{
         id: string
         userId: string
@@ -121,6 +130,8 @@ export async function GET(req: NextRequest) {
       workspaceName: member.workspace.name,
       role: member.role,
       isCompany: (await orgRoleOf(session.user.id)) != null,
+      canAccessPipeline: pipelineAccess,
+      pipelineProjectId: pipelineAccess ? (await companyPipelineProject())?.id ?? null : null,
       members: members.map(m => ({
         id: m.id,
         userId: m.user.id,
