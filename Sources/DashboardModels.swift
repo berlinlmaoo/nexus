@@ -49,18 +49,41 @@ struct MyTask: Decodable, Identifiable, Sendable {
     let dueDate: String?
     let taskList: TaskListRef?
     let count: CountRef?
+    /// Stamped by the server's Task_completion_stamp trigger when the task became DONE (null for
+    /// older rows). updatedAt is the fallback for those.
+    let completedAt: String?
+    let updatedAt: String?
 
     struct TaskListRef: Decodable, Sendable { let name: String? }
     struct CountRef: Decodable, Sendable { let comments: Int? }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status, priority, dueDate, taskList
+        case id, title, status, priority, dueDate, taskList, completedAt, updatedAt
         case count = "_count"
     }
 
     var isDone: Bool { (status ?? "").uppercased() == "DONE" }
     var laneName: String { taskList?.name ?? "NEXUS board" }
     var commentCount: Int { count?.comments ?? 0 }
+
+    /// Done more than 30 days ago. Home's Task card hides these: a list that keeps every task ever
+    /// finished buries the open ones ("udh done tpi masih muncul", owner, 9 Oct 2026). Open tasks
+    /// never count as stale, and a done task with no usable date stays visible rather than vanish.
+    func isLongDone(now: Date = Date()) -> Bool {
+        guard isDone, let when = Self.parseDate(completedAt) ?? Self.parseDate(updatedAt) else { return false }
+        return now.timeIntervalSince(when) > 30 * 86_400
+    }
+
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoPlain = ISO8601DateFormatter()
+    private static func parseDate(_ s: String?) -> Date? {
+        guard let s, !s.isEmpty else { return nil }
+        return isoFractional.date(from: s) ?? isoPlain.date(from: s)
+    }
 }
 
 struct UnreadResponse: Decodable, Sendable {

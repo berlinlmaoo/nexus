@@ -82,7 +82,7 @@ struct DashboardView: View {
     private var statData: [StatDatum] {
         [
             .init(value: projectCount, total: nil, label: T("Projects"), icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
-            .init(value: mission.done, total: mission.total, label: T("Your Mission"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
+            .init(value: mission.done, total: mission.total, label: T("Task"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Quest"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
@@ -562,10 +562,18 @@ struct DashboardView: View {
         .opacity(morphShowModal ? 1 : 0)   // solid on open; crossfades out on close
     }
 
+    /// The Task card's rows: every open task, plus tasks finished within the last 30 days. Older
+    /// finished ones are dropped from the card only — the agenda and widgets still get `tasksList`.
+    private static func taskCardRows(_ tasks: [MyTask]) -> [MyTask] {
+        let now = Date()
+        return tasks.filter { !$0.isLongDone(now: now) }
+    }
+    private var cardTasks: [MyTask] { Self.taskCardRows(tasksList) }
+
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
         switch a {
         case 0: detailList(projectsList.map { ($0.name, $0.statusLabel) }, empty: T("No projects yet."))
-        case 1: detailList(tasksList.map { ($0.title ?? T("Untitled"), $0.isDone ? T("Done") : T("Open")) }, empty: T("No open tasks."))
+        case 1: detailList(cardTasks.map { ($0.title ?? T("Untitled"), $0.isDone ? T("Done") : T("Open")) }, empty: T("No open tasks."))
         default: questDetailList
         }
     }
@@ -1251,7 +1259,9 @@ if !XpRules.tiers.isEmpty {
         if let myId = prof?.user.id, let tasks = try? await APIClient.shared.myTasks(assigneeId: myId) {
             tasksList = tasks
             tasksByDay = Self.bucketByDay(tasks)
-            mission = (tasks.filter(\.isDone).count, tasks.count)
+            // Count from the same list the card opens, so "3/5" always matches the rows it shows.
+            let shown = Self.taskCardRows(tasks)
+            mission = (shown.filter(\.isDone).count, shown.count)
         }
         loaded = true
 
@@ -1261,7 +1271,7 @@ if !XpRules.tiers.isEmpty {
     }
 }
 
-/// One gradient stat tile (Projects / Your Mission / Quest).
+/// One gradient stat tile (Projects / Task / Quest).
 struct StatCardView: View {
     let value: Int
     let total: Int?
