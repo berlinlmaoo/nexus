@@ -68,6 +68,12 @@ struct ProjectsView: View {
                 // Projects barely change between visits, so draw the last known list immediately
                 // instead of a skeleton, then refresh underneath.
                 if projects.isEmpty, let hit = ResponseCache.decoded("projects", as: [Project].self) {
+                    // Folders with them, or the cached first paint is the flat list.
+                    if let f = ResponseCache.decoded("project-folders", as: [ProjectFolder].self) {
+                        folders = f.value
+                        collapsed = Set(f.value.map(\.id))
+                        didCollapseInitially = true
+                    }
                     projects = hit.value
                     loading = false
                 }
@@ -133,12 +139,39 @@ struct ProjectsView: View {
         ErrorState(message: msg) { Task { await load() } }
     }
 
+    /// Pull-to-refresh, first load, and after creating/editing a project or folder.
+    ///
+    /// Run as its own task on purpose. `.refreshable` cancels the task it hands us when the list
+    /// re-renders under the finger, and setting `projects` re-renders it — so the folders request
+    /// that came after was cancelled, `try?` turned that into "no folders", and the whole screen fell
+    /// back to a flat list of 80 cards ("Foldernya ga muncul", owner, 9 Oct 2026).
     private func load() async {
+        await Task { await fetchBoth() }.value
+    }
+
+    /// Both lists are fetched first and land together: projects never arrive without their folders.
+    /// A folders request that fails keeps the folders already on screen rather than emptying them —
+    /// the flat list is only for a workspace that really has no folders.
+    private func fetchBoth() async {
         error = nil
         do {
-            projects = try await APIClient.shared.projects()
+            async let freshProjects = APIClient.shared.projects()
             if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId }
-            folders = (try? await APIClient.shared.projectFolders(workspaceId: workspaceId)) ?? []
+            var freshFolders = try? await APIClient.shared.projectFolders(workspaceId: workspaceId)
+            if freshFolders == nil && folders.isEmpty {
+                // Nothing to fall back on yet: one more try before drawing the list ungrouped.
+                freshFolders = try? await APIClient.shared.projectFolders(workspaceId: workspaceId)
+            }
+            let fresh = try await freshProjects
+            if let freshFolders {
+                if didCollapseInitially {
+                    // A folder first seen now (made on another device) starts closed, like every folder.
+                    let known = Set(folders.map(\.id))
+                    collapsed.formUnion(freshFolders.map(\.id).filter { !known.contains($0) })
+                }
+                folders = freshFolders
+            }
+            projects = fresh
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
