@@ -616,10 +616,12 @@ enum PipelineStyle {
         }
     }
 
+    /// Amber for a phase under way, like the GM's board (owner, 9 Oct 2026: green done, amber in progress,
+    /// red problem, grey not started) — blue read as "info", not as "being worked on".
     static func phaseTone(_ state: String) -> Color {
         switch state {
         case "done": return NX.success
-        case "active": return NX.blue
+        case "active": return NX.warning
         case "bad": return NX.danger
         default: return NX.border
         }
@@ -641,17 +643,115 @@ struct PipelineHealthPill: View {
     }
 }
 
-/// The six segments on a card: how far each line of work in the deal has come (the GM's stepper).
+/// The six segments on a card: how far each line of work in the deal has come (the GM's stepper). On
+/// every deal, open ones too: six grey segments say nothing has started, which is worth seeing (owner,
+/// 9 Oct 2026). VoiceOver reads each phase with its detail line.
 struct PipelinePhaseTrack: View {
-    let phases: [PipelinePhase]
+    let deal: PipelineDeal
     var body: some View {
+        let phases = deal.progressPhases
         HStack(spacing: 4) {
             ForEach(Array(phases.enumerated()), id: \.offset) { _, p in
                 Capsule().fill(PipelineStyle.phaseTone(p.state)).frame(height: 4)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(phases.map { "\(PipelineText.phase($0.key)): \(PipelineText.phaseState($0.state))" }.joined(separator: ", "))
+        .accessibilityLabel(phases.map { "\(PipelineText.phase($0.key)): \(deal.phaseDetail($0.key))" }.joined(separator: ", "))
+    }
+}
+
+/// The deal's blocker as a banner (owner, 9 Oct 2026: "kalo ada blocker harusnya masuk ke tampilan 1"):
+/// red on a critical deal, amber otherwise. `lineLimit` 2 on a card, the full text in the deal.
+struct PipelineBlockerBanner: View {
+    let deal: PipelineDeal
+    var lineLimit: Int? = nil
+    var body: some View {
+        if let text = deal.blockerText {
+            let tone: ChipTone = deal.health.key == "CRITICAL" ? .danger : .warning
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11, weight: .bold)).padding(.top, 1)
+                Text(text).font(NXFont.text(12, .bold)).lineLimit(lineLimit)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .foregroundStyle(tone.fg)
+            .padding(.horizontal, 9).padding(.vertical, 7)
+            .background(tone.bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(T("Blocker / issue")): \(text)")
+        }
+    }
+}
+
+/// "Phase progress": the six phases top to bottom, each with its mark (green check, amber ring, red !,
+/// grey ring) and its detail line — the GM's PROGRES FASE — on every deal, open ones too. The phase the
+/// blocker holds up carries the blocker text under it (owner, 9 Oct 2026).
+struct PipelinePhaseStepper: View {
+    let deal: PipelineDeal
+    var body: some View {
+        let phases = deal.progressPhases
+        VStack(alignment: .leading, spacing: 10) {
+            Text(T("Phase progress").uppercased())
+                .font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg).tracking(0.6)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(phases.enumerated()), id: \.offset) { i, p in
+                    row(p, last: i == phases.count - 1)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func row(_ p: PipelinePhase, last: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            mark(p.state)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(PipelineText.phase(p.key)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                Text(deal.phaseDetail(p.key)).font(NXFont.text(12, p.state == "bad" ? .semibold : .regular))
+                    .foregroundStyle(p.state == "bad" ? ChipTone.danger.fg : NX.mutedFg)
+                if p.blocked == true, let text = deal.blockerText {
+                    HStack(alignment: .top, spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10, weight: .bold)).padding(.top, 2)
+                        Text(text).font(NXFont.text(12, .bold)).multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(ChipTone.danger.fg)
+                    .padding(.top, 2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, last ? 0 : 12)
+        }
+        // The line down to the next mark: an overlay takes the row's own height, so it never asks the
+        // scroll view for more (a maxHeight: .infinity inside the row would).
+        .overlay(alignment: .topLeading) {
+            if !last {
+                Rectangle().fill(p.state == "done" ? NX.success.opacity(0.6) : NX.border)
+                    .frame(width: 2)
+                    .padding(.top, 25).padding(.bottom, 3).padding(.leading, 10)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(PipelineText.phaseState(p.state))
+    }
+
+    @ViewBuilder private func mark(_ state: String) -> some View {
+        switch state {
+        case "done":
+            Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                .frame(width: 22, height: 22).background(NX.success, in: Circle())
+        case "bad":
+            Text("!").font(NXFont.text(13, .heavy)).foregroundStyle(.white)
+                .frame(width: 22, height: 22).background(NX.danger, in: Circle())
+        case "active":
+            Circle().strokeBorder(NX.warning, lineWidth: 2.5).frame(width: 22, height: 22)
+        default:
+            Circle().strokeBorder(NX.border, lineWidth: 2).frame(width: 22, height: 22)
+        }
     }
 }
 
@@ -931,10 +1031,11 @@ private struct PipelineCardPerson: Identifiable {
     var id: String { role }
 }
 
-/// A card says only what is known (owner, 9 Oct 2026: no "Not started" pill, empty six-step bar, "Other" or
-/// a lone dash on every card). Always: code and name. When set: brand, value, PM/BD, the next action's
-/// date. Only when it matters: the health dot and the first reason, the phase track once the deal is won,
-/// "No PM yet" on a won deal. Move: long-press for "Move to stage", or the deal's Stage field.
+/// A card, the GM's layout (owner, 9 Oct 2026, from his "Control Tower" screenshot: "blocker status di
+/// board tiap dealnya belum ada"): code and health pill on top, the name, brand and value, the six-segment
+/// phase bar on EVERY deal, the blocker as a banner whenever one is written (else the first health reason),
+/// then PM (and BD when different), the next action's date and the services. Move: long-press for
+/// "Move to stage", or the deal's Stage field.
 struct PipelineDealCard: View {
     let deal: PipelineDeal
     let stages: [String]
@@ -956,6 +1057,7 @@ struct PipelineDealCard: View {
         if let bd = deal.bdDisplay, bd != deal.pmDisplay { out.append(PipelineCardPerson(role: "BD", name: bd, avatar: deal.bd?.avatar)) }
         return out
     }
+    private var servicesText: String { deal.services.joined(separator: ", ") }
 
     var body: some View {
         Button { onOpen(deal.id) } label: { card }
@@ -968,26 +1070,32 @@ struct PipelineDealCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                if flagged || deal.health.key == "HEALTHY" {
-                    Circle().fill(PipelineStyle.healthDot(deal.health.key)).frame(width: 7, height: 7)
-                        .accessibilityLabel(PipelineText.health(deal.health.key))
-                }
                 Text(deal.code).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
-                    .layoutPriority(1)
-                if !deal.brand.isEmpty {
-                    Text("· \(deal.brand)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                }
                 Spacer(minLength: 6)
-                if deal.shownValue > 0 {
-                    Text(PipelineFormat.idr(deal.shownValue)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
-                        .monospacedDigit().lineLimit(1).layoutPriority(2)
-                }
+                if deal.health.key != "NONE" { PipelineHealthPill(key: deal.health.key) }
             }
             Text(deal.name.isEmpty ? T("Untitled deal") : deal.name)
                 .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                 .multilineTextAlignment(.leading).lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if flagged, let first = deal.health.reasons.first {
+            if !deal.brand.isEmpty || deal.shownValue > 0 {
+                HStack(spacing: 6) {
+                    if !deal.brand.isEmpty {
+                        Text(deal.brand).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    if deal.shownValue > 0 {
+                        Text(PipelineFormat.idr(deal.shownValue)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                            .monospacedDigit().lineLimit(1).layoutPriority(1)
+                    }
+                }
+            }
+            if !deal.phases.isEmpty {
+                PipelinePhaseTrack(deal: deal).padding(.top, 2)
+            }
+            PipelineBlockerBanner(deal: deal, lineLimit: 2)
+            // The banner already says the blocker; otherwise the first reason the deal is flagged.
+            if flagged, deal.blockerText == nil, let first = deal.health.reasons.first {
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10, weight: .bold)).padding(.top, 2)
                     Text(deal.health.reasons.count > 1
@@ -997,10 +1105,8 @@ struct PipelineDealCard: View {
                 }
                 .foregroundStyle(deal.health.key == "CRITICAL" ? ChipTone.danger.fg : ChipTone.warning.fg)
             }
-            if (group == "Pre-Execution" || group == "Execution") && !deal.phases.isEmpty {
-                PipelinePhaseTrack(phases: deal.phases).padding(.top, 2)
-            }
-            if !people.isEmpty || needsPm || dueIn != nil {
+            if !people.isEmpty || needsPm || dueIn != nil || !servicesText.isEmpty {
+                Divider().overlay(NX.border).padding(.top, 2)
                 HStack(spacing: 6) {
                     if !people.isEmpty {
                         HStack(spacing: -5) {
@@ -1009,18 +1115,21 @@ struct PipelineDealCard: View {
                                     .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
                             }
                         }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(people.map { "\($0.role) \($0.name)" }.joined(separator: ", "))
+                        .accessibilityHidden(true)
                     }
                     if needsPm {
                         Text(T("No PM yet")).font(NXFont.text(12, .semibold)).foregroundStyle(ChipTone.danger.fg).lineLimit(1)
-                    } else if people.count == 1 {
-                        Text(people[0].name).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    } else if !people.isEmpty {
+                        Text(people.map(\.name).joined(separator: " · ")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            .accessibilityLabel(people.map { "\($0.role) \($0.name)" }.joined(separator: ", "))
                     }
                     Spacer(minLength: 4)
                     if let due = dueIn { dueChip(due) }
+                    if !servicesText.isEmpty {
+                        Text(servicesText).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            .frame(maxWidth: 130, alignment: .trailing)
+                    }
                 }
-                .padding(.top, 2)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 11)

@@ -122,7 +122,16 @@ struct PipelineDealView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Text(deal.code).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                Text(PipelineText.stage(deal.stage)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                // The deal's stage as a chip in its column's colour (owner, 9 Oct 2026: "stage di board per
+                // dealnya jg blm ada"); it changes in the Stage field below or from the card's long-press.
+                HStack(spacing: 5) {
+                    Circle().fill(PipelineStyle.groupTone(deal.stage)).frame(width: 7, height: 7)
+                    Text(PipelineText.stage(deal.stage)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .overlay(Capsule().strokeBorder(NX.border))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(T("Stage")): \(PipelineText.stage(deal.stage))")
                 Spacer(minLength: 4)
                 if deal.health.key != "NONE" { PipelineHealthPill(key: deal.health.key) }
             }
@@ -142,11 +151,15 @@ struct PipelineDealView: View {
 
     @ViewBuilder private func details(_ deal: PipelineDeal) -> some View {
         let v = store.vocab
-        if !deal.health.reasons.isEmpty {
-            PipelineReasonList(health: deal.health)
+        // The blocker on top, and again under the phase it holds up in the stepper (owner, 9 Oct 2026), so the
+        // reason list skips it.
+        PipelineBlockerBanner(deal: deal)
+        let reasons = deal.health.reasons.filter { $0.code != "BLOCKER" || deal.blockerText == nil }
+        if !reasons.isEmpty {
+            PipelineReasonList(health: PipelineHealth(key: deal.health.key, reasons: reasons))
         }
-        // The six-step progress means something once a deal is won; before that every step is "not started".
-        if !deal.phases.isEmpty && !isEarly(deal) { phaseProgress(deal) }
+        // On every deal, open ones too: grey steps say what has not started (owner, 9 Oct 2026).
+        if !deal.phases.isEmpty { PipelinePhaseStepper(deal: deal) }
         execution(deal)
 
         PipelineSection(title: T("Commercial & pipeline"), owner: T("BD / account")) {
@@ -410,20 +423,6 @@ struct PipelineDealView: View {
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func phaseProgress(_ deal: PipelineDeal) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: wide ? 6 : 3),
-                  alignment: .leading, spacing: 12) {
-            ForEach(Array(deal.phases.enumerated()), id: \.offset) { _, p in
-                VStack(alignment: .leading, spacing: 4) {
-                    Capsule().fill(PipelineStyle.phaseTone(p.state)).frame(height: 5)
-                    Text(PipelineText.phase(p.key)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(PipelineText.phaseState(p.state)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .accessibilityLabel(T("Phase progress"))
-    }
 
     // MARK: footer
 

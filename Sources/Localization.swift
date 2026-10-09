@@ -2881,6 +2881,16 @@ final class AppLanguage {
         "Pick the services, or type one that isn't listed.": "Pilih service-nya, atau ketik yang tidak ada di daftar.",
         "Filter by service": "Saring per service",
         "All services": "Semua service",
+        // Pipeline phase progress lines, the GM's words (owner, 9 Oct 2026)
+        "Contract cancelled": "Kontrak dibatalkan",
+        "Not yet relevant": "Belum relevan",
+        "Deliverable done": "Selesai",
+        "Fully paid": "Lunas",
+        "Overdue %d day": "Overdue %d hari",
+        "Overdue %d days": "Overdue %d hari",
+        "Payment overdue": "Pembayaran overdue",
+        "Upcoming due": "Akan jatuh tempo",
+        "Not yet billed": "Belum ditagih",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

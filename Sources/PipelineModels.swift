@@ -97,10 +97,12 @@ struct PipelineHealth: Decodable, Hashable, Sendable {
 }
 
 /// One of the six segments on a card: commercial, contract, readiness, deliverable, payment, closing,
-/// each done | active | pending | bad.
+/// each done | active | pending | bad. `blocked`: the deal's blocker holds this phase up (server
+/// blockerPhaseOf, owner, 9 Oct 2026) — absent from a server older than that, hence optional.
 struct PipelinePhase: Decodable, Hashable, Sendable {
     let key: String
     let state: String
+    var blocked: Bool?
 }
 
 struct PipelineDeal: Decodable, Identifiable, Sendable {
@@ -881,5 +883,75 @@ extension PipelineDeal {
         let sa = order[a.health.key] ?? 9, sb = order[b.health.key] ?? 9
         if sa != sb { return sa < sb }
         return a.netValue > b.netValue
+    }
+}
+
+// MARK: - Phase progress (owner, 9 Oct 2026)
+//
+// Berlin: "progress fase pas gw pencet board per dealnya jg gaada dan kalo gw isi blocker didalemnya …
+// harusnya masuk ke tampilan 1 sama progress fasenya supaya tau problemnya". The ONE place this app words
+// the six phases (card track, deal stepper); the states are the server's (src/lib/pipeline.ts phasesOf),
+// the words are the GM's node details, as the web's usePhaseDetail (pipeline-ui.tsx).
+extension PipelineDeal {
+    /// The blocker as written, or nil when there is none.
+    var blockerText: String? {
+        let t = blocker.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
+    /// The server's phases, with the blocker's phase marked. A server from before 9 Oct evening does not
+    /// mark it, so then the blocker goes on the phase the deal is at now: the one already in trouble, else
+    /// the one in progress, else the first not done (the server's fallback when the words name none).
+    var progressPhases: [PipelinePhase] {
+        guard blockerText != nil, !phases.isEmpty, !phases.contains(where: { $0.blocked == true }) else { return phases }
+        let held = phases.first(where: { $0.state == "bad" })
+            ?? phases.first(where: { $0.state == "active" })
+            ?? phases.first(where: { $0.state != "done" })
+            ?? phases[phases.count - 1]
+        return phases.map { $0.key == held.key ? PipelinePhase(key: $0.key, state: "bad", blocked: true) : $0 }
+    }
+
+    /// The line under a phase: "Deal won", "Fully executed", "Overdue 12 hari", "Belum dimulai" … Never
+    /// "Overdue 0 days": without a day count it says "Payment overdue". Unknown statuses are shown as-is.
+    func phaseDetail(_ key: String) -> String {
+        switch key {
+        case "commercial":
+            let g = PipelineVocab.group(of: stage)
+            return g == "Pipeline" || g == "Lost" ? PipelineText.stage(stage) : T("Deal won")
+        case "contract":
+            if contractStatus == "Fully Executed" { return T("Fully executed") }
+            if contractStatus == "Cancelled" { return T("Contract cancelled") }
+            if contractStatus.isEmpty || contractStatus == "Not Started" { return T("Not started") }
+            return contractStatus
+        case "readiness":
+            if readiness == "Ready" { return T("Ready to execute") }
+            if readiness == "Blocked" { return T("Readiness blocked") }
+            if readiness == "Partial" { return T("Partly ready") }
+            return T("Not yet relevant")
+        case "deliverable":
+            if deliverableStatus == "Completed" || deliverableStatus == "Approved" { return T("Deliverable done") }
+            if deliverableRisk == "Overdue" { return T("Deliverable overdue") }
+            if deliverableRisk == "At Risk" { return T("Deliverable at risk") }
+            if deliverableStatus.isEmpty || deliverableStatus == "Not Started" { return T("Not started") }
+            return deliverableStatus
+        case "payment":
+            switch paymentStatusShown {
+            case "Paid": return T("Fully paid")
+            case "Overdue":
+                return daysOverdue > 0
+                    ? String(format: T(daysOverdue == 1 ? "Overdue %d day" : "Overdue %d days"), daysOverdue)
+                    : T("Payment overdue")
+            case "Partial": return T("Partly paid")
+            case "Due": return T("Payment due")
+            case "Upcoming": return T("Upcoming due")
+            default: return T("Not yet billed")
+            }
+        case "closing":
+            if closingStatus == "Closed" { return "Closed" }
+            if closingStatus.isEmpty || closingStatus == "Not Ready" { return T("Not started") }
+            return closingStatus
+        default:
+            return ""
+        }
     }
 }
