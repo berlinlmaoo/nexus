@@ -97,6 +97,32 @@ export function PipelineBoard({
     if (!p.moved) { p.moved = true; e.currentTarget.setPointerCapture(p.id); }
     e.currentTarget.scrollLeft = p.left - dx;
   };
+  // A touchpad swipe sideways scrolls the board natively. A plain mouse wheel only moves up and down, so
+  // over the board it moves sideways instead — unless the pointer is over a column that can still scroll
+  // down/up itself (owner, 9 Oct 2026: "kenapa ga bisa scroll aja pake touchpad/mouse?"). Shift+wheel is
+  // the browser's own sideways wheel and is left alone.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.shiftKey || e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      if (el.scrollWidth <= el.clientWidth) return;
+      let node = e.target as HTMLElement | null;
+      while (node && node !== el) {
+        const oy = getComputedStyle(node).overflowY;
+        if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) {
+          const canMove = e.deltaY > 0 ? node.scrollTop + node.clientHeight < node.scrollHeight - 1 : node.scrollTop > 0;
+          if (canMove) return;
+        }
+        node = node.parentElement;
+      }
+      const before = el.scrollLeft;
+      el.scrollLeft += e.deltaY;
+      if (el.scrollLeft !== before) e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
   const endPan = (e: PointerEvent<HTMLDivElement>) => {
     const p = pan.current;
     pan.current = null;
@@ -117,7 +143,7 @@ export function PipelineBoard({
         onPointerMove={onPointerMove}
         onPointerUp={endPan}
         onPointerCancel={endPan}
-        className="snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain px-4 pb-3 outline-none [scrollbar-width:thin] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 md:snap-none md:px-8"
+        className="snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain px-4 pb-3 md:cursor-grab outline-none [scrollbar-width:thin] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 md:snap-none md:px-8"
       >
         <div className="flex w-max gap-3 md:h-[max(28rem,calc(100dvh-13rem))]">
           {[...byStage.entries()].map(([stage, list]) => {
@@ -160,7 +186,7 @@ export function PipelineBoard({
                     </button>
                   )}
                 </header>
-                <div className="flex min-h-16 flex-1 flex-col gap-2 overscroll-contain px-2 pb-2 [scrollbar-width:thin] md:overflow-y-auto">
+                <div className="flex min-h-16 flex-1 flex-col gap-2 overscroll-y-contain px-2 pb-2 [scrollbar-width:thin] md:overflow-y-auto">
                   {sorted.map((d) => (
                     <DealCard key={d.id} deal={d} today={today} onOpen={onOpen} onMove={onMove} canEdit={canEdit} />
                   ))}
@@ -225,9 +251,13 @@ const DealCard = memo(function DealCard({
       draggable={canEdit}
       onDragStart={(e) => { e.dataTransfer.setData(DRAG_TYPE, deal.id); e.dataTransfer.effectAllowed = "move"; setDragging(true); }}
       onDragEnd={() => setDragging(false)}
+      // A click anywhere on the card opens the deal. This used to be the title button stretched over the
+      // whole card, but a drag that starts on a <button> never starts in Chrome — so no card could be
+      // dragged to another stage (owner, 9 Oct 2026). Clicks on the card's own controls are theirs.
+      onClick={(e) => { if (!(e.target as HTMLElement).closest("button,a,input,select,textarea,[role='dialog']")) onOpen(deal.id); }}
       className={cn(
         "group relative shrink-0 rounded-xl border border-border bg-card px-3 py-2.5 shadow-soft transition-[box-shadow,border-color,opacity] hover:border-control-border hover:shadow-pop",
-        canEdit && "cursor-grab active:cursor-grabbing",
+        canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         dragging && "opacity-50",
       )}
     >
@@ -244,12 +274,13 @@ const DealCard = memo(function DealCard({
           <span title={fmtIdrFull(value, lang)} className="ml-auto shrink-0 pl-2 font-semibold tabular-nums text-foreground">{fmtIdr(value, lang)}</span>
         )}
       </div>
-      {/* The whole card opens the deal: the title's button is stretched over it (after:absolute). */}
+      {/* The title stays a real button for the keyboard; the mouse can click anywhere (see onClick above). */}
       <h4 className="mt-1 text-sm font-semibold leading-snug">
         <button
           type="button"
           onClick={() => onOpen(deal.id)}
-          className="line-clamp-2 text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-ring"
+          draggable={false}
+          className="pointer-events-none line-clamp-2 text-left focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
         >
           {deal.name || t("Untitled deal")}
         </button>
