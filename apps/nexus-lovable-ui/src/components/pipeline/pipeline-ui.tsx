@@ -53,6 +53,14 @@ export function fmtDay(iso: string | null | undefined, locale: string): string {
   return d.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
 }
 
+/** "4 Okt" / "4 Oct": a date on a card, where the year is this one or the next. */
+export function fmtDayShort(iso: string | null | undefined, locale: string): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+}
+
 /** The Indonesian names the GM gave three stages; every other key reads the same in both languages. */
 export function useVocabLabels() {
   const { t } = useLang();

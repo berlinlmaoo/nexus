@@ -40,7 +40,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
   );
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] [&>*]:min-w-0">
       <Panel
         icon={<AlertTriangle className="h-4 w-4" />}
         title={t("Needs attention")}
