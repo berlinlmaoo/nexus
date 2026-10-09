@@ -10,7 +10,7 @@ import { RenderText, ImageGrid, Lightbox, MentionList, timeAgo } from "./feed-sh
 
 export type FeedPostUI = FeedPost & { _pending?: boolean; _failed?: boolean; _tempId?: string };
 
-export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onCommentAdded }: {
+export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onCommentAdded, initialShowComments = false }: {
   post: FeedPostUI;
   members: MentionUser[];
   onLike: (post: FeedPostUI) => void;
@@ -18,12 +18,14 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
   onEdit: (id: string, text: string, mentions: string[]) => void;
   onRetry: (post: FeedPostUI) => void;
   onCommentAdded: (postId: string) => void;
+  /** Open with the replies showing — the post a notification pointed at. */
+  initialShowComments?: boolean;
 }) {
   const reduce = useReducedMotion();
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [menu, setMenu] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(initialShowComments);
   const [burstKey, setBurstKey] = useState(0);
 
   const pending = post._pending;
