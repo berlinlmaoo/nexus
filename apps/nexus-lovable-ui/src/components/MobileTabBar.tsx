@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, Trophy,
   ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, ShieldAlert, Ticket, Sun, Moon,
- HardDrive, Languages,
+ HardDrive, Languages, Filter,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
@@ -209,6 +209,8 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   const orgRole = membersInfo?.role;
   // Z Vault and Threads are the company's (Z Networks) only.
   const isCompany = membersInfo?.isCompany === true;
+  // The company's one deal board (owner/GM, 9 Oct 2026): BoD, Agency, IT, Legal, Finance only.
+  const pipelineProjectId = membersInfo?.canAccessPipeline ? membersInfo.pipelineProjectId ?? null : null;
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
   // Threads / Integrity show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
   // page there. Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
@@ -281,6 +283,20 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                         </Link>
                       );
                     })}
+                    {g.label === "Missions" && pipelineProjectId && (
+                      <Link
+                        to="/projects/$projectId"
+                        params={{ projectId: pipelineProjectId }}
+                        onClick={onClose}
+                        className={cn(
+                          "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          isActive(`/projects/${pipelineProjectId}`) ? "bg-primary/10 text-primary" : "text-foreground hover:bg-accent",
+                        )}
+                      >
+                        <Filter className="h-[18px] w-[18px] shrink-0" />
+                        <span className="flex-1">{t("Pipeline")}</span>
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))}

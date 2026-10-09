@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ExternalLink, History, Link2, Plus, Trash2, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { ArrowRight, ExternalLink, FolderKanban, History, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { AvatarFace } from "@/components/Avatar";
@@ -13,7 +15,7 @@ import {
   CLOSING_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, DELIVERABLE_RISK_OPTIONS, DELIVERABLE_STATUS_OPTIONS, LINK_TYPES,
   PAYMENT_STATUS_OPTIONS, PIPELINE_STAGES, PROBABILITY_OPTIONS, READINESS_OPTIONS, SERVICE_OPTIONS, VREG_STATUS_OPTIONS,
 } from "@/lib/pipeline";
-import { dealKey, pipelineApi, type PipelineChange, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
+import { dealKey, pipelineApi, pipelineKey, type PipelineChange, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
   HealthPill, PHASE_LABEL, PHASE_STATE_LABEL, fmtDay, fmtIdrFull, fmtPct, phaseDotTone, useReasonText, useVocabLabels,
@@ -83,6 +85,7 @@ export function DealDrawer({
                 onCommit={(v) => onPatch(deal.id, { name: v })}
                 className="-mx-2.5 mt-1 border-transparent bg-transparent text-lg font-semibold hover:border-border"
               />
+              <ExecutionProject deal={deal} projectId={projectId} canEdit={canEdit} />
               <div role="tablist" aria-label={t("Deal")} className="mt-2 flex gap-1">
                 {(["details", "history"] as const).map((k) => (
                   <button
@@ -142,6 +145,51 @@ export function DealDrawer({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * Won → execution (owner/GM, 9 Oct 2026: "after udah won lebih enak kalo kebentuk Master Calendar sama
+ * Master Task buat projectnya"). The server makes a Task project the first time a deal enters a Won stage
+ * and puts its event date on the Master Calendar; this links to it, or makes one by hand for a won deal
+ * that has none (the GM's imported deals came in already won).
+ */
+function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; projectId: string; canEdit: boolean }) {
+  const { t } = useLang();
+  const qc = useQueryClient();
+  const create = useMutation({
+    mutationFn: () => pipelineApi.createExecution(projectId, deal.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: pipelineKey(projectId) }),
+    onError: (e: unknown) => toast.error(t("Couldn't create the execution project"), { description: e instanceof Error ? e.message : undefined }),
+  });
+  const won = deal.stageGroup === "Pre-Execution" || deal.stageGroup === "Execution" || deal.stageGroup === "Closed";
+  const linked = deal.executionProject ?? null;
+  if (!linked && !(won && canEdit)) return null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {linked ? (
+        <Link
+          to="/projects/$projectId"
+          params={{ projectId: linked.id }}
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
+        >
+          <FolderKanban className="h-4 w-4 shrink-0" />
+          <span className="truncate">{t("Open execution project")}</span>
+          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={() => create.mutate()}
+          disabled={create.isPending}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
+        >
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {t("Create execution project")}
+        </button>
+      )}
+      <p className="text-xs text-muted-foreground">{t("Made automatically when a deal is won. Its event date goes on the Master Calendar.")}</p>
+    </div>
   );
 }
 
