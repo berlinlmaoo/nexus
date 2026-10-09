@@ -26,6 +26,10 @@ struct PipelineDealView: View {
     /// The deal's execution project, pushed inside this sheet (owner/GM, 9 Oct 2026).
     @State private var openProject: ProjectRef?
     @State private var makingExecution = false
+    /// Payment terms (owner, 9 Oct 2026): the add/edit/mark-paid sheet, and the term asked about before
+    /// it is deleted (in this sheet's one alert).
+    @State private var termRoute: PipelineTermRoute?
+    @State private var termToDelete: PipelineTerm?
 
     private var wide: Bool { hSize == .regular }
 
@@ -57,17 +61,27 @@ struct PipelineDealView: View {
             .keyboardDoneBar()
             .navigationDestination(item: $openProject) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
         }
+        // The only .sheet of this view: add, edit or mark paid a payment term.
+        .sheet(item: $termRoute) { route in
+            PipelineTermSheet(store: store, dealId: dealId, route: route)
+        }
         .task(id: "\(store.revision)-\(showHistory)") {
             if showHistory { await loadHistory() }
         }
         .onChange(of: store.deal(dealId) == nil) { _, gone in
             if gone && store.loaded { dismiss() }
         }
-        // One alert for this sheet: the delete question, or a refused edit in the server's words.
+        // One alert for this sheet: the delete questions, or a refused edit in the server's words.
         .alert(alertTitle, isPresented: Binding(
-            get: { confirmDelete || store.actionError != nil },
-            set: { if !$0 { confirmDelete = false; store.actionError = nil } })) {
-            if confirmDelete {
+            get: { confirmDelete || termToDelete != nil || (store.actionError != nil && termRoute == nil) },
+            set: { if !$0 { confirmDelete = false; termToDelete = nil; store.actionError = nil } })) {
+            if let term = termToDelete {
+                Button(T("Cancel"), role: .cancel) { termToDelete = nil }
+                Button(T("Delete term"), role: .destructive) {
+                    termToDelete = nil
+                    Task { await store.deleteTerm(dealId, term) }
+                }
+            } else if confirmDelete {
                 Button(T("Cancel"), role: .cancel) { confirmDelete = false }
                 Button(T("Delete deal"), role: .destructive) {
                     confirmDelete = false
@@ -77,13 +91,18 @@ struct PipelineDealView: View {
                 Button("OK") { store.actionError = nil }
             }
         } message: {
-            if confirmDelete {
+            if termToDelete != nil {
+                Text(T("The deal's receivable is worked out again without it. Control Room → Audit can bring it back."))
+            } else if confirmDelete {
                 Text(T("It leaves the pipeline for everyone. Control Room → Audit can bring it back with its history."))
             }
         }
     }
 
     private var alertTitle: String {
+        if let term = termToDelete {
+            return String(format: T("Delete %@?"), term.label)
+        }
         if confirmDelete {
             let name = store.deal(dealId)?.name ?? ""
             return String(format: T("Delete %@?"), name.isEmpty ? T("Untitled deal") : name)
@@ -195,6 +214,23 @@ struct PipelineDealView: View {
             PipelineFieldBox(T("Invoice value")) {
                 PipelineMoneyInput(label: T("Invoice value"), value: deal.invoiceValue) { patch(["invoiceValue": $0]) }
             }
+            // With payment terms the status, receivable and due date are worked out from them (owner,
+            // 9 Oct 2026: "perlu per termin"); the manual fields stay for a deal without terms.
+            if let ts = deal.termSummary {
+                PipelineFieldBox(T("Payment status")) {
+                    termDerived(T("Payment status"), ts.paymentStatus)
+                }
+                PipelineFieldBox(T("Outstanding receivable")) {
+                    termDerived(T("Outstanding receivable"), PipelineFormat.idrFull(ts.outstanding))
+                }
+                PipelineFieldBox(T("Next due date")) {
+                    termDerived(T("Next due date"), ts.nextDueDate.map { PipelineFormat.day($0) } ?? "–")
+                }
+                PipelineFieldBox(T("Days overdue")) {
+                    termDerived(T("Days overdue"), deal.daysOverdue > 0 ? String(format: T("%d days, counted from the due date"), deal.daysOverdue) : T("Not overdue"),
+                                danger: deal.daysOverdue > 7)
+                }
+            } else {
             PipelineFieldBox(T("Payment status")) {
                 PipelineMenuInput(label: T("Payment status"), value: deal.paymentStatus, options: v.paymentStatuses) { patch(["paymentStatus": $0]) }
             }
@@ -218,9 +254,18 @@ struct PipelineDealView: View {
                     PipelineDaysInput(label: T("Days overdue (typed)"), value: deal.maxDaysOverdue) { patch(["maxDaysOverdue": $0]) }
                 }
             }
+            }
             PipelineFieldBox(T("Net cash position")) {
                 PipelineMoneyInput(label: T("Net cash position"), value: deal.netCash, allowNegative: true) { patch(["netCash": $0]) }
             }
+        }
+
+        PipelineSection(title: T("Payment terms"), owner: "Finance", columns: 1) {
+            PipelineTermsList(deal: deal,
+                              onAdd: { termRoute = .add },
+                              onEdit: { termRoute = .edit($0) },
+                              onPay: { termRoute = .pay($0) },
+                              onDelete: { termToDelete = $0 })
         }
 
         PipelineSection(title: T("Closing"), owner: "PM") {
@@ -249,6 +294,18 @@ struct PipelineDealView: View {
                 patch(["links": links.map(\.json)])
             }
         }
+    }
+
+    /// A payment value the terms decide: read-only, with where it comes from underneath.
+    private func termDerived(_ label: String, _ value: String, danger: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value).font(NXFont.text(14)).foregroundStyle(danger ? ChipTone.danger.fg : NX.foreground)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            Text(T("From the payment terms")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     // MARK: execution
@@ -384,10 +441,14 @@ struct PipelineDealView: View {
         HStack(alignment: .top, spacing: 10) {
             AvatarView(url: h.user?.avatar, initial: h.user?.initial ?? "?", size: 26)
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(h.user?.name ?? T("Someone")) \(T("changed")) \(PipelineText.field(h.field))")
+                Text(historyTitle(h))
                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
-                if h.field == "notes" {
+                if h.field == "term.created" || h.field == "term.deleted" || h.field == "term.restored" {
+                    if let amount = termAmount(h.field == "term.deleted" ? h.before : h.after) {
+                        Text(PipelineFormat.idrFull(amount)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    }
+                } else if h.field == "notes" || h.field == "term.note" {
                     Text(shown(h.field, h.after)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(3)
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -405,6 +466,25 @@ struct PipelineDealView: View {
         }
     }
 
+    /// "Bagas changed Stage", or for a payment term "Bagas · Termin 1 · Amount" / "Termin 1 added".
+    private func historyTitle(_ h: PipelineChange) -> String {
+        let who = h.user?.name ?? T("Someone")
+        guard let f = h.termField else { return "\(who) \(T("changed")) \(PipelineText.field(h.field))" }
+        let term = (h.termLabel?.isEmpty == false ? h.termLabel : nil) ?? T("Payment term")
+        switch f {
+        case "created": return String(format: T("%@ added payment term %@"), who, term)
+        case "deleted": return String(format: T("%@ deleted payment term %@"), who, term)
+        case "restored": return String(format: T("%@ restored payment term %@"), who, term)
+        default: return "\(who) \(T("changed")) \(term) · \(PipelineText.termField(f))"
+        }
+    }
+
+    /// The amount a "term.created"/"term.deleted" row carries ({ amount, dueDate, paidAmount }).
+    private func termAmount(_ v: AuditJSON?) -> Double? {
+        guard case .object(let o)? = v, case .number(let n)? = o["amount"] else { return nil }
+        return n
+    }
+
     private func created(_ deal: PipelineDeal) -> String {
         let when = PipelineFormat.day(deal.createdAt)
         if let name = deal.createdBy?.name, !name.isEmpty { return String(format: T("Created by %@, %@"), name, when) }
@@ -419,7 +499,7 @@ struct PipelineDealView: View {
         case .string(let s):
             if s.isEmpty { return T("empty") }
             switch field {
-            case "paymentDueDate", "mainDate", "nextActionDate": return PipelineFormat.day(s)
+            case "paymentDueDate", "mainDate", "nextActionDate", "term.dueDate", "term.invoiceDate", "term.paidAt": return PipelineFormat.day(s)
             case "bdUserId", "pmUserId": return store.people.first { $0.id == s }?.name ?? T("someone")
             case "stage": return PipelineText.stage(s)
             case "deliverableRisk": return PipelineText.risk(s)
@@ -427,7 +507,7 @@ struct PipelineDealView: View {
             }
         case .number(let n):
             switch field {
-            case "contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash": return PipelineFormat.idrFull(n)
+            case "contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount": return PipelineFormat.idrFull(n)
             case "probability": return PipelineFormat.pct(n)
             default: return n.rounded() == n ? String(Int(n)) : String(n)
             }
@@ -947,5 +1027,317 @@ struct PipelineLinksEditor: View {
         onCommit(links + [PipelineLink(id: id, type: type, label: label.trimmingCharacters(in: .whitespaces), url: u)])
         url = ""
         label = ""
+    }
+}
+
+// MARK: - Payment terms (owner, 9 Oct 2026: "perlu per termin")
+
+/// What the deal sheet's one `.sheet` shows for a payment term.
+enum PipelineTermRoute: Identifiable {
+    case add
+    case edit(PipelineTerm)
+    case pay(PipelineTerm)
+    var id: String {
+        switch self {
+        case .add: return "add"
+        case .edit(let t): return "edit-\(t.id)"
+        case .pay(let t): return "pay-\(t.id)"
+        }
+    }
+}
+
+/// The deal's terms: each with its amount, due date, status and payment, then the totals against the
+/// invoice (else contract) value — a warning when they do not add up, since a missing or doubled term
+/// is the usual mistake and the receivable is computed from these rows.
+struct PipelineTermsList: View {
+    let deal: PipelineDeal
+    let onAdd: () -> Void
+    let onEdit: (PipelineTerm) -> Void
+    let onPay: (PipelineTerm) -> Void
+    let onDelete: (PipelineTerm) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if deal.terms.isEmpty {
+                Text(T("No payment terms yet. Add the DP and each termin: the receivable and overdue days are then worked out from them."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(deal.terms.enumerated()), id: \.element.id) { i, t in
+                        if i > 0 { Divider().overlay(NX.border) }
+                        row(t)
+                    }
+                }
+                .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                totals
+            }
+            Button(action: onAdd) {
+                Label(T("Add payment term"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).frame(minHeight: 38)
+                    .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func row(_ t: PipelineTerm) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button { onEdit(t) } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(t.label.isEmpty ? T("Payment term") : t.label)
+                            .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        NexusChip(text: PipelineText.termStatus(t.status), tone: PipelineText.termTone(t.status))
+                    }
+                    Text(PipelineFormat.idrFull(t.amount)).font(NXFont.text(13)).foregroundStyle(NX.foreground).monospacedDigit()
+                    Text(detail(t)).font(NXFont.text(12))
+                        .foregroundStyle(t.daysOverdue > 7 ? ChipTone.danger.fg : NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(T("Edit"))
+            Menu {
+                Button { onEdit(t) } label: { Label(T("Edit"), systemImage: "pencil") }
+                if !t.isPaid {
+                    Button { onPay(t) } label: { Label(T("Mark paid"), systemImage: "checkmark.circle") }
+                }
+                Button(role: .destructive) { onDelete(t) } label: { Label(T("Delete"), systemImage: "trash") }
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    .frame(width: 36, height: 36).contentShape(Rectangle())
+            }
+            .menuIndicator(.hidden)
+            .accessibilityLabel(String(format: T("Actions for %@"), t.label))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+    }
+
+    /// "Due 4 Oct 2026 · 5 days overdue · Paid Rp10.000.000 on 1 Oct 2026 · INV-12"
+    private func detail(_ t: PipelineTerm) -> String {
+        var parts: [String] = []
+        if let d = t.dueDate { parts.append(String(format: T("Due %@"), PipelineFormat.day(d))) }
+        if t.daysOverdue > 0 { parts.append(String(format: T(t.daysOverdue == 1 ? "%d day overdue" : "%d days overdue"), t.daysOverdue)) }
+        if t.paidAmount > 0 {
+            let when = t.paidAt.map { PipelineFormat.day($0) } ?? "–"
+            parts.append(String(format: T("Paid %@ on %@"), PipelineFormat.idrFull(t.paidAmount), when))
+        }
+        if !t.invoiceNo.isEmpty { parts.append(t.invoiceNo) }
+        return parts.isEmpty ? T("No due date") : parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder private var totals: some View {
+        let total = deal.terms.reduce(0) { $0 + $1.amount }
+        let paid = deal.termSummary?.totalPaid ?? deal.terms.reduce(0) { $0 + $1.paidAmount }
+        let owed = deal.termSummary?.outstanding ?? deal.terms.reduce(0) { $0 + $1.outstanding }
+        let ref = deal.termsReference
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(T("Total of terms")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                Spacer()
+                Text(PipelineFormat.idrFull(total)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
+            }
+            HStack {
+                Text(String(format: T("Paid %@"), PipelineFormat.idrFull(paid))).foregroundStyle(ChipTone.success.fg)
+                Spacer()
+                Text(String(format: T("Outstanding %@"), PipelineFormat.idrFull(owed))).foregroundStyle(owed > 0 ? NX.foreground : NX.mutedFg)
+            }
+            .font(NXFont.text(12)).monospacedDigit()
+            if ref > 0 && Swift.abs(total - ref) >= 1 {
+                Label {
+                    Text(String(format: T(deal.invoiceValue > 0 ? "Terms add up to %@, invoice value is %@" : "Terms add up to %@, contract value is %@"),
+                                PipelineFormat.idrFull(total), PipelineFormat.idrFull(ref)))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .font(NXFont.text(12, .semibold)).foregroundStyle(ChipTone.warning.fg)
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+}
+
+/// Add or edit a term, or mark it paid. Only what changed is sent (one History line per field).
+struct PipelineTermSheet: View {
+    let store: PipelineStore
+    let dealId: String
+    let route: PipelineTermRoute
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var label = ""
+    @State private var amount = ""
+    @State private var dueDate: String?
+    @State private var invoiceNo = ""
+    @State private var invoiceDate: String?
+    @State private var paid = ""
+    @State private var paidAt: String?
+    @State private var note = ""
+    @State private var busy = false
+    @State private var err: String?
+    @State private var started = false
+
+    private var term: PipelineTerm? {
+        switch route {
+        case .add: return nil
+        case .edit(let t), .pay(let t): return t
+        }
+    }
+    private var paying: Bool { if case .pay = route { return true } else { return false } }
+
+    private var title: String {
+        switch route {
+        case .add: return T("New payment term")
+        case .edit: return T("Edit payment term")
+        case .pay: return T("Mark paid")
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if paying {
+                        if let term {
+                            Text(String(format: T("%@ · %@ of %@ still owed"), term.label, PipelineFormat.idrFull(term.outstanding), PipelineFormat.idrFull(term.amount)))
+                                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                        }
+                        paidFields
+                    } else {
+                        PipelineFieldBox(T("Name")) { field(T("DP, Termin 1, Pelunasan…"), $label) }
+                        PipelineFieldBox(T("Amount")) { money($amount) }
+                        PipelineFieldBox(T("Due date")) {
+                            PipelineDateInput(label: T("Due date"), value: dueDate) { dueDate = $0 }
+                        }
+                        PipelineFieldBox(T("Invoice number")) { field("INV-…", $invoiceNo) }
+                        PipelineFieldBox(T("Invoice date")) {
+                            PipelineDateInput(label: T("Invoice date"), value: invoiceDate) { invoiceDate = $0 }
+                        }
+                        if term != nil { paidFields }
+                        PipelineFieldBox(T("Notes")) { field("", $note, multiline: true) }
+                    }
+                    if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                    Button { Task { await save() } } label: {
+                        HStack(spacing: 8) {
+                            if busy { ProgressView().tint(.white) }
+                            Text(paying ? T("Mark paid") : (term == nil ? T("Add payment term") : T("Save")))
+                        }
+                    }
+                    .buttonStyle(NexusPrimaryButton())
+                    .disabled(busy || (paying && PipelineFormat.parseMoney(paid) == nil))
+                }
+                .padding(20)
+            }
+            .background(NX.background.ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .keyboardDoneBar()
+        }
+        .presentationDetents([.medium, .large])
+        .onAppear(perform: start)
+    }
+
+    @ViewBuilder private var paidFields: some View {
+        PipelineFieldBox(T("Amount paid")) { money($paid) }
+        PipelineFieldBox(T("Paid on")) {
+            PipelineDateInput(label: T("Paid on"), value: paidAt) { paidAt = $0 }
+        }
+    }
+
+    private func field(_ placeholder: String, _ text: Binding<String>, multiline: Bool = false) -> some View {
+        Group {
+            if multiline {
+                TextField(placeholder, text: text, axis: .vertical).lineLimit(2...6)
+            } else {
+                TextField(placeholder, text: text)
+            }
+        }
+        .font(NXFont.text(15))
+        .padding(12)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func money(_ text: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            Text("Rp").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+            TextField("0", text: text).font(NXFont.text(15)).keyboardType(.numberPad).monospacedDigit()
+        }
+        .padding(12)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func start() {
+        guard !started else { return }
+        started = true
+        guard let t = term else { return }
+        label = t.label
+        amount = t.amount == 0 ? "" : PipelineFormat.plain(t.amount)
+        dueDate = t.dueDate
+        invoiceNo = t.invoiceNo
+        invoiceDate = t.invoiceDate
+        note = t.note
+        if paying {
+            // "Mark paid" starts at the whole amount (what was already paid + what is still owed) and today.
+            paid = PipelineFormat.plain(t.amount)
+            paidAt = t.paidAt ?? PipelineFormat.today
+        } else {
+            paid = t.paidAmount == 0 ? "" : PipelineFormat.plain(t.paidAmount)
+            paidAt = t.paidAt
+        }
+    }
+
+    private func save() async {
+        guard !busy else { return }
+        guard let amountValue = PipelineFormat.parseMoney(amount).map({ Swift.abs($0) }),
+              let paidValue = PipelineFormat.parseMoney(paid).map({ Swift.abs($0) }) else {
+            err = T("Type the amount as a number.")
+            return
+        }
+        var fields: [String: Any] = [:]
+        let l = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let inv = invoiceNo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let t = term {
+            if paying {
+                if paidValue != t.paidAmount { fields["paidAmount"] = paidValue }
+                if paidAt != t.paidAt { fields["paidAt"] = jsonOrNull(paidAt) }
+            } else {
+                if !l.isEmpty && l != t.label { fields["label"] = l }
+                if amountValue != t.amount { fields["amount"] = amountValue }
+                if dueDate != t.dueDate { fields["dueDate"] = jsonOrNull(dueDate) }
+                if inv != t.invoiceNo { fields["invoiceNo"] = inv }
+                if invoiceDate != t.invoiceDate { fields["invoiceDate"] = jsonOrNull(invoiceDate) }
+                if paidValue != t.paidAmount { fields["paidAmount"] = paidValue }
+                if paidAt != t.paidAt { fields["paidAt"] = jsonOrNull(paidAt) }
+                if n != t.note { fields["note"] = n }
+            }
+            if fields.isEmpty { dismiss(); return }
+        } else {
+            // A blank name becomes "Termin n" on the server.
+            if !l.isEmpty { fields["label"] = l }
+            fields["amount"] = amountValue
+            if let dueDate { fields["dueDate"] = dueDate }
+            if !inv.isEmpty { fields["invoiceNo"] = inv }
+            if let invoiceDate { fields["invoiceDate"] = invoiceDate }
+            if !n.isEmpty { fields["note"] = n }
+        }
+        busy = true; err = nil
+        defer { busy = false }
+        let ok: Bool
+        if let t = term { ok = await store.updateTerm(dealId, t.id, fields) } else { ok = await store.addTerm(dealId, fields) }
+        if ok {
+            dismiss()
+        } else {
+            // Shown here: the deal sheet underneath cannot show its alert while this one is up.
+            err = store.actionError ?? T("That change wasn't saved. Try again.")
+            store.actionError = nil
+        }
     }
 }

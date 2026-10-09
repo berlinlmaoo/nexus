@@ -137,6 +137,11 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     var daysOverdue: Int
     var health: PipelineHealth
     var phases: [PipelinePhase]
+    /// Payments per term (owner, 9 Oct 2026: "perlu per termin"), in order. Empty on a deal without
+    /// terms and on a server from before them.
+    var terms: [PipelineTerm]
+    /// The deal's payment from its terms; nil when it has none — then the manual fields count.
+    var termSummary: PipelineTermSummary?
 
     private enum CodingKeys: String, CodingKey {
         case id, code, position, name, brand, service, bdUserId, bdName, bd, pmUserId, pmName, pm, stage, probability
@@ -145,6 +150,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         case closingStatus, mainDate, nextAction, nextActionDate, blocker, notes, links, createdAt, createdBy
         case updatedAt, updatedBy, stageGroup, daysOverdue, health, phases
         case executionProjectId, executionProject
+        case terms, termSummary
     }
 
     init(from decoder: Decoder) throws {
@@ -180,7 +186,19 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         daysOverdue = Int(n(.daysOverdue))
         health = (try? c.decodeIfPresent(PipelineHealth.self, forKey: .health)) ?? PipelineHealth(key: "NONE", reasons: [])
         phases = (try? c.decodeIfPresent([PipelinePhase].self, forKey: .phases)) ?? []
+        let rawTerms = (try? c.decodeIfPresent([PipelineFailable<PipelineTerm>].self, forKey: .terms)) ?? []
+        terms = rawTerms.compactMap(\.value)
+        termSummary = (try? c.decodeIfPresent(PipelineTermSummary.self, forKey: .termSummary)) ?? nil
     }
+
+    /// With terms, the receivable, payment status and next due date are the terms' (owner, 9 Oct 2026);
+    /// the manual fields stay for deals without terms. Every place that shows them reads these.
+    var receivable: Double { termSummary?.outstanding ?? outstandingReceivable }
+    var paymentStatusShown: String { termSummary?.paymentStatus ?? paymentStatus }
+    var paymentDueShown: String? { termSummary != nil ? termSummary?.nextDueDate : paymentDueDate }
+
+    /// What the terms are checked against: the invoice value, else the contract value (web: the same).
+    var termsReference: Double { invoiceValue > 0 ? invoiceValue : contractValue }
 
     /// A won deal (Pre-Execution, Execution or Closed) may have its execution project made by hand;
     /// the server answers NOT_WON for any other (owner/GM, 9 Oct 2026).
@@ -244,6 +262,84 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
             default: break
             }
         }
+    }
+}
+
+/// One payment term of a deal: "DP", "Termin 1", … (owner, 9 Oct 2026). Status, outstanding and days
+/// overdue are the server's (lib/pipeline.ts termStatusOf), never worked out here.
+struct PipelineTerm: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    var position: Double
+    var label: String
+    var amount: Double
+    var dueDate: String?
+    var invoiceNo: String
+    var invoiceDate: String?
+    var paidAmount: Double
+    var paidAt: String?
+    var note: String
+    /// Not Invoiced | Invoiced | Partial | Paid | Overdue (an unknown one is shown as-is).
+    var status: String
+    var outstanding: Double
+    var daysOverdue: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case id, position, label, amount, dueDate, invoiceNo, invoiceDate, paidAmount, paidAt, note, status, outstanding, daysOverdue
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        func s(_ k: CodingKeys) -> String { (try? c.decodeIfPresent(String.self, forKey: k)) ?? "" }
+        func o(_ k: CodingKeys) -> String? {
+            guard let v = try? c.decodeIfPresent(String.self, forKey: k), !v.isEmpty else { return nil }
+            return v
+        }
+        func n(_ k: CodingKeys) -> Double { (try? c.decodeIfPresent(Double.self, forKey: k)) ?? 0 }
+        position = n(.position); label = s(.label); amount = n(.amount); dueDate = o(.dueDate)
+        invoiceNo = s(.invoiceNo); invoiceDate = o(.invoiceDate); paidAmount = n(.paidAmount); paidAt = o(.paidAt)
+        note = s(.note); status = o(.status) ?? "Not Invoiced"
+        outstanding = (try? c.decodeIfPresent(Double.self, forKey: .outstanding)) ?? max(0, amount - paidAmount)
+        daysOverdue = Int(n(.daysOverdue))
+    }
+
+    var isPaid: Bool { status == "Paid" }
+}
+
+/// The deal's payment worked out from its terms (server: termSummaryOf).
+struct PipelineTermSummary: Decodable, Hashable, Sendable {
+    var count = 0
+    var paidCount = 0
+    var totalAmount: Double = 0
+    var totalPaid: Double = 0
+    var outstanding: Double = 0
+    var overdueOutstanding: Double = 0
+    var maxDaysOverdue = 0
+    var paymentStatus = "Not Yet"
+    var nextDueDate: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case count, paidCount, totalAmount, totalPaid, outstanding, overdueOutstanding, maxDaysOverdue, paymentStatus, nextDueDate
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func n(_ k: CodingKeys) -> Double { (try? c.decodeIfPresent(Double.self, forKey: k)) ?? 0 }
+        count = Int(n(.count)); paidCount = Int(n(.paidCount)); totalAmount = n(.totalAmount); totalPaid = n(.totalPaid)
+        outstanding = n(.outstanding); overdueOutstanding = n(.overdueOutstanding); maxDaysOverdue = Int(n(.maxDaysOverdue))
+        paymentStatus = (try? c.decodeIfPresent(String.self, forKey: .paymentStatus)) ?? "Not Yet"
+        nextDueDate = (try? c.decodeIfPresent(String.self, forKey: .nextDueDate)) ?? nil
+    }
+}
+
+/// POST/PATCH …/terms answer { deal, term }; DELETE answers { deal }.
+struct PipelineTermResponse: Decodable, Sendable {
+    let deal: PipelineDeal?
+    let term: PipelineTerm?
+
+    private enum CodingKeys: String, CodingKey { case deal, term }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deal = try? c.decodeIfPresent(PipelineDeal.self, forKey: .deal)
+        term = try? c.decodeIfPresent(PipelineTerm.self, forKey: .term)
     }
 }
 
@@ -419,8 +515,11 @@ struct PipelineChange: Decodable, Identifiable, Sendable {
     let after: AuditJSON?
     let createdAt: String?
     let user: PipelinePerson?
+    /// A payment-term change ("term.<field>", "term.created" …): which term, named as it was then.
+    let termId: String?
+    let termLabel: String?
 
-    private enum CodingKeys: String, CodingKey { case id, field, before, after, createdAt, user }
+    private enum CodingKeys: String, CodingKey { case id, field, before, after, createdAt, user, termId, termLabel }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
@@ -429,7 +528,12 @@ struct PipelineChange: Decodable, Identifiable, Sendable {
         after = try? c.decodeIfPresent(AuditJSON.self, forKey: .after)
         createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
         user = try? c.decodeIfPresent(PipelinePerson.self, forKey: .user)
+        termId = (try? c.decodeIfPresent(String.self, forKey: .termId)) ?? nil
+        termLabel = (try? c.decodeIfPresent(String.self, forKey: .termLabel)) ?? nil
     }
+
+    /// "term.amount" → "amount"; nil for a change to the deal itself.
+    var termField: String? { field.hasPrefix("term.") ? String(field.dropFirst(5)) : nil }
 }
 
 /// GET /api/projects/:id/pipeline/:dealId
@@ -501,6 +605,43 @@ enum PipelineText {
         case "BLOCKER": return String(format: T("Blocker: %@"), r.text ?? "")
         case "VREG_PENDING": return T("Vendor registration not approved yet")
         default: return r.code
+        }
+    }
+
+    /// A payment term's status (server: TERM_STATUSES). An unknown one is shown as-is.
+    static func termStatus(_ k: String) -> String {
+        switch k {
+        case "Not Invoiced": return T("Not invoiced")
+        case "Invoiced": return T("Invoiced")
+        case "Partial": return T("Partly paid")
+        case "Paid": return T("Paid")
+        case "Overdue": return T("Overdue")
+        default: return k
+        }
+    }
+
+    static func termTone(_ k: String) -> ChipTone {
+        switch k {
+        case "Paid": return .success
+        case "Overdue": return .danger
+        case "Partial": return .warning
+        case "Invoiced": return .info
+        default: return .neutral
+        }
+    }
+
+    /// A payment term's fields in the History tab.
+    static func termField(_ key: String) -> String {
+        switch key {
+        case "label": return T("Name")
+        case "amount": return T("Amount")
+        case "dueDate": return T("Due date")
+        case "invoiceNo": return T("Invoice number")
+        case "invoiceDate": return T("Invoice date")
+        case "paidAmount": return T("Amount paid")
+        case "paidAt": return T("Paid on")
+        case "note": return T("Notes")
+        default: return key
         }
     }
 

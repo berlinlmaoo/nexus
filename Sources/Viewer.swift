@@ -24,7 +24,7 @@ final class Viewer {
     /// Z Vault and Threads are drawn only for the company's own people. The server refuses the rest.
     var isCompanyMember: Bool { isCompany == true }
 
-    /// The Pipeline Dashboard is for BoD, Agency and IT/Legal/Finance only (owner/GM, 9 Oct 2026).
+    /// Members of the Pipeline board only (owner, 9 Oct 2026: added by its lead like a task project).
     /// Unknown until loaded, so the entry stays hidden till then; the server refuses everyone else anyway.
     var canAccessPipeline: Bool { pipelineAccess == true }
 

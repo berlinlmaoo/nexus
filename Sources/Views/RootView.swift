@@ -183,8 +183,8 @@ struct MoreView: View {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 MoreTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
                                 MoreTile(T("Reports"), "chart.bar.fill", NX.success) { ReportsView() }
-                                // The company's one Pipeline board (owner/GM, 9 Oct 2026): drawn only for
-                                // BoD + Agency + IT/Legal/Finance, the people the server lets in.
+                                // The company's one Pipeline board: drawn only for its members, whom its
+                                // lead adds like on a task project (owner, 9 Oct 2026).
                                 if let board = viewer.pipelineBoard {
                                     MoreTile(T("Pipeline"), "line.3.horizontal.decrease.circle", NX.violetText) {
                                         ProjectDetailView(projectId: board.id, projectName: board.name)

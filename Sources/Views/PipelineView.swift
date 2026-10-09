@@ -34,7 +34,9 @@ final class PipelineStore {
     var actionError: String?
     /// A one-line confirmation ("… deleted. Control Room → Audit can restore it.").
     var notice: String?
-    @ObservationIgnored private var workspaceId: String?
+    /// When the project's members were last read for the BD/PM pickers (a member the lead adds shows up
+    /// within a minute, without reading the project on every edit's reload).
+    @ObservationIgnored private var peopleAt: Date?
 
     init(projectId: String) { self.projectId = projectId }
 
@@ -52,24 +54,26 @@ final class PipelineStore {
             forbidden = false
             loaded = true
             revision += 1
-            if let ws = r.project?.workspaceId, ws != workspaceId || people.isEmpty {
-                workspaceId = ws
-                await loadPeople(ws)
+            if people.isEmpty || (peopleAt.map { Date().timeIntervalSince($0) > 60 } ?? true) {
+                await loadPeople()
             }
         }
         catch APIError.unauthorized { signedOut = true }
-        // The board's own rule: staff who are not members of the project get 403.
+        // Not a member of the board (owner, 9 Oct 2026: members only, added by its lead) → 403.
         catch APIError.http(403, _) { forbidden = true }
         catch {
             if !loaded { loadError = (error as? LocalizedError)?.errorDescription ?? T("Check your connection, then try again.") }
         }
     }
 
-    private func loadPeople(_ workspaceId: String) async {
-        guard let members = try? await APIClient.shared.pipelinePeople(workspaceId: workspaceId) else { return }
+    /// BD and PM are picked from the board's own members (owner, 9 Oct 2026: access to the pipeline is
+    /// project membership, added by its lead like a task project).
+    private func loadPeople() async {
+        guard let members = try? await APIClient.shared.pipelinePeople(projectId: projectId) else { return }
+        peopleAt = Date()
         people = members.compactMap { m -> PipelinePerson? in
-            guard let id = m.userId, !id.isEmpty else { return nil }
-            return PipelinePerson(id: id, name: m.displayName, avatar: m.avatarURL)
+            guard !m.uid.isEmpty else { return nil }
+            return PipelinePerson(id: m.uid, name: m.user?.name, avatar: m.user?.avatar)
         }
         .sorted { ($0.name ?? "").localizedCaseInsensitiveCompare($1.name ?? "") == .orderedAscending }
     }
@@ -136,6 +140,46 @@ final class PipelineStore {
         } catch {
             deals.insert(gone, at: min(i, deals.count))
             fail(error, T("The deal wasn't deleted. Try again."))
+            return false
+        }
+    }
+
+    // MARK: payment terms (owner, 9 Oct 2026: "perlu per termin")
+
+    /// Add, edit or mark paid: the server answers the whole deal (receivable, status, health moved with
+    /// the term), which replaces the local one; a reload brings the KPIs. Refusals go to `actionError`.
+    @discardableResult
+    func addTerm(_ dealId: String, _ fields: [String: Any]) async -> Bool {
+        await termWrite(T("The payment term wasn't added. Try again.")) {
+            try await APIClient.shared.pipelineAddTerm(projectId: self.projectId, dealId: dealId, fields: fields)
+        }
+    }
+
+    @discardableResult
+    func updateTerm(_ dealId: String, _ termId: String, _ fields: [String: Any]) async -> Bool {
+        await termWrite(T("That change wasn't saved. Try again.")) {
+            try await APIClient.shared.pipelineUpdateTerm(projectId: self.projectId, dealId: dealId, termId: termId, fields: fields)
+        }
+    }
+
+    /// Restorable from Control Room → Audit, which the notice says.
+    @discardableResult
+    func deleteTerm(_ dealId: String, _ term: PipelineTerm) async -> Bool {
+        let ok = await termWrite(T("The payment term wasn't deleted. Try again.")) {
+            try await APIClient.shared.pipelineDeleteTerm(projectId: self.projectId, dealId: dealId, termId: term.id)
+        }
+        if ok { notice = String(format: T("%@ deleted. Control Room → Audit can restore it."), term.label) }
+        return ok
+    }
+
+    private func termWrite(_ fallback: String, _ call: () async throws -> PipelineTermResponse) async -> Bool {
+        do {
+            let r = try await call()
+            if let saved = r.deal, let j = deals.firstIndex(where: { $0.id == saved.id }) { deals[j] = saved }
+            await load()
+            return true
+        } catch {
+            fail(error, fallback)
             return false
         }
     }
@@ -861,7 +905,7 @@ struct PipelineTable: View {
         case .stage: sorted = deals.sorted { (stageIndex[$0.stage] ?? 99) < (stageIndex[$1.stage] ?? 99) }
         // Money and lateness read biggest first by default — the question is "where is the most".
         case .value: sorted = deals.sorted { $0.netValue > $1.netValue }
-        case .receivable: sorted = deals.sorted { $0.outstandingReceivable > $1.outstandingReceivable }
+        case .receivable: sorted = deals.sorted { $0.receivable > $1.receivable }
         case .overdue: sorted = deals.sorted { $0.daysOverdue > $1.daysOverdue }
         // No date goes last whichever way.
         case .nextDate: sorted = deals.sorted { ($0.nextActionDate ?? "9999") < ($1.nextActionDate ?? "9999") }
@@ -963,7 +1007,7 @@ struct PipelineTable: View {
                 .frame(width: 44, alignment: .trailing)
             Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue) : "–").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                 .monospacedDigit().frame(width: 96, alignment: .trailing)
-            Text(d.outstandingReceivable != 0 ? PipelineFormat.idr(d.outstandingReceivable) : "–").font(NXFont.text(12))
+            Text(d.receivable != 0 ? PipelineFormat.idr(d.receivable) : "–").font(NXFont.text(12))
                 .foregroundStyle(NX.foreground).monospacedDigit().frame(width: 96, alignment: .trailing)
             overdueText(d).frame(width: 56, alignment: .trailing)
             VStack(alignment: .leading, spacing: 1) {
@@ -998,9 +1042,9 @@ struct PipelineTable: View {
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 3) {
                 Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue) : "–").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
-                if d.outstandingReceivable > 0 {
+                if d.receivable > 0 {
                     HStack(spacing: 4) {
-                        Text(PipelineFormat.idr(d.outstandingReceivable)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                        Text(PipelineFormat.idr(d.receivable)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
                         overdueText(d)
                     }
                 }
@@ -1021,7 +1065,7 @@ struct PipelineTable: View {
 
     private func totals(_ list: [PipelineDeal]) -> some View {
         let net = list.reduce(0) { $0 + $1.netValue }
-        let receivable = list.reduce(0) { $0 + $1.outstandingReceivable }
+        let receivable = list.reduce(0) { $0 + $1.receivable }
         return HStack(spacing: 10) {
             Text(String(format: T("%d deals"), list.count)).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
             Spacer()
@@ -1060,7 +1104,7 @@ struct PipelineHealthView: View {
         .sorted { ($0.nextActionDate ?? "") < ($1.nextActionDate ?? "") }
     }
     private var late: [PipelineDeal] {
-        deals.filter { $0.daysOverdue > 0 && $0.outstandingReceivable > 0 }.sorted { $0.daysOverdue > $1.daysOverdue }
+        deals.filter { $0.daysOverdue > 0 && $0.receivable > 0 }.sorted { $0.daysOverdue > $1.daysOverdue }
     }
     private var blockers: [PipelineDeal] { live.filter { !$0.blocker.isEmpty }.sorted(by: PipelineDeal.bySeverity) }
 
@@ -1153,7 +1197,7 @@ struct PipelineHealthView: View {
     }
 
     private var latePayments: some View {
-        let sum = late.reduce(0) { $0 + $1.outstandingReceivable }
+        let sum = late.reduce(0) { $0 + $1.receivable }
         return PipelinePanel(icon: "creditcard", title: T("Late payments"), meta: late.isEmpty ? nil : PipelineFormat.idr(sum)) {
             if late.isEmpty {
                 calm(T("No receivable is past its due date."))
@@ -1164,7 +1208,7 @@ struct PipelineHealthView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(d.name.isEmpty ? T("Untitled deal") : d.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                                Text("\(d.paymentStatus) · \(PipelineFormat.idr(d.outstandingReceivable))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                Text("\(d.paymentStatusShown) · \(PipelineFormat.idr(d.receivable))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                             }
                             Spacer(minLength: 4)
                             Text(String(format: T(d.daysOverdue == 1 ? "%d day" : "%d days"), d.daysOverdue))

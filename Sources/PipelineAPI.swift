@@ -50,6 +50,32 @@ extension APIClient {
         _ = try await pipelineRun(req, as: SuccessResponse.self)
     }
 
+    // MARK: Payment terms (owner, 9 Oct 2026: "perlu per termin")
+
+    /// POST …/terms: label, amount, dueDate, invoiceNo, invoiceDate, paidAmount, paidAt, note — any of
+    /// them; a blank label becomes "Termin n". Answers the whole deal, whose receivable and health changed.
+    func pipelineAddTerm(projectId: String, dealId: String, fields: [String: Any]) async throws -> PipelineTermResponse {
+        var req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/terms", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        return try await pipelineRun(req, as: PipelineTermResponse.self)
+    }
+
+    /// PATCH one term: only the fields sent change, each one a line in the deal's History. "Mark paid"
+    /// is paidAmount + paidAt.
+    func pipelineUpdateTerm(projectId: String, dealId: String, termId: String, fields: [String: Any]) async throws -> PipelineTermResponse {
+        var req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/terms/\(Self.pipelineEnc(termId))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        return try await pipelineRun(req, as: PipelineTermResponse.self)
+    }
+
+    /// DELETE one term — restorable from Control Room → Audit ("pipeline_term").
+    func pipelineDeleteTerm(projectId: String, dealId: String, termId: String) async throws -> PipelineTermResponse {
+        let req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/terms/\(Self.pipelineEnc(termId))", method: "DELETE")
+        return try await pipelineRun(req, as: PipelineTermResponse.self)
+    }
+
     /// The .xlsx "Master Project" sheet (the GM's columns), saved to a temporary file named as the server
     /// names it. The caller hands the file to the share sheet.
     func pipelineExport(projectId: String, lang: String) async throws -> URL {
@@ -89,6 +115,9 @@ extension APIClient {
     /// What New project → Pipeline Dashboard ended in. The company has ONE board (owner/GM, 9 Oct 2026:
     /// "cuma satu papan/pipeline utama buat semua deal, lintas BD dan brand"), so a second create answers
     /// 409 PIPELINE_EXISTS with the board's id, and the sheet opens that board instead of showing an error.
+    /// Since the board became an ordinary members-only project (owner, 9 Oct 2026, evening) the id comes
+    /// only to someone who may open it; anyone else gets the server's sentence ("ask its lead to add
+    /// you"), thrown below as the error the sheet shows.
     enum PipelineBoardCreate { case created, exists(ProjectRef) }
 
     func pipelineBoardCreate(workspaceId: String, name: String, color: String, icon: String) async throws -> PipelineBoardCreate {
@@ -115,12 +144,11 @@ extension APIClient {
         return .created
     }
 
-    /// The members of the project's workspace — the people the BD and PM pickers offer (the server
-    /// refuses anyone else). Asked for by workspace, as the web does, because the project's workspace
-    /// need not be the one this person has open.
-    func pipelinePeople(workspaceId: String) async throws -> [WorkspaceRoster.Member] {
-        let path = "/api/workspaces/members?workspaceId=\(Self.pipelineEnc(workspaceId))"
-        return try await pipelineRun(makeRequest(path), as: WorkspaceRoster.self).members ?? []
+    /// The project's members — the people the BD and PM pickers offer (owner, 9 Oct 2026: BD/PM are
+    /// picked per deal from the people added to the board; someone else goes in by name). Read fresh,
+    /// not from the board cache, so a person the lead just added is offered at once.
+    func pipelinePeople(projectId: String) async throws -> [ProjectDetail.ProjectMember] {
+        try await pipelineRun(makeRequest("/api/projects/\(Self.pipelineEnc(projectId))"), as: ProjectDetail.self).members ?? []
     }
 
     /// `calRun` without the cache: nothing answered → `nothingAnswered`, 401 → `unauthorized`, any other

@@ -20,9 +20,11 @@ struct WorkspaceRoster: Decodable, Sendable {
     /// the company's; anyone else (a personal workspace from signing up without a code) does not
     /// see them (owner, 29 Sep 2026). Servers from 29 Sep 2026.
     let isCompany: Bool?
-    /// May open the Pipeline Dashboard: BoD + Agency + IT/Legal/Finance only (owner/GM, 9 Oct 2026:
-    /// "Board ini dari awal didesain buat BOD + Agency + Management (IT, Legal, Finance) aja"), and the
-    /// company's one board to open from the "Pipeline" entry. Servers from 9 Oct 2026; absent = no entry.
+    /// The Pipeline Dashboard is an ordinary members-only project (owner, 9 Oct 2026, evening: "akses
+    /// project pipelinenya kaya nambah orang biasa aja di task project"; its lead adds people).
+    /// pipelineProjectId: the company's one board, sent only to its members — the "Pipeline" entry.
+    /// canAccessPipeline: may pick "Pipeline Dashboard" in New project (a member, or anyone of the
+    /// company while no board exists). Servers from 9 Oct 2026; absent = no entry.
     let canAccessPipeline: Bool?
     let pipelineProjectId: String?
     let workspaceId: String?

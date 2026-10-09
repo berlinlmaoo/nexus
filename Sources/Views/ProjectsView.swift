@@ -697,8 +697,9 @@ struct CreateProjectSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                // Pipeline Dashboard is offered only to the people it is for (BoD + Agency + IT/Legal/
-                // Finance, owner/GM 9 Oct 2026); the server answers 403 to anyone else.
+                // Pipeline Dashboard is offered to the board's members (picking it opens the board) and,
+                // while none exists, to anyone of the company (owner, 9 Oct 2026); a non-member would
+                // only be told to ask the board's lead to add them.
                 ForEach(ProjectKind.allCases.filter { $0 != .pipeline || viewer.canAccessPipeline }) { k in
                     Button { pick(k) } label: { kindCard(k) }
                         .buttonStyle(.plain)

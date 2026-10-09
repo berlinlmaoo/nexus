@@ -404,8 +404,8 @@ struct SidebarRoot: View {
                             }
                             .tag(NXSelection.screen(screen))
                         }
-                        // The company's one Pipeline board, under Missions, for BoD + Agency + IT/Legal/
-                        // Finance only (owner/GM, 9 Oct 2026); a project row, so it opens like a shortcut.
+                        // The company's one Pipeline board, under Missions, for its members only (owner,
+                        // 9 Oct 2026: added by its lead); a project row, so it opens like a shortcut.
                         if group.screens.contains(.leaderboard), let board = viewer.pipelineBoard {
                             Label {
                                 Text(T("Pipeline")).font(NXFont.text(15, .semibold))
