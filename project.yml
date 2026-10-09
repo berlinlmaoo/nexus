@@ -56,6 +56,11 @@ targets:
       # while complaining about something else entirely.
       - target: NEXUSWidgets
         platformFilter: iOS
+      # Rich push: attaches the photo of a Threads post so a long press shows it. iOS only, like the
+      # widgets: Mac Catalyst could run it, but it would need its own Mac signing for a Mac that
+      # shows notification pictures small anyway, so the Mac keeps plain-text pushes.
+      - target: NEXUSNotificationService
+        platformFilter: iOS
       # The watch app rides inside the iOS app. platformFilter keeps it out of the Mac build, where
       # there is nothing to pair with and the copy phase would fail.
       - target: NEXUSWatch
@@ -128,6 +133,24 @@ targets:
         PRODUCT_NAME: NEXUSWidgets
         CODE_SIGN_ENTITLEMENTS: NEXUSWidgets.entitlements
         # An extension is delivered inside the app, never installed on its own.
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Notification Service Extension. Runs for pushes marked mutable-content, downloads the `image`
+  # URL the server put in the payload and attaches it (owner, 9 Oct 2026). No App Group, no
+  # entitlements: it never sees the session and only adds an attachment to a copy of the push.
+  NEXUSNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NotificationService
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        INFOPLIST_FILE: NotificationService/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.NotificationService
+        PRODUCT_NAME: NEXUSNotificationService
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
 
