@@ -333,15 +333,16 @@ function StatRow(_: { data: NexusDashboardResponse }) {
   const projectList = projectsQ.data ?? [];
   const quests = g.data?.quests ?? [];
 
-  // Hide tasks done more than 3 days ago (uses updatedAt as the completion proxy);
-  // open tasks always stay. Keeps "My Tasks" focused on what's still relevant.
-  const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+  // Hide tasks done more than a month ago (uses updatedAt as the completion proxy); open tasks
+  // always stay. Same window as the app's card (owner, 9 Oct 2026: done tasks from April still
+  // showed there; this page used 3 days, now both use 30).
+  const DONE_WINDOW = 30 * 24 * 60 * 60 * 1000;
   const now = Date.now();
   const taskList = (myTasks.data ?? []).filter((t) => {
     const done = (t.status ?? "").toUpperCase() === "DONE";
     if (!done) return true;
     const ts = t.updatedAt ? new Date(t.updatedAt).getTime() : 0;
-    return ts > 0 && now - ts <= THREE_DAYS;
+    return ts > 0 && now - ts <= DONE_WINDOW;
   });
   const tasksDone = taskList.filter((t) => (t.status ?? "").toUpperCase() === "DONE").length;
   const questsDone = quests.filter((q) => q.claimed).length;
@@ -353,7 +354,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       detail: <ProjectsDetail projects={projectList} />,
     },
     {
-      value: tasksDone, total: taskList.length, label: "Your Mission", Icon: ListChecks,
+      value: tasksDone, total: taskList.length, label: "Task", Icon: ListChecks,
       from: "#6ee7b7", to: "#059669", glow: "#34d399",
       detail: <TasksDetail tasks={taskList} />,
     },
@@ -415,7 +416,7 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
         <CountUp value={card.value} />
         {card.total != null && <span className="text-white/70">/{card.total}</span>}
       </div>
-      <div className="mt-1.5 text-sm font-medium text-white/85">{card.label}</div>
+      <div className="mt-1.5 text-sm font-medium text-white/85">{t(card.label)}</div>
     </motion.button>
   );
 }
@@ -450,7 +451,7 @@ function StatCardModal({ cards, active, onClose }: { cards: StatCard[]; active: 
             layoutId={reduce ? undefined : `stat-card-${active}`}
             role="dialog"
             aria-modal="true"
-            aria-label={card.label}
+            aria-label={t(card.label)}
             initial={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             animate={reduce ? { opacity: 1, scale: 1 } : undefined}
             exit={reduce ? { opacity: 0, scale: 0.95 } : undefined}
@@ -469,7 +470,7 @@ function StatCardModal({ cards, active, onClose }: { cards: StatCard[]; active: 
                 <div className="font-display text-4xl font-bold leading-none tracking-tight drop-shadow-sm">
                   {card.value}{card.total != null && <span className="text-white/70">/{card.total}</span>}
                 </div>
-                <div className="mt-1.5 text-sm font-medium text-white/85">{card.label}</div>
+                <div className="mt-1.5 text-sm font-medium text-white/85">{t(card.label)}</div>
               </div>
             </div>
             <motion.div
