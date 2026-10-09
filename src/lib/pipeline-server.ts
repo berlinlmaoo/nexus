@@ -358,20 +358,23 @@ export function defaultProbability(stage: string): number {
 }
 
 /**
- * The next free code in the project: "TZN-" + 2-digit year + 3-digit sequence. Counts the codes of
- * deals that exist AND of deals ever created here (their audit rows), so a deleted deal's code is never
- * handed out again — its restore from Audit would otherwise collide with the newcomer. The company has
- * one board (POST /api/projects refuses a second, owner/GM 9 Oct 2026), so this is its one series.
+ * The next free code in the project: "TZN-" + 2-digit year + 3-digit sequence, one above the highest
+ * code that can still show up on this board — the deals that exist, and the deleted deals Control Room →
+ * Audit can still restore (an unrestored DeletionSnapshot; restoring one with a code handed out again
+ * would hit the unique index). Not the audit trail of every deal ever created: an emptied board starts
+ * again at 001, and a code comes free only once nothing can bring its deal back (owner, 9 Oct 2026:
+ * "start fresh" after the demo deals were cleared). The company has one board (POST /api/projects
+ * refuses a second, owner/GM 9 Oct 2026), so this is its one series.
  */
 export async function nextDealCode(projectId: string, now: Date = new Date()): Promise<string> {
   // The year of the company's day (WIB), so a deal added at 01:00 on 1 January is already "27…".
   const yy = pipelineToday(now).slice(2, 4)
   const head = `${DEAL_CODE_PREFIX}${yy}`
-  const [live, created] = await Promise.all([
+  const [live, restorable] = await Promise.all([
     prisma.pipelineDeal.findMany({ where: { projectId, code: { startsWith: head } }, select: { code: true } }),
-    prisma.auditLog.findMany({
-      where: { entityType: "pipeline_deal", action: "create", metadata: { path: ["projectId"], equals: projectId } },
-      select: { metadata: true },
+    prisma.deletionSnapshot.findMany({
+      where: { entityType: "pipeline_deal", restoredAt: null, meta: { path: ["projectId"], equals: projectId } },
+      select: { data: true },
     }),
   ])
   let max = 0
@@ -381,7 +384,10 @@ export async function nextDealCode(projectId: string, now: Date = new Date()): P
     if (Number.isFinite(n) && n > max) max = n
   }
   for (const d of live) consider(d.code)
-  for (const a of created) consider((a.metadata as { code?: unknown } | null)?.code)
+  for (const snap of restorable) {
+    const rows = (snap.data as { tables?: { PipelineDeal?: { code?: unknown }[] } } | null)?.tables?.PipelineDeal
+    for (const row of Array.isArray(rows) ? rows : []) consider(row?.code)
+  }
   return `${head}${String(max + 1).padStart(3, "0")}`
 }
 

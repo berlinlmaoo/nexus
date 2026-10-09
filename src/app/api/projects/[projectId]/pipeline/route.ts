@@ -99,7 +99,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (!created) return NextResponse.json({ error: "Could not number the deal. Try again." }, { status: 409 })
 
-    // Awaited: the code sequence reads these rows (nextDealCode), so it must exist before the next create.
+    // Awaited so the trail is complete before the response; the code sequence itself reads live deals and
+    // restorable snapshots, not these rows (nextDealCode).
     await logAudit({
       action: "create",
       entityType: "pipeline_deal",
