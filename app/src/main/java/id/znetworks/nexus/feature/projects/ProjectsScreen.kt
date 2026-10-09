@@ -164,7 +164,17 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun createProject(name: String, icon: String, color: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
-        val id = api.createProject(name, ws, color, icon, folderId, type)
+        val id = try { api.createProject(name, ws, color, icon, folderId, type) } catch (e: ApiError) {
+            // One board for the company (PIPELINE-DASHBOARD §10.1): when it exists, open it instead of an error.
+            val h = e as? ApiError.Http
+            val existing = (h?.body?.get("projectId") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            when {
+                h?.code == "PIPELINE_EXISTS" && existing != null -> existing
+                h?.code == "PIPELINE_COMPANY_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.pl_company_only)) }; return@act }
+                h?.code == "PIPELINE_FORBIDDEN" -> { _state.update { it.copy(message = res.getString(R.string.pl_no_access)) }; return@act }
+                else -> throw e
+            }
+        }
         load()
         if (id.isNotBlank()) onDone(id)
     }
@@ -302,7 +312,12 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         }
     }
 
-    if (creating) CreateProjectDialog(s.folders, busy = s.busy, onDismiss = { creating = false }) { name, icon, color, folder, type ->
+    // Who may make or open the company's Pipeline board (§10): read once from the viewer.
+    val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer
+    var pipeline by remember { mutableStateOf(false to (null as String?)) }
+    LaunchedEffect(creating) { if (creating) { viewer.load(); pipeline = viewer.canAccessPipeline to viewer.pipelineProjectId } }
+    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipeline.first, pipelineId = pipeline.second,
+        onOpenBoard = { id -> creating = false; onOpenProject(id) }, onDismiss = { creating = false }) { name, icon, color, folder, type ->
         vm.createProject(name, icon, color, folder, type) { id -> creating = false; onOpenProject(id) }
     }
     if (folderCreate || folderEdit != null) FolderDialog(folderEdit, busy = s.busy, onDismiss = { folderCreate = false; folderEdit = null }) { name, icon, color, photo ->
@@ -479,7 +494,8 @@ private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onDismiss: () -> Unit, onCreate: (String, String, String, String?, ProjectType) -> Unit) {
+private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, pipelineId: String? = null, onOpenBoard: (String) -> Unit = {},
+                                onDismiss: () -> Unit, onCreate: (String, String, String, String?, ProjectType) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var icon by rememberSaveable { mutableStateOf(PROJECT_ICONS.first()) }
     var color by rememberSaveable { mutableStateOf("#7B2FBE") }
@@ -489,7 +505,11 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onD
     val c = Nx.colors
     if (type == null) {
         AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.pt_question)) },
-            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { ProjectType.entries.forEach { t -> TypeCard(t) { type = t } } } },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { ProjectType.entries.filter { it != ProjectType.PIPELINE || pipelineAccess }.forEach { t ->
+                // The company's board already exists: picking it opens that board (one board for every deal).
+                if (t == ProjectType.PIPELINE && pipelineId != null) TypeCard(t, stringResource(R.string.pl_opens_board)) { onOpenBoard(pipelineId) }
+                else TypeCard(t) { type = t }
+            } } },
             confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
         return
     }
@@ -587,7 +607,7 @@ internal fun ColorRow(selected: String, onPick: (String) -> Unit) {
 
 /** One project type: Task Project opens the form; the others are muted, dashed and "Coming soon". */
 @Composable
-private fun TypeCard(t: ProjectType, onPick: () -> Unit) {
+private fun TypeCard(t: ProjectType, description: String? = null, onPick: () -> Unit) {
     val c = Nx.colors
     val shape = RoundedCornerShape(14.dp)
     val frame = if (t.ready) Modifier.border(1.dp, c.border, shape)
@@ -605,7 +625,7 @@ private fun TypeCard(t: ProjectType, onPick: () -> Unit) {
                 if (!t.ready) Text(stringResource(R.string.pt_soon), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
                     modifier = Modifier.padding(start = 6.dp).background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
             }
-            Text(stringResource(t.description), fontSize = 12.sp, color = c.mutedFg)
+            Text(description ?: stringResource(t.description), fontSize = 12.sp, color = c.mutedFg)
         }
     }
 }

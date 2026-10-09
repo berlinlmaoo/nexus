@@ -190,7 +190,8 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 
 @Composable
 fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, onOpenChat: (String) -> Unit = {}, onOpenForm: (String) -> Unit = {}, onOpenDoc: (String) -> Unit = {},
-                        /** The form builder: null = a new form (FORM-BUILDER). */ onBuildForm: (String?) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
+                        /** The form builder: null = a new form (FORM-BUILDER). */ onBuildForm: (String?) -> Unit = {},
+                        /** Another project (a won deal's execution project, PIPELINE §10.3). */ onOpenProject: (String) -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     // Back from settings or a task: what changed there shows here.
@@ -258,7 +259,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
                             ProjectTab.SPRINTS -> SprintsTab(vm.projectId, onOpenTask)
                             ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId)
-                            ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest)
+                            ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject)
                             ProjectTab.FINANCE -> FinanceTab(vm.projectId)
                             ProjectTab.PNL -> PnlTab(vm.projectId)
                             ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)

@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (508 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (510 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -224,6 +224,18 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 5 Home stat cards | No bottom sheet: the detail grows out of the tapped card as iOS MorphFlip — drawn full size in the middle, a scale+translate starts it exactly on the card and springs to full (response 0.4, damping 0.84), one gradient top to bottom, no scrim, list fading in once landed; tap outside, × or back shrinks it back into the card. Card rects kept outside state (no recomposition while scrolling) | 2bc7765 |
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
+
+## 9 Oct, Pipeline update: one board, access, execution project (PIPELINE-DASHBOARD.md §10; server f4e8ba0 LIVE, web fa6aa40, iOS 4795b3f)
+
+NOT published, version unchanged. Nothing called on production; not yet seen on a device.
+
+| Part | What changed | Commit |
+|---|---|---|
+| Access | `Viewer` reads `canAccessPipeline` and `pipelineProjectId` from /api/workspaces/members (absent = no entry; reset on sign-out). More › Missions shows "Pipeline" only when both are there; it opens that project (Pipeline tab). A 403 on the board already showed the members-only empty state | this step |
+| One board | New project: "Pipeline Dashboard" hidden without access; when the company's board exists, picking it opens that board ("Opens the company's pipeline: one board for every deal."). POST answering 409 PIPELINE_EXISTS opens its `projectId` instead of an error; PIPELINE_COMPANY_ONLY / PIPELINE_FORBIDDEN in the app's words | this step |
+| Won → execution | Deal JSON `executionProjectId` / `executionProject`: the deal sheet shows "Open execution project · <name>" (opens it), or on a won deal (Pre-Execution / Execution / Closed) "Create execution project" (POST …/execution, then opens it and refetches), with the note that it is made automatically and its event date goes on the Master Calendar; failure → "Project eksekusi gagal dibuat" | this step |
+| Import | Values outside the lists (vregStatus "Not Assessed") and placeholder names ("BD 1") already show as-is | — |
+| Tests | PipelineBoardTest — 510 JVM tests | this step |
 
 ## 9 Oct, Pipeline Dashboard (agents:~/handoff/chat/PIPELINE-DASHBOARD.md §8; server LIVE, web 0733d04, iOS 8b698df)
 

@@ -84,7 +84,7 @@ private fun str(s: String?) = s?.let(::JsonPrimitive) ?: JsonNull
  * when it is left, BD / PM from the project's workspace, links, who changed it last, its History, Delete.
  */
 @Composable
-fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<WsMember>, vm: PipelineViewModel, onClose: () -> Unit) {
+fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<WsMember>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onClose: () -> Unit) {
     val c = Nx.colors
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -107,6 +107,14 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<WsMember>, vm
                 PhaseTrack(deal.phases, Modifier.fillMaxWidth())
                 deal.reasons.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(deal.healthKey)) }
                 Text(stringResource(R.string.pl_saves_on_leave), fontSize = 11.sp, color = c.mutedFg)
+                // Won → its execution project (Master Task + Master Calendar, §10.3).
+                val exec = deal.executionProjectId
+                if (exec != null || deal.isWon) Column(Modifier.fillMaxWidth().background(c.accentBg, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (exec != null) TextButton(onClick = { onOpenProject(exec) }) {
+                        Text(stringResource(R.string.pl_open_exec) + (deal.executionProjectName?.let { " · $it" } ?: ""), color = c.violetText, fontWeight = FontWeight.SemiBold) }
+                    else TextButton(onClick = { vm.execution(deal, onOpenProject) }) { Text(stringResource(R.string.pl_make_exec), color = c.violetText, fontWeight = FontWeight.SemiBold) }
+                    Text(stringResource(R.string.pl_exec_note), fontSize = 11.sp, color = c.mutedFg)
+                }
                 Group(stringResource(R.string.pl_s_commercial), stringResource(R.string.pl_s_bd)) {
                     TextSave(stringResource(R.string.pl_f_brand), deal.brand) { save(one("brand", JsonPrimitive(it))) }
                     Pick(stringResource(R.string.pl_f_service), deal.service, v.services) { save(one("service", JsonPrimitive(it))) }

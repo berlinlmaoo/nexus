@@ -2763,4 +2763,12 @@
         <item quantity="one">%d day, counted from the due date</item>
         <item quantity="other">%d days, counted from the due date</item>
     </plurals>
+    <!-- Pipeline: one board, access, execution project (Berlin, 9 Oct; PIPELINE-DASHBOARD §10) -->
+    <string name="pl_open_exec">Open execution project</string>
+    <string name="pl_make_exec">Create execution project</string>
+    <string name="pl_exec_note">Made automatically when a deal is won. Its event date goes on the Master Calendar.</string>
+    <string name="pl_exec_failed">Couldn\'t create the execution project.</string>
+    <string name="pl_opens_board">Opens the company\'s pipeline: one board for every deal.</string>
+    <string name="pl_company_only">A pipeline belongs to the company workspace.</string>
+    <string name="pl_no_access">The pipeline is for BoD, Agency, IT, Legal and Finance.</string>
 </resources>

@@ -1,5 +1,6 @@
 package id.znetworks.nexus.ui.shell
 
+import androidx.compose.material.icons.filled.ViewKanban
 import androidx.compose.material.icons.automirrored.filled.Chat
 import id.znetworks.nexus.feature.forms.FormBuilderScreen
 import id.znetworks.nexus.feature.chat.ChatSearchScreen
@@ -127,6 +128,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -483,7 +485,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenChat = { nav.navigate("chat/$it") },
                     onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
                     onOpenDoc = { nav.navigate("doc/$it") },
-                    onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) })
+                    onBuildForm = { form -> nav.navigate("form-builder/${entry.arguments?.getString("id")}" + (form?.let { "?form=$it" } ?: "")) },
+                    onOpenProject = { nav.navigate("project/$it") })
             }
             composable("form-builder/{projectId}?form={form}", arguments = listOf(androidx.navigation.navArgument("form") { nullable = true; defaultValue = null })) {
                 FormBuilderScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") })
@@ -589,6 +592,8 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
     // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
     val company = rememberIsCompany() == true
     val calendarOn = container.remoteConfig.body.collectAsStateWithLifecycle().value.calendar
+    var pipelineId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { container.viewer.load(); pipelineId = container.viewer.pipelineProjectId?.takeIf { container.viewer.canAccessPipeline } }
     val inboxUnread by container.badges.inboxUnread.collectAsStateWithLifecycle()
     // Control Room is drawn for MANAGER and above only (the server re-checks every call).
     val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
@@ -606,7 +611,9 @@ internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -
                 MoreItem(R.string.mt_submissions, Icons.Filled.Inbox, c.warning) { open("submissions") },
                 MoreItem(R.string.mt_rooms, Icons.Filled.MeetingRoom, c.coral) { open("rooms") },
             ))
-            MoreSection(stringResource(R.string.more_sec_missions), listOf(
+            MoreSection(stringResource(R.string.more_sec_missions), listOfNotNull(
+                // The company's one Pipeline board, only for those who may see it (PIPELINE-DASHBOARD §10.2).
+                pipelineId?.let { pid -> MoreItem(R.string.pl_tab, Icons.Filled.ViewKanban, c.violetText) { open("project/$pid") } },
                 MoreItem(R.string.mt_leaderboard, Icons.Filled.EmojiEvents, c.warning) { open("leaderboard") },
                 MoreItem(R.string.mt_reports, Icons.Filled.BarChart, c.success) { open("reports") },
             ))

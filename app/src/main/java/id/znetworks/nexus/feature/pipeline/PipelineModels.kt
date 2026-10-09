@@ -72,6 +72,12 @@ data class PipelineDeal(val raw: JsonObject) {
     val links: List<PipelineLink> get() = (raw["links"] as? JsonArray).orEmpty().mapNotNull { l ->
         (l as? JsonObject)?.let { o -> val url = o["url"].str().orEmpty(); PipelineLink(o["id"].str() ?: url, o["type"].str() ?: "Lainnya", o["label"].str().orEmpty(), url) }
     }
+    /** The TASK project made for a won deal (§10.3); null until there is one. */
+    val executionProjectId get() = raw["executionProjectId"].str() ?: (raw["executionProject"] as? JsonObject)?.get("id").str()
+    val executionProjectName get() = (raw["executionProject"] as? JsonObject)?.get("name").str()
+    /** Won: Pre-Execution, Execution or Closed — the stages an execution project belongs to. */
+    val isWon get() = stageGroup in setOf("Pre-Execution", "Execution", "Closed")
+
     /** Shown value: net if any, else the contract (the GM's rule for the board). */
     val value get() = if (netValue > 0) netValue else contractValue
     /** The person in a role: a NEXUS user wins over the typed name. */

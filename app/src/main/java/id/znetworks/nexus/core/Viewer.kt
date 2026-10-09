@@ -21,6 +21,14 @@ class Viewer(private val api: ApiClient) {
     @Volatile var isCompany: Boolean? = null
         private set
     val isCompanyMember: Boolean get() = isCompany == true
+    /**
+     * The company's one Pipeline board (PIPELINE-DASHBOARD §10): whether this person may see it (BoD+, Agency, IT,
+     * Legal, Finance — server-decided) and its project id. Absent on an older server = no entry.
+     */
+    @Volatile var canAccessPipeline: Boolean = false
+        private set
+    @Volatile var pipelineProjectId: String? = null
+        private set
     private val lock = Mutex()
 
     /** The server's own isBoD(), mirrored once so call sites cannot drift apart. */
@@ -32,10 +40,12 @@ class Viewer(private val api: ApiClient) {
         runCatching { api.get("/api/workspaces/members", JsonObject.serializer()) }.getOrNull()?.let { o ->
             role = (o["role"] as? JsonPrimitive)?.content ?: role
             isCompany = (o["isCompany"] as? JsonPrimitive)?.booleanOrNull ?: isCompany
+            canAccessPipeline = (o["canAccessPipeline"] as? JsonPrimitive)?.booleanOrNull ?: false
+            pipelineProjectId = (o["pipelineProjectId"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
         }
         role
     }
 
     /** A new session must not inherit the last person's role. */
-    fun reset() { role = null; isCompany = null }
+    fun reset() { role = null; isCompany = null; canAccessPipeline = false; pipelineProjectId = null }
 }

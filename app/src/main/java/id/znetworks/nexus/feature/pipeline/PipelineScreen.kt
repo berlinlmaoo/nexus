@@ -156,6 +156,14 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         }
     }
 
+    /** Make (or find) the won deal's execution project, then open it. */
+    fun execution(deal: PipelineDeal, onOpen: (String) -> Unit) = viewModelScope.launch {
+        _state.update { it.copy(busy = true) }
+        try { api.execution(projectId, deal.id)?.let(onOpen); load() }
+        catch (e: ApiError) { _state.update { it.copy(notice = res.getString(R.string.pl_exec_failed)) } }
+        _state.update { it.copy(busy = false) }
+    }
+
     fun delete(deal: PipelineDeal) = viewModelScope.launch {
         try {
             api.delete(projectId, deal.id)
@@ -223,7 +231,7 @@ internal fun PhaseTrack(phases: List<Pair<String, String>>, modifier: Modifier =
  * the others through `pipeline-changed` on the project room the board screen already sits in.
  */
 @Composable
-fun PipelineTab(newDealRequest: Int, vm: PipelineViewModel = viewModel()) {
+fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: PipelineViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
@@ -288,7 +296,7 @@ fun PipelineTab(newDealRequest: Int, vm: PipelineViewModel = viewModel()) {
             }
         }
     }
-    s.openDealId?.let { id -> d?.deals?.firstOrNull { it.id == id }?.let { deal -> DealSheet(deal, d, s.people, vm) { vm.open(null) } } }
+    s.openDealId?.let { id -> d?.deals?.firstOrNull { it.id == id }?.let { deal -> DealSheet(deal, d, s.people, vm, onOpenProject = { pid -> vm.open(null); onOpenProject(pid) }) { vm.open(null) } } }
     s.notice?.let { androidx.compose.material3.AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
 }
 
