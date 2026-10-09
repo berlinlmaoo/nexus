@@ -273,9 +273,46 @@ export function healthOf(d0: PipelineDealFacts, today: string): DealHealth {
 
 export type PhaseKey = "commercial" | "contract" | "readiness" | "deliverable" | "payment" | "closing"
 export type PhaseState = "done" | "active" | "pending" | "bad"
-export type DealPhase = { key: PhaseKey; state: PhaseState }
+/**
+ * `blocked`: the deal's blocker holds this phase up, so it shows the problem state and the blocker text sits
+ * under it (owner, 9 Oct 2026: "kalo ada blocker harusnya masuk ke … progress fasenya supaya tau problemnya").
+ */
+export type DealPhase = { key: PhaseKey; state: PhaseState; blocked?: boolean }
 
-/** The six-dot track on every card: how far each operational line of the deal has come (GM's nodes). */
+/**
+ * Words in a blocker that name the line of work it holds up, Indonesian and English as people type them.
+ * The earliest word in the text wins ("Kontrak belum ttd, invoice ditahan" → contract; on a tie the earlier
+ * row, so "vendor settlement" is closing, not readiness). Short words only
+ * as whole words, so "sign" does not match "design".
+ */
+const BLOCKER_PHASE_WORDS: ReadonlyArray<readonly [PhaseKey, RegExp]> = [
+  ["payment", /tagih|bayar|pelunasan|lunas|piutang|somasi|invoice|faktur|kwitansi|termin|payment|receivable|\bpaid\b|\bdp\b|down ?payment/],
+  ["contract", /kontrak|contract|legal|perjanjian|\bspk\b|\bmou\b|\bnda\b|\bpo\b|purchase order|tanda ?tangan|\bttd\b|\bsign(ed|ing)?\b/],
+  ["closing", /\bbast\b|closing|vendor settlement|settlement|laporan akhir|final report|rekonsiliasi/],
+  ["readiness", /vendor|\bvreg\b|registrasi|registration|perizinan|\bizin\b|permit|readiness|persiapan/],
+  ["deliverable", /deliverable|produksi|production|revisi|revision|materi|desain|design|konten|content|shooting|editing|\bbrief/],
+  ["commercial", /proposal|quotation|penawaran|negosiasi|negotiation|harga|pricing|budget|pitching|tender/],
+]
+
+/**
+ * The phase a blocker holds up: the one its words name, else the phase already in trouble, else the one in
+ * progress, else the first not done — "where the deal is now". null without a blocker.
+ */
+export function blockerPhaseOf(blocker: string | null | undefined, phases: readonly DealPhase[]): PhaseKey | null {
+  const text = (blocker ?? "").trim().toLowerCase()
+  if (!text || phases.length === 0) return null
+  let best: PhaseKey | null = null
+  let at = Infinity
+  for (const [key, re] of BLOCKER_PHASE_WORDS) {
+    const m = re.exec(text)
+    if (m && m.index < at) { at = m.index; best = key }
+  }
+  if (best) return best
+  const now = phases.find((p) => p.state === "bad") ?? phases.find((p) => p.state === "active") ?? phases.find((p) => p.state !== "done") ?? phases[phases.length - 1]
+  return now.key
+}
+
+/** The six-dot track on every card: how far each operational line of the deal has come (GM's nodes), plus the blocker. */
 export function phasesOf(d0: PipelineDealFacts, today: string = pipelineToday()): DealPhase[] {
   const d = paymentFactsOf(d0, today)
   const group = stageGroupOf(d.stage)
@@ -294,7 +331,7 @@ export function phasesOf(d0: PipelineDealFacts, today: string = pipelineToday())
       : d.paymentStatus === "Partial" || d.paymentStatus === "Due" || d.paymentStatus === "Upcoming" ? "active"
       : "pending"
   const closing: PhaseState = d.closingStatus === "Closed" ? "done" : !d.closingStatus || d.closingStatus === "Not Ready" ? "pending" : "active"
-  return [
+  const phases: DealPhase[] = [
     { key: "commercial", state: commercial },
     { key: "contract", state: contract },
     { key: "readiness", state: readiness },
@@ -302,6 +339,10 @@ export function phasesOf(d0: PipelineDealFacts, today: string = pipelineToday())
     { key: "payment", state: payment },
     { key: "closing", state: closing },
   ]
+  // A written blocker turns the phase it holds up red, on the card's bar and the deal's stepper, so the
+  // problem shows where it is (owner, 9 Oct 2026). The GM's nodes ignore the blocker; this is the one change.
+  const held = blockerPhaseOf(d.blocker, phases)
+  return held ? phases.map((p) => (p.key === held ? { ...p, state: "bad", blocked: true } : p)) : phases
 }
 
 export type PipelineSummary = {
