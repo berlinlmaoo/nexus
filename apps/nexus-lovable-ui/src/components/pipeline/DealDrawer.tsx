@@ -24,7 +24,7 @@ import { DealDocuments } from "./DealDocuments";
 import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
-  HealthPill, PHASE_LABEL, PHASE_STATE_LABEL, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, phaseDotTone, useReasonText, useVocabLabels,
+  BlockerBanner, GROUP_TONE, HealthPill, PhaseStepper, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, useReasonText, useVocabLabels,
 } from "./pipeline-ui";
 
 /** English names of the fields, for the history ("Bagas changed Stage …"). Translated with t(). */
@@ -64,6 +64,7 @@ export function DealDrawer({
   onClose: () => void;
 }) {
   const { t, lang } = useLang();
+  const labels = useVocabLabels();
   const [tab, setTab] = useState<"details" | "history">("details");
   const [confirming, setConfirming] = useState(false);
   return (
@@ -77,7 +78,16 @@ export function DealDrawer({
           <>
             <header className="border-b border-border px-5 pb-3 pt-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium tabular-nums text-muted-foreground">{deal.code}</p>
+                {/* The deals stage up top, with its columns colour (owner, 9 Oct 2026: "stage di board per
+                    dealnya jg blm ada"); change it in the Stage field below or by dragging the card. */}
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{deal.code}</p>
+                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs font-medium">
+                    <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", GROUP_TONE[deal.stageGroup] ?? "bg-muted-foreground/40")} />
+                    <span className="sr-only">{t("Stage")}: </span>
+                    <span className="truncate">{labels.stage(deal.stage)}</span>
+                  </span>
+                </div>
                 <div className="flex items-center gap-1.5">
                   {deal.health.key !== "NONE" && <HealthPill health={deal.health.key} />}
                   <button type="button" onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-[44px]">
@@ -243,26 +253,20 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
   const off = !canEdit;
   const L = (en: string) => t(en);
   const early = deal.stageGroup === "Pipeline" || deal.stageGroup === "Lost";
+  // The blocker has its own banner (and sits under its phase in the stepper), so the list skips it.
+  const reasons = deal.health.reasons.filter((r) => r.code !== "BLOCKER" || !deal.blocker?.trim());
   return (
     <div className="space-y-5">
-      {deal.health.reasons.length > 0 && (
-        <ul className={cn("space-y-1 rounded-xl px-3 py-2.5 text-sm", deal.health.key === "CRITICAL" ? "bg-destructive/10 text-red-800 dark:text-red-200" : "bg-warning/15 text-amber-900 dark:text-amber-200")}>
-          {deal.health.reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}
-        </ul>
-      )}
-
-      {/* The six-step progress means something once a deal is won; before that every step is "not started". */}
-      {!early && (
-      <ol aria-label={t("Phase progress")} className="grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-6">
-        {deal.phases.map((p) => (
-          <li key={p.key} className="min-w-0">
-            <span aria-hidden className={cn("block h-1.5 rounded-full", phaseDotTone(p.state))} />
-            <span className="mt-1.5 block truncate text-xs font-medium">{t(PHASE_LABEL[p.key])}</span>
-            <span className="block truncate text-2xs text-muted-foreground">{t(PHASE_STATE_LABEL[p.state])}</span>
-          </li>
-        ))}
-      </ol>
-      )}
+      <div className="space-y-2">
+        <BlockerBanner deal={deal} className="px-3 py-2.5 text-sm" />
+        {reasons.length > 0 && (
+          <ul className={cn("space-y-1 rounded-xl px-3 py-2.5 text-sm", deal.health.key === "CRITICAL" ? "bg-destructive/10 text-red-800 dark:text-red-200" : "bg-warning/15 text-amber-900 dark:text-amber-200")}>
+            {reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}
+          </ul>
+        )}
+        {/* On every deal, open ones too: grey steps say what has not started (owner, 9 Oct 2026). */}
+        <PhaseStepper deal={deal} />
+      </div>
 
       <Section title={t("Commercial & pipeline")} owner={t("BD / account")}>
         <Field label={L("Brand / client")}><TextField label={L("Brand / client")} value={deal.brand} maxLength={200} disabled={off} onCommit={(v) => onPatch({ brand: v })} /></Field>

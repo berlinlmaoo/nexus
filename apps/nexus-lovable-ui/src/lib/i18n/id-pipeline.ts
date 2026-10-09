@@ -267,4 +267,15 @@ export const ID_PIPELINE: Record<string, string> = {
   "to": "menjadi",
   "Created by {name}, {when}": "Dibuat {name}, {when}",
   "Created {when}": "Dibuat {when}",
+
+  // Phase progress lines, the GM's own words (owner, 9 Oct 2026: stepper on every deal, blocker under its phase)
+  "Contract cancelled": "Kontrak dibatalkan",
+  "Not yet relevant": "Belum relevan",
+  "Deliverable done": "Selesai",
+  "Fully paid": "Lunas",
+  "Overdue {n} day": "Overdue {n} hari",
+  "Overdue {n} days": "Overdue {n} hari",
+  "Payment overdue": "Pembayaran overdue",
+  "Upcoming due": "Akan jatuh tempo",
+  "Not yet billed": "Belum ditagih",
 };
