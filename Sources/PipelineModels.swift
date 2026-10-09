@@ -813,6 +813,23 @@ enum PipelineFormat {
         return (isID ? stampID : stampEN).string(from: d)
     }
 
+    private static let shortID: DateFormatter = makeShort("id_ID")
+    private static let shortEN: DateFormatter = makeShort("en_GB")
+    private static func makeShort(_ locale: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.calendar = calendar
+        f.timeZone = calendar.timeZone
+        f.locale = Locale(identifier: locale)
+        f.dateFormat = "d MMM"
+        return f
+    }
+
+    /// "4 Okt" / "4 Oct": a date on a board card, where the year goes without saying; "" for none.
+    static func shortDay(_ iso: String?) -> String {
+        guard let d = parseDay(iso) else { return iso ?? "" }
+        return (isID ? shortID : shortEN).string(from: d)
+    }
+
     /// Whole days from `from` to `to` (both "YYYY-MM-DD"); negative when `to` is earlier.
     static func daysBetween(_ from: String, _ to: String) -> Int? {
         guard let a = parseDay(from), let b = parseDay(to) else { return nil }

@@ -310,7 +310,7 @@ struct PipelineTab: View {
                 ScrollView {
                     EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("No deals in this pipeline yet"),
                                subtitle: T("Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card."),
-                               actionTitle: T("Add the first deal"), action: { route = .newDeal("Incoming") })
+                               actionTitle: T("Add your first deal"), action: { route = .newDeal("Incoming") })
                         .frame(minHeight: 440)
                 }
                 .refreshable { await store.load() }
@@ -368,22 +368,36 @@ struct PipelineTab: View {
 
     // MARK: header
 
+    /// Owner, 9 Oct 2026 ("UI UX di hape jg sempit bgt, tolong di rapihkan biar nyaman"): on a phone the
+    /// header is four calm rows — the KPI chips scrolling sideways, search across the width with one menu
+    /// for the PM/BD filters and Excel, a standard segmented Board · Table · Health, then the health chips.
+    /// On an iPad or a Mac search, the switch and the menu share a row. Every sideways scroller is held to
+    /// its content's height: a horizontal ScrollView otherwise takes all the height it is offered, which is
+    /// what turned the KPI strip into a tall, mostly empty card.
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            PipelineKpiStrip(summary: store.summary)
-            HStack(spacing: 8) {
-                searchField
-                filterMenu
-                exportButton
+            PipelineKpiStrip(summary: store.summary, wide: wide)
+            if wide {
+                HStack(spacing: 10) {
+                    searchField.frame(maxWidth: 380)
+                    modePicker.frame(maxWidth: 320)
+                    Spacer(minLength: 0)
+                    moreMenu
+                }
+            } else {
+                HStack(spacing: 8) {
+                    searchField
+                    moreMenu
+                }
+                modePicker
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    modePicker
-                    Rectangle().fill(NX.border).frame(width: 1, height: 22)
                     ForEach(["", "CRITICAL", "ATTENTION", "HEALTHY", "NOT_STARTED"], id: \.self) { healthChip($0) }
                 }
                 .padding(.vertical, 1)
             }
+            .fixedSize(horizontal: false, vertical: true)
             if filtering {
                 HStack(spacing: 10) {
                     Text(String(format: T("%d of %d deals"), shown.count, store.deals.count))
@@ -393,97 +407,95 @@ struct PipelineTab: View {
                 }
             }
         }
-        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 10)
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
     }
 
     private var searchField: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+            Image(systemName: "magnifyingglass").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.mutedFg)
             TextField(T("Search deal, brand, code, BD or PM…"), text: $search)
-                .font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                .font(NXFont.text(15)).foregroundStyle(NX.foreground)
                 .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.search)
             if !search.isEmpty {
                 Button { search = "" } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                        .frame(width: 28, height: 28).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Clear filters"))
             }
         }
-        .padding(.horizontal, 12).frame(height: 40)
+        .padding(.horizontal, 12).frame(height: 42)
+        .frame(maxWidth: .infinity)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(search.isEmpty ? NX.border : NX.violet.opacity(0.55)))
         .accessibilityLabel(T("Search deals"))
     }
 
-    private var filterMenu: some View {
+    /// PM and BD filters and the Excel download, in one menu next to search (no row of small buttons).
+    private var moreMenu: some View {
         let active = !pmFilter.isEmpty || !bdFilter.isEmpty
         return Menu {
-            Section(T("Filter by PM")) {
+            Menu {
                 Button { pmFilter = "" } label: { check(pmFilter.isEmpty, T("All PMs")) }
                 ForEach(pmNames, id: \.self) { n in Button { pmFilter = n } label: { check(pmFilter == n, n) } }
+            } label: {
+                Label(pmFilter.isEmpty ? T("Filter by PM") : "PM · \(pmFilter)", systemImage: "person")
             }
-            Section(T("Filter by BD")) {
+            Menu {
                 Button { bdFilter = "" } label: { check(bdFilter.isEmpty, T("All BDs")) }
                 ForEach(bdNames, id: \.self) { n in Button { bdFilter = n } label: { check(bdFilter == n, n) } }
+            } label: {
+                Label(bdFilter.isEmpty ? T("Filter by BD") : "BD · \(bdFilter)", systemImage: "person.2")
             }
+            if active {
+                Button { pmFilter = ""; bdFilter = "" } label: { Label(T("Clear filters"), systemImage: "xmark.circle") }
+            }
+            Divider()
+            Button { export() } label: {
+                Label(exporting ? T("Preparing…") : T("Download Excel"), systemImage: "square.and.arrow.down")
+            }
+            .disabled(exporting)
         } label: {
-            Image(systemName: active ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(active ? NX.violetText : NX.foreground)
-                .frame(width: 40, height: 40)
-                .background(active ? NX.violet.opacity(0.12) : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(active ? NX.violet.opacity(0.55) : NX.border))
+            Group {
+                if exporting {
+                    ProgressView().scaleEffect(0.8)
+                } else {
+                    Image(systemName: active ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(active ? NX.violetText : NX.foreground)
+                }
+            }
+            .frame(width: 42, height: 42)
+            .background(active ? NX.violet.opacity(0.12) : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(active ? NX.violet.opacity(0.55) : NX.border))
+            .contentShape(Rectangle())
         }
         .menuIndicator(.hidden)
-        .accessibilityLabel(T("Filter by PM"))
+        .accessibilityLabel(T("Filters and export"))
     }
 
     @ViewBuilder private func check(_ on: Bool, _ text: String) -> some View {
         if on { Label(text, systemImage: "checkmark") } else { Text(text) }
     }
 
-    private var exportButton: some View {
-        Button {
-            Task {
-                exporting = true
-                if let url = await store.exportFile() { route = .export(url) }
-                exporting = false
-            }
-        } label: {
-            Group {
-                if exporting { ProgressView().scaleEffect(0.8) }
-                else { Image(systemName: "square.and.arrow.down").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.foreground) }
-            }
-            .frame(width: 40, height: 40)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+    private func export() {
+        Task {
+            exporting = true
+            if let url = await store.exportFile() { route = .export(url) }
+            exporting = false
         }
-        .buttonStyle(.plain)
-        .disabled(exporting)
-        .accessibilityLabel(exporting ? T("Preparing…") : T("Download Excel"))
     }
 
+    /// The standard segmented control (owner, 9 Oct 2026): full width on a phone, nothing to scroll.
     private var modePicker: some View {
-        HStack(spacing: 2) {
+        Picker(T("View"), selection: $modeRaw) {
             ForEach(PipelineMode.allCases) { m in
-                Button { modeRaw = m.rawValue } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: m.icon).font(.system(size: 11, weight: .semibold))
-                        Text(m.label).font(NXFont.text(12, .semibold))
-                    }
-                    .foregroundStyle(mode == m ? Color.white : NX.mutedFg)
-                    .padding(.horizontal, 10).frame(height: 30)
-                    .background(mode == m ? NX.violetFill : Color.clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(mode == m ? .isSelected : [])
+                Text(m.label).tag(m.rawValue)
             }
         }
-        .padding(2)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(NX.border))
+        .pickerStyle(.segmented)
+        .labelsHidden()
     }
 
     private func healthChip(_ key: String) -> some View {
@@ -521,7 +533,7 @@ struct PipelineTab: View {
         } else {
             switch mode {
             case .board:
-                PipelineBoard(deals: list, stages: store.vocab.stages, compact: !wide,
+                PipelineBoard(deals: list, stages: store.vocab.stages, today: store.today, compact: !wide,
                               onOpen: { route = .deal($0) },
                               onMove: { id, stage in Task { await store.patch(id, ["stage": stage]) } },
                               onAdd: { route = .newDeal($0) },
@@ -601,15 +613,22 @@ struct PipelinePhaseTrack: View {
 }
 
 /// The instrument strip (the GM's "instruments"): over every deal, never the filtered view, so
-/// filtering never changes the numbers people quote. Scrolls sideways on a phone.
+/// filtering never changes the numbers people quote.
+///
+/// Owner, 9 Oct 2026: it had become a card ~500pt tall with three numbers in it — a horizontal ScrollView
+/// takes every bit of height it is offered. Now: on a phone, small KPI chips (~64pt) in a row that scrolls
+/// sideways; on an iPad or a Mac, one card with all seven side by side when they fit, else the same chips.
+/// Both are held to their content's height. A reading of zero is drawn quietly instead of in bold.
 struct PipelineKpiStrip: View {
     let summary: PipelineSummary
+    var wide: Bool = false
 
     private struct Tile: Identifiable {
         let id: String
         let label: String
         let value: String
         let sub: String
+        var zero = false
         var tone: Color? = nil
     }
 
@@ -617,45 +636,81 @@ struct PipelineKpiStrip: View {
         let s = summary
         return [
             Tile(id: "open", label: T("Open pipeline"), value: PipelineFormat.idr(s.openValue),
-                 sub: String(format: T("%d deals in play"), s.openCount)),
+                 sub: String(format: T("%d deals in play"), s.openCount), zero: s.openValue == 0),
             Tile(id: "weighted", label: T("Weighted forecast"), value: PipelineFormat.idr(s.weightedValue),
-                 sub: T("Value × probability")),
+                 sub: T("Value × probability"), zero: s.weightedValue == 0),
             Tile(id: "won", label: T("Won"), value: PipelineFormat.idr(s.wonValue),
-                 sub: String(format: T("%d active · %d lost"), s.activeCount, s.lostCount)),
+                 sub: String(format: T("%d active · %d lost"), s.activeCount, s.lostCount), zero: s.wonValue == 0),
             Tile(id: "receivable", label: T("Receivable"), value: PipelineFormat.idr(s.receivable),
-                 sub: String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)),
-                 tone: s.receivableOverdue > 0 ? ChipTone.danger.fg : nil),
+                 sub: s.receivableOverdue > 0 ? String(format: T("%@ overdue"), PipelineFormat.idr(s.receivableOverdue)) : T("Nothing overdue"),
+                 zero: s.receivable == 0, tone: s.receivableOverdue > 0 ? ChipTone.danger.fg : nil),
             Tile(id: "critical", label: T("Critical"), value: "\(s.criticalCount)",
                  sub: String(format: T("%d need attention"), s.attentionCount),
-                 tone: s.criticalCount > 0 ? ChipTone.danger.fg : nil),
+                 zero: s.criticalCount == 0, tone: s.criticalCount > 0 ? ChipTone.danger.fg : nil),
             Tile(id: "ready", label: T("Ready to execute"), value: "\(s.readyCount)",
-                 sub: String(format: T("%d blocked"), s.blockedCount),
+                 sub: String(format: T("%d blocked"), s.blockedCount), zero: s.readyCount == 0,
                  tone: s.blockedCount > 0 ? ChipTone.warning.fg : (s.readyCount > 0 ? ChipTone.success.fg : nil)),
             Tile(id: "deliverables", label: T("Deliverables on track"), value: "\(s.deliverablesOnTrack)",
-                 sub: String(format: T("%d completed"), s.deliverablesDone)),
+                 sub: String(format: T("%d completed"), s.deliverablesDone), zero: s.deliverablesOnTrack == 0),
         ]
     }
 
     var body: some View {
+        Group {
+            if wide {
+                ViewThatFits(in: .horizontal) {
+                    joined
+                    chips
+                }
+            } else {
+                chips
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(T("Pipeline at a glance"))
+    }
+
+    /// Phone: one small card per reading, scrolling sideways.
+    private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(Array(tiles.enumerated()), id: \.element.id) { i, tile in
-                    if i > 0 { Rectangle().fill(NX.border).frame(width: 1).padding(.vertical, 10) }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(tile.label.uppercased()).font(NXFont.text(10, .bold)).tracking(0.4).foregroundStyle(NX.mutedFg).lineLimit(1)
-                        Text(tile.value).font(NXFont.display(19, .bold)).foregroundStyle(tile.tone ?? NX.foreground)
-                            .monospacedDigit().lineLimit(1)
-                        Text(tile.sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .frame(minWidth: 136, alignment: .leading)
-                    .accessibilityElement(children: .combine)
+            HStack(spacing: 8) {
+                ForEach(tiles) { tile in
+                    reading(tile)
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .frame(minWidth: 124, alignment: .leading)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
                 }
             }
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+            .padding(.vertical, 1)
         }
-        .accessibilityLabel(T("Pipeline at a glance"))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// iPad / Mac: the seven readings in one card, hairlines between them.
+    private var joined: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(tiles.enumerated()), id: \.element.id) { i, tile in
+                if i > 0 { Rectangle().fill(NX.border).frame(width: 1).padding(.vertical, 10) }
+                reading(tile)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(minWidth: 118, maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func reading(_ tile: Tile) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(tile.label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Text(tile.value).font(NXFont.display(17, .bold))
+                .foregroundStyle(tile.zero ? NX.mutedFg.opacity(0.75) : (tile.tone ?? NX.foreground))
+                .monospacedDigit().lineLimit(1)
+            Text(tile.sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -667,17 +722,30 @@ private struct PipelineStageColumn: Identifiable {
     var id: String { stage }
 }
 
-/// One column per stage, left to right from first contact to closed. On a phone a column is nearly the
-/// screen's width and the strip snaps column by column; on a Mac or iPad the columns sit side by side.
-/// Each column scrolls its own cards, like the task board (LaneColumn), so nothing scrolls two ways.
+extension PipelineDeal {
+    /// The value a card and a column total show: net value when known, else the contract value (web dealValue).
+    var shownValue: Double { netValue > 0 ? netValue : contractValue }
+}
+
+/// One column per stage, left to right from first contact to closed. Each column scrolls its own cards
+/// under a fixed header (stage, count, total), like the task board's LaneColumn, so nothing scrolls two
+/// ways at once. Non-lazy stacks only.
+///
+/// Phone (owner, 9 Oct 2026: "di hape jg sempit bgt"): one column fills the width and the strip pages
+/// column by column (content margins + container-relative width + view-aligned snapping, Apple's
+/// standard carousel), with a row of dots under it that says where you are and jumps to a stage.
+/// iPad / Mac: 288pt columns side by side with the scroll bar shown.
 struct PipelineBoard: View {
     let deals: [PipelineDeal]
     let stages: [String]
+    let today: String
     let compact: Bool
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
     let onAdd: (String) -> Void
     let onRefresh: () async -> Void
+
+    @State private var page: String?
 
     private var columns: [PipelineStageColumn] {
         var order = stages
@@ -687,27 +755,67 @@ struct PipelineBoard: View {
     }
 
     var body: some View {
+        let cols = columns
         if compact {
-            ScrollView(.horizontal, showsIndicators: false) { strip }
+            VStack(spacing: 0) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(cols) { col in
+                            column(col)
+                                .containerRelativeFrame(.horizontal)
+                                .id(col.stage)
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .padding(.top, 12)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .contentMargins(.horizontal, 16, for: .scrollContent)
                 .scrollTargetBehavior(.viewAligned)
+                .scrollPosition(id: $page)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                pageDots(cols)
+            }
         } else {
-            ScrollView(.horizontal, showsIndicators: true) { strip }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(cols) { col in column(col).frame(width: 288) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    private var strip: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ForEach(columns) { col in
-                PipelineColumnView(stage: col.stage, deals: col.deals, stages: stages,
-                                   onOpen: onOpen, onMove: onMove, onAdd: onAdd, onRefresh: onRefresh)
-                    .containerRelativeFrame(.horizontal) { length, _ in compact ? max(240, length - 56) : 288 }
+    private func column(_ col: PipelineStageColumn) -> some View {
+        PipelineColumnView(stage: col.stage, deals: col.deals, stages: stages, today: today,
+                           onOpen: onOpen, onMove: onMove, onAdd: onAdd, onRefresh: onRefresh)
+    }
+
+    /// Where you are on the phone's paged board; a dot jumps to its stage.
+    private func pageDots(_ cols: [PipelineStageColumn]) -> some View {
+        let current = page ?? cols.first?.stage
+        return HStack(spacing: 2) {
+            ForEach(cols) { col in
+                let on = col.stage == current
+                Button {
+                    withAnimation(.snappy) { page = col.stage }
+                } label: {
+                    Capsule()
+                        .fill(on ? PipelineStyle.groupTone(col.stage) : NX.mutedFg.opacity(0.3))
+                        .frame(width: on ? 18 : 7, height: 7)
+                        .frame(width: on ? 30 : 20, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: T("%@, %d deals"), PipelineText.stage(col.stage), col.deals.count))
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .scrollTargetLayout()
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .animation(.snappy, value: current)
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 4)
     }
 }
 
@@ -715,53 +823,54 @@ struct PipelineColumnView: View {
     let stage: String
     let deals: [PipelineDeal]
     let stages: [String]
+    let today: String
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
     let onAdd: (String) -> Void
     let onRefresh: () async -> Void
 
-    private var total: Double { deals.reduce(0) { $0 + $1.netValue } }
+    private var total: Double { deals.reduce(0) { $0 + $1.shownValue } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Circle().fill(PipelineStyle.groupTone(stage)).frame(width: 7, height: 7)
-                        Text(PipelineText.stage(stage)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    }
-                    Text(total > 0 ? PipelineFormat.idr(total) : " ").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                }
-                Spacer(minLength: 4)
-                Text("\(deals.count)").font(NXFont.text(11, .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
-                    .padding(.horizontal, 8).padding(.vertical, 2)
+            // One line: stage, count, total, add. It stays put while the cards scroll under it.
+            HStack(spacing: 8) {
+                Circle().fill(PipelineStyle.groupTone(stage)).frame(width: 8, height: 8)
+                Text(PipelineText.stage(stage)).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text("\(deals.count)").font(NXFont.text(12, .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 7).padding(.vertical, 1)
                     .background(NX.background, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
+                Spacer(minLength: 6)
+                if total > 0 {
+                    Text(PipelineFormat.idr(total)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                        .monospacedDigit().lineLimit(1)
+                }
+                if stage != PipelineVocab.lostStage {
+                    Button { onAdd(stage) } label: {
+                        Image(systemName: "plus").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground)
+                            .frame(width: 32, height: 32)
+                            .background(NX.card, in: Circle())
+                            .overlay(Circle().strokeBorder(NX.border))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(format: T("Add a deal in %@"), PipelineText.stage(stage)))
+                }
             }
-            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 8)
-            .accessibilityElement(children: .combine)
+            .padding(.leading, 14).padding(.trailing, 10).padding(.vertical, 10)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
                     ForEach(deals) { d in
-                        PipelineDealCard(deal: d, stages: stages, onOpen: onOpen, onMove: onMove)
+                        PipelineDealCard(deal: d, stages: stages, today: today, onOpen: onOpen, onMove: onMove)
                     }
                     if deals.isEmpty {
-                        Text(T("No deals")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity).padding(.vertical, 22)
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4])))
-                    }
-                    if stage != PipelineVocab.lostStage {
-                        Button { onAdd(stage) } label: {
-                            Label(T("Add in this stage"), systemImage: "plus")
-                                .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                                .frame(maxWidth: .infinity, minHeight: 40)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        Text(T("No deals")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 6).padding(.vertical, 8)
                     }
                 }
-                .padding(.horizontal, 8).padding(.bottom, 10)
+                .padding(.horizontal, 8).padding(.bottom, 12)
             }
             .refreshable { await onRefresh() }
         }
@@ -771,89 +880,125 @@ struct PipelineColumnView: View {
     }
 }
 
+/// The PM and the BD at the foot of a card.
+private struct PipelineCardPerson: Identifiable {
+    let role: String
+    let name: String
+    let avatar: String?
+    var id: String { role }
+}
+
+/// A card says only what is known (owner, 9 Oct 2026: no "Not started" pill, empty six-step bar, "Other" or
+/// a lone dash on every card). Always: code and name. When set: brand, value, PM/BD, the next action's
+/// date. Only when it matters: the health dot and the first reason, the phase track once the deal is won,
+/// "No PM yet" on a won deal. Move: long-press for "Move to stage", or the deal's Stage field.
 struct PipelineDealCard: View {
     let deal: PipelineDeal
     let stages: [String]
+    let today: String
     let onOpen: (String) -> Void
     let onMove: (String, String) -> Void
+
+    private var group: String { PipelineVocab.group(of: deal.stage) }
+    private var flagged: Bool { deal.health.key == "CRITICAL" || deal.health.key == "ATTENTION" }
+    private var live: Bool { group != "Closed" && group != "Lost" }
+    private var dueIn: Int? {
+        guard live, let date = deal.nextActionDate else { return nil }
+        return PipelineFormat.daysBetween(today, date)
+    }
+    private var needsPm: Bool { deal.pmDisplay == nil && (group == "Pre-Execution" || group == "Execution") }
+    private var people: [PipelineCardPerson] {
+        var out: [PipelineCardPerson] = []
+        if let pm = deal.pmDisplay { out.append(PipelineCardPerson(role: "PM", name: pm, avatar: deal.pm?.avatar)) }
+        if let bd = deal.bdDisplay, bd != deal.pmDisplay { out.append(PipelineCardPerson(role: "BD", name: bd, avatar: deal.bd?.avatar)) }
+        return out
+    }
 
     var body: some View {
         Button { onOpen(deal.id) } label: { card }
             .buttonStyle(PressableCardStyle())
-            // Above the card's own button, so a tap here moves instead of opening.
-            .overlay(alignment: .bottomTrailing) { moveMenu.padding(4) }
             .contextMenu {
                 Section(T("Move to stage")) { stageButtons }
             }
     }
 
     private var card: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 6) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(deal.code).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                    Text(deal.name.isEmpty ? T("Untitled deal") : deal.name)
-                        .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                        .multilineTextAlignment(.leading).lineLimit(3)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                if flagged || deal.health.key == "HEALTHY" {
+                    Circle().fill(PipelineStyle.healthDot(deal.health.key)).frame(width: 7, height: 7)
+                        .accessibilityLabel(PipelineText.health(deal.health.key))
                 }
-                Spacer(minLength: 4)
-                if deal.health.key != "NONE" { PipelineHealthPill(key: deal.health.key) }
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(deal.brand.isEmpty ? "–" : deal.brand).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                Spacer(minLength: 4)
-                // No value yet (a fresh lead): a quiet dash, not "Rp0" in bold.
-                if deal.netValue != 0 {
-                    Text(PipelineFormat.idr(deal.netValue)).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
-                } else {
-                    Text("–").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).accessibilityLabel(T("No value yet"))
+                Text(deal.code).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit().lineLimit(1)
+                    .layoutPriority(1)
+                if !deal.brand.isEmpty {
+                    Text("· \(deal.brand)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if deal.shownValue > 0 {
+                    Text(PipelineFormat.idr(deal.shownValue)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                        .monospacedDigit().lineLimit(1).layoutPriority(2)
                 }
             }
-            if !deal.phases.isEmpty { PipelinePhaseTrack(phases: deal.phases) }
-            if !deal.blocker.isEmpty {
+            Text(deal.name.isEmpty ? T("Untitled deal") : deal.name)
+                .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                .multilineTextAlignment(.leading).lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if flagged, let first = deal.health.reasons.first {
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10, weight: .bold)).padding(.top, 2)
-                    Text(deal.blocker).font(NXFont.text(12)).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(deal.health.reasons.count > 1
+                         ? "\(PipelineText.reason(first))  \(String(format: T("+%d more"), deal.health.reasons.count - 1))"
+                         : PipelineText.reason(first))
+                        .font(NXFont.text(12, .medium)).lineLimit(2).multilineTextAlignment(.leading)
                 }
-                .foregroundStyle(ChipTone.warning.fg)
+                .foregroundStyle(deal.health.key == "CRITICAL" ? ChipTone.danger.fg : ChipTone.warning.fg)
             }
-            HStack(spacing: 6) {
-                owner
-                Spacer(minLength: 36)   // room for the move button laid over this corner
+            if (group == "Pre-Execution" || group == "Execution") && !deal.phases.isEmpty {
+                PipelinePhaseTrack(phases: deal.phases).padding(.top, 2)
             }
-            .frame(minHeight: 24)
+            if !people.isEmpty || needsPm || dueIn != nil {
+                HStack(spacing: 6) {
+                    if !people.isEmpty {
+                        HStack(spacing: -5) {
+                            ForEach(people) { p in
+                                AvatarView(url: p.avatar, initial: String(p.name.first ?? "?").uppercased(), size: 20)
+                                    .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+                            }
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(people.map { "\($0.role) \($0.name)" }.joined(separator: ", "))
+                    }
+                    if needsPm {
+                        Text(T("No PM yet")).font(NXFont.text(12, .semibold)).foregroundStyle(ChipTone.danger.fg).lineLimit(1)
+                    } else if people.count == 1 {
+                        Text(people[0].name).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    if let due = dueIn { dueChip(due) }
+                }
+                .padding(.top, 2)
+            }
         }
-        .padding(12)
+        .padding(.horizontal, 12).padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
     }
 
-    @ViewBuilder private var owner: some View {
-        let group = PipelineVocab.group(of: deal.stage)
-        if let pm = deal.pmDisplay {
-            HStack(spacing: 6) {
-                AvatarView(url: deal.pm?.avatar, initial: String(pm.first ?? "?").uppercased(), size: 18)
-                Text(pm).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            }
-        } else if group == "Pipeline" || group == "Lost" {
-            Text(deal.service).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-        } else {
-            // Won without a PM: someone has to run it.
-            Text(T("No PM yet")).font(NXFont.text(12, .semibold)).foregroundStyle(ChipTone.danger.fg)
+    /// The next action's date: red once it has passed, amber today, quiet otherwise.
+    private func dueChip(_ due: Int) -> some View {
+        let tone: Color = due < 0 ? ChipTone.danger.fg : (due == 0 ? ChipTone.warning.fg : NX.mutedFg)
+        return HStack(spacing: 4) {
+            Image(systemName: "calendar").font(.system(size: 10, weight: .semibold))
+            Text(due == 0 ? T("Today") : PipelineFormat.shortDay(deal.nextActionDate))
+                .font(NXFont.text(12, due <= 0 ? .semibold : .regular)).monospacedDigit()
         }
-    }
-
-    private var moveMenu: some View {
-        Menu {
-            Section(T("Move to stage")) { stageButtons }
-        } label: {
-            Image(systemName: "arrow.left.arrow.right")
-                .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                .frame(width: 36, height: 36).contentShape(Rectangle())
-        }
-        .menuIndicator(.hidden)
-        .accessibilityLabel(String(format: T("Move %@ to another stage"), deal.name))
+        .foregroundStyle(tone)
+        .padding(.horizontal, due <= 0 ? 6 : 0).padding(.vertical, due <= 0 ? 2 : 0)
+        .background(due < 0 ? ChipTone.danger.bg : (due == 0 ? ChipTone.warning.bg : Color.clear), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(T("Next action date")): \(PipelineFormat.day(deal.nextActionDate))")
     }
 
     @ViewBuilder private var stageButtons: some View {
@@ -1005,20 +1150,28 @@ struct PipelineTable: View {
             .frame(width: 150, alignment: .leading)
             Text(PipelineFormat.pct(d.probability)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
-            Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue) : "–").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+            // Blank, not "–", where nothing is known yet (owner, 9 Oct 2026).
+            Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue) : "").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                 .monospacedDigit().frame(width: 96, alignment: .trailing)
-            Text(d.receivable != 0 ? PipelineFormat.idr(d.receivable) : "–").font(NXFont.text(12))
+            Text(d.receivable != 0 ? PipelineFormat.idr(d.receivable) : "").font(NXFont.text(12))
                 .foregroundStyle(NX.foreground).monospacedDigit().frame(width: 96, alignment: .trailing)
             overdueText(d).frame(width: 56, alignment: .trailing)
             VStack(alignment: .leading, spacing: 1) {
-                Text(d.nextAction.isEmpty ? "–" : d.nextAction).font(NXFont.text(12)).foregroundStyle(NX.foreground).lineLimit(1)
+                if !d.nextAction.isEmpty {
+                    Text(d.nextAction).font(NXFont.text(12)).foregroundStyle(NX.foreground).lineLimit(1)
+                }
                 if d.nextActionDate != nil {
                     Text(PipelineFormat.day(d.nextActionDate)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Group {
-                if d.health.key != "NONE" { PipelineHealthPill(key: d.health.key) } else { Text("–").foregroundStyle(NX.mutedFg) }
+                // A pill only where there is something to say; an open deal's "Not started" is plain text.
+                if d.health.key == "NOT_STARTED" {
+                    Text(PipelineText.health(d.health.key)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                } else if d.health.key != "NONE" {
+                    PipelineHealthPill(key: d.health.key)
+                }
             }
             .frame(width: 88, alignment: .leading)
         }
@@ -1041,7 +1194,9 @@ struct PipelineTable: View {
             }
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 3) {
-                Text(d.netValue != 0 ? PipelineFormat.idr(d.netValue) : "–").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
+                if d.netValue != 0 {
+                    Text(PipelineFormat.idr(d.netValue)).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).monospacedDigit()
+                }
                 if d.receivable > 0 {
                     HStack(spacing: 4) {
                         Text(PipelineFormat.idr(d.receivable)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
@@ -1058,8 +1213,6 @@ struct PipelineTable: View {
         if d.daysOverdue > 0 {
             Text(String(format: T("%dd"), d.daysOverdue)).font(NXFont.text(11, .bold)).monospacedDigit()
                 .foregroundStyle(d.daysOverdue > 7 ? ChipTone.danger.fg : ChipTone.warning.fg)
-        } else {
-            Text("–").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
     }
 

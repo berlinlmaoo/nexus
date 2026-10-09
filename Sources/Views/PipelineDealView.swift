@@ -30,6 +30,8 @@ struct PipelineDealView: View {
     /// it is deleted (in this sheet's one alert).
     @State private var termRoute: PipelineTermRoute?
     @State private var termToDelete: PipelineTerm?
+    /// The folded contract → closing sections of an open deal, opened by hand.
+    @State private var laterOpen = false
 
     private var wide: Bool { hSize == .regular }
 
@@ -143,7 +145,8 @@ struct PipelineDealView: View {
         if !deal.health.reasons.isEmpty {
             PipelineReasonList(health: deal.health)
         }
-        if !deal.phases.isEmpty { phaseProgress(deal) }
+        // The six-step progress means something once a deal is won; before that every step is "not started".
+        if !deal.phases.isEmpty && !isEarly(deal) { phaseProgress(deal) }
         execution(deal)
 
         PipelineSection(title: T("Commercial & pipeline"), owner: T("BD / account")) {
@@ -185,6 +188,39 @@ struct PipelineDealView: View {
             }
         }
 
+        // Contract → closing only start once a deal is won. On an open (or lost) deal they fold under one
+        // row instead of six sections of "Not Started" (owner, 9 Oct 2026); a tap opens them.
+        if isEarly(deal) && !laterOpen {
+            laterRow
+        } else {
+            laterSections(deal)
+        }
+
+        PipelineSection(title: T("Follow-up & notes"), owner: T("Every division")) {
+            PipelineFieldBox(T("Next action")) {
+                PipelineTextInput(label: T("Next action"), value: deal.nextAction) { patch(["nextAction": $0]) }
+            }
+            PipelineFieldBox(T("Next action date")) {
+                PipelineDateInput(label: T("Next action date"), value: deal.nextActionDate) { patch(["nextActionDate": jsonOrNull($0)]) }
+            }
+            PipelineFieldBox(T("Blocker / issue")) {
+                PipelineTextInput(label: T("Blocker / issue"), value: deal.blocker, multiline: true) { patch(["blocker": $0]) }
+            }
+            PipelineFieldBox(T("Notes")) {
+                PipelineTextInput(label: T("Notes"), value: deal.notes, multiline: true) { patch(["notes": $0]) }
+            }
+        }
+
+        PipelineSection(title: T("Documents & links"), owner: T("Every division"), columns: 1) {
+            PipelineLinksEditor(links: deal.links, linkTypes: v.linkTypes) { links in
+                patch(["links": links.map(\.json)])
+            }
+        }
+    }
+
+    /// Contract, vendor registration, readiness, billing, terms and closing: the work after a deal is won.
+    @ViewBuilder private func laterSections(_ deal: PipelineDeal) -> some View {
+        let v = store.vocab
         PipelineSection(title: T("Contract"), owner: "Legal") {
             PipelineFieldBox(T("Contract status")) {
                 PipelineMenuInput(label: T("Contract status"), value: deal.contractStatus, options: v.contractStatuses) { patch(["contractStatus": $0]) }
@@ -273,27 +309,33 @@ struct PipelineDealView: View {
                 PipelineMenuInput(label: T("Closing status"), value: deal.closingStatus, options: v.closingStatuses) { patch(["closingStatus": $0]) }
             }
         }
+    }
 
-        PipelineSection(title: T("Follow-up & notes"), owner: T("Every division")) {
-            PipelineFieldBox(T("Next action")) {
-                PipelineTextInput(label: T("Next action"), value: deal.nextAction) { patch(["nextAction": $0]) }
-            }
-            PipelineFieldBox(T("Next action date")) {
-                PipelineDateInput(label: T("Next action date"), value: deal.nextActionDate) { patch(["nextActionDate": jsonOrNull($0)]) }
-            }
-            PipelineFieldBox(T("Blocker / issue")) {
-                PipelineTextInput(label: T("Blocker / issue"), value: deal.blocker, multiline: true) { patch(["blocker": $0]) }
-            }
-            PipelineFieldBox(T("Notes")) {
-                PipelineTextInput(label: T("Notes"), value: deal.notes, multiline: true) { patch(["notes": $0]) }
-            }
-        }
+    private func isEarly(_ deal: PipelineDeal) -> Bool {
+        let g = PipelineVocab.group(of: deal.stage)
+        return g == "Pipeline" || g == "Lost"
+    }
 
-        PipelineSection(title: T("Documents & links"), owner: T("Every division"), columns: 1) {
-            PipelineLinksEditor(links: deal.links, linkTypes: v.linkTypes) { links in
-                patch(["links": links.map(\.json)])
+    /// The folded "after it is won" part of an open deal.
+    private var laterRow: some View {
+        Button { withAnimation(.snappy) { laterOpen = true } } label: {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(T("Contract, delivery & payment")).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Legal, PM and Finance fill these in once the deal is won."))
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
             }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
+        .buttonStyle(.plain)
     }
 
     /// A payment value the terms decide: read-only, with where it comes from underneath.

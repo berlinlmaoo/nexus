@@ -404,17 +404,8 @@ struct SidebarRoot: View {
                             }
                             .tag(NXSelection.screen(screen))
                         }
-                        // The company's one Pipeline board, under Missions, for its members only (owner,
-                        // 9 Oct 2026: added by its lead); a project row, so it opens like a shortcut.
-                        if group.screens.contains(.leaderboard), let board = viewer.pipelineBoard {
-                            Label {
-                                Text(T("Pipeline")).font(NXFont.text(15, .semibold))
-                            } icon: {
-                                Image(systemName: "line.3.horizontal.decrease.circle")
-                                    .foregroundStyle(selection == .project(board) ? Color.white : NX.violetText)
-                            }
-                            .tag(NXSelection.project(board))
-                        }
+                        // No "Pipeline" row under Missions (owner, 9 Oct 2026): the board is a project
+                        // like any other, reached from Projects (pinned, recent, or the list).
                     } header: {
                         if let title = group.title {
                             SectionLabel(title)

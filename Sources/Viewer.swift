@@ -28,7 +28,8 @@ final class Viewer {
     /// Unknown until loaded, so the entry stays hidden till then; the server refuses everyone else anyway.
     var canAccessPipeline: Bool { pipelineAccess == true }
 
-    /// The board the "Pipeline" entry opens, or nil when there is none yet (or no access).
+    /// The board's id when the viewer is a member. No nav entry reads it any more (owner, 9 Oct 2026: the
+    /// pipeline opens from Projects); kept for a caller that needs to open the board directly.
     var pipelineBoard: ProjectRef? {
         guard canAccessPipeline, let id = pipelineProjectId, !id.isEmpty else { return nil }
         return ProjectRef(id: id, name: T("Pipeline"), icon: nil)
