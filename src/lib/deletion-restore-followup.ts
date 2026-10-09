@@ -74,6 +74,21 @@ export async function afterRestore(input: {
       // The deal reappears on every open pipeline of its project (owner, 9 Oct 2026).
       emitPipelineChanged(projectId, input.entityId, actorId)
     }
+    if (entityType === "pipeline_term") {
+      // A payment term is back on its deal: the deal's history says so (its delete wrote "term.deleted"),
+      // and open pipelines refetch — the receivable and health change with it (owner, 9 Oct 2026).
+      const term = await prisma.pipelinePaymentTerm.findUnique({
+        where: { id: input.entityId },
+        select: { label: true, amount: true, dealId: true, deal: { select: { projectId: true } } },
+      })
+      if (term) {
+        projectId = term.deal.projectId
+        await prisma.pipelineDealChange.create({
+          data: { dealId: term.dealId, userId: actorId, field: "term.restored", termId: input.entityId, termLabel: term.label, after: { amount: term.amount } },
+        })
+        emitPipelineChanged(term.deal.projectId, term.dealId, actorId)
+      }
+    }
     if (entityType === "chat_group") {
       // The group is back with its members: their lists refetch it ("membership", the reason every
       // client already refetches on). No line is written in the chat for it.

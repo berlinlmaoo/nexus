@@ -19,6 +19,10 @@ import {
   phasesOf,
   pipelineToday,
   stageGroupOf,
+  termDaysOverdue,
+  termOutstanding,
+  termStatusOf,
+  termSummaryOf,
 } from "@/lib/pipeline"
 
 /**
@@ -38,20 +42,49 @@ export const dealInclude = {
   updatedBy: personSelect,
   createdBy: personSelect,
   executionProject: { select: { id: true, name: true } },
+  terms: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
 } satisfies Prisma.PipelineDealInclude
 
 type DealRow = Prisma.PipelineDealGetPayload<{ include: typeof dealInclude }>
+type TermRow = DealRow["terms"][number]
+
+/** A payment term on the wire, with what the rules derive from it (owner, 9 Oct 2026). */
+export function serializeTerm(t: TermRow, today: string) {
+  const facts = {
+    amount: t.amount,
+    dueDate: dateOut(t.dueDate),
+    invoiceNo: t.invoiceNo,
+    invoiceDate: dateOut(t.invoiceDate),
+    paidAmount: t.paidAmount,
+    paidAt: dateOut(t.paidAt),
+  }
+  return {
+    id: t.id,
+    dealId: t.dealId,
+    position: t.position,
+    label: t.label,
+    ...facts,
+    note: t.note,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+    status: termStatusOf(facts, today),
+    outstanding: termOutstanding(facts),
+    daysOverdue: termDaysOverdue(facts, today),
+  }
+}
+
+export type SerializedTerm = ReturnType<typeof serializeTerm>
 
 export type PipelineGate =
   | { ok: true; project: { id: string; name: string; type: string; workspaceId: string } }
   | { ok: false; response: NextResponse }
 
 /**
- * The project's access rule (checkProjectAccess): read = VIEWER, write = MEMBER. For a PIPELINE project
- * that rule is the board's own since 9 Oct 2026 (owner/GM: BoD + Agency + IT/Legal/Finance, without
- * project membership; lib/pipeline-access.ts) — everyone else gets 403 on every route here. Within those
- * people the GM's board stays "editable antar divisi": no field is held back. Only a PIPELINE project has
- * deals: anything else answers 400 NOT_PIPELINE.
+ * The project's access rule (checkProjectAccess), as for any project: read = VIEWER, write = MEMBER —
+ * system admin, One Above All / BoD / Manager of the workspace, and staff who are members of the project
+ * (owner, 9 Oct 2026, evening: the board's people are added as project members by its lead, like a task
+ * project). The GM's board stays "editable antar divisi": no field is held back. Only a PIPELINE project
+ * has deals: anything else answers 400 NOT_PIPELINE.
  */
 export async function pipelineGate(userId: string, projectId: string, need: "read" | "write"): Promise<PipelineGate> {
   const project = await prisma.project.findUnique({
@@ -83,6 +116,7 @@ function linksOut(raw: unknown): Link[] {
 
 /** A deal as every client receives it: the stored columns, the people, and what the rules derive. */
 export function serializeDeal(row: DealRow, today: string) {
+  const terms = row.terms.map((t) => serializeTerm(t, today))
   const facts = {
     stage: row.stage,
     probability: row.probability,
@@ -100,6 +134,7 @@ export function serializeDeal(row: DealRow, today: string) {
     netCash: row.netCash,
     closingStatus: row.closingStatus,
     blocker: row.blocker,
+    terms,
   }
   return {
     id: row.id,
@@ -133,7 +168,11 @@ export function serializeDeal(row: DealRow, today: string) {
     stageGroup: stageGroupOf(row.stage),
     daysOverdue: daysOverdueOf(facts, today),
     health: healthOf(facts, today),
-    phases: phasesOf(facts),
+    phases: phasesOf(facts, today),
+    // Payments per term (owner, 9 Oct 2026). With terms, termSummary's outstanding / paymentStatus /
+    // nextDueDate are the deal's — show them instead of the manual fields, which stay as stored (the
+    // fallback for a deal without terms). daysOverdue, health and the KPIs already use them.
+    termSummary: termSummaryOf(terms, today),
   }
 }
 
@@ -344,4 +383,49 @@ export async function nextDealCode(projectId: string, now: Date = new Date()): P
   for (const d of live) consider(d.code)
   for (const a of created) consider((a.metadata as { code?: unknown } | null)?.code)
   return `${head}${String(max + 1).padStart(3, "0")}`
+}
+
+// ── Payment terms (owner, 9 Oct 2026: "perlu per termin") ─────────────────────────────────────────────
+
+/** Every field of a term a client may set. `position` is separate (order, not history). */
+export const TERM_FIELDS: Record<string, FieldKind> = {
+  label: { kind: "text", max: 80 },
+  amount: { kind: "money" },
+  dueDate: { kind: "date" },
+  invoiceNo: { kind: "text", max: 80 },
+  invoiceDate: { kind: "date" },
+  paidAmount: { kind: "money" },
+  paidAt: { kind: "date" },
+  note: { kind: "text", max: 1000 },
+}
+
+/** A deal holds at most this many terms — a guard against a runaway client, not a business rule. */
+export const MAX_TERMS_PER_DEAL = 60
+
+/** Checks a term body against TERM_FIELDS, same rules (and same error shape) as a deal's fields. */
+export function parseTermFields(
+  body: Record<string, unknown>,
+): { ok: true; data: Record<string, unknown> } | { ok: false; error: FieldError } {
+  const data: Record<string, unknown> = {}
+  const bad = (field: string, error: string) => ({ ok: false as const, error: { field, error } })
+  for (const [field, spec] of Object.entries(TERM_FIELDS)) {
+    if (!(field in body)) continue
+    const v = body[field]
+    if (spec.kind === "text") {
+      if (typeof v !== "string") return bad(field, "Harus berupa teks.")
+      const t = v.trim()
+      if (t.length > spec.max) return bad(field, `Maksimal ${spec.max} karakter.`)
+      data[field] = t
+    } else if (spec.kind === "money") {
+      const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v
+      if (typeof n !== "number" || !Number.isFinite(n) || n > MONEY_MAX) return bad(field, "Harus berupa angka.")
+      if (n < 0) return bad(field, "Tidak boleh negatif.")
+      data[field] = Math.round(n)
+    } else if (spec.kind === "date") {
+      const d = parseDate(v)
+      if (d === undefined) return bad(field, "Tanggal harus YYYY-MM-DD.")
+      data[field] = d
+    }
+  }
+  return { ok: true, data }
 }

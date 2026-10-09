@@ -85,6 +85,8 @@ export const RESTORABLE: Record<string, Spec> = {
   chat_group: { table: "Conversation", label: "group chat" },
   // A deal of a Pipeline Dashboard project, with its edit history (owner, 9 Oct 2026).
   pipeline_deal: { table: "PipelineDeal", label: "deal" },
+  // One payment term of a deal (owner, 9 Oct 2026: "perlu per termin").
+  pipeline_term: { table: "PipelinePaymentTerm", label: "payment term" },
 }
 
 export function rootTableOf(entityType: string): string {
@@ -155,7 +157,8 @@ export function restoreCountsOf(entityType: string, stored: Record<string, unkno
     ["submissions", less("FormSubmission")],
     ["values", less("CustomFieldValue")],
     ["receipts", less("PnlExpenseAttachment")],
-    ["payments", less("PnlIncomePayment")],
+    // A deal's payment terms are payments too (9 Oct 2026).
+    ["payments", less("PnlIncomePayment") + less("PipelinePaymentTerm")],
     ["milestones", less("GoalMilestone")],
     ["pages", less("ProjectPage")],
     ["people", less("OrgUnitMember")],
@@ -191,6 +194,7 @@ const PARENT_NOUN: Record<string, string> = {
   Portfolio: "portfolio",
   PnlIncome: "income",
   PnlExpense: "expense",
+  PipelineDeal: "deal",
   ProjectFolder: "folder",
   OrgUnit: "org chart unit",
   VaultItem: "folder",

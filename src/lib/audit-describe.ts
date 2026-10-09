@@ -722,6 +722,7 @@ const NOUNS: Record<string, string> = {
   pnl_budget: "budget",
   chat_group: "group chat",
   pipeline_deal: "pipeline deal",
+  pipeline_term: "payment term",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {
