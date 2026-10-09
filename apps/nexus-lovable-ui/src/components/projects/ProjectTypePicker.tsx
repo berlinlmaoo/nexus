@@ -16,12 +16,19 @@ const META: Record<ProjectTypeId, { icon: typeof ListChecks; title: string; body
   PIPELINE: { icon: Filter, title: "Pipeline Dashboard", body: "Follow every deal from first contact to paid." },
 };
 
-export function ProjectTypePicker({ onPick }: { onPick: (type: ProjectTypeId) => void }) {
+/**
+ * `pipeline` (owner/GM, 9 Oct 2026): the company has ONE pipeline board for every deal, and only BoD,
+ * Agency, IT, Legal and Finance may open it. Without access the card is not offered; once the board
+ * exists, picking it opens that board instead of making a second one (the server answers 409 too).
+ */
+export function ProjectTypePicker({ onPick, pipeline }: { onPick: (type: ProjectTypeId) => void; pipeline?: { allowed: boolean; exists: boolean } }) {
   const { t } = useLang();
   return (
     <div className="grid gap-2.5 sm:grid-cols-2">
-      {PROJECT_TYPES.map(({ id, available }) => {
-        const m = META[id];
+      {PROJECT_TYPES.filter(({ id }) => id !== "PIPELINE" || !pipeline || pipeline.allowed).map(({ id, available }) => {
+        const m = id === "PIPELINE" && pipeline?.exists
+          ? { ...META.PIPELINE, body: "Opens the company's pipeline: one board for every deal." }
+          : META[id];
         const Icon = m.icon;
         return (
           <button

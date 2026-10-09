@@ -46,6 +46,9 @@ export type PipelineDeal = {
   blocker: string;
   notes: string;
   links: PipelineLink[];
+  /** The Task project made when the deal was won (owner/GM, 9 Oct 2026); null = none (yet). Older servers omit it. */
+  executionProjectId?: string | null;
+  executionProject?: { id: string; name: string } | null;
   createdAt: string;
   createdBy: PipelinePerson | null;
   updatedAt: string;
@@ -58,7 +61,7 @@ export type PipelineDeal = {
 
 /** The fields a PATCH may carry (and `position`). */
 export type PipelineDealPatch = Partial<Omit<PipelineDeal,
-  "id" | "projectId" | "code" | "bd" | "pm" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases">>;
+  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases">>;
 
 export type PipelineResponse = {
   project: { id: string; name: string; type: string; workspaceId: string };
@@ -88,6 +91,9 @@ export const pipelineApi = {
     apiFetch<PipelineDeal>(`${base(projectId)}/${encodeURIComponent(dealId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
   remove: (projectId: string, dealId: string) =>
     apiFetch<{ success: boolean }>(`${base(projectId)}/${encodeURIComponent(dealId)}`, { method: "DELETE" }),
+  /** "Create execution project" on a won deal; a deal that has one gets that one back. */
+  createExecution: (projectId: string, dealId: string) =>
+    apiFetch<{ projectId: string; created: boolean; deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/execution`, { method: "POST" }),
   exportXlsx: (projectId: string, lang: "id" | "en") =>
     downloadFile(`${base(projectId)}/export?lang=${lang}`, "pipeline.xlsx"),
 };

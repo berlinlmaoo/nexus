@@ -82,6 +82,11 @@ export function projectSettingsErrorText(code: unknown): string | null {
       return "Only BoD and above can turn Finance on or off.";
     case "TYPE_COMING_SOON":
       return "That project type is coming soon. For now you can create a Task Project or a Pipeline Dashboard.";
+    // The company's one pipeline (owner/GM, 9 Oct 2026). PIPELINE_EXISTS opens the board instead.
+    case "PIPELINE_COMPANY_ONLY":
+      return "The Pipeline Dashboard lives in the company workspace only.";
+    case "PIPELINE_FORBIDDEN":
+      return "The pipeline is for BoD, Agency, IT, Legal and Finance.";
     default:
       return null;
   }

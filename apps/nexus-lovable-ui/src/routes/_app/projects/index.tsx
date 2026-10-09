@@ -191,6 +191,14 @@ function ProjectsPage() {
     return Array.from(map, ([id, label]) => ({ id, label }));
   }, [projects]);
 
+  // One company pipeline (owner/GM, 9 Oct 2026): who may see it, and the board itself once it exists.
+  const pipelineInfo = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data;
+  const openPipelineBoard = (projectId: string) => {
+    setIsCreateOpen(false);
+    setNewProjectType(null);
+    navigate({ to: "/projects/$projectId", params: { projectId } });
+  };
+
   const createProject = useMutation({
     mutationFn: () =>
       nexusApi.createProject({
@@ -207,6 +215,14 @@ function ProjectsPage() {
       setNewProjectName("");
       setNewProjectDescription("");
       navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
+    },
+    // Someone made the board a moment ago (or this page's copy of the roster is stale): open that one.
+    onError: (error) => {
+      const payload = (error as { payload?: { code?: unknown; projectId?: unknown } } | null)?.payload;
+      if (payload?.code === "PIPELINE_EXISTS" && typeof payload.projectId === "string") {
+        queryClient.invalidateQueries({ queryKey: ["nexus", "workspace-members"] });
+        openPipelineBoard(payload.projectId);
+      }
     },
   });
 
@@ -407,7 +423,10 @@ function ProjectsPage() {
             {newProjectType === null ? (
               <div className="mt-5 space-y-3">
                 <p className="text-sm font-semibold">{tr("What is this project for?")}</p>
-                <ProjectTypePicker onPick={setNewProjectType} />
+                <ProjectTypePicker
+                  onPick={(type) => (type === "PIPELINE" && pipelineInfo?.pipelineProjectId ? openPipelineBoard(pipelineInfo.pipelineProjectId) : setNewProjectType(type))}
+                  pipeline={pipelineInfo ? { allowed: pipelineInfo.canAccessPipeline === true, exists: !!pipelineInfo.pipelineProjectId } : undefined}
+                />
               </div>
             ) : (
             <div className="mt-5 space-y-3">

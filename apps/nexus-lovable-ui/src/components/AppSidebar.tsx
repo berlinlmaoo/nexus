@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
   Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, Ticket, Sun, Moon,
- HardDrive, Languages,
+ HardDrive, Languages, Filter,
 } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -160,6 +160,7 @@ export function AppSidebar() {
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRoleQuery.data?.role ?? "");
   const canManageAttendance = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const canSeeRestricted = orgRoleQuery.data?.role === "ONE_ABOVE_ALL";
+  const pipelineProjectId = orgRoleQuery.data?.canAccessPipeline ? orgRoleQuery.data.pipelineProjectId ?? null : null;
   // Threads / Integrity are visible in nav to ALL roles, but Manager-and-below land on a
   // "Coming Soon" page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const MANAGER_ONLY_URLS = new Set(["/admin", "/teams"]);
@@ -446,6 +447,18 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
+                {/* The company's one deal board (owner/GM, 9 Oct 2026), for the people it is for — BoD,
+                    Agency, IT, Legal, Finance; the server decides (canAccessPipeline) and refuses the rest. */}
+                {g.label === "Missions" && pipelineProjectId && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive(`/projects/${pipelineProjectId}`)} tooltip={t("Pipeline")}>
+                      <Link to="/projects/$projectId" params={{ projectId: pipelineProjectId }} className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 truncate">{t("Pipeline")}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

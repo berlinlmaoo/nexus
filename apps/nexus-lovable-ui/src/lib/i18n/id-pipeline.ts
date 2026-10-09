@@ -16,6 +16,15 @@ export const ID_PIPELINE: Record<string, string> = {
 
   // Creating one, and Audit
   "Create project + open pipeline": "Buat proyek + buka pipeline",
+  // One company pipeline, for BoD + Agency + IT/Legal/Finance (owner/GM, 9 Oct 2026)
+  "Opens the company's pipeline: one board for every deal.": "Membuka pipeline perusahaan: satu papan untuk semua deal.",
+  "The Pipeline Dashboard lives in the company workspace only.": "Pipeline Dashboard hanya ada di workspace perusahaan.",
+  "The pipeline is for BoD, Agency, IT, Legal and Finance.": "Pipeline hanya untuk BoD, Agency, IT, Legal dan Finance.",
+  // Won → execution project + Master Calendar
+  "Open execution project": "Buka project eksekusi",
+  "Create execution project": "Buat project eksekusi",
+  "Couldn't create the execution project": "Project eksekusi gagal dibuat",
+  "Made automatically when a deal is won. Its event date goes on the Master Calendar.": "Dibuat otomatis saat deal won. Tanggal event-nya masuk ke Master Calendar.",
   "Restore deal": "Pulihkan deal",
   "It goes back to its pipeline with its code and its edit history.": "Deal kembali ke pipeline-nya dengan kode dan riwayat perubahannya.",
 
