@@ -153,8 +153,9 @@ struct PipelineDealView: View {
             PipelineFieldBox(T("Brand / client")) {
                 PipelineTextInput(label: T("Brand / client"), value: deal.brand) { patch(["brand": $0]) }
             }
-            PipelineFieldBox(T("Service")) {
-                PipelineMenuInput(label: T("Service"), value: deal.service, options: v.services) { patch(["service": $0]) }
+            // Several services, presets and typed ones (owner, 9 Oct 2026): a sheet of checkmarks + a field.
+            PipelineFieldBox(T("Services")) {
+                PipelineServicesField(store: store, dealId: dealId)
             }
             PipelineFieldBox(T("BD / account owner")) {
                 PipelinePersonInput(label: T("BD / account owner"), userId: deal.bdUserId, name: deal.bdName, person: deal.bd,
@@ -212,7 +213,9 @@ struct PipelineDealView: View {
         }
 
         PipelineSection(title: T("Documents & links"), owner: T("Every division"), columns: 1) {
-            PipelineLinksEditor(links: deal.links, linkTypes: v.linkTypes) { links in
+            // Links and attached files (owner, 9 Oct 2026). Its own view: it presents pickers and a confirm,
+            // and this view already has its one .sheet and one .alert.
+            PipelineDocumentsEditor(store: store, deal: deal, linkTypes: v.linkTypes) { links in
                 patch(["links": links.map(\.json)])
             }
         }
@@ -486,7 +489,9 @@ struct PipelineDealView: View {
                 Text(historyTitle(h))
                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
-                if h.field == "term.created" || h.field == "term.deleted" || h.field == "term.restored" {
+                if h.field == "document.added" || h.field == "document.removed" {
+                    EmptyView()
+                } else if h.field == "term.created" || h.field == "term.deleted" || h.field == "term.restored" {
                     if let amount = termAmount(h.field == "term.deleted" ? h.before : h.after) {
                         Text(PipelineFormat.idrFull(amount)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                     }
@@ -511,6 +516,9 @@ struct PipelineDealView: View {
     /// "Bagas changed Stage", or for a payment term "Bagas · Termin 1 · Amount" / "Termin 1 added".
     private func historyTitle(_ h: PipelineChange) -> String {
         let who = h.user?.name ?? T("Someone")
+        // A file attached, or a link/file taken off (owner, 9 Oct 2026): its type and name.
+        if h.field == "document.added" { return String(format: T("%@ attached %@"), who, documentName(h.after)) }
+        if h.field == "document.removed" { return String(format: T("%@ removed %@"), who, documentName(h.before)) }
         guard let f = h.termField else { return "\(who) \(T("changed")) \(PipelineText.field(h.field))" }
         let term = (h.termLabel?.isEmpty == false ? h.termLabel : nil) ?? T("Payment term")
         switch f {
@@ -519,6 +527,18 @@ struct PipelineDealView: View {
         case "restored": return String(format: T("%@ restored payment term %@"), who, term)
         default: return "\(who) \(T("changed")) \(term) · \(PipelineText.termField(f))"
         }
+    }
+
+    /// "SPK · Kontrak final.pdf" from a "document.added"/"document.removed" row's entry.
+    private func documentName(_ v: AuditJSON?) -> String {
+        guard case .object(let o)? = v else { return T("a document") }
+        var type = ""
+        if case .string(let t)? = o["type"] { type = PipelineText.link(t) }
+        var name = ""
+        for key in ["label", "fileName", "url"] {
+            if case .string(let s)? = o[key], !s.isEmpty { name = s; break }
+        }
+        return [type, name].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// The amount a "term.created"/"term.deleted" row carries ({ amount, dueDate, paidAmount }).
@@ -554,6 +574,10 @@ struct PipelineDealView: View {
             default: return n.rounded() == n ? String(Int(n)) : String(n)
             }
         case .array(let a):
+            if field == "services" {
+                let names = a.compactMap { item -> String? in if case .string(let s) = item { return s }; return nil }
+                return names.isEmpty ? T("empty") : names.joined(separator: ", ")
+            }
             return field == "links" ? String(format: T("%d links"), a.count) : value.pretty
         case .bool(let b): return b ? "✓" : "–"
         case .object: return value.pretty
@@ -977,98 +1001,6 @@ struct PipelinePersonInput: View {
                 }
             }
         }
-    }
-}
-
-/// SPK, contract, MOU, invoice and other links. The whole list is saved on each add or remove.
-struct PipelineLinksEditor: View {
-    let links: [PipelineLink]
-    let linkTypes: [String]
-    let onCommit: ([PipelineLink]) -> Void
-
-    @Environment(\.openURL) private var openURL
-    @State private var type = "SPK"
-    @State private var url = ""
-    @State private var label = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if links.isEmpty {
-                Text(T("No SPK, contract, MOU or invoice linked yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(links.enumerated()), id: \.element.id) { i, l in
-                        if i > 0 { Divider().overlay(NX.border) }
-                        HStack(spacing: 8) {
-                            NexusChip(text: PipelineText.link(l.type))
-                            Button { if let u = URL(string: l.url) { openURL(u) } } label: {
-                                HStack(spacing: 4) {
-                                    Text(l.label.isEmpty ? l.url : l.label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
-                                    Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.violetText)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            Spacer(minLength: 4)
-                            Button { onCommit(links.filter { $0.id != l.id }) } label: {
-                                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
-                                    .frame(width: 32, height: 32).contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(T("Remove link"))
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                    }
-                }
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-            }
-
-            HStack(spacing: 8) {
-                Menu {
-                    ForEach(linkTypes, id: \.self) { k in
-                        Button { type = k } label: {
-                            if k == type { Label(PipelineText.link(k), systemImage: "checkmark") } else { Text(PipelineText.link(k)) }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(PipelineText.link(type)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                    }
-                    .modifier(PipelineInputChrome())
-                }
-                .menuIndicator(.hidden)
-                .accessibilityLabel(T("Link type"))
-                TextField(T("Paste a link (https://…)"), text: $url)
-                    .font(NXFont.text(14)).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .modifier(PipelineInputChrome())
-                    .accessibilityLabel(T("Link"))
-            }
-            TextField(T("Document name (optional)"), text: $label)
-                .font(NXFont.text(14))
-                .modifier(PipelineInputChrome())
-                .accessibilityLabel(T("Document name"))
-            Button { add() } label: {
-                Label(T("Add link"), systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, 14).frame(minHeight: 38)
-                    .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty)
-            .opacity(url.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
-        }
-    }
-
-    private func add() {
-        var u = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !u.isEmpty else { return }
-        let lower = u.lowercased()
-        if !lower.hasPrefix("http://") && !lower.hasPrefix("https://") { u = "https://\(u)" }
-        let id = "lnk" + String(Int(Date().timeIntervalSince1970 * 1000), radix: 36)
-        onCommit(links + [PipelineLink(id: id, type: type, label: label.trimmingCharacters(in: .whitespaces), url: u)])
-        url = ""
-        label = ""
     }
 }
 

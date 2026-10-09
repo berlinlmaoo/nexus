@@ -32,22 +32,37 @@ struct PipelinePerson: Decodable, Hashable, Sendable {
     var initial: String { String((name ?? "?").first ?? "?").uppercased() }
 }
 
-/// A document on a deal: SPK, contract, MOU, invoice or other. http(s) only (the server refuses the rest).
+/// A document on a deal: SPK, contract, MOU, invoice or other. A pasted http(s) link, or (owner, 9 Oct
+/// 2026) an attached file — then `url` is its members-only download path ("/api/projects/…/documents/…")
+/// and fileName / mimeType / size describe it. Older servers send links only.
 struct PipelineLink: Decodable, Hashable, Identifiable, Sendable {
     let id: String
     let type: String
     let label: String
     let url: String
+    /// "file" or "link" (nil from a server before files).
+    let kind: String?
+    let fileName: String?
+    let mimeType: String?
+    let size: Int?
 
-    private enum CodingKeys: String, CodingKey { case id, type, label, url }
-    init(id: String, type: String, label: String, url: String) { self.id = id; self.type = type; self.label = label; self.url = url }
+    private enum CodingKeys: String, CodingKey { case id, type, label, url, kind, fileName, mimeType, size }
+    init(id: String, type: String, label: String, url: String) {
+        self.id = id; self.type = type; self.label = label; self.url = url
+        kind = "link"; fileName = nil; mimeType = nil; size = nil
+    }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
         id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? url
         type = (try? c.decodeIfPresent(String.self, forKey: .type)) ?? "Lainnya"
         label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? nil
+        fileName = (try? c.decodeIfPresent(String.self, forKey: .fileName)) ?? nil
+        mimeType = (try? c.decodeIfPresent(String.self, forKey: .mimeType)) ?? nil
+        size = (try? c.decodeIfPresent(Int.self, forKey: .size)) ?? nil
     }
+    var isFile: Bool { kind == "file" }
     /// The shape PATCH takes back: the whole list is sent each time, like the web.
     var json: [String: Any] { ["id": id, "type": type, "label": label, "url": url] }
 }
@@ -95,6 +110,9 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     var name: String
     var brand: String
     var service: String
+    /// Every service, presets and typed ones (owner, 9 Oct 2026); `service` is the first. A server from
+    /// before the list sends only `service`, which becomes the one item.
+    var services: [String]
     var bdUserId: String?
     var bdName: String?
     var bd: PipelinePerson?
@@ -144,7 +162,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     var termSummary: PipelineTermSummary?
 
     private enum CodingKeys: String, CodingKey {
-        case id, code, position, name, brand, service, bdUserId, bdName, bd, pmUserId, pmName, pm, stage, probability
+        case id, code, position, name, brand, service, services, bdUserId, bdName, bd, pmUserId, pmName, pm, stage, probability
         case contractValue, netValue, invoiceValue, contractStatus, vregStatus, readiness, deliverableStatus
         case deliverableRisk, paymentStatus, outstandingReceivable, paymentDueDate, maxDaysOverdue, netCash
         case closingStatus, mainDate, nextAction, nextActionDate, blocker, notes, links, createdAt, createdBy
@@ -168,6 +186,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
             return v
         }
         code = s(.code); position = n(.position); name = s(.name); brand = s(.brand); service = s(.service)
+        services = ((try? c.decodeIfPresent([String].self, forKey: .services)) ?? nil) ?? (service.isEmpty ? [] : [service])
         bdUserId = o(.bdUserId); bdName = o(.bdName); bd = p(.bd)
         pmUserId = o(.pmUserId); pmName = o(.pmName); pm = p(.pm)
         stage = s(.stage, "Incoming"); probability = n(.probability)
@@ -224,7 +243,10 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
             switch key {
             case "name": if let str { name = str }
             case "brand": if let str { brand = str }
-            case "service": if let str { service = str }
+            case "service":
+                if let str { service = str; services = [str] + services.filter { $0.caseInsensitiveCompare(str) != .orderedSame } }
+            case "services":
+                if let list = value as? [String] { services = list; service = list.first ?? "" }
             case "stage":
                 if let str {
                     stage = str
@@ -331,6 +353,17 @@ struct PipelineTermSummary: Decodable, Hashable, Sendable {
 }
 
 /// POST/PATCH …/terms answer { deal, term }; DELETE answers { deal }.
+/// DELETE …/documents/:docId → { deal } (owner, 9 Oct 2026).
+struct PipelineDocumentResponse: Decodable, Sendable {
+    let deal: PipelineDeal?
+
+    private enum CodingKeys: String, CodingKey { case deal }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deal = try? c.decodeIfPresent(PipelineDeal.self, forKey: .deal)
+    }
+}
+
 struct PipelineTermResponse: Decodable, Sendable {
     let deal: PipelineDeal?
     let term: PipelineTerm?
@@ -673,6 +706,7 @@ enum PipelineText {
         case "name": en = "Name"
         case "brand": en = "Brand / client"
         case "service": en = "Service"
+        case "services": en = "Services"
         case "bdUserId", "bdName": en = "BD / account owner"
         case "pmUserId", "pmName": return "PM"
         case "stage": en = "Stage"

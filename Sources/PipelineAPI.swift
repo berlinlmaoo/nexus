@@ -76,6 +76,27 @@ extension APIClient {
         return try await pipelineRun(req, as: PipelineTermResponse.self)
     }
 
+    // MARK: Documents (owner, 9 Oct 2026: "kenapa ga attach documentnya jg?")
+
+    /// Attach a file to a deal's "Documents & links": the shared chunk route with target=pipeline, for
+    /// any size up to its 1 GB ceiling (one chunk for a small file). The server adds the entry itself
+    /// (type + optional name), so a file is never half attached; the caller reloads the board.
+    func pipelineUploadDocument(projectId: String, dealId: String, file: URL, fileName: String,
+                                type: String, label: String, progress: UploadProgress?) async throws {
+        let size = Self.fileSize(of: file)
+        guard size > 0 else { throw APIError.transport(T("Couldn't read that file.")) }
+        var query = "&target=pipeline&projectId=\(encValue(projectId))&dealId=\(encValue(dealId))&docType=\(encValue(type))"
+        if !label.isEmpty { query += "&label=\(encValue(label))" }
+        try await uploadInChunks(file: file, fileName: fileName, size: size, extraQuery: query, progress: progress)
+    }
+
+    /// Take a document (a link or a file) off the deal. The file stays on the server until the 90-day
+    /// purge; the deal's History keeps a line. Answers the deal.
+    func pipelineRemoveDocument(projectId: String, dealId: String, docId: String) async throws -> PipelineDocumentResponse {
+        let req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/documents/\(Self.pipelineEnc(docId))", method: "DELETE")
+        return try await pipelineRun(req, as: PipelineDocumentResponse.self)
+    }
+
     /// The .xlsx "Master Project" sheet (the GM's columns), saved to a temporary file named as the server
     /// names it. The caller hands the file to the share sheet.
     func pipelineExport(projectId: String, lang: String) async throws -> URL {

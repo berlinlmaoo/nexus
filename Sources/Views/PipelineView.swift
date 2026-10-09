@@ -184,6 +184,37 @@ final class PipelineStore {
         }
     }
 
+    // MARK: documents (owner, 9 Oct 2026: "kenapa ga attach documentnya jg?")
+
+    /// One file onto a deal's "Documents & links". The server adds the entry; a reload shows it.
+    @discardableResult
+    func uploadDocument(_ dealId: String, file: URL, fileName: String, type: String, label: String,
+                        progress: UploadProgress?) async -> Bool {
+        do {
+            try await APIClient.shared.pipelineUploadDocument(projectId: projectId, dealId: dealId, file: file, fileName: fileName,
+                                                              type: type, label: label, progress: progress)
+            await load()
+            return true
+        } catch {
+            fail(error, String(format: T("%@ wasn't attached. Try again."), fileName))
+            return false
+        }
+    }
+
+    /// A link or a file off the deal; the answer's deal replaces the local one.
+    @discardableResult
+    func removeDocument(_ dealId: String, _ doc: PipelineLink) async -> Bool {
+        do {
+            let r = try await APIClient.shared.pipelineRemoveDocument(projectId: projectId, dealId: dealId, docId: doc.id)
+            if let saved = r.deal, let j = deals.firstIndex(where: { $0.id == saved.id }) { deals[j] = saved }
+            await load()
+            return true
+        } catch {
+            fail(error, T("That change wasn't saved. Try again."))
+            return false
+        }
+    }
+
     func history(_ id: String) async throws -> PipelineDealDetail {
         try await APIClient.shared.pipelineDeal(projectId: projectId, dealId: id)
     }
@@ -257,6 +288,8 @@ struct PipelineTab: View {
     @State private var search = ""
     @State private var pmFilter = ""
     @State private var bdFilter = ""
+    /// A service, preset or typed (owner, 9 Oct 2026: a deal has several).
+    @State private var serviceFilter = ""
     @State private var healthFilter = ""
     @State private var route: PipelineRoute?
     @State private var exporting = false
@@ -271,7 +304,7 @@ struct PipelineTab: View {
     private var wide: Bool { hSize == .regular }
 
     private var filtering: Bool {
-        !search.trimmingCharacters(in: .whitespaces).isEmpty || !pmFilter.isEmpty || !bdFilter.isEmpty || !healthFilter.isEmpty
+        !search.trimmingCharacters(in: .whitespaces).isEmpty || !pmFilter.isEmpty || !bdFilter.isEmpty || !serviceFilter.isEmpty || !healthFilter.isEmpty
     }
 
     /// Search covers name, code, brand, BD and PM, like the web. Filters never change the KPIs.
@@ -281,8 +314,9 @@ struct PipelineTab: View {
             if !healthFilter.isEmpty && d.health.key != healthFilter { return false }
             if !pmFilter.isEmpty && d.pmDisplay != pmFilter { return false }
             if !bdFilter.isEmpty && d.bdDisplay != bdFilter { return false }
+            if !serviceFilter.isEmpty && !d.services.contains(serviceFilter) { return false }
             if !needle.isEmpty {
-                let hay = [d.code, d.name, d.brand, d.pmDisplay ?? "", d.bdDisplay ?? ""].joined(separator: " ").lowercased()
+                let hay = ([d.code, d.name, d.brand, d.pmDisplay ?? "", d.bdDisplay ?? ""] + d.services).joined(separator: " ").lowercased()
                 if !hay.contains(needle) { return false }
             }
             return true
@@ -291,6 +325,7 @@ struct PipelineTab: View {
 
     private var pmNames: [String] { Array(Set(store.deals.compactMap(\.pmDisplay))).sorted() }
     private var bdNames: [String] { Array(Set(store.deals.compactMap(\.bdDisplay))).sorted() }
+    private var serviceNames: [String] { Array(Set(store.deals.flatMap(\.services))).sorted() }
 
     var body: some View {
         Group {
@@ -434,7 +469,7 @@ struct PipelineTab: View {
 
     /// PM and BD filters and the Excel download, in one menu next to search (no row of small buttons).
     private var moreMenu: some View {
-        let active = !pmFilter.isEmpty || !bdFilter.isEmpty
+        let active = !pmFilter.isEmpty || !bdFilter.isEmpty || !serviceFilter.isEmpty
         return Menu {
             Menu {
                 Button { pmFilter = "" } label: { check(pmFilter.isEmpty, T("All PMs")) }
@@ -448,8 +483,16 @@ struct PipelineTab: View {
             } label: {
                 Label(bdFilter.isEmpty ? T("Filter by BD") : "BD · \(bdFilter)", systemImage: "person.2")
             }
+            if serviceNames.count > 1 {
+                Menu {
+                    Button { serviceFilter = "" } label: { check(serviceFilter.isEmpty, T("All services")) }
+                    ForEach(serviceNames, id: \.self) { n in Button { serviceFilter = n } label: { check(serviceFilter == n, n) } }
+                } label: {
+                    Label(serviceFilter.isEmpty ? T("Filter by service") : serviceFilter, systemImage: "tag")
+                }
+            }
             if active {
-                Button { pmFilter = ""; bdFilter = "" } label: { Label(T("Clear filters"), systemImage: "xmark.circle") }
+                Button { pmFilter = ""; bdFilter = ""; serviceFilter = "" } label: { Label(T("Clear filters"), systemImage: "xmark.circle") }
             }
             Divider()
             Button { export() } label: {
@@ -517,7 +560,7 @@ struct PipelineTab: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    private func resetFilters() { search = ""; pmFilter = ""; bdFilter = ""; healthFilter = "" }
+    private func resetFilters() { search = ""; pmFilter = ""; bdFilter = ""; serviceFilter = ""; healthFilter = "" }
 
     // MARK: content
 
