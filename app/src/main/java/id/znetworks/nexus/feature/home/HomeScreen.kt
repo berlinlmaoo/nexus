@@ -387,7 +387,8 @@ private data class StatDatum(val value: Int, val total: Int?, val label: Int, va
 
 private fun stats(s: HomeState) = listOf(
     StatDatum(s.projects.size, null, R.string.home_stat_projects, Icons.Filled.ViewKanban, VIOLET_GRAD),
-    StatDatum(s.tasks.count { it.isDone }, s.tasks.size, R.string.home_stat_mission, Icons.Filled.Checklist, GREEN_GRAD),
+    // "Task" (9 Oct): the count and its list leave out work done over 30 days ago; the agenda still sees every task.
+    HomeTasks.recent(s.tasks).let { recent -> StatDatum(recent.count { it.isDone }, recent.size, R.string.home_stat_mission, Icons.Filled.Checklist, GREEN_GRAD) },
     StatDatum(s.game?.questsDone ?: 0, s.game?.quests?.size ?: 0, R.string.home_stat_quest, Icons.Filled.AutoAwesome, AMBER_GRAD),
 )
 
@@ -481,10 +482,10 @@ private fun StatMorph(i: Int, source: androidx.compose.ui.geometry.Rect?, s: Hom
                 when (i) {
                     0 -> if (s.projects.isEmpty()) SheetEmpty(stringResource(R.string.home_no_projects))
                     else s.projects.take(40).forEach { p -> SheetRow(p.name, p.status.orEmpty().lowercase().replaceFirstChar(Char::titlecase)) { close { onOpenProject(p.id) } } }
-                    1 -> if (s.tasks.isEmpty()) SheetEmpty(stringResource(R.string.home_no_tasks))
-                    else s.tasks.take(40).forEach { t ->
+                    1 -> HomeTasks.recent(s.tasks).let { recent -> if (recent.isEmpty()) SheetEmpty(stringResource(R.string.home_no_tasks))
+                    else recent.take(40).forEach { t ->
                         SheetRow(t.title, stringResource(if (t.isDone) R.string.home_done else R.string.home_open)) { close { onOpenTask(t.id) } }
-                    }
+                    } }
                     else -> QuestList(s, vm)
                 }
             }
@@ -797,3 +798,17 @@ private fun ProfileRow(label: String, value: String) {
 }
 
 // endregion
+
+/** Home's Task card and list (THREADS-TASK-FOLDERS): done work stays only for 30 days (completedAt, else updatedAt). */
+object HomeTasks {
+    const val DONE_DAYS = 30L
+    fun recent(tasks: List<id.znetworks.nexus.feature.projects.BoardTask>, now: java.time.Instant = java.time.Instant.now()): List<id.znetworks.nexus.feature.projects.BoardTask> {
+        val cutoff = now.minus(java.time.Duration.ofDays(DONE_DAYS))
+        return tasks.filter { t ->
+            if (!t.isDone) return@filter true
+            val at = (t.completedAt ?: t.updatedAt)?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            at == null || at.isAfter(cutoff) // no date known: kept, as before
+        }
+    }
+}
+

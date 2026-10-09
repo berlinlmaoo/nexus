@@ -132,8 +132,14 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refresh()
-        viewModelScope.launch { runCatching { ProjectsApi(c.api).roster().members }.getOrNull()?.let { l -> _state.update { it.copy(roster = l) } } }
+        // The mention list: /api/members (THREADS-TASK-FOLDERS), else the workspace roster on an older server.
+        viewModelScope.launch {
+            (runCatching { api.members() }.getOrNull()?.takeIf { it.isNotEmpty() } ?: runCatching { ProjectsApi(c.api).roster().members }.getOrNull())
+                ?.let { l -> _state.update { it.copy(roster = l) } }
+        }
     }
+
+    private fun rosterIds() = _state.value.roster.mapNotNull { m -> (m.userId ?: m.id)?.let { it to m.name.orEmpty() } }
 
     fun refresh() = viewModelScope.launch {
         try {
@@ -182,7 +188,7 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(posting = true, notice = null) }
         viewModelScope.launch {
             try {
-                val p = api.create(text, Mentions.ids(text, picked), s.photos.map { Triple(it.jpeg, it.w, it.h) })
+                val p = api.create(text, FeedMentions.ids(text, picked, rosterIds()), s.photos.map { Triple(it.jpeg, it.w, it.h) })
                 picked.clear()
                 _state.update { it.copy(posts = listOf(p.copy(canDelete = true, canEdit = true)) + it.posts, photos = emptyList()) }
                 onDone()
@@ -195,7 +201,7 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun edit(p: Post, text: String) = viewModelScope.launch {
         try {
-            val updated = api.edit(p.id, text, Mentions.ids(text, picked))
+            val updated = api.edit(p.id, text, FeedMentions.ids(text, picked, rosterIds()))
             picked.clear()
             _state.update { s -> s.copy(posts = s.posts.map { if (it.id == p.id) updated else it }) }
         } catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res)) } }
@@ -221,6 +227,10 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openComments(postId: String?) {
         _state.update { it.copy(commentsFor = postId, comments = null) }
+        // A push or link to a post that isn't on the first page: fetch it so its heart, count and comments show.
+        if (postId != null && _state.value.posts.none { it.id == postId }) viewModelScope.launch {
+            runCatching { api.post(postId) }.getOrNull()?.let { p -> _state.update { s -> if (s.posts.any { it.id == p.id }) s else s.copy(posts = listOf(p) + s.posts) } }
+        }
         if (postId != null) viewModelScope.launch {
             runCatching { api.comments(postId) }.getOrNull()?.let { l -> _state.update { it.copy(comments = l) } }
         }
@@ -230,7 +240,7 @@ class ThreadsViewModel(app: Application) : AndroidViewModel(app) {
         val id = _state.value.commentsFor ?: return
         viewModelScope.launch {
             try {
-                val cm = api.comment(id, text, Mentions.ids(text, picked))
+                val cm = api.comment(id, text, FeedMentions.ids(text, picked, rosterIds()))
                 picked.clear()
                 _state.update { s -> s.copy(comments = s.comments.orEmpty() + cm, posts = s.posts.map { if (it.id == id) it.copy(commentCount = it.commentCount + 1) else it }) }
                 onDone()

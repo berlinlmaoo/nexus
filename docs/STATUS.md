@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (496 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (501 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -224,6 +224,32 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 5 Home stat cards | No bottom sheet: the detail grows out of the tapped card as iOS MorphFlip — drawn full size in the middle, a scale+translate starts it exactly on the card and springs to full (response 0.4, damping 0.84), one gradient top to bottom, no scrim, list fading in once landed; tap outside, × or back shrinks it back into the card. Card rects kept outside state (no recomposition while scrolling) | 2bc7765 |
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
+
+## 9 Oct, Threads likes/mentions/push photo, Home "Task", Projects folders (agents:~/handoff/chat/THREADS-TASK-FOLDERS.md; server d6967c3 + web LIVE; iOS 8a401b6, 24e3864, dcf824c, 2388b2d)
+
+NOT published, version unchanged. NAV-HOME-GROUP (above) was already complete in 0fbef0c; nothing left there.
+
+| Part | What changed | Commit |
+|---|---|---|
+| 1 Likes | Checked: the heart was already drawn from each post's `likedByMe` (never a screen-local set), flipped optimistically, then set to the like route's {liked, likeCount} and rolled back on failure. New: a post opened from a push or link that isn't on the first page is fetched with GET /api/feed/posts/:id, so its heart and comments show | this step |
+| 2 @mentions | Composer and comments already offered people on "@"; they sent only tags picked from that list, so a hand-typed "@Name" went out as []. `FeedMentions.ids` now sends every tag still in the text, picked or typed, matched as a whole word ("@Ali" no longer matches "@Alia"); the list comes from /api/members (as web/iOS), the workspace roster on an older server | this step |
+| 3 Push | `feed_post` / `feed_like` go to the `messages` channel; FCM `image` (public https) is fetched with a 6 s timeout, downscaled, and shown as BigPictureStyle (+ large icon); any failure falls back to text. `/threads?post=<id>` already opened that post with its comments | this step |
+| 4 Home | The green card is "Task" / "Tugas"; its count and its list leave out tasks DONE over 30 days ago (completedAt, else updatedAt; none known = kept). The agenda still sees every task, as iOS. `BoardTask` gained completedAt/updatedAt | this step |
+| 5 Folders | Checked, already holds on Android: load fetches projects and folders before showing either, keeps the previous folders when that request fails, and /api/project-folders is cached for the first paint (the iOS bug was its refresh task being cancelled; viewModelScope isn't) | — |
+| Tests | ThreadsTaskFoldersTest — 501 JVM tests | this step |
+
+## 9 Oct, Threads likes/mentions/push photo, Home "Task", Projects folders (agents:~/handoff/chat/THREADS-TASK-FOLDERS.md; server d6967c3 + web LIVE; iOS 8a401b6, 24e3864, dcf824c, 2388b2d)
+
+NOT published, version unchanged. NAV-HOME-GROUP (below) was already complete in 0fbef0c; nothing left there.
+
+| Part | What changed | Commit |
+|---|---|---|
+| 1 Likes | Checked: the heart was already drawn from each post's `likedByMe` (never a screen-local set), flipped optimistically, then set to the like route's {liked, likeCount} and rolled back on failure. New: a post opened from a push or link that isn't on the first page is fetched with GET /api/feed/posts/:id, so its heart and comments show | this step |
+| 2 @mentions | Composer and comments already offered people on "@"; they sent only tags picked from that list, so a hand-typed "@Name" went out as []. `FeedMentions.ids` now sends every tag still in the text, picked or typed, matched as a whole word ("@Ali" no longer matches "@Alia"); the list comes from /api/members (as web/iOS), the workspace roster on an older server | this step |
+| 3 Push | `feed_post` / `feed_like` go to the `messages` channel; FCM `image` (public https) is fetched with a 6 s timeout, downscaled, and shown as BigPictureStyle (+ large icon); any failure falls back to text. `/threads?post=<id>` already opened that post with its comments | this step |
+| 4 Home | The green card is "Task" / "Tugas"; its count and its list leave out tasks DONE over 30 days ago (completedAt, else updatedAt; none known = kept). The agenda still sees every task, as iOS. `BoardTask` gained completedAt/updatedAt | this step |
+| 5 Folders | Checked, already holds on Android: load fetches projects and folders before showing either, keeps the previous folders when that request fails, and /api/project-folders is cached for the first paint (the iOS bug was its refresh task being cancelled; viewModelScope isn't) | — |
+| Tests | ThreadsTaskFoldersTest — 501 JVM tests | this step |
 
 ## 9 Oct, Chat tab, Home tiles, bell → Inbox, group of two, board on today (agents:~/handoff/chat/NAV-HOME-GROUP.md; web 4d268c8, iOS b03edac + 1b04294)
 

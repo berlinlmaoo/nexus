@@ -50,7 +50,24 @@ object FeedRules {
     const val EDIT_WINDOW_MS = 15 * 60_000L
 }
 
+/** Who a post or comment mentions (THREADS-TASK-FOLDERS): every "@Name" tag still in the text, picked from the list OR typed by hand. */
+object FeedMentions {
+    /** [roster]: (userId, name). A tag counts only as a whole word: "@Ali" is not in "@Alia". */
+    fun ids(text: String, picked: Map<String, String>, roster: List<Pair<String, String>>): List<String> {
+        fun has(tag: String) = Regex(Regex.escape(tag) + "(?![\\p{L}\\p{N}_])", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val fromPicked = picked.filterValues(::has).keys
+        val typed = roster.filter { (_, n) -> n.isNotBlank() && has(id.znetworks.nexus.feature.chat.Mentions.tag(n)) }.map { it.first }
+        return (fromPicked + typed).distinct()
+    }
+}
+
 class ThreadsApi(private val api: ApiClient) {
+    /** Who can be @mentioned: everyone in the caller's workspaces (/api/members, as the web composer and iOS). `id` is the user id. */
+    suspend fun members() = api.get("/api/members", ListSerializer(id.znetworks.nexus.feature.projects.RosterMember.serializer()))
+
+    /** One post (THREADS-TASK-FOLDERS): a notification's post that isn't on the first page; 410 = deleted. */
+    suspend fun post(id: String) = api.get("/api/feed/posts/${java.net.URLEncoder.encode(id, "UTF-8")}", Post.serializer())
+
     suspend fun page(cursor: String?, mentionsMe: Boolean = false): FeedPage {
         val q = buildList {
             add("limit=20"); cursor?.let { add("cursor=${java.net.URLEncoder.encode(it, "UTF-8")}") }; if (mentionsMe) add("mentions=me")

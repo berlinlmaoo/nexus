@@ -576,7 +576,7 @@
     <string name="home_att_not_yet_shift">Not checked in yet · shift %1$s</string>
     <string name="home_search">Search..</string>
     <string name="home_stat_projects">Projects</string>
-    <string name="home_stat_mission">Your Mission</string>
+    <string name="home_stat_mission">Task</string>
     <string name="home_stat_quest">Quest</string>
     <string name="home_no_projects">No projects yet.</string>
     <string name="home_no_tasks">No open tasks.</string>

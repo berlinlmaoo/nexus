@@ -570,7 +570,7 @@
     <string name="home_att_not_yet_shift">Belum check in · shift %1$s</string>
     <string name="home_search">Cari..</string>
     <string name="home_stat_projects">Proyek</string>
-    <string name="home_stat_mission">Misi Kamu</string>
+    <string name="home_stat_mission">Tugas</string>
     <string name="home_stat_quest">Quest</string>
     <string name="home_no_projects">Belum ada project.</string>
     <string name="home_no_tasks">Belum ada task aktif.</string>

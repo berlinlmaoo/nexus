@@ -210,14 +210,17 @@ class NexusMessagingService : FirebaseMessagingService() {
         c.badges.refresh()
         val title = d["title"] ?: message.notification?.title ?: return
         val body = d["body"] ?: message.notification?.body.orEmpty()
+        // A post with a photo (feed_post / feed_like, 9 Oct): `image` is an absolute https URL, no cookie needed.
+        // Fetched here (FCM's worker thread) with a short timeout; any failure falls back to text.
+        val picture = d["image"]?.takeIf { it.startsWith("https://") }?.let { PushPicture.fetch(it) }
         show(this, title, body, type, d["link"], d["taskId"], d["projectId"], d["category"], d["notificationId"],
-            PushManager.channelFor(type, d["channel"] ?: message.notification?.channelId))
+            PushManager.channelFor(type, d["channel"] ?: message.notification?.channelId), picture)
     }
 
     companion object {
         fun show(
             context: Context, title: String, body: String, type: String?, link: String?, taskId: String?, projectId: String?,
-            category: String?, notificationId: String?, channel: String,
+            category: String?, notificationId: String?, channel: String, picture: android.graphics.Bitmap? = null,
         ) {
             if (Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -232,7 +235,9 @@ class NexusMessagingService : FirebaseMessagingService() {
                 .setSmallIcon(R.drawable.ic_stat_nexus)
                 .setContentTitle(title)
                 .setContentText(body)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setStyle(if (picture != null) NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(body)
+                    else NotificationCompat.BigTextStyle().bigText(body))
+                .apply { if (picture != null) setLargeIcon(picture) }
                 .setAutoCancel(true)
                 .setContentIntent(PendingIntent.getActivity(context, id, tap, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             // The only action ever offered from the shade: open the permit composer. Never check-in/out
@@ -247,3 +252,21 @@ class NexusMessagingService : FirebaseMessagingService() {
         }
     }
 }
+
+/** A push's picture: one short request (no session: the URL is public), downscaled for the shade; null on any failure. */
+internal object PushPicture {
+    private val http by lazy { okhttp3.OkHttpClient.Builder().callTimeout(6, java.util.concurrent.TimeUnit.SECONDS).build() }
+
+    fun fetch(url: String): android.graphics.Bitmap? = runCatching {
+        http.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { r ->
+            if (!r.isSuccessful) return null
+            val bytes = r.body.bytes()
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1024) sample *= 2
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+        }
+    }.getOrNull()
+}
+

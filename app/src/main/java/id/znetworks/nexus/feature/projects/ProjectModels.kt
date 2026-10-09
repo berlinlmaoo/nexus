@@ -97,6 +97,9 @@ data class CustomFieldValue(val customFieldId: String? = null, val value: JsonEl
 data class BoardTask(
     val id: String,
     val title: String = "",
+    /** When it was finished / last touched (THREADS-TASK-FOLDERS: Home leaves out work done over 30 days ago). */
+    val completedAt: String? = null,
+    val updatedAt: String? = null,
     val status: String? = null,
     val priority: String? = null,
     val startDate: String? = null,
