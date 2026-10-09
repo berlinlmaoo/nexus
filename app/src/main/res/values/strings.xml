@@ -2713,7 +2713,6 @@
     <string name="pl_f_notes">Notes</string>
     <string name="pl_f_links">Documents &amp; links</string>
     <string name="pl_not_overdue">Not overdue</string>
-    <string name="pl_no_links">No SPK, contract, MOU or invoice linked yet.</string>
     <string name="pl_link_type">Link type</string>
     <string name="pl_paste_link">Paste a link (https://…)</string>
     <string name="pl_doc_name_opt">Document name (optional)</string>
@@ -2841,4 +2840,27 @@
         <item quantity="one">%d member added</item>
         <item quantity="other">%d members added</item>
     </plurals>
+    <!-- Pipeline §13: documents, services (9 Oct late night) -->
+    <string name="pl_f_services">Services</string>
+    <string name="pl_no_services">No services yet</string>
+    <string name="pl_other_services">Other services</string>
+    <string name="pl_add_service">Add custom service</string>
+    <string name="pl_services_hint">Pick the services, or type one that isn\'t listed.</string>
+    <string name="pl_filter_service">Filter by service</string>
+    <string name="pl_all_services">All services</string>
+    <string name="pl_no_docs">No SPK, contract, MOU or invoice yet. Attach the file or paste a link.</string>
+    <string name="pl_doc_attach">Attach file</string>
+    <string name="pl_doc_photo">Photo</string>
+    <string name="pl_doc_download">Download</string>
+    <string name="pl_doc_remove">Remove document</string>
+    <string name="pl_doc_remove_q">Remove %s?</string>
+    <string name="pl_doc_remove_body">It leaves this deal for everyone. The deal\'s history keeps a note of it.</string>
+    <string name="pl_doc_too_big">%s is over 1 GB.</string>
+    <string name="pl_doc_failed">%s wasn\'t attached. Try again.</string>
+    <string name="pl_doc_uploading">Uploading %s</string>
+    <string name="pl_doc_too_many">A deal can hold at most 50 documents and links.</string>
+    <string name="pl_doc_deal_gone">This deal was deleted meanwhile.</string>
+    <string name="pl_doc_h_added">%1$s attached %2$s</string>
+    <string name="pl_doc_h_removed">%1$s removed %2$s</string>
+    <string name="pl_doc_a">a document</string>
 </resources>

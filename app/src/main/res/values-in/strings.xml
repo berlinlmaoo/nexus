@@ -2672,7 +2672,6 @@
     <string name="pl_f_notes">Catatan</string>
     <string name="pl_f_links">Dokumen &amp; link</string>
     <string name="pl_not_overdue">Belum overdue</string>
-    <string name="pl_no_links">Belum ada SPK, kontrak, MOU, atau invoice yang ditautkan.</string>
     <string name="pl_link_type">Jenis link</string>
     <string name="pl_paste_link">Tempel link (https://…)</string>
     <string name="pl_doc_name_opt">Nama dokumen (opsional)</string>
@@ -2792,4 +2791,27 @@
     <plurals name="ps_n_added">
         <item quantity="other">%d member ditambahkan</item>
     </plurals>
+    <!-- Pipeline §13: dokumen, service (9 Okt larut) -->
+    <string name="pl_f_services">Service</string>
+    <string name="pl_no_services">Belum ada service</string>
+    <string name="pl_other_services">Service lain</string>
+    <string name="pl_add_service">Tambah service sendiri</string>
+    <string name="pl_services_hint">Pilih service-nya, atau ketik yang tidak ada di daftar.</string>
+    <string name="pl_filter_service">Saring per service</string>
+    <string name="pl_all_services">Semua service</string>
+    <string name="pl_no_docs">Belum ada SPK, kontrak, MOU, atau invoice. Lampirkan file-nya atau tempel link.</string>
+    <string name="pl_doc_attach">Lampirkan file</string>
+    <string name="pl_doc_photo">Foto</string>
+    <string name="pl_doc_download">Unduh</string>
+    <string name="pl_doc_remove">Hapus dokumen</string>
+    <string name="pl_doc_remove_q">Hapus %s?</string>
+    <string name="pl_doc_remove_body">Dokumen ini hilang dari deal untuk semua orang. Riwayat deal tetap mencatatnya.</string>
+    <string name="pl_doc_too_big">%s lebih dari 1 GB.</string>
+    <string name="pl_doc_failed">%s gagal dilampirkan. Coba lagi.</string>
+    <string name="pl_doc_uploading">Mengunggah %s</string>
+    <string name="pl_doc_too_many">Satu deal paling banyak 50 dokumen dan link.</string>
+    <string name="pl_doc_deal_gone">Deal ini sudah dihapus.</string>
+    <string name="pl_doc_h_added">%1$s melampirkan %2$s</string>
+    <string name="pl_doc_h_removed">%1$s menghapus %2$s</string>
+    <string name="pl_doc_a">dokumen</string>
 </resources>

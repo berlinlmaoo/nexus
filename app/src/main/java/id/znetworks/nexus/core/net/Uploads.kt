@@ -68,6 +68,10 @@ class Uploads(private val context: Context, private val api: ApiClient) {
         return api.send(Request.Builder().url(api.url(path)).post(body).build(), serializer)
     }
 
+    /** Always the chunk route (a destination with no single-request route, e.g. a Pipeline deal's documents). */
+    suspend fun <T> chunkedOnly(file: Picked, query: List<Pair<String, String>>, serializer: KSerializer<T>, onProgress: (Long, Long) -> Unit): T =
+        chunked(file, query, serializer, onProgress)
+
     private suspend fun <T> chunked(f: Picked, query: List<Pair<String, String>>, serializer: KSerializer<T>, onProgress: (Long, Long) -> Unit): T {
         val uploadId = UUID.randomUUID().toString()
         val total = ((f.size + CHUNK - 1) / CHUNK).toInt()

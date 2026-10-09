@@ -110,7 +110,11 @@ data class PipelineState(
     /** The board project's members: who the BD / PM pickers offer (§11.1). */
     val people: List<PipelinePerson> = emptyList(),
     val openDealId: String? = null,
+    /** Files on their way to a deal (§13.1): name and progress 0…1, per deal. */
+    val uploads: List<PipelineUpload> = emptyList(),
 )
+
+data class PipelineUpload(val key: String, val dealId: String, val name: String, val progress: Float)
 
 class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     val projectId: String = handle["id"] ?: ""
@@ -229,6 +233,35 @@ class PipelineViewModel(app: Application, handle: SavedStateHandle) : AndroidVie
         term(R.string.pl_save_failed, { api.updateTerm(projectId, dealId, termId, fields) }, onDone)
     fun deleteTerm(dealId: String, termId: String) = term(R.string.pl_t_delete_failed, { api.deleteTerm(projectId, dealId, termId) })
 
+    // Documents (§13.1): files go up on the shared chunk route; the last chunk answers the deal, which replaces ours.
+    fun attach(dealId: String, uri: android.net.Uri, docType: String, label: String) = viewModelScope.launch {
+        val f = c.uploads.describe(uri) ?: run { _state.update { it.copy(notice = res.getString(R.string.pl_doc_failed, "")) }; return@launch }
+        if (f.size > id.znetworks.nexus.core.net.Uploads.MAX_FILE) { _state.update { it.copy(notice = res.getString(R.string.pl_doc_too_big, f.name)) }; return@launch }
+        val key = "u${System.nanoTime()}"
+        _state.update { it.copy(uploads = it.uploads + PipelineUpload(key, dealId, f.name, 0f)) }
+        try {
+            val o = c.uploads.chunkedOnly(f, listOfNotNull("target" to "pipeline", "projectId" to projectId, "dealId" to dealId, "docType" to docType, "mime" to f.mime,
+                label.trim().takeIf { it.isNotEmpty() }?.let { "label" to it }), JsonObject.serializer()) { done, total ->
+                val p = if (total > 0) done.toFloat() / total else 0f
+                _state.update { s -> s.copy(uploads = s.uploads.map { if (it.key == key) it.copy(progress = p) else it }) }
+            }
+            (o["deal"] as? JsonObject)?.let(::PipelineDeal)?.let { d -> replace(d.id) { d } } ?: load()
+        } catch (e: ApiError) {
+            val h = e as? ApiError.Http
+            _state.update { it.copy(notice = when {
+                h?.code == "TOO_MANY_DOCUMENTS" -> res.getString(R.string.pl_doc_too_many)
+                h?.status == 404 -> res.getString(R.string.pl_doc_deal_gone)
+                else -> res.getString(R.string.pl_doc_failed, f.name)
+            }) }
+        }
+        _state.update { s -> s.copy(uploads = s.uploads.filterNot { it.key == key }) }
+    }
+
+    fun removeDocument(dealId: String, docId: String) = viewModelScope.launch {
+        try { api.removeDocument(projectId, dealId, docId)?.let { d -> replace(d.id) { d } } ?: load() }
+        catch (e: ApiError) { _state.update { it.copy(notice = (e as? ApiError.Http)?.serverMessage ?: res.getString(R.string.pl_save_failed)) } }
+    }
+
     private fun replace(id: String, f: (PipelineDeal) -> PipelineDeal) =
         _state.update { s -> s.copy(data = s.data?.copy(deals = s.data.deals.map { if (it.id == id) f(it) else it })) }
 }
@@ -288,6 +321,7 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: P
     var pm by rememberSaveable { mutableStateOf<String?>(null) }
     var bd by rememberSaveable { mutableStateOf<String?>(null) }
     var health by rememberSaveable { mutableStateOf<String?>(null) }
+    var service by rememberSaveable { mutableStateOf<String?>(null) }
     var view by rememberSaveable { mutableStateOf(PipelineView.BOARD) }
     var seenRequest by rememberSaveable { mutableStateOf(newDealRequest) }
     LaunchedEffect(newDealRequest) { if (newDealRequest != seenRequest) { seenRequest = newDealRequest; vm.create() } }
@@ -310,7 +344,9 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: P
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.pl_search_hint), maxLines = 1) },
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f))
-                FiltersMenu(pms, bds, pm, bd, s.busy, onPm = { pm = it }, onBd = { bd = it }, onExport = {
+                // "Filter by service" only when the board uses more than one (§13.2).
+                val services = PipelineFilter.services(d.deals).takeIf { it.size > 1 }.orEmpty()
+                FiltersMenu(pms, bds, services.map { it to it }, pm, bd, service, s.busy, onPm = { pm = it }, onBd = { bd = it }, onService = { service = it }, onExport = {
                     vm.export(if (java.util.Locale.getDefault().language.let { it == "in" || it == "id" }) "id" else "en") { f ->
                         runCatching {
                             val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", f)
@@ -330,16 +366,17 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: P
                 // An active PM / BD filter shows here, tap to drop it.
                 pms.firstOrNull { it.first == pm }?.let { (_, n) -> FilterChip(true, { pm = null }, { Text("PM: $n") }, trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(14.dp)) }) }
                 bds.firstOrNull { it.first == bd }?.let { (_, n) -> FilterChip(true, { bd = null }, { Text("BD: $n") }, trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(14.dp)) }) }
+                service?.let { n -> FilterChip(true, { service = null }, { Text(n) }, trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(14.dp)) }) }
                 listOf(null, "CRITICAL", "ATTENTION", "HEALTHY", "NOT_STARTED").forEach { k ->
                     FilterChip(health == k, { health = k }, { Text(if (k == null) stringResource(R.string.tk_all) else stringResource(PipelineText.health(k))) })
                 }
             }
-            val shown = PipelineFilter.apply(d.deals, q, pm, bd, health)
+            val shown = PipelineFilter.apply(d.deals, q, pm, bd, health, service)
             if (shown.size != d.deals.size) Text(stringResource(R.string.pl_shown_of, shown.size, d.deals.size), fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
             Box(Modifier.weight(1f)) {
                 if (shown.isEmpty()) EmptyState(Icons.Filled.Search, stringResource(R.string.pl_no_match),
                     pluralStringResource(R.plurals.pl_filters_hide, d.deals.size, d.deals.size), stringResource(R.string.clear_search),
-                    { q = ""; pm = null; bd = null; health = null }, Modifier.fillMaxSize())
+                    { q = ""; pm = null; bd = null; health = null; service = null }, Modifier.fillMaxSize())
                 else when (view) {
                     PipelineView.BOARD -> Board(shown, d, vm)
                     PipelineView.LIST -> ByStage(shown, d, vm)
@@ -354,26 +391,32 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: P
 
 /** One icon menu: Filter by PM ›, Filter by BD ›, Clear filters, Download Excel (a sub-list replaces the menu's items). */
 @Composable
-private fun FiltersMenu(pms: List<Pair<String, String>>, bds: List<Pair<String, String>>, pm: String?, bd: String?, busy: Boolean,
-                        onPm: (String?) -> Unit, onBd: (String?) -> Unit, onExport: () -> Unit) {
+private fun FiltersMenu(pms: List<Pair<String, String>>, bds: List<Pair<String, String>>, services: List<Pair<String, String>>, pm: String?, bd: String?, service: String?,
+                        busy: Boolean, onPm: (String?) -> Unit, onBd: (String?) -> Unit, onService: (String?) -> Unit, onExport: () -> Unit) {
     val c = Nx.colors
     var open by remember { mutableStateOf(false) }
     var level by remember { mutableStateOf<String?>(null) }
     Box {
         IconButton(onClick = { level = null; open = true }, enabled = !busy) {
             if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Filled.FilterList, stringResource(R.string.pl_filters_export), tint = if (pm != null || bd != null) c.violetText else c.mutedFg)
+            else Icon(Icons.Filled.FilterList, stringResource(R.string.pl_filters_export), tint = if (pm != null || bd != null || service != null) c.violetText else c.mutedFg)
         }
         DropdownMenu(open, { open = false }) {
             when (level) {
                 null -> {
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_pm)) }, onClick = { level = "pm" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_bd)) }, onClick = { level = "bd" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_clear_filters)) }, enabled = pm != null || bd != null, onClick = { open = false; onPm(null); onBd(null) })
+                    if (services.isNotEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_service)) }, onClick = { level = "service" },
+                        trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_clear_filters)) }, enabled = pm != null || bd != null || service != null,
+                        onClick = { open = false; onPm(null); onBd(null); onService(null) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.pl_export)) }, leadingIcon = { Icon(Icons.Filled.Download, null) }, onClick = { open = false; onExport() })
                 }
                 else -> {
-                    val (list, cur, pick, all) = if (level == "pm") Quad(pms, pm, onPm, R.string.pl_all_pm) else Quad(bds, bd, onBd, R.string.pl_all_bd)
+                    val (list, cur, pick, all) = when (level) {
+                        "pm" -> Quad(pms, pm, onPm, R.string.pl_all_pm); "bd" -> Quad(bds, bd, onBd, R.string.pl_all_bd)
+                        else -> Quad(services, service, onService, R.string.pl_all_services)
+                    }
                     DropdownMenuItem(text = { Text(stringResource(all), fontWeight = if (cur == null) FontWeight.Bold else null) }, onClick = { open = false; pick(null) })
                     list.forEach { (id, name) -> DropdownMenuItem(text = { Text(name, fontWeight = if (cur == id) FontWeight.Bold else null) }, onClick = { open = false; pick(id) }) }
                 }

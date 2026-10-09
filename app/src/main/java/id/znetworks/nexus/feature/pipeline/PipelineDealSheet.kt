@@ -120,7 +120,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                 }
                 Group(stringResource(R.string.pl_s_commercial), stringResource(R.string.pl_s_bd)) {
                     TextSave(stringResource(R.string.pl_f_brand), deal.brand) { save(one("brand", JsonPrimitive(it))) }
-                    Pick(stringResource(R.string.pl_f_service), deal.service, v.services) { save(one("service", JsonPrimitive(it))) }
+                    ServicesRow(deal, data) { save(one("services", JsonArray(it.map(::JsonPrimitive)))) }
                     PersonPick(stringResource(R.string.pl_f_bd), deal.bdUserId, deal.bdShown, people, "bd", save)
                     Pick(stringResource(R.string.pl_f_stage), deal.stage, v.stages, label = { stageLabel(it) }) { save(one("stage", JsonPrimitive(it))) }
                     Pick(stringResource(R.string.pl_f_probability), PipelineFormat.pct(deal.probability), v.probabilities.map { PipelineFormat.pct(it) }) { p ->
@@ -185,7 +185,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                     TextSave(stringResource(R.string.pl_f_blocker), deal.text("blocker"), multiline = true) { save(one("blocker", JsonPrimitive(it))) }
                     TextSave(stringResource(R.string.pl_f_notes), deal.text("notes"), multiline = true) { save(one("notes", JsonPrimitive(it))) }
                 }
-                Group(stringResource(R.string.pl_f_links), null) { Links(deal, v.linkTypes) { save(one("links", JsonArray(it.map(PipelineLink::json)))) } }
+                Group(stringResource(R.string.pl_f_links), null) { Documents(deal, v.linkTypes, vm) { save(one("links", JsonArray(it.map(PipelineLink::json)))) } }
                 val who = deal.updatedBy?.name
                 deal.updatedAt?.let { at -> Text(if (who != null) stringResource(R.string.pl_last_by, who, stamp(at)) else stringResource(R.string.pl_last, stamp(at)), fontSize = 11.sp, color = c.mutedFg) }
                 TextButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, null, tint = c.dangerText); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.pl_delete), color = c.dangerText) }
@@ -324,36 +324,6 @@ private fun PersonPick(label: String, userId: String?, shown: String?, people: L
     }
 }
 
-/** SPK, contract, MOU, invoice, other: https only (the server refuses the rest); the whole list is sent each time. */
-@Composable
-private fun Links(deal: PipelineDeal, types: List<String>, onSave: (List<PipelineLink>) -> Unit) {
-    val c = Nx.colors
-    val context = LocalContext.current
-    val links = deal.links
-    if (links.isEmpty()) Text(stringResource(R.string.pl_no_links), fontSize = 12.sp, color = c.mutedFg)
-    links.forEach { l ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Link, null, tint = c.violetText); Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f).clickable { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(l.url))) } }) {
-                Text(l.label.ifBlank { PipelineText.link(l.type)?.let { stringResource(it) } ?: l.type }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                Text(l.url, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            IconButton(onClick = { onSave(links - l) }) { Icon(Icons.Filled.Delete, stringResource(R.string.pl_remove_link), tint = c.dangerText) }
-        }
-    }
-    var type by remember { mutableStateOf(types.firstOrNull() ?: "Lainnya") }
-    var url by remember { mutableStateOf("") }
-    var label by remember { mutableStateOf("") }
-    Pick(stringResource(R.string.pl_link_type), type, types, label = { k -> PipelineText.link(k)?.let { stringResource(it) } ?: k }) { type = it }
-    OutlinedTextField(url, { url = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_paste_link)) }, modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
-    OutlinedTextField(label, { label = it }, singleLine = true, placeholder = { Text(stringResource(R.string.pl_doc_name_opt)) }, modifier = Modifier.fillMaxWidth())
-    val ok = url.trim().let { it.startsWith("https://") || it.startsWith("http://") }
-    TextButton(onClick = {
-        onSave(links + PipelineLink("l_${System.currentTimeMillis()}", type, label.trim(), url.trim())); url = ""; label = ""
-    }, enabled = ok) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_add_link)) }
-}
-
 /** Who changed what, newest first: "Bagas changed Stage: Incoming → Negosiasi". */
 @Composable
 private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
@@ -372,21 +342,28 @@ private fun History(vm: PipelineViewModel, deal: PipelineDeal) {
                     val tf = ch.termField
                     val term = ch.termLabel?.takeIf { it.isNotBlank() } ?: stringResource(R.string.pl_t_term)
                     Column {
-                        when (tf) {
-                            null -> {
+                        when {
+                            // A document attached or removed (§13.1): "<who> attached SPK · <name>".
+                            tf == null && (ch.field == "document.added" || ch.field == "document.removed") -> {
+                                val e = PipelineChange.doc(if (ch.field == "document.added") ch.after else ch.before)
+                                val what = e?.let { (PipelineText.link(it.type)?.let { r -> stringResource(r) } ?: it.type) + " · " + it.shownName } ?: stringResource(R.string.pl_doc_a)
+                                Text(stringResource(if (ch.field == "document.added") R.string.pl_doc_h_added else R.string.pl_doc_h_removed, who, what),
+                                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                            }
+                            tf == null -> {
                                 val field = PipelineText.field(ch.field)?.let { stringResource(it) } ?: ch.field
                                 Text("$who ${stringResource(R.string.pl_changed)} $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                 Text("${shown(ch.before)} → ${shown(ch.after)}", fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
                             // A payment term (§11.2): added / deleted / restored with its amount, or one of its fields.
-                            "created", "deleted", "restored" -> {
+                            tf == "created" || tf == "deleted" || tf == "restored" -> {
                                 Text(stringResource(when (tf) { "created" -> R.string.pl_t_h_added; "deleted" -> R.string.pl_t_h_deleted; else -> R.string.pl_t_h_restored }, who, term),
                                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                 ((if (tf == "deleted") ch.before else ch.after) as? JsonObject)?.get("amount").num()?.let {
                                     Text(PipelineFormat.idrFull(it), fontSize = 12.sp, color = c.mutedFg) }
                             }
                             else -> {
-                                val field = PipelineText.termField(tf)?.let { stringResource(it) } ?: tf
+                                val field = PipelineText.termField(tf.orEmpty())?.let { stringResource(it) } ?: tf.orEmpty()
                                 val money = tf == "amount" || tf == "paidAmount"
                                 Text("$who ${stringResource(R.string.pl_changed)} $term · $field", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
                                 Text("${shown(ch.before, money)} → ${shown(ch.after, money)}", fontSize = 12.sp, color = c.mutedFg, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -409,6 +386,8 @@ private fun shown(e: JsonElement?, money: Boolean = false): String = when {
     money && e.num() != null -> PipelineFormat.idrFull(e.num()!!)
     e is JsonPrimitive && e.isString -> e.content.ifBlank { stringResource(R.string.pl_empty_value) }.let { PipelineText.stage(it)?.let { r -> stringResource(r) } ?: it }
     e is JsonPrimitive -> e.content
+    // Services (§13.2) are words: "a, b, c"; a list of objects (links) is counted.
+    e is JsonArray && e.all { it is JsonPrimitive } -> e.joinToString(", ") { (it as JsonPrimitive).content }.ifBlank { stringResource(R.string.pl_empty_value) }
     e is JsonArray -> e.size.toString()
     else -> e.toString()
 }

@@ -23,8 +23,26 @@ data class PipelinePerson(val id: String, val name: String?, val avatar: String?
     }
 }
 
-data class PipelineLink(val id: String, val type: String, val label: String, val url: String) {
-    fun json() = JsonObject(mapOf("id" to JsonPrimitive(id), "type" to JsonPrimitive(type), "label" to JsonPrimitive(label), "url" to JsonPrimitive(url)))
+/**
+ * One "Documents & links" entry (§13.1): a pasted link, or an attached file whose [url] is RELATIVE
+ * (`/api/projects/:pid/pipeline/:dealId/documents/:docId`, session needed). An older server sends no `kind` = link.
+ */
+data class PipelineLink(val id: String, val type: String, val label: String, val url: String, val kind: String = "link",
+                        val fileName: String? = null, val mimeType: String? = null, val size: Long? = null, val raw: JsonObject? = null) {
+    val isFile get() = kind == "file"
+    /** What a row is called: its label, else the file's name, else the link. */
+    val shownName get() = label.ifBlank { fileName ?: url }
+    /** Sent back as received (a PATCH may relabel / retype a file entry, matched by id), with the edited fields over it. */
+    fun json() = JsonObject((raw ?: emptyMap()) + mapOf("id" to JsonPrimitive(id), "type" to JsonPrimitive(type), "label" to JsonPrimitive(label),
+        "url" to JsonPrimitive(url)) + if (raw == null) mapOf("kind" to JsonPrimitive(kind)) else emptyMap())
+
+    companion object {
+        fun of(o: JsonObject): PipelineLink {
+            val url = o["url"].str().orEmpty()
+            return PipelineLink(o["id"].str() ?: url, o["type"].str() ?: "Lainnya", o["label"].str().orEmpty(), url, o["kind"].str() ?: "link",
+                o["fileName"].str(), o["mimeType"].str(), o["size"].num()?.toLong(), o)
+        }
+    }
 }
 
 data class PipelineReason(val code: String, val days: Int?, val text: String?)
@@ -39,6 +57,9 @@ data class PipelineDeal(val raw: JsonObject) {
     val name get() = s("name")
     val brand get() = s("brand")
     val service get() = s("service")
+    /** Several services, presets and typed ones, in order (§13.2); an older server has only `service`. */
+    val services: List<String> get() = (raw["services"] as? JsonArray)?.mapNotNull { it.str()?.trim()?.takeIf(String::isNotEmpty) }
+        ?: listOfNotNull(service.takeIf { it.isNotBlank() })
     val bdUserId get() = raw["bdUserId"].str()
     val bdName get() = raw["bdName"].str()
     val bd get() = PipelinePerson.of(raw["bd"])
@@ -70,7 +91,7 @@ data class PipelineDeal(val raw: JsonObject) {
         (p as? JsonObject)?.let { (it["key"].str() ?: return@let null) to (it["state"].str() ?: "pending") }
     }
     val links: List<PipelineLink> get() = (raw["links"] as? JsonArray).orEmpty().mapNotNull { l ->
-        (l as? JsonObject)?.let { o -> val url = o["url"].str().orEmpty(); PipelineLink(o["id"].str() ?: url, o["type"].str() ?: "Lainnya", o["label"].str().orEmpty(), url) }
+        (l as? JsonObject)?.let(PipelineLink::of)
     }
     /** The TASK project made for a won deal (§10.3); null until there is one. */
     val executionProjectId get() = raw["executionProjectId"].str() ?: (raw["executionProject"] as? JsonObject)?.get("id").str()
@@ -192,6 +213,11 @@ data class PipelineChange(val id: String, val field: String, val before: JsonEle
                           val termId: String? = null, val termLabel: String? = null) {
     /** "term.amount" → "amount" (also "created" / "deleted" / "restored"); null for a change to the deal itself. */
     val termField get() = if (field.startsWith("term.")) field.removePrefix("term.") else null
+
+    companion object {
+        /** The entry a `document.added` / `document.removed` row carries. */
+        fun doc(e: JsonElement?) = (e as? JsonObject)?.let(PipelineLink::of)
+    }
 }
 
 /** GET …/pipeline: everything the tab draws. */
@@ -209,15 +235,20 @@ data class PipelineData(val deals: List<PipelineDeal>, val summary: PipelineSumm
 
 /** Filters of the toolbar (search, PM, BD, health) — over the loaded deals. */
 object PipelineFilter {
-    fun apply(deals: List<PipelineDeal>, q: String, pm: String?, bd: String?, health: String?): List<PipelineDeal> {
+    fun apply(deals: List<PipelineDeal>, q: String, pm: String?, bd: String?, health: String?, service: String? = null): List<PipelineDeal> {
         val t = q.trim().lowercase()
         return deals.filter { d ->
-            (t.isEmpty() || listOf(d.name, d.code, d.brand, d.bdShown.orEmpty(), d.pmShown.orEmpty()).any { it.lowercase().contains(t) }) &&
+            (t.isEmpty() || (listOf(d.name, d.code, d.brand, d.bdShown.orEmpty(), d.pmShown.orEmpty()) + d.services).any { it.lowercase().contains(t) }) &&
+                (service == null || d.services.any { it.equals(service, ignoreCase = true) }) &&
                 (pm == null || (d.pmUserId ?: d.pmShown) == pm) &&
                 (bd == null || (d.bdUserId ?: d.bdShown) == bd) &&
                 (health == null || d.healthKey == health)
         }
     }
+
+    /** Every service the board uses (for the filter, shown when more than one), presets' spelling first, A→Z. */
+    fun services(deals: List<PipelineDeal>): List<String> =
+        deals.flatMap { it.services }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
 
     /** "Next actions": a written next action due within 7 days (or overdue), soonest first, Lost/Closed left out. */
     fun nextActions(deals: List<PipelineDeal>, today: String): List<PipelineDeal> {
@@ -225,6 +256,24 @@ object PipelineFilter {
         return deals.filter { d -> d.stageGroup != "Lost" && d.stageGroup != "Closed" && d.date("nextActionDate")?.let { it <= limit } == true }
             .sortedBy { it.date("nextActionDate") }
     }
+}
+
+/** The services editor (§13.2): presets + typed ones, max 20, each 1–60 characters, a preset typed in any case = the preset. */
+object PipelineServices {
+    const val MAX = 20
+    const val MAX_LEN = 60
+    /** [typed] added to [current]: trimmed, a preset's own spelling, no duplicates, within the limits; else null. */
+    fun add(current: List<String>, typed: String, presets: List<String>): List<String>? {
+        val t = typed.trim().take(MAX_LEN)
+        if (t.isEmpty() || current.size >= MAX) return null
+        val name = presets.firstOrNull { it.equals(t, ignoreCase = true) } ?: t
+        return if (current.any { it.equals(name, ignoreCase = true) }) current else current + name
+    }
+    fun toggle(current: List<String>, s: String) = if (current.any { it.equals(s, ignoreCase = true) }) current.filterNot { it.equals(s, ignoreCase = true) }
+        else if (current.size >= MAX) current else current + s
+    /** "Other services": this deal's typed ones + those used on the board's other deals, not presets. */
+    fun others(deal: PipelineDeal, all: List<PipelineDeal>, presets: List<String>): List<String> =
+        (deal.services + all.flatMap { it.services }).filter { s -> presets.none { it.equals(s, ignoreCase = true) } }.distinctBy { it.lowercase() }
 }
 
 /** What a board card shows (§12.3): only what is known. */
@@ -328,7 +377,7 @@ object PipelineText {
         "outstandingReceivable" -> R.string.pl_f_receivable; "paymentDueDate" -> R.string.pl_f_due_date; "maxDaysOverdue" -> R.string.pl_f_days_typed
         "netCash" -> R.string.pl_f_net_cash; "closingStatus" -> R.string.pl_f_closing_status; "mainDate" -> R.string.pl_f_main_date
         "nextAction" -> R.string.pl_f_next_action; "nextActionDate" -> R.string.pl_f_next_date; "blocker" -> R.string.pl_f_blocker
-        "notes" -> R.string.pl_f_notes; "links" -> R.string.pl_f_links
+        "notes" -> R.string.pl_f_notes; "links" -> R.string.pl_f_links; "services" -> R.string.pl_f_services
         else -> null
     }
 }

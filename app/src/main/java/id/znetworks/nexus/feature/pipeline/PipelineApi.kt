@@ -69,6 +69,11 @@ class PipelineApi(private val api: ApiClient) {
     suspend fun deleteTerm(projectId: String, dealId: String, termId: String) = termDeal(
         api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/terms/${enc(termId)}")).delete().build(), JsonObject.serializer()))
 
+    /** Remove a link or an attached file (§13.1) → the deal. The bytes stay until the 90-day purge. */
+    suspend fun removeDocument(projectId: String, dealId: String, docId: String) =
+        (api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/documents/${enc(docId)}")).delete().build(), JsonObject.serializer())["deal"] as? JsonObject)
+            ?.let(::PipelineDeal)
+
     /** The .xlsx "Master Project" sheet (the GM's columns) into [dir], to hand to the share sheet. */
     suspend fun export(projectId: String, lang: String, dir: File): File {
         dir.mkdirs()
