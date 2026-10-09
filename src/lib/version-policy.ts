@@ -236,6 +236,9 @@ export async function appUpgradeGate(
   pathname: string,
 ): Promise<UpgradeRequired | null> {
   if (!pathname.startsWith("/api/") || EXEMPT.has(pathname)) return null
+  // The photo a Threads push shows on long-press (owner, 9 Oct 2026). Fetched by the iOS Notification
+  // Service Extension, which may tag itself like the app; a 426 there would only drop the picture.
+  if (pathname.startsWith("/api/feed/push-image/")) return null
 
   let version: readonly number[] | string
   let message: string

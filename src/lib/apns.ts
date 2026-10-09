@@ -29,6 +29,15 @@ export type PushPayload = {
    * Absent = the icon is left as it is, which is what every push before chat did.
    */
   badge?: number | null
+  /**
+   * An ABSOLUTE https URL of a picture to show on the expanded notification (owner, 9 Oct 2026: a
+   * Threads post with a photo shows the photo on long-press). On iOS it becomes the top-level `image`
+   * key plus aps.mutable-content = 1, so the Notification Service Extension wakes up, downloads it
+   * and attaches it; a build without the extension ignores both and shows the text as before. The
+   * extension has no session cookie, so the URL must work on its own (feed-push-image.ts signs one).
+   * Android gets it as data `image`.
+   */
+  image?: string | null
 }
 
 // Android devices while NEXUS_FCM_SERVICE_ACCOUNT_JSON is unset: said once per process, not per push.
@@ -80,8 +89,10 @@ export function buildApnsBody(payload: PushPayload, opts: { badge?: boolean } = 
       ...(payload.category ? { category: payload.category } : {}),
       ...(payload.threadId ? { "thread-id": payload.threadId } : {}),
       ...(withBadge ? { badge: Math.max(0, Math.floor(payload.badge as number)) } : {}),
+      ...(payload.image ? { "mutable-content": 1 } : {}),
     },
     type: payload.type,
+    ...(payload.image ? { image: payload.image } : {}),
     ...(payload.taskId ? { taskId: payload.taskId } : {}),
     ...(payload.projectId ? { projectId: payload.projectId } : {}),
     ...(payload.link ? { link: payload.link } : {}),

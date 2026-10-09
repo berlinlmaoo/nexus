@@ -59,6 +59,8 @@ const EXACT: Record<string, AndroidChannelId> = {
   message_mention: "messages",
   feed_mention: "messages",
   feed_comment: "messages",
+  feed_post: "messages",
+  feed_like: "messages",
 
   project_invite: "tasks",
   status_update: "tasks",
@@ -113,6 +115,8 @@ export interface FcmPushInput {
   data?: Record<string, string | number | boolean | null> | null
   /** App-icon number (chat pushes): sent as data `badge`; the app decides what to do with it. */
   badge?: number | null
+  /** Absolute https URL of a picture for the expanded notification (a Threads photo): data `image`. */
+  image?: string | null
 }
 
 // FCM refuses a data message that uses these keys (or any key starting with "google." / "gcm.").
@@ -139,6 +143,7 @@ export function buildFcmMessage(token: string, p: FcmPushInput) {
   if (p.category) data.category = p.category
   if (p.notificationId) data.notificationId = p.notificationId
   if (typeof p.badge === "number" && Number.isFinite(p.badge)) data.badge = String(Math.max(0, Math.floor(p.badge)))
+  if (p.image) data.image = p.image
   data.channel = androidChannelFor(p.type, p.category)
 
   return {
