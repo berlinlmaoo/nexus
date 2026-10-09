@@ -56,6 +56,7 @@ export async function checkProjectAccess(
       where: { id: projectId },
       select: {
         workspaceId: true,
+        type: true,
         workspace: {
           select: {
             members: {
@@ -86,8 +87,12 @@ export async function checkProjectAccess(
   const need: 'manage' | 'contribute' | 'view' =
     minRequired >= ROLE_HIERARCHY.LEAD ? 'manage' : minRequired >= ROLE_HIERARCHY.MEMBER ? 'contribute' : 'view'
 
-  // A PIPELINE project follows these rules too (owner, 9 Oct 2026, evening: "akses project pipelinenya
-  // kaya nambah orang biasa aja di task project"); the afternoon's division-based rule is gone.
+  // A PIPELINE project is for the people added to it and nobody else (owner, 9 Oct 2026: "yg bisa
+  // buka chat dan project nya yg di add didalem projectnya doang"): no OAA/BoD/Manager reach-through.
+  // Members then follow the ordinary rules below (their project role decides what they may do).
+  if (project?.type === 'PIPELINE' && !isMember) {
+    return { allowed: false, role: null }
+  }
 
   // One Above All / BoD → manage everything in the workspace.
   if (workspaceRole === 'ONE_ABOVE_ALL' || workspaceRole === 'BOD') {

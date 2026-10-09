@@ -144,6 +144,9 @@ export async function GET(request: NextRequest) {
         where.members = {
           some: { userId: session.user.id },
         }
+      } else {
+        // The pipeline board shows only to its own members, whatever the viewer's rank (owner, 9 Oct 2026).
+        where.OR = [{ type: { not: "PIPELINE" } }, { members: { some: { userId: session.user.id } } }]
       }
 
       const projects = await prisma.project.findMany({
@@ -210,7 +213,10 @@ export async function GET(request: NextRequest) {
       : whereScopes.length === 1
         ? whereScopes[0]
         : { OR: whereScopes }
-    const where: Record<string, unknown> = { ...scoped }
+    // The pipeline board shows only to its own members, whatever the viewer's rank (owner, 9 Oct 2026).
+    const where: Record<string, unknown> = isSystemAdmin
+      ? { ...scoped }
+      : { AND: [scoped, { OR: [{ type: { not: "PIPELINE" } }, { members: { some: { userId: session.user.id } } }] }] }
 
     const projects = await prisma.project.findMany({
       where,
