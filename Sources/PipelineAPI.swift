@@ -78,6 +78,43 @@ extension APIClient {
         return dest
     }
 
+    /// "Create execution project" on a won deal (owner/GM, 9 Oct 2026). A stage move into Won makes it on
+    /// the server by itself; this is for a deal that has none (the GM's imported deals came in already
+    /// won). Idempotent: a deal that has one gets that one back.
+    func pipelineCreateExecution(projectId: String, dealId: String) async throws -> PipelineExecutionResponse {
+        let req = makeRequest("\(pipelineBase(projectId))/\(Self.pipelineEnc(dealId))/execution", method: "POST")
+        return try await pipelineRun(req, as: PipelineExecutionResponse.self)
+    }
+
+    /// What New project → Pipeline Dashboard ended in. The company has ONE board (owner/GM, 9 Oct 2026:
+    /// "cuma satu papan/pipeline utama buat semua deal, lintas BD dan brand"), so a second create answers
+    /// 409 PIPELINE_EXISTS with the board's id, and the sheet opens that board instead of showing an error.
+    enum PipelineBoardCreate { case created, exists(ProjectRef) }
+
+    func pipelineBoardCreate(workspaceId: String, name: String, color: String, icon: String) async throws -> PipelineBoardCreate {
+        var req = makeRequest("/api/projects", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": "PIPELINE"])
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.nothingAnswered(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        if http.statusCode == 409,
+           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           body["code"] as? String == "PIPELINE_EXISTS",
+           let id = body["projectId"] as? String, !id.isEmpty {
+            return .exists(ProjectRef(id: id, name: (body["projectName"] as? String) ?? T("Pipeline"), icon: nil))
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(http.statusCode, Self.serverMessage(data))
+        }
+        return .created
+    }
+
     /// The members of the project's workspace — the people the BD and PM pickers offer (the server
     /// refuses anyone else). Asked for by workspace, as the web does, because the project's workspace
     /// need not be the one this person has open.

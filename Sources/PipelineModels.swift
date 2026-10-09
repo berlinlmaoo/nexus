@@ -127,6 +127,11 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     var createdBy: PipelinePerson?
     var updatedAt: String?
     var updatedBy: PipelinePerson?
+    /// The Task project made for the deal once it was won (owner/GM, 9 Oct 2026): "after udah won lebih
+    /// enak kalo kebentuk Master Calendar sama Master Task buat projectnya". nil = none (yet), or a server
+    /// from before it existed.
+    var executionProjectId: String?
+    var executionProject: PipelineExecutionRef?
     // Derived by the server.
     var stageGroup: String
     var daysOverdue: Int
@@ -139,6 +144,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         case deliverableRisk, paymentStatus, outstandingReceivable, paymentDueDate, maxDaysOverdue, netCash
         case closingStatus, mainDate, nextAction, nextActionDate, blocker, notes, links, createdAt, createdBy
         case updatedAt, updatedBy, stageGroup, daysOverdue, health, phases
+        case executionProjectId, executionProject
     }
 
     init(from decoder: Decoder) throws {
@@ -168,10 +174,18 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         blocker = s(.blocker); notes = s(.notes)
         links = (try? c.decodeIfPresent([PipelineLink].self, forKey: .links)) ?? []
         createdAt = o(.createdAt); createdBy = p(.createdBy); updatedAt = o(.updatedAt); updatedBy = p(.updatedBy)
+        executionProjectId = o(.executionProjectId)
+        executionProject = (try? c.decodeIfPresent(PipelineExecutionRef.self, forKey: .executionProject)) ?? nil
         stageGroup = o(.stageGroup) ?? PipelineVocab.group(of: stage)
         daysOverdue = Int(n(.daysOverdue))
         health = (try? c.decodeIfPresent(PipelineHealth.self, forKey: .health)) ?? PipelineHealth(key: "NONE", reasons: [])
         phases = (try? c.decodeIfPresent([PipelinePhase].self, forKey: .phases)) ?? []
+    }
+
+    /// A won deal (Pre-Execution, Execution or Closed) may have its execution project made by hand;
+    /// the server answers NOT_WON for any other (owner/GM, 9 Oct 2026).
+    var canHaveExecutionProject: Bool {
+        stageGroup == "Pre-Execution" || stageGroup == "Execution" || stageGroup == "Closed"
     }
 
     /// The BD's / PM's name: the NEXUS user, else the free text (someone outside NEXUS), else nil.
@@ -348,6 +362,19 @@ struct PipelineVocab: Decodable, Sendable {
         default: return "Execution"
         }
     }
+}
+
+/// A deal's execution project as the deal carries it.
+struct PipelineExecutionRef: Decodable, Hashable, Sendable {
+    let id: String
+    let name: String?
+}
+
+/// POST /api/projects/:id/pipeline/:dealId/execution
+struct PipelineExecutionResponse: Decodable, Sendable {
+    let projectId: String
+    let created: Bool?
+    let deal: PipelineDeal?
 }
 
 struct PipelineProjectRef: Decodable, Sendable {

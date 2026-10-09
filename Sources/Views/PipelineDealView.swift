@@ -23,6 +23,9 @@ struct PipelineDealView: View {
     @State private var history: [PipelineChange] = []
     @State private var historyLoaded = false
     @State private var historyFailed = false
+    /// The deal's execution project, pushed inside this sheet (owner/GM, 9 Oct 2026).
+    @State private var openProject: ProjectRef?
+    @State private var makingExecution = false
 
     private var wide: Bool { hSize == .regular }
 
@@ -52,6 +55,7 @@ struct PipelineDealView: View {
                 ToolbarItem(placement: .topBarTrailing) { Button(T("Done")) { dismiss() } }
             }
             .keyboardDoneBar()
+            .navigationDestination(item: $openProject) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
         }
         .task(id: "\(store.revision)-\(showHistory)") {
             if showHistory { await loadHistory() }
@@ -121,6 +125,7 @@ struct PipelineDealView: View {
             PipelineReasonList(health: deal.health)
         }
         if !deal.phases.isEmpty { phaseProgress(deal) }
+        execution(deal)
 
         PipelineSection(title: T("Commercial & pipeline"), owner: T("BD / account")) {
             PipelineFieldBox(T("Brand / client")) {
@@ -244,6 +249,63 @@ struct PipelineDealView: View {
                 patch(["links": links.map(\.json)])
             }
         }
+    }
+
+    // MARK: execution
+
+    /// Won → execution (owner/GM, 9 Oct 2026: "after udah won lebih enak kalo kebentuk Master Calendar sama
+    /// Master Task buat projectnya"). The server makes the Task project when the deal first enters a Won
+    /// stage; this opens it, or makes it by hand for a won deal without one (the imported deals).
+    @ViewBuilder private func execution(_ deal: PipelineDeal) -> some View {
+        if deal.executionProjectId != nil || deal.canHaveExecutionProject {
+            VStack(alignment: .leading, spacing: 6) {
+                if let id = deal.executionProjectId {
+                    Button {
+                        openProject = ProjectRef(id: id, name: deal.executionProject?.name ?? deal.name, icon: nil)
+                    } label: {
+                        executionLabel(T("Open execution project"), "arrow.up.forward.square", deal.executionProject?.name)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        guard !makingExecution else { return }
+                        makingExecution = true
+                        Task {
+                            if let ref = await store.createExecution(deal.id) { openProject = ref }
+                            makingExecution = false
+                        }
+                    } label: {
+                        executionLabel(T("Create execution project"), "plus.rectangle.on.folder", nil)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(makingExecution)
+                }
+                Text(T("Made automatically when a deal is won. Its event date goes on the Master Calendar."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func executionLabel(_ title: String, _ symbol: String, _ detail: String?) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                if let detail, !detail.isEmpty {
+                    Text(detail).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 6)
+            if makingExecution && detail == nil && symbol.hasPrefix("plus") {
+                ProgressView().tint(NX.violetText)
+            } else {
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg)
+            }
+        }
+        .padding(.horizontal, 14).frame(minHeight: 48)
+        .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func phaseProgress(_ deal: PipelineDeal) -> some View {
