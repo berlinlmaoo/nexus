@@ -7,7 +7,6 @@ import {
   CONTRACT_STATUS_OPTIONS,
   DELIVERABLE_RISK_OPTIONS,
   DELIVERABLE_STATUS_OPTIONS,
-  LINK_TYPES,
   PAYMENT_STATUS_OPTIONS,
   PIPELINE_STAGES,
   READINESS_OPTIONS,
@@ -24,6 +23,7 @@ import {
   termStatusOf,
   termSummaryOf,
 } from "@/lib/pipeline"
+import { documentsOut, mergeDocuments, storedDocs } from "@/lib/pipeline-documents"
 
 /**
  * Database side of the Pipeline Dashboard (owner, 9 Oct 2026): who may read or write a project's deals,
@@ -107,13 +107,6 @@ function dateOut(d: Date | null | undefined): string | null {
   return d ? d.toISOString().slice(0, 10) : null
 }
 
-type Link = { id: string; type: string; label: string; url: string }
-
-function linksOut(raw: unknown): Link[] {
-  if (!Array.isArray(raw)) return []
-  return raw.filter((l): l is Link => !!l && typeof l === "object" && typeof (l as Link).url === "string")
-}
-
 /** A deal as every client receives it: the stored columns, the people, and what the rules derive. */
 export function serializeDeal(row: DealRow, today: string) {
   const terms = row.terms.map((t) => serializeTerm(t, today))
@@ -143,7 +136,10 @@ export function serializeDeal(row: DealRow, today: string) {
     position: row.position,
     name: row.name,
     brand: row.brand,
-    service: row.service,
+    // Several services, presets and typed ones (owner, 9 Oct 2026). `service` = the first, for apps that
+    // know one service only.
+    services: servicesOf(row),
+    service: servicesOf(row)[0] ?? "Other",
     bdUserId: row.bdUserId,
     bdName: row.bdName,
     bd: row.bd,
@@ -156,7 +152,9 @@ export function serializeDeal(row: DealRow, today: string) {
     nextAction: row.nextAction,
     nextActionDate: dateOut(row.nextActionDate),
     notes: row.notes,
-    links: linksOut(row.links),
+    // Pasted links and attached files (owner, 9 Oct 2026); a file's `url` is its members-only download
+    // route — lib/pipeline-documents.ts.
+    links: documentsOut(row.projectId, row.id, row.links),
     // The Task project made when the deal was won (lib/pipeline-execution.ts); null = none (yet).
     executionProjectId: row.executionProjectId,
     executionProject: row.executionProject,
@@ -190,12 +188,20 @@ type FieldKind =
   | { kind: "date" }
   | { kind: "user" }
   | { kind: "links" }
+  | { kind: "services" }
+
+/** At most this many services on a deal, each at most SERVICE_MAX characters. Guards, not rules. */
+const SERVICES_MAX = 20
+const SERVICE_MAX = 60
 
 /** Every field a client may set, and how it is checked. `position` is separate: it is not history. */
 export const DEAL_FIELDS: Record<string, FieldKind> = {
   name: { kind: "text", max: 200, required: true },
   brand: { kind: "text", max: 200 },
-  service: { kind: "enum", options: SERVICE_OPTIONS },
+  // An app that knows one service sends `service` (a preset, or since 9 Oct 2026 any name); it becomes the
+  // first of `services`, the others stay. `services` (the list) wins when both are sent.
+  service: { kind: "text", max: SERVICE_MAX, required: true },
+  services: { kind: "services" },
   bdUserId: { kind: "user" },
   bdName: { kind: "optText", max: 120 },
   pmUserId: { kind: "user" },
@@ -237,31 +243,20 @@ function parseDate(v: unknown): Date | null | undefined {
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? undefined : d
 }
 
-function parseLinks(v: unknown): Link[] | undefined {
-  if (!Array.isArray(v) || v.length > 50) return undefined
-  const out: Link[] = []
-  for (const raw of v) {
-    if (!raw || typeof raw !== "object") return undefined
-    const l = raw as Record<string, unknown>
-    const url = typeof l.url === "string" ? l.url.trim() : ""
-    // http(s) only: a javascript: or data: link on a shared board would run in a colleague's browser.
-    if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2000) return undefined
-    const type = typeof l.type === "string" && (LINK_TYPES as readonly string[]).includes(l.type) ? l.type : "Lainnya"
-    const label = typeof l.label === "string" ? l.label.trim().slice(0, 200) : ""
-    const id = typeof l.id === "string" && l.id.length > 0 && l.id.length <= 40 ? l.id : `lnk${Math.random().toString(36).slice(2, 10)}`
-    out.push({ id, type, label, url })
-  }
-  return out
-}
-
 /**
  * Checks the fields of a create or PATCH body against DEAL_FIELDS. Unknown keys are ignored (a newer
  * client may send more). People must be members of the project's workspace — the pickers offer exactly
  * those. Returns the Prisma data (dates as Date) or the first field that is wrong.
+ *
+ * `current`: the deal on a PATCH. Its links: attached files are matched against them by id and kept
+ * (owner, 9 Oct 2026: files come and go only through the upload and DELETE …/documents/:docId); a create
+ * has none, so a list that names a file there is refused. Its services: what a single `service` is put
+ * in front of.
  */
 export async function parseDealFields(
   body: Record<string, unknown>,
   workspaceId: string,
+  current?: { links?: unknown; services?: string[]; service?: string },
 ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: FieldError }> {
   const data: Record<string, unknown> = {}
   const bad = (field: string, error: string) => ({ ok: false as const, error: { field, error } })
@@ -319,14 +314,63 @@ export async function parseDealFields(
         break
       }
       case "links": {
-        const links = parseLinks(v)
+        const links = mergeDocuments(storedDocs(current?.links ?? []), v)
         if (!links) return bad(field, "Link harus diawali http:// atau https://.")
         data[field] = links
         break
       }
+      case "services": {
+        const list = normalizeServices(v)
+        if (!list) return bad(field, `Maksimal ${SERVICES_MAX} service, masing-masing 1–${SERVICE_MAX} karakter.`)
+        data[field] = list
+        break
+      }
     }
   }
+  // The two service fields always move together: `service` (the column older apps read) = the first.
+  if ("services" in data) {
+    const list = data.services as string[]
+    data.service = list[0] ?? ""
+  } else if (typeof data.service === "string") {
+    const first = normalizeServices([data.service])?.[0] ?? data.service
+    const rest = (current ? servicesOf({ services: current.services ?? [], service: current.service ?? "" }) : [])
+      .filter((s) => s.toLowerCase() !== first.toLowerCase())
+    data.service = first
+    data.services = [first, ...rest]
+  }
   return { ok: true, data }
+}
+
+// ── Services (owner, 9 Oct 2026: "gw mau bisa select multiple services dan ngetik service sendiri") ──
+
+/**
+ * A deal's services: the list, or — a deal from before the list (9 Oct 2026) — its single `service`.
+ * An emptied list stays empty: writing the list sets `service` to "" with it.
+ */
+export function servicesOf(row: { services?: string[] | null; service?: string | null }): string[] {
+  if (row.services && row.services.length) return row.services
+  return row.service ? [row.service] : []
+}
+
+/**
+ * A list as sent → as stored: trimmed, inner spaces collapsed, a preset typed in another case spelled as
+ * the preset ("event" → "Event"), duplicates (any case) dropped, order kept. undefined = refused.
+ */
+export function normalizeServices(v: unknown): string[] | undefined {
+  if (!Array.isArray(v) || v.length > SERVICES_MAX) return undefined
+  const presets = new Map(SERVICE_OPTIONS.map((s) => [s.toLowerCase(), s as string]))
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of v) {
+    if (typeof raw !== "string") return undefined
+    const s = raw.trim().replace(/\s+/g, " ")
+    if (!s || s.length > SERVICE_MAX) return undefined
+    const name = presets.get(s.toLowerCase()) ?? s
+    if (seen.has(name.toLowerCase())) continue
+    seen.add(name.toLowerCase())
+    out.push(name)
+  }
+  return out
 }
 
 /** A value as the history keeps it: dates as "YYYY-MM-DD", everything else as JSON. */
