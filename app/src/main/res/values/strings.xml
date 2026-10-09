@@ -2863,4 +2863,19 @@
     <string name="pl_doc_h_added">%1$s attached %2$s</string>
     <string name="pl_doc_h_removed">%1$s removed %2$s</string>
     <string name="pl_doc_a">a document</string>
+    <!-- Pipeline §14: phase progress lines (9 Oct) -->
+    <string name="pl_d_won">Deal won</string>
+    <string name="pl_d_executed">Fully executed</string>
+    <string name="pl_d_cancelled">Contract cancelled</string>
+    <string name="pl_d_ready">Ready to execute</string>
+    <string name="pl_d_not_relevant">Not yet relevant</string>
+    <string name="pl_d_deliv_done">Deliverable done</string>
+    <string name="pl_d_fully_paid">Fully paid</string>
+    <string name="pl_d_payment_overdue">Payment overdue</string>
+    <string name="pl_d_upcoming">Upcoming due</string>
+    <string name="pl_d_not_billed">Not yet billed</string>
+    <plurals name="pl_d_overdue_days">
+        <item quantity="one">Overdue %d day</item>
+        <item quantity="other">Overdue %d days</item>
+    </plurals>
 </resources>

@@ -45,6 +45,8 @@ data class PipelineLink(val id: String, val type: String, val label: String, val
     }
 }
 
+data class PipelinePhase(val key: String, val state: String, val blocked: Boolean = false)
+
 data class PipelineReason(val code: String, val days: Int?, val text: String?)
 
 /** One deal, read from its raw JSON (every getter has a default). */
@@ -85,6 +87,23 @@ data class PipelineDeal(val raw: JsonObject) {
     val healthKey get() = (raw["health"] as? JsonObject)?.get("key").str() ?: "NONE"
     val reasons: List<PipelineReason> get() = ((raw["health"] as? JsonObject)?.get("reasons") as? JsonArray).orEmpty().mapNotNull { r ->
         (r as? JsonObject)?.let { PipelineReason(it["code"].str().orEmpty(), it["days"].num()?.toInt(), it["text"].str()) }
+    }
+    /** The six phases with `blocked` (§14.1: the phase the blocker holds up; absent from an older server). */
+    val phaseList: List<PipelinePhase> get() = (raw["phases"] as? JsonArray).orEmpty().mapNotNull { p ->
+        (p as? JsonObject)?.let { o -> o["key"].str()?.let { k -> PipelinePhase(k, o["state"].str() ?: "pending", (o["blocked"] as? JsonPrimitive)?.content == "true") } }
+    }
+    /** The blocker as written, or null when there is none. */
+    val blockerText get() = text("blocker").trim().ifEmpty { null }
+    /**
+     * The phases with the blocker's phase marked. An older server doesn't mark it: then it goes on the phase the deal
+     * is at now — the one already bad, else the active one, else the first not done, else the last (the server's
+     * own fallback when the blocker's words name none). The word list itself is never ported.
+     */
+    val progressPhases: List<PipelinePhase> get() {
+        val ps = phaseList
+        if (blockerText == null || ps.isEmpty() || ps.any { it.blocked }) return ps
+        val held = ps.firstOrNull { it.state == "bad" } ?: ps.firstOrNull { it.state == "active" } ?: ps.firstOrNull { it.state != "done" } ?: ps.last()
+        return ps.map { if (it.key == held.key) it.copy(state = "bad", blocked = true) else it }
     }
     /** The six phases (commercial … closing), each done | active | pending | bad. */
     val phases: List<Pair<String, String>> get() = (raw["phases"] as? JsonArray).orEmpty().mapNotNull { p ->
@@ -283,8 +302,6 @@ object PipelineCard {
     /** The first reason, as a red / amber line, only for Critical / Attention; with how many more there are. */
     fun firstReason(d: PipelineDeal): Pair<PipelineReason, Int>? =
         if (d.healthKey == "CRITICAL" || d.healthKey == "ATTENTION") d.reasons.firstOrNull()?.let { it to d.reasons.size - 1 } else null
-    /** The six-step phase track: only while won and running. */
-    fun showPhases(d: PipelineDeal) = d.stage == "Won – Contract Pending" || d.stage == "Won – In Execution"
     /** "No PM yet" warns on a won deal still to run (not once closed). */
     fun needsPm(d: PipelineDeal) = d.stageGroup == "Pre-Execution" || d.stageGroup == "Execution"
     /** The next-action date chip; none on Closed / Lost. */
@@ -356,6 +373,33 @@ object PipelineText {
         "VREG_PENDING" -> Words.Str(R.string.pl_r_vreg)
         else -> Words.Raw(r.code)
     }
+    /**
+     * The line under a phase in the stepper (§14.3; web usePhaseDetail, iOS phaseDetail): the GM's node words. Never
+     * "Overdue 0 days"; an unknown status is shown as stored. [stageWords] = the stage's own label.
+     */
+    fun phaseDetail(d: PipelineDeal, key: String): Words = when (key) {
+        "commercial" -> PipelineVocab.group(d.stage).let { g -> if (g == "Pipeline" || g == "Lost") stage(d.stage)?.let { Words.Str(it) } ?: Words.Raw(d.stage) else Words.Str(R.string.pl_d_won) }
+        "contract" -> d.text("contractStatus").let { st -> when (st) {
+            "Fully Executed" -> Words.Str(R.string.pl_d_executed); "Cancelled" -> Words.Str(R.string.pl_d_cancelled)
+            "", "Not Started" -> Words.Str(R.string.pl_not_started); else -> Words.Raw(st) } }
+        "readiness" -> when (d.text("readiness")) {
+            "Ready" -> Words.Str(R.string.pl_d_ready); "Blocked" -> Words.Str(R.string.pl_r_blocked); "Partial" -> Words.Str(R.string.pl_r_partial)
+            else -> Words.Str(R.string.pl_d_not_relevant) }
+        "deliverable" -> d.text("deliverableStatus").let { st -> when {
+            st == "Completed" || st == "Approved" -> Words.Str(R.string.pl_d_deliv_done)
+            d.text("deliverableRisk") == "Overdue" -> Words.Str(R.string.pl_r_deliv_overdue)
+            d.text("deliverableRisk") == "At Risk" -> Words.Str(R.string.pl_r_at_risk)
+            st.isEmpty() || st == "Not Started" -> Words.Str(R.string.pl_not_started)
+            else -> Words.Raw(st) } }
+        "payment" -> when (d.paymentStatusShown) {
+            "Paid" -> Words.Str(R.string.pl_d_fully_paid)
+            "Overdue" -> if (d.daysOverdue > 0) Words.Plural(R.plurals.pl_d_overdue_days, d.daysOverdue) else Words.Str(R.string.pl_d_payment_overdue)
+            "Partial" -> Words.Str(R.string.pl_r_partly_paid); "Due" -> Words.Str(R.string.pl_r_payment_due); "Upcoming" -> Words.Str(R.string.pl_d_upcoming)
+            else -> Words.Str(R.string.pl_d_not_billed) }
+        "closing" -> d.text("closingStatus").let { st -> when (st) { "Closed" -> Words.Raw("Closed"); "", "Not Ready" -> Words.Str(R.string.pl_not_started); else -> Words.Raw(st) } }
+        else -> Words.Raw("")
+    }
+
     /** A payment term's status (server: TERM_STATUSES); an unknown key is shown as stored. */
     fun termStatus(k: String): Int? = when (k) {
         "Not Invoiced" -> R.string.pl_t_not_invoiced; "Invoiced" -> R.string.pl_t_invoiced; "Partial" -> R.string.pl_t_partial

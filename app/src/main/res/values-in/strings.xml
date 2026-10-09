@@ -2814,4 +2814,18 @@
     <string name="pl_doc_h_added">%1$s melampirkan %2$s</string>
     <string name="pl_doc_h_removed">%1$s menghapus %2$s</string>
     <string name="pl_doc_a">dokumen</string>
+    <!-- Pipeline §14: baris progres fase (9 Okt) -->
+    <string name="pl_d_won">Deal won</string>
+    <string name="pl_d_executed">Fully executed</string>
+    <string name="pl_d_cancelled">Kontrak dibatalkan</string>
+    <string name="pl_d_ready">Siap eksekusi</string>
+    <string name="pl_d_not_relevant">Belum relevan</string>
+    <string name="pl_d_deliv_done">Selesai</string>
+    <string name="pl_d_fully_paid">Lunas</string>
+    <string name="pl_d_payment_overdue">Pembayaran overdue</string>
+    <string name="pl_d_upcoming">Akan jatuh tempo</string>
+    <string name="pl_d_not_billed">Belum ditagih</string>
+    <plurals name="pl_d_overdue_days">
+        <item quantity="other">Overdue %d hari</item>
+    </plurals>
 </resources>

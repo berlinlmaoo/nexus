@@ -2,6 +2,7 @@ package id.znetworks.nexus.feature.pipeline
 
 import android.app.Application
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -291,19 +292,47 @@ internal fun HealthPill(key: String) {
         modifier = Modifier.background(col.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
 }
 
-/** Six segments: commercial … closing, each done / active / pending / bad (TalkBack reads them). */
+/** Six segments: commercial … closing, each done / active / pending / bad (TalkBack reads them). Active is amber (§14.2). */
 @Composable
-internal fun PhaseTrack(phases: List<Pair<String, String>>, modifier: Modifier = Modifier) {
+internal fun PhaseTrack(phases: List<PipelinePhase>, modifier: Modifier = Modifier) {
     val c = Nx.colors
     val res = LocalContext.current.resources
-    val words = phases.joinToString(", ") { (k, s) ->
-        (PipelineText.phase(k)?.let { r -> res.getString(r) } ?: k) + " " + res.getString(when (s) { "done" -> R.string.pl_st_done; "active" -> R.string.pl_st_active; "bad" -> R.string.pl_st_bad; else -> R.string.pl_st_pending })
+    val words = phases.joinToString(", ") { p ->
+        (PipelineText.phase(p.key)?.let { r -> res.getString(r) } ?: p.key) + " " + res.getString(when (p.state) { "done" -> R.string.pl_st_done; "active" -> R.string.pl_st_active; "bad" -> R.string.pl_st_bad; else -> R.string.pl_st_pending })
     }
     val label = stringResource(R.string.pl_phase_progress) + ": " + words
     Row(modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        phases.forEach { (_, s) ->
-            Box(Modifier.weight(1f).height(5.dp).background(when (s) { "done" -> c.success; "active" -> c.violet; "bad" -> c.danger; else -> c.muted }, RoundedCornerShape(3.dp)))
-        }
+        phases.forEach { p -> Box(Modifier.weight(1f).height(5.dp).background(phaseColor(p.state), RoundedCornerShape(3.dp))) }
+    }
+}
+
+@Composable
+internal fun phaseColor(state: String): Color = when (state) { "done" -> Nx.colors.success; "active" -> Nx.colors.warning; "bad" -> Nx.colors.danger; else -> Nx.colors.muted }
+
+@Composable
+internal fun phaseDetailText(d: PipelineDeal, key: String): String = when (val w = PipelineText.phaseDetail(d, key)) {
+    is PipelineText.Words.Str -> stringResource(w.res)
+    is PipelineText.Words.Plural -> pluralStringResource(w.res, w.n, w.n)
+    is PipelineText.Words.Raw -> w.text
+}
+
+/** The blocker, written out, on the card and the deal (§14.2/14.3): red when Critical, else amber. */
+@Composable
+internal fun BlockerBanner(text: String, critical: Boolean, maxLines: Int = Int.MAX_VALUE) {
+    val col = if (critical) Nx.colors.danger else Nx.colors.warning
+    Row(Modifier.fillMaxWidth().background(col.copy(alpha = 0.12f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Top) {
+        Icon(Icons.Filled.Warning, null, tint = col, modifier = Modifier.size(14.dp).padding(top = 1.dp)); Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The stage as a chip: a dot in its group's colour + its label (deal header, §14.3). */
+@Composable
+internal fun StageChip(stage: String) {
+    val c = Nx.colors
+    Row(Modifier.background(c.muted, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(7.dp).background(groupTone(stage), CircleShape)); Spacer(Modifier.width(5.dp))
+        Text(stageLabel(stage), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -468,8 +497,8 @@ internal fun groupTone(stage: String): Color = when (PipelineVocab.group(stage))
 }
 
 /**
- * One deal as a card (§12.3), only what is known: health dot · code · brand, value; name; the first reason when
- * Critical / Attention; phases only while won and running; PM / BD and the next-action date. Long-press moves it.
+ * One deal as a card (§14.2, the GM's app): code · health pill; name; brand · value; the six-phase bar on every deal;
+ * the blocker written out (else the first reason); a footer of PM · BD, next-action date and services. Long-press moves it.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -480,36 +509,47 @@ private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel)
     Box {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
             .combinedClickable(onClick = { vm.open(d.id) }, onLongClick = { menu = true }, onLongClickLabel = stringResource(R.string.pl_move_named, name))
-            .padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            .padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (d.healthKey in PipelineCard.DOTTED) { Box(Modifier.size(7.dp).background(healthColor(d.healthKey), CircleShape)); Spacer(Modifier.width(5.dp)) }
-                Text(listOf(d.code, d.brand).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(d.code, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, modifier = Modifier.weight(1f))
+                if (d.stageGroup != "Lost") HealthPill(d.healthKey)
+            }
+            Text(name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (d.brand.isNotBlank() || d.value > 0) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(d.brand, fontSize = 12.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (d.value > 0) Text(PipelineFormat.idr(d.value), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
             }
-            Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            PipelineCard.firstReason(d)?.let { (r, more) ->
+            PhaseTrack(d.progressPhases, Modifier.fillMaxWidth().padding(vertical = 2.dp))
+            val blocker = d.blockerText
+            if (blocker != null) BlockerBanner(blocker, d.healthKey == "CRITICAL", maxLines = 2)
+            else PipelineCard.firstReason(d)?.let { (r, more) ->
                 Text(reasonText(r) + if (more > 0) " " + stringResource(R.string.pl_more_reasons, more) else "", fontSize = 11.sp, color = healthColor(d.healthKey),
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (PipelineCard.showPhases(d)) PhaseTrack(d.phases, Modifier.fillMaxWidth().padding(vertical = 2.dp))
             val people = listOfNotNull(d.pmShown?.let { it to d.pm?.avatar }, d.bdShown?.let { it to d.bd?.avatar }).distinctBy { it.first }
             val due = PipelineCard.nextDate(d)
             val noPm = d.pmShown == null && PipelineCard.needsPm(d)
-            if (people.isNotEmpty() || due != null || noPm) Row(verticalAlignment = Alignment.CenterVertically) {
-                when {
-                    noPm -> Text(stringResource(R.string.pl_no_pm), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
-                    people.size == 1 -> { Avatar(people[0].first, people[0].second, 18.dp); Spacer(Modifier.width(4.dp))
-                        Text(people[0].first, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    else -> people.forEach { (n, a) -> Avatar(n, a, 18.dp); Spacer(Modifier.width(2.dp)) }
-                }
-                if (noPm) people.firstOrNull { it.first == d.bdShown }?.let { (n, a) -> Spacer(Modifier.width(6.dp)); Avatar(n, a, 18.dp) }
-                Spacer(Modifier.weight(1f))
-                due?.let { day ->
-                    val tone = PipelineCard.dateTone(day, data.today)
-                    val col = when (tone) { PipelineCard.Tone.PAST -> c.danger; PipelineCard.Tone.TODAY -> c.warning; else -> c.mutedFg }
-                    Text(if (tone == PipelineCard.Tone.TODAY) stringResource(R.string.pl_today) else PipelineCard.shortDay(day), fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                        color = col, modifier = Modifier.background(col.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+            val services = d.services.joinToString(", ")
+            if (people.isNotEmpty() || due != null || noPm || services.isNotEmpty()) {
+                androidx.compose.material3.HorizontalDivider(color = c.border)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    people.forEach { (n, a) -> Avatar(n, a, 18.dp); Spacer(Modifier.width(2.dp)) }
+                    if (people.isNotEmpty()) Spacer(Modifier.width(2.dp))
+                    when {
+                        noPm -> Text(stringResource(R.string.pl_no_pm), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger, maxLines = 1)
+                        people.isNotEmpty() -> Text(people.joinToString(" · ") { it.first }, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false))
+                    }
+                    due?.let { day ->
+                        Spacer(Modifier.width(6.dp))
+                        val tone = PipelineCard.dateTone(day, data.today)
+                        val col = when (tone) { PipelineCard.Tone.PAST -> c.danger; PipelineCard.Tone.TODAY -> c.warning; else -> c.mutedFg }
+                        Text(if (tone == PipelineCard.Tone.TODAY) stringResource(R.string.pl_today) else PipelineCard.shortDay(day), fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                            color = col, maxLines = 1, modifier = Modifier.background(col.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+                    Spacer(Modifier.weight(1f).widthIn(min = 6.dp))
+                    if (services.isNotEmpty()) Text(services, fontSize = 10.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 120.dp))
                 }
             }
         }

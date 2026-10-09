@@ -1,6 +1,12 @@
 package id.znetworks.nexus.feature.pipeline
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.border
@@ -96,7 +102,10 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
         Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.close)) }
-                Text(deal.code, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.weight(1f))
+                // Code + stage chip + health (§14.3).
+                Text(deal.code, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) { StageChip(deal.stage) }
                 HealthPill(deal.healthKey); Spacer(Modifier.width(8.dp))
             }
             PrimaryTabRow(selectedTabIndex = tab, containerColor = c.background) {
@@ -106,9 +115,11 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
             if (tab == 1) { History(vm, deal); return@Column }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 TextSave(stringResource(R.string.pl_f_name), deal.name, big = true) { save(one("name", JsonPrimitive(it))) }
-                // Phase progress only once won (§12.3).
-                if (deal.isWon) PhaseTrack(deal.phases, Modifier.fillMaxWidth())
-                deal.reasons.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(deal.healthKey)) }
+                // The blocker first, then the reasons (minus BLOCKER when the banner says it), then the stepper on every deal (§14.3).
+                val blocker = deal.blockerText
+                if (blocker != null) BlockerBanner(blocker, deal.healthKey == "CRITICAL")
+                deal.reasons.filter { blocker == null || it.code != "BLOCKER" }.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(deal.healthKey)) }
+                PhaseStepper(deal)
                 Text(stringResource(R.string.pl_saves_on_leave), fontSize = 11.sp, color = c.mutedFg)
                 // Won → its execution project (Master Task + Master Calendar, §10.3).
                 val exec = deal.executionProjectId
@@ -196,6 +207,50 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
         text = { Text(stringResource(R.string.pl_delete_body)) },
         confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete(deal) }) { Text(stringResource(R.string.pl_delete), color = c.dangerText, fontWeight = FontWeight.Bold) } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } })
+}
+
+/**
+ * "Phase progress": six rows, each a mark (done = green check, active = amber ring, bad = red "!", pending = grey
+ * ring) on a connector line (green under a done phase), the phase name, its detail line (red when bad), and under the
+ * phase the blocker holds up, the blocker in red.
+ */
+@Composable
+private fun PhaseStepper(deal: PipelineDeal) {
+    val c = Nx.colors
+    val phases = deal.progressPhases
+    if (phases.isEmpty()) return
+    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(12.dp)) {
+        Text(stringResource(R.string.pl_phase_progress), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+        Spacer(Modifier.height(8.dp))
+        phases.forEachIndexed { i, p ->
+            val col = phaseColor(p.state)
+            Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+                Column(Modifier.width(24.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(20.dp).then(when (p.state) {
+                        "done", "bad" -> Modifier.background(col, CircleShape)
+                        else -> Modifier.border(2.dp, if (p.state == "active") c.warning else c.border, CircleShape)
+                    }), contentAlignment = Alignment.Center) {
+                        when (p.state) {
+                            "done" -> Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                            "bad" -> Text("!", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                    if (i < phases.lastIndex) Box(Modifier.width(2.dp).weight(1f).background(if (p.state == "done") c.success else c.border))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f).padding(bottom = if (i < phases.lastIndex) 12.dp else 0.dp)) {
+                    Text(PipelineText.phase(p.key)?.let { stringResource(it) } ?: p.key, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                    Text(phaseDetailText(deal, p.key), fontSize = 12.sp, color = if (p.state == "bad") c.danger else c.mutedFg)
+                    if (p.blocked) deal.blockerText?.let { b ->
+                        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(top = 2.dp)) {
+                            Icon(Icons.Filled.Warning, null, tint = c.danger, modifier = Modifier.size(13.dp).padding(top = 1.dp)); Spacer(Modifier.width(4.dp))
+                            Text(b, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** "9 Okt 2026" for a yyyy-MM-dd day. */
