@@ -2591,9 +2591,7 @@
     <string name="pl_k_on_track">Deliverable aman</string>
     <string name="pl_k_completed">%1$d selesai</string>
     <string name="pl_no_deals">Belum ada deal</string>
-    <string name="pl_add_here">Tambah di fase ini</string>
     <string name="pl_untitled">Deal tanpa nama</string>
-    <string name="pl_no_value">Belum ada nilai</string>
     <string name="pl_no_pm">PM belum ditugaskan</string>
     <string name="pl_move_named">Pindahkan %1$s ke fase lain</string>
     <string name="pl_move_to">Pindah ke fase</string>
@@ -2765,4 +2763,18 @@
     <string name="pl_t_h_restored">%1$s memulihkan termin %2$s</string>
     <string name="au_rb_term">Pulihkan termin</string>
     <string name="au_note_term">Termin kembali ke deal-nya, dan piutang deal dihitung ulang bersamanya.</string>
+    <!-- Pipeline §12: tata letak (9 Okt malam) -->
+    <string name="pl_add_in">Tambah deal di %s</string>
+    <string name="pl_filters_export">Filter dan ekspor</string>
+    <string name="pl_filter_pm">Filter menurut PM</string>
+    <string name="pl_filter_bd">Filter menurut BD</string>
+    <string name="pl_clear_filters">Hapus filter</string>
+    <string name="pl_k_nothing_overdue">Tidak ada yang overdue</string>
+    <string name="pl_more_reasons">+%d lagi</string>
+    <string name="pl_today">Hari ini</string>
+    <string name="pl_fold">Kontrak, delivery &amp; pembayaran</string>
+    <string name="pl_fold_note">Diisi Legal, PM, dan Finance setelah deal won.</string>
+    <plurals name="pl_stage_n">
+        <item quantity="other">%1$s, %2$d deal</item>
+    </plurals>
 </resources>

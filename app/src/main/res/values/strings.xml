@@ -2602,7 +2602,7 @@
     <string name="pl_load_failed_sub">Check your connection, then try again.</string>
     <string name="pl_empty">No deals in this pipeline yet</string>
     <string name="pl_empty_sub">Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card.</string>
-    <string name="pl_add_first">Add the first deal</string>
+    <string name="pl_add_first">Add your first deal</string>
     <string name="pl_save_failed">That change wasn\'t saved. Try again.</string>
     <string name="pl_create_failed">The deal wasn\'t created. Try again.</string>
     <string name="pl_delete_failed">The deal wasn\'t deleted. Try again.</string>
@@ -2632,9 +2632,7 @@
     <string name="pl_k_on_track">Deliverables on track</string>
     <string name="pl_k_completed">%1$d completed</string>
     <string name="pl_no_deals">No deals</string>
-    <string name="pl_add_here">Add in this stage</string>
     <string name="pl_untitled">Untitled deal</string>
-    <string name="pl_no_value">No value yet</string>
     <string name="pl_no_pm">No PM yet</string>
     <string name="pl_move_named">Move %1$s to another stage</string>
     <string name="pl_move_to">Move to stage</string>
@@ -2812,4 +2810,19 @@
     <string name="pl_t_h_restored">%1$s restored payment term %2$s</string>
     <string name="au_rb_term">Restore payment term</string>
     <string name="au_note_term">It goes back to its deal, and the deal\'s receivable is worked out again with it.</string>
+    <!-- Pipeline §12: layout (9 Oct night) -->
+    <string name="pl_add_in">Add a deal in %s</string>
+    <string name="pl_filters_export">Filters and export</string>
+    <string name="pl_filter_pm">Filter by PM</string>
+    <string name="pl_filter_bd">Filter by BD</string>
+    <string name="pl_clear_filters">Clear filters</string>
+    <string name="pl_k_nothing_overdue">Nothing overdue</string>
+    <string name="pl_more_reasons">+%d more</string>
+    <string name="pl_today">Today</string>
+    <string name="pl_fold">Contract, delivery &amp; payment</string>
+    <string name="pl_fold_note">Legal, PM and Finance fill these in once the deal is won.</string>
+    <plurals name="pl_stage_n">
+        <item quantity="one">%1$s, %2$d deal</item>
+        <item quantity="other">%1$s, %2$d deals</item>
+    </plurals>
 </resources>

@@ -32,6 +32,7 @@ class PipelineBoardTest {
         assertTrue(projects.contains("it != ProjectType.PIPELINE || pipelineAccess"))
         assertTrue(projects.contains("onOpenBoard(pipelineId)"))
         val shell = File("src/main/java/id/znetworks/nexus/ui/shell/SignedInShell.kt").readText()
-        assertTrue(shell.contains("pipelineId?.let { pid -> MoreItem(R.string.pl_tab"))
+        // §12.1: no Pipeline entry in More — the board is opened from Projects like any project.
+        assertFalse(shell.contains("MoreItem(R.string.pl_tab"))
     }
 }

@@ -1,6 +1,8 @@
 package id.znetworks.nexus.feature.pipeline
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +89,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
     val c = Nx.colors
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var laterOpen by remember(deal.id) { mutableStateOf(false) }
     val save = { fields: JsonObject -> vm.update(deal.id, fields) }
     val v = data.vocab
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -103,7 +106,8 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
             if (tab == 1) { History(vm, deal); return@Column }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 TextSave(stringResource(R.string.pl_f_name), deal.name, big = true) { save(one("name", JsonPrimitive(it))) }
-                PhaseTrack(deal.phases, Modifier.fillMaxWidth())
+                // Phase progress only once won (§12.3).
+                if (deal.isWon) PhaseTrack(deal.phases, Modifier.fillMaxWidth())
                 deal.reasons.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(deal.healthKey)) }
                 Text(stringResource(R.string.pl_saves_on_leave), fontSize = 11.sp, color = c.mutedFg)
                 // Won → its execution project (Master Task + Master Calendar, §10.3).
@@ -125,45 +129,55 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                     Money(stringResource(R.string.pl_f_net_value), deal.netValue) { save(one("netValue", JsonPrimitive(it))) }
                     DateSave(stringResource(R.string.pl_f_main_date), deal.date("mainDate")) { save(one("mainDate", str(it))) }
                 }
-                Group(stringResource(R.string.pl_ph_contract), "Legal") {
-                    Pick(stringResource(R.string.pl_f_contract_status), deal.text("contractStatus"), v.contractStatuses) { save(one("contractStatus", JsonPrimitive(it))) }
-                }
-                Group(stringResource(R.string.pl_f_vreg), "Admin") {
-                    Pick(stringResource(R.string.pl_f_vreg), deal.text("vregStatus"), v.vregStatuses) { save(one("vregStatus", JsonPrimitive(it))) }
-                }
-                Group(stringResource(R.string.pl_s_readiness), stringResource(R.string.pl_s_pm)) {
-                    PersonPick("PM", deal.pmUserId, deal.pmShown, people, "pm", save)
-                    Pick(stringResource(R.string.pl_f_readiness), deal.text("readiness"), v.readiness) { save(one("readiness", JsonPrimitive(it))) }
-                    Pick(stringResource(R.string.pl_f_deliv_status), deal.text("deliverableStatus"), v.deliverableStatuses) { save(one("deliverableStatus", JsonPrimitive(it))) }
-                    Pick(stringResource(R.string.pl_f_deliv_risk), deal.text("deliverableRisk"), v.deliverableRisks, label = { k -> PipelineText.risk(k)?.let { stringResource(it) } ?: k }) {
-                        save(one("deliverableRisk", JsonPrimitive(it))) }
-                }
-                Group(stringResource(R.string.pl_s_billing), "Finance") {
-                    Money(stringResource(R.string.pl_f_invoice_value), deal.invoiceValue) { save(one("invoiceValue", JsonPrimitive(it))) }
-                    val ts = deal.termSummary
-                    if (ts != null) {
-                        // With terms these are the terms' (server-computed), read-only (§11.2).
-                        ReadOnly(stringResource(R.string.pl_f_payment_status), ts.paymentStatus)
-                        ReadOnly(stringResource(R.string.pl_f_receivable), PipelineFormat.idrFull(ts.outstanding))
-                        ReadOnly(stringResource(R.string.pl_t_next_due), ts.nextDueDate?.let(::dayLabel) ?: "–")
-                        Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
-                            else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
-                        Text(stringResource(R.string.pl_t_from_terms), fontSize = 11.sp, color = c.mutedFg)
-                    } else {
-                        Pick(stringResource(R.string.pl_f_payment_status), deal.text("paymentStatus"), v.paymentStatuses) { save(one("paymentStatus", JsonPrimitive(it))) }
-                        Money(stringResource(R.string.pl_f_receivable), deal.outstandingReceivable) { save(one("outstandingReceivable", JsonPrimitive(it))) }
-                        DateSave(stringResource(R.string.pl_f_due_date), deal.date("paymentDueDate")) { save(one("paymentDueDate", str(it))) }
-                        // A due date keeps the days true; without one, the GM's typed number.
-                        if (deal.date("paymentDueDate") != null) Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
-                            else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
-                        else TextSave(stringResource(R.string.pl_f_days_typed), deal.maxDaysOverdue.toString(), number = true) { t ->
-                            t.trim().toIntOrNull()?.takeIf { it >= 0 }?.let { save(one("maxDaysOverdue", JsonPrimitive(it))) } }
+                // Open or lost: what Legal, PM and Finance fill in after the win folds under one row (tap opens).
+                if (deal.isWon || laterOpen) {
+                    Group(stringResource(R.string.pl_ph_contract), "Legal") {
+                        Pick(stringResource(R.string.pl_f_contract_status), deal.text("contractStatus"), v.contractStatuses) { save(one("contractStatus", JsonPrimitive(it))) }
                     }
-                    Money(stringResource(R.string.pl_f_net_cash), deal.netCash, allowNegative = true) { save(one("netCash", JsonPrimitive(it))) }
-                }
-                Group(stringResource(R.string.pl_t_terms), "Finance") { PaymentTerms(deal, vm) }
-                Group(stringResource(R.string.pl_ph_closing), "Finance") {
-                    Pick(stringResource(R.string.pl_f_closing_status), deal.text("closingStatus"), v.closingStatuses) { save(one("closingStatus", JsonPrimitive(it))) }
+                    Group(stringResource(R.string.pl_f_vreg), "Admin") {
+                        Pick(stringResource(R.string.pl_f_vreg), deal.text("vregStatus"), v.vregStatuses) { save(one("vregStatus", JsonPrimitive(it))) }
+                    }
+                    Group(stringResource(R.string.pl_s_readiness), stringResource(R.string.pl_s_pm)) {
+                        PersonPick("PM", deal.pmUserId, deal.pmShown, people, "pm", save)
+                        Pick(stringResource(R.string.pl_f_readiness), deal.text("readiness"), v.readiness) { save(one("readiness", JsonPrimitive(it))) }
+                        Pick(stringResource(R.string.pl_f_deliv_status), deal.text("deliverableStatus"), v.deliverableStatuses) { save(one("deliverableStatus", JsonPrimitive(it))) }
+                        Pick(stringResource(R.string.pl_f_deliv_risk), deal.text("deliverableRisk"), v.deliverableRisks, label = { k -> PipelineText.risk(k)?.let { stringResource(it) } ?: k }) {
+                            save(one("deliverableRisk", JsonPrimitive(it))) }
+                    }
+                    Group(stringResource(R.string.pl_s_billing), "Finance") {
+                        Money(stringResource(R.string.pl_f_invoice_value), deal.invoiceValue) { save(one("invoiceValue", JsonPrimitive(it))) }
+                        val ts = deal.termSummary
+                        if (ts != null) {
+                            // With terms these are the terms' (server-computed), read-only (§11.2).
+                            ReadOnly(stringResource(R.string.pl_f_payment_status), ts.paymentStatus)
+                            ReadOnly(stringResource(R.string.pl_f_receivable), PipelineFormat.idrFull(ts.outstanding))
+                            ReadOnly(stringResource(R.string.pl_t_next_due), ts.nextDueDate?.let(::dayLabel) ?: "–")
+                            Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
+                                else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
+                            Text(stringResource(R.string.pl_t_from_terms), fontSize = 11.sp, color = c.mutedFg)
+                        } else {
+                            Pick(stringResource(R.string.pl_f_payment_status), deal.text("paymentStatus"), v.paymentStatuses) { save(one("paymentStatus", JsonPrimitive(it))) }
+                            Money(stringResource(R.string.pl_f_receivable), deal.outstandingReceivable) { save(one("outstandingReceivable", JsonPrimitive(it))) }
+                            DateSave(stringResource(R.string.pl_f_due_date), deal.date("paymentDueDate")) { save(one("paymentDueDate", str(it))) }
+                            // A due date keeps the days true; without one, the GM's typed number.
+                            if (deal.date("paymentDueDate") != null) Text(if (deal.daysOverdue > 0) pluralStringResource(R.plurals.pl_days_counted, deal.daysOverdue, deal.daysOverdue)
+                                else stringResource(R.string.pl_not_overdue), fontSize = 12.sp, color = if (deal.daysOverdue > 0) c.danger else c.mutedFg)
+                            else TextSave(stringResource(R.string.pl_f_days_typed), deal.maxDaysOverdue.toString(), number = true) { t ->
+                                t.trim().toIntOrNull()?.takeIf { it >= 0 }?.let { save(one("maxDaysOverdue", JsonPrimitive(it))) } }
+                        }
+                        Money(stringResource(R.string.pl_f_net_cash), deal.netCash, allowNegative = true) { save(one("netCash", JsonPrimitive(it))) }
+                    }
+                    Group(stringResource(R.string.pl_t_terms), "Finance") { PaymentTerms(deal, vm) }
+                    Group(stringResource(R.string.pl_ph_closing), "Finance") {
+                        Pick(stringResource(R.string.pl_f_closing_status), deal.text("closingStatus"), v.closingStatuses) { save(one("closingStatus", JsonPrimitive(it))) }
+                    }
+                } else Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp))
+                    .clickable { laterOpen = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.pl_fold), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+                        Text(stringResource(R.string.pl_fold_note), fontSize = 12.sp, color = c.mutedFg)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
                 }
                 Group(stringResource(R.string.pl_s_followup), stringResource(R.string.pl_s_every)) {
                     TextSave(stringResource(R.string.pl_f_next_action), deal.text("nextAction")) { save(one("nextAction", JsonPrimitive(it))) }

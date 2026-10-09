@@ -227,6 +227,27 @@ object PipelineFilter {
     }
 }
 
+/** What a board card shows (§12.3): only what is known. */
+object PipelineCard {
+    /** A small dot before the code; none for Not started (and Lost). */
+    val DOTTED = setOf("CRITICAL", "ATTENTION", "HEALTHY")
+    /** The first reason, as a red / amber line, only for Critical / Attention; with how many more there are. */
+    fun firstReason(d: PipelineDeal): Pair<PipelineReason, Int>? =
+        if (d.healthKey == "CRITICAL" || d.healthKey == "ATTENTION") d.reasons.firstOrNull()?.let { it to d.reasons.size - 1 } else null
+    /** The six-step phase track: only while won and running. */
+    fun showPhases(d: PipelineDeal) = d.stage == "Won – Contract Pending" || d.stage == "Won – In Execution"
+    /** "No PM yet" warns on a won deal still to run (not once closed). */
+    fun needsPm(d: PipelineDeal) = d.stageGroup == "Pre-Execution" || d.stageGroup == "Execution"
+    /** The next-action date chip; none on Closed / Lost. */
+    fun nextDate(d: PipelineDeal) = if (d.stageGroup == "Closed" || d.stageGroup == "Lost") null else d.date("nextActionDate")
+    enum class Tone { PAST, TODAY, LATER }
+    fun dateTone(day: String, today: String) = when { day < today -> Tone.PAST; day == today -> Tone.TODAY; else -> Tone.LATER }
+    /** "4 Okt" / "4 Oct": the year goes without saying on a card. */
+    fun shortDay(iso: String, id: Boolean = java.util.Locale.getDefault().language.let { it == "in" || it == "id" }): String = runCatching {
+        java.time.format.DateTimeFormatter.ofPattern("d MMM", if (id) java.util.Locale.forLanguageTag("id-ID") else java.util.Locale.UK).format(java.time.LocalDate.parse(iso.take(10)))
+    }.getOrDefault(iso)
+}
+
 /** Rupiah and percentages the way the web writes them, in the app's language. */
 object PipelineFormat {
     private fun isId() = java.util.Locale.getDefault().language.let { it == "in" || it == "id" }

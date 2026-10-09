@@ -2,6 +2,17 @@ package id.znetworks.nexus.feature.pipeline
 
 import android.app.Application
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,9 +40,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreVert
+
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewKanban
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,7 +51,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
+
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -287,31 +298,34 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: P
         d.deals.isEmpty() -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.pl_empty), stringResource(R.string.pl_empty_sub), stringResource(R.string.pl_add_first), { vm.create() }, Modifier.fillMaxSize())
         else -> Column(Modifier.fillMaxSize()) {
             Kpis(d.summary)
-            // Toolbar: search, PM / BD, health chips, the view, Excel.
+            // Header (§12.3): search full width + one menu (PM ›, BD ›, clear, Excel), the views, health chips on their own row.
+            val pms = d.deals.mapNotNull { x -> (x.pmUserId ?: x.pmShown)?.let { it to (x.pmShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
+            val bds = d.deals.mapNotNull { x -> (x.bdUserId ?: x.bdShown)?.let { it to (x.bdShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.pl_search_hint), maxLines = 1) },
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f))
-                IconButton(onClick = { vm.export(if (java.util.Locale.getDefault().language.let { it == "in" || it == "id" }) "id" else "en") { f ->
-                    runCatching {
-                        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", f)
-                        context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
-                            .setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                FiltersMenu(pms, bds, pm, bd, s.busy, onPm = { pm = it }, onBd = { bd = it }, onExport = {
+                    vm.export(if (java.util.Locale.getDefault().language.let { it == "in" || it == "id" }) "id" else "en") { f ->
+                        runCatching {
+                            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", f)
+                            context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
+                                .setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
                     }
-                } }, enabled = !s.busy) { if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.Download, stringResource(R.string.pl_export), tint = c.violetText) }
+                })
             }
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                val pms = d.deals.mapNotNull { x -> (x.pmUserId ?: x.pmShown)?.let { it to (x.pmShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
-                val bds = d.deals.mapNotNull { x -> (x.bdUserId ?: x.bdShown)?.let { it to (x.bdShown ?: "—") } }.distinct().sortedBy { it.second.lowercase() }
-                PersonFilter(pms.firstOrNull { it.first == pm }?.second ?: stringResource(R.string.pl_all_pm), pms, stringResource(R.string.pl_all_pm)) { pm = it }
-                PersonFilter(bds.firstOrNull { it.first == bd }?.second ?: stringResource(R.string.pl_all_bd), bds, stringResource(R.string.pl_all_bd)) { bd = it }
-                listOf(null, "CRITICAL", "ATTENTION", "HEALTHY", "NOT_STARTED").forEach { k ->
-                    FilterChip(health == k, { health = k }, { Text(if (k == null) stringResource(R.string.tk_all) else stringResource(PipelineText.health(k))) })
-                }
-            }
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
                 listOf(PipelineView.BOARD to R.string.ptab_board, PipelineView.LIST to R.string.ptab_list, PipelineView.HEALTH to R.string.pl_health).forEachIndexed { i, (v, l) ->
                     SegmentedButton(view == v, { view = v }, SegmentedButtonDefaults.itemShape(i, 3), icon = {}) { Text(stringResource(l)) }
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                // An active PM / BD filter shows here, tap to drop it.
+                pms.firstOrNull { it.first == pm }?.let { (_, n) -> FilterChip(true, { pm = null }, { Text("PM: $n") }, trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(14.dp)) }) }
+                bds.firstOrNull { it.first == bd }?.let { (_, n) -> FilterChip(true, { bd = null }, { Text("BD: $n") }, trailingIcon = { Icon(Icons.Filled.Close, null, Modifier.size(14.dp)) }) }
+                listOf(null, "CRITICAL", "ATTENTION", "HEALTHY", "NOT_STARTED").forEach { k ->
+                    FilterChip(health == k, { health = k }, { Text(if (k == null) stringResource(R.string.tk_all) else stringResource(PipelineText.health(k))) })
                 }
             }
             val shown = PipelineFilter.apply(d.deals, q, pm, bd, health)
@@ -332,94 +346,191 @@ fun PipelineTab(newDealRequest: Int, onOpenProject: (String) -> Unit = {}, vm: P
     s.notice?.let { androidx.compose.material3.AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
 }
 
+/** One icon menu: Filter by PM ›, Filter by BD ›, Clear filters, Download Excel (a sub-list replaces the menu's items). */
 @Composable
-private fun PersonFilter(label: String, people: List<Pair<String, String>>, all: String, onPick: (String?) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { open = true }) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp)); Icon(Icons.Filled.KeyboardArrowDown, null) }
-        DropdownMenu(open, { open = false }) {
-            DropdownMenuItem(text = { Text(all) }, onClick = { open = false; onPick(null) })
-            people.forEach { (id, name) -> DropdownMenuItem(text = { Text(name) }, onClick = { open = false; onPick(id) }) }
-        }
-    }
-}
-
-/** The KPI strip over every deal (one row, sideways on a phone). */
-@Composable
-private fun Kpis(sm: PipelineSummary) {
+private fun FiltersMenu(pms: List<Pair<String, String>>, bds: List<Pair<String, String>>, pm: String?, bd: String?, busy: Boolean,
+                        onPm: (String?) -> Unit, onBd: (String?) -> Unit, onExport: () -> Unit) {
     val c = Nx.colors
-    val tiles = listOf(
-        Triple(stringResource(R.string.pl_k_open), PipelineFormat.idr(sm.n("openValue")), pluralStringResource(R.plurals.pl_k_in_play, sm.i("openCount"), sm.i("openCount"))),
-        Triple(stringResource(R.string.pl_k_weighted), PipelineFormat.idr(sm.n("weightedValue")), stringResource(R.string.pl_k_weighted_sub)),
-        Triple(stringResource(R.string.pl_k_won), PipelineFormat.idr(sm.n("wonValue")), stringResource(R.string.pl_k_won_sub, sm.i("activeCount"), sm.i("lostCount"))),
-        Triple(stringResource(R.string.pl_k_receivable), PipelineFormat.idr(sm.n("receivable")), stringResource(R.string.pl_k_overdue, PipelineFormat.idr(sm.n("receivableOverdue")))),
-        Triple(stringResource(R.string.pl_critical), "${sm.i("criticalCount")}", stringResource(R.string.pl_k_attention, sm.i("attentionCount"))),
-        Triple(stringResource(R.string.pl_k_ready), "${sm.i("readyCount")}", stringResource(R.string.pl_k_blocked, sm.i("blockedCount"))),
-        Triple(stringResource(R.string.pl_k_on_track), "${sm.i("deliverablesOnTrack")}", stringResource(R.string.pl_k_completed, sm.i("deliverablesDone"))),
-    )
-    LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(tiles) { (label, value, sub) ->
-            Column(Modifier.width(150.dp).background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(10.dp)) {
-                Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1)
-                Text(sub, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    var open by remember { mutableStateOf(false) }
+    var level by remember { mutableStateOf<String?>(null) }
+    Box {
+        IconButton(onClick = { level = null; open = true }, enabled = !busy) {
+            if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Filled.FilterList, stringResource(R.string.pl_filters_export), tint = if (pm != null || bd != null) c.violetText else c.mutedFg)
+        }
+        DropdownMenu(open, { open = false }) {
+            when (level) {
+                null -> {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_pm)) }, onClick = { level = "pm" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_filter_bd)) }, onClick = { level = "bd" }, trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_clear_filters)) }, enabled = pm != null || bd != null, onClick = { open = false; onPm(null); onBd(null) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.pl_export)) }, leadingIcon = { Icon(Icons.Filled.Download, null) }, onClick = { open = false; onExport() })
+                }
+                else -> {
+                    val (list, cur, pick, all) = if (level == "pm") Quad(pms, pm, onPm, R.string.pl_all_pm) else Quad(bds, bd, onBd, R.string.pl_all_bd)
+                    DropdownMenuItem(text = { Text(stringResource(all), fontWeight = if (cur == null) FontWeight.Bold else null) }, onClick = { open = false; pick(null) })
+                    list.forEach { (id, name) -> DropdownMenuItem(text = { Text(name, fontWeight = if (cur == id) FontWeight.Bold else null) }, onClick = { open = false; pick(id) }) }
+                }
             }
         }
     }
 }
 
-/** One deal as a card: code, name, health, brand, value, phases, blocker, PM. */
+private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+
+/** The KPI strip over every deal (§12.3): small chips sideways on a phone, one card of equal tiles on a tablet; a zero is muted. */
+@Composable
+private fun Kpis(sm: PipelineSummary) {
+    val c = Nx.colors
+    data class Tile(val label: String, val value: String, val sub: String, val zero: Boolean)
+    val overdue = sm.n("receivableOverdue")
+    val tiles = listOf(
+        Tile(stringResource(R.string.pl_k_open), PipelineFormat.idr(sm.n("openValue")), pluralStringResource(R.plurals.pl_k_in_play, sm.i("openCount"), sm.i("openCount")), sm.n("openValue") == 0.0),
+        Tile(stringResource(R.string.pl_k_weighted), PipelineFormat.idr(sm.n("weightedValue")), stringResource(R.string.pl_k_weighted_sub), sm.n("weightedValue") == 0.0),
+        Tile(stringResource(R.string.pl_k_won), PipelineFormat.idr(sm.n("wonValue")), stringResource(R.string.pl_k_won_sub, sm.i("activeCount"), sm.i("lostCount")), sm.n("wonValue") == 0.0),
+        Tile(stringResource(R.string.pl_k_receivable), PipelineFormat.idr(sm.n("receivable")),
+            if (overdue > 0) stringResource(R.string.pl_k_overdue, PipelineFormat.idr(overdue)) else stringResource(R.string.pl_k_nothing_overdue), sm.n("receivable") == 0.0),
+        Tile(stringResource(R.string.pl_critical), "${sm.i("criticalCount")}", stringResource(R.string.pl_k_attention, sm.i("attentionCount")), sm.i("criticalCount") == 0),
+        Tile(stringResource(R.string.pl_k_ready), "${sm.i("readyCount")}", stringResource(R.string.pl_k_blocked, sm.i("blockedCount")), sm.i("readyCount") == 0),
+        Tile(stringResource(R.string.pl_k_on_track), "${sm.i("deliverablesOnTrack")}", stringResource(R.string.pl_k_completed, sm.i("deliverablesDone")), sm.i("deliverablesOnTrack") == 0),
+    )
+    @Composable fun TileBody(t: Tile, modifier: Modifier) = Column(modifier) {
+        Text(t.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(t.value, fontSize = 17.sp, fontWeight = if (t.zero) FontWeight.Normal else FontWeight.Bold, color = if (t.zero) c.mutedFg else c.foreground, maxLines = 1)
+        Text(t.sub, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth < 600.dp) LazyRow(Modifier.fillMaxWidth().wrapContentHeight(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(tiles) { t -> TileBody(t, Modifier.widthIn(min = 104.dp, max = 160.dp).background(c.card, RoundedCornerShape(12.dp))
+                .border(1.dp, c.border, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 7.dp)) }
+        }
+        else Row(Modifier.fillMaxWidth().padding(12.dp).background(c.card, RoundedCornerShape(14.dp)).border(1.dp, c.border, RoundedCornerShape(14.dp)).padding(vertical = 10.dp)) {
+            tiles.forEach { t -> TileBody(t, Modifier.weight(1f).padding(horizontal = 10.dp)) }
+        }
+    }
+}
+
+/** A stage group's mark in a column head (web GROUP_TONE). */
+@Composable
+internal fun groupTone(stage: String): Color = when (PipelineVocab.group(stage)) {
+    "Pipeline" -> Nx.colors.blue; "Pre-Execution" -> Nx.colors.warning; "Execution" -> Nx.colors.success
+    "Closed" -> Nx.colors.foreground.copy(alpha = 0.6f); else -> Nx.colors.mutedFg.copy(alpha = 0.4f)
+}
+
+/**
+ * One deal as a card (§12.3), only what is known: health dot · code · brand, value; name; the first reason when
+ * Critical / Attention; phases only while won and running; PM / BD and the next-action date. Long-press moves it.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DealCard(d: PipelineDeal, data: PipelineData, vm: PipelineViewModel) {
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
-        .clickable { vm.open(d.id) }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(d.code, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.weight(1f))
-            HealthPill(d.healthKey)
-            Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.MoreVert, stringResource(R.string.pl_move_named, d.name.ifBlank { stringResource(R.string.pl_untitled) }), tint = c.mutedFg) }
-                DropdownMenu(menu, { menu = false }) {
-                    Text(stringResource(R.string.pl_move_to), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                    data.vocab.stages.filter { it != d.stage }.forEach { st ->
-                        DropdownMenuItem(text = { Text(stageLabel(st)) }, onClick = { menu = false; vm.update(d.id, JsonObject(mapOf("stage" to JsonPrimitive(st)))) })
-                    }
+    val name = d.name.ifBlank { stringResource(R.string.pl_untitled) }
+    Box {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .combinedClickable(onClick = { vm.open(d.id) }, onLongClick = { menu = true }, onLongClickLabel = stringResource(R.string.pl_move_named, name))
+            .padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (d.healthKey in PipelineCard.DOTTED) { Box(Modifier.size(7.dp).background(healthColor(d.healthKey), CircleShape)); Spacer(Modifier.width(5.dp)) }
+                Text(listOf(d.code, d.brand).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (d.value > 0) Text(PipelineFormat.idr(d.value), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+            }
+            Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            PipelineCard.firstReason(d)?.let { (r, more) ->
+                Text(reasonText(r) + if (more > 0) " " + stringResource(R.string.pl_more_reasons, more) else "", fontSize = 11.sp, color = healthColor(d.healthKey),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (PipelineCard.showPhases(d)) PhaseTrack(d.phases, Modifier.fillMaxWidth().padding(vertical = 2.dp))
+            val people = listOfNotNull(d.pmShown?.let { it to d.pm?.avatar }, d.bdShown?.let { it to d.bd?.avatar }).distinctBy { it.first }
+            val due = PipelineCard.nextDate(d)
+            val noPm = d.pmShown == null && PipelineCard.needsPm(d)
+            if (people.isNotEmpty() || due != null || noPm) Row(verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    noPm -> Text(stringResource(R.string.pl_no_pm), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
+                    people.size == 1 -> { Avatar(people[0].first, people[0].second, 18.dp); Spacer(Modifier.width(4.dp))
+                        Text(people[0].first, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    else -> people.forEach { (n, a) -> Avatar(n, a, 18.dp); Spacer(Modifier.width(2.dp)) }
+                }
+                if (noPm) people.firstOrNull { it.first == d.bdShown }?.let { (n, a) -> Spacer(Modifier.width(6.dp)); Avatar(n, a, 18.dp) }
+                Spacer(Modifier.weight(1f))
+                due?.let { day ->
+                    val tone = PipelineCard.dateTone(day, data.today)
+                    val col = when (tone) { PipelineCard.Tone.PAST -> c.danger; PipelineCard.Tone.TODAY -> c.warning; else -> c.mutedFg }
+                    Text(if (tone == PipelineCard.Tone.TODAY) stringResource(R.string.pl_today) else PipelineCard.shortDay(day), fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                        color = col, modifier = Modifier.background(col.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
                 }
             }
         }
-        Text(d.name.ifBlank { stringResource(R.string.pl_untitled) }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (d.brand.isNotBlank()) Text(d.brand, fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
-        Text(if (d.value > 0) PipelineFormat.idr(d.value) else stringResource(R.string.pl_no_value), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (d.value > 0) c.foreground else c.mutedFg)
-        PhaseTrack(d.phases, Modifier.fillMaxWidth())
-        d.text("blocker").takeIf { it.isNotBlank() }?.let { Text("⚠ $it", fontSize = 11.sp, color = c.danger, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-        val won = d.stageGroup in setOf("Pre-Execution", "Execution", "Closed")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (d.pmShown != null) { Avatar(d.pmShown, d.pm?.avatar, 18.dp); Spacer(Modifier.width(4.dp)); Text(d.pmShown!!, fontSize = 11.sp, color = c.mutedFg, maxLines = 1) }
-            else if (won) Text(stringResource(R.string.pl_no_pm), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
+        DropdownMenu(menu, { menu = false }) {
+            Text(stringResource(R.string.pl_move_to), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+            data.vocab.stages.filter { it != d.stage }.forEach { st ->
+                DropdownMenuItem(text = { Text(stageLabel(st)) }, onClick = { menu = false; vm.update(d.id, JsonObject(mapOf("stage" to JsonPrimitive(st)))) })
+            }
         }
     }
 }
 
-/** The board: the eight stages side by side, each with its count and total. */
+/** A column head on ONE line, fixed while its cards scroll: dot · stage · count · total (when > 0) · "+" (not on Lost). */
+@Composable
+private fun StageHead(st: String, col: List<PipelineDeal>, vm: PipelineViewModel) {
+    val c = Nx.colors
+    val label = stageLabel(st)
+    val a11y = pluralStringResource(R.plurals.pl_stage_n, col.size, label, col.size)
+    Row(Modifier.fillMaxWidth().height(40.dp).semantics(mergeDescendants = true) { heading(); contentDescription = a11y }, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).background(groupTone(st), CircleShape)); Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Spacer(Modifier.width(6.dp))
+        Text("${col.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+        val total = col.sumOf { it.value }
+        if (total > 0) Text(" · " + PipelineFormat.idr(total), fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        if (st != PipelineVocab.LOST) IconButton(onClick = { vm.create(st) }, modifier = Modifier.size(36.dp)) {
+            Icon(Icons.Filled.Add, stringResource(R.string.pl_add_in, label), tint = c.violetText) }
+    }
+}
+
+@Composable
+private fun StageColumn(st: String, col: List<PipelineDeal>, data: PipelineData, vm: PipelineViewModel, modifier: Modifier) {
+    val c = Nx.colors
+    Column(modifier) {
+        StageHead(st, col, vm)
+        // Empty: a quiet line, no dashed box.
+        if (col.isEmpty()) Text(stringResource(R.string.pl_no_deals), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(vertical = 8.dp))
+        else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(col, key = { it.id }) { DealCard(it, data, vm) }
+        }
+    }
+}
+
+/** The board: on a phone one full-width stage per page with dots (tap jumps); wider, the stages side by side. */
 @Composable
 private fun Board(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineViewModel) {
     val c = Nx.colors
-    LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
-        items(data.vocab.stages + deals.map { it.stage }.filter { it !in data.vocab.stages }.distinct(), key = { it }) { st ->
-            val col = deals.filter { it.stage == st }.sortedWith(PipelineDeal.bySeverity)
-            Column(Modifier.width(270.dp).fillMaxHeight().background(c.muted.copy(alpha = 0.35f), RoundedCornerShape(14.dp)).padding(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stageLabel(st), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("${col.size} · ${PipelineFormat.idr(col.sumOf { it.value })}", fontSize = 11.sp, color = c.mutedFg)
+    val stages = data.vocab.stages + deals.map { it.stage }.filter { it !in data.vocab.stages }.distinct()
+    fun col(st: String) = deals.filter { it.stage == st }.sortedWith(PipelineDeal.bySeverity)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 600.dp) LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+            items(stages, key = { it }) { st ->
+                StageColumn(st, col(st), data, vm, Modifier.width(280.dp).fillMaxHeight().background(c.muted.copy(alpha = 0.35f), RoundedCornerShape(14.dp)).padding(horizontal = 8.dp))
+            }
+        } else {
+            val pager = rememberPagerState { stages.size }
+            val scope = rememberCoroutineScope()
+            Column(Modifier.fillMaxSize()) {
+                HorizontalPager(pager, Modifier.weight(1f), key = { stages[it] }) { i ->
+                    StageColumn(stages[i], col(stages[i]), data, vm, Modifier.fillMaxSize().padding(horizontal = 12.dp))
                 }
-                Spacer(Modifier.height(6.dp))
-                LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (col.isEmpty()) item { Text(stringResource(R.string.pl_no_deals), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(8.dp)) }
-                    items(col, key = { it.id }) { DealCard(it, data, vm) }
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center) {
+                    stages.forEachIndexed { i, st ->
+                        val on = pager.currentPage == i
+                        Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClickLabel = stageLabel(st)) { scope.launch { pager.animateScrollToPage(i) } }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(if (on) 9.dp else 7.dp).background(if (on) groupTone(st) else c.border, CircleShape))
+                        }
+                    }
                 }
-                if (st != PipelineVocab.LOST) TextButton(onClick = { vm.create(st) }) { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Text(stringResource(R.string.pl_add_here)) }
             }
         }
     }
@@ -436,7 +547,8 @@ private fun ByStage(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineV
             item(key = "h-$st") {
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stageLabel(st), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, modifier = Modifier.weight(1f))
-                    Text(pluralStringResource(R.plurals.pl_n_deals, col.size, col.size) + " · " + PipelineFormat.idr(col.sumOf { it.value }), fontSize = 11.sp, color = c.mutedFg)
+                    val total = col.sumOf { it.value }
+                    Text(pluralStringResource(R.plurals.pl_n_deals, col.size, col.size) + if (total > 0) " · " + PipelineFormat.idr(total) else "", fontSize = 11.sp, color = c.mutedFg)
                 }
             }
             items(col, key = { it.id }) { d ->
@@ -446,8 +558,9 @@ private fun ByStage(deals: List<PipelineDeal>, data: PipelineData, vm: PipelineV
                         Text(listOf(d.code, d.brand, d.pmShown ?: "").filter { it.isNotBlank() }.joinToString(" · "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(if (d.value > 0) PipelineFormat.idr(d.value) else "–", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
-                        HealthPill(d.healthKey)
+                        // Blank instead of "–" / "Rp0"; "Not started" as plain grey text, pills for the rest.
+                        if (d.value > 0) Text(PipelineFormat.idr(d.value), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+                        if (d.healthKey == "NOT_STARTED") Text(stringResource(R.string.pl_not_started), fontSize = 11.sp, color = c.mutedFg) else HealthPill(d.healthKey)
                         // The receivable: the terms' when the deal has them (§11.2), else the typed one.
                         if (d.receivable > 0) Text(stringResource(R.string.pl_t_outstanding, PipelineFormat.idr(d.receivable)), fontSize = 10.sp,
                             color = if (d.daysOverdue > 0) c.danger else c.mutedFg, maxLines = 1)
