@@ -33,4 +33,6 @@ export const BUS_EVENTS = {
   WORKSPACE_CHANGED: "workspace-changed",
   /** An audit row was written (or a restore landed) → the server-assigned `audit` room. No data. */
   AUDIT_CHANGED: "audit-changed",
+  /** A deal of a Pipeline Dashboard project changed → the `project:<id>` room. Ids only (owner, 9 Oct 2026). */
+  PIPELINE_CHANGED: "pipeline-changed",
 } as const

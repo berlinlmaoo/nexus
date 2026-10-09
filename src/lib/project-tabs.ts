@@ -2,9 +2,9 @@
  * Project types and per-project tabs (owner, 9 Oct 2026).
  *
  * "tiap kali buat project tuh ada dikasih pilihan ada Task Project, Finance Dashboard, Content Planner,
- * Pipeline Dashboard" — every project has a type. Only TASK exists today; the other three are shown as
- * "coming soon" and creating one is refused with 400 TYPE_COMING_SOON, so a client that offers them
- * early cannot make a half-built project.
+ * Pipeline Dashboard" — every project has a type. TASK and (since 9 Oct 2026) PIPELINE exist; the other
+ * two are shown as "coming soon" and creating one is refused with 400 TYPE_COMING_SOON, so a client that
+ * offers them early cannot make a half-built project.
  *
  * "ada bbrp project yg ga butuh spreadsheets/automation/list" — each project chooses which tabs it
  * shows. The project stores the keys it HIDES (Project.hiddenTabs), not the ones it shows: a tab added
@@ -21,8 +21,12 @@
 export const PROJECT_TYPES = ["TASK", "FINANCE", "CONTENT", "PIPELINE"] as const
 export type ProjectType = (typeof PROJECT_TYPES)[number]
 
-/** The types that can be created today. The rest answer TYPE_COMING_SOON. */
-export const CREATABLE_PROJECT_TYPES: readonly ProjectType[] = ["TASK"]
+/**
+ * The types that can be created today. The rest answer TYPE_COMING_SOON. PIPELINE since 9 Oct 2026
+ * (owner: the GM's pipeline board, rebuilt in NEXUS — routes under /api/projects/:id/pipeline, rules in
+ * lib/pipeline.ts). Finance Dashboard and Content Planner wait for Berlin's references.
+ */
+export const CREATABLE_PROJECT_TYPES: readonly ProjectType[] = ["TASK", "PIPELINE"]
 
 /** Every tab a project can hide, in tab-bar order. "table" exists on web only; iOS ignores it. */
 export const PROJECT_TAB_KEYS = [
@@ -57,7 +61,7 @@ export function checkCreatableProjectType(raw: unknown): ProjectTypeCheck {
   return {
     ok: false,
     code: "TYPE_COMING_SOON",
-    error: "Tipe project ini belum tersedia. Untuk sekarang hanya Task Project yang bisa dibuat.",
+    error: "Tipe project ini belum tersedia. Untuk sekarang yang bisa dibuat: Task Project dan Pipeline Dashboard.",
   }
 }
 

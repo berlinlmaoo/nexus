@@ -147,6 +147,17 @@ export function emitAuditChanged() {
 }
 
 /**
+ * `pipeline-changed` { projectId, dealId, actorId } to the `project:<id>` room (owner, 9 Oct 2026): a
+ * deal of a Pipeline Dashboard project was created, edited, moved, deleted or restored. A ping, not the
+ * deal: whoever has the pipeline open refetches it through GET /api/projects/:id/pipeline, which applies
+ * the access rules. Joining that room already needs VIEWER on the project (pages/api/socket.ts), the
+ * same bar as reading the pipeline. Apps that do not know the event ignore it. `dealId` null = several.
+ */
+export function emitPipelineChanged(projectId: string, dealId: string | null, actorId?: string) {
+  publishSafely(BUS_EVENTS.PIPELINE_CHANGED, { projectId, dealId, actorId: actorId ?? null })
+}
+
+/**
  * These two are called right after a write has succeeded (inside logAudit's try, among others). A
  * listener that throws would otherwise surface there as a failed write: logAudit would return null and
  * a restorable delete would lose the link to its audit row. A ping is never worth that.

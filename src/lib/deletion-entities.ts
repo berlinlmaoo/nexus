@@ -83,6 +83,8 @@ export const RESTORABLE: Record<string, Spec> = {
   dayoff_bonus: { table: "DayOffBonus", label: "extra day off" },
   // A group chat with its members and messages (owner, 9 Oct 2026).
   chat_group: { table: "Conversation", label: "group chat" },
+  // A deal of a Pipeline Dashboard project, with its edit history (owner, 9 Oct 2026).
+  pipeline_deal: { table: "PipelineDeal", label: "deal" },
 }
 
 export function rootTableOf(entityType: string): string {
