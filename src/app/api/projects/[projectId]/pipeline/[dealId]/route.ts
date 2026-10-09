@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { emitPipelineChanged } from "@/lib/socket-emitter"
 import { pipelineToday } from "@/lib/pipeline"
+import { EXECUTION_TRIGGER_STAGES, ensureExecutionProject, syncMainDateTask } from "@/lib/pipeline-execution"
 import {
   dealInclude,
   historyValue,
@@ -120,6 +121,20 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       }),
     ])
 
+    // Won → a Task project for the execution, and the main date on the Master Calendar (owner/GM, 9 Oct
+    // 2026; lib/pipeline-execution.ts). Once per deal; after the save, so a failure here never loses the edit.
+    let result = saved
+    const enteredWon = changed.includes("stage") && (EXECUTION_TRIGGER_STAGES as readonly string[]).includes(saved.stage)
+    if (enteredWon || (changed.includes("mainDate") && saved.executionProjectId)) {
+      try {
+        if (enteredWon) await ensureExecutionProject(dealId, userId, { auto: true, request })
+        else await syncMainDateTask(dealId, userId)
+        result = (await findDeal(projectId, dealId)) ?? saved
+      } catch (error) {
+        console.error("Pipeline: execution project for deal", dealId, "failed:", error)
+      }
+    }
+
     if (changed.length) {
       logAudit({
         action: "update",
@@ -132,7 +147,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       })
     }
     emitPipelineChanged(projectId, dealId, userId)
-    return NextResponse.json(serializeDeal(saved, pipelineToday()))
+    return NextResponse.json(serializeDeal(result, pipelineToday()))
   } catch (error) {
     console.error("Error updating pipeline deal:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

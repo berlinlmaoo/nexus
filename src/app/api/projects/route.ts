@@ -9,6 +9,8 @@ import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { checkCreatableProjectType } from "@/lib/project-tabs"
+import { canAccessPipeline, companyPipelineProject, pipelineListFilter } from "@/lib/pipeline-access"
+import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const projectListSelect = {
   id: true,
@@ -87,11 +89,14 @@ export async function GET(request: NextRequest) {
     const workspaceId = request.nextUrl.searchParams.get("workspaceId")
     const includeAllWorkspace = request.nextUrl.searchParams.get("includeAllWorkspace") === "1"
     const teamId = request.nextUrl.searchParams.get("teamId") || undefined
+    // The Pipeline board is left out of every list for people it is not for (owner/GM, 9 Oct 2026:
+    // BoD + Agency + IT/Legal/Finance only; lib/pipeline-access.ts).
+    const pipelineFilter = await pipelineListFilter(session.user.id)
 
     if (workspaceId) {
       if (isSystemAdmin) {
         const projects = await prisma.project.findMany({
-          where: { workspaceId },
+          where: { workspaceId, ...pipelineFilter },
           select: projectListSelect,
           orderBy: { createdAt: "desc" },
         })
@@ -136,6 +141,7 @@ export async function GET(request: NextRequest) {
 
       const where: Record<string, unknown> = {
         workspaceId,
+        ...pipelineFilter,
       }
 
       if (!includeAllWorkspace || !canSeeAllWorkspaceProjects) {
@@ -203,11 +209,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const where: Record<string, unknown> = isSystemAdmin
+    const scoped: Record<string, unknown> = isSystemAdmin
       ? {}
       : whereScopes.length === 1
         ? whereScopes[0]
         : { OR: whereScopes }
+    const where: Record<string, unknown> = { ...scoped, ...pipelineFilter }
 
     const projects = await prisma.project.findMany({
       where,
@@ -269,6 +276,29 @@ export async function POST(request: NextRequest) {
     })
     if (!workspaceMembership) {
       return NextResponse.json({ error: "Forbidden: you are not a member of this workspace" }, { status: 403 })
+    }
+
+    // One Pipeline board for the whole company (owner/GM, 9 Oct 2026: "Desainnya cuma satu papan/pipeline
+    // utama buat semua deal, lintas BD dan brand — bukan pipeline terpisah per project"). It lives in the
+    // company workspace, only the people it is for may make it, and a second one is refused with the
+    // first one's id, which the New project dialog then opens instead.
+    if (typeCheck.type === "PIPELINE") {
+      if (workspaceId !== ORG_WORKSPACE_ID) {
+        return NextResponse.json(
+          { error: "Pipeline Dashboard hanya ada di workspace perusahaan.", code: "PIPELINE_COMPANY_ONLY" },
+          { status: 400 },
+        )
+      }
+      if (!(await canAccessPipeline(userId))) {
+        return NextResponse.json({ error: "Pipeline hanya untuk BoD, Agency, IT, Legal dan Finance.", code: "PIPELINE_FORBIDDEN" }, { status: 403 })
+      }
+      const existing = await companyPipelineProject()
+      if (existing) {
+        return NextResponse.json(
+          { error: `Pipeline perusahaan sudah ada: "${existing.name}".`, code: "PIPELINE_EXISTS", projectId: existing.id, projectName: existing.name },
+          { status: 409 },
+        )
+      }
     }
 
     if (folderId) {

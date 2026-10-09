@@ -56,6 +56,7 @@ export async function checkProjectAccess(
       where: { id: projectId },
       select: {
         workspaceId: true,
+        type: true,
         workspace: {
           select: {
             members: {
@@ -85,6 +86,20 @@ export async function checkProjectAccess(
   // What does the action need? LEAD(4)=manage, MEMBER(3)=contribute/edit, ≤VIEWER(2)=view.
   const need: 'manage' | 'contribute' | 'view' =
     minRequired >= ROLE_HIERARCHY.LEAD ? 'manage' : minRequired >= ROLE_HIERARCHY.MEMBER ? 'contribute' : 'view'
+
+  // The Pipeline Dashboard (owner/GM, 9 Oct 2026): "Board ini dari awal didesain buat BOD + Agency +
+  // Management (IT, Legal, Finance) aja." Its own rule replaces the workspace-role one below — a Manager
+  // outside those units is refused, and someone inside them needs no project membership (the board is
+  // the company's one pipeline, "lintas BD dan brand"). lib/pipeline-access.ts; imported lazily because
+  // it reads lib/org.ts, which imports this file.
+  if (project?.type === 'PIPELINE') {
+    const { canAccessPipeline } = await import('@/lib/pipeline-access')
+    if (!(await canAccessPipeline(userId))) return { allowed: false, role: null }
+    if (workspaceRole === 'ONE_ABOVE_ALL' || workspaceRole === 'BOD' || workspaceRole === 'MANAGER') {
+      return { allowed: true, role: 'LEAD' }
+    }
+    return need === 'manage' ? { allowed: false, role: 'MEMBER' } : { allowed: true, role: 'MEMBER' }
+  }
 
   // One Above All / BoD → manage everything in the workspace.
   if (workspaceRole === 'ONE_ABOVE_ALL' || workspaceRole === 'BOD') {

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { pipelineListFilter } from "@/lib/pipeline-access"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
 
 export async function GET(request: NextRequest) {
@@ -91,6 +92,8 @@ export async function GET(request: NextRequest) {
     if (projectId) {
       projectWhere.id = projectId
     }
+    // The Pipeline board is found only by the people it is for (owner/GM, 9 Oct 2026; lib/pipeline-access.ts).
+    Object.assign(projectWhere, await pipelineListFilter(me))
 
     // Goal filter (Goal carries workspaceId directly)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

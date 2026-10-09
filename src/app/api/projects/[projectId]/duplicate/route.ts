@@ -50,6 +50,14 @@ export async function POST(
       },
     })
     if (!original) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    // A copy of the Pipeline board would be a second pipeline; there is one for the whole company
+    // (owner/GM, 9 Oct 2026). POST /api/projects refuses it the same way.
+    if (original.type === "PIPELINE") {
+      return NextResponse.json(
+        { error: "Pipeline perusahaan cuma satu, tidak bisa disalin.", code: "PIPELINE_EXISTS", projectId: original.id, projectName: original.name },
+        { status: 409 },
+      )
+    }
 
     const newProject = await prisma.project.create({
       data: {

@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { isUniqueViolation } from "@/lib/prisma-errors"
 import { emitPipelineChanged } from "@/lib/socket-emitter"
 import { PIPELINE_VOCAB, pipelineToday, summarize } from "@/lib/pipeline"
+import { EXECUTION_TRIGGER_STAGES, ensureExecutionProject } from "@/lib/pipeline-execution"
 import {
   dealInclude,
   defaultProbability,
@@ -108,8 +109,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       request,
       metadata: { projectId, code: created.code, stage },
     })
+    // Added straight into a Won column: won from the start, so it gets its execution project too.
+    let result = created
+    if ((EXECUTION_TRIGGER_STAGES as readonly string[]).includes(stage)) {
+      try {
+        await ensureExecutionProject(created.id, userId, { auto: true, request })
+        result = (await prisma.pipelineDeal.findUnique({ where: { id: created.id }, include: dealInclude })) ?? created
+      } catch (error) {
+        console.error("Pipeline: execution project for new deal", created.id, "failed:", error)
+      }
+    }
     emitPipelineChanged(projectId, created.id, userId)
-    return NextResponse.json(serializeDeal(created, pipelineToday()), { status: 201 })
+    return NextResponse.json(serializeDeal(result, pipelineToday()), { status: 201 })
   } catch (error) {
     console.error("Error creating pipeline deal:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
