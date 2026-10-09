@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Filter, HeartPulse, KanbanSquare, Plus, Search, Table2, X } from "lucide-react";
+import { ChevronRight, Download, Filter, HeartPulse, KanbanSquare, Loader2, Plus, Search, Table2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { nexusApi } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
-import { summarize, type HealthKey } from "@/lib/pipeline";
+import { PIPELINE_STAGES, stageGroupOf, summarize, type HealthKey } from "@/lib/pipeline";
 import { pipelineApi, pipelineKey, type PipelineDeal, type PipelineDealPatch, type PipelineResponse } from "@/lib/pipeline-api";
 import { PipelineKpis } from "./PipelineKpis";
 import { PipelineBoard } from "./PipelineBoard";
@@ -15,7 +15,7 @@ import { PipelineTable } from "./PipelineTable";
 import { PipelineHealth } from "./PipelineHealth";
 import { DealDrawer } from "./DealDrawer";
 import type { PersonOption } from "./fields";
-import { HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, applyLocal, personName } from "./pipeline-ui";
+import { GROUP_TONE, HEALTH_DOT, HEALTH_LABEL, HEALTH_ORDER, applyLocal, personName, useVocabLabels } from "./pipeline-ui";
 
 type View = "board" | "table" | "health";
 const VIEW_KEY = "nexus-pipeline-view";
@@ -203,7 +203,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   if (q.isLoading) {
     return (
       <div className="space-y-4 p-4 md:p-8" aria-busy="true" aria-label={t("Loading the pipeline")}>
-        <div className="h-20 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-[5.5rem] animate-pulse rounded-2xl bg-muted" />
         <div className="h-10 w-2/3 animate-pulse rounded-xl bg-muted" />
         <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3].map((i) => <div key={i} className="h-72 w-[17.5rem] shrink-0 animate-pulse rounded-2xl bg-muted" />)}</div>
       </div>
@@ -224,33 +224,46 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
     );
   }
 
-  const newDealButton = (
-    <button
-      type="button"
-      onClick={() => create.mutate("Incoming")}
-      disabled={create.isPending}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
-    >
-      <Plus className="h-4 w-4" /> {create.isPending ? t("Adding…") : t("New deal")}
-    </button>
+  const viewSwitch = (
+    <div role="radiogroup" aria-label={t("View")} className="grid grid-cols-3 gap-0.5 rounded-xl border border-border bg-card p-0.5 lg:inline-grid">
+      {([
+        ["board", t("Board"), KanbanSquare],
+        ["table", t("Table"), Table2],
+        ["health", t("Health"), HeartPulse],
+      ] as const).map(([v, label, Icon]) => (
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={view === v}
+          onClick={() => setView(v)}
+          className={cn(
+            "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]",
+            view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <Icon aria-hidden className="h-3.5 w-3.5" /> {label}
+        </button>
+      ))}
+    </div>
   );
+  const control = "h-9 rounded-xl border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
 
   return (
-    <div className="space-y-4 p-4 md:p-8">
+    <div className="flex flex-col gap-4 p-4 md:p-8">
       {deals.length === 0 ? (
-        <EmptyState
-          icon={Filter}
-          title={t("No deals in this pipeline yet")}
-          message={t("Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card.")}
-          action={<EmptyAction onClick={() => create.mutate("Incoming")}><Plus className="h-4 w-4" />{t("Add the first deal")}</EmptyAction>}
-        />
+        <FirstDeal adding={create.isPending} onAdd={() => create.mutate("Incoming")} />
       ) : (
         <>
           <PipelineKpis s={data.summary} />
 
+          {/* A computer: find · filter · export · add, then health chips with the view switch. A phone or a
+              narrow window (owner, 9 Oct 2026: "di hape jg sempit bgt"): search with the add button, the two
+              filters with Excel, the view switch on its own row, then the health chips as a row that scrolls
+              sideways. */}
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="relative min-w-0 flex-1 basis-56">
+              <label className="relative order-1 min-w-0 basis-[calc(100%-3.25rem)] lg:max-w-md lg:flex-1 lg:basis-48">
                 <span className="sr-only">{t("Search deals")}</span>
                 <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -258,32 +271,43 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t("Search deal, brand, code, BD or PM…")}
-                  className="w-full rounded-xl border border-border bg-card py-2 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/80 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:min-h-[44px]"
+                  className={cn(control, "w-full pl-9 pr-3 placeholder:text-muted-foreground/80")}
                 />
               </label>
-              <select aria-label={t("Filter by PM")} value={pm} onChange={(e) => setPm(e.target.value)} className="max-w-44 rounded-xl border border-border bg-card px-3 py-2 text-sm pointer-coarse:min-h-[44px]">
+              <select aria-label={t("Filter by PM")} value={pm} onChange={(e) => setPm(e.target.value)} className={cn(control, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-primary/60 text-foreground")}>
                 <option value={ALL}>{t("All PMs")}</option>
                 {pmNames.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
-              <select aria-label={t("Filter by BD")} value={bd} onChange={(e) => setBd(e.target.value)} className="max-w-44 rounded-xl border border-border bg-card px-3 py-2 text-sm pointer-coarse:min-h-[44px]">
+              <select aria-label={t("Filter by BD")} value={bd} onChange={(e) => setBd(e.target.value)} className={cn(control, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-primary/60 text-foreground")}>
                 <option value={ALL}>{t("All BDs")}</option>
                 {bdNames.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={exportXlsx}
-                  disabled={exporting}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
-                >
-                  <Download className="h-4 w-4" /> <span className="hidden sm:inline">{exporting ? t("Preparing…") : t("Download Excel")}</span><span className="sm:hidden">Excel</span>
-                </button>
-                {newDealButton}
-              </div>
+              <button
+                type="button"
+                onClick={exportXlsx}
+                disabled={exporting}
+                aria-label={t("Download Excel")}
+                title={t("Download Excel")}
+                className={cn(control, "order-5 inline-flex w-11 shrink-0 items-center justify-center gap-1.5 font-medium hover:bg-muted disabled:opacity-60 pointer-coarse:w-11 xl:w-auto xl:px-3")}
+              >
+                {exporting ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Download aria-hidden className="h-4 w-4" />}
+                <span className="hidden xl:inline">{exporting ? t("Preparing…") : "Excel"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => create.mutate("Incoming")}
+                disabled={create.isPending}
+                aria-label={t("New deal")}
+                className="order-2 inline-flex h-9 w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11 lg:order-6 lg:w-auto lg:px-3.5"
+              >
+                {create.isPending ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Plus aria-hidden className="h-4 w-4" />}
+                <span className="hidden lg:inline">{create.isPending ? t("Adding…") : t("New deal")}</span>
+              </button>
+              <div className="order-7 basis-full lg:hidden">{viewSwitch}</div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div role="group" aria-label={t("Health")} className="flex flex-wrap gap-1.5">
+            <div className="flex items-center gap-3">
+              <div role="group" aria-label={t("Health")} className="-mx-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 xl:flex-wrap xl:overflow-visible">
                 {(["", ...HEALTH_ORDER] as const).map((k) => {
                   const on = health === k;
                   const n = k ? deals.filter((d) => d.health.key === k).length : deals.length;
@@ -294,8 +318,9 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                       aria-pressed={on}
                       onClick={() => setHealth(k)}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[36px]",
+                        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[36px]",
                         on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                        !on && k && n === 0 && "opacity-60",
                       )}
                     >
                       {k && <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", HEALTH_DOT[k])} />}
@@ -305,32 +330,20 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                   );
                 })}
               </div>
-              <div role="radiogroup" aria-label={t("View")} className="inline-flex gap-0.5 rounded-xl border border-border bg-card p-0.5">
-                {([
-                  ["board", t("Board"), KanbanSquare],
-                  ["table", t("Table"), Table2],
-                  ["health", t("Health"), HeartPulse],
-                ] as const).map(([v, label, Icon]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    role="radio"
-                    aria-checked={view === v}
-                    onClick={() => setView(v)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]",
-                      view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" /> {label}
+              {filtering && (
+                <p className="hidden shrink-0 items-center gap-2 text-xs text-muted-foreground lg:flex" aria-live="polite">
+                  {t("{shown} of {total} deals", { shown: shown.length, total: deals.length })}
+                  <button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 rounded font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                    <X className="h-3 w-3" /> {t("Clear filters")}
                   </button>
-                ))}
-              </div>
+                </p>
+              )}
+              <div className="hidden shrink-0 lg:block">{viewSwitch}</div>
             </div>
             {filtering && (
-              <p className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+              <p className="-mt-1 flex items-center gap-2 text-xs text-muted-foreground lg:hidden" aria-live="polite">
                 {t("{shown} of {total} deals", { shown: shown.length, total: deals.length })}
-                <button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 rounded font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                <button type="button" onClick={resetFilters} className="inline-flex min-h-[36px] items-center gap-1 rounded font-semibold text-foreground">
                   <X className="h-3 w-3" /> {t("Clear filters")}
                 </button>
               </p>
@@ -347,7 +360,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               action={<EmptyAction onClick={resetFilters}>{t("Clear filters")}</EmptyAction>}
             />
           ) : view === "board" ? (
-            <PipelineBoard deals={shown} canEdit={canEdit} onOpen={setOpenId} onMove={(id, stage) => patchDeal(id, { stage })} onAdd={(stage) => create.mutate(stage)} />
+            <PipelineBoard deals={shown} today={today} canEdit={canEdit} onOpen={setOpenId} onMove={(id, stage) => patchDeal(id, { stage })} onAdd={(stage) => create.mutate(stage)} />
           ) : view === "table" ? (
             <PipelineTable deals={shown} canEdit={canEdit} onOpen={setOpenId} onPatch={patchDeal} />
           ) : (
@@ -366,5 +379,43 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
         onClose={() => setOpenId(null)}
       />
     </div>
+  );
+}
+
+/**
+ * An empty board (owner, 9 Oct 2026: start fresh, no demo deals): what the board is for, the road a deal
+ * takes across it, and one button. No KPI strip and no eight empty columns until there is a first deal.
+ */
+function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
+  const { t } = useLang();
+  const labels = useVocabLabels();
+  const road = PIPELINE_STAGES.filter((s) => s !== "Lost / Cancelled");
+  return (
+    <section className="rounded-2xl border border-border bg-card px-5 py-10 text-center shadow-soft md:px-10 md:py-14">
+      <h2 className="text-lg font-bold text-balance">{t("No deals in this pipeline yet")}</h2>
+      <p className="mx-auto mt-2 max-w-lg text-sm text-pretty text-muted-foreground">
+        {t("Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card.")}
+      </p>
+      <ol aria-label={t("How a deal moves")} className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-x-1 gap-y-2">
+        {road.map((s, i) => (
+          <li key={s} className="flex items-center gap-1">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", GROUP_TONE[stageGroupOf(s)])} />
+              {labels.stage(s)}
+            </span>
+            {i < road.length - 1 && <ChevronRight aria-hidden className="h-3.5 w-3.5 text-muted-foreground/60" />}
+          </li>
+        ))}
+      </ol>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={adding}
+        className="mt-7 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
+      >
+        {adding ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Plus aria-hidden className="h-4 w-4" />}
+        {adding ? t("Adding…") : t("Add your first deal")}
+      </button>
+    </section>
   );
 }

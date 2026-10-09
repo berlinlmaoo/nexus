@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, CircleCheck, ExternalLink, FolderKanban, History, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, CircleCheck, ExternalLink, FolderKanban, History, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -240,6 +240,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
   const reason = useReasonText();
   const off = !canEdit;
   const L = (en: string) => t(en);
+  const early = deal.stageGroup === "Pipeline" || deal.stageGroup === "Lost";
   return (
     <div className="space-y-5">
       {deal.health.reasons.length > 0 && (
@@ -248,6 +249,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
         </ul>
       )}
 
+      {/* The six-step progress means something once a deal is won; before that every step is "not started". */}
+      {!early && (
       <ol aria-label={t("Phase progress")} className="grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-6">
         {deal.phases.map((p) => (
           <li key={p.key} className="min-w-0">
@@ -257,6 +260,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
           </li>
         ))}
       </ol>
+      )}
 
       <Section title={t("Commercial & pipeline")} owner={t("BD / account")}>
         <Field label={L("Brand / client")}><TextField label={L("Brand / client")} value={deal.brand} maxLength={200} disabled={off} onCommit={(v) => onPatch({ brand: v })} /></Field>
@@ -274,55 +278,124 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
         <Field label={L("Event / main date")}><DateField label={L("Event / main date")} value={deal.mainDate} disabled={off} onCommit={(v) => onPatch({ mainDate: v })} /></Field>
       </Section>
 
-      <Section title={t("Contract")} owner="Legal">
-        <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
-      </Section>
+      {/* Contract → closing only start once a deal is won. On an open (or lost) deal they fold away under
+          one line instead of five sections of "Not Started" (owner, 9 Oct 2026); one click opens them. */}
+      {early ? (
+        <details className="group/later rounded-xl border border-border">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{t("Contract, delivery & payment")}</span>
+              <span className="block text-xs text-muted-foreground">{t("Legal, PM and Finance fill these in once the deal is won.")}</span>
+            </span>
+            <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/later:rotate-180" />
+          </summary>
+          <div className="space-y-5 border-t border-border px-3 py-4">
+          <Section title={t("Contract")} owner="Legal">
+            <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
+          </Section>
 
-      <Section title={t("Vendor registration")} owner={t("PM / admin")}>
-        <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
-      </Section>
+          <Section title={t("Vendor registration")} owner={t("PM / admin")}>
+            <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
+          </Section>
 
-      <Section title={t("Readiness & deliverable")} owner="PM">
-        <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
-        <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
-        <Field label={L("Deliverable risk")}><SelectField label={L("Deliverable risk")} value={deal.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={off} onCommit={(v) => onPatch({ deliverableRisk: v })} /></Field>
-      </Section>
+          <Section title={t("Readiness & deliverable")} owner="PM">
+            <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
+            <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
+            <Field label={L("Deliverable risk")}><SelectField label={L("Deliverable risk")} value={deal.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={off} onCommit={(v) => onPatch({ deliverableRisk: v })} /></Field>
+          </Section>
 
-      <Section title={t("Billing & payment")} owner="Finance">
-        <Field label={L("Invoice value")}><MoneyField label={L("Invoice value")} value={deal.invoiceValue} disabled={off} onCommit={(v) => onPatch({ invoiceValue: v })} /></Field>
-        {/* Paid per term (owner, 9 Oct 2026): status, receivable, due date and days overdue come from the
-            terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
-        {deal.termSummary ? (
-          <>
-            <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{deal.termSummary.paymentStatus}</p></Field>
-            <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
-            <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
+          <Section title={t("Billing & payment")} owner="Finance">
+            <Field label={L("Invoice value")}><MoneyField label={L("Invoice value")} value={deal.invoiceValue} disabled={off} onCommit={(v) => onPatch({ invoiceValue: v })} /></Field>
+            {/* Paid per term (owner, 9 Oct 2026): status, receivable, due date and days overdue come from the
+                terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
+            {deal.termSummary ? (
+              <>
+                <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{deal.termSummary.paymentStatus}</p></Field>
+                <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
+                <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
+                <Field label={L("Days overdue")}>
+                  <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, oldest unpaid term", { n: deal.daysOverdue }) : t("Not overdue")}</p>
+                </Field>
+                <p className="text-xs text-muted-foreground sm:col-span-2">{t("From the payment terms below.")}</p>
+              </>
+            ) : (
+              <>
+            <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
+            <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
+            <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
+            {deal.paymentDueDate ? (
+              <Field label={L("Days overdue")}>
+                <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, counted from the due date", { n: deal.daysOverdue }) : t("Not overdue")}</p>
+              </Field>
+            ) : (
+              <Field label={L("Days overdue (typed)")}><NumberField label={L("Days overdue (typed)")} value={deal.maxDaysOverdue} disabled={off} onCommit={(v) => onPatch({ maxDaysOverdue: v })} /></Field>
+            )}
+              </>
+            )}
+            <Field label={L("Net cash position")}><MoneyField label={L("Net cash position")} allowNegative value={deal.netCash} disabled={off} onCommit={(v) => onPatch({ netCash: v })} /></Field>
+            <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
+          </Section>
+
+          <Section title={t("Closing")} owner="PM">
+            <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
+          </Section>
+
+          </div>
+        </details>
+      ) : (
+        <>
+        <Section title={t("Contract")} owner="Legal">
+          <Field label={L("Contract status")} wide><SelectField label={L("Contract status")} value={deal.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ contractStatus: v })} /></Field>
+        </Section>
+
+        <Section title={t("Vendor registration")} owner={t("PM / admin")}>
+          <Field label={L("Vendor registration")} wide><SelectField label={L("Vendor registration")} value={deal.vregStatus} options={VREG_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ vregStatus: v })} /></Field>
+        </Section>
+
+        <Section title={t("Readiness & deliverable")} owner="PM">
+          <Field label={L("Execution readiness")} wide><SelectField label={L("Execution readiness")} value={deal.readiness} options={READINESS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ readiness: v })} /></Field>
+          <Field label={L("Deliverable status")}><SelectField label={L("Deliverable status")} value={deal.deliverableStatus} options={DELIVERABLE_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ deliverableStatus: v })} /></Field>
+          <Field label={L("Deliverable risk")}><SelectField label={L("Deliverable risk")} value={deal.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={off} onCommit={(v) => onPatch({ deliverableRisk: v })} /></Field>
+        </Section>
+
+        <Section title={t("Billing & payment")} owner="Finance">
+          <Field label={L("Invoice value")}><MoneyField label={L("Invoice value")} value={deal.invoiceValue} disabled={off} onCommit={(v) => onPatch({ invoiceValue: v })} /></Field>
+          {/* Paid per term (owner, 9 Oct 2026): status, receivable, due date and days overdue come from the
+              terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
+          {deal.termSummary ? (
+            <>
+              <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{deal.termSummary.paymentStatus}</p></Field>
+              <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
+              <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
+              <Field label={L("Days overdue")}>
+                <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, oldest unpaid term", { n: deal.daysOverdue }) : t("Not overdue")}</p>
+              </Field>
+              <p className="text-xs text-muted-foreground sm:col-span-2">{t("From the payment terms below.")}</p>
+            </>
+          ) : (
+            <>
+          <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
+          <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
+          <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
+          {deal.paymentDueDate ? (
             <Field label={L("Days overdue")}>
-              <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, oldest unpaid term", { n: deal.daysOverdue }) : t("Not overdue")}</p>
+              <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, counted from the due date", { n: deal.daysOverdue }) : t("Not overdue")}</p>
             </Field>
-            <p className="text-xs text-muted-foreground sm:col-span-2">{t("From the payment terms below.")}</p>
-          </>
-        ) : (
-          <>
-        <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
-        <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
-        <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
-        {deal.paymentDueDate ? (
-          <Field label={L("Days overdue")}>
-            <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, counted from the due date", { n: deal.daysOverdue }) : t("Not overdue")}</p>
-          </Field>
-        ) : (
-          <Field label={L("Days overdue (typed)")}><NumberField label={L("Days overdue (typed)")} value={deal.maxDaysOverdue} disabled={off} onCommit={(v) => onPatch({ maxDaysOverdue: v })} /></Field>
-        )}
-          </>
-        )}
-        <Field label={L("Net cash position")}><MoneyField label={L("Net cash position")} allowNegative value={deal.netCash} disabled={off} onCommit={(v) => onPatch({ netCash: v })} /></Field>
-        <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
-      </Section>
+          ) : (
+            <Field label={L("Days overdue (typed)")}><NumberField label={L("Days overdue (typed)")} value={deal.maxDaysOverdue} disabled={off} onCommit={(v) => onPatch({ maxDaysOverdue: v })} /></Field>
+          )}
+            </>
+          )}
+          <Field label={L("Net cash position")}><MoneyField label={L("Net cash position")} allowNegative value={deal.netCash} disabled={off} onCommit={(v) => onPatch({ netCash: v })} /></Field>
+          <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
+        </Section>
 
-      <Section title={t("Closing")} owner="PM">
-        <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
-      </Section>
+        <Section title={t("Closing")} owner="PM">
+          <Field label={L("Closing status")} wide><SelectField label={L("Closing status")} value={deal.closingStatus} options={CLOSING_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ closingStatus: v })} /></Field>
+        </Section>
+
+        </>
+      )}
 
       <Section title={t("Follow-up & notes")} owner={t("Every division")}>
         <Field label={L("Next action")}><TextField label={L("Next action")} value={deal.nextAction} disabled={off} onCommit={(v) => onPatch({ nextAction: v })} /></Field>

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 
@@ -64,7 +65,9 @@ export function MoneyField({
   value: number; onCommit: (v: number) => void; label: string; allowNegative?: boolean; disabled?: boolean; className?: string; cell?: boolean;
 }) {
   const { locale } = useLang();
-  const show = (n: number) => (n ? new Intl.NumberFormat(locale).format(n) : "0");
+  // Nothing typed yet reads as empty, not as a bold "0" on every row (owner, 9 Oct 2026); "0" stays the
+  // placeholder, and a saved zero is still a zero.
+  const show = (n: number) => (n ? new Intl.NumberFormat(locale).format(n) : "");
   const [draft, setDraft] = useState(show(value));
   const focused = useRef(false);
   useEffect(() => {
@@ -81,12 +84,16 @@ export function MoneyField({
   };
   return (
     <div className={cn("relative", className)}>
-      <span aria-hidden className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground", cell ? "left-1.5" : "left-2.5")}>Rp</span>
+      {/* In a table cell the "Rp" shows only next to an amount, so an empty column stays quiet. */}
+      {(!cell || draft !== "") && (
+        <span aria-hidden className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-xs text-muted-foreground", cell ? "left-1.5" : "left-2.5")}>Rp</span>
+      )}
       <input
         type="text"
         inputMode={allowNegative ? "text" : "numeric"}
         aria-label={label}
         value={draft}
+        placeholder={cell ? undefined : "0"}
         disabled={disabled}
         onFocus={(e) => { focused.current = true; setDraft(value ? String(value) : ""); requestAnimationFrame(() => e.target.select()); }}
         onChange={(e) => setDraft(e.target.value)}
@@ -138,7 +145,7 @@ export function SelectField<T extends string | number>({
 }) {
   // A value the list does not know (a newer option, an import) still shows, as itself.
   const all = options.includes(value) ? options : [value, ...options];
-  return (
+  const select = (
     <select
       aria-label={label}
       value={String(value)}
@@ -148,12 +155,22 @@ export function SelectField<T extends string | number>({
         const picked = all.find((o) => String(o) === raw);
         if (picked !== undefined && picked !== value) onCommit(picked);
       }}
-      className={cn(cell ? CELL : FIELD, "cursor-pointer", cell ? "pr-6" : "pr-7", className)}
+      className={cn(cell ? CELL : FIELD, "cursor-pointer", cell ? "appearance-none pr-6" : "pr-7", className)}
     >
       {all.map((o) => (
         <option key={String(o)} value={String(o)}>{labelOf ? labelOf(o) : String(o)}</option>
       ))}
     </select>
+  );
+  if (!cell) return select;
+  // A table cell reads as text; its arrow shows on hover or focus, not on all 40 rows at once.
+  return (
+    <div className="group/cell relative">
+      {select}
+      {!disabled && (
+        <ChevronDown aria-hidden className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/cell:opacity-100 group-focus-within/cell:opacity-100" />
+      )}
+    </div>
   );
 }
 

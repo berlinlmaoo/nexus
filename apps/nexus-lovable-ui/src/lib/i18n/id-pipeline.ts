@@ -74,6 +74,7 @@ export const ID_PIPELINE: Record<string, string> = {
   "{n} blocked": "{n} terhambat",
   "Deliverables on track": "Deliverable aman",
   "{n} completed": "{n} selesai",
+  "Nothing overdue": "Tidak ada yang overdue",
 
   // Toolbar and filters
   "New deal": "Deal baru",
@@ -104,7 +105,8 @@ export const ID_PIPELINE: Record<string, string> = {
   "Check your connection, then try again.": "Cek koneksimu, lalu coba lagi.",
   "No deals in this pipeline yet": "Belum ada deal di pipeline ini",
   "Every client job goes here, from the first brief to paid and closed. Add the first one, then BD, Legal, PM and Finance fill in their parts on the same card.": "Semua pekerjaan klien ada di sini, dari brief pertama sampai lunas dan closed. Tambahkan yang pertama, lalu BD, Legal, PM, dan Finance mengisi bagiannya masing-masing di kartu yang sama.",
-  "Add the first deal": "Tambah deal pertama",
+  "Add your first deal": "Tambah deal pertama",
+  "How a deal moves": "Perjalanan sebuah deal",
   "That change wasn't saved. Try again.": "Perubahan itu tidak tersimpan. Coba lagi.",
   "The deal wasn't created. Try again.": "Deal gagal dibuat. Coba lagi.",
   "The deal wasn't deleted. Try again.": "Deal gagal dihapus. Coba lagi.",
@@ -114,7 +116,11 @@ export const ID_PIPELINE: Record<string, string> = {
   // Board
   "Drop a deal here": "Taruh deal di sini",
   "No deals": "Belum ada deal",
-  "Add in this stage": "Tambah di fase ini",
+  "Add a deal in {stage}": "Tambah deal di {stage}",
+  "{stage}, {n} deals": "{stage}, {n} deal",
+  "Pipeline board. Scrolls sideways: arrow keys, or drag the empty space.": "Papan pipeline. Geser ke samping: tombol panah, atau seret bagian yang kosong.",
+  "Earlier stages": "Fase sebelumnya",
+  "Later stages": "Fase berikutnya",
   "Untitled deal": "Deal tanpa nama",
   "No value yet": "Belum ada nilai",
   "No PM yet": "PM belum ditugaskan",
@@ -173,6 +179,8 @@ export const ID_PIPELINE: Record<string, string> = {
   "not started": "belum mulai",
   "needs attention": "perlu perhatian",
   "Phase progress": "Progres fase",
+  "Contract, delivery & payment": "Kontrak, delivery & pembayaran",
+  "Legal, PM and Finance fill these in once the deal is won.": "Diisi Legal, PM, dan Finance setelah deal won.",
 
   // Deal drawer
   "Deal name": "Nama deal",

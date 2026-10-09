@@ -117,7 +117,7 @@ export function PipelineTable({
                 >
                   {d.name || t("Untitled deal")}
                 </button>
-                <span className="block max-w-40 truncate sm:max-w-72 text-xs text-muted-foreground">{d.brand || "–"}</span>
+                {d.brand && <span className="block max-w-40 truncate sm:max-w-72 text-xs text-muted-foreground">{d.brand}</span>}
               </td>
               <td className="px-1"><SelectField cell className="min-w-[11.5rem]" label={t("Stage")} value={d.stage} options={PIPELINE_STAGES} labelOf={labels.stage} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { stage: v })} /></td>
               <td className="px-1"><SelectField cell className="min-w-[5.5rem]" label={t("Probability")} value={d.probability} options={PROBABILITY_OPTIONS as readonly number[]} labelOf={fmtPct} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { probability: v })} /></td>
@@ -137,14 +137,18 @@ export function PipelineTable({
                 </>
               )}
               <td className={cn("px-2 text-right tabular-nums", d.daysOverdue > 7 ? "font-semibold text-red-700 dark:text-red-300" : d.daysOverdue > 0 ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground")}>
-                {d.daysOverdue > 0 ? t("{n}d", { n: d.daysOverdue }) : "–"}
+                {d.daysOverdue > 0 ? t("{n}d", { n: d.daysOverdue }) : ""}
               </td>
               <td className="px-1">
                 <NextActionCell value={d.nextAction} disabled={!canEdit} label={t("Next action")} onCommit={(v) => onPatch(d.id, { nextAction: v })} />
               </td>
               <td className="px-1"><DateField cell className="min-w-[8.5rem]" label={t("Next action date")} value={d.nextActionDate} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { nextActionDate: v })} /></td>
-              <td className="max-w-40 truncate px-2 text-muted-foreground">{personName(d.pm, d.pmName) ?? "–"}</td>
-              <td className="pr-4">{d.health.key !== "NONE" ? <HealthPill health={d.health.key} /> : <span className="text-xs text-muted-foreground">–</span>}</td>
+              <td className="max-w-40 truncate px-2 text-muted-foreground">{personName(d.pm, d.pmName) ?? ""}</td>
+              {/* A pill only where there is something to say; "Not started" is plain text on the open deals. */}
+              <td className="pr-4">
+                {d.health.key === "NOT_STARTED" ? <span className="whitespace-nowrap text-xs text-muted-foreground">{t("Not started")}</span>
+                  : d.health.key !== "NONE" ? <HealthPill health={d.health.key} /> : null}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -173,7 +177,6 @@ function NextActionCell({ value, onCommit, label, disabled }: { value: string; o
       value={draft ?? value}
       disabled={disabled}
       maxLength={500}
-      placeholder="–"
       onFocus={() => setDraft(value)}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => { const v = (draft ?? value).trim(); setDraft(null); if (v !== value) onCommit(v); }}
