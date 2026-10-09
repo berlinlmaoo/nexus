@@ -19,6 +19,7 @@ import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
 import { PnlDashboardView } from "@/components/pnl/PnlDashboardView";
+import { PipelineView } from "@/components/pipeline/PipelineView";
 import { financeTabEnabled, hiddenTabsOf } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -68,7 +69,7 @@ import {
 
 export const Route = createFileRoute("/_app/projects/$projectId")({ component: ProjectDetail });
 
-type ViewId = "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
+type ViewId = "pipeline" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
 type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
 const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
@@ -78,6 +79,8 @@ const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"] 
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const;
 
 const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
+  // A Pipeline Dashboard project's main view (owner, 9 Oct 2026); task projects never show it.
+  { id: "pipeline", label: "Pipeline", icon: Filter },
   { id: "overview", label: "Overview", icon: Activity },
   // P&L sits early so it's visible without scrolling the tab strip on mobile (BoD-only anyway).
   { id: "pnl", label: "P&L", icon: Wallet },
@@ -123,7 +126,13 @@ function ProjectDetail() {
   // (Project settings → Tabs), Finance is opt-in like P&L (it used to follow the project's NAME), and
   // P&L stays BoD-only. Hiding only hides — nothing in the tab is touched.
   const hiddenTabs = hiddenTabsOf(data);
+  // A Pipeline Dashboard project (owner, 9 Oct 2026) is its pipeline, plus its chat and the money tabs
+  // BoD switched on. Its task tabs are not offered: the three default sections exist only so that apps
+  // which do not know the type yet open it as an empty task project instead of failing.
+  const isPipeline = data?.type === "PIPELINE";
   const visibleTabs = TABS.filter((tab) => {
+    if (tab.id === "pipeline") return isPipeline;
+    if (isPipeline && tab.id !== "chat" && tab.id !== "finance" && tab.id !== "pnl") return false;
     if (tab.id === "finance") return financeTabEnabled(data);
     if (tab.id === "pnl") return !!data?.enablePnlDashboard && isBod;
     return !hiddenTabs.has(tab.id);
@@ -192,7 +201,7 @@ function ProjectDetail() {
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
               <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />Tune</Button>
             </motion.div>
-            <Button size="sm" variant="primary" onClick={() => setComposerListId(taskLists[0]?.id ?? null)}><Plus className="h-3.5 w-3.5" />Add task</Button>
+            {!isPipeline && <Button size="sm" variant="primary" onClick={() => setComposerListId(taskLists[0]?.id ?? null)}><Plus className="h-3.5 w-3.5" />Add task</Button>}
           </>
         }
         tabs={
@@ -207,6 +216,7 @@ function ProjectDetail() {
         }
       />
 
+      {!isPipeline && (
       <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-muted/30">
         <Chip size="sm" variant="soft" color={project.isError ? "danger" : "success"}>{project.isError ? "Locked" : "Live board"}</Chip>
         <div className="text-xs text-muted-foreground">Mission energy</div>
@@ -215,14 +225,21 @@ function ProjectDetail() {
         <div className="text-xs text-muted-foreground hidden sm:block">· {filteredTasks.length}/{totalTasks} cards visible · {taskLists.length} lanes</div>
         <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">{activeFilterCount > 0 && <Chip size="sm" color="accent" variant="soft">{activeFilterCount} filters</Chip>}</div>
       </div>
+      )}
 
-      {!project.isLoading && !project.isError && data && (
+      {!project.isLoading && !project.isError && data && !isPipeline && (
         <BoardFilterBar filters={filters} onChange={setFilters} total={totalTasks} visible={filteredTasks.length} tasks={allTasks} sections={taskLists} projectId={data.id} />
       )}
 
       {project.isLoading && <div className="p-8"><Card><CardBody className="text-sm text-muted-foreground">Loading mission lanes...</CardBody></Card></div>}
       {project.isError && <div className="p-8"><Empty title="Board locked" message="You need a login/session or project access to open this live board." /></div>}
-      {!project.isLoading && !project.isError && data && (
+      {!project.isLoading && !project.isError && data && isPipeline && (
+        view === "chat" ? <ProjectChat projectId={data.id} />
+          : view === "finance" && financeTabEnabled(data) ? <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>
+          : view === "pnl" && !!data.enablePnlDashboard && isBod ? <PnlDashboardView projectId={data.id} />
+          : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />
+      )}
+      {!project.isLoading && !project.isError && data && !isPipeline && (
         // Provider gates multi-select duplicate behind the project's "Task duplicate mode" flag.
         <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}

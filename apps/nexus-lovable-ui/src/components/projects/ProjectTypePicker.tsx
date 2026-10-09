@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 import { PROJECT_TYPES, type ProjectTypeId } from "@/components/projects/project-tabs";
 
 /**
- * The first step of "New project" (owner, 9 Oct 2026): what the project is for. Task Project is the
- * only one that exists; Finance Dashboard, Content Planner and Pipeline Dashboard are announced as
- * coming soon and cannot be picked (the server refuses them too, 400 TYPE_COMING_SOON). Their UI comes
- * later — the point now is that a task project is no longer what people use to count money.
+ * The first step of "New project" (owner, 9 Oct 2026): what the project is for. Task Project and
+ * Pipeline Dashboard exist (the pipeline since the same day: the GM's deal board, components/pipeline);
+ * Finance Dashboard and Content Planner are announced as coming soon and cannot be picked (the server
+ * refuses them too, 400 TYPE_COMING_SOON).
  */
 const META: Record<ProjectTypeId, { icon: typeof ListChecks; title: string; body: string }> = {
   TASK: { icon: ListChecks, title: "Task Project", body: "Board, list, calendar and timeline for work with owners and due dates." },

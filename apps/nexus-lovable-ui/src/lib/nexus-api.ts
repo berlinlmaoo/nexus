@@ -2111,7 +2111,7 @@ export function loginWithCredentials(email: string, password: string, callbackUr
 
 export type CreateProjectPayload = {
   name: string;
-  /** Only "TASK" is accepted today; the others answer 400 TYPE_COMING_SOON. Omitted = TASK. */
+  /** "TASK" or "PIPELINE" (9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON. Omitted = TASK. */
   type?: string;
   description?: string | null;
   color?: string;
