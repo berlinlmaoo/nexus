@@ -2,16 +2,22 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AtSign, ArrowUp, Loader2 } from "lucide-react";
+import { AtSign, ArrowUp, Loader2, X } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
-import { nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
+import { ApiError, nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
+import { t } from "@/lib/lang";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { Composer, type ComposerPayload } from "@/components/feed/Composer";
 import { PostCard, type FeedPostUI } from "@/components/feed/PostCard";
 
-export const Route = createFileRoute("/_app/threads")({ component: ThreadsGate });
+export const Route = createFileRoute("/_app/threads")({
+  component: ThreadsGate,
+  // `?post=<id>` is what every Threads notification links to (new post, like, mention, comment). Until
+  // 9 Oct 2026 the page ignored it and a tap landed on the top of the feed.
+  validateSearch: (s: Record<string, unknown>): { post?: string } => ({ post: typeof s.post === "string" && s.post ? s.post : undefined }),
+});
 
 // Threads is open to everyone. It spent its beta behind a BoD gate that lived in three places at
 // once — this wrapper, a redirect inside FeedPage, and the API — so the menu entry was visible to
@@ -36,8 +42,27 @@ const prependPost = (old: Inf | undefined, np: FeedPostUI): Inf | undefined =>
 function FeedPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { post: focusId } = Route.useSearch();
   const [tab, setTab] = useState<Tab>("all");
   const key = useMemo(() => ["feed", tab] as const, [tab]);
+
+  // The post a notification opened, fetched on its own: it may be far down the feed or not loaded.
+  const focus = useQuery({
+    queryKey: ["feed-post", focusId],
+    queryFn: () => nexusApi.feedPost(focusId as string) as Promise<FeedPostUI>,
+    enabled: !!focusId,
+    retry: (n, e) => !(e instanceof ApiError && (e.status === 404 || e.status === 410)) && n < 2,
+  });
+  useEffect(() => { if (focusId) window.scrollTo({ top: 0 }); }, [focusId]);
+  const closeFocus = () => navigate({ to: "/threads", search: {} });
+
+  // One post lives in several caches at once — both tabs and the focused copy. A like or an edit
+  // written into only the visible tab left the other copy stale, and whichever was shown next said
+  // the opposite.
+  const patchPost = (id: string, fn: (p: FeedPostUI) => FeedPostUI) => {
+    qc.setQueriesData<Inf>({ queryKey: ["feed"] }, (old) => updatePost(old, id, fn));
+    qc.setQueryData<FeedPostUI>(["feed-post", id], (old) => (old ? fn(old) : old));
+  };
 
   const profile = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const me = profile.data?.user;
@@ -114,31 +139,41 @@ function FeedPage() {
   const onRetry = (post: FeedPostUI) => { const p = pendingPayloads.current.get(post._tempId ?? post.id); if (p) fire(post._tempId ?? post.id, p); };
 
   // ── like (optimistic + milestone celebrate) ──
+  // The route is a toggle, so two taps in flight at once could land in either order and leave the
+  // heart saying the opposite of the database. One request per post at a time; a tap during it is
+  // dropped (it would only have undone the first).
+  const liking = useRef<Set<string>>(new Set());
   const onLike = (post: FeedPostUI) => {
-    if (post._pending || post._failed) return;
-    const liking = !post.likedByMe;
-    qc.setQueryData<Inf>(key, (old) => updatePost(old, post.id, (p) => ({ ...p, likedByMe: liking, likeCount: Math.max(0, p.likeCount + (liking ? 1 : -1)) })));
+    if (post._pending || post._failed || liking.current.has(post.id)) return;
+    liking.current.add(post.id);
+    const like = !post.likedByMe;
+    // A feed refetch already on its way (coming back to the page, the window regaining focus) was
+    // read before this like and would paint the old heart over the new one.
+    void qc.cancelQueries({ queryKey: ["feed"] });
+    patchPost(post.id, (p) => ({ ...p, likedByMe: like, likeCount: Math.max(0, p.likeCount + (like ? 1 : -1)) }));
     nexusApi.likePost(post.id)
       .then((res) => {
-        qc.setQueryData<Inf>(key, (old) => updatePost(old, post.id, (p) => ({ ...p, likedByMe: res.liked, likeCount: res.likeCount })));
+        patchPost(post.id, (p) => ({ ...p, likedByMe: res.liked, likeCount: res.likeCount }));
         if (res.liked && [1, 10, 50, 100].includes(res.likeCount)) celebrate(res.likeCount === 1 ? "First like! ❤️" : `${res.likeCount} likes 🔥`);
       })
-      .catch(() => qc.setQueryData<Inf>(key, (old) => updatePost(old, post.id, (p) => ({ ...p, likedByMe: post.likedByMe, likeCount: post.likeCount }))));
+      .catch(() => patchPost(post.id, (p) => ({ ...p, likedByMe: post.likedByMe, likeCount: post.likeCount })))
+      .finally(() => { liking.current.delete(post.id); });
   };
 
   const onDelete = (post: FeedPostUI) => {
-    qc.setQueryData<Inf>(key, (old) => removePost(old, post.id));
+    qc.setQueriesData<Inf>({ queryKey: ["feed"] }, (old) => removePost(old, post.id));
+    if (focusId === post.id) closeFocus();
     if (post._pending || post._failed) { pendingPayloads.current.delete(post._tempId ?? post.id); return; }
     nexusApi.deletePost(post.id).catch(() => qc.invalidateQueries({ queryKey: key }));
   };
 
   const onEdit = (id: string, text: string, mentions: string[]) => {
     nexusApi.editPost(id, { text, mentions })
-      .then((real) => qc.setQueryData<Inf>(key, (old) => replacePost(old, id, real as FeedPostUI)))
+      .then((real) => patchPost(id, () => real as FeedPostUI))
       .catch(() => qc.invalidateQueries({ queryKey: key }));
   };
 
-  const onCommentAdded = (postId: string) => qc.setQueryData<Inf>(key, (old) => updatePost(old, postId, (p) => ({ ...p, commentCount: p.commentCount + 1 })));
+  const onCommentAdded = (postId: string) => patchPost(postId, (p) => ({ ...p, commentCount: p.commentCount + 1 }));
 
   const loading = feed.isLoading;
   const empty = !feed.isLoading && posts.length === 0;
@@ -159,6 +194,24 @@ function FeedPage() {
           </button>
         ))}
       </div>
+
+      {focusId && (
+        <div className="border-b-4 border-border/60">
+          <div className="flex items-center justify-between px-4 pt-2.5 text-xs font-semibold text-muted-foreground">
+            <span>{t("From your notification")}</span>
+            <button onClick={closeFocus} aria-label={t("Close")} className="grid h-7 w-7 place-items-center rounded-full transition hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+          </div>
+          {focus.isLoading && <PostSkeleton />}
+          {focus.isError && (
+            <div className="px-4 pb-4 pt-1 text-sm text-muted-foreground">
+              {focus.error instanceof ApiError && (focus.error.status === 404 || focus.error.status === 410) ? t("This post was deleted.") : t("Couldn't open this post.")}
+            </div>
+          )}
+          {focus.data && (
+            <PostCard post={focus.data} members={members} onLike={onLike} onDelete={onDelete} onEdit={onEdit} onRetry={onRetry} onCommentAdded={onCommentAdded} initialShowComments />
+          )}
+        </div>
+      )}
 
       {tab === "all" && me && <Composer me={{ id: me.id, name: me.name, avatar: me.avatar }} members={members} onPost={onPost} />}
 

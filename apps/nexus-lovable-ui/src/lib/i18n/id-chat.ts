@@ -152,4 +152,9 @@ export const ID_CHAT: Record<string, string> = {
   "typing…": "mengetik…",
   "{name} is typing…": "{name} sedang mengetik…",
   "{n} people are typing…": "{n} orang sedang mengetik…",
+
+  // Threads: the post a notification opened (routes/_app/threads.tsx ?post=, owner, 9 Oct 2026)
+  "From your notification": "Dari notifikasi kamu",
+  "This post was deleted.": "Post ini sudah dihapus.",
+  "Couldn't open this post.": "Post ini gagal dibuka.",
 }

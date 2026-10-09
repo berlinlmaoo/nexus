@@ -1121,7 +1121,8 @@ export function notificationGroup(type?: string | null): Exclude<NotificationGro
   if (t === "submission_status") return "submissions";
   if (t.startsWith("complaint")) return "tickets";
   if (t.includes("announcement")) return "announcements";
-  if (t.startsWith("message") || t === "feed_comment") return "messages";
+  // Every Threads signal (feed_post, feed_like, feed_mention, feed_comment) is conversation, not "Other".
+  if (t.startsWith("message") || t.startsWith("feed_")) return "messages";
   if (t.startsWith("task") || t.startsWith("comment") || t.startsWith("quest") || t === "project_invite" || t === "status_update" || t === "streak_at_risk") return "tasks";
   return "other";
 }
@@ -2510,6 +2511,8 @@ export const nexusApi = {
   },
   editPost: (id: string, payload: { text: string; mentions: string[] }) => apiFetch<FeedPost>(`/api/feed/posts/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deletePost: (id: string) => apiFetch<{ success?: boolean }>(`/api/feed/posts/${id}`, { method: "DELETE" }),
+  // One post with the viewer's own likedByMe — what a notification's `/threads?post=<id>` opens.
+  feedPost: (id: string) => apiFetch<FeedPost>(`/api/feed/posts/${id}`),
   likePost: (id: string) => apiFetch<{ liked: boolean; likeCount: number }>(`/api/feed/posts/${id}/like`, { method: "POST" }),
   postComments: (id: string) => apiFetch<{ comments: FeedComment[] }>(`/api/feed/posts/${id}/comments`),
   addPostComment: (id: string, payload: { text: string; mentions: string[] }) => apiFetch<FeedComment>(`/api/feed/posts/${id}/comments`, { method: "POST", body: JSON.stringify(payload) }),
