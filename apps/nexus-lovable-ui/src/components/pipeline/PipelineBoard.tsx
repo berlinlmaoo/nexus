@@ -5,8 +5,8 @@ import { useLang } from "@/lib/lang";
 import { AvatarFace } from "@/components/Avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PIPELINE_STAGES, daysBetween, dealValue, stageGroupOf } from "@/lib/pipeline";
-import type { PipelineDeal } from "@/lib/pipeline-api";
-import { GROUP_TONE, HEALTH_DOT, HEALTH_LABEL, PhaseTrack, fmtDayShort, fmtIdr, fmtIdrFull, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { servicesOf, type PipelineDeal } from "@/lib/pipeline-api";
+import { BlockerBanner, GROUP_TONE, HealthPill, PhaseTrack, fmtDayShort, fmtIdr, fmtIdrFull, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 
 const DRAG_TYPE = "application/x-nexus-deal";
 
@@ -15,9 +15,6 @@ const SEVERITY: Record<string, number> = { CRITICAL: 0, ATTENTION: 1, HEALTHY: 2
 export function bySeverity(a: PipelineDeal, b: PipelineDeal): number {
   return (SEVERITY[a.health.key] ?? 9) - (SEVERITY[b.health.key] ?? 9) || (b.netValue || 0) - (a.netValue || 0);
 }
-
-/** Things on a card that would only ever say "nothing yet" stay off it (owner, 9 Oct 2026). */
-const PHASES_SHOWN = new Set(["Pre-Execution", "Execution"]);
 
 /**
  * The phase board: one column per stage, left to right from first contact to closed. Drag a card to
@@ -220,16 +217,16 @@ export function PipelineBoard({
 }
 
 /**
- * A card says only what is known (owner, 9 Oct 2026: no "Not started" pill, empty six-step bar, "Other" or
- * a lone dash on every card). Always: code, name. When set: brand, value, PM/BD, the next action's date.
- * Only when it matters: the health dot and its first reason, the phase track once a deal is won, "No PM
- * yet" on a won deal.
+ * A card, the GM's layout (owner, 9 Oct 2026, from his "Control Tower" screenshot: "blocker status di board
+ * tiap dealnya belum ada"): code and health pill on top, the name, brand and value, the six-segment phase
+ * bar on EVERY deal (grey = not started, which is worth seeing on an open deal too), the blocker as a
+ * banner whenever one is written (else the first health reason), then PM (and BD when different) and the
+ * services. "No PM yet" on a won deal; the next action's date when there is one.
  */
 const DealCard = memo(function DealCard({
   deal, today, onOpen, onMove, canEdit,
 }: { deal: PipelineDeal; today: string; onOpen: (id: string) => void; onMove: (id: string, stage: string) => void; canEdit: boolean }) {
   const { t, lang, locale } = useLang();
-  const labels = useVocabLabels();
   const reason = useReasonText();
   const [dragging, setDragging] = useState(false);
   const pm = personName(deal.pm, deal.pmName);
@@ -237,15 +234,17 @@ const DealCard = memo(function DealCard({
   const value = dealValue(deal);
   const group = stageGroupOf(deal.stage);
   const flagged = deal.health.key === "CRITICAL" || deal.health.key === "ATTENTION";
-  const showHealthDot = flagged || deal.health.key === "HEALTHY";
-  const firstReason = flagged ? deal.health.reasons[0] : undefined;
-  const moreReasons = flagged ? deal.health.reasons.length - 1 : 0;
+  const hasBlocker = !!deal.blocker?.trim();
+  // The blocker banner already says the blocker; otherwise the first reason the deal is flagged.
+  const firstReason = flagged && !hasBlocker ? deal.health.reasons[0] : undefined;
+  const moreReasons = firstReason ? deal.health.reasons.length - 1 : 0;
   const live = group !== "Closed" && group !== "Lost";
   const due = live && deal.nextActionDate ? daysBetween(today, deal.nextActionDate) : null;
   const needsPm = !pm && (group === "Pre-Execution" || group === "Execution");
   const people = [pm && { role: "PM", name: pm, avatar: deal.pm?.avatar ?? null }, bd && bd !== pm && { role: "BD", name: bd, avatar: deal.bd?.avatar ?? null }]
     .filter((x): x is { role: string; name: string; avatar: string | null } => !!x);
-  const hasFooter = people.length > 0 || due !== null || needsPm;
+  const services = servicesOf(deal).join(", ");
+  const hasFooter = people.length > 0 || due !== null || needsPm || !!services;
   return (
     <article
       draggable={canEdit}
@@ -261,18 +260,12 @@ const DealCard = memo(function DealCard({
         dragging && "opacity-50",
       )}
     >
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {showHealthDot && (
-          <span title={t(HEALTH_LABEL[deal.health.key])} className={cn("h-2 w-2 shrink-0 rounded-full", HEALTH_DOT[deal.health.key])}>
-            <span className="sr-only">{t(HEALTH_LABEL[deal.health.key])}</span>
-          </span>
-        )}
-        <span className="shrink-0 font-medium tabular-nums">{deal.code}</span>
-        {deal.brand && <span aria-hidden className="shrink-0 opacity-50">·</span>}
-        {deal.brand && <span className="min-w-0 truncate">{deal.brand}</span>}
-        {value > 0 && (
-          <span title={fmtIdrFull(value, lang)} className="ml-auto shrink-0 pl-2 font-semibold tabular-nums text-foreground">{fmtIdr(value, lang)}</span>
-        )}
+      <div className="flex items-center gap-1.5">
+        <span className="min-w-0 truncate text-xs font-semibold tabular-nums text-muted-foreground">{deal.code}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {deal.health.key !== "NONE" && <HealthPill health={deal.health.key} />}
+          {canEdit && <MoveMenu deal={deal} onMove={onMove} />}
+        </span>
       </div>
       {/* The title stays a real button for the keyboard; the mouse can click anywhere (see onClick above). */}
       <h4 className="mt-1 text-sm font-semibold leading-snug">
@@ -285,8 +278,18 @@ const DealCard = memo(function DealCard({
           {deal.name || t("Untitled deal")}
         </button>
       </h4>
+      {(deal.brand || value > 0) && (
+        <div className="mt-0.5 flex items-baseline gap-2 text-xs">
+          {deal.brand && <span className="min-w-0 truncate text-muted-foreground">{deal.brand}</span>}
+          {value > 0 && (
+            <span title={fmtIdrFull(value, lang)} className="ml-auto shrink-0 font-semibold tabular-nums text-foreground">{fmtIdr(value, lang)}</span>
+          )}
+        </div>
+      )}
+      <PhaseTrack deal={deal} className="mt-2.5" />
+      <BlockerBanner deal={deal} lines={2} className="mt-2" />
       {firstReason && (
-        <p className={cn("mt-1.5 flex items-start gap-1.5 text-xs", deal.health.key === "CRITICAL" ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-300")}>
+        <p className={cn("mt-2 flex items-start gap-1.5 text-xs", deal.health.key === "CRITICAL" ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-300")}>
           <AlertTriangle aria-hidden className="mt-px h-3.5 w-3.5 shrink-0" />
           <span className="line-clamp-2">
             {reason(firstReason)}
@@ -294,65 +297,83 @@ const DealCard = memo(function DealCard({
           </span>
         </p>
       )}
-      {PHASES_SHOWN.has(group) && <PhaseTrack deal={deal} className="mt-2.5" />}
       {hasFooter && (
-        <div className="mt-2.5 flex items-center gap-2 text-xs">
+        <div className="mt-2.5 flex items-center gap-2 border-t border-border/70 pt-2 text-xs">
           {people.length > 0 && (
             <span className="flex shrink-0 -space-x-1.5" title={people.map((p) => `${p.role}: ${p.name}`).join(" · ")}>
               {people.map((p) => <AvatarFace key={p.role} name={p.name} avatar={p.avatar} size={20} decorative className="ring-2 ring-card" />)}
-              <span className="sr-only">{people.map((p) => `${p.role}: ${p.name}`).join(", ")}</span>
             </span>
           )}
-          {people.length === 1 && !needsPm && <span className="min-w-0 truncate text-muted-foreground">{people[0].name}</span>}
-          {needsPm && <span className="min-w-0 truncate font-medium text-red-700 dark:text-red-300">{t("No PM yet")}</span>}
-          {due !== null && (
-            <span
-              title={deal.nextAction ? `${t("Next action")}: ${deal.nextAction}` : t("Next action date")}
-              className={cn(
-                "ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 tabular-nums",
-                due < 0 ? "bg-destructive/10 font-medium text-red-700 dark:text-red-300"
-                  : due === 0 ? "bg-warning/15 font-medium text-amber-800 dark:text-amber-300"
-                    : "text-muted-foreground",
-              )}
-            >
-              <CalendarClock aria-hidden className="h-3 w-3" />
-              {due === 0 ? t("Today") : fmtDayShort(deal.nextActionDate, locale)}
+          {needsPm ? (
+            <span className="min-w-0 truncate font-medium text-red-700 dark:text-red-300">{t("No PM yet")}</span>
+          ) : people.length > 0 ? (
+            <span className="min-w-0 truncate text-muted-foreground">
+              {people.map((p, i) => (
+                <span key={p.role}>{i > 0 && " · "}<span className="sr-only">{p.role}: </span>{p.name}</span>
+              ))}
             </span>
-          )}
-        </div>
-      )}
-      {canEdit && (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label={t("Move {name} to another stage", { name: deal.name })}
-              title={t("Move to stage")}
-              className="absolute right-1.5 top-1.5 z-10 grid h-7 w-7 place-items-center rounded-lg border border-border bg-card text-muted-foreground opacity-0 shadow-soft transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:hidden"
-            >
-              <ArrowRightLeft className="h-3.5 w-3.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-60 p-1">
-            <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{t("Move to stage")}</p>
-            {PIPELINE_STAGES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                disabled={s === deal.stage}
-                onClick={() => onMove(deal.id, s)}
-                className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted disabled:cursor-default disabled:font-semibold disabled:hover:bg-transparent pointer-coarse:min-h-[44px]"
+          ) : null}
+          <span className="ml-auto flex min-w-0 shrink items-center gap-1.5">
+            {due !== null && (
+              <span
+                title={deal.nextAction ? `${t("Next action")}: ${deal.nextAction}` : t("Next action date")}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 tabular-nums",
+                  due < 0 ? "bg-destructive/10 font-medium text-red-700 dark:text-red-300"
+                    : due === 0 ? "bg-warning/15 font-medium text-amber-800 dark:text-amber-300"
+                      : "text-muted-foreground",
+                )}
               >
-                <span className="inline-flex items-center gap-2">
-                  <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", GROUP_TONE[stageGroupOf(s)])} />
-                  {labels.stage(s)}
-                </span>
-                {s === deal.stage && <Check aria-hidden className="h-3.5 w-3.5" />}
-              </button>
-            ))}
-          </PopoverContent>
-        </Popover>
+                <CalendarClock aria-hidden className="h-3 w-3" />
+                {due === 0 ? t("Today") : fmtDayShort(deal.nextActionDate, locale)}
+              </span>
+            )}
+            {services && <span title={services} className="min-w-0 max-w-[9rem] truncate text-right text-muted-foreground">{services}</span>}
+          </span>
+        </div>
       )}
     </article>
   );
 });
+
+/**
+ * The card's ⇄ "Move to stage" menu: the same as a drag, by keyboard or click. It sits in the card's top
+ * row next to the health pill (shown on hover / focus) so it never covers the pill.
+ */
+function MoveMenu({ deal, onMove }: { deal: PipelineDeal; onMove: (id: string, stage: string) => void }) {
+  const { t } = useLang();
+  const labels = useVocabLabels();
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          draggable={false}
+          aria-label={t("Move {name} to another stage", { name: deal.name })}
+          title={t("Move to stage")}
+          className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:hidden"
+        >
+          <ArrowRightLeft className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-60 p-1">
+        <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{t("Move to stage")}</p>
+        {PIPELINE_STAGES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            disabled={s === deal.stage}
+            onClick={() => onMove(deal.id, s)}
+            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted disabled:cursor-default disabled:font-semibold disabled:hover:bg-transparent pointer-coarse:min-h-[44px]"
+          >
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", GROUP_TONE[stageGroupOf(s)])} />
+              {labels.stage(s)}
+            </span>
+            {s === deal.stage && <Check aria-hidden className="h-3.5 w-3.5" />}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
