@@ -54,7 +54,9 @@ struct ProjectSettingsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     identityCard
                     customizeCard
-                    tabsCard
+                    // A Pipeline Dashboard shows its pipeline, not task tabs: nothing to choose (owner,
+                    // 9 Oct 2026, as on the web).
+                    if detail.type != "PIPELINE" { tabsCard }
                     fieldsCard
                     membersCard
                     dangerCard

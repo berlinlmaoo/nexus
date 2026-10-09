@@ -3,9 +3,10 @@ import Foundation
 // MARK: - Project types and per-project tabs (owner, 9 Oct 2026)
 //
 // "tiap kali buat project tuh ada dikasih pilihan ada Task Project, Finance Dashboard, Content
-// Planner, Pipeline Dashboard" — every project has a type, chosen first in New project. Only Task
-// Project exists today; the other three are shown as coming soon and the server refuses them too
-// (POST /api/projects → 400 TYPE_COMING_SOON), so nothing half-built can be created.
+// Planner, Pipeline Dashboard" — every project has a type, chosen first in New project. Task Project
+// and, since 9 Oct 2026, Pipeline Dashboard exist (the GM's deal board, PipelineView.swift); Finance
+// Dashboard and Content Planner wait for Berlin's references, are shown as coming soon, and the server
+// refuses them too (POST /api/projects → 400 TYPE_COMING_SOON), so nothing half-built can be created.
 //
 // "ada bbrp project yg ga butuh spreadsheets/automation/list" — a project hides the tabs it does not
 // need. The server stores the HIDDEN keys (Project.hiddenTabs), the same keys web uses
@@ -18,8 +19,8 @@ enum ProjectKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Only Task Project can be created today.
-    var available: Bool { self == .task }
+    /// Task Project and Pipeline Dashboard can be created (owner, 9 Oct 2026).
+    var available: Bool { self == .task || self == .pipeline }
 
     /// The owner's names for them; the same in both languages.
     var title: String {
@@ -52,10 +53,11 @@ enum ProjectKind: String, CaseIterable, Identifiable {
 
 extension ProjectTab {
     /// The key the server and web use for this tab in Project.hiddenTabs. nil for Finance and P&L,
-    /// which are switched by their own flags rather than hidden.
+    /// which are switched by their own flags rather than hidden, and for Pipeline, which a Pipeline
+    /// Dashboard always shows and no other project has (owner, 9 Oct 2026).
     var key: String? {
         switch self {
-        case .finance, .pnl: return nil
+        case .finance, .pnl, .pipeline: return nil
         case .sheet: return "sheet"
         default: return rawValue.lowercased()
         }

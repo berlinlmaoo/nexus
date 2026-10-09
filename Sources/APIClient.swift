@@ -696,7 +696,7 @@ struct APIClient {
     }
 
     @discardableResult
-    /// `type`: only "TASK" is accepted today (owner, 9 Oct 2026); the others answer 400 TYPE_COMING_SOON.
+    /// `type`: "TASK" or "PIPELINE" (owner, 9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON.
     func createProject(workspaceId: String, name: String, color: String, icon: String, type: String = "TASK") async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

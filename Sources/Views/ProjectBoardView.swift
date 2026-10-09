@@ -22,6 +22,8 @@ struct ProjectDetailView: View {
     @State private var prefillDue: Date?
     @State private var isBod = false
     @State private var query = ""
+    /// Bumped by "+" on a Pipeline Dashboard: the pipeline opens its New deal sheet.
+    @State private var newDealRequest = 0
     @Environment(\.dismiss) private var dismiss
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
@@ -106,14 +108,29 @@ struct ProjectDetailView: View {
     private var pnlEnabled: Bool { (detail?.enablePnlDashboard ?? false) && isBod }
     private var hiddenTabKeys: Set<String> { Set(detail?.hiddenTabs ?? []) }
 
+    /// A Pipeline Dashboard (owner, 9 Oct 2026): its deals are the project, so it shows Pipeline (first,
+    /// and where it opens), Chat, and Finance / P&L when switched on — none of the task tabs, as on the
+    /// web. Its three default task sections stay on the server only so an app that does not know the
+    /// type still opens it as an empty task project.
+    private var isPipeline: Bool { detail?.type == "PIPELINE" }
+
     private var visibleTabs: [ProjectTab] {
         ProjectTab.allCases.filter {
             switch $0 {
-            case .finance: return financeEnabled
-            case .pnl:     return pnlEnabled
-            default:       return !hiddenTabKeys.contains($0.key ?? "")
+            case .finance:  return financeEnabled
+            case .pnl:      return pnlEnabled
+            case .pipeline: return isPipeline
+            case .chat:     return !hiddenTabKeys.contains($0.key ?? "")
+            default:        return !isPipeline && !hiddenTabKeys.contains($0.key ?? "")
             }
         }
+    }
+
+    /// Where to land when the open tab is not (or no longer) shown: Board, else List, else the first
+    /// tab there is — which for a Pipeline Dashboard is Pipeline.
+    private var fallbackTab: ProjectTab {
+        let tabs = visibleTabs
+        return tabs.first { ProjectTab.taskViews.contains($0) } ?? tabs.first ?? .board
     }
 
     @State private var actionError: String?
@@ -145,7 +162,7 @@ struct ProjectDetailView: View {
         // The open tab was just hidden (in settings, or live from another device): land on Board,
         // else List, else whatever is left.
         .onChange(of: visibleTabs) { _, tabs in
-            if !tabs.contains(tab) { tab = tabs.first { ProjectTab.taskViews.contains($0) } ?? tabs.first ?? .board }
+            if !tabs.contains(tab) { tab = fallbackTab }
         }
         // Live (owner, 8 Oct 2026): a task created, moved, edited or deleted on another device — or
         // the project itself renamed or changed — shows on the board, list, sheet, calendar and
@@ -227,14 +244,24 @@ struct ProjectDetailView: View {
             }
             // On the Forms tab "+" means New form, as on the web's Forms tab; on every other tab it is
             // New task. It used to open New task on the Forms tab too (owner, 9 Oct 2026).
-            Button {
-                if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
-            } label: {
-                Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(tab == .forms || canCreate ? NX.violetText : NX.mutedFg)
-                    .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+            // A Pipeline Dashboard has no task header (web): "+" is New deal on Pipeline and absent on
+            // its other tabs, where a new task would land in sections nobody can see.
+            if tab == .pipeline {
+                Button { newDealRequest += 1 } label: {
+                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
+                        .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                }
+                .accessibilityLabel(T("New deal"))
+            } else if !isPipeline {
+                Button {
+                    if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(tab == .forms || canCreate ? NX.violetText : NX.mutedFg)
+                        .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                }
+                .disabled(tab != .forms && !canCreate)
+                .accessibilityLabel(tab == .forms ? T("New form") : T("New task"))
             }
-            .disabled(tab != .forms && !canCreate)
-            .accessibilityLabel(tab == .forms ? T("New form") : T("New task"))
         }
         .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 8)
     }
@@ -299,6 +326,9 @@ struct ProjectDetailView: View {
 
     @ViewBuilder private var content: some View {
         switch tab {
+        case .pipeline:
+            if isPipeline { PipelineTab(projectId: projectId, newDealRequest: newDealRequest) }
+            else { EmptyView() }
         case .pages: ProjectPagesTab(projectId: projectId)
         case .forms: ProjectFormsBuilderTab(projectId: projectId, projectName: displayName, onNewForm: { newFormOpen = true })
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
@@ -371,7 +401,7 @@ struct ProjectDetailView: View {
                 isBod = role == "BOD" || role == "ONE_ABOVE_ALL"
             }
             // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
-            if !visibleTabs.contains(tab) { tab = .board }
+            if !visibleTabs.contains(tab) { tab = fallbackTab }
             cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }
@@ -398,7 +428,7 @@ struct ProjectDetailView: View {
               let all = try? await APIClient.shared.projectTasks(projectId) else { return }
         detail = d
         lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
-        if !visibleTabs.contains(tab) { tab = .board }
+        if !visibleTabs.contains(tab) { tab = fallbackTab }
         cachedFrom = nil
         error = nil
     }
@@ -411,7 +441,7 @@ struct ProjectDetailView: View {
         detail = d.value
         let all = ResponseCache.decoded("project-tasks-\(projectId)", as: [BoardTask].self)?.value ?? []
         lanes = Self.mergeSubtasks(into: d.value.taskLists ?? [], all: all)
-        if !visibleTabs.contains(tab) { tab = .board }
+        if !visibleTabs.contains(tab) { tab = fallbackTab }
         cachedFrom = d.savedAt
         return true
     }

@@ -3,12 +3,15 @@ import SwiftUI
 // MARK: - Tab model
 
 enum ProjectTab: String, CaseIterable, Identifiable {
+    // First, so a Pipeline Dashboard opens on it (owner, 9 Oct 2026); no other project shows it.
+    case pipeline = "Pipeline"
     case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
     case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
     case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", chat = "Chat"
     var id: String { rawValue }
     var icon: String {
         switch self {
+        case .pipeline: return "chart.bar.doc.horizontal"
         case .overview: return "square.grid.2x2.fill"
         case .board:    return "rectangle.split.3x1.fill"
         case .list:     return "list.bullet"

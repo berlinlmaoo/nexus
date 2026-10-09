@@ -35,6 +35,11 @@ extension Notification.Name {
     /// "deleted"). userInfo: `RealtimeKey.conversationId`. An open thread of it closes with a note;
     /// the chat list follows `.nexusChatPush`, which is posted for it as well.
     static let nexusChatDeleted = Notification.Name("nexus.chat.deleted")
+
+    /// A deal of a Pipeline Dashboard project was created, edited, deleted or restored (server since
+    /// 9 Oct 2026: `pipeline-changed` to the project's room, owner). userInfo, each optional:
+    /// `RealtimeKey.projectId`, `RealtimeKey.dealId`. An open pipeline refetches, and an open deal with it.
+    static let nexusPipelineChanged = Notification.Name("nexus.pipeline.changed")
 }
 
 /// The userInfo keys of the notifications above.
@@ -47,6 +52,8 @@ enum RealtimeKey {
     static let parentId = "parentId"
     /// On `.nexusChatPush`: the conversation that moved. Absent = "some chat may have moved".
     static let conversationId = "conversationId"
+    /// On `.nexusPipelineChanged`: the deal that changed.
+    static let dealId = "dealId"
 }
 
 /// The values of `RealtimeKey.kind`.

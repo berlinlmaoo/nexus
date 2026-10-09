@@ -158,6 +158,7 @@ final class RealtimeClient {
         center.post(name: .nexusAuditChanged, object: nil)
         center.post(name: .nexusProjectTasksChanged, object: nil)
         center.post(name: .nexusInboxChanged, object: nil)
+        center.post(name: .nexusPipelineChanged, object: nil)
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
     }
@@ -203,6 +204,14 @@ final class RealtimeClient {
             tasksChanged(taskId: payload?["taskId"]?.string, parentId: nil)
         case "sprint-updated":
             tasksChanged(taskId: nil, parentId: nil)
+        case "pipeline-changed":
+            // A Pipeline Dashboard deal changed (owner, 9 Oct 2026). Ids only, like every event: the
+            // open pipeline refetches GET …/pipeline. Unlike a task, a deal belongs to exactly one
+            // project and the payload names it.
+            var info: [String: String] = [:]
+            if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
+            if let dealId = payload?["dealId"]?.string { info[RealtimeKey.dealId] = dealId }
+            center.post(name: .nexusPipelineChanged, object: nil, userInfo: info)
         default:
             // presence-*, sheet-*, cursor-move, content-change, the web's own task-update relay:
             // nothing on iOS draws them.

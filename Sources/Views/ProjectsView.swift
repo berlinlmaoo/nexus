@@ -683,7 +683,8 @@ struct CreateProjectSheet: View {
         }
     }
 
-    /// Four cards. Only Task Project can be picked; the other three say "Coming soon" and do nothing.
+    /// Four cards. Task Project and Pipeline Dashboard can be picked; Finance Dashboard and Content
+    /// Planner say "Coming soon" and do nothing (owner, 9 Oct 2026).
     private var kindPicker: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
