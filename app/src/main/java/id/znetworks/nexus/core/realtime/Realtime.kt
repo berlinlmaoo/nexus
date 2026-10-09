@@ -64,8 +64,10 @@ object RealtimeEvents {
     const val SPRINT_UPDATED = "sprint-updated"
     /** "… is typing" (TYPING.md): realtime only, nothing stored or pushed. */
     const val TYPING = "typing"
+    /** A Pipeline Dashboard deal changed (project room; PIPELINE-DASHBOARD §6): refetch the pipeline. */
+    const val PIPELINE_CHANGED = "pipeline-changed"
 
-    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED, TYPING) + TASK
+    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED, TYPING, PIPELINE_CHANGED) + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -98,6 +100,7 @@ object RealtimeEvents {
             "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"))
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
             SPRINT_UPDATED -> RealtimeEvent(name, projectId = o.str("projectId"))
+            PIPELINE_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("dealId"), userId = o.str("actorId"))
             else -> RealtimeEvent(name)
         }
     }

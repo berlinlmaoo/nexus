@@ -46,7 +46,7 @@ class ProjectKindsTest {
         assertTrue(ProjectTabsLogic.locked("list", setOf("board"))); assertTrue(ProjectTabsLogic.locked("board", setOf("list")))
         assertFalse(ProjectTabsLogic.locked("board", emptySet())); assertFalse(ProjectTabsLogic.locked("sheet", setOf("board")))
         // Every tab drawn here has a server key, except the two flags.
-        ProjectTab.entries.forEach { t -> assertEquals(t.name, t == ProjectTab.FINANCE || t == ProjectTab.PNL, ProjectTabsLogic.key(t) == null) }
+        ProjectTab.entries.forEach { t -> assertEquals(t.name, t == ProjectTab.FINANCE || t == ProjectTab.PNL || t == ProjectTab.PIPELINE, ProjectTabsLogic.key(t) == null) }
     }
 
     @Test fun namedIcons() {
@@ -57,8 +57,8 @@ class ProjectKindsTest {
     }
 
     @Test fun onlyTaskProjectIsBuiltAndCreateSendsIt() {
-        assertEquals(listOf(true, false, false, false), ProjectType.entries.map { it.ready })
+        assertEquals(listOf(true, false, false, true), ProjectType.entries.map { it.ready })
         val api = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsApi.kt").readText()
-        assertTrue(api.contains("put(\"type\", ProjectType.TASK.code)"))
+        assertTrue(api.contains("put(\"type\", type.code)"))
     }
 }

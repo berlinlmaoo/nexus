@@ -17,6 +17,7 @@ object ProjectTabsLogic {
         ProjectTab.CALENDAR -> "calendar"; ProjectTab.TIMELINE -> "timeline"; ProjectTab.SPRINTS -> "sprints"
         ProjectTab.AUTOMATIONS -> "automations"; ProjectTab.PAGES -> "pages"; ProjectTab.FORMS -> "forms"; ProjectTab.CHAT -> "chat"
         ProjectTab.FINANCE, ProjectTab.PNL -> null // flags, not tab keys
+        ProjectTab.PIPELINE -> null // the project's type, not a tab key
     }
 
     /** `hiddenTabs` read leniently: anything but a list of strings hides nothing. */
@@ -27,17 +28,24 @@ object ProjectTabsLogic {
     fun financeOn(raw: JsonElement?, name: String?): Boolean =
         (raw as? JsonPrimitive)?.booleanOrNull ?: name.orEmpty().contains("finance", ignoreCase = true)
 
-    fun visible(hidden: Set<String>, financeOn: Boolean, pnlOn: Boolean, isBoD: Boolean): List<ProjectTab> = ProjectTab.entries.filter {
+    /**
+     * [isPipeline]: a Pipeline Dashboard shows Pipeline, Chat, and Finance / P&L when on — none of the task tabs
+     * (its default task sections stay on the server only so older apps open it as an empty task project).
+     */
+    fun visible(hidden: Set<String>, financeOn: Boolean, pnlOn: Boolean, isBoD: Boolean, isPipeline: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
         when (it) {
+            ProjectTab.PIPELINE -> isPipeline
             ProjectTab.FINANCE -> financeOn
             ProjectTab.PNL -> pnlOn && isBoD
-            else -> key(it) !in hidden
+            ProjectTab.CHAT -> key(it) !in hidden
+            else -> !isPipeline && key(it) !in hidden
         }
     }
 
     /** The open tab hidden (a refresh, another device): Board, else List, else the first one shown. */
     fun fallback(current: ProjectTab, visible: List<ProjectTab>): ProjectTab = when {
         current in visible -> current
+        ProjectTab.PIPELINE in visible -> ProjectTab.PIPELINE
         ProjectTab.BOARD in visible -> ProjectTab.BOARD
         ProjectTab.LIST in visible -> ProjectTab.LIST
         else -> visible.firstOrNull() ?: ProjectTab.BOARD
@@ -58,7 +66,7 @@ enum class ProjectType(val code: String, val title: String, val description: Int
     TASK("TASK", "Task Project", R.string.pt_task_sub, true),
     FINANCE("FINANCE", "Finance Dashboard", R.string.pt_finance_sub, false),
     CONTENT("CONTENT", "Content Planner", R.string.pt_content_sub, false),
-    PIPELINE("PIPELINE", "Pipeline Dashboard", R.string.pt_pipeline_sub, false),
+    PIPELINE("PIPELINE", "Pipeline Dashboard", R.string.pt_pipeline_sub, true),
 }
 
 object ProjectIcon {

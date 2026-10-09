@@ -162,9 +162,9 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
             ?: _state.value.folders.firstNotNullOfOrNull { it.workspaceId }
             ?: runCatching { c.attendanceApi.today().workspace?.id }.getOrNull()
 
-    fun createProject(name: String, icon: String, color: String, folderId: String?, onDone: (String) -> Unit) = act {
+    fun createProject(name: String, icon: String, color: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
-        val id = api.createProject(name, ws, color, icon, folderId)
+        val id = api.createProject(name, ws, color, icon, folderId, type)
         load()
         if (id.isNotBlank()) onDone(id)
     }
@@ -302,8 +302,8 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         }
     }
 
-    if (creating) CreateProjectDialog(s.folders, busy = s.busy, onDismiss = { creating = false }) { name, icon, color, folder ->
-        vm.createProject(name, icon, color, folder) { id -> creating = false; onOpenProject(id) }
+    if (creating) CreateProjectDialog(s.folders, busy = s.busy, onDismiss = { creating = false }) { name, icon, color, folder, type ->
+        vm.createProject(name, icon, color, folder, type) { id -> creating = false; onOpenProject(id) }
     }
     if (folderCreate || folderEdit != null) FolderDialog(folderEdit, busy = s.busy, onDismiss = { folderCreate = false; folderEdit = null }) { name, icon, color, photo ->
         vm.saveFolder(folderEdit, name, icon, color, photo) { folderCreate = false; folderEdit = null }
@@ -479,7 +479,7 @@ private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onDismiss: () -> Unit, onCreate: (String, String, String, String?) -> Unit) {
+private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onDismiss: () -> Unit, onCreate: (String, String, String, String?, ProjectType) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var icon by rememberSaveable { mutableStateOf(PROJECT_ICONS.first()) }
     var color by rememberSaveable { mutableStateOf("#7B2FBE") }
@@ -518,7 +518,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onD
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name, icon, color, folder) }, enabled = name.isNotBlank() && !busy) {
+            TextButton(onClick = { onCreate(name, icon, color, folder, type ?: ProjectType.TASK) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.project_launch))
             }
         },

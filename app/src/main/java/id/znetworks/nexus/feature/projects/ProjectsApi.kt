@@ -39,12 +39,12 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun searchTasks(q: String): List<BoardTask> =
         api.get("/api/tasks?search=${URLEncoder.encode(q, "UTF-8")}", ListSerializer(BoardTask.serializer()))
 
-    suspend fun createProject(name: String, workspaceId: String, color: String?, icon: String?, folderId: String?): String {
+    suspend fun createProject(name: String, workspaceId: String, color: String?, icon: String?, folderId: String?, type: ProjectType = ProjectType.TASK): String {
         val body = buildJsonObject {
             put("name", name.trim()); put("workspaceId", workspaceId)
             color?.let { put("color", it) }; icon?.let { put("icon", it) }; folderId?.let { put("folderId", it) }
-            // Only Task Project exists so far; anything else is 400 TYPE_COMING_SOON (PROJECT-TYPES-TABS).
-            put("type", ProjectType.TASK.code)
+            // Task Project and Pipeline Dashboard exist; the others are 400 TYPE_COMING_SOON (PROJECT-TYPES-TABS).
+            put("type", type.code)
         }
         return (post("/api/projects", body)["id"] as? JsonPrimitive)?.content.orEmpty()
     }
