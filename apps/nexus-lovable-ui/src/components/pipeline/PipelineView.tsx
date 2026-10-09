@@ -41,23 +41,28 @@ function errorText(error: unknown, fallback: string): string {
  * someone today), and the deal drawer. Edits show at once (optimistic) and reach colleagues live through
  * `pipeline-changed` on the project's room.
  */
-export function PipelineView({ projectId, workspaceId }: { projectId: string; workspaceId: string }) {
+export function PipelineView({ projectId }: { projectId: string; workspaceId: string }) {
   const { t, tn, lang } = useLang();
   const qc = useQueryClient();
   const key = pipelineKey(projectId);
   const q = useQuery({ queryKey: key, queryFn: () => pipelineApi.list(projectId), retry: false });
+  // BD / PM are picked from the project's members (owner, 9 Oct 2026: the board's people are its project
+  // members, added by its lead) — the same list and cache key as the task project's member pickers.
   const members = useQuery({
-    queryKey: ["nexus", "workspace-members", workspaceId],
-    queryFn: () => nexusApi.workspaceMembers(workspaceId),
+    queryKey: ["nexus", "project-members", projectId],
+    queryFn: () => nexusApi.projectMembers(projectId),
     retry: false,
     staleTime: 60_000,
   });
-  const people: PersonOption[] = useMemo(
-    () => (members.data?.members ?? [])
-      .map((m) => ({ id: m.userId, name: m.name || m.email, avatar: m.avatar }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [members.data],
-  );
+  const people: PersonOption[] = useMemo(() => {
+    const raw = members.data;
+    const arr = Array.isArray(raw) ? raw : raw?.members ?? [];
+    return arr
+      .map((m) => m.user)
+      .filter((u): u is NonNullable<typeof u> => !!u?.id)
+      .map((u) => ({ id: u.id, name: u.name || u.email || "?", avatar: u.avatar ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [members.data]);
 
   // Live: a colleague's edit refetches the list (and the open deal's history, keyed under it).
   useRealtimeRoom(`project:${projectId}`);

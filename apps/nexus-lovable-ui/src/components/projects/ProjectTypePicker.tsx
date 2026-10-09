@@ -17,9 +17,10 @@ const META: Record<ProjectTypeId, { icon: typeof ListChecks; title: string; body
 };
 
 /**
- * `pipeline` (owner/GM, 9 Oct 2026): the company has ONE pipeline board for every deal, and only BoD,
- * Agency, IT, Legal and Finance may open it. Without access the card is not offered; once the board
- * exists, picking it opens that board instead of making a second one (the server answers 409 too).
+ * `pipeline` (owner/GM, 9 Oct 2026): the company has ONE pipeline board for every deal, open to its project
+ * members (added by its lead, like any project — owner, 9 Oct 2026 evening). The card is offered to its
+ * members, where picking it opens the board, and to everyone while no board exists yet; not to anyone
+ * else, for whom a second one would only be refused (409).
  */
 export function ProjectTypePicker({ onPick, pipeline }: { onPick: (type: ProjectTypeId) => void; pipeline?: { allowed: boolean; exists: boolean } }) {
   const { t } = useLang();

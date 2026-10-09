@@ -185,20 +185,25 @@ const OTHER = "__other__";
 const NOBODY = "";
 
 /**
- * BD / PM: a NEXUS user from the project's workspace, or — only when the person is not in NEXUS — a
+ * BD / PM: one of the project's members (owner, 9 Oct 2026: the board's people are its members — add
+ * someone to the project first), or — only when the person is not in NEXUS — a
  * name typed by hand ("Someone outside NEXUS…"). Picking a user clears the typed name and vice versa.
  */
 export function PersonField({
-  userId, name, people, onCommit, label, disabled,
+  userId, name, people, onCommit, label, disabled, userName,
 }: {
   userId: string | null; name: string | null; people: PersonOption[]; label: string; disabled?: boolean;
+  /** The picked user's name, for someone who is no longer (or never was) a project member. */
+  userName?: string | null;
   onCommit: (v: { userId: string | null; name: string | null }) => void;
 }) {
   const { t } = useLang();
   const id = useId();
   const [typing, setTyping] = useState(!userId && !!name);
   useEffect(() => { setTyping(!userId && !!name); }, [userId, name]);
-  const known = userId && !people.some((p) => p.id === userId) ? [{ id: userId, name: t("(not in this workspace)"), avatar: null }] : [];
+  const known = userId && !people.some((p) => p.id === userId)
+    ? [{ id: userId, name: userName ? `${userName} ${t("(not a project member)")}` : t("(not a project member)"), avatar: null }]
+    : [];
   const value = typing ? OTHER : userId ?? NOBODY;
   return (
     <div className="space-y-1.5">

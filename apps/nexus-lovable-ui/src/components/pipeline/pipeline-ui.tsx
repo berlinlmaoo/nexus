@@ -10,6 +10,7 @@ import {
   type PhaseKey,
   type PhaseState,
   type StageGroup,
+  type TermStatus,
 } from "@/lib/pipeline";
 import type { PipelineDeal, PipelineDealPatch } from "@/lib/pipeline-api";
 
@@ -186,6 +187,26 @@ export function applyLocal(deal: PipelineDeal, patch: PipelineDealPatch, today: 
   next.stageGroup = stageGroupOf(next.stage);
   next.daysOverdue = daysOverdueOf(next, today);
   next.health = healthOf(next, today);
-  next.phases = phasesOf(next);
+  next.phases = phasesOf(next, today);
   return next;
 }
+
+/**
+ * The deal's payment as every screen shows it (owner, 9 Oct 2026: "perlu per termin"): from its terms when
+ * it has any, else the manual fields. `fromTerms` says which, so a manual field can be shown read-only.
+ */
+export function dealPayment(d: PipelineDeal): { fromTerms: boolean; status: string; outstanding: number; dueDate: string | null } {
+  const s = d.termSummary;
+  return s
+    ? { fromTerms: true, status: s.paymentStatus, outstanding: s.outstanding, dueDate: s.nextDueDate }
+    : { fromTerms: false, status: d.paymentStatus, outstanding: d.outstandingReceivable, dueDate: d.paymentDueDate };
+}
+
+/** A term status pill's colors: paid green, overdue red, partly paid / invoiced amber / blue. */
+export const TERM_TONE: Record<TermStatus, string> = {
+  Paid: "bg-success/15 text-emerald-800 dark:text-emerald-200",
+  Overdue: "bg-destructive/10 text-red-800 dark:text-red-200",
+  Partial: "bg-warning/15 text-amber-900 dark:text-amber-200",
+  Invoiced: "bg-info/15 text-sky-900 dark:text-sky-200",
+  "Not Invoiced": "bg-muted text-muted-foreground",
+};

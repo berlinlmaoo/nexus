@@ -846,9 +846,10 @@ export type NexusDayOffBonusBreakdown = { days: number; grants: { days: number; 
 export type WorkspaceMembersResponse = {
   /** Member of the company workspace (Z Networks): Z Vault and Threads are shown only then. */
   isCompany?: boolean;
-  /** May open the Pipeline Dashboard (BoD + Agency + IT/Legal/Finance, owner/GM 9 Oct 2026). Servers since then. */
+  /** May pick "Pipeline Dashboard" in New project: a member of the board, or anyone of the company while none
+   *  exists (owner, 9 Oct 2026 evening — the board is an ordinary project for access). Servers since 9 Oct. */
   canAccessPipeline?: boolean;
-  /** The company's one Pipeline board, for the "Pipeline" nav entry; null when none exists or no access. */
+  /** The company's one Pipeline board, for the "Pipeline" nav entry; only for its project members, else null. */
   pipelineProjectId?: string | null;
   workspaceId: string;
   /** Nama workspace si pemanggil — untuk label tombol "Masukkan ke …". */

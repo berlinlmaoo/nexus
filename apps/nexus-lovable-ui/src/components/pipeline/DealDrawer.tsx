@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ExternalLink, FolderKanban, History, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CircleCheck, ExternalLink, FolderKanban, History, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -14,11 +14,15 @@ import {
 import {
   CLOSING_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, DELIVERABLE_RISK_OPTIONS, DELIVERABLE_STATUS_OPTIONS, LINK_TYPES,
   PAYMENT_STATUS_OPTIONS, PIPELINE_STAGES, PROBABILITY_OPTIONS, READINESS_OPTIONS, SERVICE_OPTIONS, VREG_STATUS_OPTIONS,
+  pipelineToday, summarize,
 } from "@/lib/pipeline";
-import { dealKey, pipelineApi, pipelineKey, type PipelineChange, type PipelineDeal, type PipelineDealPatch } from "@/lib/pipeline-api";
+import {
+  dealKey, pipelineApi, pipelineKey, type PipelineChange, type PipelineDeal, type PipelineDealPatch, type PipelineResponse,
+  type PipelineTerm, type PipelineTermPatch,
+} from "@/lib/pipeline-api";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
-  HealthPill, PHASE_LABEL, PHASE_STATE_LABEL, fmtDay, fmtIdrFull, fmtPct, phaseDotTone, useReasonText, useVocabLabels,
+  HealthPill, PHASE_LABEL, PHASE_STATE_LABEL, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, phaseDotTone, useReasonText, useVocabLabels,
 } from "./pipeline-ui";
 
 /** English names of the fields, for the history ("Bagas changed Stage …"). Translated with t(). */
@@ -32,8 +36,13 @@ const FIELD_LABEL: Record<string, string> = {
   closingStatus: "Closing status", mainDate: "Event / main date", nextAction: "Next action", nextActionDate: "Next action date",
   blocker: "Blocker / issue", notes: "Notes", links: "Documents & links",
 };
-const MONEY = new Set(["contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash"]);
-const DATES = new Set(["paymentDueDate", "mainDate", "nextActionDate"]);
+/** A payment term's fields, for history rows "term.<field>" (owner, 9 Oct 2026). */
+const TERM_FIELD_LABEL: Record<string, string> = {
+  label: "Term name", amount: "Amount", dueDate: "Due date", invoiceNo: "Invoice no.", invoiceDate: "Invoice date",
+  paidAmount: "Amount paid", paidAt: "Paid on", note: "Term note",
+};
+const MONEY = new Set(["contractValue", "netValue", "invoiceValue", "outstandingReceivable", "netCash", "term.amount", "term.paidAmount"]);
+const DATES = new Set(["paymentDueDate", "mainDate", "nextActionDate", "term.dueDate", "term.invoiceDate", "term.paidAt"]);
 
 /**
  * One deal, every field, grouped by the division that owns it — the GM's drawer: Commercial (BD),
@@ -107,7 +116,7 @@ export function DealDrawer({
             </header>
             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
               {tab === "details"
-                ? <Details deal={deal} people={people} canEdit={canEdit} onPatch={(p) => onPatch(deal.id, p)} />
+                ? <Details deal={deal} projectId={projectId} people={people} canEdit={canEdit} onPatch={(p) => onPatch(deal.id, p)} />
                 : <HistoryList projectId={projectId} deal={deal} people={people} />}
             </div>
             <footer className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
@@ -225,8 +234,8 @@ function Field({ label, children, wide = false }: { label: string; children: Rea
   );
 }
 
-function Details({ deal, people, canEdit, onPatch }: { deal: PipelineDeal; people: PersonOption[]; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
-  const { t } = useLang();
+function Details({ deal, projectId, people, canEdit, onPatch }: { deal: PipelineDeal; projectId: string; people: PersonOption[]; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
+  const { t, lang, locale } = useLang();
   const labels = useVocabLabels();
   const reason = useReasonText();
   const off = !canEdit;
@@ -253,10 +262,10 @@ function Details({ deal, people, canEdit, onPatch }: { deal: PipelineDeal; peopl
         <Field label={L("Brand / client")}><TextField label={L("Brand / client")} value={deal.brand} maxLength={200} disabled={off} onCommit={(v) => onPatch({ brand: v })} /></Field>
         <Field label={L("Service")}><SelectField label={L("Service")} value={deal.service} options={SERVICE_OPTIONS} disabled={off} onCommit={(v) => onPatch({ service: v })} /></Field>
         <Field label={L("BD / account owner")}>
-          <PersonField label={L("BD / account owner")} userId={deal.bdUserId} name={deal.bdName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ bdUserId: userId, bdName: name })} />
+          <PersonField label={L("BD / account owner")} userId={deal.bdUserId} userName={deal.bd?.name} name={deal.bdName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ bdUserId: userId, bdName: name })} />
         </Field>
         <Field label="PM">
-          <PersonField label="PM" userId={deal.pmUserId} name={deal.pmName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ pmUserId: userId, pmName: name })} />
+          <PersonField label="PM" userId={deal.pmUserId} userName={deal.pm?.name} name={deal.pmName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ pmUserId: userId, pmName: name })} />
         </Field>
         <Field label={L("Stage")}><SelectField label={L("Stage")} value={deal.stage} options={PIPELINE_STAGES} labelOf={labels.stage} disabled={off} onCommit={(v) => onPatch({ stage: v })} /></Field>
         <Field label={L("Probability")}><SelectField label={L("Probability")} value={deal.probability} options={PROBABILITY_OPTIONS as readonly number[]} labelOf={fmtPct} disabled={off} onCommit={(v) => onPatch({ probability: v })} /></Field>
@@ -281,6 +290,20 @@ function Details({ deal, people, canEdit, onPatch }: { deal: PipelineDeal; peopl
 
       <Section title={t("Billing & payment")} owner="Finance">
         <Field label={L("Invoice value")}><MoneyField label={L("Invoice value")} value={deal.invoiceValue} disabled={off} onCommit={(v) => onPatch({ invoiceValue: v })} /></Field>
+        {/* Paid per term (owner, 9 Oct 2026): status, receivable, due date and days overdue come from the
+            terms below; the manual fields stay for deals without terms (the GM's imported rows). */}
+        {deal.termSummary ? (
+          <>
+            <Field label={L("Payment status")}><p className="px-0.5 py-1.5 text-sm">{deal.termSummary.paymentStatus}</p></Field>
+            <Field label={L("Outstanding receivable")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtIdrFull(deal.termSummary.outstanding, lang)}</p></Field>
+            <Field label={L("Next payment due")}><p className="px-0.5 py-1.5 text-sm tabular-nums">{fmtDay(deal.termSummary.nextDueDate, locale)}</p></Field>
+            <Field label={L("Days overdue")}>
+              <p className="px-0.5 py-1.5 text-sm tabular-nums">{deal.daysOverdue > 0 ? t("{n} days, oldest unpaid term", { n: deal.daysOverdue }) : t("Not overdue")}</p>
+            </Field>
+            <p className="text-xs text-muted-foreground sm:col-span-2">{t("From the payment terms below.")}</p>
+          </>
+        ) : (
+          <>
         <Field label={L("Payment status")}><SelectField label={L("Payment status")} value={deal.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={off} onCommit={(v) => onPatch({ paymentStatus: v })} /></Field>
         <Field label={L("Outstanding receivable")}><MoneyField label={L("Outstanding receivable")} value={deal.outstandingReceivable} disabled={off} onCommit={(v) => onPatch({ outstandingReceivable: v })} /></Field>
         <Field label={L("Payment due date")}><DateField label={L("Payment due date")} value={deal.paymentDueDate} disabled={off} onCommit={(v) => onPatch({ paymentDueDate: v })} /></Field>
@@ -291,7 +314,10 @@ function Details({ deal, people, canEdit, onPatch }: { deal: PipelineDeal; peopl
         ) : (
           <Field label={L("Days overdue (typed)")}><NumberField label={L("Days overdue (typed)")} value={deal.maxDaysOverdue} disabled={off} onCommit={(v) => onPatch({ maxDaysOverdue: v })} /></Field>
         )}
+          </>
+        )}
         <Field label={L("Net cash position")}><MoneyField label={L("Net cash position")} allowNegative value={deal.netCash} disabled={off} onCommit={(v) => onPatch({ netCash: v })} /></Field>
+        <div className="sm:col-span-2"><PaymentTerms deal={deal} projectId={projectId} canEdit={canEdit} /></div>
       </Section>
 
       <Section title={t("Closing")} owner="PM">
@@ -388,6 +414,12 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
   }
   if (q.isError) return <p className="text-sm text-red-700 dark:text-red-300">{t("The history didn't load. Close the deal and open it again.")}</p>;
   const rows: PipelineChange[] = q.data?.history ?? [];
+  // A payment term's own events (owner, 9 Oct 2026): added / deleted / restored, with its amount.
+  const termEvent: Record<string, string> = { "term.created": "added payment term", "term.deleted": "deleted payment term", "term.restored": "restored payment term" };
+  const termAmount = (h: PipelineChange) => {
+    const v = (h.field === "term.deleted" ? h.before : h.after) as { amount?: unknown } | null;
+    return typeof v?.amount === "number" ? fmtIdrFull(v.amount, lang) : null;
+  };
   return (
     <ol className="space-y-3">
       {rows.map((h) => (
@@ -396,10 +428,18 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
           <div className="min-w-0 flex-1 text-sm">
             <p>
               <span className="font-semibold">{h.user?.name ?? t("Someone")}</span>{" "}
-              <span className="text-muted-foreground">{t("changed")}</span>{" "}
-              <span className="font-medium">{t(FIELD_LABEL[h.field] ?? h.field)}</span>
+              <span className="text-muted-foreground">{t(termEvent[h.field] ?? "changed")}</span>{" "}
+              <span className="font-medium">
+                {termEvent[h.field]
+                  ? h.termLabel ?? ""
+                  : h.field.startsWith("term.")
+                    ? `${h.termLabel ?? t("Payment term")} · ${t(TERM_FIELD_LABEL[h.field.slice(5)] ?? h.field.slice(5))}`
+                    : t(FIELD_LABEL[h.field] ?? h.field)}
+              </span>
             </p>
-            {h.field === "notes" ? (
+            {termEvent[h.field] ? (
+              termAmount(h) && <p className="mt-0.5 tabular-nums text-muted-foreground">{termAmount(h)}</p>
+            ) : h.field === "notes" || h.field === "term.note" ? (
               <p className="mt-0.5 line-clamp-3 text-muted-foreground">{show(h.field, h.after)}</p>
             ) : (
               <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-muted-foreground">
@@ -423,5 +463,182 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
         </span>
       </li>
     </ol>
+  );
+}
+
+/** Error text from a refused write: the server's field message when it sent one. */
+function termErrorText(error: unknown, fallback: string): string {
+  const payload = (error as { payload?: { error?: unknown } } | null)?.payload;
+  return typeof payload?.error === "string" ? payload.error : fallback;
+}
+
+/**
+ * Payments per term (owner, 9 Oct 2026: "perlu per termin"): DP, Termin 1, Pelunasan … each with its
+ * amount, due date, invoice and what has been paid. The deal's receivable, payment status and days
+ * overdue follow from them (server: lib/pipeline.ts termSummaryOf). Fields save on their own when left,
+ * like the rest of the drawer; every answer carries the whole deal, which replaces the board's copy.
+ */
+function PaymentTerms({ deal, projectId, canEdit }: { deal: PipelineDeal; projectId: string; canEdit: boolean }) {
+  const { t, lang } = useLang();
+  const qc = useQueryClient();
+  const terms = deal.terms ?? [];
+  const sum = deal.termSummary ?? null;
+  const [confirm, setConfirm] = useState<PipelineTerm | null>(null);
+
+  const apply = (saved: PipelineDeal) => {
+    qc.setQueryData<PipelineResponse>(pipelineKey(projectId), (cur) => {
+      if (!cur) return cur;
+      const next = cur.deals.map((d) => (d.id === saved.id ? saved : d));
+      return { ...cur, deals: next, summary: summarize(next, cur.today) };
+    });
+    qc.invalidateQueries({ queryKey: dealKey(projectId, saved.id) });
+  };
+  const run = useMutation({
+    mutationFn: (call: () => Promise<{ deal: PipelineDeal }>) => call(),
+    onSuccess: (r) => apply(r.deal),
+    onError: (e: unknown) => toast.error(termErrorText(e, t("That change wasn't saved. Try again."))),
+  });
+  const patch = (term: PipelineTerm, p: PipelineTermPatch) => run.mutate(() => pipelineApi.updateTerm(projectId, deal.id, term.id, p));
+
+  // What the terms should add up to: the invoice value, or the contract value while there is no invoice.
+  const base = deal.invoiceValue > 0 ? deal.invoiceValue : deal.contractValue;
+  const baseIsInvoice = deal.invoiceValue > 0;
+  const total = sum?.totalAmount ?? 0;
+  const add = () => run.mutate(() => pipelineApi.addTerm(projectId, deal.id, { amount: Math.max(0, base - total) }));
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h4 className="text-sm font-semibold">{t("Payment terms")}</h4>
+        {sum && (
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {t("Paid {paid} of {total}", { paid: fmtIdrFull(sum.totalPaid, lang), total: fmtIdrFull(total, lang) })}
+          </p>
+        )}
+      </div>
+
+      {terms.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {t("No terms yet. Split the payment into DP and terms to track each invoice and its due date; until then the fields above count.")}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {terms.map((term) => (
+            <TermRow key={term.id} term={term} canEdit={canEdit} onPatch={(p) => patch(term, p)} onDelete={() => setConfirm(term)} />
+          ))}
+        </ul>
+      )}
+
+      {sum && base > 0 && Math.round(total) !== Math.round(base) && (
+        <p role="status" className="flex items-start gap-1.5 rounded-lg bg-warning/15 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
+          <AlertTriangle aria-hidden className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span>
+            {baseIsInvoice
+              ? t("The terms add up to {terms}; the invoice value is {value}.", { terms: fmtIdrFull(total, lang), value: fmtIdrFull(base, lang) })
+              : t("The terms add up to {terms}; the contract value is {value}.", { terms: fmtIdrFull(total, lang), value: fmtIdrFull(base, lang) })}
+          </span>
+        </p>
+      )}
+
+      {canEdit && (
+        <button
+          type="button"
+          onClick={add}
+          disabled={run.isPending}
+          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
+        >
+          {run.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {t("Add term")}
+        </button>
+      )}
+
+      <AlertDialog open={!!confirm} onOpenChange={(open) => { if (!open) setConfirm(null); }}>
+        <AlertDialogContent lang={lang}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Delete {name}?", { name: confirm?.label ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("The deal's receivable is counted again without it. Control Room → Audit can bring it back.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const term = confirm;
+                setConfirm(null);
+                if (term) run.mutate(() => pipelineApi.removeTerm(projectId, deal.id, term.id));
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t("Delete term")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function TermRow({ term, canEdit, onPatch, onDelete }: { term: PipelineTerm; canEdit: boolean; onPatch: (p: PipelineTermPatch) => void; onDelete: () => void }) {
+  const { t, lang, locale } = useLang();
+  const off = !canEdit;
+  // "Mark paid": the total received so far (prefilled with the full amount) and the day it came in.
+  const [paying, setPaying] = useState(false);
+  const [paidDraft, setPaidDraft] = useState(term.amount);
+  const [paidOn, setPaidOn] = useState<string | null>(pipelineToday());
+  const paid = term.status === "Paid";
+  return (
+    <li className="rounded-xl border border-border p-3">
+      <div className="flex items-center gap-2">
+        <TextField label={t("Term name")} value={term.label} required maxLength={80} disabled={off} onCommit={(v) => onPatch({ label: v })} className="min-w-0 flex-1 font-medium" />
+        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold", TERM_TONE[term.status] ?? "bg-muted text-muted-foreground")}>
+          {term.status}{term.daysOverdue > 0 ? ` · ${t("{n}d", { n: term.daysOverdue })}` : ""}
+        </span>
+        {canEdit && (
+          <button type="button" aria-label={t("Delete term")} onClick={onDelete} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-ring dark:hover:text-red-300 pointer-coarse:size-[44px]">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <Field label={t("Amount")}><MoneyField label={t("Amount")} value={term.amount} disabled={off} onCommit={(v) => onPatch({ amount: v })} /></Field>
+        <Field label={t("Due date")}><DateField label={t("Due date")} value={term.dueDate} disabled={off} onCommit={(v) => onPatch({ dueDate: v })} /></Field>
+        <Field label={t("Invoice no.")}><TextField label={t("Invoice no.")} value={term.invoiceNo} maxLength={80} disabled={off} onCommit={(v) => onPatch({ invoiceNo: v })} /></Field>
+        <Field label={t("Invoice date")}><DateField label={t("Invoice date")} value={term.invoiceDate} disabled={off} onCommit={(v) => onPatch({ invoiceDate: v })} /></Field>
+        {(term.paidAmount > 0 || term.paidAt) && (
+          <>
+            <Field label={t("Amount paid")}><MoneyField label={t("Amount paid")} value={term.paidAmount} disabled={off} onCommit={(v) => onPatch({ paidAmount: v })} /></Field>
+            <Field label={t("Paid on")}><DateField label={t("Paid on")} value={term.paidAt} disabled={off} onCommit={(v) => onPatch({ paidAt: v })} /></Field>
+          </>
+        )}
+        <Field label={t("Term note")} wide><TextField label={t("Term note")} value={term.note} maxLength={1000} disabled={off} onCommit={(v) => onPatch({ note: v })} /></Field>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {paid
+            ? t("Paid in full{on}", { on: term.paidAt ? ` · ${fmtDay(term.paidAt, locale)}` : "" })
+            : t("Still owed: {amount}", { amount: fmtIdrFull(term.outstanding, lang) })}
+        </p>
+        {canEdit && !paid && !paying && (
+          <button
+            type="button"
+            onClick={() => { setPaidDraft(term.amount); setPaidOn(term.paidAt ?? pipelineToday()); setPaying(true); }}
+            className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
+          >
+            <CircleCheck className="h-3.5 w-3.5" /> {t("Mark paid")}
+          </button>
+        )}
+      </div>
+      {paying && (
+        <form
+          onSubmit={(e) => { e.preventDefault(); setPaying(false); onPatch({ paidAmount: paidDraft, paidAt: paidOn }); }}
+          className="mt-2 grid gap-2 rounded-lg bg-muted/50 p-2.5 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+        >
+          <Field label={t("Total received")}><MoneyField label={t("Total received")} value={paidDraft} onCommit={setPaidDraft} /></Field>
+          <Field label={t("Paid on")}><DateField label={t("Paid on")} value={paidOn} onCommit={setPaidOn} /></Field>
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => setPaying(false)} className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted pointer-coarse:min-h-[44px]">{t("Cancel")}</button>
+            <button type="submit" className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground pointer-coarse:min-h-[44px]">{t("Save")}</button>
+          </div>
+        </form>
+      )}
+    </li>
   );
 }
