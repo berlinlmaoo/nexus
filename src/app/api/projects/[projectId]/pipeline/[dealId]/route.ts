@@ -53,6 +53,9 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
         field: h.field,
         before: h.before,
         after: h.after,
+        // A payment-term change ("term.<field>", "term.created" …): which term, named as it was then.
+        termId: h.termId,
+        termLabel: h.termLabel,
         createdAt: h.createdAt.toISOString(),
         user: h.user,
       })),

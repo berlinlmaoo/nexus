@@ -4,12 +4,12 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { checkCreatableProjectType } from "@/lib/project-tabs"
-import { canAccessPipeline, companyPipelineProject, pipelineListFilter } from "@/lib/pipeline-access"
+import { companyPipelineProject } from "@/lib/pipeline-access"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const projectListSelect = {
@@ -89,14 +89,11 @@ export async function GET(request: NextRequest) {
     const workspaceId = request.nextUrl.searchParams.get("workspaceId")
     const includeAllWorkspace = request.nextUrl.searchParams.get("includeAllWorkspace") === "1"
     const teamId = request.nextUrl.searchParams.get("teamId") || undefined
-    // The Pipeline board is left out of every list for people it is not for (owner/GM, 9 Oct 2026:
-    // BoD + Agency + IT/Legal/Finance only; lib/pipeline-access.ts).
-    const pipelineFilter = await pipelineListFilter(session.user.id)
 
     if (workspaceId) {
       if (isSystemAdmin) {
         const projects = await prisma.project.findMany({
-          where: { workspaceId, ...pipelineFilter },
+          where: { workspaceId },
           select: projectListSelect,
           orderBy: { createdAt: "desc" },
         })
@@ -141,7 +138,6 @@ export async function GET(request: NextRequest) {
 
       const where: Record<string, unknown> = {
         workspaceId,
-        ...pipelineFilter,
       }
 
       if (!includeAllWorkspace || !canSeeAllWorkspaceProjects) {
@@ -214,7 +210,7 @@ export async function GET(request: NextRequest) {
       : whereScopes.length === 1
         ? whereScopes[0]
         : { OR: whereScopes }
-    const where: Record<string, unknown> = { ...scoped, ...pipelineFilter }
+    const where: Record<string, unknown> = { ...scoped }
 
     const projects = await prisma.project.findMany({
       where,
@@ -280,8 +276,10 @@ export async function POST(request: NextRequest) {
 
     // One Pipeline board for the whole company (owner/GM, 9 Oct 2026: "Desainnya cuma satu papan/pipeline
     // utama buat semua deal, lintas BD dan brand — bukan pipeline terpisah per project"). It lives in the
-    // company workspace, only the people it is for may make it, and a second one is refused with the
-    // first one's id, which the New project dialog then opens instead.
+    // company workspace and a second one is refused. Making the first one is open to the company like any
+    // project (its maker is its lead and adds the people, owner 9 Oct 2026 evening); the refusal names the
+    // board only to someone who can open it — the New project dialog then opens it — and tells anyone
+    // else to ask its lead to add them.
     if (typeCheck.type === "PIPELINE") {
       if (workspaceId !== ORG_WORKSPACE_ID) {
         return NextResponse.json(
@@ -289,10 +287,13 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         )
       }
-      if (!(await canAccessPipeline(userId))) {
-        return NextResponse.json({ error: "Pipeline hanya untuk BoD, Agency, IT, Legal dan Finance.", code: "PIPELINE_FORBIDDEN" }, { status: 403 })
-      }
       const existing = await companyPipelineProject()
+      if (existing && !(await checkProjectAccess(userId, existing.id, ["VIEWER"])).allowed) {
+        return NextResponse.json(
+          { error: "Pipeline perusahaan sudah ada. Minta lead-nya menambahkan kamu ke project itu.", code: "PIPELINE_EXISTS" },
+          { status: 409 },
+        )
+      }
       if (existing) {
         return NextResponse.json(
           { error: `Pipeline perusahaan sudah ada: "${existing.name}".`, code: "PIPELINE_EXISTS", projectId: existing.id, projectName: existing.name },

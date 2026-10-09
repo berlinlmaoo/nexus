@@ -53,6 +53,7 @@ const COLUMNS: Col[] = [
   { id: "Tanggal Next Action", en: "Next Action Date", key: "nextActionDate", width: 13 },
   { id: "Blocker / Issue", en: "Blocker / Issue", key: "blocker", width: 30 },
   { id: "Catatan", en: "Notes", key: "notes", width: 40 },
+  { id: "Termin Pembayaran", en: "Payment Terms", key: "termsText", width: 50 },
   { id: "Dokumen & Link", en: "Documents & Links", key: "linksText", width: 40 },
   { id: "Terakhir Diperbarui", en: "Last Updated", key: "updatedLabel", width: 24 },
 ]
@@ -83,8 +84,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     for (const row of rows) {
       const d = serializeDeal(row, today)
+      // A deal paid per term (owner, 9 Oct 2026): its receivable, status and next due date come from the
+      // terms — the same numbers the board shows; the manual columns only for deals without terms.
+      const ts = d.termSummary
       const values: Record<string, unknown> = {
         ...d,
+        paymentStatus: ts?.paymentStatus ?? d.paymentStatus,
+        outstandingReceivable: ts?.outstanding ?? d.outstandingReceivable,
+        paymentDueDate: ts ? ts.nextDueDate ?? "" : d.paymentDueDate,
+        termsText: d.terms
+          .map((t) => `${t.label}: Rp${Math.round(t.amount).toLocaleString("id-ID")}${t.dueDate ? ` (${en ? "due" : "jatuh tempo"} ${t.dueDate})` : ""} · ${t.status}${t.paidAmount > 0 && t.status !== "Paid" ? ` Rp${Math.round(t.paidAmount).toLocaleString("id-ID")}` : ""}`)
+          .join(" | "),
         bdLabel: d.bd?.name ?? d.bdName ?? "",
         pmLabel: d.pm?.name ?? d.pmName ?? "",
         healthLabel: HEALTH[d.health.key][en ? 1 : 0],

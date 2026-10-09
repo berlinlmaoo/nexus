@@ -1,69 +1,17 @@
 import prisma from "@/lib/prisma"
-import type { Prisma } from "@/generated/prisma/client"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 /**
- * Who may see the Pipeline Dashboard (owner/GM, 9 Oct 2026): "Board ini dari awal didesain buat BOD +
- * Agency + Management (IT, Legal, Finance) aja." The board holds every deal's money, so nobody else sees
- * it — not even a Manager, who otherwise sees every project of the workspace.
+ * Who may see the Pipeline Dashboard (owner, 9 Oct 2026, evening — replaces the BoD + Agency + IT/Legal/
+ * Finance rule of that afternoon): "akses project pipelinenya kaya nambah orang biasa aja di task project
+ * yg perlu di add manual per project", "aksesnya yg tentuin yg buat project pipelinenya", "yg bisa buka
+ * chat dan project nya yg di add didalem projectnya doang".
  *
- * Allowed: system admins, One Above All / BoD of the company workspace, and company members who sit in a
- * Bagan IP & Divisi card (OrgUnit) whose name — or the name of a card above it — contains one of
- * PIPELINE_UNIT_NAMES as a word, ignoring case. "Above it" because "Agency" is an IP card (Framework
- * Agency) whose people are mostly in the divisions under it (Multimedia, Project Management, …).
- *
- * Applied server-side in checkProjectAccess (every route of a PIPELINE project, the socket's project room)
- * and in project lists; clients read `canAccessPipeline` from GET /api/workspaces/members to draw the
- * "Pipeline" entry. Changing who is in which card on the Bagan changes access at once — nothing is cached.
+ * So the board is an ordinary project for access: checkProjectAccess decides every route, the socket's
+ * project room and the project's chat room, exactly as for a task project, and its lead adds people as
+ * project members from the usual member screen. Nothing here grants access; this file only answers what
+ * the clients need to draw the "Pipeline" nav entry and the New project picker.
  */
-export const PIPELINE_UNIT_NAMES = ["Agency", "IT", "Legal", "Finance"] as const
-
-/** "Finance & Tech" → ["finance", "tech"]; a unit matches when one of its words is an allowed name. */
-export function isPipelineUnitName(name: string): boolean {
-  const words = name.toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean)
-  return PIPELINE_UNIT_NAMES.some((allowed) => words.includes(allowed.toLowerCase()))
-}
-
-/** The ids of every company card that grants access: a matching card and every card below it. */
-async function pipelineUnitIds(): Promise<Set<string>> {
-  const units = await prisma.orgUnit.findMany({
-    where: { workspaceId: ORG_WORKSPACE_ID },
-    select: { id: true, name: true, parentId: true },
-  })
-  const byId = new Map(units.map((u) => [u.id, u]))
-  const granted = new Set<string>()
-  for (const unit of units) {
-    // Walk up; the seen-set stops a parent loop (the chart forbids one, but a bad row must not hang a request).
-    const seen = new Set<string>()
-    for (let u: typeof unit | undefined = unit; u && !seen.has(u.id); u = u.parentId ? byId.get(u.parentId) : undefined) {
-      seen.add(u.id)
-      if (isPipelineUnitName(u.name)) { granted.add(unit.id); break }
-    }
-  }
-  return granted
-}
-
-/** May this person see and edit the Pipeline Dashboard? */
-export async function canAccessPipeline(userId: string): Promise<boolean> {
-  const [user, member] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    prisma.workspaceMember.findUnique({
-      where: { userId_workspaceId: { userId, workspaceId: ORG_WORKSPACE_ID } },
-      select: { role: true },
-    }),
-  ])
-  if (user?.role === "ADMIN") return true
-  // Someone offboarded (no longer in the company workspace) keeps no access through an old Bagan row.
-  if (!member) return false
-  if (member.role === "ONE_ABOVE_ALL" || member.role === "BOD") return true
-  const mine = await prisma.orgUnitMember.findMany({
-    where: { userId, workspaceId: ORG_WORKSPACE_ID },
-    select: { unitId: true },
-  })
-  if (mine.length === 0) return false
-  const granted = await pipelineUnitIds()
-  return mine.some((m) => granted.has(m.unitId))
-}
 
 /**
  * The company's one Pipeline board (owner/GM, 9 Oct 2026: "cuma satu papan/pipeline utama buat semua deal,
@@ -77,7 +25,27 @@ export async function companyPipelineProject(): Promise<{ id: string; name: stri
   })
 }
 
-/** A project-list filter: PIPELINE projects are left out for anyone who may not open them. */
-export async function pipelineListFilter(userId: string): Promise<Prisma.ProjectWhereInput> {
-  return (await canAccessPipeline(userId)) ? {} : { type: { not: "PIPELINE" } }
+/**
+ * The two flags of GET /api/workspaces/members (names kept from the afternoon so clients need no change):
+ * - pipelineProjectId: the board, when this person is a member of it (the nav entry opens it). Only
+ *   members get the entry, even someone whose workspace role could open it from the project list — the
+ *   owner wants the board to be the members' board.
+ * - canAccessPipeline: may pick "Pipeline Dashboard" in New project — a member (the pick opens the board),
+ *   or anyone of the company while no board exists yet (they create it and become its lead, like any
+ *   project). A non-member while it exists: hidden, a second one would only be refused.
+ */
+export async function pipelineFlags(userId: string): Promise<{ canAccessPipeline: boolean; pipelineProjectId: string | null }> {
+  const board = await companyPipelineProject()
+  if (!board) {
+    const inCompany = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId: ORG_WORKSPACE_ID } },
+      select: { id: true },
+    })
+    return { canAccessPipeline: !!inCompany, pipelineProjectId: null }
+  }
+  const member = await prisma.projectMember.findUnique({
+    where: { userId_projectId: { userId, projectId: board.id } },
+    select: { id: true },
+  })
+  return member ? { canAccessPipeline: true, pipelineProjectId: board.id } : { canAccessPipeline: false, pipelineProjectId: null }
 }

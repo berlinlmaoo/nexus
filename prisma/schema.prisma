@@ -3279,6 +3279,9 @@ model PipelineDeal {
   mainDateTaskId     String?
 
   changes PipelineDealChange[]
+  /// Payments per term (owner, 9 Oct 2026: "perlu per termin"). When a deal has any, its receivable,
+  /// payment status and days overdue come from them; the manual columns above stay for deals without.
+  terms   PipelinePaymentTerm[]
 
   @@unique([projectId, code])
   @@index([projectId, stage, position])
@@ -3295,7 +3298,34 @@ model PipelineDealChange {
   field     String
   before    Json?
   after     Json?
+  /// A change to one payment term (field "term.<column>", "term.created", "term.deleted", "term.restored"):
+  /// which term, and its label at the time — plain columns, the term may be gone since (9 Oct 2026).
+  termId    String?
+  termLabel String?
   createdAt DateTime     @default(now())
 
   @@index([dealId, createdAt])
+}
+
+/// One payment term (installment) of a deal: "DP", "Termin 1", … (owner, 9 Oct 2026: "perlu per termin").
+/// Its status (Not Invoiced / Invoiced / Partial / Paid / Overdue) is derived, never stored — see
+/// termStatusOf in lib/pipeline.ts. SQL: prisma/sql/2026-10-09-pipeline-terms.sql.
+model PipelinePaymentTerm {
+  id          String       @id @default(cuid())
+  dealId      String
+  deal        PipelineDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  /// Order inside the deal (1024, 2048, …).
+  position    Float        @default(0)
+  label       String       @default("")
+  amount      Float        @default(0)
+  dueDate     DateTime?
+  invoiceNo   String       @default("")
+  invoiceDate DateTime?
+  paidAmount  Float        @default(0)
+  paidAt      DateTime?
+  note        String       @default("")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([dealId, position])
 }
