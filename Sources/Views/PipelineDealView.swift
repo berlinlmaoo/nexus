@@ -718,7 +718,7 @@ struct PipelineFieldBox<Content: View>: View {
 }
 
 /// The box every control sits in, so text, menus, money and dates line up.
-private struct PipelineInputChrome: ViewModifier {
+struct PipelineInputChrome: ViewModifier {
     var active = false
     func body(content: Content) -> some View {
         content
