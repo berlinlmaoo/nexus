@@ -130,6 +130,11 @@ model User {
   orgUnitMemberships OrgUnitMember[] @relation("OrgUnitMemberships")
   orgUnitsLed        OrgUnit[]       @relation("OrgUnitLead")
   orgUnitReports     OrgUnitMember[] @relation("OrgUnitReportsTo")
+  pipelineDealsBd      PipelineDeal[]       @relation("PipelineDealBd")
+  pipelineDealsPm      PipelineDeal[]       @relation("PipelineDealPm")
+  pipelineDealsCreated PipelineDeal[]       @relation("PipelineDealCreatedBy")
+  pipelineDealsUpdated PipelineDeal[]       @relation("PipelineDealUpdatedBy")
+  pipelineDealChanges  PipelineDealChange[]
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -535,6 +540,7 @@ model Project {
   pnlIncomes         PnlIncome[]
   pnlBudgets         PnlBudget[]
   pnlRecurring       PnlRecurringExpense[]
+  pipelineDeals      PipelineDeal[]
 
   @@index([folderId, position])
 }
@@ -3195,4 +3201,88 @@ model OrgUnitMember {
   @@unique([unitId, userId])
   @@index([userId])
   @@index([workspaceId])
+}
+
+/// One deal of a Pipeline Dashboard project (Project.type "PIPELINE", owner 9 Oct 2026) — a row of the GM's
+/// "Control Tower TZN" board: a client job from first contact to closed and paid. Stage and status values
+/// are the GM's English keys (vocabulary + rules in src/lib/pipeline.ts). Money in rupiah, Float like P&L.
+/// SQL: prisma/sql/2026-10-09-pipeline.sql (applied by hand before the image that reads it).
+model PipelineDeal {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// "TZN-26001": prefix + 2-digit year + per-project sequence. Read-only, unique per project.
+  code      String
+  /// Order inside its stage column (drag on the board).
+  position  Float   @default(0)
+
+  name    String
+  brand   String @default("")
+  service String @default("Other")
+
+  /// BD / Account owner and PM are NEXUS users; the *Name columns are a free-text fallback for someone
+  /// who is not one (an import, a freelancer). A user id wins over the text.
+  bdUserId String?
+  bd       User?   @relation("PipelineDealBd", fields: [bdUserId], references: [id], onDelete: SetNull)
+  bdName   String?
+  pmUserId String?
+  pm       User?   @relation("PipelineDealPm", fields: [pmUserId], references: [id], onDelete: SetNull)
+  pmName   String?
+
+  stage       String @default("Incoming")
+  probability Float  @default(0.1)
+
+  contractValue Float @default(0)
+  netValue      Float @default(0)
+  invoiceValue  Float @default(0)
+
+  contractStatus    String @default("Not Started")
+  vregStatus        String @default("Not Required")
+  readiness         String @default("N/A")
+  deliverableStatus String @default("Not Started")
+  deliverableRisk   String @default("Aman")
+
+  paymentStatus         String    @default("Not Yet")
+  outstandingReceivable Float     @default(0)
+  /// When set (and money is still owed) days overdue is counted from it; else maxDaysOverdue (typed).
+  paymentDueDate        DateTime?
+  maxDaysOverdue        Int       @default(0)
+  netCash               Float     @default(0)
+
+  closingStatus  String    @default("Not Ready")
+  mainDate       DateTime?
+  nextAction     String    @default("")
+  nextActionDate DateTime?
+  blocker        String    @default("")
+  notes          String    @default("")
+  /// [{ id, type: "SPK"|"Kontrak"|"MOU"|"Invoice"|"Lainnya", label, url }]
+  links          Json      @default("[]")
+
+  createdById String?
+  createdBy   User?    @relation("PipelineDealCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById String?
+  updatedBy   User?    @relation("PipelineDealUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  changes PipelineDealChange[]
+
+  @@unique([projectId, code])
+  @@index([projectId, stage, position])
+}
+
+/// Per-field edit history of a deal: who changed which field from what to what (the GM's board kept only
+/// the last _updatedAt/_updatedBy). Comes back with the deal on a restore from Audit.
+model PipelineDealChange {
+  id        String       @id @default(cuid())
+  dealId    String
+  deal      PipelineDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  field     String
+  before    Json?
+  after     Json?
+  createdAt DateTime     @default(now())
+
+  @@index([dealId, createdAt])
 }

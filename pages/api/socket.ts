@@ -530,6 +530,12 @@ export function initializeSocketServer(
     if (rooms.length > 0) io.to(rooms).emit("workspace-changed", data.payload)
   })
 
+  // A deal of a Pipeline Dashboard project changed (lib/socket-emitter.ts emitPipelineChanged): ids only,
+  // to the project's room, which a socket joins only with VIEWER access to the project.
+  eventBus.on(BUS_EVENTS.PIPELINE_CHANGED, (data: { projectId: string; dealId: string | null; actorId: string | null }) => {
+    io.to(`project:${data.projectId}`).emit("pipeline-changed", { projectId: data.projectId, dealId: data.dealId, actorId: data.actorId })
+  })
+
   // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes
   // out once, after the last write in the window has committed. Nothing is looked up per write.
   let auditPing: ReturnType<typeof setTimeout> | null = null

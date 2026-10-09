@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import type { SnapshotMeta } from "@/lib/deletion-entities"
-import { emitCommentAdded, emitConversationUpdated, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { emitCommentAdded, emitConversationUpdated, emitPipelineChanged, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 const log = createLogger("deletion-restore")
@@ -69,6 +69,10 @@ export async function afterRestore(input: {
         ? input.entityId
         : (await prisma.vaultItem.findUnique({ where: { id: input.entityId }, select: { workspaceId: true } }))?.workspaceId
       emitVaultChanged(workspaceId, actorId)
+    }
+    if (entityType === "pipeline_deal" && projectId) {
+      // The deal reappears on every open pipeline of its project (owner, 9 Oct 2026).
+      emitPipelineChanged(projectId, input.entityId, actorId)
     }
     if (entityType === "chat_group") {
       // The group is back with its members: their lists refetch it ("membership", the reason every
