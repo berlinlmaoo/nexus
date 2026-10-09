@@ -730,10 +730,10 @@ export async function notifyFeedMention(data: {
  * pushes go through sendPushToUsers — one device query, one log line, the shared in-flight limiter.
  * Each person still gets their own row id on the push, so Android can mark it read on tap.
  *
- * Preferences: the in-app row is always written (it is the bell, and the post is there either way).
- * The push respects Do Not Disturb and the same switch every Threads notification already reads
- * (`commentMention`); there is no separate "new posts" switch, so turning that off silences Threads
- * on the phone entirely. No WhatsApp or Slack: a message per post per person would be spam.
+ * Always delivered (owner, 9 Oct 2026: "post baru di threads selalu kasih notif ke semua orang di
+ * workspace Z Networks dan gausah kasih switch mati"): neither the `commentMention` switch nor Do Not
+ * Disturb holds this push back, and there is deliberately no "new posts" switch. Mentions, comments
+ * and likes keep their preferences. No WhatsApp or Slack: a message per post per person would be spam.
  */
 export async function notifyFeedPost(data: {
   postId: string
@@ -765,9 +765,7 @@ export async function notifyFeedPost(data: {
     })
     for (const row of rows) emitNotification(row.userId, JSON.parse(JSON.stringify(row)))
 
-    const [dnd, prefs] = await Promise.all([getBatchDndStatus(ids), getBatchPrefs(ids)])
     const items: Array<{ userId: string; payload: PushPayload }> = rows
-      .filter((row) => !dnd.has(row.userId) && prefs.get(row.userId)?.commentMention !== false)
       .map((row) => ({
         userId: row.userId,
         payload: { title, body: message, type: "feed_post", link, threadId: FEED_THREAD_ID, image, notificationId: row.id },
