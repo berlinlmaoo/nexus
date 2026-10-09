@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, ChevronDown, CircleCheck, ExternalLink, FolderKanban, History, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, CircleCheck, FolderKanban, History, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -12,14 +12,16 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  CLOSING_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, DELIVERABLE_RISK_OPTIONS, DELIVERABLE_STATUS_OPTIONS, LINK_TYPES,
-  PAYMENT_STATUS_OPTIONS, PIPELINE_STAGES, PROBABILITY_OPTIONS, READINESS_OPTIONS, SERVICE_OPTIONS, VREG_STATUS_OPTIONS,
+  CLOSING_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, DELIVERABLE_RISK_OPTIONS, DELIVERABLE_STATUS_OPTIONS,
+  PAYMENT_STATUS_OPTIONS, PIPELINE_STAGES, PROBABILITY_OPTIONS, READINESS_OPTIONS, VREG_STATUS_OPTIONS,
   pipelineToday, summarize,
 } from "@/lib/pipeline";
 import {
-  dealKey, pipelineApi, pipelineKey, type PipelineChange, type PipelineDeal, type PipelineDealPatch, type PipelineResponse,
+  dealKey, pipelineApi, pipelineKey, servicesOf, type PipelineChange, type PipelineDeal, type PipelineDealPatch, type PipelineResponse,
   type PipelineTerm, type PipelineTermPatch,
 } from "@/lib/pipeline-api";
+import { DealDocuments } from "./DealDocuments";
+import { ServicesField } from "./ServicesField";
 import { DateField, MoneyField, NumberField, PersonField, SelectField, TextField, type PersonOption } from "./fields";
 import {
   HealthPill, PHASE_LABEL, PHASE_STATE_LABEL, TERM_TONE, fmtDay, fmtIdrFull, fmtPct, phaseDotTone, useReasonText, useVocabLabels,
@@ -27,7 +29,7 @@ import {
 
 /** English names of the fields, for the history ("Bagas changed Stage …"). Translated with t(). */
 const FIELD_LABEL: Record<string, string> = {
-  name: "Name", brand: "Brand / client", service: "Service", bdUserId: "BD / account owner", bdName: "BD / account owner",
+  name: "Name", brand: "Brand / client", service: "Service", services: "Services", bdUserId: "BD / account owner", bdName: "BD / account owner",
   pmUserId: "PM", pmName: "PM", stage: "Stage", probability: "Probability", contractValue: "Contract value",
   netValue: "Net project value", invoiceValue: "Invoice value", contractStatus: "Contract status",
   vregStatus: "Vendor registration", readiness: "Execution readiness", deliverableStatus: "Deliverable status",
@@ -264,7 +266,7 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
 
       <Section title={t("Commercial & pipeline")} owner={t("BD / account")}>
         <Field label={L("Brand / client")}><TextField label={L("Brand / client")} value={deal.brand} maxLength={200} disabled={off} onCommit={(v) => onPatch({ brand: v })} /></Field>
-        <Field label={L("Service")}><SelectField label={L("Service")} value={deal.service} options={SERVICE_OPTIONS} disabled={off} onCommit={(v) => onPatch({ service: v })} /></Field>
+        <Field label={L("Services")} wide><ServicesField value={servicesOf(deal)} projectId={projectId} disabled={off} onCommit={(v) => onPatch({ services: v })} /></Field>
         <Field label={L("BD / account owner")}>
           <PersonField label={L("BD / account owner")} userId={deal.bdUserId} userName={deal.bd?.name} name={deal.bdName} people={people} disabled={off} onCommit={({ userId, name }) => onPatch({ bdUserId: userId, bdName: name })} />
         </Field>
@@ -405,63 +407,8 @@ function Details({ deal, projectId, people, canEdit, onPatch }: { deal: Pipeline
       </Section>
 
       <Section title={t("Documents & links")} owner={t("Every division")}>
-        <div className="sm:col-span-2"><Links deal={deal} canEdit={canEdit} onPatch={onPatch} /></div>
+        <div className="sm:col-span-2"><DealDocuments deal={deal} projectId={projectId} canEdit={canEdit} onPatch={onPatch} /></div>
       </Section>
-    </div>
-  );
-}
-
-function Links({ deal, canEdit, onPatch }: { deal: PipelineDeal; canEdit: boolean; onPatch: (p: PipelineDealPatch) => void }) {
-  const { t } = useLang();
-  const labels = useVocabLabels();
-  const [type, setType] = useState<string>("SPK");
-  const [url, setUrl] = useState("");
-  const [label, setLabel] = useState("");
-  const add = () => {
-    let u = url.trim();
-    if (!u) return;
-    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
-    onPatch({ links: [...deal.links, { id: `lnk${Date.now().toString(36)}`, type, label: label.trim(), url: u }] });
-    setUrl("");
-    setLabel("");
-  };
-  return (
-    <div className="space-y-2">
-      {deal.links.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("No SPK, contract, MOU or invoice linked yet.")}</p>
-      ) : (
-        <ul className="divide-y divide-border rounded-xl border border-border">
-          {deal.links.map((l) => (
-            <li key={l.id} className="flex items-center gap-2 px-3 py-2">
-              <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-semibold">{labels.link(l.type)}</span>
-              <a href={l.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 flex-1 items-center gap-1 truncate text-sm font-medium text-primary underline-offset-2 hover:underline">
-                <span className="truncate">{l.label || l.url}</span>
-                <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
-              </a>
-              {canEdit && (
-                <button type="button" aria-label={t("Remove link")} onClick={() => onPatch({ links: deal.links.filter((x) => x.id !== l.id) })} className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-[44px]">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {canEdit && (
-        <form onSubmit={(e) => { e.preventDefault(); add(); }} className="grid gap-2 sm:grid-cols-[8.5rem_1fr]">
-          <select aria-label={t("Link type")} value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm pointer-coarse:min-h-[44px]">
-            {LINK_TYPES.map((k) => <option key={k} value={k}>{labels.link(k)}</option>)}
-          </select>
-          <div className="relative">
-            <Link2 aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input aria-label={t("Link")} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("Paste a link (https://…)")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2.5 text-sm pointer-coarse:min-h-[44px]" />
-          </div>
-          <input aria-label={t("Document name")} value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("Document name (optional)")} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm sm:col-start-2 pointer-coarse:min-h-[44px]" />
-          <button type="submit" disabled={!url.trim()} className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-40 sm:col-start-2 sm:justify-self-start pointer-coarse:min-h-[44px]">
-            <Plus className="h-3.5 w-3.5" /> {t("Add link")}
-          </button>
-        </form>
-      )}
     </div>
   );
 }
@@ -480,6 +427,7 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
     if (field === "stage" && typeof v === "string") return labels.stage(v);
     if (field === "deliverableRisk" && typeof v === "string") return labels.risk(v);
     if (field === "links" && Array.isArray(v)) return t("{n} links", { n: v.length });
+    if (field === "services" && Array.isArray(v)) return v.length ? v.join(", ") : t("empty");
     return String(v);
   };
   if (q.isLoading) {
@@ -489,6 +437,14 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
   const rows: PipelineChange[] = q.data?.history ?? [];
   // A payment term's own events (owner, 9 Oct 2026): added / deleted / restored, with its amount.
   const termEvent: Record<string, string> = { "term.created": "added payment term", "term.deleted": "deleted payment term", "term.restored": "restored payment term" };
+  // A document added or removed (owner, 9 Oct 2026): its type and name, the file's name when it has no other.
+  const docEvent: Record<string, string> = { "document.added": "added a document", "document.removed": "removed a document" };
+  const docName = (h: PipelineChange) => {
+    const v = (h.field === "document.removed" ? h.before : h.after) as { type?: unknown; label?: unknown; fileName?: unknown; url?: unknown } | null;
+    if (!v) return "";
+    const name = [v.label, v.fileName, v.url].find((x) => typeof x === "string" && x) as string | undefined;
+    return `${typeof v.type === "string" ? labels.link(v.type) : ""}${name ? ` · ${name}` : ""}`;
+  };
   const termAmount = (h: PipelineChange) => {
     const v = (h.field === "term.deleted" ? h.before : h.after) as { amount?: unknown } | null;
     return typeof v?.amount === "number" ? fmtIdrFull(v.amount, lang) : null;
@@ -501,16 +457,18 @@ function HistoryList({ projectId, deal, people }: { projectId: string; deal: Pip
           <div className="min-w-0 flex-1 text-sm">
             <p>
               <span className="font-semibold">{h.user?.name ?? t("Someone")}</span>{" "}
-              <span className="text-muted-foreground">{t(termEvent[h.field] ?? "changed")}</span>{" "}
+              <span className="text-muted-foreground">{t(termEvent[h.field] ?? docEvent[h.field] ?? "changed")}</span>{" "}
               <span className="font-medium">
-                {termEvent[h.field]
+                {docEvent[h.field]
+                  ? docName(h)
+                  : termEvent[h.field]
                   ? h.termLabel ?? ""
                   : h.field.startsWith("term.")
                     ? `${h.termLabel ?? t("Payment term")} · ${t(TERM_FIELD_LABEL[h.field.slice(5)] ?? h.field.slice(5))}`
                     : t(FIELD_LABEL[h.field] ?? h.field)}
               </span>
             </p>
-            {termEvent[h.field] ? (
+            {docEvent[h.field] ? null : termEvent[h.field] ? (
               termAmount(h) && <p className="mt-0.5 tabular-nums text-muted-foreground">{termAmount(h)}</p>
             ) : h.field === "notes" || h.field === "term.note" ? (
               <p className="mt-0.5 line-clamp-3 text-muted-foreground">{show(h.field, h.after)}</p>

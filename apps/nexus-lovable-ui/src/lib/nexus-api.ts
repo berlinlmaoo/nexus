@@ -2033,7 +2033,7 @@ function xhrUpload<T>(url: string, fd: FormData, file: File, onProgress: (pct: n
   });
 }
 
-function uploadChunked<T extends { id?: string }>(
+export function uploadChunked<T extends { id?: string }>(
   file: File,
   params: Record<string, string>,
   onProgress: (pct: number) => void,
