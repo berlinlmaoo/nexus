@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { daysBetween } from "@/lib/pipeline";
 import type { PipelineDeal } from "@/lib/pipeline-api";
-import { HealthPill, fmtDay, fmtIdr, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
+import { HealthPill, dealPayment, fmtDay, fmtIdr, personName, useReasonText, useVocabLabels } from "./pipeline-ui";
 import { bySeverity } from "./PipelineBoard";
 
 /**
@@ -28,7 +28,9 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
   const overdueActions = actions.filter((d) => d.nextActionDate! < today);
   const todayActions = actions.filter((d) => d.nextActionDate === today);
   const weekActions = actions.filter((d) => d.nextActionDate! > today);
-  const late = deals.filter((d) => d.daysOverdue > 0 && d.outstandingReceivable > 0).sort((a, b) => b.daysOverdue - a.daysOverdue);
+  // A deal paid per term counts only what is past due, not the terms still to come (owner, 9 Oct 2026).
+  const lateAmount = (d: PipelineDeal) => (d.termSummary ? d.termSummary.overdueOutstanding : d.outstandingReceivable);
+  const late = deals.filter((d) => d.daysOverdue > 0 && lateAmount(d) > 0).sort((a, b) => b.daysOverdue - a.daysOverdue);
   const blockers = live.filter((d) => d.blocker).sort(bySeverity);
 
   const DealLink = ({ d }: { d: PipelineDeal }) => (
@@ -101,7 +103,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
           )}
         </Panel>
 
-        <Panel icon={<Wallet className="h-4 w-4" />} title={t("Late payments")} meta={late.length ? fmtIdr(late.reduce((s, d) => s + d.outstandingReceivable, 0), lang) : undefined}>
+        <Panel icon={<Wallet className="h-4 w-4" />} title={t("Late payments")} meta={late.length ? fmtIdr(late.reduce((s, d) => s + lateAmount(d), 0), lang) : undefined}>
           {late.length === 0 ? (
             <Calm text={t("No receivable is past its due date.")} />
           ) : (
@@ -110,7 +112,7 @@ export function PipelineHealth({ deals, today, onOpen }: { deals: PipelineDeal[]
                 <li key={d.id} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
                   <div className="min-w-0">
                     <DealLink d={d} />
-                    <p className="text-xs text-muted-foreground">{d.paymentStatus} · {fmtIdr(d.outstandingReceivable, lang)}</p>
+                    <p className="text-xs text-muted-foreground">{dealPayment(d).status} · {fmtIdr(lateAmount(d), lang)}</p>
                   </div>
                   <span className={cn("shrink-0 text-sm font-semibold tabular-nums", d.daysOverdue > 7 ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-300")}>
                     {tn(d.daysOverdue, "{n} day", "{n} days")}

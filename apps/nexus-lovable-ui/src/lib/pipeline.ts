@@ -49,6 +49,7 @@ export const PIPELINE_VOCAB = {
   paymentStatuses: PAYMENT_STATUS_OPTIONS,
   closingStatuses: CLOSING_STATUS_OPTIONS,
   linkTypes: LINK_TYPES,
+  termStatuses: ["Not Invoiced", "Invoiced", "Partial", "Paid", "Overdue"],
 } as const
 
 /** The GM's thresholds (his Google Sheets cfg_* parameters). */
@@ -72,6 +73,8 @@ export type PipelineDealFacts = {
   netCash: number
   closingStatus: string
   blocker: string
+  /** Payments per term (owner, 9 Oct 2026). When there are any, they decide the payment fields above. */
+  terms?: readonly PaymentTermFacts[] | null
 }
 
 export function stageGroupOf(stage: string): StageGroup {
@@ -103,12 +106,122 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
 }
 
+// ── Payment terms (owner, 9 Oct 2026: "perlu per termin") ─────────────────────────────────────────────
+// A deal is often paid in terms (DP, Termin 1, Pelunasan). With terms, the deal's receivable, payment
+// status and days overdue are derived from them, so nobody types a total that goes stale; a deal without
+// terms (the GM's imported rows, small jobs) keeps the manual fields as before.
+
+/** A term's status — derived from its amount, payment, invoice and due date, never stored. */
+export const TERM_STATUSES = ["Not Invoiced", "Invoiced", "Partial", "Paid", "Overdue"] as const
+export type TermStatus = (typeof TERM_STATUSES)[number]
+
+/** The term fields the rules read. Dates are "YYYY-MM-DD" or null. */
+export type PaymentTermFacts = {
+  amount: number
+  dueDate: string | null
+  invoiceNo: string
+  invoiceDate: string | null
+  paidAmount: number
+  paidAt: string | null
+}
+
+/** Paid in full. A zero-amount term counts as paid only once a payment date is set. */
+export function isTermPaid(t: PaymentTermFacts): boolean {
+  const paid = t.paidAmount || 0
+  return paid >= (t.amount || 0) && (paid > 0 || !!t.paidAt)
+}
+
+export function termStatusOf(t: PaymentTermFacts, today: string): TermStatus {
+  if (isTermPaid(t)) return "Paid"
+  if (t.dueDate && t.dueDate < today) return "Overdue"
+  if ((t.paidAmount || 0) > 0) return "Partial"
+  if (t.invoiceNo || t.invoiceDate) return "Invoiced"
+  return "Not Invoiced"
+}
+
+/** What is still owed on one term. */
+export function termOutstanding(t: PaymentTermFacts): number {
+  return isTermPaid(t) ? 0 : Math.max(0, (t.amount || 0) - (t.paidAmount || 0))
+}
+
+/** Days past the due date of a term not yet paid in full; 0 when paid, undated or not yet due. */
+export function termDaysOverdue(t: PaymentTermFacts, today: string): number {
+  if (isTermPaid(t) || !t.dueDate) return 0
+  return Math.max(0, daysBetween(t.dueDate, today))
+}
+
+export type TermSummary = {
+  count: number
+  paidCount: number
+  /** Σ amount — compare with the invoice (else contract) value: terms that do not add up get a warning. */
+  totalAmount: number
+  totalPaid: number
+  /** Σ (amount − paid) over the terms not paid in full: the deal's receivable. */
+  outstanding: number
+  /** The part of `outstanding` that is past its due date. */
+  overdueOutstanding: number
+  /** The oldest unpaid due date, in days past (0 = nothing overdue). */
+  maxDaysOverdue: number
+  /** The deal-level status in the GM's vocabulary (PAYMENT_STATUS_OPTIONS). */
+  paymentStatus: string
+  /** The earliest due date among the terms still owed. */
+  nextDueDate: string | null
+}
+
+/**
+ * The deal's payment, from its terms; null when it has none (then the manual fields count). Status, in
+ * order: Paid (every term paid) → Overdue (any term past due) → Due (one falls due today) → Partial (some
+ * money received) → Upcoming (an invoice is out) → Not Yet.
+ */
+export function termSummaryOf(terms: readonly PaymentTermFacts[] | null | undefined, today: string): TermSummary | null {
+  if (!terms || terms.length === 0) return null
+  const s: TermSummary = {
+    count: terms.length, paidCount: 0, totalAmount: 0, totalPaid: 0, outstanding: 0, overdueOutstanding: 0,
+    maxDaysOverdue: 0, paymentStatus: "Not Yet", nextDueDate: null,
+  }
+  let dueToday = false
+  let invoiced = false
+  for (const t of terms) {
+    s.totalAmount += t.amount || 0
+    s.totalPaid += t.paidAmount || 0
+    if (isTermPaid(t)) { s.paidCount++; continue }
+    const owed = termOutstanding(t)
+    s.outstanding += owed
+    const late = termDaysOverdue(t, today)
+    if (late > 0) s.overdueOutstanding += owed
+    s.maxDaysOverdue = Math.max(s.maxDaysOverdue, late)
+    if (t.dueDate === today) dueToday = true
+    if (t.invoiceNo || t.invoiceDate) invoiced = true
+    if (t.dueDate && (!s.nextDueDate || t.dueDate < s.nextDueDate)) s.nextDueDate = t.dueDate
+  }
+  s.paymentStatus =
+    s.paidCount === s.count ? "Paid"
+      : s.maxDaysOverdue > 0 ? "Overdue"
+      : dueToday ? "Due"
+      : s.totalPaid > 0 ? "Partial"
+      : invoiced ? "Upcoming"
+      : "Not Yet"
+  return s
+}
+
+/**
+ * The deal's facts with its payment fields taken from its terms (when it has any) — what every rule below
+ * reads. The result carries no terms, so applying it twice changes nothing.
+ */
+export function paymentFactsOf<T extends Partial<PipelineDealFacts>>(d: T, today: string): T {
+  const s = termSummaryOf(d.terms, today)
+  if (!s) return d
+  return { ...d, terms: null, paymentStatus: s.paymentStatus, outstandingReceivable: s.outstanding, paymentDueDate: null, maxDaysOverdue: s.maxDaysOverdue }
+}
+
 /**
  * Days the receivable is overdue. From the payment due date while money is still owed — a number typed
  * by hand (the GM's sheet) is wrong the next morning; the typed maxDaysOverdue stays for rows without a
  * date (owner, 9 Oct 2026).
  */
-export function daysOverdueOf(d: Pick<PipelineDealFacts, "paymentDueDate" | "outstandingReceivable" | "paymentStatus" | "maxDaysOverdue">, today: string): number {
+export function daysOverdueOf(d0: Pick<PipelineDealFacts, "paymentDueDate" | "outstandingReceivable" | "paymentStatus" | "maxDaysOverdue" | "terms">, today: string): number {
+  // With payment terms: the oldest unpaid term's days past due (owner, 9 Oct 2026).
+  const d = paymentFactsOf(d0, today)
   if (d.paymentDueDate && d.outstandingReceivable > 0 && d.paymentStatus !== "Paid") {
     return Math.max(0, daysBetween(d.paymentDueDate, today))
   }
@@ -133,7 +246,8 @@ export type HealthReason = { code: HealthReasonCode; days?: number; text?: strin
 export type DealHealth = { key: HealthKey; reasons: HealthReason[] }
 
 /** The GM's computeHealth, unchanged — reasons as codes so every client says them in its own language. */
-export function healthOf(d: PipelineDealFacts, today: string): DealHealth {
+export function healthOf(d0: PipelineDealFacts, today: string): DealHealth {
+  const d = paymentFactsOf(d0, today)
   const group = stageGroupOf(d.stage)
   if (group === "Pipeline") return { key: "NOT_STARTED", reasons: [] }
   if (group === "Lost") return { key: "NONE", reasons: [] }
@@ -162,7 +276,8 @@ export type PhaseState = "done" | "active" | "pending" | "bad"
 export type DealPhase = { key: PhaseKey; state: PhaseState }
 
 /** The six-dot track on every card: how far each operational line of the deal has come (GM's nodes). */
-export function phasesOf(d: PipelineDealFacts): DealPhase[] {
+export function phasesOf(d0: PipelineDealFacts, today: string = pipelineToday()): DealPhase[] {
+  const d = paymentFactsOf(d0, today)
   const group = stageGroupOf(d.stage)
   const commercial: PhaseState = group === "Pipeline" ? (d.stage === "Incoming" ? "pending" : "active") : group === "Lost" ? "bad" : "done"
   const contract: PhaseState = d.contractStatus === "Fully Executed" ? "done" : d.contractStatus === "Cancelled" ? "bad" : !d.contractStatus || d.contractStatus === "Not Started" ? "pending" : "active"
@@ -222,7 +337,9 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     lostCount: 0, lostValue: 0, readyCount: 0, blockedCount: 0, receivable: 0, receivableOverdue: 0,
     criticalCount: 0, attentionCount: 0, deliverablesOnTrack: 0, deliverablesDone: 0,
   }
-  for (const d of deals) {
+  for (const d0 of deals) {
+    const terms = termSummaryOf(d0.terms, today)
+    const d = paymentFactsOf(d0, today)
     const group = stageGroupOf(d.stage)
     const value = dealValue(d)
     if (group === "Pipeline") {
@@ -240,7 +357,9 @@ export function summarize(deals: PipelineDealFacts[], today: string): PipelineSu
     if (d.readiness === "Ready") s.readyCount++
     if (d.readiness === "Blocked") s.blockedCount++
     s.receivable += d.outstandingReceivable || 0
-    if (daysOverdueOf(d, today) > 0) s.receivableOverdue += d.outstandingReceivable || 0
+    // With terms only the part past due counts as overdue, not the whole remaining contract.
+    if (terms) s.receivableOverdue += terms.overdueOutstanding
+    else if (daysOverdueOf(d, today) > 0) s.receivableOverdue += d.outstandingReceivable || 0
     const h = healthOf(d, today).key
     if (h === "CRITICAL") s.criticalCount++
     if (h === "ATTENTION") s.attentionCount++

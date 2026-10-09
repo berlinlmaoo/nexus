@@ -11,7 +11,7 @@ import {
 } from "@/lib/pipeline";
 import type { PipelineDeal, PipelineDealPatch } from "@/lib/pipeline-api";
 import { CELL, DateField, MoneyField, SelectField } from "./fields";
-import { HEALTH_ORDER, HealthPill, fmtIdr, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
+import { HEALTH_ORDER, HealthPill, dealPayment, fmtIdr, fmtPct, personName, useVocabLabels } from "./pipeline-ui";
 
 type SortKey = "code" | "name" | "stage" | "probability" | "netValue" | "outstandingReceivable" | "daysOverdue" | "nextActionDate" | "health" | "pm";
 
@@ -45,6 +45,7 @@ export function PipelineTable({
         case "nextActionDate": return d.nextActionDate ?? "9999";
         case "name": return d.name.toLowerCase();
         case "code": return d.code;
+        case "outstandingReceivable": return dealPayment(d).outstanding;
         default: return d[sort.key] as number;
       }
     };
@@ -57,7 +58,7 @@ export function PipelineTable({
 
   const totals = useMemo(() => ({
     net: rows.reduce((s, d) => s + (d.netValue || 0), 0),
-    outstanding: rows.reduce((s, d) => s + (d.outstandingReceivable || 0), 0),
+    outstanding: rows.reduce((s, d) => s + (dealPayment(d).outstanding || 0), 0),
   }), [rows]);
 
   // A function, not a component: a component defined in here would remount on every sort, and the
@@ -123,8 +124,18 @@ export function PipelineTable({
               <td className="px-1"><MoneyField cell className="min-w-[9rem]" label={t("Net value")} value={d.netValue} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { netValue: v })} /></td>
               <td className="px-1"><SelectField cell className="min-w-[9.5rem]" label={t("Contract status")} value={d.contractStatus} options={CONTRACT_STATUS_OPTIONS} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { contractStatus: v })} /></td>
               <td className="px-1"><SelectField cell className="min-w-[7rem]" label={t("Deliverable risk")} value={d.deliverableRisk} options={DELIVERABLE_RISK_OPTIONS} labelOf={labels.risk} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { deliverableRisk: v })} /></td>
-              <td className="px-1"><SelectField cell className="min-w-[7rem]" label={t("Payment status")} value={d.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { paymentStatus: v })} /></td>
-              <td className="px-1"><MoneyField cell className="min-w-[9rem]" label={t("Outstanding receivable")} value={d.outstandingReceivable} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { outstandingReceivable: v })} /></td>
+              {/* A deal paid per term: status and receivable come from its terms, edited in the drawer. */}
+              {d.termSummary ? (
+                <>
+                  <td className="px-2.5 text-sm" title={t("From the payment terms")}>{d.termSummary.paymentStatus}</td>
+                  <td className="px-2.5 text-right text-sm tabular-nums" title={t("From the payment terms")}>{fmtIdr(d.termSummary.outstanding, lang)}</td>
+                </>
+              ) : (
+                <>
+                  <td className="px-1"><SelectField cell className="min-w-[7rem]" label={t("Payment status")} value={d.paymentStatus} options={PAYMENT_STATUS_OPTIONS} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { paymentStatus: v })} /></td>
+                  <td className="px-1"><MoneyField cell className="min-w-[9rem]" label={t("Outstanding receivable")} value={d.outstandingReceivable} disabled={!canEdit} onCommit={(v) => onPatch(d.id, { outstandingReceivable: v })} /></td>
+                </>
+              )}
               <td className={cn("px-2 text-right tabular-nums", d.daysOverdue > 7 ? "font-semibold text-red-700 dark:text-red-300" : d.daysOverdue > 0 ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground")}>
                 {d.daysOverdue > 0 ? t("{n}d", { n: d.daysOverdue }) : "–"}
               </td>

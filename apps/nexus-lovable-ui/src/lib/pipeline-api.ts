@@ -1,5 +1,5 @@
 import { apiFetch, downloadFile } from "@/lib/nexus-api";
-import type { DealHealth, DealPhase, PipelineSummary, StageGroup } from "@/lib/pipeline";
+import type { DealHealth, DealPhase, PipelineSummary, StageGroup, TermStatus, TermSummary } from "@/lib/pipeline";
 
 /**
  * The Pipeline Dashboard API (owner, 9 Oct 2026): GET/POST /api/projects/:id/pipeline,
@@ -9,6 +9,32 @@ import type { DealHealth, DealPhase, PipelineSummary, StageGroup } from "@/lib/p
 export type PipelinePerson = { id: string; name: string | null; avatar: string | null };
 
 export type PipelineLink = { id: string; type: string; label: string; url: string };
+
+/**
+ * One payment term of a deal (owner, 9 Oct 2026: "perlu per termin"). status / outstanding / daysOverdue
+ * are the server's (lib/pipeline.ts termStatusOf), so every client says the same.
+ */
+export type PipelineTerm = {
+  id: string;
+  dealId: string;
+  position: number;
+  label: string;
+  amount: number;
+  dueDate: string | null;
+  invoiceNo: string;
+  invoiceDate: string | null;
+  paidAmount: number;
+  paidAt: string | null;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+  status: TermStatus;
+  outstanding: number;
+  daysOverdue: number;
+};
+
+/** What a term POST/PATCH may carry. */
+export type PipelineTermPatch = Partial<Pick<PipelineTerm, "label" | "amount" | "dueDate" | "invoiceNo" | "invoiceDate" | "paidAmount" | "paidAt" | "note" | "position">>;
 
 export type PipelineDeal = {
   id: string;
@@ -57,11 +83,15 @@ export type PipelineDeal = {
   daysOverdue: number;
   health: DealHealth;
   phases: DealPhase[];
+  /** Payments per term (9 Oct 2026). With any, termSummary's receivable / status / next due date are the
+   *  deal's and the manual payment fields above are only a fallback. Older servers omit both. */
+  terms?: PipelineTerm[];
+  termSummary?: TermSummary | null;
 };
 
 /** The fields a PATCH may carry (and `position`). */
 export type PipelineDealPatch = Partial<Omit<PipelineDeal,
-  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases">>;
+  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary">>;
 
 export type PipelineResponse = {
   project: { id: string; name: string; type: string; workspaceId: string };
@@ -77,6 +107,9 @@ export type PipelineChange = {
   after: unknown;
   createdAt: string;
   user: PipelinePerson | null;
+  /** A payment-term change ("term.amount", "term.created", …): which term, named as it was then. */
+  termId?: string | null;
+  termLabel?: string | null;
 };
 
 const base = (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/pipeline`;
@@ -94,6 +127,13 @@ export const pipelineApi = {
   /** "Create execution project" on a won deal; a deal that has one gets that one back. */
   createExecution: (projectId: string, dealId: string) =>
     apiFetch<{ projectId: string; created: boolean; deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/execution`, { method: "POST" }),
+  /** Payment terms (9 Oct 2026). Every answer carries the whole deal: its receivable and health moved. */
+  addTerm: (projectId: string, dealId: string, payload: PipelineTermPatch) =>
+    apiFetch<{ deal: PipelineDeal; term: PipelineTerm }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms`, { method: "POST", body: JSON.stringify(payload) }),
+  updateTerm: (projectId: string, dealId: string, termId: string, payload: PipelineTermPatch) =>
+    apiFetch<{ deal: PipelineDeal; term: PipelineTerm }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms/${encodeURIComponent(termId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  removeTerm: (projectId: string, dealId: string, termId: string) =>
+    apiFetch<{ deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms/${encodeURIComponent(termId)}`, { method: "DELETE" }),
   exportXlsx: (projectId: string, lang: "id" | "en") =>
     downloadFile(`${base(projectId)}/export?lang=${lang}`, "pipeline.xlsx"),
 };

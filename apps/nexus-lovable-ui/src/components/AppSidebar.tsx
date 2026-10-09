@@ -447,8 +447,8 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
-                {/* The company's one deal board (owner/GM, 9 Oct 2026), for the people it is for — BoD,
-                    Agency, IT, Legal, Finance; the server decides (canAccessPipeline) and refuses the rest. */}
+                {/* The company's one deal board (owner/GM, 9 Oct 2026), for its project members — the
+                    server sends pipelineProjectId only to them (owner, 9 Oct 2026 evening). */}
                 {g.label === "Missions" && pipelineProjectId && (
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={isActive(`/projects/${pipelineProjectId}`)} tooltip={t("Pipeline")}>

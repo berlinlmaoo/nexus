@@ -209,7 +209,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   const orgRole = membersInfo?.role;
   // Z Vault and Threads are the company's (Z Networks) only.
   const isCompany = membersInfo?.isCompany === true;
-  // The company's one deal board (owner/GM, 9 Oct 2026): BoD, Agency, IT, Legal, Finance only.
+  // The company's one deal board (owner/GM, 9 Oct 2026), for its project members only (9 Oct evening).
   const pipelineProjectId = membersInfo?.canAccessPipeline ? membersInfo.pipelineProjectId ?? null : null;
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
   // Threads / Integrity show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
