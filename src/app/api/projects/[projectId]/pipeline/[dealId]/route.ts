@@ -17,7 +17,9 @@ import {
   probabilityForStage,
   sameValue,
   serializeDeal,
+  servicesOf,
 } from "@/lib/pipeline-server"
+import { documentHistoryValue, linksForHistory } from "@/lib/pipeline-documents"
 
 type Ctx = { params: Promise<{ projectId: string; dealId: string }> }
 
@@ -51,8 +53,9 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
       history: history.map((h) => ({
         id: h.id,
         field: h.field,
-        before: h.before,
-        after: h.after,
+        // A document's storage key stays on the server (lib/pipeline-documents.ts).
+        before: documentHistoryValue(h.field, h.before),
+        after: documentHistoryValue(h.field, h.after),
         // A payment-term change ("term.<field>", "term.created" …): which term, named as it was then.
         termId: h.termId,
         termLabel: h.termLabel,
@@ -84,7 +87,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
-    const parsed = await parseDealFields(body, gate.project.workspaceId)
+    const parsed = await parseDealFields(body, gate.project.workspaceId, deal)
     if (!parsed.ok) return NextResponse.json({ ...parsed.error, code: "INVALID_FIELD" }, { status: 400 })
     const data = parsed.data
 
@@ -93,8 +96,11 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       if (p !== null) data.probability = p
     }
 
-    const current = deal as unknown as Record<string, unknown>
+    // `services` compared with what the deal shows (an older deal's single service), not the bare column.
+    const current = { ...deal, services: servicesOf(deal) } as unknown as Record<string, unknown>
     const changed = Object.keys(data).filter((field) => !sameValue(current[field], data[field]))
+    // `service` only mirrors the first of `services`: one history row ("services") says it all.
+    const historyFields = changed.filter((field) => field !== "service" || !changed.includes("services"))
     let position: number | undefined
     if ("position" in body) {
       if (typeof body.position !== "number" || !Number.isFinite(body.position)) {
@@ -114,12 +120,12 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     const [saved] = await prisma.$transaction([
       prisma.pipelineDeal.update({ where: { id: dealId }, data: update as Prisma.PipelineDealUncheckedUpdateInput, include: dealInclude }),
       prisma.pipelineDealChange.createMany({
-        data: changed.map((field) => ({
+        data: historyFields.map((field) => ({
           dealId,
           userId,
           field,
-          before: (historyValue(current[field]) ?? undefined) as Prisma.InputJsonValue | undefined,
-          after: (historyValue(data[field]) ?? undefined) as Prisma.InputJsonValue | undefined,
+          before: (field === "links" ? linksForHistory(current[field]) : historyValue(current[field]) ?? undefined) as Prisma.InputJsonValue | undefined,
+          after: (field === "links" ? linksForHistory(data[field]) : historyValue(data[field]) ?? undefined) as Prisma.InputJsonValue | undefined,
         })),
       }),
     ])

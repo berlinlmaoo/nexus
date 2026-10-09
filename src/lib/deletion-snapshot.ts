@@ -30,6 +30,7 @@ import { afterRestoreInTx, beforeRestoreInTx } from "@/lib/deletion-restore-rule
 import { logAudit } from "@/lib/audit"
 import { emitAuditChanged } from "@/lib/socket-emitter"
 import { deleteStoredFile } from "@/lib/vault"
+import { pipelineFilePath } from "@/lib/pipeline-documents"
 
 /**
  * Restorable deletes (owner, 8 Oct 2026: Control Room → Audit → Restore; the same day, for every
@@ -429,11 +430,19 @@ export async function restoreDetailFor(auditLogId: string): Promise<RestoreDetai
 
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads")
 
-/** A file a delete left on disk for a restore: an /api/files/… upload or a Vault storage key. */
+/** A file a delete left on disk for a restore: an /api/files/… upload, a Vault or a Pipeline storage key. */
 async function removeKeptFile(kind: string, ref: string): Promise<boolean> {
   if (kind === "vault") {
     await deleteStoredFile(ref)
     return true
+  }
+  if (kind === "pipeline") {
+    try {
+      await unlink(pipelineFilePath(ref))
+      return true
+    } catch {
+      return false // already gone, or a key that is not one of ours
+    }
   }
   if (!ref.startsWith("/api/files/")) return false
   const full = path.resolve(UPLOADS_DIR, ref.slice("/api/files/".length))
@@ -452,6 +461,8 @@ async function removeKeptFile(kind: string, ref: string): Promise<boolean> {
  * "Replace file…" copy holds (its soft row's before and after storageKey, 9 Oct 2026): the replaced
  * bytes stay on disk while that copy can still put them back, and once the copy goes, whichever of
  * the two no live row uses goes with it. A Vault trash copy's soft rows carry no storageKey (skipped).
+ * And a Pipeline deal's attached files (owner, 9 Oct 2026): `file` of each entry in a deleted deal's
+ * links, and of the "document.removed" history rows that went with it (lib/pipeline-documents.ts).
  */
 const FILE_REFS_SQL = `
   select 'upload'::text as kind, e->>'url' as ref from jsonb_array_elements(coalesce(s.data->'tables'->'Attachment', '[]'::jsonb)) e
@@ -464,7 +475,21 @@ const FILE_REFS_SQL = `
   union all
   select 'vault', r->'set'->>'storageKey' from jsonb_array_elements(coalesce(s.data->'soft'->'rows', '[]'::jsonb)) r where s.data->'soft'->>'table' = 'VaultItem'
   union all
-  select 'vault', r->'was'->>'storageKey' from jsonb_array_elements(coalesce(s.data->'soft'->'rows', '[]'::jsonb)) r where s.data->'soft'->>'table' = 'VaultItem'`
+  select 'vault', r->'was'->>'storageKey' from jsonb_array_elements(coalesce(s.data->'soft'->'rows', '[]'::jsonb)) r where s.data->'soft'->>'table' = 'VaultItem'
+  union all
+  select 'pipeline', l->>'file' from jsonb_array_elements(coalesce(s.data->'tables'->'PipelineDeal', '[]'::jsonb)) e,
+    jsonb_array_elements(case when jsonb_typeof(e->'links') = 'array' then e->'links' else '[]'::jsonb end) l
+  union all
+  select 'pipeline', e->'before'->>'file' from jsonb_array_elements(coalesce(s.data->'tables'->'PipelineDealChange', '[]'::jsonb)) e where e->>'field' = 'document.removed'`
+
+/**
+ * Files taken off a live deal more than the retention ago (a "document.removed" history row, owner 9 Oct
+ * 2026): no copy holds them — removing one document is not a delete of a row — so the history row is
+ * where the purge learns of them. Same test as the rest before they go: no live deal and no copy uses them.
+ */
+const REMOVED_DOCUMENT_REFS_SQL = `
+  select distinct 'pipeline'::text as kind, c."before"->>'file' as ref from "PipelineDealChange" c
+  where c.field = 'document.removed' and c."createdAt" < $1 and c."before"->>'file' is not null`
 
 /**
  * Drops copies older than `cutoff` (restored or not), then the files only they still pointed at.
@@ -476,7 +501,9 @@ const FILE_REFS_SQL = `
 export async function purgeDeletionSnapshots(cutoff: Date): Promise<{ deleted: number; filesRemoved: number }> {
   const refs = await prisma.$queryRawUnsafe<{ kind: string; ref: string }[]>(
     `select distinct x.kind, x.ref from "DeletionSnapshot" s, lateral (${FILE_REFS_SQL}) x
-     where s."createdAt" < $1 and x.ref is not null`,
+     where s."createdAt" < $1 and x.ref is not null
+     union
+     ${REMOVED_DOCUMENT_REFS_SQL}`,
     cutoff,
   )
   const deleted = (await prisma.deletionSnapshot.deleteMany({ where: { createdAt: { lt: cutoff } } })).count
@@ -489,6 +516,7 @@ export async function purgeDeletionSnapshots(cutoff: Date): Promise<{ deleted: n
        or exists (select 1 from "PnlExpenseAttachment" p where p.url = c.ref)
        or exists (select 1 from "Message" m where m."attachmentUrl" = c.ref)
        or exists (select 1 from "VaultItem" v where v."storageKey" = c.ref)
+       or exists (select 1 from "PipelineDeal" d where d.links @> jsonb_build_array(jsonb_build_object('file', c.ref)))
      union
      select x.ref from "DeletionSnapshot" s, lateral (${FILE_REFS_SQL}) x where x.ref = any($1::text[])`,
     candidates,

@@ -28,7 +28,7 @@ const COLUMNS: Col[] = [
   { id: "Project ID", en: "Project ID", key: "code", width: 12 },
   { id: "Nama Project", en: "Project Name", key: "name", width: 36 },
   { id: "Brand/Client", en: "Brand/Client", key: "brand", width: 18 },
-  { id: "Service", en: "Service", key: "service", width: 16 },
+  { id: "Service", en: "Service", key: "service", width: 24 },
   { id: "BD", en: "BD", key: "bdLabel", width: 18 },
   { id: "PM", en: "PM", key: "pmLabel", width: 18 },
   { id: "Fase Pipeline", en: "Pipeline Phase", key: "stage", width: 22 },
@@ -95,10 +95,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         termsText: d.terms
           .map((t) => `${t.label}: Rp${Math.round(t.amount).toLocaleString("id-ID")}${t.dueDate ? ` (${en ? "due" : "jatuh tempo"} ${t.dueDate})` : ""} · ${t.status}${t.paidAmount > 0 && t.status !== "Paid" ? ` Rp${Math.round(t.paidAmount).toLocaleString("id-ID")}` : ""}`)
           .join(" | "),
+        // Every service of the deal (owner, 9 Oct 2026: several, and typed ones).
+        service: d.services.join(", "),
         bdLabel: d.bd?.name ?? d.bdName ?? "",
         pmLabel: d.pm?.name ?? d.pmName ?? "",
         healthLabel: HEALTH[d.health.key][en ? 1 : 0],
-        linksText: d.links.map((l) => `${l.type}: ${l.url}`).join(" | "),
+        // An attached file is listed by its name (owner, 9 Oct 2026): its download route means nothing
+        // outside NEXUS, a pasted link stays the link.
+        linksText: d.links.map((l) => `${l.type}: ${l.kind === "file" ? (l.label ? `${l.label} (${l.fileName})` : l.fileName) : l.label ? `${l.label} (${l.url})` : l.url}`).join(" | "),
         updatedLabel: `${d.updatedAt.slice(0, 16).replace("T", " ")} UTC${d.updatedBy?.name ? ` · ${d.updatedBy.name}` : ""}`,
       }
       const out: Record<string, unknown> = {}

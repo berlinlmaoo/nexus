@@ -27,6 +27,9 @@ import {
   type VaultItemRow,
 } from "@/lib/vault"
 import { replaceTargetFor, applyReplace, replacedRow, type ReplaceTarget } from "@/lib/vault-replace"
+import { pipelineGate, dealInclude, serializeDeal } from "@/lib/pipeline-server"
+import { pipelineToday } from "@/lib/pipeline"
+import { MAX_DEAL_DOCUMENTS, addFileDocument, documentOut, newPipelineFile, storedDocs } from "@/lib/pipeline-documents"
 
 // Chunked attachment upload — lets files larger than Cloudflare's ~100MB request-body cap through by
 // splitting them client-side into sub-100MB chunks (each passes CF normally), then reassembling here.
@@ -182,7 +185,13 @@ export async function POST(request: NextRequest) {
     // per-user session cap, the atomic publish — and differs only in what it authorizes against
     // and which row it writes at the end. A separate chunked route for the vault would be the
     // largest duplication in this repo, and the copy that drifts is always the one nobody tests.
-    const target = sp.get("target") === "vault" ? "vault" : "task"
+    // A Pipeline deal's "Documents & links" (owner, 9 Oct 2026: "kenapa ga attach documentnya jg?") is
+    // the third target: authorized as an edit of the deal, and the finished file becomes an entry on
+    // the deal (lib/pipeline-documents.ts) instead of an Attachment row.
+    const targetParam = sp.get("target")
+    const target = targetParam === "vault" ? "vault" : targetParam === "pipeline" ? "pipeline" : "task"
+    const pipelineProjectId = sp.get("projectId") ?? ""
+    const pipelineDealId = sp.get("dealId") ?? ""
     const vaultParentId = sp.get("parentId") || null
     // "Replace file…" for a file too big for one request (9 Oct 2026): the same transport, and at the
     // end the bytes go in place of this item's instead of into a new row (lib/vault-replace.ts).
@@ -200,6 +209,8 @@ export async function POST(request: NextRequest) {
     if (!filename) return NextResponse.json({ error: "filename is required" }, { status: 400 })
     if (target === "task" && !taskId)
       return NextResponse.json({ error: "taskId is required" }, { status: 400 })
+    if (target === "pipeline" && (!pipelineProjectId || !pipelineDealId))
+      return NextResponse.json({ error: "projectId and dealId are required" }, { status: 400 })
     if (!request.body) return NextResponse.json({ error: "No chunk body" }, { status: 400 })
     if (!Number.isInteger(contentLength) || contentLength <= 0 || contentLength > MAX_CHUNK)
       return NextResponse.json({ error: "Bad chunk size" }, { status: 400 })
@@ -243,6 +254,15 @@ export async function POST(request: NextRequest) {
       // left is refused at the first chunk instead of after twenty minutes of transfer.
       const quotaError = await assertQuota(vaultActor.workspaceId, totalSize)
       if (quotaError) return NextResponse.json({ error: quotaError }, { status: 507 })
+    } else if (target === "pipeline") {
+      // Same rule as editing the deal: a member of the board (checkProjectAccess MEMBER), a PIPELINE
+      // project, a deal of that project with room for one more document.
+      const gate = await pipelineGate(userId, pipelineProjectId, "write")
+      if (!gate.ok) return gate.response
+      const deal = await prisma.pipelineDeal.findFirst({ where: { id: pipelineDealId, projectId: pipelineProjectId }, select: { links: true } })
+      if (!deal) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
+      if (storedDocs(deal.links).length >= MAX_DEAL_DOCUMENTS)
+        return NextResponse.json({ error: `Maksimal ${MAX_DEAL_DOCUMENTS} dokumen per deal.`, code: "TOO_MANY_DOCUMENTS" }, { status: 400 })
     } else {
       // Task must exist AND the user must be a member of its project (and can't upload into another
       // workspace's task).
@@ -415,6 +435,47 @@ export async function POST(request: NextRequest) {
         }
         emitVaultChanged(vaultActor.workspaceId, userId)
 
+        return NextResponse.json(payload, { status: 201 })
+      }
+
+      // ── pipeline finalize ───────────────────────────────────────────────────
+      if (target === "pipeline") {
+        const stored = await newPipelineFile(filename)
+        finalPath = stored.fullPath
+        await concatToFile(sdir, totalChunks, `${finalPath}.partial`)
+        await rename(`${finalPath}.partial`, finalPath)
+
+        const added = await addFileDocument({
+          projectId: pipelineProjectId,
+          dealId: pipelineDealId,
+          userId,
+          storageKey: stored.storageKey,
+          fileName: filename,
+          mimeType: resolveMime(mimeType, filename),
+          size: assembled,
+          type: sp.get("docType"),
+          label: sp.get("label"),
+          request,
+        })
+        if (!added.ok) {
+          // Nothing refers to the bytes: the deal went (deleted mid-upload) or filled up meanwhile.
+          await unlink(finalPath).catch(() => {})
+          finalPath = null
+          return added.code === "DEAL_NOT_FOUND"
+            ? NextResponse.json({ error: "Deal not found" }, { status: 404 })
+            : NextResponse.json({ error: `Maksimal ${MAX_DEAL_DOCUMENTS} dokumen per deal.`, code: "TOO_MANY_DOCUMENTS" }, { status: 400 })
+        }
+        committed = true
+
+        // `id` is the new entry's (the web's uploadChunked expects one); `deal` replaces the client's copy.
+        const fresh = await prisma.pipelineDeal.findFirst({ where: { id: pipelineDealId }, include: dealInclude })
+        const payload = {
+          id: added.doc.id,
+          document: documentOut(pipelineProjectId, pipelineDealId, added.doc),
+          deal: fresh ? serializeDeal(fresh, pipelineToday()) : null,
+        }
+        await writeFile(donePath, JSON.stringify(payload)).catch(() => {})
+        for (let i = 0; i < totalChunks; i++) await unlink(path.join(sdir, `${i}.part`)).catch(() => {})
         return NextResponse.json(payload, { status: 201 })
       }
 
