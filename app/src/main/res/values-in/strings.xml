@@ -1427,6 +1427,7 @@
     <string name="fc_open">Kalender folder</string>
     <string name="fc_pick">Pilih project</string>
     <string name="fc_counts">%1$d project · %2$d task</string>
+    <string name="fc_not_found">Gagal memuat folder ini.</string>
     <string name="fc_loading">Memuat task…</string>
     <string name="fc_no_projects">Folder ini belum punya project. Pindahin project ke sini, atau pilih lewat \'Pilih project\'.</string>
     <string name="fc_pick_note">Pilih project mana yang masuk calendar folder ini.</string>
@@ -2715,7 +2716,8 @@
     <!-- Pipeline: one board, access, execution project (Berlin, 9 Oct; PIPELINE-DASHBOARD §10) -->
     <string name="pl_open_exec">Buka project eksekusi</string>
     <string name="pl_make_exec">Buat project eksekusi</string>
-    <string name="pl_exec_note">Dibuat otomatis saat deal won. Tanggal event-nya masuk ke Master Calendar.</string>
+    <string name="pl_exec_note">Membuat folder untuk deal ini berisi Master Calendar dan Master Task. Tanggal event-nya masuk ke Master Calendar.</string>
+    <string name="pl_open_exec_folder">Buka folder eksekusi</string>
     <string name="pl_exec_failed">Project eksekusi gagal dibuat</string>
     <string name="pl_opens_board">Membuka pipeline perusahaan: satu papan untuk semua deal.</string>
     <string name="pl_company_only">Pipeline hanya ada di workspace perusahaan.</string>

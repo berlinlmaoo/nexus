@@ -1433,6 +1433,7 @@
     <string name="fc_open">Folder calendar</string>
     <string name="fc_pick">Pick projects</string>
     <string name="fc_counts">%1$d projects · %2$d tasks</string>
+    <string name="fc_not_found">Couldn\'t load this folder.</string>
     <string name="fc_loading">Loading tasks…</string>
     <string name="fc_no_projects">This folder has no projects yet. Move a project here, or pick some via \'Pick projects\'.</string>
     <string name="fc_pick_note">Pick which projects go into this folder\'s calendar.</string>
@@ -2762,8 +2763,9 @@
     <!-- Pipeline: one board, access, execution project (Berlin, 9 Oct; PIPELINE-DASHBOARD §10) -->
     <string name="pl_open_exec">Open execution project</string>
     <string name="pl_make_exec">Create execution project</string>
-    <string name="pl_exec_note">Made automatically when a deal is won. Its event date goes on the Master Calendar.</string>
-    <string name="pl_exec_failed">Couldn\'t create the execution project.</string>
+    <string name="pl_exec_note">Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.</string>
+    <string name="pl_open_exec_folder">Open execution folder</string>
+    <string name="pl_exec_failed">Couldn\'t create the execution project</string>
     <string name="pl_opens_board">Opens the company\'s pipeline: one board for every deal.</string>
     <string name="pl_company_only">A pipeline belongs to the company workspace.</string>
     <!-- Pipeline §11: payment terms, members-only board (9 Oct) -->

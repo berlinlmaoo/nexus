@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -119,9 +120,14 @@ fun FolderCalendarScreen(folderId: String, onBack: () -> Unit, onOpenTask: (Stri
     val byId = projects.associateBy { it.id }
     fun colorOf(pid: String?) = colors[pid] ?: byId[pid]?.color ?: "#7b68ee"
 
-    LaunchedEffect(Unit) {
+    // A folder that isn't in the list (a deal's execution folder not reachable, a failed load) says so (PIPELINE §15.2).
+    var missing by remember { mutableStateOf(false) }
+    var attempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(attempt) {
+        missing = false
         folders = runCatching { api.folders().value }.getOrDefault(emptyList())
         projects = runCatching { api.projects().value }.getOrDefault(emptyList())
+        missing = folders.none { it.id == folderId }
         configured = folders.firstOrNull { it.id == folderId }?.aggregateProjectIds.orEmpty()
     }
     // A folder renamed or a project moved on another device (Berlin, 8 Oct).
@@ -141,6 +147,11 @@ fun FolderCalendarScreen(folderId: String, onBack: () -> Unit, onOpenTask: (Stri
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(folder?.name ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
             IconButton(onClick = { picking = true }, enabled = configured != null) { Icon(Icons.Filled.Tune, stringResource(R.string.fc_pick)) }
+        }
+        if (missing) {
+            id.znetworks.nexus.ui.components.EmptyState(Icons.Filled.Folder, stringResource(R.string.fc_not_found), "",
+                stringResource(R.string.try_again), { attempt++ }, Modifier.fillMaxSize())
+            return@Column
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(stringResource(R.string.fc_counts, selectedIds.size, tasks.size), fontSize = 12.sp, color = c.mutedFg)

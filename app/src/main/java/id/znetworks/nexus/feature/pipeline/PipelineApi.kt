@@ -34,9 +34,9 @@ class PipelineApi(private val api: ApiClient) {
     suspend fun update(projectId: String, dealId: String, fields: JsonObject) =
         PipelineDeal(api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}")).patch(fields.toString().toJsonBody()).build(), JsonObject.serializer()))
 
-    /** The execution project of a won deal (§10.3): 201 made / 200 already had one → its id; 400 NOT_WON otherwise. */
-    suspend fun execution(projectId: String, dealId: String): String? =
-        (api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/execution")).post("{}".toJsonBody()).build(), JsonObject.serializer())["projectId"]).str()
+    /** A won deal's execution folder with its Master Calendar + Master Task (§15): 201 made / 200 already had one; 400 NOT_WON otherwise. */
+    suspend fun execution(projectId: String, dealId: String) =
+        PipelineExecution.of(api.send(Request.Builder().url(api.url("${base(projectId)}/${enc(dealId)}/execution")).post("{}".toJsonBody()).build(), JsonObject.serializer()))
 
     /** Restorable from Control Room › Audit ("pipeline_deal"), with its history. */
     suspend fun delete(projectId: String, dealId: String) =

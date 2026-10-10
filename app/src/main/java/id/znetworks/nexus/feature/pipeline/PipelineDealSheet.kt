@@ -28,6 +28,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.runtime.collectAsState
+import kotlinx.serialization.json.contentOrNull
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -91,7 +97,7 @@ private fun str(s: String?) = s?.let(::JsonPrimitive) ?: JsonNull
  * when it is left, BD / PM from the board project's members, payment terms, links, who changed it last, its History, Delete.
  */
 @Composable
-fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerson>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onClose: () -> Unit) {
+fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerson>, vm: PipelineViewModel, onOpenProject: (String) -> Unit = {}, onOpenFolder: (String) -> Unit = {}, onClose: () -> Unit) {
     val c = Nx.colors
     var tab by remember { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -121,14 +127,7 @@ fun DealSheet(deal: PipelineDeal, data: PipelineData, people: List<PipelinePerso
                 deal.reasons.filter { blocker == null || it.code != "BLOCKER" }.forEach { r -> Text("• " + reasonText(r), fontSize = 12.sp, color = healthColor(deal.healthKey)) }
                 PhaseStepper(deal)
                 Text(stringResource(R.string.pl_saves_on_leave), fontSize = 11.sp, color = c.mutedFg)
-                // Won → its execution project (Master Task + Master Calendar, §10.3).
-                val exec = deal.executionProjectId
-                if (exec != null || deal.isWon) Column(Modifier.fillMaxWidth().background(c.accentBg, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (exec != null) TextButton(onClick = { onOpenProject(exec) }) {
-                        Text(stringResource(R.string.pl_open_exec) + (deal.executionProjectName?.let { " · $it" } ?: ""), color = c.violetText, fontWeight = FontWeight.SemiBold) }
-                    else TextButton(onClick = { vm.execution(deal, onOpenProject) }) { Text(stringResource(R.string.pl_make_exec), color = c.violetText, fontWeight = FontWeight.SemiBold) }
-                    Text(stringResource(R.string.pl_exec_note), fontSize = 11.sp, color = c.mutedFg)
-                }
+                ExecutionBox(deal, vm.state.collectAsState().value.busy, onOpenFolder, onOpenProject) { vm.execution(deal, onOpenFolder, onOpenProject) }
                 Group(stringResource(R.string.pl_s_commercial), stringResource(R.string.pl_s_bd)) {
                     TextSave(stringResource(R.string.pl_f_brand), deal.brand) { save(one("brand", JsonPrimitive(it))) }
                     ServicesRow(deal, data) { save(one("services", JsonArray(it.map(::JsonPrimitive)))) }
@@ -445,4 +444,56 @@ private fun shown(e: JsonElement?, money: Boolean = false): String = when {
     e is JsonArray && e.all { it is JsonPrimitive } -> e.joinToString(", ") { (it as JsonPrimitive).content }.ifBlank { stringResource(R.string.pl_empty_value) }
     e is JsonArray -> e.size.toString()
     else -> e.toString()
+}
+
+/**
+ * Won → execution, by hand (§15, owner 10 Oct: nothing is made when a deal reaches Won). Three states: the
+ * folder with its Master Calendar / Master Task shortcuts; a 9 Oct deal's lone project; or, on a won deal,
+ * "Create execution project", which makes the folder and opens it.
+ */
+@Composable
+private fun ExecutionBox(deal: PipelineDeal, busy: Boolean, onOpenFolder: (String) -> Unit, onOpenProject: (String) -> Unit, onCreate: () -> Unit) {
+    val c = Nx.colors
+    val folder = deal.executionFolderId
+    val project = deal.executionProjectId ?: deal.executionCalendarProjectId
+    if (folder == null && project == null && !deal.isWon) return
+    Column(Modifier.fillMaxWidth().background(c.accentBg, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        when {
+            folder != null -> {
+                TextButton(onClick = { onOpenFolder(folder) }) {
+                    Icon(Icons.Filled.Folder, null, Modifier.size(18.dp), tint = c.violetText); Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.pl_open_exec_folder), color = c.violetText, fontWeight = FontWeight.SemiBold)
+                        deal.executionFolderName?.let { Text(it, fontSize = 12.sp, color = c.mutedFg, maxLines = 1) }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    deal.executionCalendarProjectId?.let { id -> ExecShortcut("Master Calendar", Icons.Filled.CalendarMonth) { onOpenProject(id) } }
+                    deal.executionProjectId?.let { id -> ExecShortcut("Master Task", Icons.Filled.Checklist) { onOpenProject(id) } }
+                }
+            }
+            project != null -> TextButton(onClick = { onOpenProject(project) }) {
+                val name = deal.executionProjectName ?: (deal.raw["executionCalendarProject"] as? kotlinx.serialization.json.JsonObject)?.get("name")?.let { (it as? JsonPrimitive)?.contentOrNull }
+                Text(stringResource(R.string.pl_open_exec) + (name?.let { " · $it" } ?: ""), color = c.violetText, fontWeight = FontWeight.SemiBold)
+            }
+            else -> {
+                TextButton(onClick = onCreate, enabled = !busy) {
+                    if (busy) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+                    Text(stringResource(R.string.pl_make_exec), color = c.violetText, fontWeight = FontWeight.SemiBold)
+                }
+                Text(stringResource(R.string.pl_exec_note), fontSize = 11.sp, color = c.mutedFg)
+            }
+        }
+    }
+}
+
+/** One of the execution folder's two projects, opened straight from the deal. The names are not translated. */
+@Composable
+private fun ExecShortcut(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    val c = Nx.colors
+    Row(Modifier.clip(RoundedCornerShape(10.dp)).background(c.violet.copy(alpha = 0.06f)).clickable(onClick = onClick)
+        .heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(16.dp), tint = c.violetText); Spacer(Modifier.width(6.dp))
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.foreground, maxLines = 1)
+    }
 }

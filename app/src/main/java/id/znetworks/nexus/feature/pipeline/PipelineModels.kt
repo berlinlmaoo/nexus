@@ -112,9 +112,13 @@ data class PipelineDeal(val raw: JsonObject) {
     val links: List<PipelineLink> get() = (raw["links"] as? JsonArray).orEmpty().mapNotNull { l ->
         (l as? JsonObject)?.let(PipelineLink::of)
     }
-    /** The TASK project made for a won deal (§10.3); null until there is one. */
+    /** The "<deal>: Master Task" project (§15; a 9 Oct deal's only project); null until one is made by hand. */
     val executionProjectId get() = raw["executionProjectId"].str() ?: (raw["executionProject"] as? JsonObject)?.get("id").str()
     val executionProjectName get() = (raw["executionProject"] as? JsonObject)?.get("name").str()
+    /** The deal's execution folder and its "<deal>: Master Calendar" (§15); null before 10 Oct and until made. */
+    val executionFolderId get() = raw["executionFolderId"].str() ?: (raw["executionFolder"] as? JsonObject)?.get("id").str()
+    val executionFolderName get() = (raw["executionFolder"] as? JsonObject)?.get("name").str()
+    val executionCalendarProjectId get() = raw["executionCalendarProjectId"].str() ?: (raw["executionCalendarProject"] as? JsonObject)?.get("id").str()
     /** Payments per term (§11.2), in order; empty on a deal without terms and from an older server. */
     val terms: List<PipelineTerm> get() = (raw["terms"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::PipelineTerm)?.takeIf { t -> t.id.isNotEmpty() } }
         .sortedBy { it.position }
@@ -423,5 +427,15 @@ object PipelineText {
         "nextAction" -> R.string.pl_f_next_action; "nextActionDate" -> R.string.pl_f_next_date; "blocker" -> R.string.pl_f_blocker
         "notes" -> R.string.pl_f_notes; "links" -> R.string.pl_f_links; "services" -> R.string.pl_f_services
         else -> null
+    }
+}
+
+/** The answer of "Create execution project" (§15.1): a folder to open, else the project (an older server). */
+data class PipelineExecution(val folderId: String?, val projectId: String?, val calendarProjectId: String?, val deal: PipelineDeal?) {
+    companion object {
+        fun of(o: JsonObject) = PipelineExecution(
+            o["folderId"].str(), o["projectId"].str(), o["calendarProjectId"].str(),
+            (o["deal"] as? JsonObject)?.let(::PipelineDeal)?.takeIf { it.id.isNotEmpty() },
+        )
     }
 }
