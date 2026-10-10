@@ -147,11 +147,16 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     var createdBy: PipelinePerson?
     var updatedAt: String?
     var updatedBy: PipelinePerson?
-    /// The Task project made for the deal once it was won (owner/GM, 9 Oct 2026): "after udah won lebih
-    /// enak kalo kebentuk Master Calendar sama Master Task buat projectnya". nil = none (yet), or a server
-    /// from before it existed.
+    /// "Create execution project" on a won deal (owner, 10 Oct 2026: "jangan dibuat otomatis tpi siapin
+    /// aja tombol … 1 folder di project yg isinya Master Calendar sama Master Task"). executionProject is
+    /// the folder's Master Task (or, on a deal from 9 Oct, its single execution project); the folder and
+    /// its Master Calendar are nil on older deals and on a server from before them.
     var executionProjectId: String?
     var executionProject: PipelineExecutionRef?
+    var executionCalendarProjectId: String?
+    var executionCalendarProject: PipelineExecutionRef?
+    var executionFolderId: String?
+    var executionFolder: PipelineExecutionRef?
     // Derived by the server.
     var stageGroup: String
     var daysOverdue: Int
@@ -170,6 +175,7 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         case closingStatus, mainDate, nextAction, nextActionDate, blocker, notes, links, createdAt, createdBy
         case updatedAt, updatedBy, stageGroup, daysOverdue, health, phases
         case executionProjectId, executionProject
+        case executionCalendarProjectId, executionCalendarProject, executionFolderId, executionFolder
         case terms, termSummary
     }
 
@@ -203,6 +209,10 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
         createdAt = o(.createdAt); createdBy = p(.createdBy); updatedAt = o(.updatedAt); updatedBy = p(.updatedBy)
         executionProjectId = o(.executionProjectId)
         executionProject = (try? c.decodeIfPresent(PipelineExecutionRef.self, forKey: .executionProject)) ?? nil
+        executionCalendarProjectId = o(.executionCalendarProjectId)
+        executionCalendarProject = (try? c.decodeIfPresent(PipelineExecutionRef.self, forKey: .executionCalendarProject)) ?? nil
+        executionFolderId = o(.executionFolderId)
+        executionFolder = (try? c.decodeIfPresent(PipelineExecutionRef.self, forKey: .executionFolder)) ?? nil
         stageGroup = o(.stageGroup) ?? PipelineVocab.group(of: stage)
         daysOverdue = Int(n(.daysOverdue))
         health = (try? c.decodeIfPresent(PipelineHealth.self, forKey: .health)) ?? PipelineHealth(key: "NONE", reasons: [])
@@ -221,8 +231,8 @@ struct PipelineDeal: Decodable, Identifiable, Sendable {
     /// What the terms are checked against: the invoice value, else the contract value (web: the same).
     var termsReference: Double { invoiceValue > 0 ? invoiceValue : contractValue }
 
-    /// A won deal (Pre-Execution, Execution or Closed) may have its execution project made by hand;
-    /// the server answers NOT_WON for any other (owner/GM, 9 Oct 2026).
+    /// A won deal (Pre-Execution, Execution or Closed) may have its execution folder made — by hand only
+    /// since 10 Oct 2026; the server answers NOT_WON for any other.
     var canHaveExecutionProject: Bool {
         stageGroup == "Pre-Execution" || stageGroup == "Execution" || stageGroup == "Closed"
     }
@@ -495,15 +505,25 @@ struct PipelineVocab: Decodable, Sendable {
     }
 }
 
-/// A deal's execution project as the deal carries it.
+/// A deal's execution folder or project as the deal carries it.
 struct PipelineExecutionRef: Decodable, Hashable, Sendable {
     let id: String
     let name: String?
 }
 
 /// POST /api/projects/:id/pipeline/:dealId/execution
+/// What "Create execution project" opens: the deal's folder, or — from a server before 10 Oct 2026,
+/// which made one project and no folder — that project.
+enum PipelineExecutionTarget {
+    case folder(String)
+    case project(ProjectRef)
+}
+
+/// projectId is the Master Task; calendarProjectId and folderId are nil from a server before 10 Oct 2026.
 struct PipelineExecutionResponse: Decodable, Sendable {
     let projectId: String
+    let calendarProjectId: String?
+    let folderId: String?
     let created: Bool?
     let deal: PipelineDeal?
 }

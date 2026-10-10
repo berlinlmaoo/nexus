@@ -2810,7 +2810,6 @@ final class AppLanguage {
         "Pipeline": "Pipeline",
         "Open execution project": "Buka project eksekusi",
         "Create execution project": "Buat project eksekusi",
-        "Made automatically when a deal is won. Its event date goes on the Master Calendar.": "Dibuat otomatis saat deal won. Tanggal event-nya masuk ke Master Calendar.",
         "The execution project wasn't created. Try again.": "Project eksekusi gagal dibuat. Coba lagi.",
         // Pipeline: payment terms + members-only access (owner, 9 Oct 2026)
         "Not invoiced": "Belum ditagih",
@@ -2891,6 +2890,11 @@ final class AppLanguage {
         "Payment overdue": "Pembayaran overdue",
         "Upcoming due": "Akan jatuh tempo",
         "Not yet billed": "Belum ditagih",
+        // Pipeline: execution folder by hand (owner, 10 Oct 2026)
+        "Open execution folder": "Buka folder eksekusi",
+        "Master Calendar": "Master Calendar",
+        "Master Task": "Master Task",
+        "Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.": "Membuat folder untuk deal ini berisi Master Calendar dan Master Task. Tanggal event-nya masuk ke Master Calendar.",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

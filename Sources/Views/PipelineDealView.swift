@@ -23,8 +23,9 @@ struct PipelineDealView: View {
     @State private var history: [PipelineChange] = []
     @State private var historyLoaded = false
     @State private var historyFailed = false
-    /// The deal's execution project, pushed inside this sheet (owner/GM, 9 Oct 2026).
+    /// The deal's execution folder, or one of its projects, pushed inside this sheet (owner, 10 Oct 2026).
     @State private var openProject: ProjectRef?
+    @State private var openFolderId: String?
     @State private var makingExecution = false
     /// Payment terms (owner, 9 Oct 2026): the add/edit/mark-paid sheet, and the term asked about before
     /// it is deleted (in this sheet's one alert).
@@ -62,6 +63,7 @@ struct PipelineDealView: View {
             }
             .keyboardDoneBar()
             .navigationDestination(item: $openProject) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
+            .navigationDestination(item: $openFolderId) { id in FolderByIdView(folderId: id) }
         }
         // The only .sheet of this view: add, edit or mark paid a payment term.
         .sheet(item: $termRoute) { route in
@@ -368,15 +370,39 @@ struct PipelineDealView: View {
 
     // MARK: execution
 
-    /// Won → execution (owner/GM, 9 Oct 2026: "after udah won lebih enak kalo kebentuk Master Calendar sama
-    /// Master Task buat projectnya"). The server makes the Task project when the deal first enters a Won
-    /// stage; this opens it, or makes it by hand for a won deal without one (the imported deals).
+    /// Won → execution, by hand (owner, 10 Oct 2026: "jangan dibuat otomatis tpi siapin aja tombol untuk
+    /// 'Create execution project' … 1 folder di project yg isinya Master Calendar sama Master Task").
+    /// Nothing is made when a deal reaches Won. On a won deal this makes a folder named after the deal with
+    /// "<deal>: Master Calendar" and "<deal>: Master Task", and the event date goes on that Master
+    /// Calendar. Once made it opens the folder (and each project); a deal from 9 Oct with one project and
+    /// no folder opens that project.
     @ViewBuilder private func execution(_ deal: PipelineDeal) -> some View {
-        if deal.executionProjectId != nil || deal.canHaveExecutionProject {
+        let projectId = deal.executionProjectId ?? deal.executionCalendarProjectId
+        if deal.executionFolderId != nil || projectId != nil || deal.canHaveExecutionProject {
             VStack(alignment: .leading, spacing: 6) {
-                if let id = deal.executionProjectId {
+                if let folderId = deal.executionFolderId {
                     Button {
-                        openProject = ProjectRef(id: id, name: deal.executionProject?.name ?? deal.name, icon: nil)
+                        openFolderId = folderId
+                    } label: {
+                        executionLabel(T("Open execution folder"), "folder", deal.executionFolder?.name)
+                    }
+                    .buttonStyle(.plain)
+                    HStack(spacing: 8) {
+                        if let id = deal.executionCalendarProjectId {
+                            executionShortcut(T("Master Calendar"), "calendar") {
+                                openProject = ProjectRef(id: id, name: deal.executionCalendarProject?.name ?? deal.name, icon: nil)
+                            }
+                        }
+                        if let id = deal.executionProjectId {
+                            executionShortcut(T("Master Task"), "checklist") {
+                                openProject = ProjectRef(id: id, name: deal.executionProject?.name ?? deal.name, icon: nil)
+                            }
+                        }
+                    }
+                } else if let id = projectId {
+                    Button {
+                        let name = deal.executionProject?.name ?? deal.executionCalendarProject?.name ?? deal.name
+                        openProject = ProjectRef(id: id, name: name, icon: nil)
                     } label: {
                         executionLabel(T("Open execution project"), "arrow.up.forward.square", deal.executionProject?.name)
                     }
@@ -386,7 +412,12 @@ struct PipelineDealView: View {
                         guard !makingExecution else { return }
                         makingExecution = true
                         Task {
-                            if let ref = await store.createExecution(deal.id) { openProject = ref }
+                            let target = await store.createExecution(deal.id)
+                            if case .folder(let id)? = target {
+                                openFolderId = id
+                            } else if case .project(let ref)? = target {
+                                openProject = ref
+                            }
                             makingExecution = false
                         }
                     } label: {
@@ -394,12 +425,26 @@ struct PipelineDealView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(makingExecution)
+                    Text(T("Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(T("Made automatically when a deal is won. Its event date goes on the Master Calendar."))
-                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// One of the execution folder's two projects, opened straight from the deal.
+    private func executionShortcut(_ title: String, _ symbol: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.violetText)
+                Text(title).font(NXFont.text(13, .medium)).foregroundStyle(NX.foreground).lineLimit(1)
+            }
+            .padding(.horizontal, 12).frame(minHeight: 44)
+            .background(NX.violet.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func executionLabel(_ title: String, _ symbol: String, _ detail: String?) -> some View {

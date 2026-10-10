@@ -436,3 +436,51 @@ private struct FolderProjectPicker: View {
         dismiss()
     }
 }
+
+// MARK: - Folder, by id
+
+/// A folder opened by its id alone: "Open folder" on a restored folder in Audit, and "Open execution
+/// folder" on a won Pipeline deal (owner, 10 Oct 2026). The folder screen draws from the folder, every
+/// folder and every project (it works out which projects sit under it, subfolders included), and the
+/// caller has only the id: they are read first, through the same loaders the folder screen refreshes with.
+/// Not private: used from AdminAuditViews.swift and PipelineDealView.swift.
+struct FolderByIdView: View {
+    let folderId: String
+    @State private var folder: ProjectFolder?
+    @State private var folders: [ProjectFolder] = []
+    @State private var projects: [Project] = []
+    @State private var failed = false
+
+    var body: some View {
+        if let folder {
+            FolderAggregateView(folder: folder, allFolders: folders, allProjects: projects)
+        } else {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                if failed {
+                    ErrorState(message: T("Couldn't load this folder."), icon: "folder") { Task { await load() } }
+                } else {
+                    ProgressView().tint(NX.violetText)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            async let readProjects = APIClient.shared.projects()
+            // No workspace: every folder this person can see, which holds this one wherever it is.
+            async let readFolders = APIClient.shared.projectFolders(workspaceId: nil)
+            let (p, f) = try await (readProjects, readFolders)
+            projects = p
+            folders = f
+            // Not among them: deleted again, or out of this person's reach.
+            if let match = f.first(where: { $0.id == folderId }) { folder = match } else { failed = true }
+        } catch {
+            failed = true
+        }
+    }
+}

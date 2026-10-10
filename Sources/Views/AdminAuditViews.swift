@@ -640,7 +640,7 @@ private struct AuditEntrySheet: View {
                 DocReaderView(docId: id, title: e.entityType == "doc" ? (e.entityName ?? "") : "")
             } label: { label }.buttonStyle(.plain)
         case .folder(let id):
-            NavigationLink { AuditFolderDestination(folderId: id) } label: { label }.buttonStyle(.plain)
+            NavigationLink { FolderByIdView(folderId: id) } label: { label }.buttonStyle(.plain)
         default:
             Button { leave(to: target) } label: { label }.buttonStyle(.plain)
         }
@@ -885,52 +885,6 @@ private struct AuditEntrySheet: View {
                 Text(value).font(.system(size: 12, design: .monospaced)).foregroundStyle(NX.foreground)
                     .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             }
-        }
-    }
-}
-
-// MARK: - Folder, by id
-
-/// "Open folder" on a restored project folder. The folder screen draws from the folder, every folder
-/// and every project (it works out which projects sit under it, subfolders included), and the entry
-/// has only the id: they are read first, through the same loaders the folder screen refreshes with.
-private struct AuditFolderDestination: View {
-    let folderId: String
-    @State private var folder: ProjectFolder?
-    @State private var folders: [ProjectFolder] = []
-    @State private var projects: [Project] = []
-    @State private var failed = false
-
-    var body: some View {
-        if let folder {
-            FolderAggregateView(folder: folder, allFolders: folders, allProjects: projects)
-        } else {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                if failed {
-                    ErrorState(message: T("Couldn't load this folder."), icon: "folder") { Task { await load() } }
-                } else {
-                    ProgressView().tint(NX.violetText)
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await load() }
-        }
-    }
-
-    private func load() async {
-        failed = false
-        do {
-            async let readProjects = APIClient.shared.projects()
-            // No workspace: every folder this person can see, which holds this one wherever it is.
-            async let readFolders = APIClient.shared.projectFolders(workspaceId: nil)
-            let (p, f) = try await (readProjects, readFolders)
-            projects = p
-            folders = f
-            // Not among them: deleted again, or out of this person's reach.
-            if let match = f.first(where: { $0.id == folderId }) { folder = match } else { failed = true }
-        } catch {
-            failed = true
         }
     }
 }

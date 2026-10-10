@@ -101,15 +101,17 @@ final class PipelineStore {
         }
     }
 
-    /// "Create execution project" (owner/GM, 9 Oct 2026): the deal's Task project, made now or the one it
-    /// already has. Answers the project to open, or nil after showing the refusal.
-    func createExecution(_ id: String) async -> ProjectRef? {
+    /// "Create execution project" (owner, 10 Oct 2026): the deal's folder with its Master Calendar and
+    /// Master Task, made now or the one it already has. Answers the folder to open — or, from a server
+    /// without folders, the project — or nil after showing the refusal.
+    func createExecution(_ id: String) async -> PipelineExecutionTarget? {
         do {
             let r = try await APIClient.shared.pipelineCreateExecution(projectId: projectId, dealId: id)
             if let saved = r.deal, let j = deals.firstIndex(where: { $0.id == id }) { deals[j] = saved }
             let name = r.deal?.executionProject?.name ?? deal(id)?.name ?? ""
             await load()
-            return ProjectRef(id: r.projectId, name: name, icon: nil)
+            if let folderId = r.folderId ?? r.deal?.executionFolderId { return .folder(folderId) }
+            return .project(ProjectRef(id: r.projectId, name: name, icon: nil))
         } catch {
             fail(error, T("The execution project wasn't created. Try again."))
             return nil
