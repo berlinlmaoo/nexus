@@ -388,21 +388,29 @@ struct FolderNode: View {
     private var isExpanded: Bool { !collapsed.contains(folder.id) }
     private var count: Int { directProjects.count + subFolders.count }
 
+    private func toggle() {
+        withAnimation(.easeOut(duration: 0.18)) {
+            if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // The whole row opens / closes the folder (owner, 10 Oct 2026: the small arrow alone sat next
+            // to the Master Calendar button and was easy to miss). Only the calendar button does
+            // something else; the arrow stays as the visual cue.
             HStack(spacing: 8) {
-                Button {
-                    if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
-                } label: {
+                Button(action: toggle) {
                     HStack(spacing: 10) {
                         FolderIconTile(folder: folder)
                         Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                         Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
                             .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+                        Spacer(minLength: 4)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                Spacer(minLength: 4)
                 NavigationLink {
                     FolderAggregateView(folder: folder, allFolders: allFolders, allProjects: Array(projectsByFolder.values.joined()))
                 } label: {
@@ -410,15 +418,19 @@ struct FolderNode: View {
                         .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
-                Button {
-                    if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
-                } label: {
+                .padding(.horizontal, 6)
+                Button(action: toggle) {
                     Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
                         .rotationEffect(.degrees(isExpanded ? 0 : -90)).frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             .padding(12)
+            // The padding around the row opens it too, so a tap anywhere on the card counts.
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .onTapGesture(perform: toggle)
+            .accessibilityAddTraits(.isButton)
             .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
             .contextMenu {
