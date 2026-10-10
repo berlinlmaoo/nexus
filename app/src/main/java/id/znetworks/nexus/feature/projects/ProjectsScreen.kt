@@ -347,7 +347,9 @@ private fun FolderNode(
         Box {
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp))
-                    .clickable { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp),
+                    // The whole row opens / closes the folder (owner, 10 Oct; iOS 7e0c34f); only the calendar and ⋯ do something else.
+                    .clickable(onClickLabel = stringResource(if (open) R.string.folder_collapse else R.string.folder_expand)) { open = !open }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(if (open) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
@@ -357,7 +359,14 @@ private fun FolderNode(
                 Text(f.name, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
                 Text("${projects.size}", fontSize = 12.sp, color = c.mutedFg)
                 // Every task due across this folder's projects (iOS FolderAggregateView).
-                IconButton(onClick = { onCalendar(f.id) }) { Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText) }
+                // Its own action: a tinted circle set apart from the count, so it isn't hit when the row is meant.
+                Spacer(Modifier.size(10.dp))
+                IconButton(onClick = { onCalendar(f.id) }, modifier = Modifier.size(36.dp)) {
+                    Box(Modifier.size(30.dp).clip(CircleShape).background(c.violet.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText, modifier = Modifier.size(18.dp))
+                    }
+                }
+                Spacer(Modifier.size(4.dp))
                 IconButton(onClick = { menu = true }) { Text("⋯", color = c.mutedFg, fontSize = 18.sp) }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

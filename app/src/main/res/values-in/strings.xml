@@ -413,6 +413,8 @@
     <string name="projects_section_tasks">Tugas</string>
     <string name="folder_edit">Edit folder</string>
     <string name="folder_delete">Hapus folder</string>
+    <string name="folder_expand">Buka folder</string>
+    <string name="folder_collapse">Tutup folder</string>
     <string name="folder_empty">Folder kosong.</string>
     <string name="folder_delete_q">Hapus folder %1$s?</string>
     <string name="folder_delete_body">Mission di dalamnya pindah ke tingkat teratas dan folder di dalamnya naik satu tingkat. Tidak ada yang lain yang dihapus.</string>

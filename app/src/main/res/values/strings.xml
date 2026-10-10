@@ -419,6 +419,8 @@
     <string name="projects_section_tasks">Tasks</string>
     <string name="folder_edit">Edit folder</string>
     <string name="folder_delete">Delete folder</string>
+    <string name="folder_expand">Open folder</string>
+    <string name="folder_collapse">Close folder</string>
     <string name="folder_empty">Empty folder.</string>
     <string name="folder_delete_q">Delete the folder %1$s?</string>
     <string name="folder_delete_body">Its missions move to the top level and folders inside it move up one level. Nothing else is deleted.</string>
