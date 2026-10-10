@@ -95,9 +95,10 @@ data class PipelineDeal(val raw: JsonObject) {
     /** The blocker as written, or null when there is none. */
     val blockerText get() = text("blocker").trim().ifEmpty { null }
     /**
-     * The phases with the blocker's phase marked. An older server doesn't mark it: then it goes on the phase the deal
-     * is at now — the one already bad, else the active one, else the first not done, else the last (the server's
-     * own fallback when the blocker's words name none). The word list itself is never ported.
+     * The phases with the blocker's phase marked. The server sends `blocked` (since 10 Oct a written blocker always
+     * holds the phase the deal is at, server 3eb63d6); nothing here reads the blocker's words. An older server doesn't
+     * mark it: then the same rule runs here — the phase already bad, else the active one, else the first not done,
+     * else the last.
      */
     val progressPhases: List<PipelinePhase> get() {
         val ps = phaseList

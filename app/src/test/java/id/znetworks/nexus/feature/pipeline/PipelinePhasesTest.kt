@@ -12,6 +12,15 @@ class PipelinePhasesTest {
     private val six = """[{"key":"commercial","state":"done"},{"key":"contract","state":"done"},{"key":"readiness","state":"active"},
         {"key":"deliverable","state":"pending"},{"key":"payment","state":"pending"},{"key":"closing","state":"pending"}]"""
 
+    /** 10 Oct (server 3eb63d6): the server's flag decides, whatever the blocker's words say. */
+    @Test fun serverFlagBeatsWords() {
+        val d = deal("""{"id":"w","blocker":"Invoice belum dibayar, somasi","phases":[{"key":"commercial","state":"done"},{"key":"contract","state":"bad","blocked":true},{"key":"payment","state":"pending"}]}""")
+        assertEquals("contract", d.progressPhases.single { it.blocked }.key)
+        // Older server, same words: the current phase, never the "payment" the words suggest.
+        val old = deal("""{"id":"o","blocker":"Invoice belum dibayar","phases":[{"key":"commercial","state":"done"},{"key":"contract","state":"active"},{"key":"payment","state":"pending"}]}""")
+        assertEquals("contract", old.progressPhases.single { it.blocked }.key)
+    }
+
     @Test fun blockerPhase() {
         // The server marks it: read as sent.
         val marked = deal("""{"id":"a","blocker":"MASIH DITAGIH - PROSES SOMASI","phases":[{"key":"commercial","state":"done"},{"key":"payment","state":"bad","blocked":true}]}""")

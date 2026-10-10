@@ -262,8 +262,7 @@ fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, onCreate: (Loc
 // region Timeline
 
 private fun ganttColor(p: String?) = when (p.orEmpty().uppercase()) {
-    "URGENT" -> Color(0xFFFB7185)
-    "HIGH" -> Color(0xFFF59E0B)
+    "URGENT", "HIGH" -> Color(0xFFFB7185)   // HIGH red like URGENT (owner, 10 Oct)
     "MEDIUM" -> Color(0xFF38BDF8)
     "LOW" -> Color(0xFFA78BFA)
     else -> Color(0xFF2DD4BF)
