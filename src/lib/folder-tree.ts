@@ -5,7 +5,9 @@ import prisma from "@/lib/prisma"
  * MAX_FOLDER_DEPTH levels (root = 1) and forbid cycles. These helpers do small, depth-bounded walks
  * — fine for an interactive sidebar (a workspace has tens of folders, not millions).
  */
-export const MAX_FOLDER_DEPTH = 3
+// 4 since 10 Oct 2026: a won deal's execution folder sits inside its client's folder
+// ("THE Z CREATIVE › Projects: Ongoing & Onboarding › ANKER › <deal>", lib/pipeline-execution.ts).
+export const MAX_FOLDER_DEPTH = 4
 
 /** Depth of a folder: 1 for a root folder, +1 per ancestor. */
 export async function folderDepth(folderId: string): Promise<number> {

@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { emitPipelineChanged } from "@/lib/socket-emitter"
 import { pipelineToday } from "@/lib/pipeline"
-import { EXECUTION_TRIGGER_STAGES, ensureExecutionProject, syncMainDateTask } from "@/lib/pipeline-execution"
+import { syncMainDateTask } from "@/lib/pipeline-execution"
 import {
   dealInclude,
   historyValue,
@@ -130,17 +130,16 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       }),
     ])
 
-    // Won → a Task project for the execution, and the main date on the Master Calendar (owner/GM, 9 Oct
-    // 2026; lib/pipeline-execution.ts). Once per deal; after the save, so a failure here never loses the edit.
+    // Entering Won makes nothing by itself any more (owner, 10 Oct 2026): the execution folder comes from
+    // "Create execution project". A deal that has one keeps its main date on the Master Calendar
+    // (lib/pipeline-execution.ts) — after the save, so a failure here never loses the edit.
     let result = saved
-    const enteredWon = changed.includes("stage") && (EXECUTION_TRIGGER_STAGES as readonly string[]).includes(saved.stage)
-    if (enteredWon || (changed.includes("mainDate") && saved.executionProjectId)) {
+    if (changed.includes("mainDate") && (saved.executionCalendarProjectId || saved.executionProjectId)) {
       try {
-        if (enteredWon) await ensureExecutionProject(dealId, userId, { auto: true, request })
-        else await syncMainDateTask(dealId, userId)
+        await syncMainDateTask(dealId, userId)
         result = (await findDeal(projectId, dealId)) ?? saved
       } catch (error) {
-        console.error("Pipeline: execution project for deal", dealId, "failed:", error)
+        console.error("Pipeline: main-date task for deal", dealId, "failed:", error)
       }
     }
 

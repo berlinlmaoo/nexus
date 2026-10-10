@@ -42,6 +42,8 @@ export const dealInclude = {
   updatedBy: personSelect,
   createdBy: personSelect,
   executionProject: { select: { id: true, name: true } },
+  executionCalendarProject: { select: { id: true, name: true } },
+  executionFolder: { select: { id: true, name: true } },
   terms: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
 } satisfies Prisma.PipelineDealInclude
 
@@ -155,9 +157,15 @@ export function serializeDeal(row: DealRow, today: string) {
     // Pasted links and attached files (owner, 9 Oct 2026); a file's `url` is its members-only download
     // route — lib/pipeline-documents.ts.
     links: documentsOut(row.projectId, row.id, row.links),
-    // The Task project made when the deal was won (lib/pipeline-execution.ts); null = none (yet).
+    // "Create execution project" (lib/pipeline-execution.ts); null = none (yet). executionProject is the
+    // folder's Master Task (or a 9 Oct deal's single project); the folder and its Master Calendar came
+    // on 10 Oct and are null on older deals.
     executionProjectId: row.executionProjectId,
     executionProject: row.executionProject,
+    executionCalendarProjectId: row.executionCalendarProjectId,
+    executionCalendarProject: row.executionCalendarProject,
+    executionFolderId: row.executionFolderId,
+    executionFolder: row.executionFolder,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt.toISOString(),

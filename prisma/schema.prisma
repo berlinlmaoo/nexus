@@ -543,6 +543,8 @@ model Project {
   pipelineDeals      PipelineDeal[] @relation("PipelineDealProject")
   /// When this is the execution project of a won deal (owner/GM, 9 Oct 2026), that deal.
   pipelineExecutionOf PipelineDeal?  @relation("PipelineDealExecution")
+  /// When this is the Master Calendar of a won deal's execution folder (owner, 10 Oct 2026), that deal.
+  pipelineCalendarOf  PipelineDeal?  @relation("PipelineDealExecutionCalendar")
 
   @@index([folderId, position])
 }
@@ -614,6 +616,8 @@ model ProjectFolder {
 
   projects Project[]
   pins     FolderPin[]
+  /// When this is the execution folder of a won deal (owner, 10 Oct 2026), that deal.
+  pipelineExecutionOf PipelineDeal? @relation("PipelineDealExecutionFolder")
 
   // Folder aggregate view (board + calendar): a CURATED set of project ids to pull tasks from.
   // Empty = fall back to every project currently in the folder (and its subtree), resolved in the app.
@@ -3272,15 +3276,22 @@ model PipelineDeal {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  /// Won → execution (owner/GM, 9 Oct 2026: "after udah won lebih enak kalo kebentuk Master Calendar sama
-  /// Master Task buat projectnya"). The Task project made for the deal when it first entered a Won stage
-  /// (or by hand from the deal), and when that happened — so deleting the project does not make the next
-  /// stage move build another. lib/pipeline-execution.ts. SQL: prisma/sql/2026-10-09-pipeline-execution.sql.
+  /// Won → execution, by hand (owner, 10 Oct 2026: "jangan dibuat otomatis tpi siapin aja tombol …
+  /// 1 folder di project yg isinya Master Calendar sama Master Task"). "Create execution project" makes a
+  /// folder named after the deal (executionFolderId) holding "<deal>: Master Calendar"
+  /// (executionCalendarProjectId) and "<deal>: Master Task" (executionProjectId — the Master Task, so
+  /// clients from 9 Oct still open something). A deal from 9 Oct may have only executionProjectId.
+  /// lib/pipeline-execution.ts. SQL: prisma/sql/2026-10-09-pipeline-execution.sql + 2026-10-10-pipeline-execution-folder.sql.
   executionProjectId String?   @unique
   executionProject   Project?  @relation("PipelineDealExecution", fields: [executionProjectId], references: [id], onDelete: SetNull)
+  executionCalendarProjectId String?  @unique
+  executionCalendarProject   Project? @relation("PipelineDealExecutionCalendar", fields: [executionCalendarProjectId], references: [id], onDelete: SetNull)
+  executionFolderId  String?        @unique
+  executionFolder    ProjectFolder? @relation("PipelineDealExecutionFolder", fields: [executionFolderId], references: [id], onDelete: SetNull)
   executionCreatedAt DateTime?
-  /// The task in the execution project that puts mainDate on the Master Calendar (a plain id: the task may
-  /// be deleted by hand, and the next mainDate change then makes a new one).
+  /// The task in the Master Calendar project (or a 9 Oct deal's single execution project) that puts
+  /// mainDate on the Master Calendar (a plain id: the task may be deleted by hand, and the next mainDate
+  /// change then makes a new one).
   mainDateTaskId     String?
 
   changes PipelineDealChange[]

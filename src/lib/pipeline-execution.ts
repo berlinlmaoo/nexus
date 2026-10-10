@@ -7,26 +7,27 @@ import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { stageGroupOf } from "@/lib/pipeline"
 
 /**
- * Won → execution (owner/GM, 9 Oct 2026): "after udah won lebih enak kalo kebentuk Master Calendar sama
- * Master Task buat projectnya".
+ * Won → execution, by hand (owner, 10 Oct 2026: "soal won itu jangan dibuat otomatis tpi siapin aja tombol
+ * untuk 'Create execution project' nanti langsung lo buatin 1 folder di project yg isinya Master Calendar
+ * sama Master Task").
  *
- * When a deal first enters a Won stage, a Task project is made for its execution: named after the deal,
- * in the board's (company) workspace, with the deal's BD and PM (when they are NEXUS users) and whoever
- * moved it as members. The deal keeps its id (executionProjectId) and both clients show "Open execution
- * project". Its event / main date becomes a task in that project, assigned to the PM and BD, so the
- * Master Calendar — which is made of tasks, "there is no event kind" (lib/calendar/core.ts, rule 3) —
- * shows it under their Bagan cards, or under the project's folder when they are not on the Bagan.
+ * Nothing happens on its own any more when a deal reaches Won. "Create execution project" on a won deal
+ * (POST …/pipeline/:dealId/execution) makes ONE folder named after the deal, inside the client's folder,
+ * holding two Task projects named the way the company already names them ("ANKER: Master Calendar",
+ * "ANKER: General Task"):
+ *   <deal>: Master Calendar   ← the deal's event / main date lands here as a task (syncMainDateTask)
+ *   <deal>: Master Task
+ * Both have whoever pressed the button (LEAD) and the deal's BD and PM (when they are still in the
+ * workspace) as members. Folders have no members of their own — every workspace member sees the folder
+ * tree and project membership decides what is inside (api/project-folders) — so nothing else is needed
+ * for the members to see it.
  *
- * Once per deal: executionCreatedAt stays set even if the project is deleted later, so moving the deal
- * between stages afterwards does not build another one. "Create execution project" on the deal (any won
- * stage, POST …/pipeline/:dealId/execution) makes one by hand when there is none — the GM's 41 imported
- * deals came in already won and got none on their own.
+ * The deal keeps all three ids: executionFolderId, executionCalendarProjectId, and executionProjectId,
+ * which points at the Master Task so a client from before this change still opens something sensible.
+ * A deal made by the 9 Oct version (one project, no folder) keeps that project; the button opens it.
  */
 
-/** Entering one of these (from any other stage) makes the execution project. */
-export const EXECUTION_TRIGGER_STAGES = ["Won – Contract Pending", "Won – In Execution"] as const
-
-/** A deal that has been won (and not lost) may have an execution project made by hand. */
+/** A deal that has been won (and not lost) may have its execution folder made. */
 export function canHaveExecutionProject(stage: string): boolean {
   const g = stageGroupOf(stage)
   return g === "Pre-Execution" || g === "Execution" || g === "Closed"
@@ -34,40 +35,71 @@ export function canHaveExecutionProject(stage: string): boolean {
 
 /**
  * Where client projects live in the company's folder tree today: "THE Z CREATIVE › Projects: Ongoing &
- * Onboarding", one subfolder per client (ANKER, JIM BEAM, …). Found by name, not id, so a renamed or
- * missing folder only means the project lands at the root.
+ * Onboarding", one subfolder per client (ANKER, JIM BEAM, …). Found by name, not id: no client folder
+ * means the deal's folder goes straight under "Projects: Ongoing & Onboarding", and without that one it
+ * goes to the root.
  */
 const EXECUTION_FOLDER_NAME = "Projects: Ongoing & Onboarding"
 
 /** "JIMBEAM" and "JIM BEAM" are the same client. */
 const folderKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "")
 
-async function executionFolderId(workspaceId: string, brand: string): Promise<string | null> {
-  const parent = await prisma.projectFolder.findFirst({
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+async function executionParentFolderId(tx: Tx, workspaceId: string, brand: string): Promise<string | null> {
+  const parent = await tx.projectFolder.findFirst({
     where: { workspaceId, name: { equals: EXECUTION_FOLDER_NAME, mode: "insensitive" } },
     select: { id: true },
   })
   if (!parent) return null
   const key = folderKey(brand)
   if (key) {
-    const children = await prisma.projectFolder.findMany({ where: { workspaceId, parentFolderId: parent.id }, select: { id: true, name: true } })
+    const children = await tx.projectFolder.findMany({ where: { workspaceId, parentFolderId: parent.id }, select: { id: true, name: true } })
     const client = children.find((f) => folderKey(f.name) === key)
     if (client) return client.id
   }
   return parent.id
 }
 
-export type ExecutionResult = { projectId: string; created: boolean }
+/**
+ * Folder names are unique per workspace (ProjectFolder @@unique([workspaceId, name])), and a deal is often
+ * named like its client ("ANKER"), so a taken name gets the deal's code: "ANKER (TZN-26001)".
+ */
+async function freeFolderName(tx: Tx, workspaceId: string, name: string, code: string): Promise<string> {
+  const base = name.trim().slice(0, 180) || code
+  const candidates = [base, `${base} (${code})`]
+  for (let i = 2; i <= 20; i++) candidates.push(`${base} (${code}) ${i}`)
+  const taken = new Set(
+    (await tx.projectFolder.findMany({
+      where: { workspaceId, name: { in: candidates, mode: "insensitive" } },
+      select: { name: true },
+    })).map((f) => f.name.toLowerCase()),
+  )
+  return candidates.find((c) => !taken.has(c.toLowerCase())) ?? `${base} (${code}) ${Date.now()}`
+}
+
+export type ExecutionResult = {
+  /** The Master Task (or the single project of a 9 Oct deal) — what older clients open. */
+  projectId: string
+  calendarProjectId: string | null
+  folderId: string | null
+  created: boolean
+}
+
+const STANDARD_LISTS = [
+  { name: "To Do", position: 0 },
+  { name: "In Progress", position: 1 },
+  { name: "Done", position: 2 },
+]
 
 /**
- * Makes the deal's execution project unless it has one. `auto` (a stage move) also stops when one was
- * made before and has since been deleted. Safe to call twice at once: the deal row is locked while it
- * decides. Returns null when nothing was made and there is nothing to open.
+ * Makes the deal's execution folder and its two projects unless it already has an execution project.
+ * Safe to press twice at once: the deal row is locked while it decides. Returns null when the deal is gone.
  */
 export async function ensureExecutionProject(
   dealId: string,
   actorId: string,
-  opts: { auto: boolean; request?: NextRequest },
+  opts: { request?: NextRequest } = {},
 ): Promise<ExecutionResult | null> {
   const outcome = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "PipelineDeal" WHERE id = ${dealId} FOR UPDATE`
@@ -75,13 +107,18 @@ export async function ensureExecutionProject(
       where: { id: dealId },
       select: {
         code: true, name: true, brand: true, bdUserId: true, pmUserId: true,
-        executionProjectId: true, executionCreatedAt: true,
+        executionProjectId: true, executionCalendarProjectId: true, executionFolderId: true,
         project: { select: { workspaceId: true } },
       },
     })
     if (!deal) return null
-    if (deal.executionProjectId) return { projectId: deal.executionProjectId, created: false, deal }
-    if (opts.auto && deal.executionCreatedAt) return null
+    const existing = deal.executionProjectId ?? deal.executionCalendarProjectId
+    if (existing) {
+      return {
+        created: false as const,
+        result: { projectId: existing, calendarProjectId: deal.executionCalendarProjectId, folderId: deal.executionFolderId, created: false },
+      }
+    }
 
     const workspaceId = deal.project.workspaceId
     // BD and PM join only while they are still in the workspace (the deal keeps a departed person's id).
@@ -90,70 +127,107 @@ export async function ensureExecutionProject(
       (await tx.workspaceMember.findMany({ where: { workspaceId, userId: { in: wanted } }, select: { userId: true } })).map((m) => m.userId),
     )
     const memberIds = wanted.filter((id) => id === actorId || inWorkspace.has(id))
-    const folderId = await executionFolderId(workspaceId, deal.brand)
 
-    const project = await tx.project.create({
-      data: {
-        name: deal.name.slice(0, 200),
-        description: `Eksekusi deal ${deal.code} dari Pipeline.`,
-        type: "TASK",
-        workspaceId,
-        folderId,
-        members: { create: memberIds.map((userId) => ({ userId, role: userId === actorId ? ("LEAD" as const) : ("MEMBER" as const) })) },
-        taskLists: {
-          create: [
-            { name: "To Do", position: 0 },
-            { name: "In Progress", position: 1 },
-            { name: "Done", position: 2 },
-          ],
-        },
-      },
-      select: { id: true, name: true, folderId: true },
+    const parentFolderId = await executionParentFolderId(tx, workspaceId, deal.brand)
+    const lastFolder = await tx.projectFolder.findFirst({
+      where: { workspaceId, parentFolderId },
+      orderBy: { position: "desc" },
+      select: { position: true },
     })
+    const folder = await tx.projectFolder.create({
+      data: {
+        name: await freeFolderName(tx, workspaceId, deal.name, deal.code),
+        workspaceId,
+        parentFolderId,
+        position: (lastFolder?.position ?? -1) + 1,
+      },
+      select: { id: true, name: true, parentFolderId: true },
+    })
+
+    const makeProject = (suffix: string, position: number) =>
+      tx.project.create({
+        data: {
+          name: `${deal.name.slice(0, 180)}: ${suffix}`,
+          description: `Eksekusi deal ${deal.code} dari Pipeline.`,
+          type: "TASK",
+          workspaceId,
+          folderId: folder.id,
+          position,
+          members: { create: memberIds.map((userId) => ({ userId, role: userId === actorId ? ("LEAD" as const) : ("MEMBER" as const) })) },
+          taskLists: { create: STANDARD_LISTS },
+        },
+        select: { id: true, name: true },
+      })
+    const calendar = await makeProject("Master Calendar", 0)
+    const tasks = await makeProject("Master Task", 1)
+
     await tx.pipelineDeal.update({
       where: { id: dealId },
-      data: { executionProjectId: project.id, executionCreatedAt: new Date() },
+      data: {
+        executionFolderId: folder.id,
+        executionCalendarProjectId: calendar.id,
+        executionProjectId: tasks.id,
+        executionCreatedAt: new Date(),
+      },
     })
-    return { projectId: project.id, created: true, deal, project, memberIds, workspaceId }
+    return { created: true as const, deal, folder, projects: [calendar, tasks], memberIds, workspaceId,
+      result: { projectId: tasks.id, calendarProjectId: calendar.id, folderId: folder.id, created: true } }
   })
   if (!outcome) return null
 
-  if (outcome.created && "project" in outcome && outcome.project) {
-    const { project, memberIds, workspaceId, deal } = outcome
+  if (outcome.created) {
+    const { folder, projects, memberIds, workspaceId, deal } = outcome
     logAudit({
       action: "create",
-      entityType: "project",
-      entityId: project.id,
-      entityName: project.name,
+      entityType: "project_folder",
+      entityId: folder.id,
+      entityName: folder.name,
       userId: actorId,
       request: opts.request,
-      metadata: { fromPipelineDeal: dealId, code: deal.code, auto: opts.auto },
+      metadata: { fromPipelineDeal: dealId, code: deal.code, parentFolderId: folder.parentFolderId, workspaceId },
     })
-    await syncProjectRoomSafe(project.id, "pipeline-execution")
-    emitWorkspaceChanged(workspaceId, { kind: "projects", projectId: project.id, folderId: project.folderId ?? undefined, actorId }, memberIds)
-    ensureProjectSheet(project.id, actorId).catch((err) => console.error("Failed to pre-create sheet for execution project", project.id, err))
+    emitWorkspaceChanged(workspaceId, { kind: "folders", folderId: folder.id, actorId })
+    for (const project of projects) {
+      logAudit({
+        action: "create",
+        entityType: "project",
+        entityId: project.id,
+        entityName: project.name,
+        userId: actorId,
+        request: opts.request,
+        metadata: { fromPipelineDeal: dealId, code: deal.code, folderId: folder.id },
+      })
+      await syncProjectRoomSafe(project.id, "pipeline-execution")
+      emitWorkspaceChanged(workspaceId, { kind: "projects", projectId: project.id, folderId: folder.id, actorId }, memberIds)
+      ensureProjectSheet(project.id, actorId).catch((err) => console.error("Failed to pre-create sheet for execution project", project.id, err))
+    }
   }
   await syncMainDateTask(dealId, actorId)
-  return { projectId: outcome.projectId, created: outcome.created }
+  return outcome.result
 }
 
 /**
- * Keeps the deal's event / main date on the Master Calendar: one task in the execution project, due on
- * mainDate (00:00 UTC, the calendar's "date without a time"), assigned to the PM and BD. Made when the
- * deal has a date and an execution project; moved when the date changes; left without a due date when
- * the date is cleared (never deleted — people may have commented on it). A task deleted by hand is made
- * again on the next date change.
+ * Keeps the deal's event / main date on the Master Calendar: one task in the execution folder's Master
+ * Calendar project (or, for a 9 Oct deal without one, its single execution project), due on mainDate
+ * (00:00 UTC, the calendar's "date without a time"), assigned to the PM and BD. Made when the deal has a
+ * date and somewhere to put it; moved when the date changes; left without a due date when the date is
+ * cleared (never deleted — people may have commented on it). A task deleted by hand is made again on the
+ * next date change.
  */
 export async function syncMainDateTask(dealId: string, actorId: string): Promise<void> {
   try {
     const deal = await prisma.pipelineDeal.findUnique({
       where: { id: dealId },
-      select: { code: true, name: true, mainDate: true, mainDateTaskId: true, executionProjectId: true, bdUserId: true, pmUserId: true },
+      select: {
+        code: true, name: true, mainDate: true, mainDateTaskId: true,
+        executionProjectId: true, executionCalendarProjectId: true, bdUserId: true, pmUserId: true,
+      },
     })
-    if (!deal?.executionProjectId) return
+    const targetProjectId = deal?.executionCalendarProjectId ?? deal?.executionProjectId
+    if (!deal || !targetProjectId) return
     const existing = deal.mainDateTaskId
       ? await prisma.task.findFirst({
-          where: { id: deal.mainDateTaskId, taskList: { projectId: deal.executionProjectId } },
+          where: { id: deal.mainDateTaskId, taskList: { projectId: targetProjectId } },
           select: { id: true, dueDate: true },
         })
       : null
@@ -166,7 +240,7 @@ export async function syncMainDateTask(dealId: string, actorId: string): Promise
     if (!deal.mainDate) return
 
     const list = await prisma.taskList.findFirst({
-      where: { projectId: deal.executionProjectId },
+      where: { projectId: targetProjectId },
       orderBy: { position: "asc" },
       select: { id: true, project: { select: { workspaceId: true } } },
     })

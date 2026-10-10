@@ -11,10 +11,11 @@ import { dealInclude, pipelineGate, serializeDeal } from "@/lib/pipeline-server"
 type Ctx = { params: Promise<{ projectId: string; dealId: string }> }
 
 /**
- * "Create execution project" on a won deal (owner/GM, 9 Oct 2026). A stage move into Won makes it by
- * itself; this is for a deal that has none — the GM's imported deals, which came in already won, or one
- * whose project was deleted. Idempotent: a deal that has one gets that one back (201 only when made now).
- * → { projectId, created, deal }
+ * "Create execution project" on a won deal (owner, 10 Oct 2026 — the only way one is made; a stage move
+ * into Won does nothing by itself). Makes a folder named after the deal, inside the client's folder, with
+ * "<deal>: Master Calendar" and "<deal>: Master Task" in it (lib/pipeline-execution.ts). Idempotent: a
+ * deal that has one gets that one back (201 only when made now).
+ * → { projectId (Master Task), calendarProjectId, folderId, created, deal }
  */
 export async function POST(request: NextRequest, { params }: Ctx) {
   try {
@@ -30,12 +31,18 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "Deal ini belum won.", code: "NOT_WON" }, { status: 400 })
     }
 
-    const result = await ensureExecutionProject(dealId, userId, { auto: false, request })
+    const result = await ensureExecutionProject(dealId, userId, { request })
     if (!result) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
     const saved = await prisma.pipelineDeal.findUniqueOrThrow({ where: { id: dealId }, include: dealInclude })
     if (result.created) emitPipelineChanged(projectId, dealId, userId)
     return NextResponse.json(
-      { projectId: result.projectId, created: result.created, deal: serializeDeal(saved, pipelineToday()) },
+      {
+        projectId: result.projectId,
+        calendarProjectId: result.calendarProjectId,
+        folderId: result.folderId,
+        created: result.created,
+        deal: serializeDeal(saved, pipelineToday()),
+      },
       { status: result.created ? 201 : 200 },
     )
   } catch (error) {
