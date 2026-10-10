@@ -61,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -310,11 +311,14 @@ private fun Board(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) 
                     Text("${lane.tasks.size}", fontSize = 12.sp, color = c.mutedFg)
                 }
                 Spacer(Modifier.height(8.dp))
+                // Add task sits under the lane header, outside the card list (the web board's "Spawn card",
+                // iOS db37e62), so a long lane never has to be scrolled to its end to add one.
+                InlineAdd(onAdd = { vm.create(lane.id, it) })
+                Spacer(Modifier.height(8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f, fill = false)) {
                     if (lane.tasks.isEmpty()) item { Text(stringResource(R.string.board_empty_lane), fontSize = 12.sp, color = c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.padding(8.dp)) }
                     items(lane.tasks, key = { it.id }) { t -> MovableTask(t, allLanes, onOpenTask, vm) }
                 }
-                InlineAdd(onAdd = { vm.create(lane.id, it) })
             }
         }
     }
@@ -341,11 +345,22 @@ private fun InlineAdd(onAdd: (String) -> Unit) {
     var composing by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     if (!composing) {
-        TextButton(onClick = { composing = true }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Filled.Add, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.board_add_task))
+        // Dashed outline, as on the web's Spawn card and iOS.
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.muted.copy(alpha = 0.5f))
+                .drawBehind {
+                    drawRoundRect(c.border, cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx(),
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx()))))
+                }
+                .clickable { composing = true }.padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Add, null, Modifier.size(16.dp), tint = c.mutedFg); Spacer(Modifier.size(6.dp))
+            Text(stringResource(R.string.board_add_task), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
         }
     } else {
-        Column(Modifier.fillMaxWidth().padding(top = 6.dp).background(c.card, RoundedCornerShape(12.dp)).padding(8.dp)) {
+        Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(12.dp)).padding(8.dp)) {
             OutlinedTextField(title, { title = it }, placeholder = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = { composing = false; title = "" }) { Text(stringResource(R.string.cancel)) }
