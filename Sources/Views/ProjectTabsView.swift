@@ -8,6 +8,8 @@ enum ProjectTab: String, CaseIterable, Identifiable {
     case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
     case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
     case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", chat = "Chat"
+    // Only an Outlet Sales Dashboard shows it (owner, 10 Oct 2026, for Ryan): the night's report form.
+    case reportForm = "Report form"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -25,6 +27,7 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .finance:  return "banknote.fill"
         case .pnl:      return "dollarsign.circle.fill"
         case .chat:     return "bubble.left.and.bubble.right.fill"
+        case .reportForm: return "list.clipboard"
         }
     }
 }

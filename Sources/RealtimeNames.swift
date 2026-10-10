@@ -40,6 +40,11 @@ extension Notification.Name {
     /// 9 Oct 2026: `pipeline-changed` to the project's room, owner). userInfo, each optional:
     /// `RealtimeKey.projectId`, `RealtimeKey.dealId`. An open pipeline refetches, and an open deal with it.
     static let nexusPipelineChanged = Notification.Name("nexus.pipeline.changed")
+
+    /// An event of an Outlet Sales Dashboard was created, edited, deleted or restored, or a month's
+    /// target changed (server since 10 Oct 2026: `outlet-sales-changed` to the project's room). userInfo,
+    /// optional: `RealtimeKey.projectId`. A ping: the open outlet refetches the month it shows.
+    static let nexusOutletSalesChanged = Notification.Name("nexus.outletSales.changed")
 }
 
 /// The userInfo keys of the notifications above.

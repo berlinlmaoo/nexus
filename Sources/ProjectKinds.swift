@@ -7,6 +7,7 @@ import Foundation
 // and, since 9 Oct 2026, Pipeline Dashboard exist (the GM's deal board, PipelineView.swift); Finance
 // Dashboard and Content Planner wait for Berlin's references, are shown as coming soon, and the server
 // refuses them too (POST /api/projects → 400 TYPE_COMING_SOON), so nothing half-built can be created.
+// Since 10 Oct 2026 the Finance Dashboard card is the Outlet Sales Dashboard (OutletSalesView.swift).
 //
 // "ada bbrp project yg ga butuh spreadsheets/automation/list" — a project hides the tabs it does not
 // need. The server stores the HIDDEN keys (Project.hiddenTabs), the same keys web uses
@@ -15,18 +16,22 @@ import Foundation
 // opt-in flag of its own (financeEnabled, enablePnlDashboard), switched by BoD and above.
 
 enum ProjectKind: String, CaseIterable, Identifiable {
-    case task = "TASK", finance = "FINANCE", content = "CONTENT", pipeline = "PIPELINE"
+    // Outlet Sales Dashboard took Finance Dashboard's card (owner, 10 Oct 2026, for Ryan), in the web's
+    // order: Task Project · Outlet Sales Dashboard · Content Planner · Pipeline Dashboard. FINANCE stays a
+    // type the server knows (and refuses to create, 400 TYPE_COMING_SOON); it is just no longer offered.
+    case task = "TASK", outlet = "OUTLET_SALES", content = "CONTENT", pipeline = "PIPELINE"
 
     var id: String { rawValue }
 
-    /// Task Project and Pipeline Dashboard can be created (owner, 9 Oct 2026).
-    var available: Bool { self == .task || self == .pipeline }
+    /// Task Project, Pipeline Dashboard (owner, 9 Oct 2026) and Outlet Sales Dashboard (10 Oct 2026) can
+    /// be created; Content Planner is coming soon.
+    var available: Bool { self != .content }
 
     /// The owner's names for them; the same in both languages.
     var title: String {
         switch self {
         case .task: return "Task Project"
-        case .finance: return "Finance Dashboard"
+        case .outlet: return "Outlet Sales Dashboard"
         case .content: return "Content Planner"
         case .pipeline: return "Pipeline Dashboard"
         }
@@ -35,7 +40,7 @@ enum ProjectKind: String, CaseIterable, Identifiable {
     var blurb: String {
         switch self {
         case .task: return T("Board, list, calendar and timeline for work with owners and due dates.")
-        case .finance: return T("Revenue, OPEX and profit, month by month.")
+        case .outlet: return T("One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night.")
         case .content: return T("Plan and schedule content across your channels.")
         case .pipeline: return T("Follow every deal from first contact to paid.")
         }
@@ -44,7 +49,7 @@ enum ProjectKind: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .task: return "checklist"
-        case .finance: return "chart.bar.fill"
+        case .outlet: return "storefront"
         case .content: return "calendar.badge.clock"
         case .pipeline: return "line.3.horizontal.decrease.circle"
         }
@@ -54,10 +59,11 @@ enum ProjectKind: String, CaseIterable, Identifiable {
 extension ProjectTab {
     /// The key the server and web use for this tab in Project.hiddenTabs. nil for Finance and P&L,
     /// which are switched by their own flags rather than hidden, and for Pipeline, which a Pipeline
-    /// Dashboard always shows and no other project has (owner, 9 Oct 2026).
+    /// Dashboard always shows and no other project has (owner, 9 Oct 2026), and for Report form, which
+    /// only an Outlet Sales Dashboard has (10 Oct 2026).
     var key: String? {
         switch self {
-        case .finance, .pnl, .pipeline: return nil
+        case .finance, .pnl, .pipeline, .reportForm: return nil
         case .sheet: return "sheet"
         default: return rawValue.lowercased()
         }

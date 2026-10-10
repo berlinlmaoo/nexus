@@ -24,6 +24,11 @@ struct ProjectDetailView: View {
     @State private var query = ""
     /// Bumped by "+" on a Pipeline Dashboard: the pipeline opens its New deal sheet.
     @State private var newDealRequest = 0
+    /// An Outlet Sales Dashboard's month, calendar day and report draft, shared by its four tabs. Made
+    /// once the project says it is one.
+    @State private var outletStore: OutletSalesStore?
+    /// An outlet opens on Overview once (later reloads leave the tab alone).
+    @State private var outletLanded = false
     @Environment(\.dismiss) private var dismiss
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
@@ -114,12 +119,25 @@ struct ProjectDetailView: View {
     /// type still opens it as an empty task project.
     private var isPipeline: Bool { detail?.type == "PIPELINE" }
 
+    /// An Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): Overview · Calendar · Board · Report form
+    /// · Chat, plus Finance / P&L when switched on — the web's order, none of the task tabs. Its Overview,
+    /// Calendar and Board are the outlet's own (OutletSalesView.swift), not the task ones of the same name.
+    private var isOutlet: Bool { detail?.type == "OUTLET_SALES" }
+
     private var visibleTabs: [ProjectTab] {
-        ProjectTab.allCases.filter {
+        if isOutlet {
+            var tabs = ProjectTab.outletTabs
+            if !hiddenTabKeys.contains(ProjectTab.chat.key ?? "") { tabs.append(.chat) }
+            if financeEnabled { tabs.append(.finance) }
+            if pnlEnabled { tabs.append(.pnl) }
+            return tabs
+        }
+        return ProjectTab.allCases.filter {
             switch $0 {
             case .finance:  return financeEnabled
             case .pnl:      return pnlEnabled
             case .pipeline: return isPipeline
+            case .reportForm: return false
             case .chat:     return !hiddenTabKeys.contains($0.key ?? "")
             default:        return !isPipeline && !hiddenTabKeys.contains($0.key ?? "")
             }
@@ -129,6 +147,7 @@ struct ProjectDetailView: View {
     /// Where to land when the open tab is not (or no longer) shown: Board, else List, else the first
     /// tab there is — which for a Pipeline Dashboard is Pipeline.
     private var fallbackTab: ProjectTab {
+        if isOutlet { return .overview }
         let tabs = visibleTabs
         return tabs.first { ProjectTab.taskViews.contains($0) } ?? tabs.first ?? .board
     }
@@ -142,7 +161,7 @@ struct ProjectDetailView: View {
             tabBar
             Divider().overlay(NX.border)
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
-            if searchApplies && !loading && error == nil && !lanes.isEmpty { searchBar }
+            if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty { searchBar }
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -252,7 +271,8 @@ struct ProjectDetailView: View {
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
                 }
                 .accessibilityLabel(T("New deal"))
-            } else if !isPipeline {
+            } else if !isPipeline && !isOutlet {
+                // An outlet's "Add event" sits in its own header row, next to the month.
                 Button {
                     if tab == .forms { newFormOpen = true } else { prefillDue = nil; showCreate = true }
                 } label: {
@@ -325,6 +345,14 @@ struct ProjectDetailView: View {
     // MARK: content
 
     @ViewBuilder private var content: some View {
+        if isOutlet, tab.isOutletView, let outletStore {
+            OutletSalesTab(store: outletStore, tab: $tab)
+        } else {
+            taskContent
+        }
+    }
+
+    @ViewBuilder private var taskContent: some View {
         switch tab {
         case .pipeline:
             if isPipeline { PipelineTab(projectId: projectId, newDealRequest: newDealRequest) }
@@ -360,6 +388,44 @@ struct ProjectDetailView: View {
         }
     }
 
+    /// The first load of an outlet: its store, Overview, and whatever a link asked for — `view`, `event`
+    /// (the form on it, or the calendar on its day) and `date` (the calendar's day / a new event's day).
+    private func landOutlet() {
+        let store: OutletSalesStore
+        if let outletStore { store = outletStore } else {
+            store = OutletSalesStore(projectId: projectId)
+            outletStore = store
+        }
+        if !outletLanded {
+            outletLanded = true
+            tab = .overview
+        }
+        guard let link = AppRouter.shared.projectLink, link.projectId == projectId else { return }
+        AppRouter.shared.projectLink = nil
+        let view = link.view ?? (link.event != nil ? "form" : nil)
+        if let date = link.date {
+            store.selectedDay = date
+            Task { await store.show(month: String(date.prefix(7))) }
+        }
+        switch view {
+        case "form":
+            store.openForm(eventId: link.event, date: link.date)
+            tab = .reportForm
+        case "calendar":
+            tab = .calendar
+            if let id = link.event {
+                Task {
+                    if let e = await store.fetchEvent(id) {
+                        store.selectedDay = e.date
+                        await store.show(month: e.month)
+                    }
+                }
+            }
+        case "board": tab = .board
+        default: tab = .overview
+        }
+    }
+
     @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
         let lanes = filteredLanes
         if !lanes.isEmpty {
@@ -392,6 +458,8 @@ struct ProjectDetailView: View {
         do {
             let d = try await APIClient.shared.project(projectId)
             detail = d
+            // Before the task reads below, so an outlet never flashes an empty task board.
+            if d.type == "OUTLET_SALES" { landOutlet() }
             // Best-effort: the project payload is parentId-only, so pull the full task set and merge
             // subtasks into their lane (under the parent) for the board + list. Calendar/Timeline use detail.
             let all = (try? await APIClient.shared.projectTasks(projectId)) ?? []
@@ -441,6 +509,7 @@ struct ProjectDetailView: View {
         detail = d.value
         let all = ResponseCache.decoded("project-tasks-\(projectId)", as: [BoardTask].self)?.value ?? []
         lanes = Self.mergeSubtasks(into: d.value.taskLists ?? [], all: all)
+        if d.value.type == "OUTLET_SALES" { landOutlet() }
         if !visibleTabs.contains(tab) { tab = fallbackTab }
         cachedFrom = d.savedAt
         return true

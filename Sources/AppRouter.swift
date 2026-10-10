@@ -67,6 +67,36 @@ struct NXDetailRequest: Identifiable, Hashable {
     }
 }
 
+/// Where a project link asked its project to open: `/projects/{id}?view=form|calendar|board|overview
+/// &event={id}&date=YYYY-MM-DD` — the Outlet Sales Dashboard's "Copy form link" (owner, 10 Oct 2026).
+/// ProjectDetailView claims it once the project has loaded, and only for its own id.
+struct NXProjectLink: Equatable {
+    let projectId: String
+    let view: String?
+    let event: String?
+    let date: String?
+
+    /// nil when the link names no project, or carries none of the three (a plain project link).
+    init?(path: String) {
+        let items = URLComponents(string: path.hasPrefix("/") ? "https://nexus" + path : path)
+        let parts = (items?.path ?? "").split(separator: "/").map(String.init)
+        guard parts.count == 2, parts[0].lowercased() == "projects", !parts[1].isEmpty else { return nil }
+        self.init(projectId: parts[1], query: items?.queryItems ?? [])
+    }
+
+    init?(projectId: String, query: [URLQueryItem]) {
+        let value = { (k: String) -> String? in
+            query.first { $0.name == k }?.value.flatMap { $0.isEmpty ? nil : $0 }
+        }
+        let view = value("view")?.lowercased(), event = value("event"), date = value("date")
+        guard view != nil || event != nil || date != nil else { return nil }
+        self.projectId = projectId
+        self.view = view
+        self.event = event
+        self.date = date.flatMap { OutletFormat.parts($0) != nil && $0.count == 10 ? $0 : nil }
+    }
+}
+
 /// The Calendar as it stands, carried over when the window crosses the size class: the day it shows,
 /// Month or People, the division it is focused on, and the task open on top of it.
 struct CalendarCarry: Equatable {
@@ -167,6 +197,10 @@ final class AppRouter {
     /// and a push tap has no such stack in hand.
     var detail: NXDetailRequest?
 
+    /// The tab, event and day a project link asked for (`NXProjectLink`), waiting for that project's
+    /// screen. Held rather than fired, like `focus`.
+    var projectLink: NXProjectLink?
+
     /// The WIB day ("YYYY-MM-DD") a link asked the Calendar to open on: `/calendar?date=…` from a
     /// notification, or `nexus://calendar?date=…`. CalendarView reads it, jumps to that day and
     /// clears it. Held rather than fired, for the same reasons as `focus`: a link tapped on a cold
@@ -215,6 +249,12 @@ final class AppRouter {
     func openNotification(_ info: [String: String]) {
         let value = { (k: String) -> String? in info[k].flatMap { $0.isEmpty ? nil : $0 } }
         if let id = value("taskId") { open(.task(id)); return }
+        // A link into a project's tab (an outlet's report form) keeps its view, event and day.
+        if let link = value("link").flatMap(NXProjectLink.init(path:)) {
+            projectLink = link
+            open(.project(link.projectId))
+            return
+        }
         if let id = value("projectId") { open(.project(id)); return }
         // "Budi is outside the office" (approvers, 8 Oct 2026): the crew board, where it shows —
         // not the top of the Attendance screen its "/attendance" link names. Same rule as the Inbox row.
@@ -350,6 +390,16 @@ final class AppRouter {
                 go(.teamCalendar)
             }
             return
+        }
+        // `nexus://projects/<id>?view=form&event=…&date=…` — a project, on the tab the link names.
+        if name.lowercased() == "projects" {
+            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let rest = url.pathComponents.filter { $0 != "/" }
+            if let id = rest.first, !id.isEmpty {
+                projectLink = NXProjectLink(projectId: id, query: comps?.queryItems ?? [])
+                open(.project(id))
+                return
+            }
         }
         guard let screen = NXScreen(rawValue: name) else { return }
         go(screen)

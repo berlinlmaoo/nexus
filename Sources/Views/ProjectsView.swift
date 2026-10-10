@@ -97,8 +97,8 @@ struct ProjectsView: View {
             .sheet(item: $sheet) { which in
                 switch which {
                 case .newProject:
-                    // The type picker (Task Project; Finance Dashboard, Content Planner and Pipeline
-                    // Dashboard coming soon) is CreateProjectSheet's first step — the only way in.
+                    // The type picker (Task Project, Outlet Sales Dashboard, Pipeline Dashboard; Content
+                    // Planner coming soon) is CreateProjectSheet's first step — the only way in.
                     CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenExisting: { openBoard = $0 }) { await load() }
                 case .newProjectIn(let f):
                     CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenExisting: { openBoard = $0 }, folder: f) { await load() }
@@ -1018,7 +1018,11 @@ struct CreateProjectSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Create project")) }
+                            // An outlet opens straight away (web: "Create project + open dashboard").
+                            HStack(spacing: 8) {
+                                if busy { ProgressView().tint(.white) }
+                                Text(kind == .outlet ? T("Create project + open dashboard") : T("Create project"))
+                            }
                         }
                         .buttonStyle(NexusPrimaryButton())
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -1042,8 +1046,9 @@ struct CreateProjectSheet: View {
         }
     }
 
-    /// Four cards. Task Project and Pipeline Dashboard can be picked; Finance Dashboard and Content
-    /// Planner say "Coming soon" and do nothing (owner, 9 Oct 2026).
+    /// Four cards. Task Project, Outlet Sales Dashboard and Pipeline Dashboard can be picked; Content
+    /// Planner says "Coming soon" and does nothing (owner, 9 Oct 2026; Outlet Sales took Finance
+    /// Dashboard's card on 10 Oct 2026).
     private var kindPicker: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -1127,6 +1132,15 @@ struct CreateProjectSheet: View {
                     // The "Pipeline" entry in More / the sidebar learns the new board's id.
                     await viewer.reload()
                 }
+            } else if kind == .outlet {
+                // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
+                // Overview once the list knows it.
+                let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed, color: color,
+                                                                          icon: icon, folderId: folder?.id)
+                await onCreated()
+                dismiss()
+                onOpenExisting(made)
+                return
             } else {
                 try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed, color: color, icon: icon,
                                                         type: (kind ?? .task).rawValue, folderId: folder?.id)

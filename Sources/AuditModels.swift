@@ -426,6 +426,8 @@ enum AuditRestoreKinds {
         "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
         // A Pipeline Dashboard deal (owner, 9 Oct 2026).
         "pipeline_deal",
+        // An Outlet Sales Dashboard event with its report (owner, 10 Oct 2026).
+        "outlet_sales_event",
     ]
 
     private static let buttons: [String: String] = [
@@ -447,6 +449,7 @@ enum AuditRestoreKinds {
         "post": "Restore post", "quest": "Restore quest", "calendar_event": "Restore event",
         "dayoff_bonus": "Restore extra day off", "chat_group": "Restore group chat",
         "pipeline_deal": "Restore deal",
+        "outlet_sales_event": "Restore event",
     ]
 
     static func isProjectOrTask(_ entityType: String?) -> Bool { entityType == "project" || entityType == "task" }
@@ -491,6 +494,7 @@ enum AuditRestoreKinds {
         case "chat_group": return "It shows in its members' chat lists again. Nothing is posted in the chat about it."
         // Its code is never handed to another deal, so it always fits back in (owner, 9 Oct 2026).
         case "pipeline_deal": return "It goes back to its pipeline with its code and its edit history."
+        case "outlet_sales_event": return "It goes back to its outlet with its whole report, and counts in its month's totals again."
         case "attendance_office": return soft ? "The office is back in the list and open for check-ins." : nil
         default: return nil
         }

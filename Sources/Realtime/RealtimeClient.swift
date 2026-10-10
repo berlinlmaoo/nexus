@@ -159,6 +159,7 @@ final class RealtimeClient {
         center.post(name: .nexusProjectTasksChanged, object: nil)
         center.post(name: .nexusInboxChanged, object: nil)
         center.post(name: .nexusPipelineChanged, object: nil)
+        center.post(name: .nexusOutletSalesChanged, object: nil)
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
     }
@@ -212,6 +213,13 @@ final class RealtimeClient {
             if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
             if let dealId = payload?["dealId"]?.string { info[RealtimeKey.dealId] = dealId }
             center.post(name: .nexusPipelineChanged, object: nil, userInfo: info)
+        case "outlet-sales-changed":
+            // An Outlet Sales Dashboard changed (owner, 10 Oct 2026): an event created, edited, deleted
+            // or restored, or a target set. `{ projectId, eventId | null, month | null, actorId }`; the
+            // open outlet refetches whatever month it shows, so only the project is passed on.
+            var info: [String: String] = [:]
+            if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
+            center.post(name: .nexusOutletSalesChanged, object: nil, userInfo: info)
         default:
             // presence-*, sheet-*, cursor-move, content-change, the web's own task-update relay:
             // nothing on iOS draws them.
