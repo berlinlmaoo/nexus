@@ -436,7 +436,7 @@ struct PersonReportSections: View {
     static func priorityColor(_ p: String?) -> Color {
         switch p {
         case "URGENT": return NX.danger
-        case "HIGH": return NX.warning
+        case "HIGH": return NX.danger
         case "MEDIUM": return NX.blue
         case "LOW": return NX.mutedFg
         default: return NX.border
