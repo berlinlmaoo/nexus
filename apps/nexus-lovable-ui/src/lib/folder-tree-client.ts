@@ -1,6 +1,8 @@
 import type { NexusProjectFolder } from "@/lib/nexus-api";
 
-export const MAX_FOLDER_DEPTH = 3;
+// 4 since 10 Oct 2026, like the server (src/lib/folder-tree.ts): a won deal's execution folder sits
+// inside its client's folder, one level below "Projects: Ongoing & Onboarding › <client>".
+export const MAX_FOLDER_DEPTH = 4;
 
 /** "Grandparent / Parent / Folder" breadcrumb for a folder (for move-target labels). */
 export function folderPath(folder: NexusProjectFolder, byId: Map<string, NexusProjectFolder>): string {

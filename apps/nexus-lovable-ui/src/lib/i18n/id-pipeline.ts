@@ -50,11 +50,12 @@ export const ID_PIPELINE: Record<string, string> = {
   "added payment term": "menambah termin",
   "deleted payment term": "menghapus termin",
   "restored payment term": "memulihkan termin",
-  // Won → execution project + Master Calendar
+  // Won → execution folder (Master Calendar + Master Task), by hand since 10 Oct
   "Open execution project": "Buka project eksekusi",
+  "Open execution folder": "Buka folder eksekusi",
   "Create execution project": "Buat project eksekusi",
   "Couldn't create the execution project": "Project eksekusi gagal dibuat",
-  "Made automatically when a deal is won. Its event date goes on the Master Calendar.": "Dibuat otomatis saat deal won. Tanggal event-nya masuk ke Master Calendar.",
+  "Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.": "Membuat folder untuk deal ini berisi Master Calendar dan Master Task. Tanggal event-nya masuk ke Master Calendar.",
   "Restore deal": "Pulihkan deal",
   "It goes back to its pipeline with its code and its edit history.": "Deal kembali ke pipeline-nya dengan kode dan riwayat perubahannya.",
 

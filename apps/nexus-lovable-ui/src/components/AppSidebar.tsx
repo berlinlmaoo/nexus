@@ -320,7 +320,7 @@ export function AppSidebar() {
     }
   };
 
-  // Render a folder + its subfolders (recursively) + its projects. Folders nest up to 3 levels and may
+  // Render a folder + its subfolders (recursively) + its projects. Folders nest up to 4 levels and may
   // hold a mix of subfolders and projects. A folder with nothing inside is hidden.
   const renderFolderNode = (folder: NexusProjectFolder, depth: number): ReactNode => {
     const subfolders = folders.filter((f) => (f.parentFolderId ?? null) === folder.id);
@@ -486,7 +486,7 @@ export function AppSidebar() {
                   <div className="mx-2 my-1 h-px bg-sidebar-border/60" />
                 </div>
               )}
-              {/* Root folders render recursively (subfolders nested inside, up to 3 levels).
+              {/* Root folders render recursively (subfolders nested inside, up to 4 levels).
                   Pinned root folders are already shown (expandable) in the Pinned section above. */}
               {folders.filter((f) => !(f.parentFolderId ?? null) && !pinnedFolderIds.has(f.id)).map((folder) => (
                 <Fragment key={folder.id}>

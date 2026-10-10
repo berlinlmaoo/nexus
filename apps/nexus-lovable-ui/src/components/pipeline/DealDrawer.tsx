@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, ChevronDown, CircleCheck, FolderKanban, History, Loader2, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarDays, ChevronDown, CircleCheck, Folder, FolderKanban, History, ListChecks, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -170,46 +170,77 @@ export function DealDrawer({
 }
 
 /**
- * Won → execution (owner/GM, 9 Oct 2026: "after udah won lebih enak kalo kebentuk Master Calendar sama
- * Master Task buat projectnya"). The server makes a Task project the first time a deal enters a Won stage
- * and puts its event date on the Master Calendar; this links to it, or makes one by hand for a won deal
- * that has none (the GM's imported deals came in already won).
+ * Won → execution, by hand (owner, 10 Oct 2026: "jangan dibuat otomatis tpi siapin aja tombol untuk
+ * 'Create execution project' … 1 folder di project yg isinya Master Calendar sama Master Task"). Nothing
+ * is made when a deal reaches Won; on a won deal this button makes a folder named after the deal (inside
+ * its client's folder) with "<deal>: Master Calendar" and "<deal>: Master Task", and the deal's event
+ * date goes on that Master Calendar. Once made it opens the folder; a deal from 9 Oct that only has one
+ * project opens that project.
  */
 function ExecutionProject({ deal, projectId, canEdit }: { deal: PipelineDeal; projectId: string; canEdit: boolean }) {
   const { t } = useLang();
   const qc = useQueryClient();
   const create = useMutation({
     mutationFn: () => pipelineApi.createExecution(projectId, deal.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: pipelineKey(projectId) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pipelineKey(projectId) });
+      // The new folder and its two projects show in the sidebar and on Projects right away.
+      qc.invalidateQueries({ queryKey: ["nexus", "project-folders"] });
+      qc.invalidateQueries({ queryKey: ["nexus", "projects"] });
+    },
     onError: (e: unknown) => toast.error(t("Couldn't create the execution project"), { description: e instanceof Error ? e.message : undefined }),
   });
   const won = deal.stageGroup === "Pre-Execution" || deal.stageGroup === "Execution" || deal.stageGroup === "Closed";
-  const linked = deal.executionProject ?? null;
-  if (!linked && !(won && canEdit)) return null;
+  const folder = deal.executionFolder ?? null;
+  const calendar = deal.executionCalendarProject ?? null;
+  const tasks = deal.executionProject ?? null;
+  if (!folder && !tasks && !calendar && !(won && canEdit)) return null;
+  const primary =
+    "inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
+  const secondary =
+    "inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]";
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-      {linked ? (
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId: linked.id }}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]"
-        >
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+      {folder ? (
+        <>
+          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className={primary}>
+            <Folder className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t("Open execution folder")}</span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+          </Link>
+          {calendar && (
+            <Link to="/projects/$projectId" params={{ projectId: calendar.id }} className={secondary}>
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{t("Master Calendar")}</span>
+            </Link>
+          )}
+          {tasks && (
+            <Link to="/projects/$projectId" params={{ projectId: tasks.id }} className={secondary}>
+              <ListChecks className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{t("Master Task")}</span>
+            </Link>
+          )}
+        </>
+      ) : tasks || calendar ? (
+        <Link to="/projects/$projectId" params={{ projectId: (tasks ?? calendar)!.id }} className={primary}>
           <FolderKanban className="h-4 w-4 shrink-0" />
           <span className="truncate">{t("Open execution project")}</span>
           <ArrowRight className="h-3.5 w-3.5 shrink-0" />
         </Link>
       ) : (
-        <button
-          type="button"
-          onClick={() => create.mutate()}
-          disabled={create.isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
-        >
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          {t("Create execution project")}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => create.mutate()}
+            disabled={create.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60 pointer-coarse:min-h-[44px]"
+          >
+            {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {t("Create execution project")}
+          </button>
+          <p className="text-xs text-muted-foreground">{t("Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.")}</p>
+        </>
       )}
-      <p className="text-xs text-muted-foreground">{t("Made automatically when a deal is won. Its event date goes on the Master Calendar.")}</p>
     </div>
   );
 }

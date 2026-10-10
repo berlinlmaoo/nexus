@@ -92,6 +92,12 @@ export type PipelineDeal = {
   /** The Task project made when the deal was won (owner/GM, 9 Oct 2026); null = none (yet). Older servers omit it. */
   executionProjectId?: string | null;
   executionProject?: { id: string; name: string } | null;
+  /** "Create execution project" (owner, 10 Oct 2026): the deal's folder and its Master Calendar project.
+   *  executionProject above is that folder's Master Task. Null on deals made before 10 Oct. */
+  executionCalendarProjectId?: string | null;
+  executionCalendarProject?: { id: string; name: string } | null;
+  executionFolderId?: string | null;
+  executionFolder?: { id: string; name: string } | null;
   createdAt: string;
   createdBy: PipelinePerson | null;
   updatedAt: string;
@@ -108,7 +114,7 @@ export type PipelineDeal = {
 
 /** The fields a PATCH may carry (and `position`). */
 export type PipelineDealPatch = Partial<Omit<PipelineDeal,
-  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary">>;
+  "id" | "projectId" | "code" | "bd" | "pm" | "executionProjectId" | "executionProject" | "executionCalendarProjectId" | "executionCalendarProject" | "executionFolderId" | "executionFolder" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "stageGroup" | "daysOverdue" | "health" | "phases" | "terms" | "termSummary">>;
 
 export type PipelineResponse = {
   project: { id: string; name: string; type: string; workspaceId: string };
@@ -141,9 +147,10 @@ export const pipelineApi = {
     apiFetch<PipelineDeal>(`${base(projectId)}/${encodeURIComponent(dealId)}`, { method: "PATCH", body: JSON.stringify(payload) }),
   remove: (projectId: string, dealId: string) =>
     apiFetch<{ success: boolean }>(`${base(projectId)}/${encodeURIComponent(dealId)}`, { method: "DELETE" }),
-  /** "Create execution project" on a won deal; a deal that has one gets that one back. */
+  /** "Create execution project" on a won deal: a folder with its Master Calendar and Master Task. A deal
+   *  that has one gets that one back. */
   createExecution: (projectId: string, dealId: string) =>
-    apiFetch<{ projectId: string; created: boolean; deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/execution`, { method: "POST" }),
+    apiFetch<{ projectId: string; calendarProjectId: string | null; folderId: string | null; created: boolean; deal: PipelineDeal }>(`${base(projectId)}/${encodeURIComponent(dealId)}/execution`, { method: "POST" }),
   /** Payment terms (9 Oct 2026). Every answer carries the whole deal: its receivable and health moved. */
   addTerm: (projectId: string, dealId: string, payload: PipelineTermPatch) =>
     apiFetch<{ deal: PipelineDeal; term: PipelineTerm }>(`${base(projectId)}/${encodeURIComponent(dealId)}/terms`, { method: "POST", body: JSON.stringify(payload) }),
