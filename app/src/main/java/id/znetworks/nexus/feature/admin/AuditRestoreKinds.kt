@@ -46,6 +46,7 @@ object RestoreKinds {
         "chat_group", // DELETE-GROUP, 9 Oct
         "pipeline_deal", // PIPELINE-DASHBOARD, 9 Oct
         "pipeline_term", // PIPELINE-DASHBOARD §11.2, 9 Oct (opens its deal's board)
+        "outlet_sales_event", // OUTLET-SALES, 10 Oct (opens its outlet)
     )
     private val VAULT = setOf("vault_file", "vault_folder", "vault_trash")
 
@@ -69,6 +70,7 @@ object RestoreKinds {
         "chat_group" -> R.string.au_rb_chat_group
         "pipeline_deal" -> R.string.au_rb_deal
         "pipeline_term" -> R.string.au_rb_term
+        "outlet_sales_event" -> R.string.au_rb_outlet_event
         else -> R.string.au_restore
     }
 
@@ -86,6 +88,7 @@ object RestoreKinds {
         "chat_group" -> R.string.au_note_chat_group
         "pipeline_deal" -> R.string.au_note_deal
         "pipeline_term" -> R.string.au_note_term
+        "outlet_sales_event" -> R.string.au_note_outlet_event
         else -> null
     }
 

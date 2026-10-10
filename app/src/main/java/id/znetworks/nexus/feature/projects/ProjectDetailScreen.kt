@@ -102,6 +102,8 @@ import java.util.Locale
 enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     /** A Pipeline Dashboard's deals (type PIPELINE, 9 Oct): first and where it opens; never on a task project. */
     PIPELINE(R.string.pl_tab),
+    /** An Outlet Sales Dashboard (type OUTLET_SALES, OUTLET-SALES §1): these four, then Chat; never on a task project. */
+    OUTLET_OVERVIEW(R.string.os_tab_overview), OUTLET_CALENDAR(R.string.ptab_calendar), OUTLET_BOARD(R.string.ptab_board), OUTLET_FORM(R.string.os_tab_form),
     OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
     SHEET(R.string.ptab_sheet, true), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
     SPRINTS(R.string.ptab_sprints), AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
@@ -125,7 +127,8 @@ data class ProjectDetailState(
      * (older server: the name says finance), P&L only with its flag AND a BoD-tier viewer.
      */
     val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
-        ProjectTabsLogic.financeOn(detail?.financeEnabled, detail?.name), detail?.enablePnlDashboard == true, isBoD, isPipeline = detail?.type == "PIPELINE")
+        ProjectTabsLogic.financeOn(detail?.financeEnabled, detail?.name), detail?.enablePnlDashboard == true, isBoD, isPipeline = detail?.type == "PIPELINE",
+        isOutlet = detail?.type == "OUTLET_SALES")
 }
 
 class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -262,6 +265,13 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.SPRINTS -> SprintsTab(vm.projectId, onOpenTask)
                             ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId)
                             ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
+                            ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
+                                val views = mapOf(ProjectTab.OUTLET_OVERVIEW to id.znetworks.nexus.feature.outlet.OutletView.OVERVIEW,
+                                    ProjectTab.OUTLET_CALENDAR to id.znetworks.nexus.feature.outlet.OutletView.CALENDAR,
+                                    ProjectTab.OUTLET_BOARD to id.znetworks.nexus.feature.outlet.OutletView.BOARD,
+                                    ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
+                                id.znetworks.nexus.feature.outlet.OutletTab(views.getValue(tab), goTo = { v -> tab = views.entries.first { it.value == v }.key })
+                            }
                             ProjectTab.FINANCE -> FinanceTab(vm.projectId)
                             ProjectTab.PNL -> PnlTab(vm.projectId)
                             ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
@@ -282,7 +292,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             FloatingActionButton(onClick = { onBuildForm(null) }, containerColor = c.violet, contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.fb_new)) }
         }
-        if (s.detail != null && s.detail?.type != "PIPELINE" && s.lanes.isNotEmpty() && tab.searches) {
+        if (s.detail != null && s.detail?.type != "PIPELINE" && s.detail?.type != "OUTLET_SALES" && s.lanes.isNotEmpty() && tab.searches) {
             FloatingActionButton(onClick = { createDue = null; creating = true }, containerColor = c.violet, contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.task_new)) }
         }

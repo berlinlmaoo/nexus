@@ -18,6 +18,7 @@ object ProjectTabsLogic {
         ProjectTab.AUTOMATIONS -> "automations"; ProjectTab.PAGES -> "pages"; ProjectTab.FORMS -> "forms"; ProjectTab.CHAT -> "chat"
         ProjectTab.FINANCE, ProjectTab.PNL -> null // flags, not tab keys
         ProjectTab.PIPELINE -> null // the project's type, not a tab key
+        ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> null // the type's own tabs
     }
 
     /** `hiddenTabs` read leniently: anything but a list of strings hides nothing. */
@@ -32,13 +33,15 @@ object ProjectTabsLogic {
      * [isPipeline]: a Pipeline Dashboard shows Pipeline, Chat, and Finance / P&L when on — none of the task tabs
      * (its default task sections stay on the server only so older apps open it as an empty task project).
      */
-    fun visible(hidden: Set<String>, financeOn: Boolean, pnlOn: Boolean, isBoD: Boolean, isPipeline: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
+    fun visible(hidden: Set<String>, financeOn: Boolean, pnlOn: Boolean, isBoD: Boolean, isPipeline: Boolean = false, isOutlet: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
         when (it) {
             ProjectTab.PIPELINE -> isPipeline
+            // [isOutlet] (OUTLET-SALES §1): Overview · Calendar · Board · Report form · Chat (+ Finance / P&L when on).
+            ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> isOutlet
             ProjectTab.FINANCE -> financeOn
             ProjectTab.PNL -> pnlOn && isBoD
             ProjectTab.CHAT -> key(it) !in hidden
-            else -> !isPipeline && key(it) !in hidden
+            else -> !isPipeline && !isOutlet && key(it) !in hidden
         }
     }
 
@@ -46,6 +49,7 @@ object ProjectTabsLogic {
     fun fallback(current: ProjectTab, visible: List<ProjectTab>): ProjectTab = when {
         current in visible -> current
         ProjectTab.PIPELINE in visible -> ProjectTab.PIPELINE
+        ProjectTab.OUTLET_OVERVIEW in visible -> ProjectTab.OUTLET_OVERVIEW
         ProjectTab.BOARD in visible -> ProjectTab.BOARD
         ProjectTab.LIST in visible -> ProjectTab.LIST
         else -> visible.firstOrNull() ?: ProjectTab.BOARD
@@ -64,7 +68,8 @@ object ProjectTabsLogic {
 /** The four project types (only TASK is built). Names stay English in both languages. */
 enum class ProjectType(val code: String, val title: String, val description: Int, val ready: Boolean) {
     TASK("TASK", "Task Project", R.string.pt_task_sub, true),
-    FINANCE("FINANCE", "Finance Dashboard", R.string.pt_finance_sub, false),
+    /** Replaces the Finance Dashboard card (OUTLET-SALES §1, 10 Oct); FINANCE is 400 TYPE_COMING_SOON. */
+    OUTLET_SALES("OUTLET_SALES", "Outlet Sales Dashboard", R.string.pt_outlet_sub, true),
     CONTENT("CONTENT", "Content Planner", R.string.pt_content_sub, false),
     PIPELINE("PIPELINE", "Pipeline Dashboard", R.string.pt_pipeline_sub, true),
 }

@@ -258,7 +258,7 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             }
             // Tabs: which ones this project shows (hiding deletes nothing).
             // A Pipeline Dashboard has no task tabs to choose (as the web's Tune).
-            if (d.type != "PIPELINE") Section(stringResource(R.string.ps_tabs)) {
+            if (d.type != "PIPELINE" && d.type != "OUTLET_SALES") Section(stringResource(R.string.ps_tabs)) {
                 Text(stringResource(R.string.ps_tabs_sub), fontSize = 12.sp, color = c.mutedFg)
                 val hidden = s.hiddenDraft ?: ProjectTabsLogic.hidden(d.hiddenTabs)
                 val canChange = s.isManager

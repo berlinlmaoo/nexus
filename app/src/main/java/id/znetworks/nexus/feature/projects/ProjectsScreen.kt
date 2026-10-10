@@ -605,7 +605,8 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
         },
         confirmButton = {
             TextButton(onClick = { onCreate(name, icon, color, folder, type ?: ProjectType.TASK) }, enabled = name.isNotBlank() && !busy) {
-                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.project_launch))
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } },
@@ -684,7 +685,7 @@ private fun TypeCard(t: ProjectType, description: String? = null, onPick: () -> 
         }
     Row(Modifier.fillMaxWidth().clip(shape).background(if (t.ready) c.card else c.muted.copy(alpha = 0.4f)).then(frame)
         .clickable(enabled = t.ready, onClick = onPick).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(when (t) { ProjectType.TASK -> "✅"; ProjectType.FINANCE -> "💰"; ProjectType.CONTENT -> "🗓️"; ProjectType.PIPELINE -> "🤝" },
+        Text(when (t) { ProjectType.TASK -> "✅"; ProjectType.OUTLET_SALES -> "🍸"; ProjectType.CONTENT -> "🗓️"; ProjectType.PIPELINE -> "🤝" },
             fontSize = 22.sp, modifier = Modifier.padding(end = 12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

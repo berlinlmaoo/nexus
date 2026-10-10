@@ -66,8 +66,11 @@ object RealtimeEvents {
     const val TYPING = "typing"
     /** A Pipeline Dashboard deal changed (project room; PIPELINE-DASHBOARD §6): refetch the pipeline. */
     const val PIPELINE_CHANGED = "pipeline-changed"
+    /** An outlet's event or month target changed (project room; OUTLET-SALES §9): a ping, refetch the month shown. */
+    const val OUTLET_SALES_CHANGED = "outlet-sales-changed"
 
-    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED, TYPING, PIPELINE_CHANGED) + TASK
+    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED, TYPING, PIPELINE_CHANGED,
+        OUTLET_SALES_CHANGED) + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -101,6 +104,7 @@ object RealtimeEvents {
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
             SPRINT_UPDATED -> RealtimeEvent(name, projectId = o.str("projectId"))
             PIPELINE_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("dealId"), userId = o.str("actorId"))
+            OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))
             else -> RealtimeEvent(name)
         }
     }
