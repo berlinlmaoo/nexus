@@ -68,7 +68,11 @@ import {
   Sheet as SheetIcon,
 } from "lucide-react";
 
-export const Route = createFileRoute("/_app/projects/$projectId")({ component: ProjectDetail });
+export const Route = createFileRoute("/_app/projects/$projectId")({
+  component: ProjectDetail,
+  // `?settings=1` opens Project settings (the project tree's "Project settings" menu item, 10 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { settings?: 1 } => ({ settings: s.settings === 1 || s.settings === "1" ? 1 : undefined }),
+});
 
 type ViewId = "pipeline" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
@@ -112,6 +116,12 @@ function ProjectDetail() {
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
   const data = project.data;
+  const search = Route.useSearch();
+  useEffect(() => {
+    if (search.settings !== 1 || !data) return;
+    setSettingsOpen(true);
+    navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
+  }, [search.settings, data, projectId, navigate]);
   // P&L is BoD-and-above only: the tab renders only when the Tune toggle is on AND the viewer is
   // BoD+ — checked against THIS project's workspace (a multi-workspace user's role can differ).
   const wsm = useQuery({

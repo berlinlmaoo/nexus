@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip, Input } from "@heroui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
@@ -17,27 +17,29 @@ import { invalidateProjectData } from "@/lib/invalidate";
 import { Reveal } from "@/components/motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  FolderGlyph, ProjectGlyph, TreeMenuBody, folderMenuEntries, projectMenuEntries, useProjectTreeActions, type TreeActions,
+} from "@/components/projects/project-tree";
+import { canDropInto, dragFromDrop, endTreeDrag, isTreeDrag, startTreeDrag, useTreeDrag } from "@/lib/project-tree-dnd";
 import {
   ArrowRight,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock3,
   Folder,
   FolderPlus,
-  ImagePlus,
+  Inbox,
   LayoutGrid,
   List,
   MoreVertical,
-  Pencil,
   Plus,
   Search,
   SlidersHorizontal,
   Sparkles,
   Target,
-  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -46,8 +48,14 @@ export const Route = createFileRoute("/_app/projects/")({
   component: ProjectsPage,
   // `?new=1` opens "New project" (the sidebar's "+ New project" lands here, so every project starts by
   // choosing its type — owner, 9 Oct 2026).
-  validateSearch: (s: Record<string, unknown>): { new?: 1 } => ({ new: s.new === 1 || s.new === "1" ? 1 : undefined }),
+  // `&folder=<id>` makes it inside that folder (a folder's "New project here", 10 Oct 2026).
+  validateSearch: (s: Record<string, unknown>): { new?: 1; folder?: string } => ({
+    new: s.new === 1 || s.new === "1" ? 1 : undefined,
+    folder: typeof s.folder === "string" && s.folder ? s.folder : undefined,
+  }),
 });
+
+const EXPANDED_KEY = "nexus:projects:expanded-folders";
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "In play", cls: "bg-success/15 text-success" },
@@ -103,6 +111,8 @@ function ProjectsPage() {
   const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
   // New project, step one (owner, 9 Oct 2026): what the project is for. null = the picker is showing.
   const [newProjectType, setNewProjectType] = useState<ProjectTypeId | null>(null);
+  // The folder a new project goes into (from a folder's "New project here"); null = no folder.
+  const [newProjectFolderId, setNewProjectFolderId] = useState<string | null>(null);
   const { t: tr } = useLang();
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1 });
@@ -208,6 +218,7 @@ function ProjectsPage() {
         color: newProjectColor,
         workspaceId: newProjectWorkspaceId || workspaceOptions[0]?.id || "",
         type: newProjectType ?? "TASK",
+        ...(newProjectFolderId ? { folderId: newProjectFolderId } : {}),
       }),
     onSuccess: async (project) => {
       invalidateProjectData(queryClient);
@@ -233,15 +244,16 @@ function ProjectsPage() {
       ? createProject.error.message
       : "Create failed. Check session and workspace permission.";
 
-  const openCreate = () => {
+  const openCreate = (folderId: string | null = null) => {
     if (!newProjectWorkspaceId && workspaceOptions[0]) setNewProjectWorkspaceId(workspaceOptions[0].id);
     setNewProjectType(null);
+    setNewProjectFolderId(folderId);
     setIsCreateOpen(true);
   };
   const search = Route.useSearch();
   useEffect(() => {
     if (search.new !== 1) return;
-    openCreate();
+    openCreate(search.folder ?? null);
     navigate({ to: "/projects", search: {}, replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.new]);
@@ -272,65 +284,77 @@ function ProjectsPage() {
     return { byFolder, none: byFolder.get("__none__") ?? [] };
   }, [visibleProjects]);
 
-  // Default = semua folder group KETUTUP (collapsed). Kita track set `expanded` (kosong = semua ketutup),
-  // jadi folder yang baru muncul pun otomatis ketutup sampai user buka manual.
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggleExpand = (id: string) =>
+  // Folders start closed; the ones you open are remembered per browser (owner, 10 Oct 2026).
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(EXPANDED_KEY) : null;
+      const ids = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const setExpandedFor = (id: string, open: boolean) =>
     setExpanded((prev) => {
+      if (prev.has(id) === open) return prev;
       const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
+      if (open) n.add(id); else n.delete(id);
+      try { localStorage.setItem(EXPANDED_KEY, JSON.stringify([...n])); } catch { /* a convenience only */ }
       return n;
     });
+  const toggleExpand = (id: string) => setExpandedFor(id, !expanded.has(id));
 
-  const [folderForm, setFolderForm] = useState<{ mode: "create" | "edit"; id?: string; name: string; icon: string; color: string; parentId?: string | null; parentName?: string; iconFile?: File | null } | null>(null);
-  const invalidateFolders = () => invalidateProjectData(queryClient);
-  const folderSave = useMutation({
-    mutationFn: async (f: { mode: "create" | "edit"; id?: string; name: string; icon: string; color: string; parentId?: string | null; iconFile?: File | null }) => {
-      // Don't overwrite an uploaded photo with the emoji field unless the user actually changed it:
-      // when icon is an uploaded URL we keep it as-is (backend stores the URL in the same column).
-      const saved = f.mode === "create"
-        ? await nexusApi.projectFolderCreate(primaryWorkspaceId, { name: f.name.trim(), icon: f.icon, color: f.color, parentFolderId: f.parentId ?? null })
-        : await nexusApi.projectFolderUpdate(f.id!, { name: f.name.trim(), icon: f.icon, color: f.color });
-      // Photo picked? Upload AFTER save — create mode needs the new folder's id first.
-      const folderId = f.mode === "create" ? saved?.id : f.id;
-      if (f.iconFile && folderId) await nexusApi.uploadFolderIcon(folderId, f.iconFile);
-      return saved;
-    },
-    onSuccess: () => { invalidateFolders(); setFolderForm(null); },
-    onError: (e: unknown) => toast.error("Couldn't save folder", { description: e instanceof Error ? e.message : undefined }),
-  });
-  const folderDelete = useMutation({
-    mutationFn: (id: string) => nexusApi.projectFolderDelete(id),
-    onSuccess: () => { invalidateFolders(); toast.success("Folder deleted — its projects are now folder-free"); },
-    onError: (e: unknown) => toast.error("Couldn't delete folder", { description: e instanceof Error ? e.message : undefined }),
-  });
-  const moveProject = useMutation({
-    mutationFn: ({ projectId, folderId }: { projectId: string; folderId: string | null }) => nexusApi.updateProject(projectId, { folderId }),
-    onSuccess: () => { invalidateProjectData(queryClient); },
-    onError: (e: unknown) => toast.error("Couldn't move project", { description: e instanceof Error ? e.message : undefined }),
-  });
-  const onMoveProject = (projectId: string, folderId: string | null) => moveProject.mutate({ projectId, folderId });
+  // Move, pin, edit, delete: the same actions and dialogs as the sidebar (components/projects/project-tree).
+  const { actions: tree, dialogs: treeDialogs } = useProjectTreeActions({ folders: folderList, canManage: canManageFolders, workspaceId: primaryWorkspaceId });
+  const onMoveProject = (p: NexusProject, folderId: string | null) => tree.moveProject(p, folderId);
 
-  // ── Drag & drop: drag a project card/row onto a folder section to move it IN (or onto "Tanpa folder"
-  //    to pull it OUT). Mirrors the sidebar's native-HTML5 DnD; gated to folder managers like the move
-  //    menu. Cards are <Link>s, but a drag never fires a click, so navigation isn't triggered.
-  const [dragProjectId, setDragProjectId] = useState<string | null>(null);
+  // ── Drag & drop: a project card/row or a folder header onto a folder (in), or onto "No folder" (out).
+  //    Shares its drag with the sidebar, so a card can also be dropped on a sidebar folder.
+  const drag = useTreeDrag();
   const [dropTarget, setDropTarget] = useState<string | null>(null); // hovered folder id, or "__none__"
-  const projectDragHandlers = (projectId: string): DragProps =>
+  useEffect(() => { if (!drag) setDropTarget(null); }, [drag]);
+  const projectDragHandlers = (p: NexusProject): DragProps =>
     canManageFolders
-      ? {
-          draggable: true,
-          onDragStart: (e) => { setDragProjectId(projectId); try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", projectId); } catch { /* ignore */ } },
-          onDragEnd: () => { setDragProjectId(null); setDropTarget(null); },
-        }
+      ? { draggable: true, onDragStart: (e) => startTreeDrag(e, { kind: "project", id: p.id, from: p.folderId ?? null }), onDragEnd: () => endTreeDrag() }
+      : {};
+  const folderDragHandlers = (f: NexusProjectFolder): DragProps =>
+    canManageFolders
+      ? { draggable: true, onDragStart: (e) => startTreeDrag(e, { kind: "folder", id: f.id, from: f.parentFolderId ?? null }), onDragEnd: () => endTreeDrag() }
       : {};
   const folderDropHandlers = (folderId: string | null): DropProps => {
     if (!canManageFolders) return {};
     const key = folderId ?? "__none__";
     return {
-      onDragOver: (e) => { if (dragProjectId) { e.preventDefault(); setDropTarget(key); } },
-      onDragLeave: () => setDropTarget((t) => (t === key ? null : t)),
-      onDrop: (e) => { e.preventDefault(); const pid = dragProjectId; setDragProjectId(null); setDropTarget(null); if (pid) onMoveProject(pid, folderId); },
+      onDragOver: (e) => {
+        if (!isTreeDrag(e.dataTransfer.types)) return;
+        if (drag && !canDropInto(drag, folderId, folderList)) {
+          // Over the folder it is already in: no drop here, and not in the folder around it either.
+          if (drag.from === folderId) e.stopPropagation();
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation(); // the innermost folder wins, not every section around it
+        e.dataTransfer.dropEffect = "move";
+        if (dropTarget !== key) setDropTarget(key);
+      },
+      onDragLeave: (e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDropTarget((t) => (t === key ? null : t));
+      },
+      onDrop: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const d = dragFromDrop(e.dataTransfer);
+        endTreeDrag();
+        if (!d || !canDropInto(d, folderId, folderList)) return;
+        if (d.kind === "project") {
+          const p = projects.find((x) => x.id === d.id);
+          if (p) onMoveProject(p, folderId);
+        } else {
+          const f = folderList.find((x) => x.id === d.id);
+          if (f) tree.moveFolder(f, folderId);
+        }
+      },
     };
   };
 
@@ -377,16 +401,16 @@ function ProjectsPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onPress={() => setFolderForm({ mode: "create", name: "", icon: "📁", color: "#7B2FBE" })}
-                aria-label="New folder"
+                onPress={() => tree.newFolder(null)}
+                aria-label={tr("New folder")}
               >
-                <FolderPlus className="h-3.5 w-3.5" /> Folder
+                <FolderPlus className="h-3.5 w-3.5" /> {tr("Folder")}
               </Button>
             )}
             <Button
               size="sm"
               variant="primary"
-              onPress={openCreate}
+              onPress={() => openCreate()}
             >
               <Plus className="h-3.5 w-3.5" /> {tr("New project")}
             </Button>
@@ -431,6 +455,15 @@ function ProjectsPage() {
             ) : (
             <div className="mt-5 space-y-3">
               <ProjectTypeChosen type={newProjectType} onChange={() => setNewProjectType(null)} />
+              {newProjectFolderId && folderList.some((f) => f.id === newProjectFolderId) && (
+                <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs">
+                  <FolderGlyph folder={folderList.find((f) => f.id === newProjectFolderId)!} size={14} className="text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {tr("Inside “{name}”.", { name: folderPath(folderList.find((f) => f.id === newProjectFolderId)!, new Map(folderList.map((f) => [f.id, f]))) })}
+                  </span>
+                  <button type="button" onClick={() => setNewProjectFolderId(null)} className="shrink-0 rounded-md px-1.5 py-0.5 font-semibold text-muted-foreground hover:bg-accent hover:text-foreground">{tr("No folder")}</button>
+                </div>
+              )}
               <div className="grid grid-cols-[72px_1fr] gap-3">
                 <label className="text-xs font-semibold text-muted-foreground">
                   Icon
@@ -605,7 +638,9 @@ function ProjectsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {items.map((p, i) => (
                   <Reveal key={p.id} delay={Math.min(i, 8) * 0.04} className="h-full">
-                    <ProjectCard project={p} folders={folderList} canMove={canManageFolders} onMove={(fid) => onMoveProject(p.id, fid)} dragProps={projectDragHandlers(p.id)} dragging={dragProjectId === p.id} />
+                    <ProjectContextMenu project={p} actions={tree}>
+                      <ProjectCard project={p} folders={folderList} canMove={canManageFolders} onMove={(fid) => onMoveProject(p, fid)} dragProps={projectDragHandlers(p)} dragging={drag?.kind === "project" && drag.id === p.id} />
+                    </ProjectContextMenu>
                   </Reveal>
                 ))}
               </div>
@@ -613,7 +648,9 @@ function ProjectsPage() {
               <div className="overflow-hidden rounded-[28px] border border-border bg-card shadow-soft">
                 <div className="divide-y divide-border">
                   {items.map((p) => (
-                    <ProjectRow key={p.id} project={p} folders={folderList} canMove={canManageFolders} onMove={(fid) => onMoveProject(p.id, fid)} dragProps={projectDragHandlers(p.id)} dragging={dragProjectId === p.id} />
+                    <ProjectContextMenu key={p.id} project={p} actions={tree}>
+                      <ProjectRow project={p} folders={folderList} canMove={canManageFolders} onMove={(fid) => onMoveProject(p, fid)} dragProps={projectDragHandlers(p)} dragging={drag?.kind === "project" && drag.id === p.id} />
+                    </ProjectContextMenu>
                   ))}
                 </div>
               </div>
@@ -645,16 +682,15 @@ function ProjectsPage() {
                     count={items.length + subCount}
                     collapsed={!expanded.has(folder.id)}
                     onToggle={() => toggleExpand(folder.id)}
-                    canManage={canManageFolders}
+                    actions={tree}
+                    dragProps={folderDragHandlers(folder)}
+                    dragging={drag?.kind === "folder" && drag.id === folder.id}
                     dropProps={folderDropHandlers(folder.id)}
                     isDropTarget={dropTarget === folder.id}
-                    onEdit={() => setFolderForm({ mode: "edit", id: folder.id, name: folder.name, icon: folder.icon ?? "📁", color: folder.color ?? "#7B2FBE" })}
-                    onDelete={() => folderDelete.mutate(folder.id)}
-                    onNewSub={() => setFolderForm({ mode: "create", parentId: folder.id, parentName: folder.name, name: "", icon: "📁", color: "#7B2FBE" })}
                   >
                     {renderFolderTree(folder.id, depth + 1)}
                     {items.length ? renderItems(items) : (subCount === 0 ? (
-                      <p className="px-1 py-2 text-xs text-muted-foreground">Empty folder — drop a project in here, or make a subfolder.</p>
+                      <p className="px-1 py-2 text-xs text-muted-foreground">{canManageFolders ? tr("Empty folder — drag a project in here, or make a subfolder.") : tr("Nothing here yet")}</p>
                     ) : null)}
                   </FolderSection>
                 );
@@ -663,14 +699,14 @@ function ProjectsPage() {
           return (
             <div className="space-y-4">
               {renderFolderTree(null, 0)}
-              {grouped.none.length > 0 && (
+              {(grouped.none.length > 0 || (drag && canManageFolders && canDropInto(drag, null, folderList))) && (
                 <FolderSection
                   folder={null}
                   depth={0}
                   count={grouped.none.length}
                   collapsed={!expanded.has("__none__")}
                   onToggle={() => toggleExpand("__none__")}
-                  canManage={false}
+                  actions={tree}
                   dropProps={folderDropHandlers(null)}
                   isDropTarget={dropTarget === "__none__"}
                 >
@@ -682,16 +718,7 @@ function ProjectsPage() {
         })()}
       </div>
 
-      {folderForm && (
-        <FolderFormModal
-          form={folderForm}
-          saving={folderSave.isPending}
-          canSave={!!folderForm.name.trim() && (folderForm.mode === "edit" || !!primaryWorkspaceId)}
-          onChange={(patch) => setFolderForm((f) => (f ? { ...f, ...patch } : f))}
-          onCancel={() => setFolderForm(null)}
-          onSave={() => folderForm && folderSave.mutate(folderForm)}
-        />
-      )}
+      {treeDialogs}
     </div>
   );
 }
@@ -844,6 +871,7 @@ function BadgeMetric({ label, value }: { label: string; value: string }) {
 // Small folder-picker on a project card/row. The card is a <Link>, so we preventDefault to stop it
 // navigating — but that ALSO makes Radix skip its own open-toggle, so we toggle `open` manually here.
 function MoveToFolderMenu({ currentFolderId, folders, onMove }: { currentFolderId: string | null; folders: NexusProjectFolder[]; onMove: (folderId: string | null) => void }) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const pick = (e: React.MouseEvent, folderId: string | null) => { e.preventDefault(); e.stopPropagation(); setOpen(false); onMove(folderId); };
   return (
@@ -853,18 +881,18 @@ function MoveToFolderMenu({ currentFolderId, folders, onMove }: { currentFolderI
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
           className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary hover:text-primary"
-          title="Move to folder"
-          aria-label="Move to folder"
+          title={t("Move to folder…")}
+          aria-label={t("Move to folder…")}
         >
           <Folder className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-56 p-1.5">
-        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Move to folder</div>
+        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{t("Move to folder…")}</div>
         <div className="max-h-64 overflow-y-auto">
           <button type="button" onClick={(e) => pick(e, null)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
             <span className="grid h-4 w-4 place-items-center">{currentFolderId === null && <Check className="h-3.5 w-3.5 text-primary" />}</span>
-            <span className="text-muted-foreground">No folder</span>
+            <span className="text-muted-foreground">{t("No folder")}</span>
           </button>
           {(() => {
             const byId = new Map(folders.map((f) => [f.id, f]));
@@ -874,10 +902,8 @@ function MoveToFolderMenu({ currentFolderId, folders, onMove }: { currentFolderI
               .map(({ f, path }) => (
                 <button key={f.id} type="button" onClick={(e) => pick(e, f.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
                   <span className="grid h-4 w-4 shrink-0 place-items-center">{currentFolderId === f.id && <Check className="h-3.5 w-3.5 text-primary" />}</span>
-                  <span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded">
-                    <ProjectIcon icon={f.icon ?? "📁"} className="max-h-4 max-w-4 rounded object-cover" />
-                  </span>
-                  <span className="truncate">{path}</span>
+                  <FolderGlyph folder={f} size={16} className="text-muted-foreground" />
+                  <span className="truncate" title={path}>{path}</span>
                 </button>
               ));
           })()}
@@ -887,144 +913,88 @@ function MoveToFolderMenu({ currentFolderId, folders, onMove }: { currentFolderI
   );
 }
 
-function FolderManageMenu({ name, onEdit, onDelete, onNewSub }: { name: string; onEdit: () => void; onDelete: () => void; onNewSub?: () => void }) {
-  const [open, setOpen] = useState(false);
+// Right click on a project card or row: the same menu as in the sidebar.
+function ProjectContextMenu({ project, actions, children }: { project: NexusProject; actions: TreeActions; children: React.ReactNode }) {
+  const { t } = useLang();
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-label="Folder options">
-          <MoreVertical className="h-4 w-4" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-1.5">
-        {onNewSub && (
-          <button type="button" onClick={() => { setOpen(false); onNewSub(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
-            <FolderPlus className="h-3.5 w-3.5" /> New subfolder
-          </button>
-        )}
-        <button type="button" onClick={() => { setOpen(false); onEdit(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
-          <Pencil className="h-3.5 w-3.5" /> Edit folder
-        </button>
-        <button
-          type="button"
-          onClick={() => { setOpen(false); if (window.confirm(`Delete folder "${name}"? The projects inside become folder-free (they won't be deleted).`)) onDelete(); }}
-          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"
-        >
-          <Trash2 className="h-3.5 w-3.5" /> Delete folder
-        </button>
-      </PopoverContent>
-    </Popover>
+    <ContextMenu>
+      <ContextMenuTrigger asChild><div className="h-full">{children}</div></ContextMenuTrigger>
+      <ContextMenuContent className="w-60">
+        <TreeMenuBody kind="context" title={project.name} glyph={<ProjectGlyph project={project} size={14} />} entries={projectMenuEntries(project, actions, t)} />
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
-function FolderSection({ folder, count, collapsed, onToggle, canManage, onEdit, onDelete, onNewSub, depth = 0, children, dropProps, isDropTarget }: {
+function FolderSection({ folder, count, collapsed, onToggle, actions, depth = 0, children, dragProps, dragging, dropProps, isDropTarget }: {
   folder: NexusProjectFolder | null; count: number; collapsed: boolean; onToggle: () => void;
-  canManage: boolean; onEdit?: () => void; onDelete?: () => void; onNewSub?: () => void; depth?: number; children: React.ReactNode;
-  dropProps?: DropProps; isDropTarget?: boolean;
+  actions: TreeActions; depth?: number; children: React.ReactNode;
+  dragProps?: DragProps; dragging?: boolean; dropProps?: DropProps; isDropTarget?: boolean;
 }) {
+  const { t } = useLang();
+  const entries = folder ? folderMenuEntries(folder, actions, t) : [];
+  const header = (
+    // The whole header row opens / closes the folder (owner, 10 Oct 2026), not only the arrow; the
+    // name still opens the folder view and the menu keeps its own clicks.
+    <div
+      {...dragProps}
+      className={cn("flex cursor-pointer items-center gap-2 px-1", dragProps?.draggable && "active:cursor-grabbing")}
+      onClick={(e) => {
+        // Clicks from the menu bubble here through its portal: only clicks on the row itself count.
+        const el = e.target as HTMLElement;
+        if (e.currentTarget.contains(el) && !el.closest("a,button")) onToggle();
+      }}
+    >
+      <button type="button" onClick={onToggle} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-expanded={!collapsed} aria-label={collapsed ? t("Open folder") : t("Close folder")}>
+        <ChevronRight className={cn("h-4 w-4 transition-transform duration-150", !collapsed && "rotate-90")} />
+      </button>
+      {folder ? (
+        <Link to="/folders/$folderId" params={{ folderId: folder.id }} draggable={false} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title={t("Open folder view")}>
+          <FolderGlyph folder={folder} open={!collapsed} size={20} className={cn(!folder.color && "text-muted-foreground")} />
+          <h3 className="truncate font-semibold tracking-tight" title={folder.name}>{folder.name}</h3>
+        </Link>
+      ) : (
+        <>
+          <Inbox className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <h3 className="truncate font-semibold tracking-tight">{t("No folder")}</h3>
+        </>
+      )}
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
+      {folder && (
+        <div className="ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-label={t("More for {name}", { name: folder.name })}>
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <TreeMenuBody kind="dropdown" title={folder.name} glyph={<FolderGlyph folder={folder} size={14} />} entries={entries} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  );
   return (
     <section
       {...dropProps}
-      className={cn("border p-3 shadow-soft transition-colors", depth > 0 ? "mt-3 rounded-2xl bg-card/20" : "rounded-[28px] bg-card/40", isDropTarget ? "border-primary ring-2 ring-primary/40 bg-primary/5" : "border-border")}
+      className={cn(
+        "border p-3 shadow-soft transition-colors",
+        depth > 0 ? "mt-3 rounded-2xl bg-card/20" : "rounded-[28px] bg-card/40",
+        isDropTarget ? "border-primary bg-primary/5 ring-2 ring-primary/40" : "border-border",
+        dragging && "opacity-50",
+      )}
     >
-      {/* The whole header row opens / closes the folder (owner, 10 Oct 2026), not only the arrow; the
-          name still opens the folder view and the menu keeps its own clicks. */}
-      <div
-        className="flex cursor-pointer items-center gap-2 px-1"
-        onClick={(e) => {
-          // Clicks from the menu bubble here through its portal: only clicks on the row itself count.
-          const t = e.target as HTMLElement;
-          if (e.currentTarget.contains(t) && !t.closest("a,button")) onToggle();
-        }}
-      >
-        <button type="button" onClick={onToggle} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-label={collapsed ? "Expand folder" : "Collapse folder"}>
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: folder?.color || "#94a3b8" }} />
-        {folder ? (
-          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title="Open folder view (combined board + calendar)">
-            <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
-              <ProjectIcon icon={folder.icon || "📁"} className="max-h-6 max-w-6 rounded-md object-cover" />
-            </span>
-            <h3 className="truncate font-bold tracking-tight">{folder.name}</h3>
-          </Link>
-        ) : (
-          <>
-            <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
-              <ProjectIcon icon="🗂️" className="max-h-6 max-w-6 rounded-md object-cover" />
-            </span>
-            <h3 className="truncate font-bold tracking-tight">No folder</h3>
-          </>
-        )}
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{count}</span>
-        {canManage && folder && onEdit && onDelete && (
-          <div className="ml-auto"><FolderManageMenu name={folder.name} onEdit={onEdit} onDelete={onDelete} onNewSub={onNewSub} /></div>
-        )}
-      </div>
+      {folder ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>{header}</ContextMenuTrigger>
+          <ContextMenuContent className="w-60">
+            <TreeMenuBody kind="context" title={folder.name} glyph={<FolderGlyph folder={folder} size={14} />} entries={entries} />
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : header}
       {!collapsed && <div className="mt-3">{children}</div>}
     </section>
-  );
-}
-
-const FOLDER_COLORS = ["#7B2FBE", "#4EB301", "#2563EB", "#DB2777", "#F59E0B", "#10B981", "#0EA5E9", "#111827"];
-
-function FolderFormModal({ form, saving, canSave, onChange, onCancel, onSave }: {
-  form: { mode: "create" | "edit"; id?: string; name: string; icon: string; color: string; parentName?: string; iconFile?: File | null };
-  saving: boolean; canSave: boolean;
-  onChange: (patch: Partial<{ name: string; icon: string; color: string; iconFile: File | null }>) => void;
-  onCancel: () => void; onSave: () => void;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  // Preview priority: freshly-picked file > already-uploaded URL > emoji input box.
-  const pickedPreview = useMemo(() => (form.iconFile ? URL.createObjectURL(form.iconFile) : null), [form.iconFile]);
-  useEffect(() => () => { if (pickedPreview) URL.revokeObjectURL(pickedPreview); }, [pickedPreview]);
-  const uploadedUrl = !form.iconFile && form.icon.startsWith("/") ? form.icon : null;
-  const photoPreview = pickedPreview ?? uploadedUrl;
-  return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/35 px-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="w-full max-w-sm rounded-[28px] border border-border bg-card p-5 shadow-pop">
-        <h2 className="text-lg font-black tracking-tight">{form.mode === "create" ? (form.parentName ? "New subfolder" : "New folder") : "Edit folder"}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{form.parentName ? `Inside the "${form.parentName}" folder. ` : ""}Group your projects to keep Mission Control tidy.</p>
-        <div className="mt-4 space-y-3">
-          <div className="flex items-center gap-2">
-            {photoPreview ? (
-              <img src={photoPreview} alt="" className="h-10 w-12 shrink-0 rounded-xl border border-border object-cover" />
-            ) : (
-              <input value={form.icon} onChange={(e) => onChange({ icon: e.target.value.slice(0, 4) })} className="h-10 w-12 rounded-xl border border-border bg-background text-center text-xl outline-none focus:border-primary" aria-label="Emoji" />
-            )}
-            <input
-              value={form.name}
-              onChange={(e) => onChange({ name: e.target.value })}
-              placeholder="Folder name"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter" && canSave && !saving) onSave(); }}
-              className="h-10 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary"
-            />
-          </div>
-          {/* foto folder — sama kaya icon project (PNG/JPG/SVG/WEBP maks 5MB) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent">
-              <ImagePlus className="h-3.5 w-3.5" />{photoPreview ? "Change photo" : "Upload photo"}
-            </button>
-            {photoPreview && (
-              <button type="button" onClick={() => { onChange({ iconFile: null, icon: "📁" }); if (fileRef.current) fileRef.current.value = ""; }} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive">
-                <Trash2 className="h-3.5 w-3.5" />Back to emoji
-              </button>
-            )}
-            <span className="text-[10px] text-muted-foreground">PNG/JPG/SVG/WEBP, max 5MB</span>
-            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange({ iconFile: f }); }} />
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {FOLDER_COLORS.map((c) => (
-              <button key={c} type="button" onClick={() => onChange({ color: c })} className={cn("h-7 w-7 rounded-full border-2 transition", form.color === c ? "scale-110 border-foreground" : "border-transparent hover:scale-105")} style={{ background: c }} aria-label={`color ${c}`} />
-            ))}
-          </div>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onPress={onCancel}>Cancel</Button>
-          <Button size="sm" variant="primary" isDisabled={!canSave || saving} onPress={onSave}>{saving ? "Saving…" : "Save"}</Button>
-        </div>
-      </div>
-    </div>
   );
 }
