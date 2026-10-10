@@ -531,6 +531,39 @@ struct LaneColumn: View {
             }
             .padding(.horizontal, 4)
 
+            // Add task sits under the lane header, above the cards (like the web board's "Spawn card"),
+            // so a long lane never has to be scrolled to its end to add one.
+            if composing {
+                VStack(spacing: 8) {
+                    TextField(T("Task title…"), text: $newTitle, axis: .vertical)
+                        .font(NXFont.text(14)).focused($focused).lineLimit(3)
+                        .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.5)))
+                        .onSubmit(submit)
+                    HStack(spacing: 8) {
+                        Button(T("Cancel")) { composing = false; newTitle = "" }
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                        Spacer()
+                        Button(action: submit) {
+                            HStack(spacing: 4) { if adding { ProgressView().scaleEffect(0.7) }; Text(T("Add")) }
+                                .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(NX.violet, in: Capsule())
+                        }
+                        .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty || adding)
+                    }
+                }
+            } else {
+                Button { composing = true; focused = true } label: {
+                    HStack(spacing: 6) { Image(systemName: "plus"); Text(T("Add task")) }
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            }
+
             ScrollView(.vertical, showsIndicators: false) {
               LazyVStack(alignment: .leading, spacing: 10) {
             ForEach(orderedTasks) { task in
@@ -560,34 +593,6 @@ struct LaneColumn: View {
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
             }
 
-            if composing {
-                VStack(spacing: 8) {
-                    TextField(T("Task title…"), text: $newTitle, axis: .vertical)
-                        .font(NXFont.text(14)).focused($focused).lineLimit(3)
-                        .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.5)))
-                        .onSubmit(submit)
-                    HStack(spacing: 8) {
-                        Button(T("Cancel")) { composing = false; newTitle = "" }
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                        Spacer()
-                        Button(action: submit) {
-                            HStack(spacing: 4) { if adding { ProgressView().scaleEffect(0.7) }; Text(T("Add")) }
-                                .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background(NX.violet, in: Capsule())
-                        }
-                        .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty || adding)
-                    }
-                }
-            } else {
-                Button { composing = true; focused = true } label: {
-                    HStack(spacing: 6) { Image(systemName: "plus"); Text(T("Add task")) }
-                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }.buttonStyle(.plain)
-            }
               }   // LazyVStack
             }     // per-lane ScrollView
         }
