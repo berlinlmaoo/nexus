@@ -30,19 +30,19 @@ export async function GET(
       include: {
         user: true,
         reactions: {
-          include: { user: { select: { id: true, name: true } } },
+          include: { user: { select: { id: true, name: true, avatar: true } } },
         },
         replies: {
           include: {
             user: true,
             reactions: {
-              include: { user: { select: { id: true, name: true } } },
+              include: { user: { select: { id: true, name: true, avatar: true } } },
             },
             replies: {
               include: {
                 user: true,
                 reactions: {
-                  include: { user: { select: { id: true, name: true } } },
+                  include: { user: { select: { id: true, name: true, avatar: true } } },
                 },
               },
               orderBy: { createdAt: "asc" },

@@ -7,6 +7,7 @@ import { fmtDate, nexusApi, tiptapToText, type NexusDoc, type NexusProject } fro
 import { BookOpen, Plus, Search, Loader2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/Avatar";
 
 export const Route = createFileRoute("/_app/docs")({ component: Docs });
 
@@ -138,7 +139,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
       </div>
       <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/10 text-[9px] font-black text-primary">{initials(author?.name)}</span>
+          {author?.id ? <Avatar userId={author.id} name={author.name} avatar={author.avatar} size={20} className="ring-0" /> : <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/10 text-[9px] font-black text-primary">?</span>}
           <span>{author?.name || "NEXUS"}</span>
         </div>
         <span>Updated {fmtDate(doc.updatedAt)}</span>
@@ -160,10 +161,6 @@ function emojiForDoc(doc: NexusDoc) {
   return "📚";
 }
 
-function initials(name?: string | null) {
-  if (!name) return "?";
-  return name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-}
 
 function contentToTipTap(text: string) {
   const trimmed = text.trim();

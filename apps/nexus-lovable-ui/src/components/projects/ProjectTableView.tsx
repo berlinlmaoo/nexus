@@ -14,6 +14,7 @@ import { CustomFieldInput } from "@/components/tasks/TaskDetailPanel";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/Avatar";
 import { toast } from "sonner";
 
 // Built-in columns (Name is always the implicit first column, not configurable away).
@@ -28,7 +29,6 @@ const DEFAULT_COLUMNS = ["assignee", "dueDate", "priority", "status", "tags"];
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
 
-const initials = (name?: string | null) => (name ? name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") : "?");
 
 // Parse a raw serialized custom-field value into the shape CustomFieldInput expects.
 function parseCfValue(type: string, raw: string): unknown {
@@ -318,7 +318,7 @@ function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: N
             <span className="text-xs text-muted-foreground">—</span>
           ) : (
             <span className="flex items-center -space-x-1.5">
-              {current.slice(0, 3).map((u) => <span key={u.id} title={u.name ?? ""} className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary ring-2 ring-card">{initials(u.name)}</span>)}
+              {current.slice(0, 3).map((u) => <Avatar key={u.id} userId={u.id} name={u.name} avatar={u.avatar} size={24} className="ring-card" />)}
               {current.length > 3 && <span className="grid h-6 w-6 place-items-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground ring-2 ring-card">+{current.length - 3}</span>}
             </span>
           )}
@@ -331,7 +331,7 @@ function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: N
           return (
             <button key={u.id} onClick={() => onToggle(u.id, has)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-accent">
               <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", has ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{has && <Check className="h-3 w-3" />}</span>
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">{initials(u.name)}</span>
+              <Avatar userId={u.id} name={u.name} avatar={u.avatar} size={24} className="shrink-0 ring-0" />
               <span className="truncate">{u.name ?? u.email ?? "Member"}</span>
             </button>
           );

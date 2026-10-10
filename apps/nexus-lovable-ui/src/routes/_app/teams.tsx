@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { nexusApi, statusLabel, type NexusTeam, type NexusDivision } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/Avatar";
 
 // Halaman ini sudah tidak ada. Isinya dipecah ke tempat yang memang memilikinya:
 //   - siapa masuk tim mana  -> Control Room > Users, di dropdown baris orangnya
@@ -24,10 +25,6 @@ export const Route = createFileRoute("/_app/teams")({
 
 const UNGROUPED = "__ungrouped__";
 
-function initialsOf(name?: string | null) {
-  if (!name) return "?";
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
 
 export function DivisionManager({ divisions, teams }: { divisions: NexusDivision[]; teams: NexusTeam[] }) {
   const qc = useQueryClient();
@@ -248,7 +245,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
             const isPrimary = !!m.isAttendancePrimary;
             return (
               <span key={uid} className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-background py-0.5 pl-0.5 pr-2 text-xs">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">{initialsOf(m.user?.name)}</span>
+                <Avatar userId={uid} name={m.user?.name} avatar={m.user?.avatar} size={24} className="shrink-0 ring-0" />
                 <span className="max-w-[120px] truncate font-semibold" title={m.user?.name ?? ""}>{m.user?.name ?? "—"}</span>
                 {/* Lead tim dihapus: approval absensi sekarang diatur di Control Room > Bagan Approval. */}
                 {canManageAtt ? (
@@ -290,7 +287,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                       onClick={() => { addMember.mutate(m.userId); setMemberQuery(""); setMemberOpen(false); }}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold hover:bg-accent"
                     >
-                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[8px] font-bold text-primary">{initialsOf(m.name)}</span>
+                      <Avatar userId={m.userId} name={m.name} size={20} className="shrink-0 ring-0" />
                       <span className="truncate">{m.name}</span>
                     </button>
                   ))

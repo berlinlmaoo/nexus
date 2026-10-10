@@ -10,6 +10,7 @@ import { projectEmoji } from "@/components/projects/ProjectIcon";
 import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, financeTabEnabled, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFace } from "@/components/Avatar";
 
 // Shared layout id so the modal morphs out of the "Tune" button (same as board task cards).
 export const TUNE_MORPH_ID = "project-tune-card";
@@ -17,17 +18,10 @@ export const TUNE_MORPH_ID = "project-tune-card";
 const STATUSES = ["ACTIVE", "ARCHIVED", "COMPLETED"];
 const COLORS = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#64748b"];
 
-function initialsOf(name?: string | null) {
-  if (!name) return "?";
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
-
+/** A member's photo (looked up in the workspace directory when the payload carries none), initials as fallback. */
 function MiniAvatar({ user, size = 26 }: { user?: NexusUser | null; size?: number }) {
-  return (
-    <span className="inline-grid shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary ring-1 ring-border" style={{ width: size, height: size, fontSize: size * 0.36 }} title={user?.name ?? ""}>
-      {initialsOf(user?.name)}
-    </span>
-  );
+  if (user?.id) return <Avatar userId={user.id} name={user.name} avatar={user.avatar} size={size} className="shrink-0 ring-1 ring-border" />;
+  return <AvatarFace name={user?.name} size={size} className="shrink-0 ring-1 ring-border" />;
 }
 
 /** Pill switch matching the core-NEXUS "Customize Project" toggles. */

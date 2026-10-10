@@ -48,6 +48,7 @@ import {
   type NexusUser,
 } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFace } from "@/components/Avatar";
 import { useLang } from "@/lib/lang";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
@@ -106,16 +107,6 @@ function maybeUnplayableVideo(att: { mimeType?: string | null; name?: string | n
   return (att.mimeType ?? "").toLowerCase() === "video/quicktime" || fileExt(att.name) === "mov";
 }
 
-function initialsOf(name?: string | null) {
-  if (!name) return "?";
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 /**
  * A task person (assignee or creator) who was offboarded. Their tasks stay theirs (owner, 8 Oct 2026).
  * No date, unlike components/LeftTag: the task payload carries User.deactivatedAt (when the account was
@@ -148,16 +139,10 @@ function CreatedByLine({ creator, createdAt }: { creator: NexusUser; createdAt: 
   );
 }
 
+/** A task person's photo (looked up in the workspace directory when the payload carries none), initials as fallback. */
 function MiniAvatar({ user, size = 28 }: { user?: NexusUser | null; size?: number }) {
-  return (
-    <span
-      className="inline-grid shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary ring-1 ring-border"
-      style={{ width: size, height: size, fontSize: size * 0.36 }}
-      title={user?.name ?? "Unassigned"}
-    >
-      {initialsOf(user?.name)}
-    </span>
-  );
+  if (user?.id) return <Avatar userId={user.id} name={user.name} avatar={user.avatar} size={size} className="shrink-0 ring-1 ring-border" />;
+  return <AvatarFace name={user?.name} size={size} className="shrink-0 ring-1 ring-border" />;
 }
 
 function toMembers(data: { members?: NexusUser[] } | NexusUser[] | undefined): NexusUser[] {
@@ -799,9 +784,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                           </button>
                           {st.dueDate && <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">{fmtDue(st.dueDate)}</span>}
                           {(st.assignees ?? []).slice(0, 2).map((a, i) =>
-                            a.user?.avatar
-                              ? <img key={a.user.id ?? i} src={a.user.avatar} alt="" title={a.user.name ?? ""} className="h-5 w-5 shrink-0 rounded-full object-cover" />
-                              : <span key={a.user?.id ?? i} title={a.user?.name ?? ""} className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent text-[9px] font-bold text-accent-foreground">{(a.user?.name ?? "?").slice(0, 1).toUpperCase()}</span>
+                            <MiniAvatar key={a.user?.id ?? i} user={a.user} size={20} />
                           )}
                         </div>
                       ))}

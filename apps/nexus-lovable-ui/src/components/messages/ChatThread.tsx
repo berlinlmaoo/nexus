@@ -11,10 +11,6 @@ import { cn } from "@/lib/utils";
 import { MessageText, safeHref } from "@/components/messages/MessageText";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 
-function initialsOf(name?: string | null) {
-  if (!name) return "?";
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
 
 /** The sender's photo beside their bubble (initials when there is none), as everywhere else in NEXUS. */
 function MiniAvatar({ user, size = 28 }: { user?: NexusUser | null; size?: number }) {
@@ -829,7 +825,7 @@ export function ChatThread({
           <div className="absolute bottom-full left-3 right-3 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-pop">
             {mentionMatches.map((u) => (
               <button key={u.id} onMouseDown={(e) => { e.preventDefault(); pickMention(u); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(u.name)}</span>
+                <Avatar userId={u.id} name={u.name} avatar={u.avatar} size={24} className="shrink-0 ring-0" />
                 <span className="flex-1 truncate">{u.name ?? u.email}</span>
               </button>
             ))}

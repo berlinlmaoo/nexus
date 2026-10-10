@@ -5,6 +5,7 @@ import { Download, Loader2, Maximize2, Minimize2, Scan, Search, Smartphone, X, Z
 import { toPng } from "html-to-image";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/Avatar";
 
 /**
  * Bagan Approval — siapa menyetujui absensi siapa. Rantai bebas, digambar sebagai bagan organisasi.
@@ -464,7 +465,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
               <div className="px-2 pb-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{ORG_ROLE_LABEL[role] ?? role}</div>
               {list.map((m) => (
                 <button key={m.userId} type="button" onClick={() => onPick(m.userId)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-accent", m.userId === currentApproverId && "bg-primary/10 font-semibold text-primary")}>
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(m.name)}</span>
+                  <Avatar userId={m.userId} name={m.name} avatar={m.avatar} size={24} className="shrink-0 ring-0" />
                   <span className="min-w-0 flex-1 truncate">{label(m)}</span>
                   {reportsOf(m.userId) > 0 && <span className="shrink-0 text-[11px] text-muted-foreground">{reportsOf(m.userId)} bawahan</span>}
                 </button>

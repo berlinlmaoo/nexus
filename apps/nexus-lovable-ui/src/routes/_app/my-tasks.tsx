@@ -8,6 +8,7 @@ import { Plus, Filter, ArrowUpDown, CheckCircle2, MessageCircle, Sparkles, Loade
 import { celebrate } from "@/components/Celebration";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { Reveal } from "@/components/motion";
+import { Avatar } from "@/components/Avatar";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -111,10 +112,12 @@ function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
           {update.isError && <span className="text-red-500">Update failed</span>}
         </div>
       </div>
-      <span className={`hidden sm:inline-flex rounded-full px-2 py-0.5 text-2xs font-bold ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "Normal")}</span>
+      <span className={`hidden sm:inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "Normal")}</span>
       <span className="hidden md:block text-xs text-muted-foreground w-24 text-right">{fmtDue(task.dueDate)}</span>
       <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-bold text-muted-foreground">{statusLabel(task.status)}</span>
-      <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title={assignee?.name || "Unassigned"}>{initials(assignee?.name)}</div>
+      {assignee?.id
+        ? <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={28} className="shrink-0" />
+        : <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title="Unassigned">?</div>}
     </motion.div>
   );
 }
@@ -240,8 +243,4 @@ function isDueSoon(value?: string | null) {
   return due <= Date.now() + 3 * 24 * 60 * 60 * 1000 && due >= Date.now() - 24 * 60 * 60 * 1000;
 }
 
-function initials(name?: string | null) {
-  if (!name) return "?";
-  return name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-}
 

@@ -23,6 +23,7 @@ import { PipelineView } from "@/components/pipeline/PipelineView";
 import { financeTabEnabled, hiddenTabsOf } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { priorityTone } from "@/lib/calendar/tone";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -749,7 +750,9 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving, hideStatus }
           </span>
           <span className="inline-flex items-center gap-2">
             {typeof task._count?.comments === "number" && <span className="inline-flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{task._count.comments}</span>}
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title={assignee?.name || "Unassigned"}>{initials(assignee?.name)}</span>
+            {assignee?.id
+              ? <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={24} className="shrink-0" />
+              : <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title="Unassigned">?</span>}
           </span>
         </div>
       </CardBody>
@@ -1191,7 +1194,7 @@ function ListRow({ task, onOpen }: { task: NexusTask; onOpen: (task: NexusTask) 
       </div>
       <span className="hidden md:block"><PriorityChip priority={task.priority} /></span>
       <Chip size="sm" variant="soft" className="hidden sm:flex">{statusLabel(task.status)}</Chip>
-      {assignee && <span title={assignee.name ?? ""} className="hidden h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-border sm:grid">{initials(assignee.name)}</span>}
+      {assignee && <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={28} className="hidden shrink-0 ring-1 ring-border sm:inline-flex" />}
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
     </motion.button>
   );
@@ -1436,7 +1439,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue, hideStatus
                           <div className={cn("truncate text-sm font-semibold group-hover:text-primary", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                             <span>{statusLabel(task.status)}</span>
-                            {assignee?.name && <span className="inline-flex items-center gap-1"><span className="grid h-4 w-4 place-items-center rounded-full bg-primary/10 text-[8px] font-bold text-primary">{initials(assignee.name)}</span>{assignee.name}</span>}
+                            {assignee?.name && <span className="inline-flex items-center gap-1"><Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={16} className="ring-0" />{assignee.name}</span>}
                           </div>
                           <TaskCfChips task={task} max={3} className="mt-1.5" />
                         </div>
@@ -2116,9 +2119,9 @@ function Empty({ title, message }: { title: string; message: string }) {
 }
 
 function PriorityChip({ priority }: { priority?: string | null }) {
-  const p = (priority || "NONE").toUpperCase();
-  const color = p === "URGENT" || p === "HIGH" ? "danger" : p === "MEDIUM" ? "warning" : "success";
-  return <Chip size="sm" variant="soft" color={color}>{statusLabel(priority || "Normal")}</Chip>;
+  // A compact pill (owner, 10 Oct 2026: the HeroUI chip was too big beside the card title). Colours from
+  // the shared priorityTone, so the board reads like the Calendar, folders and My Mission.
+  return <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4", priorityTone(priority))}>{statusLabel(priority || "Normal")}</span>;
 }
 
 
@@ -2194,7 +2197,3 @@ function isDone(status?: string | null) {
   return ["DONE", "COMPLETED", "COMPLETE"].includes((status || "").toUpperCase());
 }
 
-function initials(name?: string | null) {
-  if (!name) return "?";
-  return name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-}

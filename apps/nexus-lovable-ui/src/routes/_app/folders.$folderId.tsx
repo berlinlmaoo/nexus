@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { PageHeader } from "@/components/PageHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { priorityTone } from "@/lib/calendar/tone";
 
 export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
 
@@ -312,16 +313,12 @@ function DesktopCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById
   );
 }
 
-const PRIORITY_PILL: Record<string, string> = {
-  LOW: "bg-muted text-muted-foreground",
-  MEDIUM: "bg-info/15 text-info",
-  HIGH: "bg-warning/15 text-warning",
-  URGENT: "bg-destructive/15 text-destructive",
-};
+const PRIORITY_KEYS = new Set(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 function PriorityPill({ priority }: { priority?: string | null }) {
   const key = (priority ?? "NONE").toUpperCase();
-  if (key === "NONE" || !PRIORITY_PILL[key]) return null;
-  return <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", PRIORITY_PILL[key])}>{key.charAt(0) + key.slice(1).toLowerCase()}</span>;
+  if (!PRIORITY_KEYS.has(key)) return null;
+  // Same compact pill and shared tone as the project board (owner, 10 Oct 2026).
+  return <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4", priorityTone(key))}>{key.charAt(0) + key.slice(1).toLowerCase()}</span>;
 }
 
 // One task row in the mobile day-detail list (checkbox · title · project + due · priority · assignee).
