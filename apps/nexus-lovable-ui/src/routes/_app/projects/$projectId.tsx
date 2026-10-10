@@ -20,6 +20,7 @@ import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
 import { PnlDashboardView } from "@/components/pnl/PnlDashboardView";
 import { PipelineView } from "@/components/pipeline/PipelineView";
+import { OutletSalesView, type OutletView } from "@/components/outlet-sales/OutletSalesView";
 import { financeTabEnabled, hiddenTabsOf } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ import {
   Activity,
   Calendar as CalIcon,
   Check,
+  ClipboardList,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -71,10 +73,17 @@ import {
 export const Route = createFileRoute("/_app/projects/$projectId")({
   component: ProjectDetail,
   // `?settings=1` opens Project settings (the project tree's "Project settings" menu item, 10 Oct 2026).
-  validateSearch: (s: Record<string, unknown>): { settings?: 1 } => ({ settings: s.settings === 1 || s.settings === "1" ? 1 : undefined }),
+  // An Outlet Sales Dashboard (10 Oct 2026): `?view=overview|calendar|board|form`, `&date=YYYY-MM-DD`,
+  // `&event=<id>` — the shared form link opens the report form, on one event when it names one.
+  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string } => ({
+    settings: s.settings === 1 || s.settings === "1" ? 1 : undefined,
+    view: s.view === "overview" || s.view === "calendar" || s.view === "board" || s.view === "form" ? s.view : undefined,
+    date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
+    event: typeof s.event === "string" && s.event.length <= 64 ? s.event : undefined,
+  }),
 });
 
-type ViewId = "pipeline" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
+type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
 type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
 const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
@@ -86,6 +95,11 @@ const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const;
 const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   // A Pipeline Dashboard project's main view (owner, 9 Oct 2026); task projects never show it.
   { id: "pipeline", label: "Pipeline", icon: Filter },
+  // An Outlet Sales Dashboard project's views (owner, 10 Oct 2026, for Ryan); one OutletSalesView behind them.
+  { id: "os-overview", label: "Overview", icon: Activity },
+  { id: "os-calendar", label: "Calendar", icon: CalIcon },
+  { id: "os-board", label: "Board", icon: LayoutGrid },
+  { id: "os-form", label: "Report form", icon: ClipboardList },
   { id: "overview", label: "Overview", icon: Activity },
   // P&L sits early so it's visible without scrolling the tab strip on mobile (BoD-only anyway).
   { id: "pnl", label: "P&L", icon: Wallet },
@@ -141,9 +155,13 @@ function ProjectDetail() {
   // BoD switched on. Its task tabs are not offered: the three default sections exist only so that apps
   // which do not know the type yet open it as an empty task project instead of failing.
   const isPipeline = data?.type === "PIPELINE";
+  // An Outlet Sales Dashboard (owner, 10 Oct 2026) likewise: its four views, chat and the money tabs.
+  const isOutlet = data?.type === "OUTLET_SALES";
+  const isSpecial = isPipeline || isOutlet;
   const visibleTabs = TABS.filter((tab) => {
     if (tab.id === "pipeline") return isPipeline;
-    if (isPipeline && tab.id !== "chat" && tab.id !== "finance" && tab.id !== "pnl") return false;
+    if (tab.id.startsWith("os-")) return isOutlet;
+    if (isSpecial && tab.id !== "chat" && tab.id !== "finance" && tab.id !== "pnl") return false;
     if (tab.id === "finance") return financeTabEnabled(data);
     if (tab.id === "pnl") return !!data?.enablePnlDashboard && isBod;
     return !hiddenTabs.has(tab.id);
@@ -156,6 +174,17 @@ function ProjectDetail() {
     if (next) setView(next.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id, visibleKey, view]);
+  // A link into an Outlet Sales Dashboard (?view=…&date=…&event=…): open that view once the project is
+  // known, hand the day / event to the view (remounted by `nonce`), then drop the query from the address.
+  const [outletLink, setOutletLink] = useState<{ date?: string; eventId?: string; nonce: number }>({ nonce: 0 });
+  useEffect(() => {
+    if (!data || (!search.view && !search.date && !search.event)) return;
+    if (data.type === "OUTLET_SALES") {
+      setOutletLink((cur) => ({ date: search.date, eventId: search.event, nonce: cur.nonce + 1 }));
+      setView(`os-${search.view ?? (search.event ? "form" : "calendar")}` as ViewId);
+    }
+    navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
+  }, [search.view, search.date, search.event, data, projectId, navigate]);
   const rootQc = useQueryClient();
   // Set a task's due date by dragging it onto a calendar day.
   const setTaskDue = useMutation({
@@ -212,7 +241,7 @@ function ProjectDetail() {
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
               <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />Tune</Button>
             </motion.div>
-            {!isPipeline && <Button size="sm" variant="primary" onClick={() => setComposerListId(taskLists[0]?.id ?? null)}><Plus className="h-3.5 w-3.5" />Add task</Button>}
+            {!isSpecial && <Button size="sm" variant="primary" onClick={() => setComposerListId(taskLists[0]?.id ?? null)}><Plus className="h-3.5 w-3.5" />Add task</Button>}
           </>
         }
         tabs={
@@ -227,7 +256,7 @@ function ProjectDetail() {
         }
       />
 
-      {!isPipeline && (
+      {!isSpecial && (
       <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-muted/30">
         <Chip size="sm" variant="soft" color={project.isError ? "danger" : "success"}>{project.isError ? "Locked" : "Live board"}</Chip>
         <div className="text-xs text-muted-foreground">Mission energy</div>
@@ -238,7 +267,7 @@ function ProjectDetail() {
       </div>
       )}
 
-      {!project.isLoading && !project.isError && data && !isPipeline && (
+      {!project.isLoading && !project.isError && data && !isSpecial && (
         <BoardFilterBar filters={filters} onChange={setFilters} total={totalTasks} visible={filteredTasks.length} tasks={allTasks} sections={taskLists} projectId={data.id} />
       )}
 
@@ -250,7 +279,21 @@ function ProjectDetail() {
           : view === "pnl" && !!data.enablePnlDashboard && isBod ? <PnlDashboardView projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />
       )}
-      {!project.isLoading && !project.isError && data && !isPipeline && (
+      {!project.isLoading && !project.isError && data && isOutlet && (
+        view === "chat" ? <ProjectChat projectId={data.id} />
+          : view === "finance" && financeTabEnabled(data) ? <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>
+          : view === "pnl" && !!data.enablePnlDashboard && isBod ? <PnlDashboardView projectId={data.id} />
+          : (
+            <OutletSalesView
+              key={outletLink.nonce}
+              projectId={data.id}
+              view={view.startsWith("os-") ? (view.slice(3) as OutletView) : "overview"}
+              onView={(v) => setView(`os-${v}` as ViewId)}
+              initial={outletLink.nonce ? { date: outletLink.date, eventId: outletLink.eventId } : undefined}
+            />
+          )
+      )}
+      {!project.isLoading && !project.isError && data && !isSpecial && (
         // Provider gates multi-select duplicate behind the project's "Task duplicate mode" flag.
         <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}

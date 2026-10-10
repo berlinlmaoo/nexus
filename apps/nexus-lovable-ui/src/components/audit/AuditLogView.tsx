@@ -340,7 +340,7 @@ const RESTORABLE_TYPES = new Set([
   "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
   "vault_file", "vault_folder", "vault_file_version", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
   "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
-  "pipeline_deal",
+  "pipeline_deal", "outlet_sales_event",
 ]);
 
 /** The button, per kind. A kind this list doesn't know (a newer server) gets plain "Restore". */
@@ -360,6 +360,7 @@ const RESTORE_BUTTON: Record<string, string> = {
   quest: "Restore quest", calendar_event: "Restore event", dayoff_bonus: "Restore extra day off",
   chat_group: "Restore group chat",
   pipeline_deal: "Restore deal",
+  outlet_sales_event: "Restore event",
 };
 
 /** One line under the explanation, where the kind needs it said. `soft`: the delete only flipped a flag. */
@@ -390,6 +391,8 @@ function restoreNote(entityType: string, soft: boolean): string | null {
     case "chat_group": return "It shows in its members' chat lists again. Nothing is posted in the chat about it.";
     // A Pipeline Dashboard deal (9 Oct 2026): its code is never given to another deal, so it fits back in.
     case "pipeline_deal": return "It goes back to its pipeline with its code and its edit history.";
+    // An Outlet Sales Dashboard night (10 Oct 2026): back on its outlet's calendar and in the month's totals.
+    case "outlet_sales_event": return "It goes back to its outlet with its whole report, and counts in its month's totals again.";
     case "attendance_office": return soft ? "The office is back in the list and open for check-ins." : null;
     default: return null;
   }

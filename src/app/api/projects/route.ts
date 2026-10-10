@@ -264,7 +264,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Project type (owner, 9 Oct 2026). No type = a Task Project, which is what every client before
-    // this sends. Finance Dashboard, Content Planner and Pipeline Dashboard are "coming soon".
+    // this sends. Pipeline Dashboard (9 Oct) and Outlet Sales Dashboard (10 Oct 2026) can be created;
+    // Finance Dashboard and Content Planner cannot (lib/project-tabs.ts). An Outlet Sales project gets the
+    // three default sections below too, so an app that does not know the type opens it as an empty task
+    // project instead of failing — as for the pipeline.
     const typeCheck = checkCreatableProjectType(body.type)
     if (!typeCheck.ok) {
       return NextResponse.json({ error: typeCheck.error, code: typeCheck.code }, { status: 400 })

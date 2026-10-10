@@ -158,6 +158,17 @@ export function emitPipelineChanged(projectId: string, dealId: string | null, ac
 }
 
 /**
+ * `outlet-sales-changed` { projectId, eventId, month, actorId } to the `project:<id>` room (owner, 10 Oct
+ * 2026): an event of an Outlet Sales Dashboard project was created, edited, deleted or restored, or a
+ * monthly target changed (eventId null). A ping, not the data: whoever has the outlet open refetches the
+ * month it shows through GET /api/projects/:id/outlet-sales (whatever `month` says: an event moved to
+ * another date can leave one month and enter another). Apps that do not know the event ignore it.
+ */
+export function emitOutletSalesChanged(projectId: string, eventId: string | null, month: string | null, actorId?: string) {
+  publishSafely(BUS_EVENTS.OUTLET_SALES_CHANGED, { projectId, eventId, month, actorId: actorId ?? null })
+}
+
+/**
  * These two are called right after a write has succeeded (inside logAudit's try, among others). A
  * listener that throws would otherwise surface there as a failed write: logAudit would return null and
  * a restorable delete would lose the link to its audit row. A ping is never worth that.

@@ -35,4 +35,6 @@ export const BUS_EVENTS = {
   AUDIT_CHANGED: "audit-changed",
   /** A deal of a Pipeline Dashboard project changed → the `project:<id>` room. Ids only (owner, 9 Oct 2026). */
   PIPELINE_CHANGED: "pipeline-changed",
+  /** An event or target of an Outlet Sales Dashboard project changed → the `project:<id>` room. Ids only (owner, 10 Oct 2026). */
+  OUTLET_SALES_CHANGED: "outlet-sales-changed",
 } as const

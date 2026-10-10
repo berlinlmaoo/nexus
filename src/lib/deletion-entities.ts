@@ -87,6 +87,8 @@ export const RESTORABLE: Record<string, Spec> = {
   pipeline_deal: { table: "PipelineDeal", label: "deal" },
   // One payment term of a deal (owner, 9 Oct 2026: "perlu per termin").
   pipeline_term: { table: "PipelinePaymentTerm", label: "payment term" },
+  // An event (night) of an Outlet Sales Dashboard project with its report (owner, 10 Oct 2026).
+  outlet_sales_event: { table: "OutletSalesEvent", label: "outlet event" },
 }
 
 export function rootTableOf(entityType: string): string {

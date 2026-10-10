@@ -135,6 +135,10 @@ model User {
   pipelineDealsCreated PipelineDeal[]       @relation("PipelineDealCreatedBy")
   pipelineDealsUpdated PipelineDeal[]       @relation("PipelineDealUpdatedBy")
   pipelineDealChanges  PipelineDealChange[]
+  outletEventsCreated  OutletSalesEvent[]   @relation("OutletEventCreatedBy")
+  outletEventsUpdated  OutletSalesEvent[]   @relation("OutletEventUpdatedBy")
+  outletEventsReported OutletSalesEvent[]   @relation("OutletEventReportedBy")
+  outletTargetsUpdated OutletSalesTarget[]  @relation("OutletTargetUpdatedBy")
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -545,6 +549,9 @@ model Project {
   pipelineExecutionOf PipelineDeal?  @relation("PipelineDealExecution")
   /// When this is the Master Calendar of a won deal's execution folder (owner, 10 Oct 2026), that deal.
   pipelineCalendarOf  PipelineDeal?  @relation("PipelineDealExecutionCalendar")
+  /// Outlet Sales Dashboard (Project.type "OUTLET_SALES", owner 10 Oct 2026): one project = one outlet.
+  outletSalesEvents  OutletSalesEvent[]
+  outletSalesTargets OutletSalesTarget[]
 
   @@index([folderId, position])
 }
@@ -3344,4 +3351,67 @@ model PipelinePaymentTerm {
   updatedAt   DateTime     @updatedAt
 
   @@index([dealId, position])
+}
+
+/// Monthly target of an Outlet Sales Dashboard project (Project.type "OUTLET_SALES", owner 10 Oct 2026,
+/// for Ryan): sales in rupiah and pax for one calendar month "YYYY-MM". Null = no target for that part
+/// (clients show "—" and no percentage). Set by the project lead, Manager, BoD or One Above All. A target
+/// is never deleted: clearing it stores nulls, and the audit row keeps the values before.
+/// Rules: src/lib/outlet-sales.ts. SQL: prisma/sql/2026-10-10-outlet-sales.sql.
+model OutletSalesTarget {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  month       String
+  salesTarget Float?
+  paxTarget   Int?
+  updatedById String?
+  updatedBy   User?    @relation("OutletTargetUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, month])
+}
+
+/// One event (night) of an outlet and its report: Ryan's form (owner, 10 Oct 2026). A date may hold
+/// several events. Every actual is nullable: null = not filled yet (0 is a real zero). The totals (RSVP,
+/// hosting) are never stored; the server adds them up (src/lib/outlet-sales.ts), and the status
+/// (UPCOMING / WAITING_REPORT / REPORTED) is derived from the date and what has been filled.
+model OutletSalesEvent {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// The day of the event, WIB, no time.
+  date          DateTime  @db.Date
+  name          String
+  salesTarget   Float?
+  paxTarget     Int?
+  /// Actual sales of the night, whole rupiah.
+  sales         Float?
+  pax           Int?
+  rsvpWalkIn    Int?
+  rsvpTeam      Int?
+  rsvpPr        Int?
+  rsvpEo        Int?
+  hostingTeam   Int?
+  hostingPr     Int?
+  hostingEo     Int?
+  successWhat   String    @default("")
+  successWhy    String    @default("")
+  successRepeat String    @default("")
+  failWhat      String    @default("")
+  failWhy       String    @default("")
+  failPrevent   String    @default("")
+  /// When the event first became REPORTED, and by whom.
+  reportedAt    DateTime?
+  reportedById  String?
+  reportedBy    User?     @relation("OutletEventReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+  createdById   String?
+  createdBy     User?     @relation("OutletEventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById   String?
+  updatedBy     User?     @relation("OutletEventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([projectId, date])
 }

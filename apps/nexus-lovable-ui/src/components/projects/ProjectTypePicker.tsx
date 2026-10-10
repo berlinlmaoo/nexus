@@ -1,17 +1,19 @@
-import { BarChart3, CalendarRange, Filter, ListChecks } from "lucide-react";
+import { CalendarRange, Filter, ListChecks, Store } from "lucide-react";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { PROJECT_TYPES, type ProjectTypeId } from "@/components/projects/project-tabs";
 
 /**
  * The first step of "New project" (owner, 9 Oct 2026): what the project is for. Task Project and
- * Pipeline Dashboard exist (the pipeline since the same day: the GM's deal board, components/pipeline);
- * Finance Dashboard and Content Planner are announced as coming soon and cannot be picked (the server
- * refuses them too, 400 TYPE_COMING_SOON).
+ * Pipeline Dashboard exist (the pipeline since the same day: the GM's deal board, components/pipeline), and
+ * since 10 Oct 2026 the Outlet Sales Dashboard (components/outlet-sales), in the Finance Dashboard card's
+ * place. Content Planner is announced as coming soon and cannot be picked (the server refuses it too,
+ * 400 TYPE_COMING_SOON).
  */
 const META: Record<ProjectTypeId, { icon: typeof ListChecks; title: string; body: string }> = {
   TASK: { icon: ListChecks, title: "Task Project", body: "Board, list, calendar and timeline for work with owners and due dates." },
-  FINANCE: { icon: BarChart3, title: "Finance Dashboard", body: "Revenue, OPEX and profit, month by month." },
+  // Owner, 10 Oct 2026 (for Ryan): takes the Finance Dashboard card's place. One project = one outlet.
+  OUTLET_SALES: { icon: Store, title: "Outlet Sales Dashboard", body: "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night." },
   CONTENT: { icon: CalendarRange, title: "Content Planner", body: "Plan and schedule content across your channels." },
   PIPELINE: { icon: Filter, title: "Pipeline Dashboard", body: "Follow every deal from first contact to paid." },
 };

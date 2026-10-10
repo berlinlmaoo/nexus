@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import type { SnapshotMeta } from "@/lib/deletion-entities"
-import { emitCommentAdded, emitConversationUpdated, emitPipelineChanged, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
+import { emitCommentAdded, emitConversationUpdated, emitOutletSalesChanged, emitPipelineChanged, emitSheetStructure, emitTaskCreated, emitTaskUpdated, emitVaultChanged, emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { emitProjectChanged } from "@/lib/workspace-realtime"
 
 const log = createLogger("deletion-restore")
@@ -73,6 +73,11 @@ export async function afterRestore(input: {
     if (entityType === "pipeline_deal" && projectId) {
       // The deal reappears on every open pipeline of its project (owner, 9 Oct 2026).
       emitPipelineChanged(projectId, input.entityId, actorId)
+    }
+    if (entityType === "outlet_sales_event" && projectId) {
+      // The night is back on its outlet's calendar, board and month totals (owner, 10 Oct 2026).
+      const ev = await prisma.outletSalesEvent.findUnique({ where: { id: input.entityId }, select: { date: true } })
+      emitOutletSalesChanged(projectId, input.entityId, ev ? ev.date.toISOString().slice(0, 7) : null, actorId)
     }
     if (entityType === "pipeline_term") {
       // A payment term is back on its deal: the deal's history says so (its delete wrote "term.deleted"),

@@ -59,12 +59,14 @@ export function financeTabEnabled(project?: Pick<NexusProject, "financeEnabled" 
 }
 
 /**
- * Project types offered when creating a project. TASK and, since 9 Oct 2026, PIPELINE (the GM's pipeline
- * board — components/pipeline). Finance Dashboard and Content Planner wait for Berlin's references.
+ * Project types offered when creating a project. TASK; since 9 Oct 2026 PIPELINE (the GM's pipeline board —
+ * components/pipeline); since 10 Oct 2026 OUTLET_SALES (owner, for Ryan: one project per outlet —
+ * components/outlet-sales), in the place the Finance Dashboard card had. Content Planner waits for
+ * Berlin's references.
  */
 export const PROJECT_TYPES = [
   { id: "TASK", available: true },
-  { id: "FINANCE", available: false },
+  { id: "OUTLET_SALES", available: true },
   { id: "CONTENT", available: false },
   { id: "PIPELINE", available: true },
 ] as const;
@@ -81,7 +83,7 @@ export function projectSettingsErrorText(code: unknown): string | null {
     case "BOD_REQUIRED":
       return "Only BoD and above can turn Finance on or off.";
     case "TYPE_COMING_SOON":
-      return "That project type is coming soon. For now you can create a Task Project or a Pipeline Dashboard.";
+      return "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.";
     // The company's one pipeline (owner/GM, 9 Oct 2026). PIPELINE_EXISTS opens the board when the answer
     // names it; without a projectId the person is not one of its members (owner, 9 Oct 2026 evening:
     // the board's lead adds people, like any project).

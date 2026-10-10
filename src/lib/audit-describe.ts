@@ -723,6 +723,8 @@ const NOUNS: Record<string, string> = {
   chat_group: "group chat",
   pipeline_deal: "pipeline deal",
   pipeline_term: "payment term",
+  outlet_sales_event: "outlet event",
+  outlet_sales_target: "outlet target",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {

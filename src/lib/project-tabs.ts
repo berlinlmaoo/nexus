@@ -2,8 +2,8 @@
  * Project types and per-project tabs (owner, 9 Oct 2026).
  *
  * "tiap kali buat project tuh ada dikasih pilihan ada Task Project, Finance Dashboard, Content Planner,
- * Pipeline Dashboard" — every project has a type. TASK and (since 9 Oct 2026) PIPELINE exist; the other
- * two are shown as "coming soon" and creating one is refused with 400 TYPE_COMING_SOON, so a client that
+ * Pipeline Dashboard" — every project has a type. TASK, (since 9 Oct 2026) PIPELINE and (since 10 Oct
+ * 2026) OUTLET_SALES exist; FINANCE and CONTENT are not creatable and creating one is refused with 400 TYPE_COMING_SOON, so a client that
  * offers them early cannot make a half-built project.
  *
  * "ada bbrp project yg ga butuh spreadsheets/automation/list" — each project chooses which tabs it
@@ -18,15 +18,18 @@
  * a key it does not know, so this list can grow without breaking an older app.
  */
 
-export const PROJECT_TYPES = ["TASK", "FINANCE", "CONTENT", "PIPELINE"] as const
+export const PROJECT_TYPES = ["TASK", "FINANCE", "CONTENT", "PIPELINE", "OUTLET_SALES"] as const
 export type ProjectType = (typeof PROJECT_TYPES)[number]
 
 /**
  * The types that can be created today. The rest answer TYPE_COMING_SOON. PIPELINE since 9 Oct 2026
  * (owner: the GM's pipeline board, rebuilt in NEXUS — routes under /api/projects/:id/pipeline, rules in
- * lib/pipeline.ts). Finance Dashboard and Content Planner wait for Berlin's references.
+ * lib/pipeline.ts). OUTLET_SALES since 10 Oct 2026 (owner, for Ryan: "Outlet Sales Dashboard" takes the
+ * place of the Finance Dashboard card in the picker; one project = one outlet, as many as needed — routes
+ * under /api/projects/:id/outlet-sales, rules in lib/outlet-sales.ts). FINANCE stays a known type that
+ * cannot be created (no client offers it any more); Content Planner waits for Berlin's references.
  */
-export const CREATABLE_PROJECT_TYPES: readonly ProjectType[] = ["TASK", "PIPELINE"]
+export const CREATABLE_PROJECT_TYPES: readonly ProjectType[] = ["TASK", "PIPELINE", "OUTLET_SALES"]
 
 /** Every tab a project can hide, in tab-bar order. "table" exists on web only; iOS ignores it. */
 export const PROJECT_TAB_KEYS = [
@@ -61,7 +64,7 @@ export function checkCreatableProjectType(raw: unknown): ProjectTypeCheck {
   return {
     ok: false,
     code: "TYPE_COMING_SOON",
-    error: "Tipe project ini belum tersedia. Untuk sekarang yang bisa dibuat: Task Project dan Pipeline Dashboard.",
+    error: "Tipe project ini belum tersedia. Untuk sekarang yang bisa dibuat: Task Project, Pipeline Dashboard, dan Outlet Sales Dashboard.",
   }
 }
 
