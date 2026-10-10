@@ -76,6 +76,21 @@ func prioTone(_ p: String) -> ChipTone {
     switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .warning; case "MEDIUM": return .info; default: return .neutral }
 }
 
+/// A task's priority as a compact pill (owner, 10 Oct 2026: the NexusChip was too big beside the card
+/// title). One size on the board, List, folder and My Tasks rows, like the web's text-[10px] pill.
+struct PriorityPill: View {
+    let priority: String
+    var body: some View {
+        let tone = prioTone(priority)
+        Text(priority.capitalized)
+            .font(NXFont.text(10, .bold)).lineLimit(1)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .foregroundStyle(tone.fg)
+            .background(tone.bg, in: Capsule())
+            .fixedSize()
+    }
+}
+
 /// Compact task row used by List / Calendar / Timeline.
 struct ProjectTaskRow: View {
     let task: BoardTask
@@ -104,7 +119,7 @@ struct ProjectTaskRow: View {
                     CFChipRow(values: task.customFieldValues)
                 }
                 Spacer(minLength: 4)
-                if let p = task.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
+                if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
                 HStack(spacing: -7) {
                     ForEach(task.assigneeAvatars, id: \.id) { a in
                         AvatarView(url: a.url, initial: a.initial, size: 22)
@@ -187,8 +202,7 @@ struct OverviewTab: View {
                                 onOpenMember(ProfileTarget(userId: m.uid, name: m.user?.name, avatar: m.user?.avatar))
                             } label: {
                                 HStack(spacing: 10) {
-                                    Text(m.initial).font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
-                                        .frame(width: 30, height: 30).background(NX.accentBg, in: Circle())
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 30)
                                     Text(m.displayName).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
                                     Spacer()
                                 }

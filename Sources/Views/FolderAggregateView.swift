@@ -348,7 +348,7 @@ private struct FolderTaskRow: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if let p = task.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
+                if let p = task.priority, p.uppercased() != "NONE" { PriorityPill(priority: p) }
                 if let a = task.assignee { AvatarView(url: a.avatar, initial: String((a.name ?? "?").first ?? "?").uppercased(), size: 24) }
             }
             .padding(12)

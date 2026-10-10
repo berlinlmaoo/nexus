@@ -668,7 +668,7 @@ struct BoardCard: View {
                     .strikethrough(task.isDone).lineLimit(3)
                 Spacer(minLength: 0)
                 if let p = task.priority, p.uppercased() != "NONE" {
-                    NexusChip(text: p.capitalized, tone: prioTone(p))
+                    PriorityPill(priority: p)
                 }
             }
             CFChipRow(values: task.customFieldValues)
@@ -704,8 +704,5 @@ struct BoardCard: View {
     private var dueText: String {
         guard let d = ProjDate.parse(task.dueDate) else { return "No due" }
         return ProjDate.fmt("d MMM").string(from: d)   // cached parser + formatter
-    }
-    private func prioTone(_ p: String) -> ChipTone {
-        switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .warning; case "MEDIUM": return .info; default: return .neutral }
     }
 }

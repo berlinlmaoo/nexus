@@ -220,7 +220,16 @@ struct TaskDetailView: View {
                             Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
                         }
                         if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
-                            assigneeLine(people).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            // Faces before the names (owner, 10 Oct 2026: "profile picture tiap orang gaada").
+                            HStack(spacing: 6) {
+                                HStack(spacing: -6) {
+                                    ForEach(Array(people.prefix(3).enumerated()), id: \.offset) { _, u in
+                                        AvatarView(url: u.avatar, initial: String((u.name ?? "?").first ?? "?").uppercased(), size: 20)
+                                            .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+                                    }
+                                }
+                                assigneeLine(people).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            }
                         } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
                     }
                 }.buttonStyle(.plain)
@@ -519,8 +528,7 @@ struct AssigneePicker: View {
                         ForEach(members) { m in
                             Button { toggle(m.uid) } label: {
                                 HStack(spacing: 12) {
-                                    Text(m.initial).font(NXFont.text(13, .black)).foregroundStyle(NX.violetText)
-                                        .frame(width: 34, height: 34).background(NX.accentBg, in: Circle())
+                                    AvatarView(url: m.user?.avatar, initial: m.initial, size: 34)
                                     Text(m.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                                     Spacer()
                                     if selected.contains(m.uid) {

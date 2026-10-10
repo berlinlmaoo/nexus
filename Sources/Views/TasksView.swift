@@ -157,7 +157,7 @@ struct TaskRow: View {
                     }
                     Spacer(minLength: 4)
                     if let p = task.priority, p.uppercased() != "NONE" {
-                        NexusChip(text: p.capitalized, tone: priorityTone(p))
+                        PriorityPill(priority: p)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,14 +166,5 @@ struct TaskRow: View {
             .buttonStyle(.plain)
         }
         .padding(14)
-    }
-
-    private func priorityTone(_ p: String) -> ChipTone {
-        switch p.uppercased() {
-        case "URGENT": return .danger
-        case "HIGH": return .warning
-        case "MEDIUM": return .info
-        default: return .neutral
-        }
     }
 }
