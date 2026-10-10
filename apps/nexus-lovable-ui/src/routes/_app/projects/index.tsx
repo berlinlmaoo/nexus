@@ -927,7 +927,16 @@ function FolderSection({ folder, count, collapsed, onToggle, canManage, onEdit, 
       {...dropProps}
       className={cn("border p-3 shadow-soft transition-colors", depth > 0 ? "mt-3 rounded-2xl bg-card/20" : "rounded-[28px] bg-card/40", isDropTarget ? "border-primary ring-2 ring-primary/40 bg-primary/5" : "border-border")}
     >
-      <div className="flex items-center gap-2 px-1">
+      {/* The whole header row opens / closes the folder (owner, 10 Oct 2026), not only the arrow; the
+          name still opens the folder view and the menu keeps its own clicks. */}
+      <div
+        className="flex cursor-pointer items-center gap-2 px-1"
+        onClick={(e) => {
+          // Clicks from the menu bubble here through its portal: only clicks on the row itself count.
+          const t = e.target as HTMLElement;
+          if (e.currentTarget.contains(t) && !t.closest("a,button")) onToggle();
+        }}
+      >
         <button type="button" onClick={onToggle} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent" aria-label={collapsed ? "Expand folder" : "Collapse folder"}>
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
