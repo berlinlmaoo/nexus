@@ -472,7 +472,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }, onBack = { nav.popBackStack() }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable(Tab.PROJECTS.route) {
-                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") })
+                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") },
+                    onOpenSettings = { nav.navigate("project/$it/settings") })
             }
             composable(Tab.MORE.route) {
                 val logout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }

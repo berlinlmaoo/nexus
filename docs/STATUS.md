@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (526 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (531 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -224,6 +224,31 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 5 Home stat cards | No bottom sheet: the detail grows out of the tapped card as iOS MorphFlip — drawn full size in the middle, a scale+translate starts it exactly on the card and springs to full (response 0.4, damping 0.84), one gradient top to bottom, no scrim, list fading in once landed; tap outside, × or back shrinks it back into the card. Card rects kept outside state (no recomposition while scrolling) | 2bc7765 |
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
+
+## 10 Oct, Projects tree: drag and drop, full folder and project menus (agents:~/handoff/chat/FOLDERS-DND.md; web d82b45d, iOS c322ce0; no server change)
+- FolderTree mirrors the server's lib/folder-tree.ts:
+  - at most 4 levels, and a folder never goes into itself or one of its own subfolders;
+  - "New subfolder" is hidden at level 4;
+  - "Move to…" lists only valid places, by path ("Clients › ANKER › Launch").
+- Sections: Pinned (pinned folders as whole trees + pinned projects), Folders, No folder. Folder pins come from
+  GET/POST /api/project-folders/pins; project pins work as before.
+- Folder row:
+  - tap anywhere opens or closes it, and the closed/open state is remembered on the phone;
+  - long-press or ⋯ opens the menu: Open folder view, New project here, New subfolder, Rename or edit…, Move to…,
+    Pin to top/Unpin, Delete folder… (centred confirm with the new "move up one level, restorable from Audit" wording);
+  - the count shows only while closed; the calendar button stays its own action.
+- Project card long-press: Open project, Pin/Unpin, Move to folder…, Remove from folder, Project settings
+  (→ project/{id}/settings).
+- Drag and drop (managers): drag a project or folder by the grip on its row onto a folder row (it lights up when
+  the drop is allowed) or onto the "No folder — drop here to take it out" strip. Long-press stays the menu. The
+  list does not auto-scroll during a drag (the row would leave the screen and end the gesture); "Move to…"
+  covers far targets.
+- Moves happen on screen at once. They roll back with "Couldn't move “X”" plus the server's reason, and confirm
+  with a "Moved X to Y" snackbar with Undo. Delete folder shows "Folder deleted. What was inside moved up one level."
+- Gating (Viewer.canAdminister = OAA/BoD/Manager): move, edit, delete, new subfolder and the grips. Open, pin,
+  "New project here" and settings are for everyone. Staff don't see folders with no project anywhere under them.
+- Not done: reordering siblings (PATCH position), which is optional in the spec. Android has no reorder yet.
+- Tests: FolderTreeTest, FolderRowTapTest moved to ProjectTree.kt. Not checked on an emulator. APK not published.
 
 ## 10 Oct, Projects: the whole folder row opens / closes it (owner's request; iOS 7e0c34f)
 - Android already toggled a folder from anywhere on its row, with the arrow at the far left away from the

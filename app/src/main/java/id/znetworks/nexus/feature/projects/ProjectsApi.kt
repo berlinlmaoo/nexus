@@ -72,7 +72,20 @@ class ProjectsApi(private val api: ApiClient) {
             put("name", name.trim()); icon?.let { put("icon", it) }; color?.let { put("color", it) }
         })
 
+    /** Contents move up one level; nothing inside is deleted, and the folder is restorable from Audit. */
     suspend fun deleteFolder(id: String) = delete("/api/project-folders/$id")
+
+    /** A folder (with all it holds) into another folder, or to the top level with null; 400 with a message on a bad place (FOLDERS-DND). */
+    suspend fun moveFolder(id: String, parentFolderId: String?) =
+        patch("/api/project-folders/$id", JsonObject(mapOf("parentFolderId" to (parentFolderId?.let { JsonPrimitive(it) } ?: JsonNull))))
+
+    /** The person's pinned folders, in the server's order; [] from a server without folder pins. */
+    suspend fun folderPins(): List<String> =
+        (api.get("/api/project-folders/pins", JsonObject.serializer())["folderIds"] as? kotlinx.serialization.json.JsonArray)
+            .orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }
+
+    suspend fun setFolderPin(folderId: String, pinned: Boolean) =
+        post("/api/project-folders/pins", buildJsonObject { put("folderId", folderId); put("pinned", pinned) })
 
     /** The folder calendar's project subset ([] = all of the folder's projects, now and later). */
     suspend fun setFolderAggregate(id: String, projectIds: List<String>) =

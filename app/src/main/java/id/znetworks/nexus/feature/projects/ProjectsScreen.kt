@@ -61,6 +61,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -105,7 +107,17 @@ data class ProjectsState(
     val searching: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
+    /** The person's pinned folders, in the server's order (FOLDERS-DND). */
+    val pinnedFolders: List<String> = emptyList(),
+    /** OAA / BoD / Manager: may move, edit, delete and make folders. The server decides again on every call. */
+    val canManage: Boolean = false,
+    /** Folders the person closed; remembered on this phone. Everything else shows open. */
+    val collapsed: Set<String> = emptySet(),
+    /** "Moved X to Y" with Undo, once. */
+    val toast: TreeToast? = null,
 )
+
+data class TreeToast(val text: String, val undo: (() -> Unit)? = null, val at: Long = System.nanoTime())
 
 class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as NexusApplication).container
@@ -115,13 +127,20 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
     val state = _state.asStateFlow()
     private var searchJob: Job? = null
 
-    init { load() }
+    private val prefs = app.getSharedPreferences("projects_tree", android.content.Context.MODE_PRIVATE)
+
+    init {
+        _state.update { it.copy(collapsed = prefs.getStringSet("collapsed", emptySet()).orEmpty().toSet()) }
+        viewModelScope.launch { c.viewer.load(); _state.update { it.copy(canManage = c.viewer.canAdminister) } }
+        load()
+    }
 
     fun load() = viewModelScope.launch {
         try {
             val p = api.projects()
             val f = runCatching { api.folders().value }.getOrDefault(_state.value.folders)
-            _state.update { it.copy(projects = p.value, folders = f, loading = false, error = null, savedAt = p.savedAtMillis) }
+            val pins = runCatching { api.folderPins() }.getOrDefault(_state.value.pinnedFolders)
+            _state.update { it.copy(projects = p.value, folders = f, pinnedFolders = pins, loading = false, error = null, savedAt = p.savedAtMillis) }
             loadTallies(p.value.map { it.id })
         } catch (e: ApiError) {
             _state.update { it.copy(loading = false, error = e.describe(res)) }
@@ -180,8 +199,8 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
         if (id.isNotBlank()) onDone(id)
     }
 
-    fun saveFolder(editing: ProjectFolder?, name: String, icon: String, color: String, photo: ByteArray?, onDone: () -> Unit) = act {
-        val id = if (editing == null) api.createFolder(workspaceId() ?: throw IllegalStateException(), name, icon, color, null)
+    fun saveFolder(editing: ProjectFolder?, parentId: String?, name: String, icon: String, color: String, photo: ByteArray?, onDone: () -> Unit) = act {
+        val id = if (editing == null) api.createFolder(workspaceId() ?: throw IllegalStateException(), name, icon, color, parentId)
         else { api.updateFolder(editing.id, name, icon, color); editing.id }
         // The folder is saved by now: a refused picture keeps it and says why, not a silent close.
         if (photo != null && id != null) {
@@ -190,8 +209,77 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
         load(); onDone()
     }
 
-    fun deleteFolder(f: ProjectFolder) = act { api.deleteFolder(f.id); load() }
-    fun move(p: Project, folderId: String?) = act { api.moveProject(p.id, folderId); load() }
+    fun deleteFolder(f: ProjectFolder) = viewModelScope.launch {
+        try {
+            api.deleteFolder(f.id)
+            toast(res.getString(R.string.folder_deleted, f.name) + " " + res.getString(R.string.folder_deleted_sub))
+            load()
+        } catch (e: ApiError) { _state.update { it.copy(message = res.getString(R.string.tree_delete_failed, f.name) + "\n" + e.describe(res)) } }
+    }
+
+    private fun folderName(id: String?) = _state.value.folders.firstOrNull { it.id == id }?.name
+
+    /** At once on screen, then the server; a refusal puts it back and says why. [undoable] offers Undo (not on the undo itself). */
+    fun moveProject(p: Project, folderId: String?, undoable: Boolean = true) {
+        val tree = FolderTree(_state.value.folders, _state.value.projects)
+        val now = _state.value.projects.firstOrNull { it.id == p.id } ?: return
+        if (!tree.canMoveProject(now, folderId)) return
+        val from = now.folderId
+        _state.update { s -> s.copy(projects = s.projects.map { if (it.id == p.id) it.copy(folderId = folderId) else it }) }
+        viewModelScope.launch {
+            try {
+                api.moveProject(p.id, folderId)
+                val text = folderId?.let { res.getString(R.string.tree_moved, p.name, folderName(it).orEmpty()) } ?: res.getString(R.string.tree_took_out, p.name)
+                toast(text, if (undoable) ({ moveProject(now.copy(folderId = folderId), from, undoable = false) }) else null)
+                load()
+            } catch (e: ApiError) {
+                _state.update { s -> s.copy(projects = s.projects.map { if (it.id == p.id) it.copy(folderId = from) else it },
+                    message = res.getString(R.string.tree_move_failed, p.name) + "\n" + e.describe(res)) }
+            }
+        }
+    }
+
+    /** A folder with everything in it; the depth / cycle rule is checked here first, and by the server. */
+    fun moveFolder(f: ProjectFolder, parentId: String?, undoable: Boolean = true) {
+        val tree = FolderTree(_state.value.folders, _state.value.projects)
+        val now = _state.value.folders.firstOrNull { it.id == f.id } ?: return
+        if (!tree.canMoveFolder(f.id, parentId)) {
+            if (parentId != now.parentFolderId) _state.update { it.copy(message = res.getString(R.string.tree_rule)) }
+            return
+        }
+        val from = now.parentFolderId
+        _state.update { s -> s.copy(folders = s.folders.map { if (it.id == f.id) it.copy(parentFolderId = parentId) else it }) }
+        viewModelScope.launch {
+            try {
+                api.moveFolder(f.id, parentId)
+                val text = parentId?.let { res.getString(R.string.tree_moved, f.name, folderName(it).orEmpty()) } ?: res.getString(R.string.tree_moved_top, f.name)
+                toast(text, if (undoable) ({ moveFolder(now.copy(parentFolderId = parentId), from, undoable = false) }) else null)
+                load()
+            } catch (e: ApiError) {
+                _state.update { s -> s.copy(folders = s.folders.map { if (it.id == f.id) it.copy(parentFolderId = from) else it },
+                    message = res.getString(R.string.tree_move_failed, f.name) + "\n" + e.describe(res)) }
+            }
+        }
+    }
+
+    fun toggleFolderPin(id: String) {
+        val before = _state.value.pinnedFolders
+        val pin = id !in before
+        _state.update { it.copy(pinnedFolders = if (pin) listOf(id) + before else before - id) }
+        viewModelScope.launch {
+            try { api.setFolderPin(id, pin) }
+            catch (e: ApiError) { _state.update { it.copy(pinnedFolders = before, message = res.getString(R.string.tree_pin_failed)) } }
+        }
+    }
+
+    fun toggleOpen(id: String) {
+        val next = _state.value.collapsed.let { if (id in it) it - id else it + id }
+        _state.update { it.copy(collapsed = next) }
+        prefs.edit().putStringSet("collapsed", next).apply()
+    }
+
+    private fun toast(text: String, undo: (() -> Unit)? = null) = _state.update { it.copy(toast = TreeToast(text, undo)) }
+    fun toastShown() = _state.update { it.copy(toast = null) }
     fun dismissMessage() = _state.update { it.copy(message = null) }
 
     private fun act(block: suspend () -> Unit) = viewModelScope.launch {
@@ -234,7 +322,8 @@ fun IconTile(icon: String?, fallback: String, size: Int = 44) {
 
 /** "Mission Control" (iOS ProjectsView): search, folder tree, project cards, create. */
 @Composable
-fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onOpenFolder: (String) -> Unit = {}, vm: ProjectsViewModel = viewModel()) {
+fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onOpenFolder: (String) -> Unit = {},
+                   onOpenSettings: (String) -> Unit = {}, vm: ProjectsViewModel = viewModel()) {
     val shortcuts = (LocalContext.current.applicationContext as NexusApplication).container.shortcuts
     val shortcutLists by shortcuts.lists.collectAsStateWithLifecycle()
     val pinnedIds = shortcutLists.pinned.map { it.id }
@@ -247,10 +336,44 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     var creating by rememberSaveable { mutableStateOf(false) }
     var folderEdit by remember { mutableStateOf<ProjectFolder?>(null) }
     var folderCreate by rememberSaveable { mutableStateOf(false) }
+    // FOLDERS-DND: where a new project / subfolder goes, and what "Move to…" is moving.
+    var createIn by remember { mutableStateOf<String?>(null) }
+    var subfolderOf by remember { mutableStateOf<ProjectFolder?>(null) }
+    var placingFolder by remember { mutableStateOf<ProjectFolder?>(null) }
+    var placingProject by remember { mutableStateOf<Project?>(null) }
+    val drag = remember { TreeDrag() }
+    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    val undoLabel = stringResource(R.string.undo)
+    LaunchedEffect(s.toast) {
+        val t = s.toast ?: return@LaunchedEffect
+        vm.toastShown()
+        val r = snackbar.showSnackbar(t.text, actionLabel = t.undo?.let { undoLabel }, duration = androidx.compose.material3.SnackbarDuration.Short)
+        if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) t.undo?.invoke()
+    }
+    val tree = FolderTree(s.folders, s.projects)
+    drag.onDrop = { item, target ->
+        when (item) {
+            is TreeDrag.ProjectItem -> vm.moveProject(item.project, target)
+            is TreeDrag.FolderItem -> vm.moveFolder(item.folder, target)
+        }
+    }
+    val actions = TreeActions(
+        tree, s, drag, pinnedIds.toSet(),
+        openProject = onOpenProject, openFolderView = onOpenFolder, openSettings = onOpenSettings,
+        newProjectIn = { createIn = it.id; creating = true }, newSubfolder = { subfolderOf = it },
+        edit = { folderEdit = it }, delete = vm::deleteFolder,
+        pickFolderPlace = { placingFolder = it }, pickProjectPlace = { placingProject = it },
+        removeFromFolder = { vm.moveProject(it, null) },
+        toggleFolderPin = vm::toggleFolderPin,
+        toggleProjectPin = { p -> shortcuts.refresh(); shortcuts.togglePin(ShortcutRef(p.id, p.name, p.icon, p.color)) },
+        toggleOpen = vm::toggleOpen,
+    )
     val q = s.query.trim()
     val matched = if (q.isEmpty()) s.projects else s.projects.filter { it.name.contains(q, true) || it.description.orEmpty().contains(q, true) }
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() },
+        modifier = Modifier.fillMaxSize().background(c.background).onGloballyPositioned { origin = it.positionInRoot() }) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -277,7 +400,7 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
                 s.error != null && s.projects.isEmpty() -> item {
                     EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.projects_load_failed), s.error!!, stringResource(R.string.try_again), { vm.load() })
                 }
-                s.projects.isEmpty() -> item {
+                s.projects.isEmpty() && s.folders.isEmpty() -> item {
                     EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.projects_empty), stringResource(R.string.projects_empty_sub),
                         stringResource(R.string.projects_new), { creating = true })
                 }
@@ -286,43 +409,56 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
                         Text(stringResource(R.string.projects_nothing_matches), color = c.mutedFg, modifier = Modifier.padding(8.dp))
                     }
                     if (matched.isNotEmpty()) item { Section(stringResource(R.string.projects_section_missions)) }
-                    items(matched, key = { "p-" + it.id }) { p -> ProjectCard(p, s.tallies?.get(p.id), s.tallies != null, { onOpenProject(p.id) }) }
+                    items(matched, key = { "p-" + it.id }) { p -> ProjectRow(p, actions) }
                     if (s.searching) item { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
                     if (s.taskHits.isNotEmpty()) item { Section(stringResource(R.string.projects_section_tasks)) }
                     items(s.taskHits, key = { "t-" + it.id }) { t -> TaskHitRow(t) { onOpenTask(t.id) } }
                 }
                 else -> {
-                    // Pinned (Berlin 29 Sep, iOS 286cada): the person's pins, synced with the web and the other
-                    // devices, in the server's order; only projects in this list.
+                    // Pinned (Berlin 29 Sep, iOS 286cada; folders FOLDERS-DND): the person's pins, synced with the web and
+                    // the other devices, in the server's order. A pinned folder is the whole folder, openable here.
+                    val pinnedFolders = s.pinnedFolders.mapNotNull { id -> s.folders.firstOrNull { it.id == id } }
                     val pinned = pinnedIds.mapNotNull { id -> s.projects.firstOrNull { it.id == id } }
-                    if (pinned.isNotEmpty()) {
+                    if (pinnedFolders.isNotEmpty() || pinned.isNotEmpty()) {
                         item { Section(stringResource(R.string.home_pinned)) }
-                        items(pinned, key = { "pin-" + it.id }) { p -> MovableCard(p, s, onOpenProject, vm::move) }
-                        item { Section(stringResource(R.string.projects_section_all)) }
+                        items(pinnedFolders, key = { "pf-" + it.id }) { f -> FolderNode(f, 0, "pin", actions) }
+                        items(pinned, key = { "pin-" + it.id }) { p -> ProjectRow(p, actions) }
                     }
-                    val roots = s.folders.filter { it.parentFolderId == null || s.folders.none { f -> f.id == it.parentFolderId } }
-                        .sortedWith(compareBy({ it.position ?: Int.MAX_VALUE }, { it.name.lowercase() }))
-                    items(roots, key = { "f-" + it.id }) { f ->
-                        FolderNode(f, s, depth = 0, onOpenProject, onEdit = { folderEdit = it }, onDelete = vm::deleteFolder, onMove = vm::move, onCalendar = onOpenFolder)
+                    val roots = tree.roots().filter { s.canManage || tree.hasProjects(it.id) }
+                    if (roots.isNotEmpty()) {
+                        item { Section(stringResource(R.string.tree_folders)) }
+                        items(roots, key = { "f-" + it.id }) { f -> FolderNode(f, 0, "tree", actions) }
                     }
-                    val loose = s.projects.filter { p -> p.folderId == null || s.folders.none { it.id == p.folderId } }
-                    if (roots.isNotEmpty() && loose.isNotEmpty()) item { Section(stringResource(R.string.projects_section_missions)) }
-                    items(loose, key = { "p-" + it.id }) { p -> MovableCard(p, s, onOpenProject, vm::move) }
+                    val loose = tree.loose()
+                    if (loose.isNotEmpty() || s.canManage) item { Section(stringResource(R.string.folder_none)) }
+                    if (s.canManage && s.folders.isNotEmpty()) item { NoFolderStrip(actions) }
+                    items(loose, key = { "p-" + it.id }) { p -> ProjectRow(p, actions) }
                 }
             }
         }
+        DragGhost(drag, origin)
+        androidx.compose.material3.SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
     // Who may make or open the company's Pipeline board (§10): read once from the viewer.
     val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer
     var pipeline by remember { mutableStateOf(false to (null as String?)) }
     LaunchedEffect(creating) { if (creating) { viewer.load(); pipeline = viewer.canAccessPipeline to viewer.pipelineProjectId } }
-    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipeline.first, pipelineId = pipeline.second,
-        onOpenBoard = { id -> creating = false; onOpenProject(id) }, onDismiss = { creating = false }) { name, icon, color, folder, type ->
-        vm.createProject(name, icon, color, folder, type) { id -> creating = false; onOpenProject(id) }
+    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipeline.first, pipelineId = pipeline.second, initialFolder = createIn,
+        onOpenBoard = { id -> creating = false; createIn = null; onOpenProject(id) }, onDismiss = { creating = false; createIn = null }) { name, icon, color, folder, type ->
+        vm.createProject(name, icon, color, folder, type) { id -> creating = false; createIn = null; onOpenProject(id) }
     }
-    if (folderCreate || folderEdit != null) FolderDialog(folderEdit, busy = s.busy, onDismiss = { folderCreate = false; folderEdit = null }) { name, icon, color, photo ->
-        vm.saveFolder(folderEdit, name, icon, color, photo) { folderCreate = false; folderEdit = null }
+    if (folderCreate || folderEdit != null || subfolderOf != null) FolderDialog(folderEdit, parent = subfolderOf, busy = s.busy,
+        onDismiss = { folderCreate = false; folderEdit = null; subfolderOf = null }) { name, icon, color, photo ->
+        vm.saveFolder(folderEdit, subfolderOf?.id, name, icon, color, photo) { folderCreate = false; folderEdit = null; subfolderOf = null }
+    }
+    placingFolder?.let { f ->
+        MovePlaceDialog(stringResource(R.string.fm_move), f.parentFolderId, stringResource(R.string.tree_top_level), showTop = tree.canMoveFolder(f.id, null),
+            places = tree.folderTargets(f.id), tree = tree, onDismiss = { placingFolder = null }) { target -> placingFolder = null; vm.moveFolder(f, target) }
+    }
+    placingProject?.let { p ->
+        MovePlaceDialog(stringResource(R.string.pm_move), p.folderId, stringResource(R.string.folder_none), showTop = tree.canMoveProject(p, null),
+            places = tree.projectTargets(p), tree = tree, onDismiss = { placingProject = null }) { target -> placingProject = null; vm.moveProject(p, target) }
     }
     s.message?.let { AlertDialog(onDismissRequest = vm::dismissMessage, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismissMessage) { Text("OK") } }) }
 }
@@ -331,92 +467,11 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
 private fun Section(text: String) = Text(text.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold,
     color = Nx.colors.mutedFg, letterSpacing = 1.sp, modifier = Modifier.padding(top = 4.dp))
 
-@Composable
-private fun FolderNode(
-    f: ProjectFolder, s: ProjectsState, depth: Int, onOpen: (String) -> Unit,
-    onEdit: (ProjectFolder) -> Unit, onDelete: (ProjectFolder) -> Unit, onMove: (Project, String?) -> Unit,
-    onCalendar: (String) -> Unit = {},
-) {
-    val c = Nx.colors
-    var open by rememberSaveable(f.id) { mutableStateOf(true) }
-    var menu by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
-    val children = s.folders.filter { it.parentFolderId == f.id }.sortedWith(compareBy({ it.position ?: Int.MAX_VALUE }, { it.name.lowercase() }))
-    val projects = s.projects.filter { it.folderId == f.id }
-    Column(Modifier.padding(start = (depth * 12).dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box {
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(14.dp))
-                    // The whole row opens / closes the folder (owner, 10 Oct; iOS 7e0c34f); only the calendar and ⋯ do something else.
-                    .clickable(onClickLabel = stringResource(if (open) R.string.folder_collapse else R.string.folder_expand)) { open = !open }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(if (open) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg)
-                Spacer(Modifier.size(6.dp))
-                IconTile(f.icon, "📁", size = 30)
-                Spacer(Modifier.size(10.dp))
-                Text(f.name, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
-                Text("${projects.size}", fontSize = 12.sp, color = c.mutedFg)
-                // Every task due across this folder's projects (iOS FolderAggregateView).
-                // Its own action: a tinted circle set apart from the count, so it isn't hit when the row is meant.
-                Spacer(Modifier.size(10.dp))
-                IconButton(onClick = { onCalendar(f.id) }, modifier = Modifier.size(36.dp)) {
-                    Box(Modifier.size(30.dp).clip(CircleShape).background(c.violet.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText, modifier = Modifier.size(18.dp))
-                    }
-                }
-                Spacer(Modifier.size(4.dp))
-                IconButton(onClick = { menu = true }) { Text("⋯", color = c.mutedFg, fontSize = 18.sp) }
-            }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.folder_edit)) }, onClick = { menu = false; onEdit(f) })
-                DropdownMenuItem(text = { Text(stringResource(R.string.folder_delete), color = c.danger) }, onClick = { menu = false; confirmDelete = true })
-            }
-        }
-        if (open) {
-            children.forEach { FolderNode(it, s, depth + 1, onOpen, onEdit, onDelete, onMove, onCalendar) }
-            projects.forEach { MovableCard(it, s, onOpen, onMove) }
-            if (children.isEmpty() && projects.isEmpty()) Text(stringResource(R.string.folder_empty), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(start = 8.dp))
-        }
-    }
-    if (confirmDelete) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        title = { Text(stringResource(R.string.folder_delete_q, f.name)) },
-        text = { Text(stringResource(R.string.folder_delete_body)) },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete(f) }) { Text(stringResource(R.string.delete), color = c.danger) } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
-    )
-}
-
-/** A project card with a long-press "Move to folder" menu. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun MovableCard(p: Project, s: ProjectsState, onOpen: (String) -> Unit, onMove: (Project, String?) -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    Box {
-        ProjectCard(p, s.tallies?.get(p.id), s.tallies != null, onClick = { onOpen(p.id) }, onLongClick = { menu = true })
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            val shortcuts = (LocalContext.current.applicationContext as NexusApplication).container.shortcuts
-            val lists by shortcuts.lists.collectAsStateWithLifecycle()
-            val pinned = lists.pinned.any { it.id == p.id }
-            DropdownMenuItem(text = { Text(stringResource(if (pinned) R.string.home_unpin else R.string.home_pin)) },
-                leadingIcon = { Icon(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, null) },
-                onClick = { menu = false; shortcuts.refresh(); shortcuts.togglePin(ShortcutRef(p.id, p.name, p.icon, p.color)) })
-            HorizontalDivider()
-            Text(stringResource(R.string.folder_move_to), fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-            if (p.folderId != null) DropdownMenuItem(text = { Text(stringResource(R.string.folder_none)) }, onClick = { menu = false; onMove(p, null) })
-            s.folders.filter { it.id != p.folderId }.forEach { f ->
-                DropdownMenuItem(text = { Text("${ProjectIcon.emoji(f.icon) ?: "📁"} ${f.name}") }, onClick = { menu = false; onMove(p, f.id) })
-            }
-        }
-    }
-}
-
 /** Port of the iOS/web ProjectCard: icon, brief, status, Cards/Done/Lanes, progress, members, next due. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
+                /** After the status chip: the drag grip on the Projects tree. */ trailing: (@Composable () -> Unit)? = null) {
     val c = Nx.colors
     val accent = parseColor(p.color, c.violet)
     val total = tally?.total ?: p.taskCount
@@ -436,6 +491,7 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
                     Text(p.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.project_no_brief), fontSize = 12.sp, color = c.mutedFg, maxLines = 2)
                 }
                 StatusChip(p.status)
+                trailing?.invoke()
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -504,12 +560,12 @@ private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, pipelineId: String? = null, onOpenBoard: (String) -> Unit = {},
+private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, pipelineId: String? = null, initialFolder: String? = null, onOpenBoard: (String) -> Unit = {},
                                 onDismiss: () -> Unit, onCreate: (String, String, String, String?, ProjectType) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var icon by rememberSaveable { mutableStateOf(PROJECT_ICONS.first()) }
     var color by rememberSaveable { mutableStateOf("#7B2FBE") }
-    var folder by rememberSaveable { mutableStateOf<String?>(null) }
+    var folder by rememberSaveable { mutableStateOf(initialFolder) }
     // First: what the project is for (9 Oct). Only Task Project is built; the rest say "Coming soon".
     var type by rememberSaveable { mutableStateOf<ProjectType?>(null) }
     val c = Nx.colors
@@ -557,7 +613,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
 }
 
 @Composable
-private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -> Unit, onSave: (String, String, String, ByteArray?) -> Unit) {
+private fun FolderDialog(editing: ProjectFolder?, parent: ProjectFolder? = null, busy: Boolean, onDismiss: () -> Unit, onSave: (String, String, String, ByteArray?) -> Unit) {
     var photo by remember { mutableStateOf<ByteArray?>(null) }
     var unreadable by remember { mutableStateOf(false) }
     val pick = id.znetworks.nexus.feature.auth.rememberAvatarPicker { jpeg -> unreadable = jpeg == null; if (jpeg != null) photo = jpeg }
@@ -566,9 +622,10 @@ private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -
     var color by rememberSaveable(editing?.id) { mutableStateOf(editing?.color ?: PROJECT_COLORS.first()) }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(stringResource(if (editing == null) R.string.folder_new else R.string.folder_edit)) },
+        title = { Text(stringResource(if (editing != null) R.string.folder_edit else if (parent != null) R.string.fm_new_sub else R.string.folder_new)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (editing == null && parent != null) Text(stringResource(R.string.folder_inside, parent.name), fontSize = 12.sp, color = Nx.colors.mutedFg)
                 OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.folder_name)) }, modifier = Modifier.fillMaxWidth())
                 EmojiRow(FOLDER_ICONS, if (photo == null) icon else "") { icon = it; photo = null }
                 TextButton(onClick = pick) { Text(stringResource(if (photo != null) R.string.folder_photo_chosen else R.string.folder_photo)) }
