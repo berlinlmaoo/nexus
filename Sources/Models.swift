@@ -27,7 +27,8 @@ struct Project: Decodable, Identifiable, Sendable {
     let color: String?
     let icon: String?
     let status: String?
-    let folderId: String?
+    /// `var` so the Projects screen can move a card at once, before the server answers.
+    var folderId: String?
     let workspaceId: String?
     let count: Counts?
     let taskLists: [TaskList]?
@@ -95,7 +96,8 @@ struct ProjectFolder: Decodable, Identifiable, Sendable {
     let icon: String?
     let color: String?
     let position: Int?
-    let parentFolderId: String?
+    /// `var` so a folder dragged into another one moves at once, before the server answers.
+    var parentFolderId: String?
     /// Curated subset for the aggregate view (empty/nil = every project in the folder + descendants).
     let aggregateProjectIds: [String]?
 

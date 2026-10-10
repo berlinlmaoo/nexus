@@ -697,10 +697,13 @@ struct APIClient {
 
     @discardableResult
     /// `type`: "TASK" or "PIPELINE" (owner, 9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON.
-    func createProject(workspaceId: String, name: String, color: String, icon: String, type: String = "TASK") async throws -> Bool {
+    /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
+    func createProject(workspaceId: String, name: String, color: String, icon: String, type: String = "TASK", folderId: String? = nil) async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": type])
+        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": type]
+        if let folderId { body["folderId"] = folderId }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
@@ -727,6 +730,17 @@ struct APIClient {
         var req = makeRequest("/api/project-folders/\(folderId)", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "icon": icon, "color": color])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    /// Move a folder (with everything in it) into another folder, or to the top level with nil.
+    /// The server checks the same rules as `FolderTree`: no folder inside itself or its own
+    /// subfolders, at most four levels.
+    @discardableResult
+    func projectFolderMove(folderId: String, parentFolderId: String?) async throws -> Bool {
+        var req = makeRequest("/api/project-folders/\(folderId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["parentFolderId": parentFolderId.map { $0 as Any } ?? NSNull()])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

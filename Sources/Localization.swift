@@ -2895,6 +2895,19 @@ final class AppLanguage {
         "Master Calendar": "Master Calendar",
         "Master Task": "Master Task",
         "Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.": "Membuat folder untuk deal ini berisi Master Calendar dan Master Task. Tanggal event-nya masuk ke Master Calendar.",
+        // Projects: drag and drop into folders, fuller folder and project menus (owner, 10 Oct 2026)
+        "Open folder view": "Buka tampilan folder",
+        "New project here": "Proyek baru di sini",
+        "New subfolder": "Subfolder baru",
+        "Remove from folder": "Keluarkan dari folder",
+        "Delete this folder?": "Hapus folder ini?",
+        "\"%@\" goes away. The projects and subfolders in it move up one level, and the folder can be restored from Audit.": "\"%@\" dihapus. Proyek dan subfolder di dalamnya naik satu tingkat, dan folder-nya bisa dipulihkan dari Audit.",
+        "Couldn't update projects": "Gagal memperbarui proyek",
+        "The project wasn't moved.": "Proyek tidak jadi dipindah.",
+        "The folder wasn't moved.": "Folder tidak jadi dipindah.",
+        "The folder wasn't deleted.": "Folder tidak jadi dihapus.",
+        "Drop a project here to take it out of its folder.": "Lepas proyek di sini untuk mengeluarkannya dari folder.",
+        "Goes into %@": "Masuk ke %@",
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

@@ -25,6 +25,12 @@ struct ProjectsView: View {
     @State private var openBoard: ProjectRef?
     /// projectId → done/total task counts, filled in after the list renders (see `loadProgress`).
     @State private var tallies: [String: ProjectTally] = [:]
+    /// A folder's aggregate view opened from its context menu (the calendar button is a link of its own).
+    @State private var openFolder: FolderRoute?
+    /// Folder waiting on the delete confirmation.
+    @State private var confirmDelete: ProjectFolder?
+    /// A move, delete or drop the server refused, shown in an alert (same as the board).
+    @State private var actionError: String?
 
     // grouping
     private var byFolder: [String: [Project]] {
@@ -37,15 +43,47 @@ struct ProjectsView: View {
         let folderIds = Set(folders.map(\.id))
         return projects.filter { $0.folderId == nil || !folderIds.contains($0.folderId!) }
     }
+    private var tree: FolderTree { FolderTree(folders) }
+
+    /// Everything a folder row or a project card can ask of this screen, passed down the tree as one value.
+    private var actions: ProjectsActions {
+        ProjectsActions(
+            moveProject: { p, folderId in await move(p, to: folderId) },
+            moveFolder: { f, parentId in await moveFolder(f, to: parentId) },
+            drop: { payload, folderId in drop(payload, into: folderId) },
+            openProject: { p in openBoard = ProjectRef(id: p.id, name: p.name, icon: p.icon) },
+            openFolder: { f in openFolder = FolderRoute(id: f.id) },
+            newProject: { f in sheet = .newProjectIn(f) },
+            newSubfolder: { f in sheet = .newSubfolder(f) },
+            editFolder: { f in sheet = .editFolder(f) },
+            deleteFolder: { f in confirmDelete = f }
+        )
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
                 content
+                    // The delete confirmation sits on the content and the error alert on the stack
+                    // around it: two alerts on one view and only one of them ever shows.
+                    .alert(T("Delete this folder?"), isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), presenting: confirmDelete) { f in
+                        Button(T("Delete"), role: .destructive) { Task { await deleteFolder(f) } }
+                        Button(T("Cancel"), role: .cancel) { confirmDelete = nil }
+                    } message: { f in
+                        Text(String(format: T("\"%@\" goes away. The projects and subfolders in it move up one level, and the folder can be restored from Audit."), f.name))
+                    }
             }
+            .alert(T("Couldn't update projects"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+                Button("OK") { actionError = nil }
+            } message: { Text(actionError ?? "") }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
             .navigationDestination(item: $openBoard) { ref in ProjectDetailView(projectId: ref.id, projectName: ref.name) }
+            .navigationDestination(item: $openFolder) { route in
+                if let f = folders.first(where: { $0.id == route.id }) {
+                    FolderAggregateView(folder: f, allFolders: folders, allProjects: projects.filter { $0.folderId != nil })
+                }
+            }
             .navigationTitle(T("Mission Control"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -62,8 +100,12 @@ struct ProjectsView: View {
                     // The type picker (Task Project; Finance Dashboard, Content Planner and Pipeline
                     // Dashboard coming soon) is CreateProjectSheet's first step — the only way in.
                     CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenExisting: { openBoard = $0 }) { await load() }
+                case .newProjectIn(let f):
+                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenExisting: { openBoard = $0 }, folder: f) { await load() }
                 case .newFolder:
                     CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
+                case .newSubfolder(let parent):
+                    CreateFolderSheet(workspaceId: workspaceId ?? "", parent: parent) { await load() }
                 case .editFolder(let f):
                     CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
                 }
@@ -120,13 +162,18 @@ struct ProjectsView: View {
                     .background(NX.violet.opacity(0.1), in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    let folderTree = tree
+                    let rowActions = actions
                     ForEach(rootFolders) { f in
-                        FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
-                                   tallies: tallies, collapsed: $collapsed, onMove: move,
-                                   onDeleteFolder: deleteFolder, onEditFolder: { sheet = .editFolder($0) })
+                        FolderNode(folder: f, depth: 0, tree: folderTree, projectsByFolder: byFolder,
+                                   tallies: tallies, collapsed: $collapsed, actions: rowActions)
+                    }
+                    // Only worth a target once there are folders to take things out of.
+                    if !folders.isEmpty {
+                        UnfiledDropZone(isEmpty: ungrouped.isEmpty) { payload in drop(payload, into: nil) }
                     }
                     ForEach(ungrouped) { p in
-                        ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
+                        ProjectFolderLink(project: p, tree: folderTree, tally: tallies[p.id], actions: rowActions)
                     }
                     }
                 }
@@ -253,8 +300,10 @@ struct ProjectsView: View {
         } else {
             if !ps.isEmpty {
                 sectionLabel(T("PROJECTS"))
+                let folderTree = tree
+                let rowActions = actions
                 ForEach(ps) { p in
-                    ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
+                    ProjectFolderLink(project: p, tree: folderTree, tally: tallies[p.id], actions: rowActions)
                 }
             }
             if !ts.isEmpty {
@@ -312,37 +361,256 @@ struct ProjectsView: View {
             uniquingKeysWith: { first, _ in first }
         )
     }
+    /// Moves on screen first, then asks the server; the reload after either keeps the list or puts the
+    /// card back where the server has it, and a refusal (only a project's lead may move it) is said.
     private func move(_ p: Project, to folderId: String?) async {
-        try? await APIClient.shared.setProjectFolder(projectId: p.id, folderId: folderId)
+        if let i = projects.firstIndex(where: { $0.id == p.id }) {
+            withAnimation(.easeOut(duration: 0.18)) { projects[i].folderId = folderId }
+        }
+        if let folderId { collapsed.remove(folderId) }   // show where it landed
+        do { try await APIClient.shared.setProjectFolder(projectId: p.id, folderId: folderId) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The project wasn't moved.") }
         await load()
     }
-    private func deleteFolder(_ f: ProjectFolder) async {
-        try? await APIClient.shared.projectFolderDelete(f.id)
+
+    /// Same as `move`, for a folder and everything in it. The rules are checked before this is
+    /// offered (`FolderTree.canPlace`); the server checks them again.
+    private func moveFolder(_ f: ProjectFolder, to parentId: String?) async {
+        guard tree.canPlace(f.id, under: parentId) else { return }
+        if let i = folders.firstIndex(where: { $0.id == f.id }) {
+            withAnimation(.easeOut(duration: 0.18)) { folders[i].parentFolderId = parentId }
+        }
+        if let parentId { collapsed.remove(parentId) }
+        do { try await APIClient.shared.projectFolderMove(folderId: f.id, parentFolderId: parentId) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The folder wasn't moved.") }
         await load()
+    }
+
+    private func deleteFolder(_ f: ProjectFolder) async {
+        confirmDelete = nil
+        do { try await APIClient.shared.projectFolderDelete(f.id) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The folder wasn't deleted.") }
+        await load()
+    }
+
+    /// A drag let go over a folder row (`folderId`) or over the "No folder" strip (nil). Returns
+    /// false for a drop that would change nothing or break the folder rules, so the item floats back.
+    private func drop(_ payload: String, into folderId: String?) -> Bool {
+        switch ProjectsDrag.parse(payload) {
+        case .project(let id):
+            guard let p = projects.first(where: { $0.id == id }) else { return false }
+            if let folderId {
+                guard p.folderId != folderId else { return false }
+            } else {
+                guard !ungrouped.contains(where: { $0.id == id }) else { return false }
+            }
+            Task { await move(p, to: folderId) }
+            return true
+        case .folder(let id):
+            guard let f = folders.first(where: { $0.id == id }), tree.canPlace(id, under: folderId) else { return false }
+            Task { await moveFolder(f, to: folderId) }
+            return true
+        case nil:
+            return false
+        }
+    }
+}
+
+/// Pushes a folder's aggregate view from its context menu.
+struct FolderRoute: Hashable {
+    let id: String
+}
+
+/// Everything a folder row or a project card can ask the Projects screen to do: one value down the
+/// folder tree instead of a closure per action through every level of the recursion.
+struct ProjectsActions {
+    let moveProject: (Project, String?) async -> Void
+    let moveFolder: (ProjectFolder, String?) async -> Void
+    /// Drag payload + target folder (nil = no folder / top level); false = refused.
+    let drop: (String, String?) -> Bool
+    let openProject: (Project) -> Void
+    let openFolder: (ProjectFolder) -> Void
+    let newProject: (ProjectFolder) -> Void
+    let newSubfolder: (ProjectFolder) -> Void
+    let editFolder: (ProjectFolder) -> Void
+    let deleteFolder: (ProjectFolder) -> Void
+}
+
+/// What a project card or folder row carries while dragged: the id behind a prefix that says which of
+/// the two it is (same idea as the board's `.draggable(task.id)`, but a folder row takes both).
+enum ProjectsDrag {
+    case project(String)
+    case folder(String)
+
+    static func payload(project id: String) -> String { "nexus-project:" + id }
+    static func payload(folder id: String) -> String { "nexus-folder:" + id }
+
+    /// nil for anything else let go over a row (text dragged in from another app, say).
+    static func parse(_ s: String) -> ProjectsDrag? {
+        if s.hasPrefix("nexus-project:") { return .project(String(s.dropFirst("nexus-project:".count))) }
+        if s.hasPrefix("nexus-folder:") { return .folder(String(s.dropFirst("nexus-folder:".count))) }
+        return nil
+    }
+}
+
+/// The folder tree with the server's rules (lib/folder-tree.ts) checked on the device, so the
+/// Move to… menus only offer places the server will accept and a refused drop floats back at once:
+/// at most `maxDepth` levels (a top-level folder is level 1), and no folder inside itself or inside
+/// one of its own subfolders.
+struct FolderTree {
+    static let maxDepth = 4
+    let folders: [ProjectFolder]
+    private let byId: [String: ProjectFolder]
+    private let children: [String: [ProjectFolder]]
+
+    init(_ folders: [ProjectFolder]) {
+        self.folders = folders
+        byId = Dictionary(folders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        children = Dictionary(grouping: folders.filter { $0.parentFolderId != nil }) { $0.parentFolderId! }
+    }
+
+    func folder(_ id: String) -> ProjectFolder? { byId[id] }
+
+    /// 1 for a top-level folder, +1 per folder above it.
+    func depth(_ id: String) -> Int {
+        var depth = 1
+        var seen: Set<String> = [id]
+        var cursor = byId[id]?.parentFolderId
+        while let parent = cursor, !seen.contains(parent), byId[parent] != nil {
+            seen.insert(parent)
+            depth += 1
+            cursor = byId[parent]?.parentFolderId
+        }
+        return depth
+    }
+
+    /// 1 for a folder with no subfolders, +1 per level below it.
+    func height(_ id: String) -> Int {
+        var seen: Set<String> = []
+        func walk(_ id: String) -> Int {
+            guard seen.insert(id).inserted else { return 0 }   // defensive against a cycle
+            let below = (children[id] ?? []).map { walk($0.id) }.max() ?? 0
+            return 1 + below
+        }
+        return walk(id)
+    }
+
+    func descendants(_ id: String) -> Set<String> {
+        var out: Set<String> = []
+        var stack = [id]
+        while let next = stack.popLast() {
+            for child in children[next] ?? [] where out.insert(child.id).inserted { stack.append(child.id) }
+        }
+        return out
+    }
+
+    /// Whether `moving` may go under `parent` (nil = top level). A move to where it already is counts
+    /// as no, so it is neither offered nor sent.
+    func canPlace(_ moving: String, under parent: String?) -> Bool {
+        guard let folder = byId[moving], folder.parentFolderId != parent else { return false }
+        guard let parent else { return true }
+        guard parent != moving, byId[parent] != nil, !descendants(moving).contains(parent) else { return false }
+        return depth(parent) + height(moving) <= Self.maxDepth
+    }
+
+    /// Room for one more level under this folder (New subfolder).
+    func canHoldSubfolder(_ id: String) -> Bool { depth(id) < Self.maxDepth }
+
+    /// "Clients › ANKER › Launch", so two folders with the same name can be told apart in a menu.
+    func path(_ id: String) -> String {
+        var names: [String] = []
+        var seen: Set<String> = []
+        var cursor: String? = id
+        while let current = cursor, let f = byId[current], seen.insert(current).inserted {
+            names.insert(f.name, at: 0)
+            cursor = f.parentFolderId
+        }
+        return names.joined(separator: " › ")
+    }
+
+    /// One folder in a Move to… menu.
+    struct Entry: Identifiable {
+        let folder: ProjectFolder
+        let path: String
+        var id: String { folder.id }
+    }
+
+    /// Every folder in tree order (a parent, then its subfolders), each with its path.
+    var ordered: [Entry] {
+        let sort: ([ProjectFolder]) -> [ProjectFolder] = { list in list.sorted { ($0.position ?? 0, $0.name) < ($1.position ?? 0, $1.name) } }
+        var out: [Entry] = []
+        var seen: Set<String> = []
+        func visit(_ f: ProjectFolder) {
+            guard seen.insert(f.id).inserted else { return }
+            out.append(Entry(folder: f, path: path(f.id)))
+            for child in sort(children[f.id] ?? []) { visit(child) }
+        }
+        for root in sort(folders.filter { $0.parentFolderId == nil || byId[$0.parentFolderId!] == nil }) { visit(root) }
+        return out
+    }
+}
+
+/// The strip above the projects with no folder: let a project go here to take it out of its folder,
+/// or a folder to bring it up to the top level.
+struct UnfiledDropZone: View {
+    let isEmpty: Bool
+    let onDrop: (String) -> Bool
+    @State private var targeted = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "tray").font(.system(size: 12, weight: .semibold))
+            Text(T("No folder").uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
+            if isEmpty || targeted {
+                Text(T("Drop a project here to take it out of its folder."))
+                    .font(NXFont.text(11)).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(targeted ? NX.violetText : NX.mutedFg)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+        .background(targeted ? NX.violet.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(targeted ? NX.violet : NX.border, style: StrokeStyle(lineWidth: targeted ? 2 : 1, dash: [5]))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .dropDestination(for: String.self) { items, _ in
+            guard let payload = items.first else { return false }
+            return onDrop(payload)
+        } isTargeted: { t in
+            withAnimation(.easeOut(duration: 0.12)) { targeted = t }
+        }
     }
 }
 
 /// The one sheet `ProjectsView` shows.
 private enum ProjectsSheet: Identifiable {
     case newProject
+    case newProjectIn(ProjectFolder)
     case newFolder
+    case newSubfolder(ProjectFolder)
     case editFolder(ProjectFolder)
 
     var id: String {
         switch self {
         case .newProject: return "new-project"
+        case .newProjectIn(let f): return "new-project-in-\(f.id)"
         case .newFolder: return "new-folder"
+        case .newSubfolder(let f): return "new-subfolder-\(f.id)"
         case .editFolder(let f): return "edit-folder-\(f.id)"
         }
     }
 }
 
-/// A project shown as a card link, with a "move to folder" context menu.
+/// A project shown as a card link. Long-press (right-click on the Mac) for its menu; press and drag
+/// to drop it on a folder row or on the "No folder" strip.
 struct ProjectFolderLink: View {
     let project: Project
-    let folders: [ProjectFolder]
+    let tree: FolderTree
     var tally: ProjectTally? = nil
-    let onMove: (Project, String?) async -> Void
+    let actions: ProjectsActions
     var body: some View {
         NavigationLink {
             ProjectDetailView(projectId: project.id, projectName: project.name)
@@ -350,8 +618,13 @@ struct ProjectFolderLink: View {
             ProjectCard(project: project, tally: tally)
         }
         .buttonStyle(PressableCardStyle())
+        // The id is the whole payload, as on the board: the screen already holds the project.
+        .draggable(ProjectsDrag.payload(project: project.id)) {
+            ProjectCard(project: project, tally: tally).frame(width: 320).opacity(0.9)
+        }
         .contextMenu {
             let ref = ProjectRef(id: project.id, name: project.name, icon: project.icon)
+            Button { actions.openProject(project) } label: { Label(T("Open project"), systemImage: "arrow.up.right.square") }
             Button {
                 ProjectShortcuts.shared.togglePin(ref)
             } label: {
@@ -359,28 +632,35 @@ struct ProjectFolderLink: View {
                     ? Label(T("Unpin"), systemImage: "pin.slash")
                     : Label(T("Pin"), systemImage: "pin")
             }
-            Menu(T("Move to folder")) {
-                if project.folderId != nil { Button(T("No folder")) { Task { await onMove(project, nil) } } }
-                ForEach(folders.filter { $0.id != project.folderId }) { f in
-                    Button { Task { await onMove(project, f.id) } } label: { Label(f.name, systemImage: "folder") }
+            Menu {
+                ForEach(tree.ordered.filter { $0.folder.id != project.folderId }) { entry in
+                    Button { Task { await actions.moveProject(project, entry.folder.id) } } label: {
+                        Label(entry.path, systemImage: "folder")
+                    }
+                }
+            } label: { Label(T("Move to folder"), systemImage: "folder") }
+            if let folderId = project.folderId, tree.folder(folderId) != nil {
+                Button { Task { await actions.moveProject(project, nil) } } label: {
+                    Label(T("Remove from folder"), systemImage: "tray.and.arrow.up")
                 }
             }
         }
     }
 }
 
-/// Collapsible folder section (recurses for sub-folders).
+/// Collapsible folder section (recurses for sub-folders). The header row takes drops: a project
+/// dragged onto it moves into this folder, a folder dragged onto it becomes its subfolder.
 struct FolderNode: View {
     let folder: ProjectFolder
     let depth: Int
-    let allFolders: [ProjectFolder]
+    let tree: FolderTree
     let projectsByFolder: [String: [Project]]
     let tallies: [String: ProjectTally]
     @Binding var collapsed: Set<String>
-    let onMove: (Project, String?) async -> Void
-    let onDeleteFolder: (ProjectFolder) async -> Void
-    let onEditFolder: (ProjectFolder) -> Void
+    let actions: ProjectsActions
+    @State private var dropTargeted = false
 
+    private var allFolders: [ProjectFolder] { tree.folders }
     private var subFolders: [ProjectFolder] {
         allFolders.filter { $0.parentFolderId == folder.id }.sorted { ($0.position ?? 0, $0.name) < ($1.position ?? 0, $1.name) }
     }
@@ -431,21 +711,27 @@ struct FolderNode: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .onTapGesture(perform: toggle)
             .accessibilityAddTraits(.isButton)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-            .contextMenu {
-                Button { onEditFolder(folder) } label: { Label(T("Edit folder"), systemImage: "pencil") }
-                Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label(T("Delete folder"), systemImage: "trash") }
+            .background(dropTargeted ? NX.violet.opacity(0.10) : NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(dropTargeted ? NX.violet : NX.border, lineWidth: dropTargeted ? 2 : 1)
+            )
+            .draggable(ProjectsDrag.payload(folder: folder.id)) { dragPreview }
+            .dropDestination(for: String.self) { items, _ in
+                guard let payload = items.first else { return false }
+                return actions.drop(payload, folder.id)
+            } isTargeted: { targeted in
+                withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
             }
+            .contextMenu { menu }
 
             if isExpanded {
                 ForEach(subFolders) { sub in
-                    FolderNode(folder: sub, depth: depth + 1, allFolders: allFolders, projectsByFolder: projectsByFolder,
-                               tallies: tallies, collapsed: $collapsed, onMove: onMove,
-                               onDeleteFolder: onDeleteFolder, onEditFolder: onEditFolder)
+                    FolderNode(folder: sub, depth: depth + 1, tree: tree, projectsByFolder: projectsByFolder,
+                               tallies: tallies, collapsed: $collapsed, actions: actions)
                 }
                 ForEach(directProjects) { p in
-                    ProjectFolderLink(project: p, folders: allFolders, tally: tallies[p.id], onMove: onMove)
+                    ProjectFolderLink(project: p, tree: tree, tally: tallies[p.id], actions: actions)
                 }
                 if directProjects.isEmpty && subFolders.isEmpty {
                     Text(T("Empty folder.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
@@ -454,12 +740,45 @@ struct FolderNode: View {
         }
         .padding(.leading, CGFloat(depth) * 14)
     }
+
+    @ViewBuilder private var menu: some View {
+        Button { actions.openFolder(folder) } label: { Label(T("Open folder view"), systemImage: "calendar") }
+        Button { actions.newProject(folder) } label: { Label(T("New project here"), systemImage: "rectangle.stack.badge.plus") }
+        if tree.canHoldSubfolder(folder.id) {
+            Button { actions.newSubfolder(folder) } label: { Label(T("New subfolder"), systemImage: "folder.badge.plus") }
+        }
+        Button { actions.editFolder(folder) } label: { Label(T("Edit folder"), systemImage: "pencil") }
+        let targets = tree.ordered.filter { tree.canPlace(folder.id, under: $0.folder.id) }
+        let canGoTop = tree.canPlace(folder.id, under: nil)
+        if canGoTop || !targets.isEmpty {
+            Menu {
+                if canGoTop {
+                    Button { Task { await actions.moveFolder(folder, nil) } } label: { Label(T("Top level"), systemImage: "arrow.up.to.line") }
+                }
+                ForEach(targets) { entry in
+                    Button { Task { await actions.moveFolder(folder, entry.folder.id) } } label: { Label(entry.path, systemImage: "folder") }
+                }
+            } label: { Label(T("Move to…"), systemImage: "folder") }
+        }
+        Button(role: .destructive) { actions.deleteFolder(folder) } label: { Label(T("Delete folder"), systemImage: "trash") }
+    }
+
+    private var dragPreview: some View {
+        HStack(spacing: 10) {
+            FolderIconTile(folder: folder)
+            Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+        }
+        .padding(12)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
 }
 
 /// Create or edit a project folder: name + emoji/photo icon + color.
 struct CreateFolderSheet: View {
     let workspaceId: String
     let editing: ProjectFolder?
+    /// Made inside this folder (folder → New subfolder); nil = top level.
+    let parent: ProjectFolder?
     let onCreated: () async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -470,8 +789,8 @@ struct CreateFolderSheet: View {
     @State private var busy = false
     @State private var err: String?
 
-    init(workspaceId: String, editing: ProjectFolder? = nil, onCreated: @escaping () async -> Void) {
-        self.workspaceId = workspaceId; self.editing = editing; self.onCreated = onCreated
+    init(workspaceId: String, editing: ProjectFolder? = nil, parent: ProjectFolder? = nil, onCreated: @escaping () async -> Void) {
+        self.workspaceId = workspaceId; self.editing = editing; self.parent = parent; self.onCreated = onCreated
         _name = State(initialValue: editing?.name ?? "")
         _icon = State(initialValue: (editing?.isUploadedIcon == true ? "📁" : (editing?.icon ?? "📁")))
         _color = State(initialValue: editing?.color ?? "#7b68ee")
@@ -486,6 +805,7 @@ struct CreateFolderSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        if let parent, editing == nil { FolderPlacementNote(folder: parent) }
                         field(T("FOLDER NAME")) {
                             TextField("mis. Client Pertamina", text: $name)
                                 .font(NXFont.text(16)).padding(12)
@@ -533,7 +853,7 @@ struct CreateFolderSheet: View {
                     .padding(20)
                 }
             }
-            .navigationTitle(editing == nil ? T("New folder") : T("Edit folder"))
+            .navigationTitle(editing != nil ? T("Edit folder") : (parent != nil ? T("New subfolder") : T("New folder")))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .sheet(isPresented: $showImporter) {
@@ -582,7 +902,8 @@ struct CreateFolderSheet: View {
                 try await APIClient.shared.projectFolderUpdate(folderId: editing.id, name: trimmed, icon: icon, color: color)
                 folderId = editing.id
             } else {
-                folderId = try await APIClient.shared.projectFolderCreate(workspaceId: workspaceId, name: trimmed, icon: icon, color: color)
+                folderId = try await APIClient.shared.projectFolderCreate(workspaceId: workspaceId, name: trimmed, icon: icon, color: color,
+                                                                          parentFolderId: parent?.id)
             }
             // Not `try?`. The folder itself is already saved by the time this runs, so a picture
             // that was refused used to leave the sheet closing on a folder with no icon and nothing
@@ -602,6 +923,21 @@ struct CreateFolderSheet: View {
         } catch {
             err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save folder.")
         }
+    }
+}
+
+/// "Goes into <folder>" above a create form opened from a folder's menu.
+struct FolderPlacementNote: View {
+    let folder: ProjectFolder
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "folder").font(.system(size: 12, weight: .semibold))
+            Text(String(format: T("Goes into %@"), folder.name)).font(NXFont.text(13, .semibold)).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(NX.violetText)
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -630,6 +966,8 @@ struct CreateProjectSheet: View {
     /// Opens a project that already exists instead of making one: the company's one Pipeline board
     /// (owner/GM, 9 Oct 2026: "Desainnya cuma satu papan/pipeline utama buat semua deal").
     var onOpenExisting: (ProjectRef) -> Void = { _ in }
+    /// Made inside this folder (folder → New project here). The one Pipeline board is never filed.
+    var folder: ProjectFolder? = nil
     let onCreated: () async -> Void
     @State private var viewer = Viewer.shared
     @Environment(\.dismiss) private var dismiss
@@ -652,6 +990,7 @@ struct CreateProjectSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         chosenKind(kind)
+                        if let folder, kind != .pipeline { FolderPlacementNote(folder: folder) }
                         field(T("PROJECT NAME")) {
                             TextField("mis. Z Networks Multimedia", text: $name)
                                 .font(NXFont.text(16)).padding(12)
@@ -789,7 +1128,8 @@ struct CreateProjectSheet: View {
                     await viewer.reload()
                 }
             } else {
-                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed, color: color, icon: icon, type: (kind ?? .task).rawValue)
+                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed, color: color, icon: icon,
+                                                        type: (kind ?? .task).rawValue, folderId: folder?.id)
             }
             await onCreated()
             dismiss()
