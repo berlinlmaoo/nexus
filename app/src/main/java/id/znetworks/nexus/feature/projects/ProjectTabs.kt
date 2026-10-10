@@ -172,8 +172,17 @@ fun SheetTab(projectId: String, lanes: List<Lane>, onOpen: (String) -> Unit) {
                                 textDecoration = if (t.isDone) TextDecoration.LineThrough else null)
                         }
                     }
-                    cell(lane, 130.dp); cell(taskStatusLabel(t.status), 110.dp); cell(priorityLabel(t.priority), 100.dp)
-                    cell(dayLabel(t.dueDate), 90.dp); cell(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), 140.dp)
+                    cell(lane, 130.dp); cell(taskStatusLabel(t.status), 110.dp); cell("", 100.dp) { PriorityChip(t.priority) }
+                    cell(dayLabel(t.dueDate), 90.dp)
+                    // Faces, then the names (AVATARS-PRIORITY).
+                    cell(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), 140.dp, content = if (t.assignees.isEmpty()) null else ({
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            id.znetworks.nexus.ui.components.AvatarStack(t.assignees.map { it.user?.name to it.user?.avatar }, size = 20.dp)
+                            Spacer(Modifier.width(4.dp))
+                            Text(t.assignees.mapNotNull { it.user?.name }.joinToString(", "), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                fontSize = 12.sp, color = c.foreground.copy(alpha = 0.9f))
+                        }
+                    }))
                     defs.forEach { f -> cell(valueText(t.customFieldValues.firstOrNull { it.customFieldId == f.id }?.value).orEmpty(), 140.dp) }
                 }
                 HorizontalDivider(color = c.border.copy(alpha = 0.6f))

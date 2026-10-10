@@ -74,8 +74,7 @@ fun priorityColor(p: String?): Color = when (p.orEmpty().uppercase()) {
     "URGENT" -> Nx.colors.danger
     "HIGH" -> Nx.colors.warning
     "MEDIUM" -> Nx.colors.blue
-    "LOW" -> Nx.colors.violetText
-    else -> Nx.colors.mutedFg
+    else -> Nx.colors.mutedFg   // LOW is neutral (AVATARS-PRIORITY)
 }
 
 @Composable
@@ -87,10 +86,16 @@ fun Pill(text: String, tone: Color) {
 @Composable
 fun TaskStatusChip(status: String?) = Pill(taskStatusLabel(status), taskStatusColor(status))
 
+/**
+ * The compact priority pill (owner, 10 Oct: "icon high itu kayaknya ke gedean"; AVATARS-PRIORITY): 10sp bold,
+ * 7×2dp, one line that never wraps; it sits beside the title, which takes the rest of the width. NONE shows nothing.
+ */
 @Composable
-fun PriorityChip(priority: String?) {
+fun PriorityChip(priority: String?, modifier: Modifier = Modifier) {
     if (priority.isNullOrBlank() || priority.equals("NONE", true)) return
-    Pill(priorityLabel(priority), priorityColor(priority))
+    val tone = priorityColor(priority)
+    Text(priorityLabel(priority), color = tone, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+        modifier = modifier.background(tone.copy(alpha = 0.15f), CircleShape).padding(horizontal = 7.dp, vertical = 2.dp))
 }
 
 /** "d MMM", red when an open task is overdue, amber when due today. */
@@ -147,10 +152,11 @@ fun TaskCard(
                     }
                 }
             }
+            // Top-right, one line: a long title wraps beside it instead of being squeezed by it.
+            PriorityChip(t.priority, Modifier.padding(start = 8.dp, top = 2.dp))
         }
         FieldChipRow(t.customFieldValues)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            PriorityChip(t.priority)
             DueLabel(t.dueDate, t.isDone)
             if (t.subtasks.isNotEmpty()) Text("☑ ${t.doneSubs}/${t.subtasks.size}", fontSize = 11.sp, color = c.mutedFg)
             val comments = t.count?.comments ?: 0

@@ -294,7 +294,7 @@ private fun MonthCalendar(tasks: List<BoardTask>, colorOf: (String?) -> String, 
                             textDecoration = if (done) TextDecoration.LineThrough else null)
                         byId[pid]?.let { p -> Text(listOfNotNull(ProjectIcon.emoji(p.icon), p.name).joinToString(" "), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = 1) }
                     }
-                    t.priority?.takeIf { !it.equals("NONE", true) }?.let { Pill(priorityLabel(it), c.mutedFg); Spacer(Modifier.width(6.dp)) }
+                    PriorityChip(t.priority, Modifier.padding(start = 6.dp, end = 6.dp))
                     t.assignees.firstOrNull()?.user?.let { u -> Avatar(u.name, u.avatar, 24.dp) }
                 }
             }

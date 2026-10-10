@@ -94,15 +94,15 @@ fun Avatar(name: String?, url: String?, size: Dp = 28.dp, ring: Boolean = false)
     }
 }
 
-/** Up to [max] overlapping avatars, "+N" for the rest. */
+/** Up to [max] photos overlapping by 6dp with a card-coloured ring (AVATARS-PRIORITY), "+N" for the rest. */
 @Composable
 fun AvatarStack(people: List<Pair<String?, String?>>, size: Dp = 24.dp, max: Int = 3) {
     Row {
         people.take(max).forEachIndexed { i, (name, url) ->
-            Box(Modifier.offset(x = (-8 * i).dp)) { Avatar(name, url, size, ring = true) }
+            Box(Modifier.offset(x = (-6 * i).dp)) { Avatar(name, url, size, ring = true) }
         }
         if (people.size > max) {
-            Box(Modifier.offset(x = (-8 * max).dp).size(size).background(Nx.colors.muted, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.offset(x = (-6 * max).dp).size(size).background(Nx.colors.muted, CircleShape), contentAlignment = Alignment.Center) {
                 Text("+${people.size - max}", fontSize = (size.value * 0.38f).sp, color = Nx.colors.mutedFg, fontWeight = FontWeight.Bold)
             }
         }
