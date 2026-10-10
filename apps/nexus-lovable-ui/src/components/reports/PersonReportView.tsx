@@ -16,7 +16,7 @@ import type { PersonReportResponse, ReportPriority, ReportRatio } from "@/lib/ne
 import { fmtDayKey, fmtHours, fmtNum, fmtPct, periodRangeLabel, ROLE_LABEL } from "./report-format";
 
 const PRIORITY_LABEL: Record<ReportPriority, string> = { URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };
-const PRIORITY_DOT: Record<ReportPriority, string> = { URGENT: "var(--destructive)", HIGH: "var(--warning)", MEDIUM: "#0091ff", LOW: "var(--muted-foreground)", NONE: "var(--border)" };
+const PRIORITY_DOT: Record<ReportPriority, string> = { URGENT: "var(--destructive)", HIGH: "var(--destructive)", MEDIUM: "#0091ff", LOW: "var(--muted-foreground)", NONE: "var(--border)" };
 const PENALTY_LABEL: Record<string, string> = {
   late: "Late check-in",
   nocheckout: "No check-out",

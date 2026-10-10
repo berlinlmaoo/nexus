@@ -1248,14 +1248,14 @@ function ListView({ taskLists, onOpen, hideStatus }: { taskLists: NonNullable<Ne
 
 const CAL_CHIP: Record<string, string> = {
   URGENT: "bg-rose-100 text-rose-700",
-  HIGH: "bg-amber-100 text-amber-700",
+  HIGH: "bg-red-100 text-red-700",
   MEDIUM: "bg-sky-100 text-sky-700",
   LOW: "bg-emerald-100 text-emerald-700",
   NONE: "bg-muted text-muted-foreground",
 };
 const CAL_STRIPE: Record<string, string> = {
   URGENT: "bg-rose-500",
-  HIGH: "bg-amber-500",
+  HIGH: "bg-red-500",
   MEDIUM: "bg-sky-500",
   LOW: "bg-emerald-500",
   NONE: "bg-muted-foreground/40",
@@ -1610,7 +1610,7 @@ function pctTone(pct: number) {
 }
 const GANTT_BAR: Record<string, string> = {
   URGENT: "bg-rose-500",
-  HIGH: "bg-amber-500",
+  HIGH: "bg-red-500",
   MEDIUM: "bg-sky-500",
   LOW: "bg-violet-500",
   NONE: "bg-teal-500",

@@ -280,34 +280,13 @@ export type PhaseState = "done" | "active" | "pending" | "bad"
 export type DealPhase = { key: PhaseKey; state: PhaseState; blocked?: boolean }
 
 /**
- * Words in a blocker that name the line of work it holds up, Indonesian and English as people type them.
- * The earliest word in the text wins ("Kontrak belum ttd, invoice ditahan" → contract; on a tie the earlier
- * row, so "vendor settlement" is closing, not readiness). Short words only
- * as whole words, so "sign" does not match "design".
- */
-const BLOCKER_PHASE_WORDS: ReadonlyArray<readonly [PhaseKey, RegExp]> = [
-  ["payment", /tagih|bayar|pelunasan|lunas|piutang|somasi|invoice|faktur|kwitansi|termin|payment|receivable|\bpaid\b|\bdp\b|down ?payment/],
-  ["contract", /kontrak|contract|legal|perjanjian|\bspk\b|\bmou\b|\bnda\b|\bpo\b|purchase order|tanda ?tangan|\bttd\b|\bsign(ed|ing)?\b/],
-  ["closing", /\bbast\b|closing|vendor settlement|settlement|laporan akhir|final report|rekonsiliasi/],
-  ["readiness", /vendor|\bvreg\b|registrasi|registration|perizinan|\bizin\b|permit|readiness|persiapan/],
-  ["deliverable", /deliverable|produksi|production|revisi|revision|materi|desain|design|konten|content|shooting|editing|\bbrief/],
-  ["commercial", /proposal|quotation|penawaran|negosiasi|negotiation|harga|pricing|budget|pitching|tender/],
-]
-
-/**
- * The phase a blocker holds up: the one its words name, else the phase already in trouble, else the one in
- * progress, else the first not done — "where the deal is now". null without a blocker.
+ * The phase a blocker holds up: the phase the deal is at now — the one already in trouble, else the one in
+ * progress, else the first not done. Not guessed from the blocker's words (owner, 10 Oct 2026: "pokoknya
+ * kalo blocker diisi itu fase nya ketahan"). null without a blocker.
  */
 export function blockerPhaseOf(blocker: string | null | undefined, phases: readonly DealPhase[]): PhaseKey | null {
   const text = (blocker ?? "").trim().toLowerCase()
   if (!text || phases.length === 0) return null
-  let best: PhaseKey | null = null
-  let at = Infinity
-  for (const [key, re] of BLOCKER_PHASE_WORDS) {
-    const m = re.exec(text)
-    if (m && m.index < at) { at = m.index; best = key }
-  }
-  if (best) return best
   const now = phases.find((p) => p.state === "bad") ?? phases.find((p) => p.state === "active") ?? phases.find((p) => p.state !== "done") ?? phases[phases.length - 1]
   return now.key
 }
