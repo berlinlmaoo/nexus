@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useChildMatches, useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -11,7 +11,14 @@ import { Avatar } from "@/components/Avatar";
 
 export const Route = createFileRoute("/_app/docs")({ component: Docs });
 
+// /docs/$docId is a child of this route in the file tree. Without an <Outlet/> a doc link rendered this
+// list instead of the doc (the page was unreachable on web until 12 Oct 2026).
 function Docs() {
+  const children = useChildMatches();
+  return children.length > 0 ? <Outlet /> : <DocsList />;
+}
+
+function DocsList() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const docs = useQuery({ queryKey: ["nexus", "docs"], queryFn: () => nexusApi.docs(), retry: false });
