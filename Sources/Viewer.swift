@@ -16,24 +16,10 @@ final class Viewer {
     private(set) var role: String?
     /// See WorkspaceRoster.isCompany. Unknown until loaded: company-only screens stay hidden till then.
     private(set) var isCompany: Bool?
-    /// See WorkspaceRoster.canAccessPipeline / pipelineProjectId (owner/GM, 9 Oct 2026).
-    private(set) var pipelineAccess: Bool?
-    private(set) var pipelineProjectId: String?
     private var loading = false
 
     /// Z Vault and Threads are drawn only for the company's own people. The server refuses the rest.
     var isCompanyMember: Bool { isCompany == true }
-
-    /// Members of the Pipeline board only (owner, 9 Oct 2026: added by its lead like a task project).
-    /// Unknown until loaded, so the entry stays hidden till then; the server refuses everyone else anyway.
-    var canAccessPipeline: Bool { pipelineAccess == true }
-
-    /// The board's id when the viewer is a member. No nav entry reads it any more (owner, 9 Oct 2026: the
-    /// pipeline opens from Projects); kept for a caller that needs to open the board directly.
-    var pipelineBoard: ProjectRef? {
-        guard canAccessPipeline, let id = pipelineProjectId, !id.isEmpty else { return nil }
-        return ProjectRef(id: id, name: T("Pipeline"), icon: nil)
-    }
 
     private init() {}
 
@@ -61,7 +47,7 @@ final class Viewer {
         apply(roster)
     }
 
-    /// Asked again after the company's board is created, so its "Pipeline" entry appears without a relaunch.
+    /// Asks the server again, without waiting for a relaunch.
     func reload() async {
         guard !loading else { return }
         loading = true
@@ -72,10 +58,8 @@ final class Viewer {
     private func apply(_ roster: WorkspaceRoster?) {
         role = roster?.role
         isCompany = roster?.isCompany
-        pipelineAccess = roster?.canAccessPipeline
-        pipelineProjectId = roster?.pipelineProjectId
     }
 
     /// A new session must not inherit the last person's role.
-    func reset() { role = nil; isCompany = nil; pipelineAccess = nil; pipelineProjectId = nil }
+    func reset() { role = nil; isCompany = nil }
 }

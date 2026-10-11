@@ -20,8 +20,7 @@ struct ProjectsView: View {
     @State private var hits: SearchResults?
     @State private var searching = false
     @State private var openTaskId: String?
-    /// The company's Pipeline board, opened when New project → Pipeline Dashboard finds it already
-    /// exists (owner/GM, 9 Oct 2026: one board for the whole company).
+    /// A project New project opens as soon as it is made (an Outlet Sales or Pipeline Dashboard).
     @State private var openBoard: ProjectRef?
     /// projectId → done/total task counts, filled in after the list renders (see `loadProgress`).
     @State private var tallies: [String: ProjectTally] = [:]
@@ -99,9 +98,9 @@ struct ProjectsView: View {
                 case .newProject:
                     // The type picker (Task Project, Outlet Sales Dashboard, Pipeline Dashboard; Content
                     // Planner coming soon) is CreateProjectSheet's first step — the only way in.
-                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenExisting: { openBoard = $0 }) { await load() }
+                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { openBoard = $0 }) { await load() }
                 case .newProjectIn(let f):
-                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenExisting: { openBoard = $0 }, folder: f) { await load() }
+                    CreateProjectSheet(workspaceId: workspaceId ?? "", onOpenProject: { openBoard = $0 }, folder: f) { await load() }
                 case .newFolder:
                     CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
                 case .newSubfolder(let parent):
@@ -963,9 +962,8 @@ struct FolderIconTile: View {
 /// Create a new project (web "Create a new project"): the type first, then name, icon and colour.
 struct CreateProjectSheet: View {
     let workspaceId: String
-    /// Opens a project that already exists instead of making one: the company's one Pipeline board
-    /// (owner/GM, 9 Oct 2026: "Desainnya cuma satu papan/pipeline utama buat semua deal").
-    var onOpenExisting: (ProjectRef) -> Void = { _ in }
+    /// Opens the project just made: an Outlet Sales or Pipeline Dashboard opens straight away.
+    var onOpenProject: (ProjectRef) -> Void = { _ in }
     /// Made inside this folder (folder → New project here). The one Pipeline board is never filed.
     var folder: ProjectFolder? = nil
     let onCreated: () async -> Void
@@ -1032,11 +1030,10 @@ struct CreateProjectSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                // Pipeline Dashboard is offered to the board's members (picking it opens the board) and,
-                // while none exists, to anyone of the company (owner, 9 Oct 2026); a non-member would
-                // only be told to ask the board's lead to add them.
-                ForEach(ProjectKind.allCases.filter { $0 != .pipeline || viewer.canAccessPipeline }) { k in
-                    Button { pick(k) } label: { kindCard(k) }
+                // Pipeline Dashboard is offered to the company's own people only (the server refuses it
+                // elsewhere). Since 11 Oct 2026 there is no one-company board: every pick makes a new one.
+                ForEach(ProjectKind.allCases.filter { $0 != .pipeline || viewer.isCompanyMember }) { k in
+                    Button { kind = k } label: { kindCard(k) }
                         .buttonStyle(.plain)
                         .disabled(!k.available)
                 }
@@ -1044,17 +1041,6 @@ struct CreateProjectSheet: View {
             .padding(20)
         }
         .task { await viewer.loadIfNeeded() }
-    }
-
-    /// There is one Pipeline board for the whole company: once it exists, picking the type opens it
-    /// rather than asking for a name the server would refuse (409 PIPELINE_EXISTS).
-    private func pick(_ k: ProjectKind) {
-        if k == .pipeline, let board = viewer.pipelineBoard {
-            dismiss()
-            onOpenExisting(board)
-        } else {
-            kind = k
-        }
     }
 
     private func kindCard(_ k: ProjectKind) -> some View {
@@ -1100,17 +1086,13 @@ struct CreateProjectSheet: View {
         do {
             let trimmed = name.trimmingCharacters(in: .whitespaces)
             if kind == .pipeline {
-                // A board made meanwhile by someone else comes back as 409 PIPELINE_EXISTS with its id:
-                // open it, not an error (owner/GM, 9 Oct 2026: one board for the whole company).
-                switch try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed) {
-                case .exists(let board):
-                    dismiss()
-                    onOpenExisting(board)
-                    return
-                case .created:
-                    // The "Pipeline" entry in More / the sidebar learns the new board's id.
-                    await viewer.reload()
-                }
+                // A new, empty board every time (owner, 11 Oct 2026: the one-company-board rule is gone),
+                // opened straight away like an outlet.
+                let made = try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed)
+                await onCreated()
+                dismiss()
+                onOpenProject(made)
+                return
             } else if kind == .outlet {
                 // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
                 // Overview once the list knows it.
@@ -1118,7 +1100,7 @@ struct CreateProjectSheet: View {
                                                                           folderId: folder?.id)
                 await onCreated()
                 dismiss()
-                onOpenExisting(made)
+                onOpenProject(made)
                 return
             } else {
                 try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed,

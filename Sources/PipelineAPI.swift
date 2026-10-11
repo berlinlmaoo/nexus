@@ -133,36 +133,15 @@ extension APIClient {
         return try await pipelineRun(req, as: PipelineExecutionResponse.self)
     }
 
-    /// What New project → Pipeline Dashboard ended in. The company has ONE board (owner/GM, 9 Oct 2026:
-    /// "cuma satu papan/pipeline utama buat semua deal, lintas BD dan brand"), so a second create answers
-    /// 409 PIPELINE_EXISTS with the board's id, and the sheet opens that board instead of showing an error.
-    /// Since the board became an ordinary members-only project (owner, 9 Oct 2026, evening) the id comes
-    /// only to someone who may open it; anyone else gets the server's sentence ("ask its lead to add
-    /// you"), thrown below as the error the sheet shows.
-    enum PipelineBoardCreate { case created, exists(ProjectRef) }
-
-    func pipelineBoardCreate(workspaceId: String, name: String) async throws -> PipelineBoardCreate {
+    /// New project → Pipeline Dashboard: a new, empty board each time (owner, 11 Oct 2026 — there is no
+    /// longer one board for the whole company). A refusal (e.g. outside the company workspace) comes back
+    /// as the server's own sentence.
+    func pipelineBoardCreate(workspaceId: String, name: String) async throws -> ProjectRef {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "type": "PIPELINE"])
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await perform(req)
-        } catch {
-            throw APIError.nothingAnswered(error)
-        }
-        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
-        if http.statusCode == 401 { throw APIError.unauthorized }
-        if http.statusCode == 409,
-           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           body["code"] as? String == "PIPELINE_EXISTS",
-           let id = body["projectId"] as? String, !id.isEmpty {
-            return .exists(ProjectRef(id: id, name: (body["projectName"] as? String) ?? T("Pipeline"), icon: nil))
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw APIError.http(http.statusCode, Self.serverMessage(data))
-        }
-        return .created
+        let made = try await pipelineRun(req, as: OutletCreatedProject.self)
+        return ProjectRef(id: made.id, name: made.name ?? name, icon: nil)
     }
 
     /// The project's members — the people the BD and PM pickers offer (owner, 9 Oct 2026: BD/PM are
