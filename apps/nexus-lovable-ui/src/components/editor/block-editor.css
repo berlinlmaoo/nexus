@@ -215,7 +215,7 @@ button.nx-swatch:hover { box-shadow: 0 0 0 2px var(--ring); }
   float: left;
   height: 0;
   pointer-events: none;
-  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  color: var(--muted-foreground);
 }
 .nx-editor .tiptap:not(:focus) .is-empty:not(.is-editor-empty)::before { content: none; }
 
@@ -252,3 +252,8 @@ button.nx-swatch:hover { box-shadow: 0 0 0 2px var(--ring); }
 .nx-page-col.is-full { max-width: none; }
 .nx-page-tail { min-height: 30vh; cursor: text; }
 body.nx-editing [data-mobile-tabbar] { visibility: hidden; }
+
+/* Browser surfaces: selection and caret in the palette */
+.nx-editor ::selection { background: var(--nx-select); }
+.nx-editor .tiptap { caret-color: var(--nx-drop); }
+.nx-editor .tiptap:focus-visible { outline: none; }
