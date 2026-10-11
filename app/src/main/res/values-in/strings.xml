@@ -2741,11 +2741,9 @@
     <string name="pl_exec_note">Membuat folder untuk deal ini berisi Master Calendar dan Master Task. Tanggal event-nya masuk ke Master Calendar.</string>
     <string name="pl_open_exec_folder">Buka folder eksekusi</string>
     <string name="pl_exec_failed">Project eksekusi gagal dibuat</string>
-    <string name="pl_opens_board">Membuka pipeline perusahaan: satu papan untuk semua deal.</string>
     <string name="pl_company_only">Pipeline hanya ada di workspace perusahaan.</string>
     <!-- Pipeline §11: termin pembayaran, board khusus anggota (9 Okt) -->
     <string name="pl_not_member">(bukan anggota project)</string>
-    <string name="pl_exists_ask">Pipeline perusahaan sudah ada. Minta lead project-nya menambahkan kamu.</string>
     <string name="pl_t_terms">Termin pembayaran</string>
     <string name="pl_t_term">Termin pembayaran</string>
     <string name="pl_t_not_invoiced">Belum ditagih</string>

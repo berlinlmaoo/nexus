@@ -23,14 +23,14 @@ class PipelineBoardTest {
         assertFalse(deal("""{"id":"c","stage":"Negotiation"}""").isWon)
     }
 
-    @Test fun oneBoardAndAccess() {
+    @Test fun manyBoardsAndAccess() {
+        // §16 (11 Oct): picking Pipeline always creates a new board; nothing opens an existing one instead.
         val viewer = File("src/main/java/id/znetworks/nexus/core/Viewer.kt").readText()
-        assertTrue(viewer.contains("o[\"canAccessPipeline\"]")); assertTrue(viewer.contains("o[\"pipelineProjectId\"]"))
+        assertTrue(viewer.contains("o[\"canAccessPipeline\"]")); assertFalse(viewer.contains("o[\"pipelineProjectId\"]"))
         val projects = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsScreen.kt").readText()
-        // 409 PIPELINE_EXISTS opens the board; no access = no Pipeline type to pick; an existing board opens directly.
-        assertTrue(projects.contains("h?.code == \"PIPELINE_EXISTS\" && existing != null -> existing"))
+        assertFalse(projects.contains("PIPELINE_EXISTS")); assertFalse(projects.contains("onOpenBoard"))
         assertTrue(projects.contains("it != ProjectType.PIPELINE || pipelineAccess"))
-        assertTrue(projects.contains("onOpenBoard(pipelineId)"))
+        assertTrue(projects.contains("h?.code == \"PIPELINE_COMPANY_ONLY\""))
         val shell = File("src/main/java/id/znetworks/nexus/ui/shell/SignedInShell.kt").readText()
         // §12.1: no Pipeline entry in More — the board is opened from Projects like any project.
         assertFalse(shell.contains("MoreItem(R.string.pl_tab"))

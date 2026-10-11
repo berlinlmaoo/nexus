@@ -53,8 +53,7 @@ class PipelineTermsTest {
 
     @Test fun membersOnlyAccess() {
         val projects = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsScreen.kt").readText()
-        // 409 without projectId (not a member): the server's sentence, nothing opens; no more PIPELINE_FORBIDDEN.
-        assertTrue(projects.contains("h?.code == \"PIPELINE_EXISTS\" -> { _state.update { it.copy(message = h.serverMessage"))
+        // No PIPELINE_FORBIDDEN (and since §16 no PIPELINE_EXISTS either).
         assertFalse(projects.contains("PIPELINE_FORBIDDEN"))
         val api = File("src/main/java/id/znetworks/nexus/feature/pipeline/PipelineApi.kt").readText()
         assertTrue(api.contains("\"/api/projects/\${enc(projectId)}/members\""))

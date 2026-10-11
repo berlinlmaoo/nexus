@@ -184,13 +184,10 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
     fun createProject(name: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
         val id = try { api.createProject(name, ws, folderId, type) } catch (e: ApiError) {
-            // One board for the company (PIPELINE-DASHBOARD §10.1): when it exists, open it instead of an error —
-            // but only someone who may open it gets its id (§11.1, members only); anyone else reads the server's sentence.
+            // Many boards (PIPELINE-DASHBOARD §16, 11 Oct): a Pipeline is created like any project, never "opened
+            // instead"; the only refusal left is the company-workspace rule.
             val h = e as? ApiError.Http
-            val existing = (h?.body?.get("projectId") as? kotlinx.serialization.json.JsonPrimitive)?.content
             when {
-                h?.code == "PIPELINE_EXISTS" && existing != null -> existing
-                h?.code == "PIPELINE_EXISTS" -> { _state.update { it.copy(message = h.serverMessage ?: res.getString(R.string.pl_exists_ask)) }; return@act }
                 h?.code == "PIPELINE_COMPANY_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.pl_company_only)) }; return@act }
                 else -> throw e
             }
@@ -439,12 +436,11 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
         androidx.compose.material3.SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
-    // Who may make or open the company's Pipeline board (§10): read once from the viewer.
+    // Who may make a Pipeline board (company workspace, §16): read once from the viewer.
     val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer
-    var pipeline by remember { mutableStateOf(false to (null as String?)) }
-    LaunchedEffect(creating) { if (creating) { viewer.load(); pipeline = viewer.canAccessPipeline to viewer.pipelineProjectId } }
-    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipeline.first, pipelineId = pipeline.second, initialFolder = createIn,
-        onOpenBoard = { id -> creating = false; createIn = null; onOpenProject(id) }, onDismiss = { creating = false; createIn = null }) { name, folder, type ->
+    var pipelineAccess by remember { mutableStateOf(false) }
+    LaunchedEffect(creating) { if (creating) { viewer.load(); pipelineAccess = viewer.canAccessPipeline } }
+    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipelineAccess, initialFolder = createIn, onDismiss = { creating = false; createIn = null }) { name, folder, type ->
         vm.createProject(name, folder, type) { id -> creating = false; createIn = null; onOpenProject(id) }
     }
     if (folderCreate || folderEdit != null || subfolderOf != null) FolderDialog(folderEdit, parent = subfolderOf, busy = s.busy,
@@ -559,7 +555,7 @@ private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, pipelineId: String? = null, initialFolder: String? = null, onOpenBoard: (String) -> Unit = {},
+private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, initialFolder: String? = null,
                                 onDismiss: () -> Unit, onCreate: (String, String?, ProjectType) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var folder by rememberSaveable { mutableStateOf(initialFolder) }
@@ -569,9 +565,8 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
     if (type == null) {
         AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.pt_question)) },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { ProjectType.entries.filter { it != ProjectType.PIPELINE || pipelineAccess }.forEach { t ->
-                // The company's board already exists: picking it opens that board (one board for every deal).
-                if (t == ProjectType.PIPELINE && pipelineId != null) TypeCard(t, stringResource(R.string.pl_opens_board)) { onOpenBoard(pipelineId) }
-                else TypeCard(t) { type = t }
+                // Pipeline too asks for a name and makes a NEW empty board (§16): there can be many.
+                TypeCard(t) { type = t }
             } } },
             confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
         return

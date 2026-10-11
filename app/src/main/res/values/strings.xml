@@ -2788,11 +2788,9 @@
     <string name="pl_exec_note">Makes a folder for this deal with its Master Calendar and Master Task. The event date goes on the Master Calendar.</string>
     <string name="pl_open_exec_folder">Open execution folder</string>
     <string name="pl_exec_failed">Couldn\'t create the execution project</string>
-    <string name="pl_opens_board">Opens the company\'s pipeline: one board for every deal.</string>
     <string name="pl_company_only">A pipeline belongs to the company workspace.</string>
     <!-- Pipeline §11: payment terms, members-only board (9 Oct) -->
     <string name="pl_not_member">(not a project member)</string>
-    <string name="pl_exists_ask">The company\'s pipeline already exists. Ask its project lead to add you.</string>
     <string name="pl_t_terms">Payment terms</string>
     <string name="pl_t_term">Payment term</string>
     <string name="pl_t_not_invoiced">Not invoiced</string>
