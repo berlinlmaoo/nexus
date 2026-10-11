@@ -149,9 +149,19 @@ class ProjectsApi(private val api: ApiClient) {
 
     // region project tabs
 
-    suspend fun automations(projectId: String) = api.get("/api/automations?projectId=$projectId", AutomationsResponse.serializer()).automations
+    /** The project's rules and whether the caller may toggle / run them (DEV-REDESIGN §2). */
+    suspend fun automations(projectId: String) = api.get("/api/automations?projectId=$projectId", AutomationsResponse.serializer())
 
     suspend fun setAutomation(id: String, enabled: Boolean) = patch("/api/automations", buildJsonObject { put("id", id); put("enabled", enabled) })
+
+    /** One rule's run log, newest first; [before] = the oldest run shown (Load older). */
+    suspend fun automationRuns(automationId: String, before: String? = null) =
+        api.get("/api/automations/runs?automationId=${URLEncoder.encode(automationId, "UTF-8")}" + (before?.let { "&before=${URLEncoder.encode(it, "UTF-8")}" } ?: ""),
+            AutomationRunsResponse.serializer())
+
+    /** "Run now": once, by hand, on [taskId] or on no task (only task-free actions run then). LEAD only. */
+    suspend fun runAutomation(id: String, taskId: String?): RunNowResponse =
+        api.json.decodeFromJsonElement(RunNowResponse.serializer(), post("/api/automations/run", buildJsonObject { put("id", id); taskId?.let { put("taskId", it) } }))
 
     suspend fun customFields(projectId: String) = api.get("/api/custom-fields?projectId=$projectId", CustomFieldsResponse.serializer()).fields.sortedBy { it.position ?: Int.MAX_VALUE }
 

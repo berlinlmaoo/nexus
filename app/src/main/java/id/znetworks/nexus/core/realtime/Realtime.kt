@@ -67,9 +67,11 @@ object RealtimeEvents {
     const val PIPELINE_CHANGED = "pipeline-changed"
     /** An outlet's event or month target changed (project room; OUTLET-SALES §9): a ping, refetch the month shown. */
     const val OUTLET_SALES_CHANGED = "outlet-sales-changed"
+    /** A project's automation was made, changed, toggled, deleted or ran (project room; DEV-REDESIGN §2): refetch the list / run log. */
+    const val AUTOMATIONS_CHANGED = "automations-changed"
 
     val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
-        OUTLET_SALES_CHANGED) + TASK
+        OUTLET_SALES_CHANGED, AUTOMATIONS_CHANGED) + TASK
 
     /**
      * The handshake refusals that are about the session (deleted, offboarded, revoked, no cookie): stop, and
@@ -103,6 +105,8 @@ object RealtimeEvents {
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
             PIPELINE_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("dealId"), userId = o.str("actorId"))
             OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))
+            // { projectId, automationId, actorId }
+            AUTOMATIONS_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("automationId"), userId = o.str("actorId"))
             else -> RealtimeEvent(name)
         }
     }

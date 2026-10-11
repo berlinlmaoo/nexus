@@ -11,22 +11,7 @@ import java.util.Locale
 @Serializable
 data class StatusUpdate(val id: String, val text: String = "", val status: String? = null, val createdAt: String? = null, val author: UserRef? = null)
 
-@Serializable
-data class Rule(val type: String? = null, val field: String? = null, val value: JsonElement? = null) {
-    fun text(): String {
-        fun human(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase)
-        var out = human(type.orEmpty()).ifBlank { "—" }
-        if (!field.isNullOrBlank()) out += " · " + human(field)
-        valueText(value)?.takeIf { it.isNotBlank() }?.let { out += " = $it" }
-        return out
-    }
-}
-
-@Serializable
-data class Automation(val id: String, val name: String = "", val enabled: Boolean? = null, val trigger: Rule? = null, val action: Rule? = null)
-
-@Serializable
-data class AutomationsResponse(val automations: List<Automation> = emptyList())
+// Automation models live in AutomationText.kt (DEV-REDESIGN §2).
 
 @Serializable
 data class CustomFieldDef(

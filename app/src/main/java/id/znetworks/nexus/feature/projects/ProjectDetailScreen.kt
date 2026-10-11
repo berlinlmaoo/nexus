@@ -357,7 +357,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask,
                                 plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> createDue = d; creating = true }
                             ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
-                            ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId)
+                            ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId, s.lanes, s.detail!!.members)
                             ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
                             ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
                                 val views = mapOf(ProjectTab.OUTLET_OVERVIEW to id.znetworks.nexus.feature.outlet.OutletView.OVERVIEW,

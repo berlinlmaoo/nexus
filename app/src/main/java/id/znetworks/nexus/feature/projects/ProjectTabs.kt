@@ -369,53 +369,6 @@ fun TimelineTab(lanes: List<Lane>, onOpen: (String) -> Unit) {
 
 // region Automations
 
-@Composable
-fun AutomationsTab(projectId: String) {
-    val api = projectsApi()
-    val c = Nx.colors
-    val res = LocalContext.current.resources
-    val scope = rememberCoroutineScope()
-    val (s, reload) = rememberLoad(projectId) { api.automations(projectId) }
-    var error by remember { mutableStateOf<String?>(null) }
-    when {
-        s.loading && s.value == null -> Centered { CircularProgressIndicator() }
-        s.value == null -> EmptyState(Icons.Filled.Bolt, stringResource(R.string.pt_load_failed), s.error.orEmpty(), stringResource(R.string.try_again), reload, Modifier.fillMaxSize())
-        s.value!!.isEmpty() -> TabEmpty(Icons.Filled.Bolt, stringResource(R.string.pt_auto_empty))
-        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(s.value!!, key = { it.id }) { a ->
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Bolt, null, tint = if (a.enabled == true) c.warning else c.mutedFg, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(a.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        // LEAD only on the server: a 403 comes back as its own sentence.
-                        Switch(a.enabled == true, { on ->
-                            scope.launch {
-                                try { api.setAutomation(a.id, on) } catch (e: ApiError) { error = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) }
-                                reload()
-                            }
-                        })
-                    }
-                    Row(verticalAlignment = Alignment.Top) {
-                        RuleBadge(stringResource(R.string.pt_auto_if), a.trigger?.text() ?: "—", c.blue, Modifier.weight(1f))
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = c.mutedFg, modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp).size(14.dp))
-                        RuleBadge(stringResource(R.string.pt_auto_then), a.action?.text() ?: "—", c.violetText, Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-    error?.let { AlertDialog(onDismissRequest = { error = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } }) }
-}
-
-@Composable
-private fun RuleBadge(label: String, text: String, tint: Color, modifier: Modifier) {
-    Column(modifier.background(tint.copy(alpha = 0.08f), RoundedCornerShape(10.dp)).padding(8.dp)) {
-        Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = tint)
-        Text(text, fontSize = 12.sp, color = Nx.colors.foreground)
-    }
-}
-
 // endregion
 
 /** Pages, forms and the project chat arrive with Phase 3; until then the project opens on the web. */

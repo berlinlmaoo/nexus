@@ -26,7 +26,8 @@ class ProjectTabsTest {
     }
 
     @Test fun ruleTextAndRupiah() {
-        assertEquals("Status changed · Priority = HIGH", Rule("STATUS_CHANGED", "priority", kotlinx.serialization.json.JsonPrimitive("HIGH")).text())
+        // Readable sentences are AutomationText's (AutomationsTest); the raw value reads as text.
+        assertEquals("HIGH", Rule("STATUS_CHANGED", "priority", kotlinx.serialization.json.JsonPrimitive("HIGH")).text)
         assertEquals("Rp1.250.000", idr(1_250_000.0))
     }
 }

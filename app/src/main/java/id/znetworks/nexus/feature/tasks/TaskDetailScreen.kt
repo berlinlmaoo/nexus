@@ -654,11 +654,12 @@ private fun CommentsCard(t: TaskDetail, vm: TaskDetailViewModel) {
         if (t.comments.isEmpty()) Muted(stringResource(R.string.td_no_comments))
         t.comments.forEach { cm ->
             Row(verticalAlignment = Alignment.Top) {
-                Avatar(cm.user?.name, cm.user?.avatar, 28.dp)
+                Avatar(id.znetworks.nexus.feature.projects.authorName(cm.user), cm.user?.avatar, 28.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(cm.user?.name ?: "—", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+                        // An automation's comment is signed "Automation" (DEV-REDESIGN §2).
+                        Text(id.znetworks.nexus.feature.projects.authorName(cm.user), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                         Spacer(Modifier.width(6.dp))
                         Text(whenText(cm.createdAt), fontSize = 11.sp, color = c.mutedFg)
                     }
@@ -684,7 +685,7 @@ private fun ActivityCard(t: TaskDetail) {
         CardHeader(stringResource(R.string.td_activity))
         t.activityLogs.take(12).forEach { a ->
             Row(verticalAlignment = Alignment.Top) {
-                Text(a.user?.name ?: "—", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
+                Text(id.znetworks.nexus.feature.projects.authorName(a.user), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.foreground)
                 Spacer(Modifier.width(6.dp))
                 Text(activityText(a), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(6.dp))
@@ -711,8 +712,9 @@ internal fun activityText(a: ActivityLog): String {
 private fun CreatedBy(u: id.znetworks.nexus.feature.projects.UserRef) {
     val c = Nx.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
-        Avatar(u.name, u.avatar, 20.dp); Spacer(Modifier.width(6.dp))
-        Text(stringResource(R.string.td_created_by, u.name ?: u.email ?: "—"), fontSize = 12.sp, color = c.mutedFg,
+        val name = id.znetworks.nexus.feature.projects.authorName(u)
+        Avatar(name, u.avatar, 20.dp); Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.td_created_by, name), fontSize = 12.sp, color = c.mutedFg,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (u.deactivatedAt != null) id.znetworks.nexus.ui.components.LeftPill(Modifier.padding(start = 6.dp))
     }
