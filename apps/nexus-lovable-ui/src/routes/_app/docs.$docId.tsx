@@ -210,7 +210,14 @@ function DocPage() {
             onCover={(v) => { setCover(v); void patch({ coverImage: v }); }}
             onTitle={onTitle}
             onUploadCover={async (f) => (await ctx.upload(f)).url}
-            onEnterBody={() => editorRef.current?.commands.focus("start")}
+            onEnterBody={() => {
+              // Notion: Enter in the title starts a new empty block at the top (or uses the empty one there).
+              const ed = editorRef.current;
+              if (!ed) return;
+              const first = ed.state.doc.firstChild;
+              if (ed.isEditable && first && !(first.type.name === "paragraph" && first.content.size === 0)) ed.chain().insertContentAt(0, { type: "paragraph" }).focus("start").run();
+              else ed.commands.focus("start");
+            }}
           />
           <div className={cn("nx-page-col mt-3", fullWidth && "is-full")}>
             <BlockEditor

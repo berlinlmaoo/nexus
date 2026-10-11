@@ -131,6 +131,11 @@ export function TableToolbar({ editor }: { editor: Editor }) {
 export function MobileToolbar({ editor, onBlockMenu }: { editor: Editor; onBlockMenu: (el: HTMLElement) => void }) {
   const { t } = useLang();
   const [bottom, setBottom] = useState(0);
+  // The floating tab bar steps aside while the keyboard toolbar is up (block-editor.css).
+  useEffect(() => {
+    document.body.classList.add("nx-editing");
+    return () => document.body.classList.remove("nx-editing");
+  }, []);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;

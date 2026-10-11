@@ -109,7 +109,7 @@ export function MobileTabBar() {
 
   return (
     <>
-      <nav className="md:hidden fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto w-[min(92%,26rem)] px-0">
+      <nav data-mobile-tabbar="" className="md:hidden fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto w-[min(92%,26rem)] px-0">
         {/* liquid-glass pill */}
         <div
           ref={navRef}
