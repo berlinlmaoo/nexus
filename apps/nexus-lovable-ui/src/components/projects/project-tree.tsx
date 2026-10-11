@@ -51,7 +51,7 @@ export function FolderGlyph({ folder, open, size = 16, className }: { folder: Pi
 }
 
 /**
- * A project's mark: its photo, else the one default every project shares — the coloured task tile
+ * A project's mark: its photo, else the one default every project shares — the full-colour task icon
  * (owner, 11 Oct 2026: no per-project emoji or colour any more).
  */
 export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color">; size?: number; className?: string }) {
