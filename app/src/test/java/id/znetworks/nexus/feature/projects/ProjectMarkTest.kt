@@ -4,11 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Checklist
 import java.io.File
 
-/** PROJECT-ICON (Berlin, 11 Oct + UPDATE): the task icon for every project, a photo the only custom icon, no colour picker. */
+/** PROJECT-ICON (Berlin, 11 Oct + UPDATE 2): the blue task tile for every project, a photo the only custom icon, no colour picker. */
 class ProjectMarkTest {
     private fun src(p: String) = File("src/main/java/id/znetworks/nexus/$p").readText()
 
@@ -18,13 +16,16 @@ class ProjectMarkTest {
         listOf(null, "", "🚀", "folder", "briefcase", "📁").forEach { assertFalse(it.toString(), ProjectMarkLogic.isPhoto(it)) }
     }
 
-    @Test fun defaultIsTheTaskIconNotTheColour() {
-        assertEquals(Icons.Filled.Checklist, ProjectMarkLogic.DEFAULT)
-        assertTrue(src("ui/shell/SignedInShell.kt").contains("TASKS(\"tasks\", R.string.tab_tasks, Icons.Filled.Checklist"))
+    @Test fun defaultIsTheBlueTaskTile() {
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF3B82F6), ProjectMarkLogic.TOP)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF2563EB), ProjectMarkLogic.BOTTOM)
+        assertEquals(0.28f, ProjectMarkLogic.RADIUS)
+        assertEquals(0.65f, ProjectMarkLogic.CHECK)
+        assertEquals(0.12f, ProjectMarkLogic.EDGE.alpha, 0.01f)
         assertEquals("folder", ProjectMarkLogic.REMOVED)
         val mark = src("feature/projects/ProjectMark.kt")
+        assertTrue(mark.contains("Icons.Rounded.Check") && mark.contains("tint = Color.White") && mark.contains("Brush.verticalGradient"))
         assertFalse(mark.contains("parseColor"))
-        assertTrue(mark.contains("tint = c.mutedFg"))
     }
 
     @Test fun projectsNeverDrawAnEmoji() {

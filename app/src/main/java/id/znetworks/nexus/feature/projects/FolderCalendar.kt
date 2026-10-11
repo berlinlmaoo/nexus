@@ -293,7 +293,7 @@ private fun MonthCalendar(tasks: List<BoardTask>, colorOf: (String?) -> String, 
                         Text(t.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (done) c.mutedFg else c.foreground, maxLines = 2,
                             textDecoration = if (done) TextDecoration.LineThrough else null)
                         byId[pid]?.let { p -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            ProjectMark(p.icon, 12.dp, tile = false); Spacer(Modifier.width(4.dp))
+                            ProjectMark(p.icon, 12.dp); Spacer(Modifier.width(4.dp))
                             Text(p.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = 1)
                         } }
                     }
