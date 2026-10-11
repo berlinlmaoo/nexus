@@ -2980,7 +2980,7 @@ final class AppLanguage {
 
         // Projects: one default mark, photo optional (11 Oct)
         "Add photo": "Tambah foto",
-        "Without a photo, the project shows the task icon.": "Tanpa foto, proyek tampil dengan ikon task.",
+        "Without a photo, the project shows the default task icon.": "Tanpa foto, proyek tampil dengan ikon task bawaan.",
 
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)

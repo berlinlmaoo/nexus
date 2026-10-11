@@ -96,12 +96,7 @@ struct ProjectSettingsView: View {
     private var photoRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
-                    ProjectMark(icon: icon, color: nil, size: 48, glyph: 28)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .frame(width: 48, height: 48)
+                ProjectMark(icon: icon, color: nil, size: 48)
                 VStack(alignment: .leading, spacing: 6) {
                     PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
                         HStack(spacing: 6) {
@@ -120,7 +115,7 @@ struct ProjectSettingsView: View {
                 Spacer(minLength: 0)
             }
             if !hasPhoto {
-                Text(T("Without a photo, the project shows the task icon."))
+                Text(T("Without a photo, the project shows the default task icon."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             if let photoError {

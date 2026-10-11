@@ -648,7 +648,7 @@ struct SidebarRoot: View {
     }
 }
 
-/// A shortcut row's project mark: its photo, or the grey Tasks icon (ProjectMark, owner 11 Oct
+/// A shortcut row's project mark: its photo, or the default task tile (ProjectMark, owner 11 Oct
 /// 2026 — stored emoji are no longer drawn).
 ///
 /// Shared rather than private to the sidebar: the phone's Dashboard shows the same shortcuts, and

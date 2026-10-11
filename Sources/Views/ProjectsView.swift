@@ -1170,12 +1170,7 @@ struct ProjectCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // header row
             HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NX.muted)
-                    ProjectMark(icon: project.icon, color: project.color, size: 44, glyph: 24)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .frame(width: 44, height: 44)
+                ProjectMark(icon: project.icon, color: project.color, size: 44)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(project.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)

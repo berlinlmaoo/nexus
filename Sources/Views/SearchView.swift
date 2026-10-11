@@ -72,9 +72,9 @@ struct SearchView: View {
                         group("PROJECTS") {
                             ForEach(projects) { p in
                                 NavigationLink { ProjectDetailView(projectId: p.id, projectName: p.name) } label: {
-                                    // The project's own mark (photo or the grey Tasks icon), not a generic glyph.
-                                    hit(icon: "rectangle.stack.fill", tint: NX.mutedFg, title: p.name, sub: nil,
-                                        mark: AnyView(ProjectMark(icon: p.icon, color: p.color, size: 34, glyph: 22)))
+                                    // The project's own mark (photo or the default task tile), not a generic glyph.
+                                    hit(icon: "rectangle.stack.fill", tint: .clear, title: p.name, sub: nil,
+                                        mark: AnyView(ProjectMark(icon: p.icon, color: p.color, size: 34)))
                                 }.buttonStyle(.plain)
                             }
                         }
