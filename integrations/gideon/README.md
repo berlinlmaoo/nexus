@@ -109,3 +109,14 @@ MATIKAN (urut dari paling cepat):
     ssh nexus-prod 'docker stop nexus-dev-gideon-relay'                        # putus seketika
     ssh nexus-prod 'touch ~/nexus-dev-data/gideon-dev.off && ~/deploy-nexus-dev.sh gideon'   # permanen: relay dihapus, env dicabut
     ssh agents 'sudo systemctl disable --now gideon-dev-shim'                   # shim dev mati
+
+## GIDEON = Notion AI (12 Okt 2026, dev)
+
+- Tool baru `nexus_search_workspace` (plugin/__init__.py + schemas.py) → action `search_workspace` di /api/gideon/tools:
+  satu pencarian atas project, task, dokumen, komentar task, form, dan chat — hanya yang boleh dilihat aktor
+  (aturan sama dengan ⌘K /api/search; chat lewat visibleConversationIdsOf). Absensi tidak pernah dicari.
+- SUDAH dipasang di profil `gideon-dev` (VM agents, ~/.hermes/profiles/gideon-dev/plugins/nexus/). Prod BELUM:
+  salin ke ~/.hermes/plugins/nexus/ hanya bersamaan dengan rilis server yang memuat action-nya.
+- Server juga mencari sendiri sebelum menjawab (pre-search, /api/gideon stream:true) dan hanya hit yang disebut di
+  jawaban yang jadi Sources. Editor "Ask AI" (/api/gideon/write) dan AI Autofill memakai shim yang sama dengan
+  prompt "jangan panggil tool"; tetap actor-scoped kalau model melanggarnya.
