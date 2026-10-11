@@ -9,6 +9,7 @@ import {
 } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
+import { shrinkRangesAfterDeletion } from "@/lib/sheet-structure"
 
 const MAX_INSERT = 1000
 /** Below this the midpoints have run out of float precision and the sheet needs renumbering. */
@@ -135,12 +136,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       return { sheetId, position: at, cells: cells as object }
     })
 
-    await prisma.sheetRow.createMany({ data })
-    const created = await prisma.sheetRow.findMany({
-      where: { sheetId, position: { gte: Math.min(...data.map((d) => d.position)), lte: Math.max(...data.map((d) => d.position)) } },
-      orderBy: { position: "asc" },
+    // Exactly the rows this request made. Reading back "every row between the lowest and highest
+    // new position" also returned the rows already sitting in that span — so undoing a delete of rows
+    // 2 and 9 put rows 3–8 into the client cache a second time.
+    const created = (await prisma.sheetRow.createManyAndReturn({
+      data,
       select: { id: true, position: true, cells: true, height: true, updatedAt: true },
-    })
+    })).sort((a, b) => a.position - b.position)
     emitSheetStructure(sheetId, session.user.id)
     return NextResponse.json({
       rows: created.map((r) => ({ id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt })),
@@ -250,6 +252,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     let count = 0
     const projectId = access.sheet.projectId
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
+    // Ranges whose corner row is going away shrink to what's left (SUM(A2:A9) minus row 2 is
+    // SUM(A3:A9) — not #REF!), computed against the order BEFORE the delete.
+    const rewrite = await shrinkRangesAfterDeletion(sheetId, access.sheet.columns.map((c) => c.id), { rows: new Set(ids) })
+    let rewritten: { id: string; cells: unknown; updatedAt: Date }[] = []
+    const me = session.user.id
     await restorableDelete({
       entityType: "sheet_rows", entityId: sheetId, rootIds: ids,
       entityName: `${ids.length} ${ids.length === 1 ? "row" : "rows"} of ${access.sheet.name || "a sheet"}`,
@@ -258,10 +265,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
       remove: async (tx) => {
         count = (await tx.sheetRow.deleteMany({ where: { id: { in: ids }, sheetId } })).count
+        rewritten = await rewrite.apply(tx, me)
       },
     })
     emitSheetStructure(sheetId, session.user.id)
-    return NextResponse.json({ deleted: count })
+    return NextResponse.json({
+      deleted: count,
+      // Rows whose formulas were rewritten, so the client can patch its cache without a refetch.
+      rows: rewritten.map((r) => ({ id: r.id, cells: readCells(r.cells), updatedAt: r.updatedAt })),
+    })
   } catch (error) {
     console.error("Error deleting sheet rows:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -7,9 +7,16 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { normalizeColumns, readCells, resolveSheetAccess } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
+import { computeSheet } from "@/lib/sheet-formula"
 
 // GET /api/sheets/[sheetId] — the whole sheet: structure + every row.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ sheetId: string }> }) {
+//
+// ?computed=1 adds `computed`: { [rowId]: { [columnId]: { v, d, nf?, formula?, error? } } } for every
+// non-empty cell — the computed value (formula results evaluated; numbers, dates as serials since
+// 1899-12-30, text, booleans or an error text like "#REF!") and `d`, the exact text the web grid
+// shows. Mobile apps render sheets from this without a formula engine of their own; export uses the
+// same function, so a phone, the grid and the .xlsx can never disagree.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ sheetId: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -31,12 +38,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ she
       }),
     ])
 
+    const outRows = rows.map((r) => ({ id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt }))
+    const wantComputed = ["1", "true"].includes(req.nextUrl.searchParams.get("computed") ?? "")
     return NextResponse.json({
       id: sheet.id,
       projectId: sheet.projectId,
       name: sheet.name,
       columns: sheet.columns,
-      rows: rows.map((r) => ({ id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt })),
+      rows: outRows,
+      ...(wantComputed ? { computed: computeSheet(sheet.columns, outRows) } : {}),
       canEdit,
       canManage,
     })

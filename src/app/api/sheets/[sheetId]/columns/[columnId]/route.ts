@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { MAX_COLUMNS, resolveSheetAccess } from "@/lib/project-sheets"
 import { deleteColumnKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { emitSheetStructure } from "@/lib/socket-emitter"
+import { shrinkRangesAfterDeletion } from "@/lib/sheet-structure"
 
 // DELETE /api/sheets/[sheetId]/columns/[columnId]
 //
@@ -44,6 +45,9 @@ export async function DELETE(
       metadata: { sheetId, sheetName: access.sheet.name, projectId },
     })
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
+    // A range with this column as a corner shrinks to the columns left (A1:C9 minus C is A1:B9).
+    const me = session.user.id
+    const rewrite = await shrinkRangesAfterDeletion(sheetId, access.sheet.columns.map((c) => c.id), { cols: new Set([columnId]) })
     await deleteColumnKeepingSnapshot({
       entityType: "project_sheet_column", entityId: `${sheetId}:${columnId}`, entityName: column.name || "Untitled column",
       workspaceId: project?.workspaceId ?? null, deletedById: session.user.id, auditLogId,
@@ -57,6 +61,7 @@ export async function DELETE(
         // Drop the key from every row in one statement — otherwise the values linger as orphans that
         // would silently reappear if a future column ever reused the id.
         await tx.$executeRaw`UPDATE "SheetRow" SET "cells" = "cells" - ${columnId} WHERE "sheetId" = ${sheetId}`
+        await rewrite.apply(tx, me)
       },
     })
     emitSheetStructure(sheetId, session.user.id)

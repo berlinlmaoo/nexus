@@ -6,7 +6,10 @@ import { randomUUID } from "crypto"
 import prisma from "@/lib/prisma"
 import { checkProjectAccess } from "@/lib/rbac"
 import type { ProjectRole } from "@/generated/prisma/client"
-import { isFormulaCell, type FormulaCell } from "@/lib/sheet-formula"
+import {
+  detectInput, isFormulaCell, isTypedCell, parseDateText, parseLocaleNumber, serialToIso,
+  type FormulaCell, type TypedCell,
+} from "@/lib/sheet-formula"
 
 export const SHEET_COLUMN_TYPES = ["text", "number", "currency", "date", "select", "multiselect", "checkbox", "task", "link"] as const
 export type SheetColumnType = (typeof SHEET_COLUMN_TYPES)[number]
@@ -290,8 +293,19 @@ export function normalizeColumns(raw: unknown, existing: SheetColumn[]): { colum
  * A FORMULA bypasses the column type entirely: it's stored as `{ f }` and its result is computed at
  * render, so a formula in a currency column is still a formula, not the string "=SUM(...)".
  * The client sends it already translated into id-space (see sheet-formula.ts toStored).
+ *
+ * NEVER silently drops input (11 Oct 2026): text that doesn't parse as the column's type is kept as
+ * text — "abc" typed into a Rupiah column used to become 0, and "Rp 1.500.000" became nothing.
+ * Numbers are read the Indonesian way ("1.500" is 1500, "1,5" is 1.5) by the same parser the grid uses.
+ *
+ * `detect` (import, API clients that send raw text) turns "Rp 1.500.000" / "15%" / "11/10/2026" in a
+ * text column into a typed value, exactly like typing it in the grid does.
  */
-export function coerceCellValue(type: SheetColumnType, value: unknown): string | number | boolean | string[] | FormulaCell | LinkCell | null {
+export function coerceCellValue(
+  type: SheetColumnType,
+  value: unknown,
+  opts: { detect?: boolean } = {},
+): string | number | boolean | string[] | FormulaCell | LinkCell | TypedCell | null {
   if (value === null || value === undefined || value === "") return null
   if (isFormulaCell(value)) {
     const f = value.f.slice(0, 2000)
@@ -309,23 +323,36 @@ export function coerceCellValue(type: SheetColumnType, value: unknown): string |
     if (!u) return t || null
     return { t: t || u, u }
   }
+  // A typed number ({ v, nf }) from the grid's value detection.
+  if (isTypedCell(value)) {
+    const typed: TypedCell = { v: value.v, nf: value.nf }
+    if (type === "date") return typed.nf === "date" ? serialToIso(typed.v) : typed
+    if ((type === "number" || type === "currency") && (typed.nf === "num" || typed.nf === "idr")) return typed.v
+    if (type === "checkbox") return typed.v !== 0
+    if (type === "select" || type === "task") return String(typed.v)
+    return typed
+  }
+  // A list or a link arriving in a plain column reads as its text — never "[object Object]".
+  if (Array.isArray(value)) value = value.map(String).join(", ")
+  else if (isLinkCell(value)) value = value.t || value.u
+  else if (value && typeof value === "object") return JSON.stringify(value).slice(0, 5000)
+  if (value === "") return null
   switch (type) {
     case "number":
     case "currency": {
-      // Accept what people actually paste: "Rp 1.500.000", "1,500.00", "(250)" for negatives.
+      if (typeof value === "number") return Number.isFinite(value) ? value : null
+      if (typeof value === "boolean") return value ? 1 : 0
       const raw = String(value).trim()
-      const negative = /^\(.*\)$/.test(raw)
-      const cleaned = raw.replace(/[()]/g, "").replace(/[^\d.,-]/g, "")
-      // Indonesian "1.500.000,50" vs English "1,500,000.50": whichever separator comes LAST is the
-      // decimal point.
-      const lastDot = cleaned.lastIndexOf(".")
-      const lastComma = cleaned.lastIndexOf(",")
-      let normalized = cleaned
-      if (lastComma > lastDot) normalized = cleaned.replace(/\./g, "").replace(",", ".")
-      else normalized = cleaned.replace(/,/g, "")
-      const n = Number(normalized)
-      if (!Number.isFinite(n)) return null
-      return negative ? -Math.abs(n) : n
+      const d = detectInput(raw)
+      if (d.kind === "empty") return null
+      if (d.kind === "number") {
+        if (d.nf === "pct" || d.nf === "date") return { v: d.v, nf: d.nf }
+        return d.v
+      }
+      // In a NUMBER column "007" is just 7 (text columns keep leading zeros: phone numbers).
+      const plain = parseLocaleNumber(raw)
+      if (plain) return plain.n
+      return raw.slice(0, 5000)
     }
     case "checkbox": {
       if (typeof value === "boolean") return value
@@ -333,16 +360,25 @@ export function coerceCellValue(type: SheetColumnType, value: unknown): string |
       return ["true", "1", "ya", "yes", "y", "✓", "x"].includes(s)
     }
     case "date": {
+      if (typeof value === "number") return Number.isFinite(value) ? serialToIso(value) : null
       const s = String(value).trim()
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-      const d = new Date(s)
-      return Number.isNaN(d.getTime()) ? String(value).slice(0, 500) : d.toISOString().slice(0, 10)
+      // Day first: "11/10/2026" is 11 October. (new Date() would read it as 10 November.)
+      const serial = parseDateText(s)
+      return serial === null ? s.slice(0, 500) : serialToIso(serial)
     }
     case "task":
       // The cell holds a task id; the UI resolves it to a title. Never reformatted.
       return String(value).slice(0, 60)
-    default:
-      return String(value).slice(0, 5000)
+    default: {
+      if (typeof value === "number") return Number.isFinite(value) ? value : null
+      if (typeof value === "boolean") return value
+      const text = String(value).slice(0, 5000)
+      if (!opts.detect) return text
+      const d = detectInput(text)
+      if (d.kind === "empty") return null
+      if (d.kind === "number") return d.nf ? { v: d.v, nf: d.nf } : d.v
+      return text
+    }
   }
 }
 
@@ -396,7 +432,7 @@ export function readMulti(value: unknown): string[] {
   return [...new Set(list.map((v) => v.trim()).filter(Boolean))].map((v) => v.slice(0, 80)).slice(0, MAX_MULTI_VALUES)
 }
 
-export function readCells(raw: unknown): Record<string, string | number | boolean | string[] | FormulaCell | LinkCell> {
+export function readCells(raw: unknown): Record<string, string | number | boolean | string[] | FormulaCell | LinkCell | TypedCell> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
-  return raw as Record<string, string | number | boolean | string[] | FormulaCell | LinkCell>
+  return raw as Record<string, string | number | boolean | string[] | FormulaCell | LinkCell | TypedCell>
 }

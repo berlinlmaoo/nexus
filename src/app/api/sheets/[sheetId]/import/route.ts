@@ -264,7 +264,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
         const colId = targetIds[i]
         if (!colId) return
         const value = raw instanceof Date ? raw.toISOString().slice(0, 10) : raw
-        const v = coerceCellValue(typeById.get(colId) ?? "text", value)
+        // detect: "Rp 1.500.000" / "15%" / "11/10/2026" in a text column become numbers and dates,
+        // exactly as if they had been typed or pasted into the grid.
+        const v = coerceCellValue(typeById.get(colId) ?? "text", value, { detect: true })
         if (v !== null) cells[colId] = v
       })
       return { sheetId, position: pos++, cells: cells as object }
