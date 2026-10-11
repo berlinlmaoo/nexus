@@ -364,7 +364,6 @@ struct ProjectDetailView: View {
         case .pages: ProjectPagesTab(projectId: projectId)
         case .forms: ProjectFormsBuilderTab(projectId: projectId, projectName: displayName, onNewForm: { newFormOpen = true })
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
-        case .sprints: SprintsTab(projectId: projectId, onOpen: { openTaskId = $0 })
         case .automations: AutomationsTab(projectId: projectId)
         default:
             if loading {

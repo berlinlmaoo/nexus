@@ -203,8 +203,6 @@ final class RealtimeClient {
             tasksChanged(taskId: payload?["id"]?.string, parentId: payload?["parentId"]?.string)
         case "task-deleted", "comment-added":
             tasksChanged(taskId: payload?["taskId"]?.string, parentId: nil)
-        case "sprint-updated":
-            tasksChanged(taskId: nil, parentId: nil)
         case "pipeline-changed":
             // A Pipeline Dashboard deal changed (owner, 9 Oct 2026). Ids only, like every event: the
             // open pipeline refetches GET …/pipeline. Unlike a task, a deal belongs to exactly one

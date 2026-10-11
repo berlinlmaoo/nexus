@@ -549,15 +549,8 @@ final class AppLanguage {
         "Announcement title": "Judul pengumuman",
         "Announcement body…": "Isi pengumuman…",
 
-        // ── sprints / automations / finance ───────────────────────────────────
-        "No sprints yet. Create a cycle to focus execution.":
-            "Belum ada sprint. Bikin cycle buat fokusin eksekusi.",
-        "No cards in this sprint yet.": "Belum ada card di sprint ini.",
-        "SPRINT NAME": "NAMA SPRINT",
-        "END": "SELESAI",
+        // ── automations / finance ───────────────────────────────────
         "IF": "KALAU",
-        "Create sprint": "Bikin sprint",
-        "Couldn't create the sprint.": "Gagal bikin sprint.",
         "No automations yet. Set up rules from the web app (desktop).":
             "Belum ada automation. Atur rule otomatis lewat web (desktop).",
 
@@ -2253,7 +2246,6 @@ final class AppLanguage {
         // Projects: types, per-project tabs, Finance opt-in (9 Oct)
         "Overview": "Ringkasan",
         "List": "Daftar",
-        "Sprints": "Sprint",
         "Automations": "Otomasi",
         "Pages": "Halaman",
         "Tabs": "Tab",
@@ -2999,7 +2991,6 @@ final class AppLanguage {
         "A spreadsheet with formulas": "Spreadsheet dengan rumus",
         "Tasks on a month by due date": "Task per tanggal dalam sebulan",
         "Start-to-end bars, Gantt style": "Bar mulai–selesai ala Gantt",
-        "Work in timeboxed cycles": "Kerja per siklus waktu",
         "When this happens, do that": "Kalau ini terjadi, lakukan itu",
         "Docs and notes for the project": "Dokumen dan catatan project",
         "Collect requests as tasks": "Kumpulkan permintaan jadi task",

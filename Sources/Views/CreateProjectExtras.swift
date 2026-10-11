@@ -6,8 +6,8 @@ import SwiftUI
 // settings → Tabs) and `memberIds` (any type; the server drops the creator and duplicates).
 
 /// The tabs a new Task Project starts with, as cards with a small drawing of each view (owner, 11 Oct
-/// 2026, like the web). All on by default; Board or List always stays on (the server answers 400
-/// TASK_VIEW_REQUIRED otherwise). Holds the HIDDEN keys, as the server stores them.
+/// 2026, like the web). All on by default except Automations (owner, 11 Oct 2026); Board or List
+/// always stays on (the server answers 400 TASK_VIEW_REQUIRED otherwise). Holds the HIDDEN keys, as the server stores them.
 struct NewProjectTabsPicker: View {
     @Binding var hiddenTabs: Set<String>
 
@@ -80,7 +80,6 @@ extension ProjectTab {
         case .sheet:       return T("A spreadsheet with formulas")
         case .calendar:    return T("Tasks on a month by due date")
         case .timeline:    return T("Start-to-end bars, Gantt style")
-        case .sprints:     return T("Work in timeboxed cycles")
         case .automations: return T("When this happens, do that")
         case .pages:       return T("Docs and notes for the project")
         case .forms:       return T("Collect requests as tasks")
@@ -113,7 +112,6 @@ struct TabThumbnail: View {
         case .sheet: sheet
         case .calendar: calendar
         case .timeline: timeline
-        case .sprints: sprints
         case .automations: automations
         case .pages: pages
         case .forms: forms
@@ -202,26 +200,6 @@ struct TabThumbnail: View {
                         .padding(.leading, w * span.0)
                         .frame(maxHeight: .infinity)
                 }
-            }
-        }
-    }
-
-    /// S1/S2/S3 with progress at 100, 60 and 0 %, the middle one accent.
-    private var sprints: some View {
-        VStack(spacing: 0) {
-            ForEach(Array([1.0, 0.6, 0.0].enumerated()), id: \.offset) { i, p in
-                HStack(spacing: 5) {
-                    Text("S\(i + 1)").font(.system(size: 8, weight: .bold)).foregroundStyle(NX.foreground.opacity(0.45))
-                        .frame(width: 12, alignment: .leading)
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            bar(ink)
-                            bar(i == 1 ? accent : NX.foreground.opacity(0.3)).frame(width: geo.size.width * p)
-                        }
-                        .frame(maxHeight: .infinity)
-                    }
-                }
-                .frame(maxHeight: .infinity)
             }
         }
     }

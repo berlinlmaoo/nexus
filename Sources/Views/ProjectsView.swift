@@ -973,8 +973,9 @@ struct CreateProjectSheet: View {
     /// Step one (owner, 9 Oct 2026): what the project is for. nil = the type cards are showing.
     @State private var kind: ProjectKind?
     @State private var name = ""
-    /// Tabs the new Task Project starts without (owner, 11 Oct 2026). Empty = every tab on.
-    @State private var hiddenTabs: Set<String> = []
+    /// Tabs the new Task Project starts without (owner, 11 Oct 2026). Automations starts off (owner,
+    /// 11 Oct 2026); empty = every tab on.
+    @State private var hiddenTabs: Set<String> = [ProjectTab.automations.key ?? "automations"]
     /// People added to the new project from the start, any type (owner, 11 Oct 2026).
     @State private var memberIds: Set<String> = []
     @State private var busy = false
@@ -1119,7 +1120,7 @@ struct CreateProjectSheet: View {
                 // Starting tabs are a Task Project thing; the server refuses them on any other type.
                 try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed,
                                                         type: type.rawValue, folderId: folder?.id,
-                                                        hiddenTabs: type == .task ? hiddenTabs.sorted() : [],
+                                                        hiddenTabs: type == .task ? hiddenTabs.sorted() : nil,
                                                         memberIds: Array(memberIds))
             }
             await onCreated()

@@ -22,8 +22,8 @@ extension Notification.Name {
     /// `RealtimeKey.folderId`.
     static let nexusWorkspaceChanged = Notification.Name("nexus.workspace.changed")
 
-    /// A task of a project was created, changed, moved or deleted, a comment was added to one, or a
-    /// sprint changed — on any device. userInfo, each optional: `RealtimeKey.projectId` (absent when
+    /// A task of a project was created, changed, moved or deleted, or a comment was added to one — on
+    /// any device. userInfo, each optional: `RealtimeKey.projectId` (absent when
     /// it cannot be told: every open project screen counts it), `RealtimeKey.taskId`, and
     /// `RealtimeKey.parentId` when the task is a subtask.
     static let nexusProjectTasksChanged = Notification.Name("nexus.project.tasks.changed")

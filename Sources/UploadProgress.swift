@@ -301,7 +301,7 @@ final class UploadReporter: NSObject, URLSessionTaskDelegate {
 /// Direction-agnostic: the same capsule is drawn over a file going out and one coming in. What is
 /// moving is said by whatever the caller puts beside it, not by this.
 ///
-/// Same shape as every other progress bar in the app (sprints, project health, mission energy): a
+/// Same shape as every other progress bar in the app (project health, mission energy): a
 /// muted capsule track under a filled one, in the brand fill token.
 struct UploadProgressBar: View {
     let progress: UploadProgress

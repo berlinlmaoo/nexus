@@ -6,7 +6,8 @@ enum ProjectTab: String, CaseIterable, Identifiable {
     // First, so a Pipeline Dashboard opens on it (owner, 9 Oct 2026); no other project shows it.
     case pipeline = "Pipeline"
     case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
-    case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
+    // Sprints was removed (owner, 11 Oct 2026); an old "sprints" key in hiddenTabs is just ignored.
+    case timeline = "Timeline", automations = "Automations"
     case pages = "Pages", forms = "Forms", chat = "Chat"
     // Only an Outlet Sales Dashboard shows it (owner, 10 Oct 2026, for Ryan): the night's report form.
     case reportForm = "Report form"
@@ -20,7 +21,6 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .sheet:    return "tablecells"
         case .calendar: return "calendar"
         case .timeline: return "chart.bar.xaxis"
-        case .sprints:  return "target"
         case .automations: return "bolt.fill"
         case .pages:    return "doc.text.fill"
         case .forms:    return "list.clipboard.fill"

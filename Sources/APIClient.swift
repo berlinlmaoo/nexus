@@ -700,14 +700,16 @@ struct APIClient {
     /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
     /// No `icon` and no `color` (owner, 11 Oct 2026): the server gives a new project its defaults and
     /// the app draws the Tasks icon (ProjectMark) until someone adds a photo in Project settings.
-    /// `hiddenTabs` (Task Project only) and `memberIds` are sent only when there is something in them.
+    /// `hiddenTabs` (Task Project only) is sent whenever it is given, even empty: with no hiddenTabs the
+    /// server hides Automations by default (owner, 11 Oct 2026), so an empty list is how "every tab on"
+    /// is said. `memberIds` is sent only when there is something in it.
     func createProject(workspaceId: String, name: String, type: String = "TASK", folderId: String? = nil,
-                       hiddenTabs: [String] = [], memberIds: [String] = []) async throws -> Bool {
+                       hiddenTabs: [String]? = nil, memberIds: [String] = []) async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "type": type]
         if let folderId { body["folderId"] = folderId }
-        if !hiddenTabs.isEmpty { body["hiddenTabs"] = hiddenTabs }
+        if let hiddenTabs { body["hiddenTabs"] = hiddenTabs }
         if !memberIds.isEmpty { body["memberIds"] = memberIds }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
@@ -932,28 +934,6 @@ struct APIClient {
 
     func taskDetail(_ id: String) async throws -> TaskDetail {
         try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
-    }
-
-    // MARK: - Sprints
-
-    func sprints(_ projectId: String) async throws -> SprintsResponse {
-        try await run(makeRequest("/api/sprints?projectId=\(enc(projectId))"), decode: SprintsResponse.self)
-    }
-    @discardableResult
-    func createSprint(projectId: String, name: String, startDate: String, endDate: String) async throws -> Bool {
-        var req = makeRequest("/api/sprints", method: "POST")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["projectId": projectId, "name": name, "startDate": startDate, "endDate": endDate])
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
-    }
-    @discardableResult
-    func updateSprint(id: String, status: String) async throws -> Bool {
-        var req = makeRequest("/api/sprints", method: "PATCH")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "status": status])
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
     }
 
     // MARK: - Automations / Finance / P&L
