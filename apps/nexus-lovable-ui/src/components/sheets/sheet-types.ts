@@ -19,8 +19,9 @@ export const COLUMN_COLOR_CLASS: Record<string, string> = {
   violet: "bg-violet-100 text-violet-900 dark:bg-violet-950 dark:text-violet-100",
   slate: "bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-100",
 };
+/** English source text; shown through t() (Indonesian in lib/i18n/id-sheets.ts). */
 export const COLUMN_COLOR_LABEL: Record<string, string> = {
-  rose: "Merah", amber: "Kuning", green: "Hijau", blue: "Biru", violet: "Ungu", slate: "Abu",
+  rose: "Red", amber: "Yellow", green: "Green", blue: "Blue", violet: "Purple", slate: "Grey",
 };
 
 /** Chip tints for dropdown choices — stronger than the header tints so a pill reads as a pill. */
@@ -49,22 +50,23 @@ export function optionColor(col: NexusSheetColumn, value: string): string {
   return CHIP_COLOR_CLASS[CHIP_COLORS[i % CHIP_COLORS.length]];
 }
 
+/** English source text; shown through t() (Indonesian in lib/i18n/id-sheets.ts). */
 export const COLUMN_TYPE_LABEL: Record<NexusSheetColumnType, string> = {
-  text: "Teks",
-  number: "Angka",
+  text: "Text",
+  number: "Number",
   currency: "Rupiah",
-  date: "Tanggal",
-  select: "Pilihan",
-  multiselect: "Pilihan ganda",
-  checkbox: "Centang",
+  date: "Date",
+  select: "Dropdown",
+  multiselect: "Multi-select",
+  checkbox: "Checkbox",
   task: "Task",
   link: "Link",
 };
 
 export const RULE_OP_LABEL: Record<NexusSheetRule["op"], string> = {
-  gt: "lebih dari", lt: "kurang dari", gte: "≥", lte: "≤",
-  eq: "sama dengan", neq: "tidak sama dengan", contains: "mengandung",
-  empty: "kosong", notEmpty: "ada isinya",
+  gt: "greater than", lt: "less than", gte: "≥", lte: "≤",
+  eq: "is equal to", neq: "is not equal to", contains: "contains",
+  empty: "is empty", notEmpty: "is not empty",
 };
 
 /** Tailwind classes per style. Kept here so the rule editor and the cell agree on the swatches. */

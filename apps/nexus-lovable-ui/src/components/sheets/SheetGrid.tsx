@@ -1,11 +1,33 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ClipboardPaste, Copy, Eraser, Filter, MessageSquare, Pencil, Plus,
-  Link2 as LinkIcon, Replace, RotateCcw, Scissors, Search, Trash2, X,
+  ArrowDownAZ, ArrowUpAZ, BetweenHorizontalStart, BetweenVerticalStart, ChevronDown, ClipboardPaste, Copy,
+  Eraser, EyeOff, Filter, Link2 as LinkIcon, ListChecks, MessageSquare, MoveHorizontal, MoveVertical, Paintbrush, Plus,
+  RemoveFormatting, Replace, RotateCcw, Scissors, Search, Settings2, Snowflake, Trash2, X,
+  CalendarDays, CircleChevronDown, ClipboardList, Hash, SquareCheck, Tags, Type,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { NexusSheetColumnColor } from "@/lib/nexus-api";
+import { t as trT, useLang } from "@/lib/lang";
+import type { NexusSheetColumnColor, NexusSheetSettings } from "@/lib/nexus-api";
+import {
+  COLUMN_COLOR_CLASS, COLUMN_TYPE_LABEL, RULE_STYLE_CLASS, buildSheetData, displayCell, editFormula, editValue,
+  fillValues, inputToCell, isLinkCell, matchRule, optionColor, readMulti, sameCell, sortKey,
+  type NexusSheetColumn, type NexusSheetColumnType, type NexusSheetRow, type NexusSheetRule,
+} from "./sheet-types";
+import {
+  decimalsShown, engineFor, errorHint, findA1Ranges, formatResult, formatWithStyle, isError, isFormulaCell, letterToIndex,
+  shiftFormula, toDisplay, toStored, type SheetEngine,
+} from "@/lib/sheet-formula";
+import {
+  buildClipboard, consumeCut, foreignFormulaAt, readClipboard, readClipboardAsync, writeClipboardAsync, writeClipboardEvent,
+  type ClipCell, type PasteBlock,
+} from "./sheet-clipboard";
+import { CellEditor, ColumnPopover, TaskCell, type Next } from "./sheet-cells";
+import { SheetToolbar, Menu, MenuItem } from "./SheetToolbar";
+import {
+  borderShadows, bordersFor, horizontalClass, patchStyle, styleClasses, styleInline, verticalClass,
+  type BorderPreset, type CellStyle,
+} from "./sheet-style";
 
 // Mirrors ROW_HEIGHT_MIN / ROW_HEIGHT_MAX in src/lib/project-sheets.ts — the server clamps to the
 // same bounds, so a hand-crafted request can't produce a row the grid won't render sanely.
@@ -17,46 +39,44 @@ const ROW_H_MAX = 400;
  *
  * A 1.000-row sheet put 10.030 <td> in the DOM and a single arrow-key press locked the tab for over
  * 45 seconds — the browser was relaying out the whole table on every selection change. Only the rows
- * on screen (plus a buffer) are rendered now; the space above and below is held open by two spacer
- * rows so the scrollbar still reflects the real size.
+ * on screen (plus a buffer) are rendered; the space above and below is held open by two spacer rows so
+ * the scrollbar still reflects the real size.
  *
  * Row heights are therefore EXACT, not estimated: every <tr> gets an explicit height, so the running
  * offsets used to pick the window can't drift from what's painted.
  */
-const ROW_H_DEFAULT = 29;
+const ROW_H_DEFAULT = 26;
 const WINDOW_BUFFER = 12;
-import {
-  COLUMN_TYPE_LABEL, RULE_OP_LABEL, RULE_STYLE_CLASS, aggregate, buildSheetData, displayCell, editFormula, editValue,
-  COLUMN_COLOR_CLASS, COLUMN_COLOR_LABEL,
-  CHIP_COLORS, CHIP_COLOR_CLASS,
-  fillValues, formatComputed, inputToCell, isLinkCell, matchRule, optionColor, readMulti, sameCell, sortKey,
-  type NexusSheetColumn, type NexusSheetColumnType, type NexusSheetRow, type NexusSheetRule,
-} from "./sheet-types";
-import {
-  SUPPORTED_FUNCTIONS, engineFor, errorHint, findA1Ranges, isError, isFormulaCell, shiftFormula, toDisplay, toStored,
-  type SheetEngine,
-} from "@/lib/sheet-formula";
-import {
-  buildClipboard, consumeCut, foreignFormulaAt, readClipboard, readClipboardAsync, writeClipboardAsync, writeClipboardEvent,
-  type ClipCell, type PasteBlock,
-} from "./sheet-clipboard";
-import { useLang } from "@/lib/lang";
+/** Fixed geometry (Sheets-like): the row-number gutter, the letter header and the optional name row. */
+const GUTTER_W = 46;
+const HEAD_H = 24;
+const LABEL_H = 26;
+const COL_W_DEFAULT = 120;
+const ADD_COL_W = 44;
+/** Selection colour: NEXUS's electric-blue accent (--info). */
+const SEL = "var(--info)";
+const FREEZE_LINE = "color-mix(in oklab, var(--muted-foreground) 55%, transparent)";
+/** Opaque selection tints for STICKY surfaces (headers, gutter, frozen panes): a translucent tint
+ *  there would let the cells scrolling underneath show through. */
+const HEAD_SEL_BG = "bg-[color-mix(in_oklab,var(--info)_16%,var(--muted))]";
+const LABEL_SEL_BG = "bg-[color-mix(in_oklab,var(--info)_9%,var(--card))]";
 
 /**
  * The grid.
  *
  * The load-bearing decision: **only ONE <input> is mounted at a time** — the cell being edited.
- * Every other cell is a plain <td> with formatted text. That single choice solves three problems at
- * once: thousands of mounted inputs would kill the browser; a background refetch can't steal focus
- * from an input that doesn't exist; and Rupiah/date formatting renders as text instead of fighting
- * the input's value. The uncontrolled-input-with-composite-key idea is lifted from
- * the Finance tab's grid (retired 11 Oct 2026).
+ * Every other cell is a plain <td> with formatted text. Thousands of mounted inputs would kill the
+ * browser; a background refetch can't steal focus from an input that doesn't exist; and Rupiah/date
+ * formatting renders as text instead of fighting the input's value.
+ *
+ * Chrome follows Google Sheets (owner, 11 Oct 2026): toolbar, Name Box + fx bar, lettered columns and
+ * numbered rows, a blue selection with a fill handle, freeze bars, sheet tabs and a status bar. The
+ * named, typed columns NEXUS always had stay: their names show in a slim row under the letters (only
+ * when some column has a name or a type), and their settings live in the column menu.
  */
 
 export type Selection = { r: number; c: number; r2: number; c2: number };
 type Editing = { rowId: string; colId: string; seed?: string } | null;
-/** Where the cursor goes after a commit. */
-type Next = "down" | "up" | "right" | "left" | null;
 
 /** Dashed outline colours for referenced ranges, cycled per distinct reference. */
 const REF_COLORS = [
@@ -74,25 +94,18 @@ const rectOf = (s: Selection) => ({
   left: Math.min(s.c, s.c2), right: Math.max(s.c, s.c2),
 });
 
-
 type FillRect = { top: number; bottom: number; left: number; right: number; axis: "down" | "up" | "right" | "left" };
 
 /**
  * Where a fill drag will land: the block of cells ABOUT to be written, never the source block.
- *
- * ONE function feeds both the dashed preview and the actual write. Keeping them apart is what let
- * the preview paint whole rows while the write touched a single column, so they share this now.
- *
- * Axis-locked, like Excel: a drag extends down/up OR left/right, whichever way the pointer travelled
- * further past the block. A diagonal drag filling a whole rectangle would overwrite a lot of cells
- * nobody aimed at.
+ * ONE function feeds both the dashed preview and the actual write. Axis-locked, like Excel.
  */
 function fillTarget(rect: { top: number; bottom: number; left: number; right: number }, to: { r: number; c: number } | null): FillRect | null {
   if (!to) return null;
   const down = to.r - rect.bottom, up = rect.top - to.r;
   const right = to.c - rect.right, left = rect.left - to.c;
   const vert = Math.max(down, up), horiz = Math.max(right, left);
-  if (vert <= 0 && horiz <= 0) return null; // back inside the block
+  if (vert <= 0 && horiz <= 0) return null;
   if (vert >= horiz) {
     return down > 0
       ? { top: rect.bottom + 1, bottom: to.r, left: rect.left, right: rect.right, axis: "down" }
@@ -103,22 +116,46 @@ function fillTarget(rect: { top: number; bottom: number; left: number; right: nu
     : { top: rect.top, bottom: rect.bottom, left: to.c, right: rect.left - 1, axis: "left" };
 }
 
+/** A1-style letters are a DISPLAY layer over the column's position — the stored key is its id. */
+export function colLetter(i: number): string {
+  let n = i;
+  let out = "";
+  do { out = String.fromCharCode(65 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return out;
+}
+
+type ColumnPatch = { name?: string; type?: NexusSheetColumnType; width?: number; options?: string[]; optionColors?: Record<string, NexusSheetColumnColor>; color?: NexusSheetColumnColor; rules?: NexusSheetRule[] };
+type StyleEdit = { rowId: string; values: Record<string, CellStyle | null> };
+type MenuEntry = { label: string; icon?: ReactNode; run: () => void; hint?: string; danger?: boolean; disabled?: boolean } | "sep";
+type Stat = "sum" | "avg" | "count" | "countNum" | "min" | "max";
+
+function readZoom(): number {
+  try { const z = Number(localStorage.getItem("nexus-sheet-zoom")); return z >= 0.5 && z <= 2 ? z : 1; } catch { return 1; }
+}
+function readStat(): Stat {
+  try { const s = localStorage.getItem("nexus-sheet-stat") as Stat | null; return s && ["sum", "avg", "count", "countNum", "min", "max"].includes(s) ? s : "sum"; } catch { return "sum"; }
+}
+
 export function SheetGrid({
-  columns, rows, canEdit, canManage,
-  onSetCells, onAddRows, onDeleteRows, onReorderRow, onDeleteColumn, onEditColumn, onAddColumn, tasks, onOpenTask, commentCounts, onOpenComments,
-  peerCursors, onEditingChange, onCursor, onResizeRow, onInsertColumn,
+  columns, rows, settings, canEdit, canManage,
+  onSetCells, onSetStyles, onSettings, onAddRows, onDeleteRows, onReorderRow, onDeleteColumn, onEditColumn, onAddColumn,
+  tasks, onOpenTask, commentCounts, onOpenComments, peerCursors, onEditingChange, onCursor, onResizeRow, onInsertColumn,
+  canUndo, canRedo, onUndo, onRedo, footerLeft, saving,
 }: {
   columns: NexusSheetColumn[];
   rows: NexusSheetRow[];
+  settings: NexusSheetSettings;
   canEdit: boolean;
   canManage: boolean;
   onSetCells: (edits: { rowId: string; values: Record<string, unknown> }[]) => void;
+  onSetStyles: (edits: StyleEdit[], label: string) => void;
+  onSettings: (patch: { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null }, label: string) => void;
   onAddRows: (payload: { count?: number; afterRowId?: string; beforeRowId?: string; rows?: Record<string, unknown>[] }) => Promise<NexusSheetRow[]>;
   onDeleteRows: (rowIds: string[]) => void;
   /** Move `rowId` to just after `afterRowId`; null means "to the top". */
   onReorderRow: (rowId: string, afterRowId: string | null) => void;
   onDeleteColumn: (columnId: string) => void;
-  onEditColumn: (columnId: string, patch: { name?: string; type?: NexusSheetColumnType; width?: number; options?: string[]; optionColors?: Record<string, NexusSheetColumnColor>; color?: NexusSheetColumnColor; rules?: NexusSheetRule[] }) => void;
+  onEditColumn: (columnId: string, patch: ColumnPatch) => void;
   onAddColumn: () => void;
   /** Project tasks, for the "task" column type. */
   tasks: { id: string; title: string; status?: string | null }[];
@@ -134,26 +171,33 @@ export function SheetGrid({
   onResizeRow: (rowId: string, height: number | null) => void;
   /** Insert a fresh column AT this index (existing ones shift right). */
   onInsertColumn: (index: number) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  /** Sheet tabs, drawn at the left of the bottom bar (the status bar sits on the right). */
+  footerLeft?: ReactNode;
+  saving?: boolean;
 }) {
+  const { lang, t } = useLang();
   const [sel, setSel] = useState<Selection>({ r: 0, c: 0, r2: 0, c2: 0 });
-  /** Right-click menu for a row, anchored at the pointer. */
-  const [rowMenu, setRowMenu] = useState<
-    { rowId: string; number: number; height: number | null; left: number; top: number } | null
-  >(null);
-  /** Right-click menu for a cell, anchored at the pointer. */
-  const [cellMenu, setCellMenu] = useState<{ r: number; c: number; left: number; top: number } | null>(null);
+  /** Right-click menus, anchored at the pointer: a cell, a column header, a row header. */
+  const [menu, setMenu] = useState<{ kind: "cell" | "col" | "row"; r: number; c: number; left: number; top: number } | null>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const maxC = columns.length - 1;
   const dragging = useRef(false);
-  // Row drag uses the HTML5 DnD API on the row-number gutter only, so it never fights cell selection
-  // (which is a mousedown-drag on the cells themselves).
+  // Row drag uses the HTML5 DnD API on the row-number gutter only, so it never fights cell selection.
   const [dragRow, setDragRow] = useState<string | null>(null);
   const [dropRow, setDropRow] = useState<string | null>(null);
   const rect = useMemo(() => rectOf(sel), [sel]);
+  const [zoom, setZoomState] = useState(readZoom);
+  const setZoom = (z: number) => { setZoomState(z); try { localStorage.setItem("nexus-sheet-zoom", String(z)); } catch { /* ignore */ } };
+  /** The column whose settings popover is open (name, type, choices, colours, rules). */
+  const [colPopover, setColPopover] = useState<{ colId: string; anchor: DOMRect | null } | null>(null);
+
   // Formulas are evaluated, never stored — so the context is rebuilt whenever the data is. The engine
-  // carries over every cached result an edit didn't touch (dependency graph), so typing in one cell
-  // doesn't recompute the sheet.
+  // carries over every cached result an edit didn't touch (dependency graph).
   const data = useMemo(() => buildSheetData(columns, rows), [columns, rows]);
   const engineRef = useRef<SheetEngine | null>(null);
   const engine = useMemo(() => {
@@ -161,38 +205,42 @@ export function SheetGrid({
     engineRef.current = e;
     return e;
   }, [data]);
-  const { lang, t } = useLang();
 
   // While a FORMULA is being edited, clicking a cell inserts its reference instead of moving the
   // selection — that's the behaviour that makes formulas usable without memorising addresses.
   const [draft, setDraft] = useState("");
   const editorEl = useRef<HTMLInputElement | null>(null);
-  // Where the ref just inserted by a click lives, so dragging can widen it into a range in place.
   const refSpan = useRef<{ at: number; len: number; anchor: { r: number; c: number } } | null>(null);
-  // Dragging the little square at the selection's bottom-right corner: fill down (or up) from it.
   const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null);
   const filling = useRef(false);
   const [sort, setSort] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  /** Column whose filter box should be forced open — the cell menu can't reach HeaderCell's state. */
-  const [openFilterFor, setOpenFilterFor] = useState<string | null>(null);
+  /** Columns whose filter box is open (shown in the name row under the letters). */
+  const [filterOpen, setFilterOpen] = useState<Record<string, boolean>>({});
   const [scroll, setScroll] = useState({ top: 0, height: 700 });
   const [findOpen, setFindOpen] = useState(false);
   const [find, setFind] = useState({ q: "", to: "", matchCase: false });
+  const [stat, setStatState] = useState<Stat>(readStat);
+  const setStat = (s: Stat) => { setStatState(s); try { localStorage.setItem("nexus-sheet-stat", s); } catch { /* ignore */ } };
+
+  // ── Sheet settings ───────────────────────────────────────────────────────────────────────────
+  const hiddenRows = useMemo(() => new Set(settings.hiddenRows ?? []), [settings.hiddenRows]);
+  const hiddenCols = useMemo(() => new Set(settings.hiddenCols ?? []), [settings.hiddenCols]);
+  const frozenCols = Math.min(settings.frozenCols ?? 0, columns.length);
+  const frozenRowsSetting = settings.frozenRows ?? 0;
+  const colHidden = useCallback((c: number) => hiddenCols.has(columns[c]?.id ?? ""), [hiddenCols, columns]);
 
   /**
-   * What's on screen: the rows after sorting/filtering, each keeping its index in the UNDERLYING
-   * order.
-   *
-   * Sorting here is a per-viewer VIEW, never a write — `SheetRow.position` is untouched. If sorting
-   * actually moved rows, one person sorting by amount would silently rearrange the sheet for
-   * everyone else who has it open.
-   *
-   * The raw index is what the gutter number and every A1 reference use, so a formula written while
-   * the view is sorted still points at the row the user clicked.
+   * What's on screen: the rows after hiding, sorting and filtering, each keeping its index in the
+   * UNDERLYING order. Sorting is a per-viewer VIEW, never a write. Frozen rows are the sheet's first
+   * N rows and stay put on top — sorting and filtering leave them alone, as Sheets does with a
+   * frozen header row.
    */
-  const view = useMemo(() => {
-    let list = rows.map((row, rawIndex) => ({ row, rawIndex }));
+  const { view, frozenRows } = useMemo(() => {
+    const all = rows.map((row, rawIndex) => ({ row, rawIndex })).filter(({ row }) => !hiddenRows.has(row.id));
+    const fixedRaw = Math.min(frozenRowsSetting, rows.length);
+    const fixed = all.filter((x) => x.rawIndex < fixedRaw);
+    let list = all.filter((x) => x.rawIndex >= fixedRaw);
 
     const active = Object.entries(filters).filter(([, q]) => q.trim());
     if (active.length) {
@@ -203,15 +251,12 @@ export function SheetGrid({
         return shown.toLowerCase().includes(q.trim().toLowerCase());
       }));
     }
-
     if (sort) {
       const dir = sort.dir === "asc" ? 1 : -1;
-      // Sorted by the COMPUTED value: a formula column sorts by its results, numbers (and dates,
-      // typed Rupiah, numeric text) numerically before text, like Sheets.
+      // By the COMPUTED value: numbers (and dates, typed Rupiah, numeric text) before text.
       const keyed = list.map((item) => ({ item, k: sortKey(engine.value(item.row.id, sort.colId)) }));
       keyed.sort((a, b) => {
-        // Empties always sink, in both directions — a column of blanks on top is never what you want.
-        if (!a.k || !b.k) return !a.k && !b.k ? 0 : !a.k ? 1 : -1;
+        if (!a.k || !b.k) return !a.k && !b.k ? 0 : !a.k ? 1 : -1; // empties always sink
         if ("n" in a.k && "n" in b.k) return (a.k.n - b.k.n) * dir;
         if ("n" in a.k) return -dir;
         if ("n" in b.k) return dir;
@@ -219,8 +264,8 @@ export function SheetGrid({
       });
       list = keyed.map((x) => x.item);
     }
-    return list;
-  }, [rows, columns, sort, filters, data, engine]);
+    return { view: [...fixed, ...list], frozenRows: fixed.length };
+  }, [rows, columns, sort, filters, data, engine, hiddenRows, frozenRowsSetting]);
 
   /** Running pixel offset of every row, so the window and the spacers agree to the pixel. */
   const offsets = useMemo(() => {
@@ -231,24 +276,30 @@ export function SheetGrid({
   }, [view]);
   const totalHeight = offsets[view.length] ?? 0;
 
-  /**
-   * Scroll + size tracking.
-   *
-   * Called straight from the scroll event, NOT wrapped in requestAnimationFrame: the browser already
-   * fires scroll at most once per frame, React batches the state update, and the rAF version simply
-   * stops working wherever rAF is throttled (a background tab), leaving the window frozen on stale
-   * rows. Returning `prev` unchanged when nothing moved keeps this from re-rendering on no-op events.
-   */
+  /** Column geometry: widths (hidden = 0) and the left edge of each, for frozen (sticky) columns. */
+  const widths = useMemo(() => columns.map((c) => (hiddenCols.has(c.id) ? 0 : c.width ?? COL_W_DEFAULT)), [columns, hiddenCols]);
+  const lefts = useMemo(() => {
+    const out: number[] = [];
+    let x = GUTTER_W;
+    for (const w of widths) { out.push(x); x += w; }
+    return out;
+  }, [widths]);
+  const tableWidth = GUTTER_W + widths.reduce((s, w) => s + w, 0) + ADD_COL_W;
+
+  /** The slim row of column names/types under the letters — only when some column carries one. */
+  const showLabels = useMemo(
+    () => columns.some((c) => c.name.trim() || c.type !== "text" || c.color) || Object.values(filterOpen).some(Boolean) || Object.values(filters).some((q) => q),
+    [columns, filterOpen, filters],
+  );
+  const headH = HEAD_H + (showLabels ? LABEL_H : 0);
+
   const syncScroll = useCallback(() => {
     const el = gridRef.current;
     if (!el) return;
     setScroll((prev) =>
-      prev.top === el.scrollTop && prev.height === el.clientHeight
-        ? prev
-        : { top: el.scrollTop, height: el.clientHeight },
+      prev.top === el.scrollTop && prev.height === el.clientHeight ? prev : { top: el.scrollTop, height: el.clientHeight },
     );
   }, []);
-  const onGridScroll = syncScroll;
   useEffect(() => {
     const el = gridRef.current;
     if (!el) return;
@@ -258,37 +309,71 @@ export function SheetGrid({
     return () => ro.disconnect();
   }, [syncScroll]);
 
-  /**
-   * Keep the cursor on screen. Without windowing the browser did this for free, because every row
-   * existed; now a selection can move to a row that isn't mounted, and nothing would appear to happen.
-   */
+  /** Keep the cursor on screen (windowing means the row may not be mounted). */
   useEffect(() => {
     const el = gridRef.current;
-    if (!el) return;
-    const top = offsets[sel.r] ?? 0;
-    const bottom = offsets[sel.r + 1] ?? top + ROW_H_DEFAULT;
-    const headerH = 34; // the sticky <thead> covers this much of the top
-    if (top < el.scrollTop + headerH) el.scrollTop = Math.max(0, top - headerH);
-    else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight;
-  }, [sel.r, offsets]);
+    if (!el || sel.r < frozenRows) return;
+    const pinned = (offsets[frozenRows] ?? 0) * zoom;
+    const top = (offsets[sel.r] ?? 0) * zoom;
+    const bottom = (offsets[sel.r + 1] ?? 0) * zoom;
+    const header = headH * zoom;
+    if (top - pinned < el.scrollTop) el.scrollTop = Math.max(0, top - pinned);
+    else if (bottom + header > el.scrollTop + el.clientHeight) el.scrollTop = bottom + header - el.clientHeight;
+    // Horizontal: keep the active column visible past the frozen ones.
+    const cl = (lefts[sel.c] ?? 0) * zoom, cr = cl + (widths[sel.c] ?? 0) * zoom;
+    const frozenW = ((lefts[frozenCols] ?? GUTTER_W)) * zoom;
+    if (sel.c >= frozenCols) {
+      if (cl - frozenW + GUTTER_W * zoom < el.scrollLeft + GUTTER_W * zoom) el.scrollLeft = Math.max(0, cl - frozenW);
+      else if (cr > el.scrollLeft + el.clientWidth) el.scrollLeft = cr - el.clientWidth;
+    }
+  }, [sel.r, sel.c, offsets, zoom, headH, frozenRows, lefts, widths, frozenCols]);
+
+  // ── Merged cells (only drawn while the view is in sheet order) ──────────────────────────────
+  const naturalOrder = !sort && !Object.values(filters).some((q) => q.trim());
+  const merges = useMemo(() => {
+    const anchors = new Map<string, { rowSpan: number; colSpan: number }>();
+    const covered = new Set<string>();
+    const ranges: { top: number; bottom: number; left: number; right: number }[] = [];
+    if (!naturalOrder) return { anchors, covered, ranges };
+    const viewIdx = new Map(view.map((v, i) => [v.row.id, i]));
+    const rawIdx = new Map(rows.map((r, i) => [r.id, i]));
+    for (const m of settings.merges ?? []) {
+      const r0 = rawIdx.get(m.r), c0 = columns.findIndex((c) => c.id === m.c);
+      if (r0 === undefined || c0 < 0) continue;
+      const vis: number[] = [];
+      for (let r = r0; r < Math.min(rows.length, r0 + m.rs); r += 1) { const i = viewIdx.get(rows[r].id); if (i !== undefined) vis.push(i); }
+      if (!vis.length) continue;
+      const c1 = Math.min(columns.length - 1, c0 + m.cs - 1);
+      const top = vis[0], bottom = vis[vis.length - 1];
+      anchors.set(`${view[top].row.id}:${columns[c0].id}`, { rowSpan: vis.length, colSpan: c1 - c0 + 1 });
+      ranges.push({ top, bottom, left: c0, right: c1 });
+      for (const i of vis) for (let c = c0; c <= c1; c += 1) if (!(i === top && c === c0)) covered.add(`${view[i].row.id}:${columns[c].id}`);
+    }
+    return { anchors, covered, ranges };
+  }, [naturalOrder, settings.merges, view, rows, columns]);
 
   const [winFirst, winLast] = useMemo(() => {
-    if (view.length <= WINDOW_BUFFER * 3) return [0, view.length]; // small sheet: don't bother
-    // Binary search rather than a scan: this runs on every scroll frame.
-    let lo = 0, hi = view.length - 1, start = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (offsets[mid + 1] <= scroll.top) lo = mid + 1;
-      else { start = mid; hi = mid - 1; }
+    const n = view.length;
+    let first = frozenRows, last = n;
+    if (n - frozenRows > WINDOW_BUFFER * 3) {
+      const top = scroll.top / zoom + offsets[frozenRows];
+      const height = scroll.height / zoom;
+      let lo = frozenRows, hi = n - 1, start = frozenRows;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (offsets[mid + 1] <= top) lo = mid + 1;
+        else { start = mid; hi = mid - 1; }
+      }
+      let end = start;
+      while (end < n && offsets[end] < top + height) end += 1;
+      first = Math.max(frozenRows, start - WINDOW_BUFFER);
+      last = Math.min(n, end + WINDOW_BUFFER);
     }
-    let end = start;
-    while (end < view.length && offsets[end] < scroll.top + scroll.height) end += 1;
-    return [Math.max(0, start - WINDOW_BUFFER), Math.min(view.length, end + WINDOW_BUFFER)];
-  }, [offsets, scroll.top, scroll.height, view.length]);
+    // A merged block that starts above the window but reaches into it must render from its anchor.
+    for (const m of merges.ranges) if (m.top < first && m.bottom >= first && m.top >= frozenRows) first = m.top;
+    return [first, last];
+  }, [offsets, scroll.top, scroll.height, view.length, frozenRows, zoom, merges.ranges]);
 
-  const viewRows = useMemo(() => view.map((v) => v.row), [view]);
-  // Column totals over COMPUTED values, memoised on the data — not recomputed on every selection move.
-  const footer = useMemo(() => columns.map((col) => aggregate(viewRows, col, engine)), [viewRows, columns, engine]);
   const maxR = view.length - 1;
   const filtering = Object.values(filters).some((q) => q.trim()) || Boolean(sort);
 
@@ -303,18 +388,13 @@ export function SheetGrid({
 
   const a1 = useCallback((r: number, c: number) => `${colLetter(c)}${r + 1}`, []);
 
-  /**
-   * The rectangles the draft formula refers to, each with a colour — the dashed outlines that make
-   * it obvious which cells a formula is actually reading.
-   */
+  /** The rectangles the draft formula refers to, each with a colour. */
   const refRects = useMemo(() => {
     if (!editing || !draft.startsWith("=")) return [];
-    // The same scanner the engine uses: refs inside "quoted text" and function names like LOG10
-    // aren't outlined, $A$1 and whole columns (A:A) are.
     return findA1Ranges(draft)
-      .filter((x) => x.left <= maxC && x.top <= maxR)
-      .map((x, i) => ({ top: x.top, bottom: Math.min(x.bottom, maxR), left: x.left, right: x.right, color: i % REF_COLORS.length }));
-  }, [editing, draft, maxR, maxC]);
+      .filter((x) => x.left <= maxC && x.top <= rows.length - 1)
+      .map((x, i) => ({ top: x.top, bottom: Math.min(x.bottom, rows.length - 1), left: x.left, right: x.right, color: i % REF_COLORS.length }));
+  }, [editing, draft, rows.length, maxC]);
 
   /** Put `textToInsert` at the caret, or replace the ref a drag is currently widening. */
   const putRef = useCallback((textToInsert: string, anchor: { r: number; c: number } | null) => {
@@ -332,35 +412,40 @@ export function SheetGrid({
     el.setSelectionRange(caret, caret);
   }, []);
 
-
   const clamp = useCallback((r: number, c: number) => ({
     r: Math.max(0, Math.min(maxR, r)),
     c: Math.max(0, Math.min(maxC, c)),
   }), [maxR, maxC]);
 
+  /** Step to the next VISIBLE column in a direction (hidden columns are skipped, like Sheets). */
+  const stepCol = useCallback((c: number, dc: number) => {
+    let n = c + dc;
+    while (n >= 0 && n <= maxC && colHidden(n)) n += dc > 0 ? 1 : -1;
+    return n < 0 || n > maxC ? c : n;
+  }, [maxC, colHidden]);
+
   const move = useCallback((dr: number, dc: number, extend: boolean) => {
     setSel((s) => {
-      const { r, c } = clamp((extend ? s.r2 : s.r) + dr, (extend ? s.c2 : s.c) + dc);
+      const fromC = extend ? s.c2 : s.c;
+      const nc = dc ? stepCol(fromC, dc) : fromC;
+      const { r, c } = clamp((extend ? s.r2 : s.r) + dr, nc);
       return extend ? { ...s, r2: r, c2: c } : { r, c, r2: r, c2: c };
     });
-  }, [clamp]);
+  }, [clamp, stepCol]);
 
-  /**
-   * Save what was typed. Every path that turns text into a cell value (typing, the formula bar,
-   * paste, replace, the phone view) goes through inputToCell, so "Rp 1.500.000" is a number and
-   * "=A1*2" a formula everywhere — and nothing typed is ever silently dropped.
-   */
+  // ── Writes ───────────────────────────────────────────────────────────────────────────────────
+
+  /** Save what was typed — through inputToCell, the one path from text to a cell value. */
   const commit = useCallback((rowId: string, colId: string, raw: string) => {
     const col = columns.find((x) => x.id === colId);
     if (!col) return;
     const prevRaw = rows.find((x) => x.id === rowId)?.cells[colId];
     const next = inputToCell(col, raw, data.shape, prevRaw);
-    // Don't spend a request when nothing actually changed (blur fires on every exit).
     if (sameCell(prevRaw, next)) return;
     onSetCells([{ rowId, values: { [colId]: next } }]);
   }, [columns, rows, onSetCells, data.shape]);
 
-  /** Clear every cell in the current rectangle in one request. */
+  /** Clear every VALUE in the current rectangle in one request (formatting stays, as in Sheets). */
   const clearSelection = useCallback(() => {
     if (!canEdit) return;
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
@@ -370,31 +455,80 @@ export function SheetGrid({
       const values: Record<string, unknown> = {};
       for (let c = rect.left; c <= rect.right; c += 1) {
         const col = columns[c];
-        if (col) values[col.id] = null;
+        if (col && row.cells[col.id] !== undefined) values[col.id] = null;
       }
       if (Object.keys(values).length) edits.push({ rowId: row.id, values });
     }
     if (edits.length) onSetCells(edits);
   }, [canEdit, rect, view, columns, onSetCells]);
 
-  /**
-   * A formula moved from (fromRow, fromCol) to (toRow, toCol), all in UNDERLYING positions: relative
-   * references shift by the offset, "$" parts stay — what copy/paste and the fill handle do in Sheets.
-   */
+  /** Apply a formatting change to every cell of the selection. */
+  const styleSelection = useCallback((fn: (st: CellStyle | undefined, r: number, c: number) => CellStyle | null, label: string) => {
+    if (!canEdit) return;
+    const edits: StyleEdit[] = [];
+    for (let r = rect.top; r <= rect.bottom; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      const values: Record<string, CellStyle | null> = {};
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        if (!col || colHidden(c)) continue;
+        const before = row.styles?.[col.id];
+        const next = fn(before, r, c);
+        if (JSON.stringify(before ?? null) !== JSON.stringify(next ?? null)) values[col.id] = next;
+      }
+      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
+    }
+    if (edits.length) onSetStyles(edits, label);
+  }, [canEdit, rect, view, columns, colHidden, onSetStyles]);
+
+  const activeRow = view[sel.r]?.row;
+  const activeCol = columns[sel.c];
+  const activeRaw = activeRow && activeCol ? activeRow.cells[activeCol.id] : undefined;
+  const activeStyle = activeRow && activeCol ? activeRow.styles?.[activeCol.id] : undefined;
+
+  const applyStyle = (patch: Partial<Record<keyof CellStyle, unknown>>) =>
+    styleSelection((st) => patchStyle(st, patch), t("format cells"));
+  const applyBorders = (preset: BorderPreset) =>
+    styleSelection((st, r, c) => patchStyle(st, { bd: bordersFor(preset, r, c, rect, st?.bd) || null }), t("borders"));
+  const clearFormat = () => styleSelection(() => null, t("clear formatting"));
+  const changeDecimals = (delta: 1 | -1) => {
+    const shown = activeRow && activeCol ? displayCell(activeCol.type, activeRaw, { data, rowId: activeRow.id, colId: activeCol.id }) : "";
+    const current = activeStyle?.dp ?? decimalsShown(shown);
+    const dp = Math.max(0, Math.min(10, current + delta));
+    styleSelection((st) => patchStyle(st, { dp }), t("decimal places"));
+  };
+
+  /** Merge the selection, or unmerge whatever merged blocks it touches. */
+  const mergedHere = merges.ranges.filter((m) => m.top <= rect.bottom && m.bottom >= rect.top && m.left <= rect.right && m.right >= rect.left);
+  const canMerge = naturalOrder && (mergedHere.length > 0 || rect.bottom > rect.top || rect.right > rect.left);
+  const toggleMerge = () => {
+    if (!canEdit || !naturalOrder) return;
+    const current = settings.merges ?? [];
+    if (mergedHere.length) {
+      const ids = new Set(mergedHere.map((m) => `${view[m.top].row.id}:${columns[m.left].id}`));
+      onSettings({ merges: current.filter((m) => !ids.has(`${m.r}:${m.c}`)) }, t("unmerge cells"));
+      return;
+    }
+    const top = view[rect.top], bottom = view[rect.bottom];
+    if (!top || !bottom) return;
+    onSettings({
+      merges: [...current, { r: top.row.id, c: columns[rect.left].id, rs: bottom.rawIndex - top.rawIndex + 1, cs: rect.right - rect.left + 1 }],
+    }, t("merge cells"));
+  };
+
   const moveFormula = useCallback((stored: string, from: { r: number; c: number }, to: { r: number; c: number }) => {
-    const a1 = toDisplay(stored, data.shape);
-    return { f: toStored(shiftFormula(a1, to.r - from.r, to.c - from.c), data.shape) };
+    const text = toDisplay(stored, data.shape);
+    return { f: toStored(shiftFormula(text, to.r - from.r, to.c - from.c), data.shape) };
   }, [data.shape]);
 
-  /** Same helper the write uses, so the dashed outline can never promise a different block. */
   const fillPreviewRect = useMemo(() => fillTarget(rect, fillTo), [rect, fillTo]);
 
   /** Commit whatever the fill drag is previewing. */
   const applyFill = useCallback((to: { r: number; c: number }) => {
     if (!canEdit) return;
-    const t = fillTarget(rect, to);
-    if (!t) return;
-
+    const tgt = fillTarget(rect, to);
+    if (!tgt) return;
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
     const put = (rowIdx: number, colIdx: number, value: unknown) => {
       const row = view[rowIdx]?.row;
@@ -407,63 +541,49 @@ export function SheetGrid({
       })();
       entry.values[col.id] = value ?? null;
     };
-    const rawAt = (r: number, c: number) => {
-      const col = columns[c];
-      return col ? view[r]?.row.cells[col.id] : undefined;
-    };
+    const rawAt = (r: number, c: number) => { const col = columns[c]; return col ? view[r]?.row.cells[col.id] : undefined; };
     const posOf = (r: number, c: number) => ({ r: view[r]?.rawIndex ?? r, c });
-
-    /**
-     * One line of the fill (a column for up/down, a row for left/right). A line containing a formula
-     * repeats its block with every formula SHIFTED to its new place (=A1*2 filled down is =A2*2);
-     * otherwise series continue (1,2 -> 3,4; dates by day or month) or the block repeats.
-     */
+    /** One line of the fill: formulas shift to their new place, series continue, blocks repeat. */
     const fillLine = (sources: { r: number; c: number }[], targets: { r: number; c: number }[]) => {
       const raws = sources.map((p) => rawAt(p.r, p.c));
       if (raws.some((v) => isFormulaCell(v))) {
-        targets.forEach((tgt, i) => {
+        targets.forEach((tg, i) => {
           const k = i % sources.length;
           const v = raws[k];
-          put(tgt.r, tgt.c, isFormulaCell(v) ? moveFormula(v.f, posOf(sources[k].r, sources[k].c), posOf(tgt.r, tgt.c)) : v ?? null);
+          put(tg.r, tg.c, isFormulaCell(v) ? moveFormula(v.f, posOf(sources[k].r, sources[k].c), posOf(tg.r, tg.c)) : v ?? null);
         });
         return;
       }
       const produced = fillValues(raws, targets.length);
-      targets.forEach((tgt, i) => put(tgt.r, tgt.c, produced[i]));
+      targets.forEach((tg, i) => put(tg.r, tg.c, produced[i]));
     };
-
-    if (t.axis === "down" || t.axis === "up") {
-      // Targets ordered AWAY from the block, so a series counts in the direction it grows.
-      const rowsOut: number[] = [];
-      if (t.axis === "down") for (let r = t.top; r <= t.bottom; r += 1) rowsOut.push(r);
-      else for (let r = t.bottom; r >= t.top; r -= 1) rowsOut.push(r);
+    if (tgt.axis === "down" || tgt.axis === "up") {
+      const out: number[] = [];
+      if (tgt.axis === "down") for (let r = tgt.top; r <= tgt.bottom; r += 1) out.push(r);
+      else for (let r = tgt.bottom; r >= tgt.top; r -= 1) out.push(r);
       for (let c = rect.left; c <= rect.right; c += 1) {
         const src: { r: number; c: number }[] = [];
         for (let r = rect.top; r <= rect.bottom; r += 1) src.push({ r, c });
-        fillLine(t.axis === "down" ? src : [...src].reverse(), rowsOut.map((r) => ({ r, c })));
+        fillLine(tgt.axis === "down" ? src : [...src].reverse(), out.map((r) => ({ r, c })));
       }
     } else {
-      const colsOut: number[] = [];
-      if (t.axis === "right") for (let c = t.left; c <= t.right; c += 1) colsOut.push(c);
-      else for (let c = t.right; c >= t.left; c -= 1) colsOut.push(c);
+      const out: number[] = [];
+      if (tgt.axis === "right") for (let c = tgt.left; c <= tgt.right; c += 1) out.push(c);
+      else for (let c = tgt.right; c >= tgt.left; c -= 1) out.push(c);
       for (let r = rect.top; r <= rect.bottom; r += 1) {
         const src: { r: number; c: number }[] = [];
         for (let c = rect.left; c <= rect.right; c += 1) src.push({ r, c });
-        fillLine(t.axis === "right" ? src : [...src].reverse(), colsOut.map((c) => ({ r, c })));
+        fillLine(tgt.axis === "right" ? src : [...src].reverse(), out.map((c) => ({ r, c })));
       }
     }
     if (edits.length) onSetCells(edits);
-    // Selection grows to cover source + filled, same as every spreadsheet.
     setSel({
-      r: Math.min(rect.top, t.top), c: Math.min(rect.left, t.left),
-      r2: Math.max(rect.bottom, t.bottom), c2: Math.max(rect.right, t.right),
+      r: Math.min(rect.top, tgt.top), c: Math.min(rect.left, tgt.left),
+      r2: Math.max(rect.bottom, tgt.bottom), c2: Math.max(rect.right, tgt.right),
     });
   }, [canEdit, rect, columns, view, onSetCells, moveFormula]);
 
-  /**
-   * The selected block for the clipboard: what each cell SHOWS (formula results, "Rp 1.500.000",
-   * a link's label — never "[object Object]"), plus raw values and A1 formulas for a NEXUS paste.
-   */
+  /** The selected block for the clipboard: what cells SHOW, plus raw values and A1 formulas. */
   const clipSelection = useCallback((cut: boolean) => {
     const cells: ClipCell[][] = [];
     for (let r = rect.top; r <= rect.bottom; r += 1) {
@@ -483,32 +603,20 @@ export function SheetGrid({
       }
       cells.push(line);
     }
-    return buildClipboard(
-      cells,
-      { r: view[rect.top]?.rawIndex ?? rect.top, c: rect.left },
-      cut,
-      columns.slice(rect.left, rect.right + 1).map((c) => c.type),
-    );
+    return buildClipboard(cells, { r: view[rect.top]?.rawIndex ?? rect.top, c: rect.left }, cut, columns.slice(rect.left, rect.right + 1).map((c) => c.type));
   }, [rect, view, columns, data]);
 
-  /**
-   * Paste a block at the selection. A single value pasted onto a bigger selection fills all of it
-   * (Sheets does the same). Formulas shift by the distance from where they were copied (a cut pastes
-   * them unchanged); foreign text goes through the typing parser.
-   */
+  /** Paste a block at the selection (one value onto a range fills it; formulas shift). */
   const applyPaste = useCallback(async (block: PasteBlock) => {
     if (!canEdit || !block.cells.length) return;
     let cells = block.cells;
     const selRows = rect.bottom - rect.top + 1, selCols = rect.right - rect.left + 1;
     const single = cells.length === 1 && cells[0].length === 1;
     if (single && selRows * selCols > 1) cells = Array.from({ length: selRows }, () => Array.from({ length: selCols }, () => block.cells[0][0]));
-
     const startR = rect.top;
     const startC = rect.left;
-    // Grow the sheet downward if the block runs past the last row. Columns are NOT auto-created —
-    // silently widening the schema from a paste is a footgun, so the block is clipped instead.
-    // Growing the sheet while a filter hides rows would land the paste in unpredictable places, so
-    // the paste is clipped to what's visible instead.
+    // Grow the sheet downward if the block runs past the last row. Columns are NOT auto-created.
+    // While a filter hides rows the paste is clipped to what's visible instead.
     const needed = filtering ? 0 : startR + cells.length - view.length;
     let working = view.map((v) => ({ row: v.row, rawIndex: v.rawIndex }));
     if (needed > 0) {
@@ -518,7 +626,6 @@ export function SheetGrid({
     const shape = needed > 0
       ? { columnIds: data.shape.columnIds, rowIds: [...data.shape.rowIds, ...working.slice(view.length).map((w) => w.row.id)] }
       : data.shape;
-
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
     cells.forEach((line, i) => {
       const target = working[startR + i];
@@ -526,26 +633,17 @@ export function SheetGrid({
       const values: Record<string, unknown> = {};
       line.forEach((cell, j) => {
         const col = columns[startC + j];
-        if (!col) return; // clipped
+        if (!col) return;
         const at = { r: target.rawIndex, c: startC + j };
         const srcI = single ? 0 : i, srcJ = single ? 0 : j;
         if (cell.formula && block.origin) {
-          // A NEXUS formula: shift by the distance it travelled (cut = moved, no shift).
           const from = { r: block.origin.r + srcI, c: block.origin.c + srcJ };
-          const a1 = block.cut ? cell.formula : shiftFormula(cell.formula, at.r - from.r, at.c - from.c);
-          values[col.id] = { f: toStored(a1, shape) };
+          const text = block.cut ? cell.formula : shiftFormula(cell.formula, at.r - from.r, at.c - from.c);
+          values[col.id] = { f: toStored(text, shape) };
           return;
         }
-        if (cell.formulaR1C1) {
-          values[col.id] = { f: toStored(foreignFormulaAt(cell.formulaR1C1, at.r, at.c), shape) };
-          return;
-        }
-        // A NEXUS value into a column of the same type keeps its raw form (links keep their URL,
-        // typed numbers their format); anything else is read like typed text.
-        if (block.internal && cell.raw !== undefined && block.types?.[srcJ] === col.type) {
-          values[col.id] = cell.raw;
-          return;
-        }
+        if (cell.formulaR1C1) { values[col.id] = { f: toStored(foreignFormulaAt(cell.formulaR1C1, at.r, at.c), shape) }; return; }
+        if (block.internal && cell.raw !== undefined && block.types?.[srcJ] === col.type) { values[col.id] = cell.raw; return; }
         values[col.id] = inputToCell(col, cell.text, shape);
       });
       if (Object.keys(values).length) edits.push({ rowId: target.row.id, values });
@@ -559,7 +657,6 @@ export function SheetGrid({
     });
   }, [canEdit, rect, view, rows.length, columns, onAddRows, onSetCells, maxC, filtering, data.shape]);
 
-  /** Opens the comment thread for a cell by grid position, anchored under the cell itself. */
   const openCommentsAt = (r: number, c: number) => {
     const row = view[r]?.row;
     const col = columns[c];
@@ -569,122 +666,231 @@ export function SheetGrid({
     onOpenComments(row.id, col.id, box ? { left: box.left, top: box.bottom + 4 } : { left: 80, top: 160 });
   };
 
-  // Tell the parent which cell is being typed in. A realtime patch must never overwrite it.
-  useEffect(() => {
-    onEditingChange(editing ? { rowId: editing.rowId, colId: editing.colId } : null);
-  }, [editing, onEditingChange]);
+  /** Insert link (any text or link column): a label plus an http(s) address. */
+  const insertLink = () => {
+    const row = activeRow, col = activeCol;
+    if (!canEdit || !row || !col) return;
+    if (col.type !== "text" && col.type !== "link") { alert(t("Links can go in text and link columns.")); return; }
+    const raw = row.cells[col.id];
+    const url = window.prompt(t("Link address for this cell:"), isLinkCell(raw) ? raw.u : "");
+    if (url === null) return;
+    const label = displayCell(col.type, raw, { data, rowId: row.id, colId: col.id });
+    onSetCells([{ rowId: row.id, values: { [col.id]: url.trim() ? { t: label || url.trim(), u: url.trim() } : (label || null) } }]);
+  };
 
-  // Broadcast where this person is parked. The hook dedupes repeats, so holding an arrow key down
-  // doesn't turn into one emit per repeat.
-  useEffect(() => {
-    onCursor(view[sel.r]?.row.id ?? null, columns[sel.c]?.id ?? null);
-  }, [sel.r, sel.c, view, columns, onCursor]);
-
-
-  /**
-   * What the cell right-click menu offers.
-   *
-   * Deliberately a subset of Sheets: everything here maps onto something this grid already does
-   * correctly. Cut is copy+clear, paste reuses the same TSV path as Ctrl+V, and the row/column
-   * inserts go through the existing endpoints rather than new ones.
-   */
-  type MenuItem = { label: string; icon: typeof Copy; run: () => void; hint?: string; danger?: boolean };
-  const menuItems: (MenuItem | "sep")[] = useMemo(() => {
-    if (!cellMenu) return [];
-    const row = view[cellMenu.r]?.row;
-    const col = columns[cellMenu.c];
-    if (!row || !col) return [];
-    const rowsInBlock = rect.bottom - rect.top + 1;
-    const colsInBlock = rect.right - rect.left + 1;
-    const items: (MenuItem | "sep")[] = [];
-
-    if (canEdit) {
-      items.push({
-        label: "Potong", icon: Scissors, hint: "⌘X",
-        // Cleared only once the clipboard really holds the block — a failed write must not lose data.
-        run: () => { void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => alert(t("The browser blocked the clipboard. Use Ctrl+X / ⌘X instead."))); },
-      });
-    }
-    items.push({
-      label: "Salin", icon: Copy, hint: "⌘C",
-      run: () => void writeClipboardAsync(clipSelection(false)).catch(() => alert(t("The browser blocked the clipboard. Use Ctrl+C / ⌘C instead."))),
-    });
-    if (canEdit) {
-      // Reading the clipboard needs the browser's permission prompt, which Ctrl+V never triggers.
-      // If it's refused, say so instead of failing silently.
-      const pasteVia = (valuesOnly: boolean) => () => {
-        readClipboardAsync()
-          .then((block) => {
-            if (!block) return;
-            void applyPaste(valuesOnly
-              ? { cells: block.cells.map((r) => r.map((c) => ({ text: c.text }))), internal: false }
-              : block);
-          })
-          .catch(() => alert(t("The browser blocked the clipboard. Use Ctrl+V / ⌘V instead.")));
-      };
-      items.push({ label: "Tempel", icon: ClipboardPaste, hint: "⌘V", run: pasteVia(false) });
-      items.push({ label: t("Paste values only"), icon: ClipboardPaste, hint: "⌘⇧V", run: pasteVia(true) });
-      items.push({
-        label: rowsInBlock * colsInBlock > 1 ? "Kosongin isi seleksi" : "Kosongin isi sel",
-        icon: Eraser, hint: "Del", run: clearSelection,
-      });
-      items.push("sep");
-      items.push({
-        label: "Sisipin baris di atas", icon: Plus,
-        run: () => void onAddRows({ count: 1, beforeRowId: row.id }),
-      });
-      items.push({
-        label: "Sisipin baris di bawah", icon: Plus,
-        run: () => void onAddRows({ count: 1, afterRowId: row.id }),
-      });
-      items.push({
-        label: "Sisipin kolom di kiri", icon: Plus,
-        run: () => onInsertColumn(cellMenu.c),
-      });
-      items.push({
-        label: "Sisipin kolom di kanan", icon: Plus,
-        run: () => onInsertColumn(cellMenu.c + 1),
-      });
-      items.push("sep");
-      items.push({
-        label: rowsInBlock > 1 ? `Hapus ${rowsInBlock} baris` : "Hapus baris", icon: Trash2, danger: true,
-        run: () => onDeleteRows(view.slice(rect.top, rect.bottom + 1).map((v) => v.row.id)),
-      });
-      if (canManage) {
-        items.push({
-          label: "Hapus kolom", icon: Trash2, danger: true,
-          run: () => onDeleteColumn(col.id),
-        });
+  /** Σ: on a block, write =FN(block) in the cell below it; on one cell, start typing =FN(. */
+  const insertFunction = (fn: string) => {
+    if (!canEdit) return;
+    const multi = rect.bottom > rect.top && rect.left === rect.right && naturalOrder;
+    if (multi && ["SUM", "AVERAGE", "COUNT", "MAX", "MIN"].includes(fn)) {
+      const below = view[rect.bottom + 1];
+      const col = columns[rect.left];
+      if (below && col) {
+        const range = `${a1(view[rect.top].rawIndex, rect.left)}:${a1(view[rect.bottom].rawIndex, rect.left)}`;
+        onSetCells([{ rowId: below.row.id, values: { [col.id]: { f: toStored(`=${fn}(${range})`, data.shape) } } }]);
+        setSel({ r: rect.bottom + 1, c: rect.left, r2: rect.bottom + 1, c2: rect.left });
+        return;
       }
-      items.push("sep");
     }
-    if (canEdit && col.type === "link") {
-      const cur = row.cells[col.id] as unknown;
-      const current = isLinkCell(cur) ? cur.u : "";
-      items.push({
-        label: "Atur URL…", icon: LinkIcon,
-        run: () => {
-          const next = window.prompt("Alamat link buat sel ini:", current);
-          if (next === null) return;
-          const text = displayCell(col.type, row.cells[col.id], null);
-          onSetCells([{ rowId: row.id, values: { [col.id]: next.trim() ? { t: text || next.trim(), u: next.trim() } : (text || null) } }]);
-        },
-      });
-      items.push("sep");
-    }
-    items.push({
-      label: "Komentar", icon: MessageSquare, hint: "⌘⌥M",
-      run: () => openCommentsAt(cellMenu.r, cellMenu.c),
-    });
-    items.push({
-      label: "Saring kolom ini", icon: Filter,
-      run: () => setOpenFilterFor(col.id),
-    });
-    return items;
-  }, [cellMenu, view, columns, rect, canEdit, canManage, clipSelection, clearSelection, applyPaste, t,
-      onAddRows, onInsertColumn, onDeleteRows, onDeleteColumn, openCommentsAt]);
+    if (activeRow && activeCol) setEditing({ rowId: activeRow.id, colId: activeCol.id, seed: `=${fn}(` });
+  };
 
-  /** Is there anything in this cell? (Ctrl+Arrow jumps by filled blocks, like Sheets.) */
+  useEffect(() => { onEditingChange(editing ? { rowId: editing.rowId, colId: editing.colId } : null); }, [editing, onEditingChange]);
+  useEffect(() => { onCursor(view[sel.r]?.row.id ?? null, columns[sel.c]?.id ?? null); }, [sel.r, sel.c, view, columns, onCursor]);
+
+  // ── Header actions ──────────────────────────────────────────────────────────────────────────
+  const selectColumns = (c1: number, c2: number) => setSel({ r: 0, c: c1, r2: maxR, c2 });
+  const selectRows = (r1: number, r2: number) => setSel({ r: r1, c: 0, r2, c2: maxC });
+  const hideColumns = (from: number, to: number) => {
+    const ids = columns.slice(from, to + 1).map((c) => c.id);
+    if (ids.length >= columns.filter((c) => !hiddenCols.has(c.id)).length) return; // never hide everything
+    onSettings({ hiddenCols: [...new Set([...(settings.hiddenCols ?? []), ...ids])] }, t("hide columns"));
+  };
+  const hideRows = (from: number, to: number) => {
+    const ids = view.slice(from, to + 1).map((v) => v.row.id);
+    onSettings({ hiddenRows: [...new Set([...(settings.hiddenRows ?? []), ...ids])] }, t("hide rows"));
+  };
+  const unhideCols = (ids: string[]) => onSettings({ hiddenCols: (settings.hiddenCols ?? []).filter((x) => !ids.includes(x)) }, t("unhide columns"));
+  const unhideRows = (ids: string[]) => onSettings({ hiddenRows: (settings.hiddenRows ?? []).filter((x) => !ids.includes(x)) }, t("unhide rows"));
+
+  /** Double-click a column edge: fit the widest value on screen (like Sheets' "Fit to data"). */
+  const autofit = (c: number) => {
+    const col = columns[c];
+    if (!col) return;
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return;
+    ctx.font = `13px ${getComputedStyle(document.body).fontFamily}`;
+    let w = ctx.measureText(col.name || colLetter(c)).width + 40;
+    for (const { row } of view.slice(0, 2000)) {
+      const text = displayCell(col.type, row.cells[col.id], { data, rowId: row.id, colId: col.id });
+      if (text) w = Math.max(w, ctx.measureText(text).width * ((row.styles?.[col.id]?.fs ?? 13) / 13) + 20);
+    }
+    onEditColumn(col.id, { width: Math.round(Math.max(48, Math.min(600, w))) });
+  };
+
+  const setFrozenCols = (n: number) => onSettings({ frozenCols: n > 0 ? n : null }, n ? t("freeze columns") : t("unfreeze columns"));
+  const setFrozenRows = (n: number) => onSettings({ frozenRows: n > 0 ? n : null }, n ? t("freeze rows") : t("unfreeze rows"));
+
+  /** Dragging the thick freeze bar from the corner: drop it after any row / column. */
+  const [freezeDrag, setFreezeDrag] = useState<{ axis: "row" | "col"; n: number } | null>(null);
+  const startFreezeDrag = (axis: "row" | "col") => (e: React.MouseEvent) => {
+    if (!canEdit) return;
+    e.preventDefault(); e.stopPropagation();
+    let n = axis === "row" ? frozenRowsSetting : frozenCols;
+    setFreezeDrag({ axis, n });
+    const onMove = (ev: MouseEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(axis === "row" ? "[data-raw-row]" : "[data-col-index]") as HTMLElement | null;
+      if (!el) return;
+      const box = el.getBoundingClientRect();
+      if (axis === "row") {
+        const raw = Number(el.dataset.rawRow);
+        n = ev.clientY > box.top + box.height / 2 ? raw + 1 : raw;
+      } else {
+        const ci = Number(el.dataset.colIndex);
+        n = ev.clientX > box.left + box.width / 2 ? ci + 1 : ci;
+      }
+      setFreezeDrag({ axis, n: Math.max(0, Math.min(axis === "row" ? 20 : 10, n)) });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setFreezeDrag(null);
+      const final = Math.max(0, Math.min(axis === "row" ? 20 : 10, n));
+      if (axis === "row" && final !== frozenRowsSetting) setFrozenRows(final);
+      if (axis === "col" && final !== frozenCols) setFrozenCols(final);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // ── Menus ───────────────────────────────────────────────────────────────────────────────────
+  const clipboardBlocked = (keys: string) => alert(t("The browser blocked the clipboard. Use {keys} instead.", { keys }));
+  const pasteVia = (valuesOnly: boolean) => () => {
+    readClipboardAsync()
+      .then((block) => {
+        if (!block) return;
+        void applyPaste(valuesOnly ? { cells: block.cells.map((r) => r.map((c) => ({ text: c.text }))), internal: false } : block);
+      })
+      .catch(() => clipboardBlocked("Ctrl+V / ⌘V"));
+  };
+  const openColumnSettings = (c: number) => {
+    const col = columns[c];
+    if (!col) return;
+    const el = gridRef.current?.querySelector(`[data-col-index="${c}"]`);
+    setColPopover({ colId: col.id, anchor: el?.getBoundingClientRect() ?? null });
+  };
+
+  const menuEntries = useMemo((): MenuEntry[] => {
+    if (!menu) return [];
+    const ic = (I: typeof Copy) => <I className="h-3.5 w-3.5" />;
+    const row = view[menu.r]?.row;
+    const col = columns[menu.c];
+    const nRows = rect.bottom - rect.top + 1;
+    const nCols = rect.right - rect.left + 1;
+    const out: MenuEntry[] = [];
+    const insertDelete = (kind: "row" | "col") => {
+      if (!canEdit) return;
+      if (kind === "row" && row) {
+        out.push({ label: t("Insert 1 row above"), icon: ic(BetweenHorizontalStart), run: () => void onAddRows({ count: 1, beforeRowId: row.id }) });
+        out.push({ label: t("Insert 1 row below"), icon: ic(BetweenHorizontalStart), run: () => void onAddRows({ count: 1, afterRowId: row.id }) });
+      }
+      if (kind === "col") {
+        out.push({ label: t("Insert 1 column left"), icon: ic(BetweenVerticalStart), run: () => onInsertColumn(menu.c) });
+        out.push({ label: t("Insert 1 column right"), icon: ic(BetweenVerticalStart), run: () => onInsertColumn(menu.c + 1) });
+      }
+    };
+    if (menu.kind === "cell") {
+      if (canEdit) out.push({ label: t("Cut"), icon: ic(Scissors), hint: "⌘X", run: () => { void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => clipboardBlocked("Ctrl+X / ⌘X")); } });
+      out.push({ label: t("Copy"), icon: ic(Copy), hint: "⌘C", run: () => void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")) });
+      if (canEdit) {
+        out.push({ label: t("Paste"), icon: ic(ClipboardPaste), hint: "⌘V", run: pasteVia(false) });
+        out.push({ label: t("Paste values only"), icon: ic(ClipboardPaste), run: pasteVia(true) });
+        out.push("sep");
+        insertDelete("row");
+        insertDelete("col");
+        out.push("sep");
+        out.push({ label: nRows > 1 ? t("Delete rows {a} – {b}", { a: (view[rect.top]?.rawIndex ?? 0) + 1, b: (view[rect.bottom]?.rawIndex ?? 0) + 1 }) : t("Delete row"), icon: ic(Trash2), danger: true, run: () => onDeleteRows(view.slice(rect.top, rect.bottom + 1).map((v) => v.row.id)) });
+        if (canManage && col) out.push({ label: t("Delete column"), icon: ic(Trash2), danger: true, run: () => onDeleteColumn(col.id) });
+        out.push({ label: nRows * nCols > 1 ? t("Clear values") : t("Clear value"), icon: ic(Eraser), hint: "Del", run: clearSelection });
+        out.push({ label: t("Clear formatting"), icon: ic(RemoveFormatting), hint: "⌘\\", run: clearFormat });
+        out.push("sep");
+        out.push({ label: col && isLinkCell(row?.cells[col.id]) ? t("Edit link") : t("Insert link"), icon: ic(LinkIcon), hint: "⌘K", run: insertLink });
+      }
+      out.push({ label: t("Comment"), icon: ic(MessageSquare), hint: "⌘⌥M", run: () => openCommentsAt(menu.r, menu.c) });
+      if (canEdit) {
+        out.push("sep");
+        out.push({ label: t("Conditional formatting…"), icon: ic(Paintbrush), run: () => openColumnSettings(menu.c) });
+        out.push({ label: t("Data validation…"), icon: ic(ListChecks), run: () => openColumnSettings(menu.c) });
+      }
+      out.push({ label: t("Filter this column"), icon: ic(Filter), run: () => col && setFilterOpen((f) => ({ ...f, [col.id]: true })) });
+      return out;
+    }
+    if (menu.kind === "col" && col) {
+      const span = nCols > 1 && menu.c >= rect.left && menu.c <= rect.right ? [rect.left, rect.right] : [menu.c, menu.c];
+      const label = span[0] === span[1] ? colLetter(span[0]) : `${colLetter(span[0])}–${colLetter(span[1])}`;
+      out.push({ label: t("Copy"), icon: ic(Copy), hint: "⌘C", run: () => void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")) });
+      if (canEdit) {
+        out.push({ label: t("Paste"), icon: ic(ClipboardPaste), hint: "⌘V", run: pasteVia(false) });
+        out.push("sep");
+        insertDelete("col");
+        if (canManage) out.push({ label: t("Delete column {c}", { c: colLetter(menu.c) }), icon: ic(Trash2), danger: true, run: () => onDeleteColumn(col.id) });
+        out.push({ label: t("Clear column"), icon: ic(Eraser), run: clearSelection });
+        out.push({ label: t("Hide column {c}", { c: label }), icon: ic(EyeOff), run: () => hideColumns(span[0], span[1]) });
+        out.push({
+          label: t("Resize column"), icon: ic(MoveHorizontal), run: () => {
+            const w = window.prompt(t("Column width in pixels:"), String(col.width ?? COL_W_DEFAULT));
+            const n = Number(w);
+            if (w !== null && Number.isFinite(n) && n >= 20) onEditColumn(col.id, { width: Math.round(Math.min(600, n)) });
+          },
+        });
+        out.push({ label: t("Fit to data"), icon: ic(MoveHorizontal), run: () => autofit(menu.c) });
+        out.push(frozenCols === menu.c + 1
+          ? { label: t("Unfreeze columns"), icon: ic(Snowflake), run: () => setFrozenCols(0) }
+          : { label: t("Freeze up to column {c}", { c: colLetter(menu.c) }), icon: ic(Snowflake), disabled: menu.c >= 10, run: () => setFrozenCols(menu.c + 1) });
+      }
+      out.push("sep");
+      out.push({ label: t("Sort sheet A → Z"), icon: ic(ArrowDownAZ), run: () => setSort({ colId: col.id, dir: "asc" }) });
+      out.push({ label: t("Sort sheet Z → A"), icon: ic(ArrowUpAZ), run: () => setSort({ colId: col.id, dir: "desc" }) });
+      if (sort) out.push({ label: t("Back to sheet order"), icon: ic(RotateCcw), run: () => setSort(null) });
+      out.push({ label: t("Filter this column"), icon: ic(Filter), run: () => setFilterOpen((f) => ({ ...f, [col.id]: true })) });
+      if (filters[col.id]) out.push({ label: t("Remove filter"), icon: ic(X), run: () => { setFilters((f) => ({ ...f, [col.id]: "" })); setFilterOpen((f) => ({ ...f, [col.id]: false })); } });
+      if (canEdit) {
+        out.push("sep");
+        out.push({ label: t("Column settings…"), icon: ic(Settings2), hint: t(COLUMN_TYPE_LABEL[col.type]), run: () => openColumnSettings(menu.c) });
+      }
+      return out;
+    }
+    if (menu.kind === "row" && row) {
+      const span = nRows > 1 && menu.r >= rect.top && menu.r <= rect.bottom ? [rect.top, rect.bottom] : [menu.r, menu.r];
+      const rawN = (view[menu.r]?.rawIndex ?? 0) + 1;
+      out.push({ label: t("Copy"), icon: ic(Copy), hint: "⌘C", run: () => void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")) });
+      if (canEdit) {
+        out.push({ label: t("Paste"), icon: ic(ClipboardPaste), hint: "⌘V", run: pasteVia(false) });
+        out.push("sep");
+        insertDelete("row");
+        out.push({ label: span[0] === span[1] ? t("Delete row {n}", { n: rawN }) : t("Delete {n} rows", { n: span[1] - span[0] + 1 }), icon: ic(Trash2), danger: true, run: () => onDeleteRows(view.slice(span[0], span[1] + 1).map((v) => v.row.id)) });
+        out.push({ label: t("Clear row"), icon: ic(Eraser), run: clearSelection });
+        out.push({ label: span[0] === span[1] ? t("Hide row {n}", { n: rawN }) : t("Hide {n} rows", { n: span[1] - span[0] + 1 }), icon: ic(EyeOff), run: () => hideRows(span[0], span[1]) });
+        out.push({
+          label: t("Resize row"), icon: ic(MoveVertical), run: () => {
+            const h = window.prompt(t("Row height in pixels:"), String(row.height ?? ROW_H_DEFAULT));
+            const n = Number(h);
+            if (h !== null && Number.isFinite(n)) onResizeRow(row.id, Math.round(Math.max(ROW_H_MIN, Math.min(ROW_H_MAX, n))));
+          },
+        });
+        if (row.height != null) out.push({ label: t("Default height"), icon: ic(RotateCcw), run: () => onResizeRow(row.id, null) });
+        const rawIdx = view[menu.r]?.rawIndex ?? 0;
+        out.push(frozenRowsSetting === rawIdx + 1
+          ? { label: t("Unfreeze rows"), icon: ic(Snowflake), run: () => setFrozenRows(0) }
+          : { label: t("Freeze up to row {n}", { n: rawIdx + 1 }), icon: ic(Snowflake), disabled: rawIdx >= 20, run: () => setFrozenRows(rawIdx + 1) });
+      }
+      return out;
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menu, view, columns, rect, canEdit, canManage, clipSelection, clearSelection, applyPaste, t, sort, filters, frozenCols, frozenRowsSetting, settings]);
+
+  // ── Keyboard ────────────────────────────────────────────────────────────────────────────────
   const filledAt = (r: number, c: number) => {
     const row = view[r]?.row;
     const col = columns[c];
@@ -692,10 +898,7 @@ export function SheetGrid({
     const v = row.cells[col.id];
     return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
   };
-  /**
-   * Ctrl/Cmd+Arrow: inside a block of filled cells, go to its far edge; otherwise go to the next
-   * filled cell; with nothing ahead, go to the edge of the sheet.
-   */
+  /** Ctrl/Cmd+Arrow: to the far edge of a filled block, else to the next filled cell, else the sheet edge. */
   const jump = (r: number, c: number, dr: number, dc: number) => {
     const inside = (y: number, x: number) => y >= 0 && y <= maxR && x >= 0 && x <= maxC;
     let nr = r + dr, nc = c + dc;
@@ -710,7 +913,6 @@ export function SheetGrid({
     }
     return { r: nr, c: nc };
   };
-  /** Ctrl+End: the last row and column that hold anything. */
   const lastFilled = () => {
     let r2 = 0, c2 = 0;
     view.forEach(({ row }, r) => columns.forEach((col, c) => {
@@ -725,23 +927,21 @@ export function SheetGrid({
   };
   /** Column a run of Tabs started in: Enter after Tab, Tab, Tab returns there on the next row. */
   const tabRun = useRef<number | null>(null);
-  const pageRows = Math.max(1, Math.floor((scroll.height - 34) / ROW_H_DEFAULT) - 1);
-
-  /** After a commit: where the cursor goes, honouring a Tab run. */
+  const pageRows = Math.max(1, Math.floor((scroll.height / zoom - headH) / ROW_H_DEFAULT) - 1);
   // Read through a ref: Row is memoised and may hold an older closure of this function.
   const selRef = useRef(sel);
   selRef.current = sel;
   const afterCommit = (next: Next) => {
-    const sel = selRef.current;
+    const s = selRef.current;
     if (next === "right") {
-      if (tabRun.current === null) tabRun.current = sel.c;
+      if (tabRun.current === null) tabRun.current = s.c;
       move(0, 1, false);
       return;
     }
     if (next === "down" && tabRun.current !== null) {
       const c = tabRun.current;
       tabRun.current = null;
-      goTo(sel.r + 1, c, false);
+      goTo(s.r + 1, c, false);
       return;
     }
     tabRun.current = null;
@@ -753,13 +953,19 @@ export function SheetGrid({
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (editing) return; // the input owns the keyboard while editing
     const meta = e.metaKey || e.ctrlKey;
-    // Ctrl/Cmd+Alt+M — same shortcut Sheets uses for "comment on this cell". Matched on e.code, not
-    // e.key, because Option+M on macOS types "µ".
-    if (meta && e.altKey && e.code === "KeyM") {
-      e.preventDefault();
-      openCommentsAt(sel.r, sel.c);
-      return;
+    if (meta && e.altKey && e.code === "KeyM") { e.preventDefault(); openCommentsAt(sel.r, sel.c); return; }
+    // Formatting shortcuts (Sheets' own).
+    if (meta && !e.altKey && canEdit) {
+      const k = e.key.toLowerCase();
+      if (k === "b") { e.preventDefault(); applyStyle({ b: activeStyle?.b ? null : 1 }); return; }
+      if (k === "i") { e.preventDefault(); applyStyle({ i: activeStyle?.i ? null : 1 }); return; }
+      if (k === "u") { e.preventDefault(); applyStyle({ u: activeStyle?.u ? null : 1 }); return; }
+      if (k === "\\") { e.preventDefault(); clearFormat(); return; }
+      if (k === "k") { e.preventDefault(); insertLink(); return; }
     }
+    if (e.altKey && e.shiftKey && e.code === "Digit5" && canEdit) { e.preventDefault(); applyStyle({ s: activeStyle?.s ? null : 1 }); return; }
+    if (e.key === " " && meta) { e.preventDefault(); selectColumns(rect.left, rect.right); return; }
+    if (e.key === " " && e.shiftKey) { e.preventDefault(); selectRows(rect.top, rect.bottom); return; }
     const from = e.shiftKey ? { r: sel.r2, c: sel.c2 } : { r: sel.r, c: sel.c };
     const arrow = (dr: number, dc: number) => {
       e.preventDefault();
@@ -788,14 +994,12 @@ export function SheetGrid({
       case "F2": {
         e.preventDefault();
         if (e.key === "Enter" && tabRun.current !== null && !e.shiftKey) {
-          // Enter at the end of a Tab run: next row, back in the column the run started from.
           const c = tabRun.current;
           tabRun.current = null;
           return goTo(sel.r + 1, c, false);
         }
         if (!canEdit) return;
-        const row = view[sel.r]?.row; const col = columns[sel.c];
-        if (row && col) setEditing({ rowId: row.id, colId: col.id });
+        if (activeRow && activeCol) setEditing({ rowId: activeRow.id, colId: activeCol.id });
         return;
       }
       case "Escape": return setSel((s) => ({ ...s, r2: s.r, c2: s.c }));
@@ -806,9 +1010,9 @@ export function SheetGrid({
       default: break;
     }
     // Any printable character starts editing and REPLACES the cell (F2 / double-click append instead).
-    if (!meta && !e.altKey && e.key.length === 1 && canEdit) {
-      const row = view[sel.r]?.row; const col = columns[sel.c];
-      if (row && col) { e.preventDefault(); setEditing({ rowId: row.id, colId: col.id, seed: e.key }); }
+    if (!meta && !e.altKey && e.key.length === 1 && canEdit && activeRow && activeCol) {
+      e.preventDefault();
+      setEditing({ rowId: activeRow.id, colId: activeCol.id, seed: e.key });
     }
   };
 
@@ -818,19 +1022,13 @@ export function SheetGrid({
       filling.current = false;
       setFillTo(null);
       dragging.current = false;
-      // Finishing a reference drag frees the span so the NEXT click starts a fresh reference
-      // instead of overwriting the one just placed.
       refSpan.current = null;
     };
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
   }, [applyFill, fillTo]);
 
-  const activeRow = view[sel.r]?.row;
-  const activeCol = columns[sel.c];
-  const activeRaw = activeRow && activeCol ? activeRow.cells[activeCol.id] : undefined;
-
-  /** Every visible cell whose text contains the query, in reading order. */
+  // ── Find & replace ──────────────────────────────────────────────────────────────────────────
   const findHits = useMemo(() => {
     if (!find.q.trim()) return [] as { r: number; c: number }[];
     const needle = find.matchCase ? find.q : find.q.toLowerCase();
@@ -838,10 +1036,8 @@ export function SheetGrid({
     view.forEach(({ row }, r) => {
       columns.forEach((col, c) => {
         const raw = row.cells[col.id];
-        // Search what the cell SHOWS (a formula's result, a link's label), like Sheets does by default.
-        const text = isFormula(raw)
-          ? displayCell(col.type, raw, { data, rowId: row.id, colId: col.id })
-          : editValue(col.type, raw);
+        // What the cell SHOWS (a formula's result, a link's label), like Sheets does by default.
+        const text = isFormula(raw) ? displayCell(col.type, raw, { data, rowId: row.id, colId: col.id }) : editValue(col.type, raw);
         const hay = find.matchCase ? text : text.toLowerCase();
         if (text && hay.includes(needle)) out.push({ r, c });
       });
@@ -857,19 +1053,14 @@ export function SheetGrid({
       const col = columns[hit.c];
       if (!row || !col) continue;
       const raw = row.cells[col.id];
-      // Formula cells are skipped on purpose: replacing text inside a stored formula would rewrite
-      // its id-space references and quietly break it.
+      // Formula cells are skipped: replacing text inside a stored formula would rewrite references.
       if (isFormula(raw)) continue;
       const text = editValue(col.type, raw);
       const replaced = find.matchCase
         ? text.split(find.q).join(find.to)
         : text.replace(new RegExp(find.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), find.to);
       if (replaced === text) continue;
-      // A link keeps its URL (only the label is text); everything else is re-read like typing, so a
-      // replaced "Rp 1.500.000" is still a number — never "[object Object]".
-      const next = isLinkCell(raw)
-        ? (replaced.trim() ? { t: replaced, u: raw.u } : null)
-        : inputToCell(col, replaced, data.shape, raw);
+      const next = isLinkCell(raw) ? (replaced.trim() ? { t: replaced, u: raw.u } : null) : inputToCell(col, replaced, data.shape, raw);
       const entry = edits.find((e) => e.rowId === row.id) ?? (() => {
         const fresh = { rowId: row.id, values: {} as Record<string, unknown> };
         edits.push(fresh);
@@ -881,299 +1072,501 @@ export function SheetGrid({
     return edits.length;
   }, [canEdit, find, findHits, view, columns, onSetCells, data.shape]);
 
+  // ── Status bar: Sum / Average / Count of the selection ──────────────────────────────────────
+  const stats = useMemo(() => {
+    let sum = 0, n = 0, filled = 0, min = Infinity, max = -Infinity, cells = 0;
+    for (let r = rect.top; r <= rect.bottom && cells < 200_000; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        if (!col) continue;
+        cells += 1;
+        const v = engine.value(row.id, col.id);
+        if (v === null || v === "" || isError(v)) continue;
+        filled += 1;
+        if (typeof v === "number") { sum += v; n += 1; min = Math.min(min, v); max = Math.max(max, v); }
+      }
+    }
+    return { sum, avg: n ? sum / n : 0, count: filled, countNum: n, min: n ? min : 0, max: n ? max : 0, cells };
+  }, [rect, view, columns, engine]);
+  const statFormat = useMemo(() => {
+    // Totals read like the column they come from: Rupiah stays Rupiah.
+    const col = columns[rect.left];
+    const row = view[rect.top]?.row;
+    const st = row && col ? row.styles?.[col.id] : undefined;
+    const nf = row && col ? engine.format(row.id, col.id) : null;
+    return (v: number) => formatWithStyle(v, st?.nf, st?.dp, nf ?? (col?.type === "currency" ? "idr" : null))
+      ?? formatResult(col?.type === "currency" ? "currency" : "number", v, nf === "date" ? null : nf);
+  }, [columns, rect.left, rect.top, view, engine]);
+  const statLabel: Record<Stat, string> = {
+    sum: t("Sum"), avg: t("Average"), count: t("Count"), countNum: t("Count numbers"), min: t("Min"), max: t("Max"),
+  };
+  const statValue = (s: Stat) => (s === "count" || s === "countNum" ? String(stats[s]) : statFormat(stats[s]));
+  const multiCell = stats.cells > 1;
+
+  /** Name Box text: the active cell, or the selected range. */
+  const nameBox = useMemo(() => {
+    const a = (r: number, c: number) => `${colLetter(c)}${(view[r]?.rawIndex ?? r) + 1}`;
+    if (rect.top === 0 && rect.bottom === maxR && rect.left === rect.right && maxR > 0) return `${colLetter(rect.left)}:${colLetter(rect.left)}`;
+    return rect.top === rect.bottom && rect.left === rect.right ? a(rect.top, rect.left) : `${a(rect.top, rect.left)}:${a(rect.bottom, rect.right)}`;
+  }, [rect, view, maxR]);
+  /** Typing "B12" or "A1:C9" (or "C:C") in the Name Box selects it. */
+  const jumpTo = (text: string) => {
+    const s = text.trim().toUpperCase().replace(/\$/g, "");
+    const viewOf = (raw: number) => view.findIndex((v) => v.rawIndex === raw);
+    let m = /^([A-Z]{1,3}):([A-Z]{1,3})$/.exec(s);
+    if (m) { selectColumns(letterToIndex(m[1]), letterToIndex(m[2])); return true; }
+    m = /^([A-Z]{1,3})(\d+)(?::([A-Z]{1,3})(\d+))?$/.exec(s);
+    if (!m) return false;
+    const r1 = viewOf(Number(m[2]) - 1), c1 = letterToIndex(m[1]);
+    const r2 = m[3] ? viewOf(Number(m[4]) - 1) : r1, c2 = m[3] ? letterToIndex(m[3]) : c1;
+    if (r1 < 0 || r2 < 0 || c1 > maxC || c2 > maxC) return false;
+    setSel({ r: r1, c: c1, r2, c2 });
+    return true;
+  };
+
+  /** Raw ids of hidden columns right before column c (for the unhide arrows). */
+  const hiddenBefore = (c: number) => {
+    const ids: string[] = [];
+    for (let i = c - 1; i >= 0 && colHidden(i); i -= 1) ids.push(columns[i].id);
+    return ids;
+  };
+  const hiddenRowsBefore = useMemo(() => {
+    const out = new Map<string, string[]>();
+    if (!hiddenRows.size) return out;
+    let block: string[] = [];
+    for (const row of rows) {
+      if (hiddenRows.has(row.id)) { block.push(row.id); continue; }
+      if (block.length) { out.set(row.id, block); block = []; }
+    }
+    return out;
+  }, [rows, hiddenRows]);
+
+  const colFrozenStyle = (c: number, z: number): CSSProperties =>
+    c < frozenCols ? { position: "sticky", left: lefts[c], zIndex: z } : {};
+
   return (
     <>
-    {findOpen && (
-      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-2 py-1.5">
-        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <input
-          autoFocus value={find.q} onChange={(e) => setFind((f) => ({ ...f, q: e.target.value }))}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Escape") setFindOpen(false);
-            if (e.key === "Enter" && findHits.length) {
-              // Enter walks the hits, wrapping — the plain "find next" everyone expects.
-              const at = findHits.findIndex((h) => h.r === sel.r && h.c === sel.c);
-              const next = findHits[(at + 1) % findHits.length];
-              setSel({ r: next.r, c: next.c, r2: next.r, c2: next.c });
-            }
-          }}
-          placeholder="Cari…" className="w-40 rounded border border-border bg-background px-2 py-0.5 text-xs outline-none focus:border-primary"
-        />
-        {canEdit && (
-          <>
-            <Replace className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <input
-              value={find.to} onChange={(e) => setFind((f) => ({ ...f, to: e.target.value }))}
-              onKeyDown={(e) => e.stopPropagation()}
-              placeholder="Ganti jadi…" className="w-40 rounded border border-border bg-background px-2 py-0.5 text-xs outline-none focus:border-primary"
-            />
-            <button
-              onClick={() => { const n = replaceAll(); if (typeof n === "number") alert(n ? `${n} baris keganti.` : "Nggak ada yang cocok."); }}
-              className="rounded-lg bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground"
-            >Ganti semua</button>
-          </>
-        )}
-        <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <input type="checkbox" checked={find.matchCase} onChange={(e) => setFind((f) => ({ ...f, matchCase: e.target.checked }))} className="h-3 w-3 accent-primary" />
-          Bedakan huruf besar/kecil
-        </label>
-        <span className="text-[11px] text-muted-foreground">{find.q.trim() ? `${findHits.length} ketemu` : ""}</span>
-        <button onClick={() => setFindOpen(false)} className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
-      </div>
-    )}
-    {/* Formula bar: a long formula is unreadable squeezed into its cell, and this is where people
-        expect to see what a cell REALLY contains rather than its formatted result. */}
-    <div className="mb-2 flex items-center gap-2 rounded-xl border border-border bg-card px-2 py-1">
-      <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-bold text-muted-foreground">
-        {activeCol ? `${colLetter(sel.c)}${(view[sel.r]?.rawIndex ?? sel.r) + 1}` : "—"}
-      </span>
-      <span className="shrink-0 text-xs text-muted-foreground">fx</span>
-      <input
-        key={`${activeRow?.id}:${activeCol?.id}:${JSON.stringify(activeRaw ?? "")}`}
-        defaultValue={
-          isFormula(activeRaw)
-            ? editFormula(activeRaw, data.shape) ?? ""
-            : editValue(activeCol?.type ?? "text", activeRaw)
-        }
-        readOnly={!canEdit}
-        placeholder={canEdit ? "Ketik isi sel atau rumus…" : ""}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Enter" && activeRow && activeCol) {
-            commit(activeRow.id, activeCol.id, (e.target as HTMLInputElement).value);
-            gridRef.current?.focus();
-          }
-          if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); gridRef.current?.focus(); }
+    <div className="space-y-1.5">
+      <SheetToolbar
+        canEdit={canEdit}
+        style={activeStyle}
+        onStyle={applyStyle}
+        onBorders={applyBorders}
+        onClearFormat={clearFormat}
+        onDecimals={changeDecimals}
+        zoom={zoom}
+        onZoom={setZoom}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        merged={mergedHere.length > 0}
+        canMerge={canMerge}
+        onMerge={toggleMerge}
+        onLink={insertLink}
+        onComment={() => openCommentsAt(sel.r, sel.c)}
+        filterOn={Boolean(activeCol && (filters[activeCol.id] || filterOpen[activeCol.id]))}
+        onFilter={() => {
+          if (!activeCol) return;
+          const on = Boolean(filters[activeCol.id] || filterOpen[activeCol.id]);
+          setFilterOpen((f) => ({ ...f, [activeCol.id]: !on }));
+          if (on) setFilters((f) => ({ ...f, [activeCol.id]: "" }));
         }}
-        onBlur={(e) => { if (activeRow && activeCol) commit(activeRow.id, activeCol.id, e.target.value); }}
-        className="min-w-0 flex-1 select-text bg-transparent font-mono text-xs outline-none"
+        onFunction={insertFunction}
+        onFind={() => setFindOpen((o) => !o)}
       />
-      {/* Right-click and Ctrl+Alt+M both open the thread, but neither is discoverable on its own —
-          this button is how someone finds out the feature exists. */}
-      <button
-        onClick={() => openCommentsAt(sel.r, sel.c)}
-        title="Komentar di sel ini (Ctrl+Alt+M, atau klik kanan selnya)"
-        className="relative grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-primary"
-      >
-        <MessageSquare className="h-3.5 w-3.5" />
-        {activeRow && activeCol && (commentCounts[`${activeRow.id}:${activeCol.id}`] ?? 0) > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
-        )}
-      </button>
-    </div>
 
-    <div
-      ref={gridRef}
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      onCopy={(e) => { if (!editing) { e.preventDefault(); writeClipboardEvent(e, clipSelection(false)); } }}
-      onCut={(e) => {
-        if (editing || !canEdit) return;
-        e.preventDefault();
-        // Written synchronously into the event before clearing, so the block can't be lost.
-        writeClipboardEvent(e, clipSelection(true));
-        clearSelection();
-      }}
-      onPaste={(e) => {
-        if (editing) return; // let the native input handle a single-cell paste
-        const block = readClipboard(e.clipboardData);
-        if (!block) return;
-        e.preventDefault();
-        void applyPaste(block);
-      }}
-      onScroll={onGridScroll}
-      // select-none because dragging across cells is a RANGE selection, not a text selection — without
-      // it the browser also highlights the words it drags over, so half the sheet ends up smeared blue.
-      // Nothing here depends on native selection: Ctrl+C builds its TSV from state, not from the DOM.
-      className="max-h-[calc(100vh-19rem)] select-none overflow-auto rounded-2xl border border-border bg-card outline-none focus:ring-2 focus:ring-primary/30"
-    >
-      <table className="w-max min-w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-20">
-          <tr>
-            <th className="sticky left-0 z-30 w-10 border-b border-r border-border bg-muted px-2 py-2 text-[10px] font-bold text-muted-foreground" />
-            {columns.map((col, ci) => (
-              <HeaderCell
-                key={col.id}
-                col={col}
-                index={ci}
-                active={ci >= rect.left && ci <= rect.right}
-                canManage={canManage}
-                canEdit={canEdit}
-                onEditColumn={(patch) => onEditColumn(col.id, patch)}
-                onResize={(width) => onEditColumn(col.id, { width })}
-                sortDir={sort?.colId === col.id ? sort.dir : null}
-                onSort={() => setSort((cur) =>
-                  cur?.colId !== col.id ? { colId: col.id, dir: "asc" }
-                    : cur.dir === "asc" ? { colId: col.id, dir: "desc" }
-                    : null)}
-                filterValue={filters[col.id] ?? ""}
-                onFilter={(q) => setFilters((f) => ({ ...f, [col.id]: q }))}
-                forceFilterOpen={openFilterFor === col.id}
-                onFilterOpened={() => setOpenFilterFor(null)}
-                onDelete={() => onDeleteColumn(col.id)}
+      {findOpen && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-2 py-1.5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            autoFocus value={find.q} onChange={(e) => setFind((f) => ({ ...f, q: e.target.value }))}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") setFindOpen(false);
+              if (e.key === "Enter" && findHits.length) {
+                const at = findHits.findIndex((h) => h.r === sel.r && h.c === sel.c);
+                const next = findHits[(at + 1) % findHits.length];
+                setSel({ r: next.r, c: next.c, r2: next.r, c2: next.c });
+              }
+            }}
+            placeholder={t("Find…")} aria-label={t("Find")}
+            className="w-40 rounded-md border border-border bg-background px-2 py-0.5 text-xs outline-none focus:border-ring"
+          />
+          {canEdit && (
+            <>
+              <Replace className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input
+                value={find.to} onChange={(e) => setFind((f) => ({ ...f, to: e.target.value }))}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder={t("Replace with…")} aria-label={t("Replace with")}
+                className="w-40 rounded-md border border-border bg-background px-2 py-0.5 text-xs outline-none focus:border-ring"
               />
-            ))}
-            <th className="border-b border-border bg-muted px-1">
-              {canEdit && (
-                <button onClick={onAddColumn} title="Tambah kolom"
-                  className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-primary/10 hover:text-primary">
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {/* Spacer holding open the rows scrolled off the top. colSpan covers gutter + columns +
-              the trailing filler cell, so the table's column widths stay put. */}
-          {winFirst > 0 && (
-            <tr style={{ height: offsets[winFirst] }} aria-hidden>
-              <td colSpan={columns.length + 2} className="p-0" />
-            </tr>
+              <button
+                onClick={() => { const n = replaceAll(); if (typeof n === "number") alert(n ? t("{n} rows changed.", { n }) : t("No matches.")); }}
+                className="rounded-md bg-primary px-2 py-1 text-2xs font-semibold text-primary-foreground"
+              >{t("Replace all")}</button>
+            </>
           )}
-          {view.slice(winFirst, winLast).map(({ row, rawIndex }, k) => {
-            const ri = winFirst + k;
-            return (
-            <Row
-              key={row.id}
-              row={row}
-              rowIndex={ri}
-              gutterNumber={rawIndex + 1}
-              columns={columns}
-              selected={ri >= rect.top && ri <= rect.bottom}
-              rect={rect}
-              editing={editing}
-              canEdit={canEdit}
-              data={data}
-              lang={lang}
-              refMode={refMode}
-              refRects={refRects}
-              onPickRef={(c) => {
-                // Clicking a cell mid-formula inserts its address instead of moving the cursor.
-                // Addresses always speak the UNDERLYING row, so a reference picked while the view is
-                // sorted still points at the row that was clicked.
-                putRef(a1(rawIndex, c), { r: rawIndex, c });
-                dragging.current = true;
-              }}
-              onExtendRef={(c) => {
-                const anchor = refSpan.current?.anchor;
-                if (!dragging.current || !anchor) return;
-                const from = a1(Math.min(anchor.r, rawIndex), Math.min(anchor.c, c));
-                const to = a1(Math.max(anchor.r, rawIndex), Math.max(anchor.c, c));
-                putRef(from === to ? from : `${from}:${to}`, anchor);
-              }}
-              onDraftChange={setDraft}
-              registerEditor={(el) => { editorEl.current = el; }}
-              findHits={findHits}
-              tasks={tasks}
-              onOpenTask={onOpenTask}
-              commentCounts={commentCounts}
-              onOpenComments={onOpenComments}
-              peerCursors={peerCursors}
-              onResizeRow={(height) => onResizeRow(row.id, height)}
-              showFillHandle={canEdit && ri === rect.bottom}
-              fillRect={fillPreviewRect}
-              onFillStart={() => { filling.current = true; setFillTo({ r: ri, c: rect.right }); }}
-              onFillOver={(ci) => { if (filling.current) setFillTo({ r: ri, c: ci }); }}
-              onSelect={(c, extend) => { tabRun.current = null; setSel((s) => (extend ? { ...s, r2: ri, c2: c } : { r: ri, c, r2: ri, c2: c })); }}
-              onDragOver={(c) => { if (dragging.current) setSel((s) => ({ ...s, r2: ri, c2: c })); }}
-              onStartDrag={(c) => { tabRun.current = null; dragging.current = true; setSel({ r: ri, c, r2: ri, c2: c }); }}
-              onEdit={(colId) => setEditing({ rowId: row.id, colId })}
-              onCommit={(colId, raw, next) => {
-                commit(row.id, colId, raw);
-                setEditing(null);
-                gridRef.current?.focus();
-                afterCommit(next);
-              }}
-              onCancel={() => { setEditing(null); gridRef.current?.focus(); }}
-              onRowMenu={(at) => setRowMenu({ rowId: row.id, number: rawIndex + 1, height: row.height, ...at })}
-              onCellMenu={(ci, at) => setCellMenu({ r: ri, c: ci, ...at })}
-              dragging={dragRow === row.id}
-              dropTarget={dropRow === row.id}
-              onDragStart={() => setDragRow(row.id)}
-              onDragOverRow={() => { if (dragRow && dragRow !== row.id) setDropRow(row.id); }}
-              onDrop={() => {
-                if (dragRow && dragRow !== row.id) {
-                  // Dropping ON a row means "land right after it", except at the very top where the
-                  // only sensible reading is "before everything".
-                  const targetIndex = rows.findIndex((r) => r.id === row.id);
-                  const sourceIndex = rows.findIndex((r) => r.id === dragRow);
-                  const after = targetIndex === 0 && sourceIndex > 0 ? null : row.id;
-                  onReorderRow(dragRow, after);
-                }
-                setDragRow(null); setDropRow(null);
-              }}
-              onDragEnd={() => { setDragRow(null); setDropRow(null); }}
-            />
-            );
-          })}
-          {winLast < view.length && (
-            <tr style={{ height: totalHeight - offsets[winLast] }} aria-hidden>
-              <td colSpan={columns.length + 2} className="p-0" />
-            </tr>
-          )}
-        </tbody>
-        <tfoot className="sticky bottom-0 z-20">
-          <tr>
-            <td className="sticky left-0 z-30 border-t border-r border-border bg-muted" />
-            {columns.map((col, ci) => {
-              const a = footer[ci];
-              const numeric = col.type === "number" || col.type === "currency";
-              return (
-                <td key={col.id} className="border-t border-border bg-muted px-2 py-1.5 text-right text-[11px] font-bold tabular-nums text-muted-foreground">
-                  {numeric
-                    ? formatComputed(col.type, a.sum)
-                    : a.filled > 0 ? t("{n} filled", { n: a.filled }) : ""}
-                </td>
-              );
-            })}
-            <td className="border-t border-border bg-muted" />
-          </tr>
-        </tfoot>
-      </table>
-
-      {canEdit && (
-        <div className="sticky left-0 flex gap-2 p-2">
-          <button onClick={() => void onAddRows({ count: 1 })}
-            className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-primary">
-            <Plus className="h-3.5 w-3.5" /> Baris
-          </button>
-          <button onClick={() => void onAddRows({ count: 20 })}
-            className="rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-primary">
-            +20
-          </button>
+          <label className="flex items-center gap-1 text-2xs text-muted-foreground">
+            <input type="checkbox" checked={find.matchCase} onChange={(e) => setFind((f) => ({ ...f, matchCase: e.target.checked }))} className="h-3 w-3 accent-primary" />
+            {t("Match case")}
+          </label>
+          <span className="text-2xs tabular-nums text-muted-foreground">{find.q.trim() ? t("{n} found", { n: findHits.length }) : ""}</span>
+          <button onClick={() => setFindOpen(false)} aria-label={t("Close")} className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
+
+      {/* Name Box + formula bar. The Name Box shows the selection and jumps when you type an address. */}
+      <div className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card">
+        <input
+          key={nameBox}
+          defaultValue={nameBox}
+          aria-label={t("Name box")}
+          onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              if (!jumpTo((e.target as HTMLInputElement).value)) (e.target as HTMLInputElement).value = nameBox;
+              gridRef.current?.focus();
+            }
+            if (e.key === "Escape") { (e.target as HTMLInputElement).value = nameBox; gridRef.current?.focus(); }
+          }}
+          className="w-24 shrink-0 border-r border-border bg-transparent px-2 py-1 font-mono text-xs tabular-nums outline-none focus:bg-muted/50"
+        />
+        <span className="grid shrink-0 place-items-center border-r border-border px-2 font-serif text-xs italic text-muted-foreground">fx</span>
+        <input
+          key={`${activeRow?.id}:${activeCol?.id}:${JSON.stringify(activeRaw ?? "")}`}
+          defaultValue={isFormula(activeRaw) ? editFormula(activeRaw, data.shape) ?? "" : editValue(activeCol?.type ?? "text", activeRaw)}
+          readOnly={!canEdit}
+          aria-label={t("Formula bar")}
+          placeholder={canEdit ? t("Type a value or a formula…") : ""}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter" && activeRow && activeCol) {
+              commit(activeRow.id, activeCol.id, (e.target as HTMLInputElement).value);
+              gridRef.current?.focus();
+            }
+            if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); gridRef.current?.focus(); }
+          }}
+          onBlur={(e) => { if (activeRow && activeCol) commit(activeRow.id, activeCol.id, e.target.value); }}
+          className="min-w-0 flex-1 select-text bg-transparent px-2 py-1 font-mono text-xs outline-none"
+        />
+        {activeCol && (activeCol.name || activeCol.type !== "text") && (
+          <span className="hidden shrink-0 items-center border-l border-border px-2 text-2xs text-muted-foreground sm:flex">
+            {activeCol.name || colLetter(sel.c)} · {t(COLUMN_TYPE_LABEL[activeCol.type])}
+          </span>
+        )}
+        <button
+          onClick={() => openCommentsAt(sel.r, sel.c)}
+          title={t("Comment on this cell (Ctrl+Alt+M)")}
+          aria-label={t("Comment on this cell (Ctrl+Alt+M)")}
+          className="relative grid w-8 shrink-0 place-items-center border-l border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          {activeRow && activeCol && (commentCounts[`${activeRow.id}:${activeCol.id}`] ?? 0) > 0 && (
+            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+          )}
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div
+          ref={gridRef}
+          tabIndex={0}
+          role="grid"
+          aria-label={t("Spreadsheet")}
+          aria-rowcount={rows.length}
+          aria-colcount={columns.length}
+          onKeyDown={onKeyDown}
+          onCopy={(e) => { if (!editing) { e.preventDefault(); writeClipboardEvent(e, clipSelection(false)); } }}
+          onCut={(e) => {
+            if (editing || !canEdit) return;
+            e.preventDefault();
+            writeClipboardEvent(e, clipSelection(true));
+            clearSelection();
+          }}
+          onPaste={(e) => {
+            if (editing) return;
+            const block = readClipboard(e.clipboardData);
+            if (!block) return;
+            e.preventDefault();
+            void applyPaste(block);
+          }}
+          onScroll={syncScroll}
+          // select-none: dragging across cells is a RANGE selection, not a text selection.
+          className="sheet-scroll relative h-[calc(100vh-21rem)] min-h-[320px] select-none overflow-auto outline-none [scrollbar-color:var(--border)_transparent]"
+        >
+          <table
+            className="border-separate border-spacing-0 text-[13px] text-foreground"
+            style={{ tableLayout: "fixed", width: tableWidth, zoom } as CSSProperties}
+          >
+            <colgroup>
+              <col style={{ width: GUTTER_W }} />
+              {widths.map((w, i) => <col key={columns[i].id} style={{ width: w }} />)}
+              <col style={{ width: ADD_COL_W }} />
+            </colgroup>
+            <thead>
+              <tr style={{ height: HEAD_H }}>
+                {/* Select-all corner, with the two freeze handles (drag them, like Sheets' grey bars). */}
+                <th
+                  onClick={() => setSel({ r: 0, c: 0, r2: maxR, c2: maxC })}
+                  title={t("Select all (Ctrl+A)")}
+                  rowSpan={showLabels ? 2 : 1}
+                  className="sticky left-0 top-0 z-40 cursor-pointer border-b border-r border-border bg-muted p-0 hover:bg-secondary"
+                >
+                  <span aria-hidden className="absolute bottom-1 right-1 h-0 w-0 border-b-[7px] border-l-[7px] border-b-muted-foreground/40 border-l-transparent" />
+                  {canEdit && (
+                    <>
+                      <span
+                        onMouseDown={startFreezeDrag("row")}
+                        onClick={(e) => e.stopPropagation()}
+                        title={t("Drag to freeze rows")}
+                        className="absolute bottom-0 left-0 h-[4px] w-full cursor-row-resize bg-muted-foreground/30 hover:bg-info"
+                      />
+                      <span
+                        onMouseDown={startFreezeDrag("col")}
+                        onClick={(e) => e.stopPropagation()}
+                        title={t("Drag to freeze columns")}
+                        className="absolute right-0 top-0 h-full w-[4px] cursor-col-resize bg-muted-foreground/30 hover:bg-info"
+                      />
+                    </>
+                  )}
+                </th>
+                {columns.map((col, ci) => {
+                  const active = ci >= rect.left && ci <= rect.right;
+                  const whole = active && rect.top === 0 && rect.bottom === maxR;
+                  const hidden = colHidden(ci);
+                  const before = hidden ? [] : hiddenBefore(ci);
+                  const freezeEdge = (freezeDrag?.axis === "col" ? freezeDrag.n : frozenCols) === ci + 1;
+                  return (
+                    <ColumnHeader
+                      key={col.id}
+                      index={ci}
+                      col={col}
+                      hidden={hidden}
+                      active={active}
+                      whole={whole}
+                      canEdit={canEdit}
+                      showMarks={!showLabels}
+                      sortDir={sort?.colId === col.id ? sort.dir : null}
+                      filtered={Boolean(filters[col.id])}
+                      hiddenBefore={before}
+                      onUnhide={() => unhideCols(before)}
+                      style={{ ...colFrozenStyle(ci, 31), top: 0, ...(freezeEdge ? { boxShadow: `inset -3px 0 0 0 ${FREEZE_LINE}` } : {}) }}
+                      onSelect={(extend) => {
+                        tabRun.current = null;
+                        if (extend) setSel((s) => ({ r: 0, c: s.c, r2: maxR, c2: ci }));
+                        else selectColumns(ci, ci);
+                      }}
+                      onMenu={(at) => {
+                        if (!(ci >= rect.left && ci <= rect.right && rect.top === 0 && rect.bottom === maxR)) selectColumns(ci, ci);
+                        setMenu({ kind: "col", r: 0, c: ci, ...at });
+                      }}
+                      onResize={(width) => onEditColumn(col.id, { width })}
+                      onAutofit={() => autofit(ci)}
+                    />
+                  );
+                })}
+                <th rowSpan={showLabels ? 2 : 1} className="sticky top-0 z-30 border-b border-border bg-muted p-0">
+                  {canEdit && (
+                    <button onClick={onAddColumn} title={t("Add column")} aria-label={t("Add column")}
+                      className="mx-auto grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-background hover:text-foreground">
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </th>
+              </tr>
+              {showLabels && (
+                <tr style={{ height: LABEL_H }}>
+                  {columns.map((col, ci) => (
+                    <ColumnLabel
+                      key={col.id}
+                      col={col}
+                      index={ci}
+                      hidden={colHidden(ci)}
+                      active={ci >= rect.left && ci <= rect.right}
+                      canEdit={canEdit}
+                      sortDir={sort?.colId === col.id ? sort.dir : null}
+                      filterValue={filters[col.id] ?? ""}
+                      filterOpen={Boolean(filterOpen[col.id])}
+                      onFilter={(q) => setFilters((f) => ({ ...f, [col.id]: q }))}
+                      onCloseFilter={() => { setFilters((f) => ({ ...f, [col.id]: "" })); setFilterOpen((f) => ({ ...f, [col.id]: false })); }}
+                      style={{ ...colFrozenStyle(ci, 31), top: HEAD_H, ...((freezeDrag?.axis === "col" ? freezeDrag.n : frozenCols) === ci + 1 ? { boxShadow: `inset -3px 0 0 0 ${FREEZE_LINE}` } : {}) }}
+                      onOpenSettings={() => openColumnSettings(ci)}
+                      onMenu={(at) => { selectColumns(ci, ci); setMenu({ kind: "col", r: 0, c: ci, ...at }); }}
+                    />
+                  ))}
+                </tr>
+              )}
+            </thead>
+            <tbody>
+              {[...view.slice(0, frozenRows).map((v, i) => ({ ...v, ri: i })),
+                ...(winFirst > frozenRows ? [null] : []),
+                ...view.slice(winFirst, winLast).map((v, k) => ({ ...v, ri: winFirst + k }))].map((item) => {
+                if (!item) {
+                  // Spacer holding open the rows scrolled off the top.
+                  return (
+                    <tr key="spacer-top" style={{ height: offsets[winFirst] - offsets[frozenRows] }} aria-hidden>
+                      <td colSpan={columns.length + 2} className="p-0" />
+                    </tr>
+                  );
+                }
+                const { row, rawIndex, ri } = item;
+                const frozen = ri < frozenRows;
+                const freezeRowEdge = (freezeDrag?.axis === "row" ? freezeDrag.n : frozenRowsSetting) === rawIndex + 1;
+                return (
+                  <Row
+                    key={row.id}
+                    row={row}
+                    rowIndex={ri}
+                    rawIndex={rawIndex}
+                    columns={columns}
+                    widthsKey={widths}
+                    lefts={lefts}
+                    frozenCols={frozenCols}
+                    stickyTop={frozen ? headH + offsets[ri] : null}
+                    freezeEdge={freezeRowEdge}
+                    hiddenCols={hiddenCols}
+                    unhideRows={hiddenRowsBefore.get(row.id) ?? null}
+                    onUnhideRows={unhideRows}
+                    merges={merges}
+                    selected={ri >= rect.top && ri <= rect.bottom}
+                    rowSelected={ri >= rect.top && ri <= rect.bottom && rect.left === 0 && rect.right === maxC}
+                    rect={rect}
+                    activeC={ri === sel.r ? sel.c : -1}
+                    editing={editing}
+                    canEdit={canEdit}
+                    data={data}
+                    lang={lang}
+                    refMode={refMode}
+                    refRects={refRects}
+                    onPickRef={(c) => {
+                      // Addresses always speak the UNDERLYING row, so a reference picked while the view
+                      // is sorted still points at the row that was clicked.
+                      putRef(a1(rawIndex, c), { r: rawIndex, c });
+                      dragging.current = true;
+                    }}
+                    onExtendRef={(c) => {
+                      const anchor = refSpan.current?.anchor;
+                      if (!dragging.current || !anchor) return;
+                      const from = a1(Math.min(anchor.r, rawIndex), Math.min(anchor.c, c));
+                      const to = a1(Math.max(anchor.r, rawIndex), Math.max(anchor.c, c));
+                      putRef(from === to ? from : `${from}:${to}`, anchor);
+                    }}
+                    onDraftChange={setDraft}
+                    registerEditor={(el) => { editorEl.current = el; }}
+                    findHits={findHits}
+                    tasks={tasks}
+                    onOpenTask={onOpenTask}
+                    commentCounts={commentCounts}
+                    peerCursors={peerCursors}
+                    onResizeRow={(height) => onResizeRow(row.id, height)}
+                    showFillHandle={canEdit && ri === rect.bottom}
+                    fillRect={fillPreviewRect}
+                    onFillStart={() => { filling.current = true; setFillTo({ r: ri, c: rect.right }); }}
+                    onFillOver={(ci) => { if (filling.current) setFillTo({ r: ri, c: ci }); }}
+                    onSelect={(c, extend) => { tabRun.current = null; setSel((s) => (extend ? { ...s, r2: ri, c2: c } : { r: ri, c, r2: ri, c2: c })); }}
+                    onDragOver={(c) => { if (dragging.current) setSel((s) => ({ ...s, r2: ri, c2: c })); }}
+                    onStartDrag={(c) => { tabRun.current = null; dragging.current = true; setSel({ r: ri, c, r2: ri, c2: c }); }}
+                    onSelectRow={(extend) => {
+                      tabRun.current = null;
+                      if (extend) setSel((s) => ({ r: s.r, c: 0, r2: ri, c2: maxC }));
+                      else selectRows(ri, ri);
+                    }}
+                    onEdit={(colId) => setEditing({ rowId: row.id, colId })}
+                    onCommit={(colId, raw, next) => {
+                      commit(row.id, colId, raw);
+                      setEditing(null);
+                      gridRef.current?.focus();
+                      afterCommit(next);
+                    }}
+                    onCancel={() => { setEditing(null); gridRef.current?.focus(); }}
+                    onRowMenu={(at) => {
+                      if (!(ri >= rect.top && ri <= rect.bottom && rect.left === 0 && rect.right === maxC)) selectRows(ri, ri);
+                      setMenu({ kind: "row", r: ri, c: 0, ...at });
+                    }}
+                    onCellMenu={(ci, at) => setMenu({ kind: "cell", r: ri, c: ci, ...at })}
+                    dragging={dragRow === row.id}
+                    dropTarget={dropRow === row.id}
+                    onDragStart={() => setDragRow(row.id)}
+                    onDragOverRow={() => { if (dragRow && dragRow !== row.id) setDropRow(row.id); }}
+                    onDrop={() => {
+                      if (dragRow && dragRow !== row.id) {
+                        // Dropping ON a row means "land right after it", except at the very top.
+                        const targetIndex = rows.findIndex((r) => r.id === row.id);
+                        const sourceIndex = rows.findIndex((r) => r.id === dragRow);
+                        onReorderRow(dragRow, targetIndex === 0 && sourceIndex > 0 ? null : row.id);
+                      }
+                      setDragRow(null); setDropRow(null);
+                    }}
+                    onDragEnd={() => { setDragRow(null); setDropRow(null); }}
+                  />
+                );
+              })}
+              {winLast < view.length && (
+                <tr style={{ height: totalHeight - offsets[winLast] }} aria-hidden>
+                  <td colSpan={columns.length + 2} className="p-0" />
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {canEdit && (
+            <div className="sticky left-0 flex items-center gap-2 px-2 py-3" style={{ zoom } as CSSProperties}>
+              <button onClick={() => void onAddRows({ count: 1 })}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                <Plus className="h-3.5 w-3.5" /> {t("Add 1 row")}
+              </button>
+              <button onClick={() => void onAddRows({ count: 100 })}
+                className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                {t("Add 100 rows")}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom bar: sheet tabs on the left, the selection's statistics on the right. */}
+        <div className="flex min-h-9 items-center gap-2 border-t border-border bg-muted/60 px-1.5">
+          <div className="min-w-0 flex-1">{footerLeft}</div>
+          {saving && <span className="shrink-0 text-2xs text-muted-foreground">{t("Saving…")}</span>}
+          {multiCell && stats.count > 0 && (
+            <Menu
+              label={t("Selection statistics")}
+              trigger={
+                <span className="max-w-[220px] truncate text-xs tabular-nums">
+                  <span className="text-muted-foreground">{statLabel[stat]}:</span> <span className="font-medium">{statValue(stat)}</span>
+                </span>
+              }
+            >
+              {(close) => (Object.keys(statLabel) as Stat[]).map((s) => (
+                <MenuItem key={s} active={stat === s} hint={statValue(s)} onClick={() => { setStat(s); close(); }}>{statLabel[s]}</MenuItem>
+              ))}
+            </Menu>
+          )}
+        </div>
+      </div>
     </div>
 
-
-    {/* Right-click menu for a cell. Only the entries this grid can actually honour — no Sheets item
-        is listed here as a stub, because a menu that says "Tempel khusus" and does nothing is worse
-        than one that never offered it. */}
-    {cellMenu && createPortal(
+    {/* Right-click menus (cell, column header, row header). Only entries this grid can honour. */}
+    {menu && menuEntries.length > 0 && createPortal(
       <>
-        <div className="fixed inset-0 z-[60]" onClick={() => setCellMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCellMenu(null); }} />
+        <div className="fixed inset-0 z-[60]" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
         <div
-          style={{ left: Math.min(cellMenu.left, window.innerWidth - 240), top: Math.min(cellMenu.top, window.innerHeight - 400) }}
-          className="fixed z-[61] max-h-[80vh] w-56 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-pop"
+          role="menu"
+          style={{ left: Math.min(menu.left, window.innerWidth - 250), top: Math.max(8, Math.min(menu.top, window.innerHeight - 440)) }}
+          className="fixed z-[61] max-h-[80vh] w-60 overflow-y-auto rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
         >
-          {menuItems.map((item, i) =>
+          {menuEntries.map((item, i) =>
             item === "sep" ? (
               <div key={`sep${i}`} className="my-1 border-t border-border" />
             ) : (
-              <button
-                key={item.label}
-                onClick={() => { setCellMenu(null); item.run(); }}
-                className={cn(
-                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition",
-                  item.danger ? "text-rose-600 hover:bg-rose-50" : "hover:bg-muted",
-                )}
-              >
-                <item.icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="flex-1 truncate">{item.label}</span>
-                {item.hint && <span className="shrink-0 text-[10px] font-normal text-muted-foreground">{item.hint}</span>}
-              </button>
+              <MenuItem key={`${item.label}${i}`} icon={item.icon} hint={item.hint} danger={item.danger} disabled={item.disabled}
+                onClick={() => { setMenu(null); item.run(); }}>
+                {item.label}
+              </MenuItem>
             ),
           )}
         </div>
@@ -1181,75 +1574,49 @@ export function SheetGrid({
       document.body,
     )}
 
-    {/* Right-click menu for a row. Portaled + fixed for the same reason as every other popover here:
-        the grid scroll container is overflow:auto and would clip it. */}
-    {rowMenu && createPortal(
-      <>
-        <div className="fixed inset-0 z-[60]" onClick={() => setRowMenu(null)} onContextMenu={(e) => { e.preventDefault(); setRowMenu(null); }} />
-        <div
-          style={{ left: Math.min(rowMenu.left, window.innerWidth - 200), top: Math.min(rowMenu.top, window.innerHeight - 130) }}
-          className="fixed z-[61] w-48 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-pop"
-        >
-          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Baris {rowMenu.number}</p>
-          <button
-            onClick={() => { void onAddRows({ count: 1, afterRowId: rowMenu.rowId }); setRowMenu(null); }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-muted"
-          ><Plus className="h-3.5 w-3.5" /> Sisipin baris di bawah</button>
-          {rowMenu.height != null && (
-            <button
-              onClick={() => { onResizeRow(rowMenu.rowId, null); setRowMenu(null); }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-muted"
-            ><RotateCcw className="h-3.5 w-3.5" /> Balikin tinggi default</button>
-          )}
-          <button
-            onClick={() => { onDeleteRows([rowMenu.rowId]); setRowMenu(null); }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
-          ><Trash2 className="h-3.5 w-3.5" /> Hapus baris</button>
-        </div>
-      </>,
-      document.body,
-    )}
+    {colPopover && (() => {
+      const col = columns.find((c) => c.id === colPopover.colId);
+      return col ? (
+        <ColumnPopover
+          col={col}
+          anchor={colPopover.anchor}
+          onClose={() => setColPopover(null)}
+          onSave={(patch) => { onEditColumn(col.id, patch); setColPopover(null); }}
+        />
+      ) : null;
+    })()}
     </>
   );
 }
 
-function HeaderCell({ col, index, active, canManage, canEdit, onEditColumn, onResize, onDelete, sortDir, onSort, filterValue, onFilter, forceFilterOpen, onFilterOpened }: {
-  col: NexusSheetColumn; index: number; active: boolean; canManage: boolean; canEdit: boolean;
-  onEditColumn: (patch: { name?: string; type?: NexusSheetColumnType; rules?: NexusSheetRule[] }) => void;
+/** A lettered column header: click selects the column, the right edge resizes (double-click fits). */
+function ColumnHeader({ index, col, hidden, active, whole, canEdit, showMarks, sortDir, filtered, hiddenBefore, onUnhide, style, onSelect, onMenu, onResize, onAutofit }: {
+  index: number; col: NexusSheetColumn; hidden: boolean; active: boolean; whole: boolean; canEdit: boolean;
+  /** Sort/filter marks go here when there is no name row to carry them. */
+  showMarks: boolean;
+  sortDir: "asc" | "desc" | null; filtered: boolean;
+  hiddenBefore: string[]; onUnhide: () => void;
+  style: CSSProperties;
+  onSelect: (extend: boolean) => void;
+  onMenu: (at: { left: number; top: number }) => void;
   onResize: (width: number) => void;
-  onDelete: () => void;
-  sortDir: "asc" | "desc" | null;
-  onSort: () => void;
-  filterValue: string;
-  onFilter: (q: string) => void;
-  /** Set when the cell right-click menu asked for this column's filter box. */
-  forceFilterOpen: boolean;
-  onFilterOpened: () => void;
+  onAutofit: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const thRef = useRef<HTMLTableCellElement>(null);
-
-  /**
-   * Drag the right edge to resize. The width is applied live to the DOM node and only SAVED on
-   * mouseup — one PATCH per resize instead of one per pixel, and one undo entry instead of hundreds.
-   */
-  const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
-  useEffect(() => {
-    if (!forceFilterOpen) return;
-    setFilterOpen(true);
-    onFilterOpened();
-  }, [forceFilterOpen, onFilterOpened]);
-
+  const { t } = useLang();
+  const ref = useRef<HTMLTableCellElement>(null);
+  /** Width applied live to the DOM, SAVED on mouseup: one PATCH and one undo entry per resize. */
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startW = thRef.current?.offsetWidth ?? col.width ?? 140;
+    const table = ref.current?.closest("table");
+    const colEl = table?.querySelectorAll("col")[index + 1] as HTMLElement | undefined;
+    const startW = ref.current?.offsetWidth ?? col.width ?? COL_W_DEFAULT;
     let latest = startW;
+    const z = Number((table?.style as CSSStyleDeclaration & { zoom?: string })?.zoom) || 1;
     const move = (ev: MouseEvent) => {
-      latest = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
-      if (thRef.current) thRef.current.style.minWidth = `${latest}px`;
+      latest = Math.max(30, Math.min(600, startW + (ev.clientX - startX) / z));
+      if (colEl) colEl.style.width = `${latest}px`;
     };
     const up = () => {
       window.removeEventListener("mousemove", move);
@@ -1259,488 +1626,135 @@ function HeaderCell({ col, index, active, canManage, canEdit, onEditColumn, onRe
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
   };
+  if (hidden) return <th data-col-index={index} style={style} className="sticky top-0 z-30 overflow-hidden border-b border-border bg-muted p-0" />;
   return (
     <th
-      ref={thRef}
-      style={col.width ? { minWidth: col.width } : undefined}
-      className={cn("group relative border-b border-r border-border px-2 py-1.5 text-left text-xs font-bold",
-        // The active-column highlight still wins: knowing where the cursor is beats the decoration.
-        active ? "bg-primary/10 text-primary" : col.color ? COLUMN_COLOR_CLASS[col.color] : "bg-muted text-foreground")}
-      onContextMenu={(e) => {
-        if (!canEdit) return;
-        e.preventDefault();
-        setMenu({ left: e.clientX, top: e.clientY });
-      }}
-    >
-      <div className="flex items-center gap-1">
-        {/* The letter is the label until someone names the column, exactly like a blank Sheets file. */}
-        <span className="text-[10px] font-black text-muted-foreground">{colLetter(index)}</span>
-        <button
-          onDoubleClick={() => canEdit && setOpen(true)}
-          className={cn("min-w-0 flex-1 truncate text-left", !col.name && "font-normal text-muted-foreground/50")}
-          title={col.name
-            ? `${col.name} — klik 2x buat atur kolom, klik kanan buat menu`
-            : "Klik 2x buat kasih nama & tipe kolom · klik kanan buat menu"}
-        >
-          {col.name || "—"}
-        </button>
-        {/* Passive state only. These used to be BUTTONS that appeared on hover, stacked right up
-            against the resize grip on the same edge — so aiming for the grip kept hitting sort,
-            filter, or (worst) delete. Every action moved to the right-click menu; what's left just
-            reports that the column IS sorted or filtered. */}
-        {sortDir && (
-          <span className="shrink-0 text-primary" title={sortDir === "asc" ? "Diurut A→Z" : "Diurut Z→A"}>
-            {sortDir === "desc" ? <ArrowUpAZ className="h-3 w-3" /> : <ArrowDownAZ className="h-3 w-3" />}
-          </span>
-        )}
-        {filterValue && (
-          <span className="shrink-0 text-primary" title="Kolom ini lagi disaring"><Filter className="h-3 w-3" /></span>
-        )}
-      </div>
-
-      {(filterOpen || filterValue) && (
-        <input
-          value={filterValue}
-          onChange={(e) => onFilter(e.target.value)}
-          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") { onFilter(""); setFilterOpen(false); } }}
-          placeholder="saring…"
-          className="mt-1 w-full rounded border border-border bg-background px-1 py-0.5 text-[11px] font-normal outline-none focus:border-primary"
-        />
+      ref={ref}
+      data-col-index={index}
+      scope="col"
+      style={style}
+      onMouseDown={(e) => { if (e.button === 0) onSelect(e.shiftKey); }}
+      onContextMenu={(e) => { e.preventDefault(); onMenu({ left: e.clientX, top: e.clientY }); }}
+      className={cn(
+        "group sticky top-0 z-30 cursor-default select-none border-b border-r border-border p-0 text-center text-[11px] font-medium tabular-nums",
+        whole ? "bg-info text-info-foreground" : active ? `${HEAD_SEL_BG} text-foreground` : "bg-muted text-muted-foreground",
       )}
-
+    >
+      <span className="flex items-center justify-center gap-1 px-1">
+        {colLetter(index)}
+        {showMarks && sortDir && (sortDir === "desc" ? <ArrowUpAZ className="h-3 w-3" /> : <ArrowDownAZ className="h-3 w-3" />)}
+        {showMarks && filtered && <Filter className="h-3 w-3" />}
+      </span>
+      {hiddenBefore.length > 0 && (
+        <button
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onUnhide(); }}
+          title={t("Show {n} hidden columns", { n: hiddenBefore.length })}
+          aria-label={t("Show {n} hidden columns", { n: hiddenBefore.length })}
+          className="absolute -left-2 top-1/2 z-10 flex h-4 -translate-y-1/2 items-center rounded-sm border border-border bg-card px-0.5 text-muted-foreground shadow-soft hover:text-foreground"
+        >
+          <ChevronDown className="h-2.5 w-2.5 rotate-90" /><ChevronDown className="-ml-1 h-2.5 w-2.5 -rotate-90" />
+        </button>
+      )}
       {canEdit && (
         <span
           onMouseDown={startResize}
-          title="Tarik buat atur lebar kolom"
-          className="absolute -right-[3px] top-0 z-20 h-full w-2 cursor-col-resize hover:bg-primary/40"
-        />
-      )}
-
-      {menu && createPortal(
-        <>
-          <div className="fixed inset-0 z-[60]" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
-          <div
-            style={{ left: Math.min(menu.left, window.innerWidth - 220), top: Math.min(menu.top, window.innerHeight - 190) }}
-            className="fixed z-[61] w-52 overflow-hidden rounded-xl border border-border bg-card py-1 font-normal shadow-pop"
-          >
-            <p className="truncate px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              Kolom {colLetter(index)}{col.name ? ` · ${col.name}` : ""}
-            </p>
-            <button onClick={() => { setOpen(true); setMenu(null); }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-muted"
-            ><Pencil className="h-3.5 w-3.5" /> Nama &amp; tipe kolom…</button>
-            <button onClick={() => { onSort(); setMenu(null); }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-muted"
-            >
-              {sortDir === "desc" ? <ArrowUpAZ className="h-3.5 w-3.5" /> : <ArrowDownAZ className="h-3.5 w-3.5" />}
-              {sortDir === "asc" ? "Urut Z→A" : sortDir === "desc" ? "Balikin urutan asli" : "Urut A→Z"}
-            </button>
-            <button onClick={() => { setFilterOpen(true); setMenu(null); }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-muted"
-            ><Filter className="h-3.5 w-3.5" /> Saring kolom ini</button>
-            {filterValue && (
-              <button onClick={() => { onFilter(""); setFilterOpen(false); setMenu(null); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-muted"
-              ><X className="h-3.5 w-3.5" /> Hapus saringan</button>
-            )}
-            {canManage && (
-              <button onClick={() => { onDelete(); setMenu(null); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
-              ><Trash2 className="h-3.5 w-3.5" /> Hapus kolom</button>
-            )}
-          </div>
-        </>,
-        document.body,
-      )}
-
-      {open && (
-        <ColumnPopover
-          col={col}
-          anchor={thRef.current?.getBoundingClientRect() ?? null}
-          onClose={() => setOpen(false)}
-          onSave={(patch) => { onEditColumn(patch); setOpen(false); }}
+          onDoubleClick={(e) => { e.stopPropagation(); onAutofit(); }}
+          title={t("Drag to resize · double-click to fit")}
+          className="absolute -right-[3px] top-0 z-20 h-full w-[6px] cursor-col-resize hover:bg-info/60"
         />
       )}
     </th>
   );
 }
 
-/** Name + type in one place, so a blank column becomes a Rupiah/date column without leaving the grid. */
-
-/**
- * The picker for a multi-select cell.
- *
- * A tick list rather than a native `<select multiple>`: the native one needs Ctrl-click to add a
- * second value, which nobody discovers, and it can't be made to fit a 29px row. Portaled + fixed like
- * every other popover here, because the grid's overflow:auto would clip it.
- *
- * Commits on close, not on every tick — one undo entry per visit instead of one per checkbox.
- */
-function ChoiceEditor({ col, multi, initial, onCommit, onCancel }: {
-  col: NexusSheetColumn;
-  /** false = pick one and close, true = tick several then close. */
-  multi: boolean;
-  initial: string;
-  onCommit: (value: string) => void;
-  onCancel: () => void;
+/** The slim row under the letters: the column's name and type (NEXUS's typed columns), sort/filter marks. */
+function ColumnLabel({ col, index, hidden, active, canEdit, sortDir, filterValue, filterOpen, onFilter, onCloseFilter, style, onOpenSettings, onMenu }: {
+  col: NexusSheetColumn; index: number; hidden: boolean; active: boolean; canEdit: boolean;
+  sortDir: "asc" | "desc" | null; filterValue: string; filterOpen: boolean;
+  onFilter: (q: string) => void; onCloseFilter: () => void;
+  style: CSSProperties;
+  onOpenSettings: () => void;
+  onMenu: (at: { left: number; top: number }) => void;
 }) {
-  const [picked, setPicked] = useState<string[]>(() => (multi ? readMulti(initial) : initial ? [initial] : []));
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
-
-  useEffect(() => {
-    const cell = boxRef.current?.closest("td");
-    const r = cell?.getBoundingClientRect();
-    if (r) setAnchor({ left: Math.min(r.left, window.innerWidth - 232), top: Math.min(r.bottom + 2, window.innerHeight - 260) });
-  }, []);
-
-  const toggle = (v: string) => {
-    // Single choice closes on the click — an extra "Selesai" step for one value is friction nobody
-    // asked for. Multi keeps the list open so several ticks are one visit.
-    if (!multi) { onCommit(picked[0] === v ? "" : v); return; }
-    setPicked((p) => (p.includes(v) ? p.filter((x) => x !== v) : [...p, v]));
-  };
-
-  const options = col.options ?? [];
-  // Values already in the cell that are no longer offered still show, ticked — hiding them would
-  // silently drop data the moment someone opened the picker.
-  const extras = picked.filter((v) => !options.includes(v));
-
+  const { t } = useLang();
+  if (hidden) return <th style={style} className="sticky z-30 overflow-hidden border-b border-border bg-muted p-0" />;
+  const showFilter = filterOpen || Boolean(filterValue);
   return (
-    <>
-      <span ref={boxRef} className="block truncate text-xs text-muted-foreground">
-        {picked.length ? picked.join(", ") : "—"}
-      </span>
-      {anchor && createPortal(
-        <>
-          <div className="fixed inset-0 z-[60]" onClick={() => onCommit(multi ? picked.join(", ") : (picked[0] ?? ""))} />
-          <div
-            style={{ left: anchor.left, top: anchor.top }}
-            className="fixed z-[61] max-h-60 w-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-pop"
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") onCancel();
-              if (e.key === "Enter") onCommit(multi ? picked.join(", ") : (picked[0] ?? ""));
-            }}
+    <th
+      data-col-index={index}
+      scope="col"
+      style={style}
+      onDoubleClick={() => canEdit && onOpenSettings()}
+      onContextMenu={(e) => { e.preventDefault(); onMenu({ left: e.clientX, top: e.clientY }); }}
+      className={cn(
+        "sticky z-30 border-b border-r border-border px-1.5 py-0 text-left text-xs font-semibold",
+        active ? LABEL_SEL_BG : col.color ? COLUMN_COLOR_CLASS[col.color] : "bg-card",
+      )}
+    >
+      {showFilter ? (
+        <span className="flex items-center gap-1">
+          <Filter className="h-3 w-3 shrink-0 text-info" />
+          <input
+            autoFocus={filterOpen && !filterValue}
+            value={filterValue}
+            onChange={(e) => onFilter(e.target.value)}
+            onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") onCloseFilter(); }}
+            placeholder={t("filter…")}
+            aria-label={t("Filter {c}", { c: col.name || colLetter(index) })}
+            className="h-5 min-w-0 flex-1 rounded border border-border bg-background px-1 text-[11px] font-normal outline-none focus:border-ring"
+          />
+          <button onClick={onCloseFilter} aria-label={t("Remove filter")} className="shrink-0 text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
+        </span>
+      ) : (
+        <span className="flex items-center gap-1">
+          <TypeIcon type={col.type} />
+          <button
+            onClick={() => canEdit && onOpenSettings()}
+            title={canEdit ? t("Column settings: name, type, choices, colours, rules") : undefined}
+            className={cn("min-w-0 flex-1 truncate text-left", !col.name && "font-normal text-muted-foreground/60")}
           >
-            {options.length === 0 && extras.length === 0 && (
-              <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                Kolom ini belum punya pilihan. Klik 2x judul kolomnya buat ngisi.
-              </p>
-            )}
-            {[...options, ...extras].map((o) => (
-              <button
-                key={o}
-                onClick={() => toggle(o)}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs font-semibold transition hover:bg-muted"
-              >
-                <span className={cn("grid h-3.5 w-3.5 shrink-0 place-items-center rounded border",
-                  picked.includes(o) ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
-                  {picked.includes(o) && <Check className="h-2.5 w-2.5" />}
-                </span>
-                <span className={cn("min-w-0 max-w-full truncate rounded-full px-2 leading-5", optionColor(col, o))}>{o}</span>
-                {!options.includes(o) && <span className="shrink-0 text-[9px] text-muted-foreground">di luar daftar</span>}
-              </button>
-            ))}
-            {multi ? (
-              <button
-                onClick={() => onCommit(picked.join(", "))}
-                className="mt-1 w-full rounded-lg bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground"
-              >Selesai</button>
-            ) : (
-              <button
-                onClick={() => onCommit("")}
-                className="mt-1 w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-600"
-              >Kosongin</button>
-            )}
-          </div>
-        </>,
-        document.body,
+            {col.name || (col.type === "text" ? "" : t(COLUMN_TYPE_LABEL[col.type]))}
+          </button>
+          {sortDir && <span className="shrink-0 text-info" title={sortDir === "asc" ? t("Sorted A → Z") : t("Sorted Z → A")}>{sortDir === "desc" ? <ArrowUpAZ className="h-3 w-3" /> : <ArrowDownAZ className="h-3 w-3" />}</span>}
+        </span>
       )}
-    </>
+    </th>
   );
 }
 
-function ColumnPopover({ col, anchor, onClose, onSave }: {
-  col: NexusSheetColumn;
-  /** Screen rect of the header cell. */
-  anchor: DOMRect | null;
-  onClose: () => void;
-  onSave: (patch: { name: string; type: NexusSheetColumnType; options?: string[]; optionColors?: Record<string, NexusSheetColumnColor>; color?: NexusSheetColumnColor; rules?: NexusSheetRule[] }) => void;
-}) {
-  const [name, setName] = useState(col.name);
-  const [type, setType] = useState<NexusSheetColumnType>(col.type);
-  const [options, setOptions] = useState<string[]>(col.options ?? []);
-  const [optionColors, setOptionColors] = useState<Record<string, NexusSheetColumnColor>>(col.optionColors ?? {});
-  /** Which choice has its palette open, if any. */
-  const [palette, setPalette] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [color, setColor] = useState<NexusSheetColumnColor | undefined>(col.color);
-  const [rules, setRules] = useState<NexusSheetRule[]>(col.rules ?? []);
-  const addOption = () => {
-    const v = draft.trim();
-    // Silently ignoring a duplicate beats an error toast: the choice the user wanted is already there.
-    if (!v || options.includes(v)) { setDraft(""); return; }
-    setOptions((o) => [...o, v.slice(0, 80)]);
-    setDraft("");
-  };
-  const save = () => onSave({
-    name: name.trim(),
-    type,
-    // Choices only mean anything on a select column; carrying them on a text column would resurrect
-    // a stale list the moment someone switched the type back.
-    options: type === "select" || type === "multiselect" ? options : [],
-    // Colours for choices that no longer exist are dropped, so a deleted-then-retyped choice starts
-    // from the automatic colour instead of resurrecting an old one.
-    optionColors: Object.fromEntries(Object.entries(optionColors).filter(([k]) => options.includes(k))),
-    color,
-    rules: rules.length ? rules : undefined,
-  });
-  // Portaled and fixed, for the same reason as the autocomplete and the comment thread: anchored
-  // inside the <th> it was clipped by the grid's overflow:auto, which hid the colour picker and the
-  // rules editor below the fold entirely.
-  const left = Math.min(anchor?.left ?? 80, window.innerWidth - 248);
-  // Height is bound to the space actually left below the header, not to a guessed constant: the
-  // popover grows with the number of choices and rules, so any fixed number is wrong eventually —
-  // and being 27px too tall is enough to put the save button off-screen.
-  const top = Math.min((anchor?.bottom ?? 120) + 4, Math.max(8, window.innerHeight - 240));
-  const maxHeight = Math.max(200, window.innerHeight - top - 12);
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-[60]" onClick={onClose} />
-      <div
-        style={{ left, top, maxHeight }}
-        className="fixed z-[61] w-56 space-y-2 overflow-y-auto rounded-xl border border-border bg-card p-3 font-normal shadow-pop"
-      >
-        <input
-          autoFocus value={name} maxLength={80} placeholder="Nama kolom (boleh kosong)"
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") onClose();
-          }}
-          className="w-full rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-primary"
-        />
-        <div className="flex flex-wrap gap-1">
-          {(Object.keys(COLUMN_TYPE_LABEL) as NexusSheetColumnType[]).map((t) => (
-            <button key={t} onClick={() => setType(t)}
-              className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold transition",
-                type === t ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
-              {COLUMN_TYPE_LABEL[t]}
-            </button>
-          ))}
-        </div>
-        {/* The choices themselves. Without this a "Pilihan" column rendered an empty dropdown and
-            there was nowhere in the app to fill it. */}
-        {(type === "select" || type === "multiselect") && (
-          <div className="space-y-1 border-t border-border pt-2">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Isi dropdown</div>
-            {options.length > 0 && (
-              <div className="space-y-0.5">
-                {options.map((o, i) => (
-                  <div key={o}>
-                    <div className="flex items-center gap-1">
-                      {/* The swatch opens this choice's palette. Colours default to cycling the
-                          palette by position, so the list is legible before anyone touches it. */}
-                      <button
-                        onClick={() => setPalette((c) => (c === o ? null : o))}
-                        title="Warna pilihan ini"
-                        className={cn("h-4 w-4 shrink-0 rounded-full border border-border",
-                          (optionColors[o] ? CHIP_COLOR_CLASS[optionColors[o]] : CHIP_COLOR_CLASS[CHIP_COLORS[i % CHIP_COLORS.length]]).split(" ")[0])}
-                      />
-                      <span className={cn("min-w-0 flex-1 truncate rounded-full px-2 text-[11px] font-semibold leading-5",
-                        optionColors[o] ? CHIP_COLOR_CLASS[optionColors[o]] : CHIP_COLOR_CLASS[CHIP_COLORS[i % CHIP_COLORS.length]])}>{o}</span>
-                      <button onClick={() => {
-                        setOptions((xs) => xs.filter((_, j) => j !== i));
-                        setOptionColors((c) => { const n = { ...c }; delete n[o]; return n; });
-                      }} className="shrink-0 text-muted-foreground hover:text-rose-600"><X className="h-2.5 w-2.5" /></button>
-                    </div>
-                    {palette === o && (
-                      <div className="flex flex-wrap gap-1 py-1 pl-5">
-                        {CHIP_COLORS.map((c) => (
-                          <button key={c} title={COLUMN_COLOR_LABEL[c]}
-                            onClick={() => { setOptionColors((prev) => ({ ...prev, [o]: c })); setPalette(null); }}
-                            className={cn("h-4 w-4 rounded-full border border-border", CHIP_COLOR_CLASS[c].split(" ")[0])} />
-                        ))}
-                        <button title="Balik ke otomatis"
-                          onClick={() => { setOptionColors((prev) => { const n = { ...prev }; delete n[o]; return n; }); setPalette(null); }}
-                          className="rounded-full border border-dashed border-border px-1.5 text-[9px] font-bold text-muted-foreground">auto</button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-1">
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter") { e.preventDefault(); addOption(); }
-                  if (e.key === "Escape") onClose();
-                }}
-                placeholder="Tulis pilihan, Enter"
-                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs font-normal outline-none focus:border-primary"
-              />
-              <button onClick={addOption} disabled={!draft.trim()}
-                className="shrink-0 rounded-lg border border-border px-2 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-40">+</button>
-            </div>
-          </div>
-        )}
-
-        {/* Header tint. */}
-        <div className="space-y-1 border-t border-border pt-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Warna judul</div>
-          <div className="flex flex-wrap gap-1">
-            <button
-              onClick={() => setColor(undefined)}
-              title="Tanpa warna"
-              className={cn("h-5 w-5 rounded-full border bg-muted", !color ? "border-primary ring-2 ring-primary/30" : "border-border")}
-            />
-            {(Object.keys(COLUMN_COLOR_CLASS) as NexusSheetColumnColor[]).map((c) => (
-              <button key={c} onClick={() => setColor(c)} title={COLUMN_COLOR_LABEL[c]}
-                className={cn("h-5 w-5 rounded-full border", COLUMN_COLOR_CLASS[c].split(" ")[0],
-                  color === c ? "border-primary ring-2 ring-primary/30" : "border-border")} />
-            ))}
-          </div>
-        </div>
-
-        {/* Conditional formatting — the first matching rule wins, so order is meaningful. */}
-        <div className="space-y-1 border-t border-border pt-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Warnain otomatis</div>
-          {rules.map((r, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <select
-                value={r.op}
-                onChange={(e) => setRules((rs) => rs.map((x, j) => (j === i ? { ...x, op: e.target.value as NexusSheetRule["op"] } : x)))}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="min-w-0 flex-1 rounded border border-border bg-background px-1 py-0.5 text-[11px] font-normal outline-none"
-              >
-                {(Object.keys(RULE_OP_LABEL) as NexusSheetRule["op"][]).map((o) => (
-                  <option key={o} value={o}>{RULE_OP_LABEL[o]}</option>
-                ))}
-              </select>
-              {r.op !== "empty" && r.op !== "notEmpty" && (
-                <input
-                  value={r.value ?? ""}
-                  onChange={(e) => setRules((rs) => rs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  placeholder="nilai"
-                  className="w-16 rounded border border-border bg-background px-1 py-0.5 text-[11px] font-normal outline-none"
-                />
-              )}
-              <select
-                value={r.style}
-                onChange={(e) => setRules((rs) => rs.map((x, j) => (j === i ? { ...x, style: e.target.value as NexusSheetRule["style"] } : x)))}
-                onKeyDown={(e) => e.stopPropagation()}
-                className={cn("rounded border border-border px-1 py-0.5 text-[11px] font-normal outline-none", RULE_STYLE_CLASS[r.style])}
-              >
-                <option value="red">merah</option>
-                <option value="amber">kuning</option>
-                <option value="green">hijau</option>
-                <option value="blue">biru</option>
-                <option value="grey">abu</option>
-                <option value="bold">tebal</option>
-              </select>
-              <button onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
-                className="shrink-0 text-muted-foreground hover:text-rose-600"><X className="h-3 w-3" /></button>
-            </div>
-          ))}
-          {rules.length < 8 && (
-            <button
-              onClick={() => setRules((rs) => [...rs, { op: "lt", value: "0", style: "red" }])}
-              className="w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-primary"
-            >+ Aturan</button>
-          )}
-        </div>
-
-        <button onClick={save}
-          className="w-full rounded-lg bg-primary px-2 py-1.5 text-xs font-bold text-primary-foreground">Simpan</button>
-      </div>
-    </>,
-    document.body,
-  );
-}
-
-/**
- * A cell pointing at a real NEXUS task — the thing a plain spreadsheet can't do.
- *
- * The cell stores only the task id; the title and status are read live, so a task renamed or moved to
- * Done updates here without anyone touching the sheet.
- */
-function TaskCell({ taskId, tasks, canEdit, onOpen, onPick }: {
-  taskId: string;
-  tasks: { id: string; title: string; status?: string | null }[];
-  canEdit: boolean;
-  onOpen?: (taskId: string) => void;
-  onPick: (taskId: string) => void;
-}) {
-  const [picking, setPicking] = useState(false);
-  const [q, setQ] = useState("");
-  const task = tasks.find((t) => t.id === taskId);
-
-  if (picking) {
-    const matches = tasks.filter((t) => t.title.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8);
-    return (
-      <div className="relative">
-        <input
-          autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") setPicking(false); }}
-          onBlur={() => setTimeout(() => setPicking(false), 120)}
-          placeholder="Cari task…"
-          className="w-full select-text rounded border border-primary bg-background px-1 py-0.5 text-sm outline-none"
-        />
-        <div className="absolute left-0 top-full z-40 mt-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-card shadow-pop">
-          {taskId && (
-            <button onMouseDown={(e) => { e.preventDefault(); onPick(""); setPicking(false); }}
-              className="block w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent">Kosongin</button>
-          )}
-          {matches.map((t) => (
-            <button key={t.id} onMouseDown={(e) => { e.preventDefault(); onPick(t.id); setPicking(false); }}
-              className="block w-full truncate px-3 py-1.5 text-left text-xs hover:bg-accent">{t.title}</button>
-          ))}
-          {!matches.length && <div className="px-3 py-2 text-xs text-muted-foreground">Nggak ketemu.</div>}
-        </div>
-      </div>
-    );
+/** The column type, as a small lucide icon beside the name (Rupiah reads as the letters it shows). */
+function TypeIcon({ type }: { type: NexusSheetColumnType }) {
+  const cls = "h-3 w-3 shrink-0 text-muted-foreground";
+  switch (type) {
+    case "number": return <Hash className={cls} />;
+    case "currency": return <span className="shrink-0 text-[9px] font-bold text-muted-foreground">Rp</span>;
+    case "date": return <CalendarDays className={cls} />;
+    case "select": return <CircleChevronDown className={cls} />;
+    case "multiselect": return <Tags className={cls} />;
+    case "checkbox": return <SquareCheck className={cls} />;
+    case "task": return <ClipboardList className={cls} />;
+    case "link": return <LinkIcon className={cls} />;
+    default: return <Type className={cls} />;
   }
-
-  if (!task) {
-    return canEdit ? (
-      <button onClick={() => setPicking(true)} className="text-xs text-muted-foreground/60 hover:text-primary">
-        {taskId ? "task nggak ketemu" : "+ task"}
-      </button>
-    ) : <span />;
-  }
-  const done = (task.status ?? "").toUpperCase() === "DONE";
-  return (
-    <span className="flex items-center gap-1">
-      <button
-        onClick={() => onOpen?.(task.id)}
-        title="Buka task"
-        className={cn("min-w-0 truncate text-left text-xs font-semibold text-primary hover:underline", done && "line-through opacity-60")}
-      >{task.title}</button>
-      {canEdit && (
-        <button onClick={() => setPicking(true)} title="Ganti task"
-          className="shrink-0 text-[10px] text-muted-foreground hover:text-primary">✎</button>
-      )}
-    </span>
-  );
-}
-
-/** A1-style letters are a DISPLAY layer over the column's position — the stored key is its id. */
-export function colLetter(i: number): string {
-  let n = i;
-  let out = "";
-  do { out = String.fromCharCode(65 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0);
-  return out;
 }
 
 type RowProps = {
-  row: NexusSheetRow; rowIndex: number; gutterNumber: number; columns: NexusSheetColumn[];
-  selected: boolean; rect: ReturnType<typeof rectOf>; editing: Editing; canEdit: boolean;
+  row: NexusSheetRow; rowIndex: number; rawIndex: number; columns: NexusSheetColumn[];
+  /** Identity changes when any width changes (cells don't read it; it re-renders sticky offsets). */
+  widthsKey: number[];
+  lefts: number[];
+  frozenCols: number;
+  /** Sticky top for a frozen row, null otherwise. */
+  stickyTop: number | null;
+  /** The thick freeze line sits under this row. */
+  freezeEdge: boolean;
+  hiddenCols: Set<string>;
+  unhideRows: string[] | null;
+  onUnhideRows: (ids: string[]) => void;
+  merges: { anchors: Map<string, { rowSpan: number; colSpan: number }>; covered: Set<string> };
+  selected: boolean; rowSelected: boolean; rect: ReturnType<typeof rectOf>; activeC: number;
+  editing: Editing; canEdit: boolean;
   data: ReturnType<typeof buildSheetData>;
   lang: "en" | "id";
   refMode: boolean;
@@ -1753,15 +1767,14 @@ type RowProps = {
   tasks: { id: string; title: string; status?: string | null }[];
   onOpenTask?: (taskId: string) => void;
   commentCounts: Record<string, number>;
-  onOpenComments: (rowId: string, columnId: string, at: { left: number; top: number }) => void;
   showFillHandle: boolean;
-  /** The block a fill drag is about to write, or null. Cells test their own membership. */
   fillRect: FillRect | null;
   onFillStart: () => void;
   onFillOver: (colIndex: number) => void;
   onSelect: (c: number, extend: boolean) => void;
   onDragOver: (c: number) => void;
   onStartDrag: (c: number) => void;
+  onSelectRow: (extend: boolean) => void;
   onEdit: (colId: string) => void;
   onCommit: (colId: string, raw: string, next: Next) => void;
   onCancel: () => void;
@@ -1778,21 +1791,14 @@ type RowProps = {
   onResizeRow: (height: number | null) => void;
 };
 
-/**
- * memo'd so arrow-key navigation re-renders 2 rows instead of the whole sheet. Without this, moving
- * the cursor on a 2,000-row sheet re-renders 2,000 rows per keypress and the grid feels broken.
- */
+/** memo'd so arrow-key navigation re-renders 2 rows instead of the whole sheet. */
 const Row = memo(function Row(p: RowProps) {
   const editingHere = p.editing && p.editing.rowId === p.row.id;
   const trRef = useRef<HTMLTableRowElement>(null);
+  const engine = engineFor(p.data);
+  const t = (en: string, vars?: Record<string, string | number>) => trT(en, vars, p.lang);
 
-  /**
-   * Drag the bottom edge of the row number to change its height.
-   *
-   * Same shape as the column resize on the header edge: the height is applied live to the DOM node
-   * and only SAVED on mouseup — one PATCH per resize instead of one per pixel, and one undo entry
-   * instead of hundreds. Double-click clears it back to the default.
-   */
+  /** Drag the bottom edge of the row number to change its height; double-click resets it. */
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1812,67 +1818,109 @@ const Row = memo(function Row(p: RowProps) {
     window.addEventListener("mouseup", up);
   };
 
+  const sticky = (extra: CSSProperties = {}): CSSProperties =>
+    p.stickyTop !== null ? { position: "sticky", top: p.stickyTop, ...extra } : extra;
+
   return (
     <tr
       ref={trRef}
-      // ALWAYS explicit, never left to the content: the window's offsets are computed from these
-      // numbers, so a row that paints even a pixel taller would drift the spacers out of sync.
+      // ALWAYS explicit: the window's offsets are computed from these numbers.
       style={{ height: p.row.height ?? ROW_H_DEFAULT }}
-      className={cn("group/row", p.dragging && "opacity-40", p.dropTarget && "border-t-2 border-primary")}
-
+      className={cn("group/row", p.dragging && "opacity-40")}
     >
       <td
+        data-raw-row={p.rawIndex}
         draggable={p.canEdit}
         onDragStart={p.onDragStart}
         onDragOver={(e) => { e.preventDefault(); p.onDragOverRow(); }}
         onDrop={(e) => { e.preventDefault(); p.onDrop(); }}
         onDragEnd={p.onDragEnd}
-        title={p.canEdit ? "Tarik buat pindahin baris · klik kanan buat menu" : undefined}
-        onContextMenu={(e) => {
-          if (!p.canEdit) return;
-          e.preventDefault();
-          p.onRowMenu({ left: e.clientX, top: e.clientY });
+        onMouseDown={(e) => { if (e.button === 0 && !(e.target as HTMLElement).closest("button,[data-resize]")) p.onSelectRow(e.shiftKey); }}
+        title={p.canEdit ? t("Click to select the row · drag to move it · right-click for more") : undefined}
+        onContextMenu={(e) => { e.preventDefault(); p.onRowMenu({ left: e.clientX, top: e.clientY }); }}
+        style={{
+          position: "sticky", left: 0, zIndex: p.stickyTop !== null ? 25 : 20,
+          ...(p.stickyTop !== null ? { top: p.stickyTop } : {}),
+          boxShadow: [p.freezeEdge ? `inset 0 -3px 0 0 ${FREEZE_LINE}` : "", p.dropTarget ? `inset 0 2px 0 0 ${SEL}` : ""].filter(Boolean).join(", ") || undefined,
         }}
-        className={cn("sticky left-0 z-10 w-10 border-b border-r border-border bg-muted/60 px-1 text-center text-[10px] tabular-nums text-muted-foreground",
-          "relative",
-          p.canEdit && "cursor-grab active:cursor-grabbing")}
+        className={cn(
+          "relative border-b border-r border-border px-1 text-center text-[11px] tabular-nums",
+          p.rowSelected ? "bg-info text-info-foreground" : p.selected ? `${HEAD_SEL_BG} text-foreground` : "bg-muted text-muted-foreground",
+          p.canEdit && "cursor-default",
+        )}
       >
-        {/* The number stays put. It used to be swapped for a delete icon on hover, which hid the one
-            thing the gutter exists to show — and put a destructive button under an accidental
-            mouse-over. Delete lives in the right-click menu now. */}
-        <span>{p.gutterNumber}</span>
+        <span>{p.rawIndex + 1}</span>
+        {p.unhideRows && (
+          <button
+            onClick={(e) => { e.stopPropagation(); p.onUnhideRows(p.unhideRows!); }}
+            title={t("Show {n} hidden rows", { n: p.unhideRows.length })}
+            aria-label={t("Show {n} hidden rows", { n: p.unhideRows.length })}
+            className="absolute -top-2 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center rounded-sm border border-border bg-card px-1 leading-none text-muted-foreground shadow-soft hover:text-foreground"
+          >
+            <ChevronDown className="h-2.5 w-2.5 rotate-180" /><ChevronDown className="-mt-1 h-2.5 w-2.5" />
+          </button>
+        )}
         {p.canEdit && (
-          // Sits ON the bottom border, half above and half below, so the grab zone covers the line
-          // people actually aim at rather than only the pixels inside this row.
           <span
+            data-resize
             onMouseDown={startResize}
             onDoubleClick={(e) => { e.stopPropagation(); p.onResizeRow(null); }}
-            title="Tarik buat atur tinggi baris · klik 2x buat balik ke default"
-            className="absolute -bottom-[3px] left-0 z-20 h-1.5 w-full cursor-row-resize hover:bg-primary/40"
+            title={t("Drag to resize · double-click for the default height")}
+            className="absolute -bottom-[3px] left-0 z-20 h-1.5 w-full cursor-row-resize hover:bg-info/60"
           />
         )}
       </td>
       {p.columns.map((col, ci) => {
-        const inRect = p.selected && ci >= p.rect.left && ci <= p.rect.right;
+        const key = `${p.row.id}:${col.id}`;
+        if (p.merges.covered.has(key)) return null;
+        const span = p.merges.anchors.get(key);
+        if (p.hiddenCols.has(col.id)) return <td key={col.id} style={sticky()} className="overflow-hidden border-0 p-0" />;
+        const lastCol = span ? ci + span.colSpan - 1 : ci;
+        const inRect = p.selected && lastCol >= p.rect.left && ci <= p.rect.right;
         const refHit = p.refRects.find(
-          (x) => p.gutterNumber - 1 >= x.top && p.gutterNumber - 1 <= x.bottom && ci >= x.left && ci <= x.right,
+          (x) => p.rawIndex >= x.top && p.rawIndex <= x.bottom && ci >= x.left && ci <= x.right,
         );
         const isEditing = Boolean(editingHere && p.editing!.colId === col.id);
         const value = p.row.cells[col.id];
-        // Rules test what the cell COMPUTES to: a formula's result, a typed number — so "empty"
-        // no longer matches every formula cell, and "> 1000000" works on computed totals.
-        const engine = engineFor(p.data);
-        const computed = col.rules?.length || isFormula(value) ? engine.value(p.row.id, col.id) : null;
+        const st = p.row.styles?.[col.id];
+        const computed = engine.value(p.row.id, col.id);
         const ruleHit = col.rules?.length ? matchRule(col.rules, computed) : null;
-        const peerHere = p.peerCursors[`${p.row.id}:${col.id}`];
+        const peerHere = p.peerCursors[key];
+        const numeric = typeof computed === "number" && col.type !== "checkbox" && col.type !== "select" && col.type !== "multiselect";
+
+        // Shadows: drawn borders, the selection's outer edge, the active cell, the freeze line.
+        const shadows = borderShadows(st);
+        if (inRect) {
+          if (p.rowIndex === p.rect.top) shadows.push(`inset 0 2px 0 0 ${SEL}`);
+          if (p.rowIndex === p.rect.bottom || (span && p.rowIndex + span.rowSpan - 1 >= p.rect.bottom)) shadows.push(`inset 0 -2px 0 0 ${SEL}`);
+          if (ci === p.rect.left) shadows.push(`inset 2px 0 0 0 ${SEL}`);
+          if (lastCol === p.rect.right) shadows.push(`inset -2px 0 0 0 ${SEL}`);
+        }
+        if (p.activeC === ci) shadows.push(`inset 0 0 0 2px ${SEL}`);
+        if (ci === p.frozenCols - 1) shadows.push(`inset -3px 0 0 0 ${FREEZE_LINE}`);
+        if (p.freezeEdge) shadows.push(`inset 0 -3px 0 0 ${FREEZE_LINE}`);
+        const frozenCol = ci < p.frozenCols;
+        const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(value) ? engine.format(p.row.id, col.id) : (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null));
+        const text = styled ?? displayCell(col.type, value, { data: p.data, rowId: p.row.id, colId: col.id });
+        const fill = st?.bg || ruleHit;
         return (
           <td
             key={col.id}
-            data-cell={`${p.row.id}:${col.id}`}
+            data-cell={key}
+            role="gridcell"
+            aria-selected={inRect}
+            rowSpan={span?.rowSpan}
+            colSpan={span?.colSpan}
+            style={{
+              ...(frozenCol ? { position: "sticky", left: p.lefts[ci], zIndex: p.stickyTop !== null ? 24 : 15 } : {}),
+              ...(p.stickyTop !== null ? { position: "sticky", top: p.stickyTop, zIndex: frozenCol ? 24 : 18 } : {}),
+              ...styleInline(st),
+              ...(shadows.length ? { boxShadow: shadows.join(", ") } : {}),
+            }}
             onMouseDown={(e) => {
+              if (e.button !== 0) return;
               if (p.refMode) {
-                // preventDefault keeps focus in the formula input — a blur here would commit the
-                // half-written formula before the reference lands.
+                // preventDefault keeps focus in the formula input — a blur would commit it early.
                 e.preventDefault();
                 p.onPickRef(ci);
                 return;
@@ -1880,66 +1928,58 @@ const Row = memo(function Row(p: RowProps) {
               if (e.shiftKey) p.onSelect(ci, true); else p.onStartDrag(ci);
             }}
             onMouseEnter={() => {
-              // Fill tracking lives on the CELL, not the row: a horizontal drag needs the column
-              // under the pointer, which a <tr> handler can't know.
               p.onFillOver(ci);
               if (p.refMode) p.onExtendRef(ci); else p.onDragOver(ci);
             }}
             onDoubleClick={() => p.canEdit && p.onEdit(col.id)}
             onContextMenu={(e) => {
               e.preventDefault();
-              // Right-clicking OUTSIDE the current selection moves to that cell first — otherwise
-              // "Hapus baris" would act on a row the user isn't looking at. Right-clicking INSIDE
-              // it keeps the block, so a multi-row delete still works.
               if (!inRect) p.onSelect(ci, false);
               p.onCellMenu(ci, { left: e.clientX, top: e.clientY });
             }}
             className={cn(
-              "border-b border-r border-border px-2 py-1 align-middle",
-              col.type === "number" || col.type === "currency" ? "text-right tabular-nums" : "",
-              col.type === "checkbox" ? "text-center" : "",
-              inRect ? "bg-primary/10" : "",
-              // Dashed outline in the reference's own colour, so it's obvious which cells the
-              // formula being typed actually reads.
-              refHit ? `outline outline-2 -outline-offset-2 outline-dashed ${REF_COLORS[refHit.color]}` : "",
-              // Only the columns the fill will actually write. The preview used to paint the whole
-              // row, which promised a fill across every column while applyFill wrote just the
-              // selected ones.
-              p.fillRect
-                && p.rowIndex >= p.fillRect.top && p.rowIndex <= p.fillRect.bottom
-                && ci >= p.fillRect.left && ci <= p.fillRect.right
-                ? "bg-primary/5 outline-dashed outline-1 -outline-offset-1 outline-primary/40" : "",
+              "group/cell relative overflow-hidden border-b border-r border-border/80 px-1.5 py-0.5",
+              verticalClass(st), horizontalClass(st, numeric),
+              numeric && "tabular-nums",
+              col.type === "checkbox" && !st?.ha ? "text-center" : "",
+              // Opaque background wherever the cell is pinned, so scrolled cells pass underneath.
+              fill ? "" : frozenCol || p.stickyTop !== null ? "bg-card" : "",
               ruleHit ? RULE_STYLE_CLASS[ruleHit.style] : "",
-              p.findHits.some((h) => h.r === p.rowIndex && h.c === ci) ? "bg-amber-100" : "",
-              "relative",
+              styleClasses(st),
+              refHit ? `outline outline-2 -outline-offset-2 outline-dashed ${REF_COLORS[refHit.color]}` : "",
+              p.fillRect && p.rowIndex >= p.fillRect.top && p.rowIndex <= p.fillRect.bottom && ci >= p.fillRect.left && ci <= p.fillRect.right
+                ? "bg-info/5 outline-dashed outline-1 -outline-offset-1 outline-info/60" : "",
+              p.findHits.some((h) => h.r === p.rowIndex && h.c === ci) ? "bg-amber-100 dark:bg-amber-900/40" : "",
             )}
           >
-            {/* Someone else is parked here. Their colour comes from the server as a hex string, so
-                it has to be an inline style — Tailwind can't express a runtime colour. The inset
-                shadow draws inside the cell so it never shifts the grid by a pixel. */}
+            {/* Selection tint as an overlay, so it sits over fills and pinned cells stay opaque. */}
+            {inRect && p.activeC !== ci && <span aria-hidden className="pointer-events-none absolute inset-0 bg-info/10" />}
             {peerHere && (
               <>
+                <span className="pointer-events-none absolute inset-0 z-[1]" style={{ boxShadow: `inset 0 0 0 2px ${peerHere.color}` }} />
                 <span
-                  className="pointer-events-none absolute inset-0 z-[1]"
-                  style={{ boxShadow: `inset 0 0 0 2px ${peerHere.color}` }}
-                />
-                <span
-                  className="pointer-events-none absolute -top-[9px] left-0 z-[2] max-w-[110px] truncate rounded-t px-1 text-[9px] font-bold leading-[10px] text-white"
+                  className="pointer-events-none absolute right-0 top-0 z-[2] max-w-[110px] truncate rounded-bl px-1 text-[9px] font-bold leading-[11px] text-white"
                   style={{ backgroundColor: peerHere.color }}
                 >
                   {peerHere.name}
                 </span>
               </>
             )}
-            {/* The little corner flag every spreadsheet uses for "there's a note here". Outside the
-                type branch on purpose: a checkbox or a task cell can be commented on too. */}
-            {(p.commentCounts[`${p.row.id}:${col.id}`] ?? 0) > 0 && (
+            {(p.commentCounts[key] ?? 0) > 0 && (
               <span
-                title={`${p.commentCounts[`${p.row.id}:${col.id}`]} komentar — klik kanan buat buka`}
+                title={t("{n} comments — right-click to open", { n: p.commentCounts[key] })}
                 className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-amber-500"
               />
             )}
+            {p.showFillHandle && inRect && lastCol === p.rect.right && !isEditing && (
+              <span
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); p.onFillStart(); }}
+                title={t("Drag to copy or continue a series")}
+                className="absolute -bottom-[1px] -right-[1px] z-10 h-[7px] w-[7px] cursor-crosshair border border-card bg-info"
+              />
+            )}
             {isEditing ? (
+              <div className="absolute inset-0 z-10">
               <CellEditor
                 col={col}
                 initial={p.editing?.seed ?? editFormula(value, p.data.shape) ?? editValue(col.type, value)}
@@ -1949,6 +1989,7 @@ const Row = memo(function Row(p: RowProps) {
                 onDraftChange={p.onDraftChange}
                 registerEditor={p.registerEditor}
               />
+              </div>
             ) : col.type === "task" ? (
               <TaskCell
                 taskId={typeof value === "string" ? value : ""}
@@ -1958,35 +1999,30 @@ const Row = memo(function Row(p: RowProps) {
                 onPick={(id) => p.onCommit(col.id, id, null)}
               />
             ) : col.type === "select" ? (
-              // A pill and a caret, like Sheets. Bare text gave no hint the cell was a dropdown at
-              // all — the only way to find out was to double-click and see what happened.
               <span className="flex items-center gap-1 overflow-hidden">
                 {value !== undefined && value !== null && value !== "" && (
-                  <span className={cn("max-w-full truncate rounded-full px-2 text-[11px] font-semibold leading-5", optionColor(col, String(value)))}>
-                    {String(value)}
-                  </span>
+                  <span className={cn("max-w-full truncate rounded-full px-2 text-[11px] font-medium leading-5", optionColor(col, String(value)))}>{String(value)}</span>
                 )}
-                {p.canEdit && <ChevronDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/60" />}
+                {p.canEdit && <ChevronDown className={cn("ml-auto h-3 w-3 shrink-0 text-muted-foreground/60", (value === undefined || value === null || value === "") && "opacity-0 group-hover/cell:opacity-100")} />}
               </span>
             ) : col.type === "multiselect" ? (
               <span className="flex items-center gap-1 overflow-hidden">
                 <span className="flex min-w-0 flex-wrap items-center gap-1">
                   {readMulti(value).map((v) => (
-                    <span key={v} className={cn("max-w-full truncate rounded-full px-2 text-[11px] font-semibold leading-5", optionColor(col, v))}>{v}</span>
+                    <span key={v} className={cn("max-w-full truncate rounded-full px-2 text-[11px] font-medium leading-5", optionColor(col, v))}>{v}</span>
                   ))}
                 </span>
-                {p.canEdit && <ChevronDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/60" />}
+                {p.canEdit && <ChevronDown className={cn("ml-auto h-3 w-3 shrink-0 text-muted-foreground/60", !readMulti(value).length && "opacity-0 group-hover/cell:opacity-100")} />}
               </span>
-            ) : col.type === "link" && isLinkCell(value) ? (
+            ) : isLinkCell(value) ? (
               <a
                 href={value.u}
                 target="_blank"
                 rel="noopener noreferrer"
-                // stopPropagation so clicking the link doesn't also start a selection drag.
                 onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => { if (!e.metaKey && !e.ctrlKey) e.stopPropagation(); }}
                 title={value.u}
-                className="block truncate text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+                className={cn("block text-info underline decoration-info/40 underline-offset-2 hover:decoration-info", st?.w ? "whitespace-normal break-words" : "truncate")}
               >
                 {value.t || value.u}
               </a>
@@ -1994,46 +2030,42 @@ const Row = memo(function Row(p: RowProps) {
               <button
                 disabled={!p.canEdit}
                 onClick={() => p.onCommit(col.id, value === true ? "" : "true", null)}
-                className={cn("grid h-4 w-4 place-items-center rounded border", value ? "border-primary bg-primary text-primary-foreground" : "border-border")}
+                aria-label={value ? t("Untick") : t("Tick")}
+                className={cn("mx-auto grid h-4 w-4 place-items-center rounded border", value ? "border-primary bg-primary text-primary-foreground" : "border-control-border")}
               >
-                {value ? <Check className="h-3 w-3" /> : null}
+                {value ? <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden><path d="M2.5 6.5l2.2 2.2L9.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}
               </button>
             ) : (
-              <>
-              {p.showFillHandle && ci === p.rect.right && p.selected && (
-                // The grab square, same place every spreadsheet puts it. Fills in all four
-                // directions; the axis is locked to whichever way the pointer travelled further.
-                <span
-                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); p.onFillStart(); }}
-                  title="Tarik ke bawah, atas, kiri, atau kanan buat nyalin / nerusin deret"
-                  className="absolute -bottom-[3px] -right-[3px] z-10 h-[7px] w-[7px] cursor-crosshair rounded-[1px] bg-primary"
-                />
-              )}
               <span
-                className={cn("block truncate", isFormula(value) && (isError(computed) ? "font-semibold text-rose-600" : "text-primary"))}
-                title={isFormula(value)
-                  ? (isError(computed) ? `${computed} — ${errorHint(computed, p.lang)}` : p.lang === "en" ? "Formula cell — double-click to see the formula" : "Sel rumus — klik 2x buat lihat rumusnya")
-                  : undefined}
+                className={cn("block", st?.w ? "whitespace-pre-wrap break-words" : "truncate whitespace-pre",
+                  isError(computed) && isFormula(value) ? "font-medium text-destructive" : "")}
+                title={isFormula(value) && isError(computed) ? `${computed} — ${errorHint(computed, p.lang)}` : undefined}
               >
-                {displayCell(col.type, value, { data: p.data, rowId: p.row.id, colId: col.id })}
+                {text}
               </span>
-              </>
             )}
           </td>
         );
       })}
-      <td className="border-b border-border" />
+      <td style={sticky()} className={cn("border-b border-border/60", p.stickyTop !== null && "bg-card")} />
     </tr>
   );
 }, (a, b) =>
   a.row === b.row &&
   a.columns === b.columns &&
-  // A formula in THIS row can read cells in another row, so its rendered value changes when the
-  // sheet data does — comparing only `row` would leave stale results on screen.
+  // A formula in THIS row can read cells in another row, so its value changes when the data does.
   a.data === b.data &&
   a.lang === b.lang &&
   a.rowIndex === b.rowIndex &&
-  a.gutterNumber === b.gutterNumber &&
+  a.rawIndex === b.rawIndex &&
+  a.widthsKey === b.widthsKey &&
+  a.lefts === b.lefts &&
+  a.frozenCols === b.frozenCols &&
+  a.stickyTop === b.stickyTop &&
+  a.freezeEdge === b.freezeEdge &&
+  a.hiddenCols === b.hiddenCols &&
+  a.unhideRows === b.unhideRows &&
+  a.merges === b.merges &&
   a.canEdit === b.canEdit &&
   a.dragging === b.dragging &&
   a.dropTarget === b.dropTarget &&
@@ -2045,197 +2077,10 @@ const Row = memo(function Row(p: RowProps) {
   a.row.height === b.row.height &&
   a.showFillHandle === b.showFillHandle &&
   a.fillRect === b.fillRect &&
-  // Only re-render when this row's selected-ness or edit state actually changed.
-  (a.selected === b.selected && (!a.selected || (a.rect.left === b.rect.left && a.rect.right === b.rect.right))) &&
+  a.activeC === b.activeC &&
+  a.rowSelected === b.rowSelected &&
+  // Only re-render when this row's selected-ness or the selection's edges in it changed.
+  (a.selected === b.selected && (!a.selected || (a.rect.left === b.rect.left && a.rect.right === b.rect.right && a.rect.top === b.rect.top && a.rect.bottom === b.rect.bottom))) &&
   (a.editing?.rowId === a.row.id) === (b.editing?.rowId === b.row.id) &&
   (a.editing?.rowId !== a.row.id || a.editing?.colId === b.editing?.colId),
 );
-
-/** The one mounted input. Uncontrolled on purpose: a refetch can never overwrite what's being typed. */
-function CellEditor({ col, initial, seeded, onCommit, onCancel, onDraftChange, registerEditor }: {
-  col: NexusSheetColumn; initial: string;
-  /** True when `initial` is the keystroke that OPENED the editor, rather than the cell's value. */
-  seeded: boolean;
-  onCommit: (raw: string, next: Next) => void;
-  onCancel: () => void;
-  onDraftChange: (text: string) => void;
-  registerEditor: (el: HTMLInputElement | null) => void;
-}) {
-  const ref = useRef<HTMLInputElement | HTMLSelectElement>(null);
-  const done = useRef(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.focus();
-    if (!(el instanceof HTMLInputElement)) return;
-    // Caret at the END, like Sheets: F2 / double-click / Enter APPEND to what's there (typing a
-    // character instead replaces the cell — that path arrives here already seeded with the key).
-    // Never select-all: a keystroke opening the editor would then eat the next one ("=SUM" -> "SUM").
-    try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* date inputs */ }
-  }, [seeded]);
-
-  const finish = (next: Next) => {
-    if (done.current) return;
-    done.current = true;
-    onCommit(ref.current?.value ?? "", next);
-  };
-
-  if (col.type === "multiselect" || col.type === "select") {
-    return (
-      <ChoiceEditor
-        col={col}
-        multi={col.type === "multiselect"}
-        initial={initial}
-        onCommit={(v) => onCommit(v, null)}
-        onCancel={onCancel}
-      />
-    );
-  }
-
-  return (
-    <FormulaInput
-      inputRef={ref as React.RefObject<HTMLInputElement>}
-      col={col}
-      initial={initial}
-      seeded={seeded}
-      onFinish={finish}
-      onCancel={() => { done.current = true; onCancel(); }}
-      onDraftChange={onDraftChange}
-      registerEditor={registerEditor}
-    />
-  );
-}
-
-/**
- * The cell input, plus the function autocomplete that appears once the text starts with "=".
- *
- * The list only offers functions the engine actually implements (SUPPORTED_FUNCTIONS lives next to
- * the evaluator's switch) — suggesting SUMPRODUCT and then returning #NAME? would be worse than not
- * suggesting it. Rendered through a portal with fixed positioning because the grid scroll container
- * has `overflow:auto`, which would otherwise clip a dropdown anchored inside a <td>.
- */
-function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDraftChange, registerEditor }: {
-  inputRef: React.RefObject<HTMLInputElement>;
-  col: NexusSheetColumn;
-  initial: string;
-  /** Opened by typing (replace mode): arrow keys commit and move, like Sheets. */
-  seeded: boolean;
-  onFinish: (next: Next) => void;
-  onCancel: () => void;
-  onDraftChange: (text: string) => void;
-  registerEditor: (el: HTMLInputElement | null) => void;
-}) {
-  const [text, setTextRaw] = useState(initial);
-  const { lang } = useLang();
-  // The grid needs the live draft to know whether a click should insert a reference, and to draw the
-  // dashed outlines — so every change goes up as well as into local state.
-  const setText = useCallback((v: string) => { setTextRaw(v); onDraftChange(v); }, [onDraftChange]);
-  useEffect(() => {
-    onDraftChange(initial);
-    registerEditor(inputRef.current);
-    return () => { onDraftChange(""); registerEditor(null); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const [pick, setPick] = useState(0);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
-
-  /**
-   * What to complete right now.
-   *   ""   -> the caret sits right after "=", an operator, "(" or a separator: offer everything,
-   *           which is what a spreadsheet does the instant you type "=".
-   *   "SU" -> filter by that prefix.
-   *   null -> nothing to complete (mid-number, after ")" or a closing quote).
-   */
-  const token = useMemo(() => {
-    if (!text.startsWith("=")) return null;
-    const letters = /([A-Za-z]+)$/.exec(text);
-    if (letters) return letters[1].toUpperCase();
-    return /[=+\-*/^&<>(,;:]$/.test(text) ? "" : null;
-  }, [text]);
-
-  const matches = useMemo(
-    () => (token === null ? [] : SUPPORTED_FUNCTIONS.filter((f) => f.name.startsWith(token))),
-    [token],
-  );
-  const open = matches.length > 0;
-
-  useEffect(() => { setPick(0); }, [token]);
-  useEffect(() => {
-    if (!open) { setAnchor(null); return; }
-    const r = inputRef.current?.getBoundingClientRect();
-    if (r) setAnchor({ left: r.left, top: r.bottom + 2, width: Math.max(240, r.width) });
-  }, [open, text, inputRef]);
-
-  const accept = (name: string) => {
-    // Replace the half-typed name and open the bracket, the way every spreadsheet does.
-    const next = `${text.replace(/[A-Za-z]+$/, "")}${name}(`;
-    setText(next);
-    const el = inputRef.current;
-    if (el) {
-      el.value = next;
-      requestAnimationFrame(() => { el.focus(); el.setSelectionRange(next.length, next.length); });
-    }
-  };
-
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type={col.type === "date" && !text.startsWith("=") ? "date" : "text"}
-        inputMode={col.type === "number" || col.type === "currency" ? "decimal" : undefined}
-        defaultValue={initial}
-        onChange={(e) => setText(e.target.value)}
-        onSelect={(e) => setTextRaw((e.target as HTMLInputElement).value)}
-        // Blur while clicking a suggestion would commit before the pick lands; the list uses
-        // onMouseDown+preventDefault so focus never leaves in the first place.
-        onBlur={() => onFinish(null)}
-        onKeyDown={(e) => {
-          e.stopPropagation(); // arrows move the caret, not the grid selection
-          if (open) {
-            if (e.key === "ArrowDown") { e.preventDefault(); setPick((p) => (p + 1) % matches.length); return; }
-            if (e.key === "ArrowUp") { e.preventDefault(); setPick((p) => (p - 1 + matches.length) % matches.length); return; }
-            if (e.key === "Tab") { e.preventDefault(); accept(matches[pick].name); return; }
-            if (e.key === "Enter" && token) { e.preventDefault(); accept(matches[pick].name); return; }
-            if (e.key === "Escape") { e.preventDefault(); setText(`${text} `); return; } // close list, keep editing
-          }
-          if (e.key === "Enter") { e.preventDefault(); onFinish(e.shiftKey ? "up" : "down"); }
-          else if (e.key === "Tab") { e.preventDefault(); onFinish(e.shiftKey ? "left" : "right"); }
-          else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
-          else if (seeded && !text.startsWith("=") && !e.shiftKey && !e.metaKey && !e.ctrlKey &&
-            (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-            // Typed straight into the cell (not F2): arrows commit and move on, as in Sheets.
-            e.preventDefault();
-            onFinish(e.key === "ArrowDown" ? "down" : e.key === "ArrowUp" ? "up" : e.key === "ArrowLeft" ? "left" : "right");
-          }
-        }}
-        className="w-full select-text rounded border border-primary bg-background px-1 py-0.5 text-sm outline-none"
-      />
-      {open && anchor && createPortal(
-        <div
-          style={{ left: anchor.left, top: anchor.top, width: anchor.width }}
-          className="fixed z-[60] overflow-hidden rounded-xl border border-border bg-card shadow-pop"
-        >
-          <div className="max-h-64 overflow-y-auto">
-          {matches.map((f, i) => (
-            <button
-              key={f.name}
-              onMouseDown={(e) => { e.preventDefault(); accept(f.name); }}
-              onMouseEnter={() => setPick(i)}
-              className={cn("block w-full px-3 py-1.5 text-left transition", i === pick ? "bg-primary/10" : "hover:bg-accent")}
-            >
-              <div className="font-mono text-xs font-bold">
-                {f.name}<span className="font-normal text-muted-foreground">{f.args}</span>
-              </div>
-              <div className="text-[11px] text-muted-foreground">{lang === "en" ? f.descEn : f.desc}</div>
-            </button>
-          ))}
-          </div>
-          <div className="border-t border-border px-3 py-1 text-[10px] text-muted-foreground">
-            <b>Tab</b> buat pilih · <b>↑↓</b> buat pindah
-          </div>
-        </div>,
-        document.body,
-      )}
-    </>
-  );
-}

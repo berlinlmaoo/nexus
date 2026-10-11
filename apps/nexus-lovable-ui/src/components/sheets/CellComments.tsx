@@ -5,6 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import { isFormulaCell, toDisplay, type SheetShape } from "@/lib/sheet-formula";
 import { formatCell } from "./sheet-types";
+import { useLang } from "@/lib/lang";
 import type {
   NexusSheetCellValue, NexusSheetColumnType, NexusSheetComment, NexusSheetRevision,
 } from "@/lib/nexus-api";
@@ -39,6 +40,7 @@ export function CellCommentThread({
   onRestore: (value: unknown) => void;
   onClose: () => void;
 }) {
+  const { t, locale } = useLang();
   const [tab, setTab] = useState<"comments" | "history">("comments");
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -53,12 +55,12 @@ export function CellCommentThread({
 
   /** A stored value as a person reads it: formulas as their A1 form, empty as an explicit label. */
   const show = (v: unknown) => {
-    if (v === null || v === undefined || v === "") return "(kosong)";
+    if (v === null || v === undefined || v === "") return t("(empty)");
     if (isFormulaCell(v)) { const f = toDisplay(v.f, shape); return f.startsWith("=") ? f : `=${f}`; }
     return formatCell(columnType, v) || (typeof v === "object" ? "" : String(v));
   };
   const when = (iso: string) =>
-    new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return createPortal(
     <>
@@ -69,26 +71,26 @@ export function CellCommentThread({
       >
         <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
           {([
-            { id: "comments", label: "Komentar", icon: MessageSquare, badge: comments.filter((c) => !c.resolvedAt).length },
-            { id: "history", label: "Riwayat", icon: History, badge: 0 },
-          ] as const).map((t) => (
+            { id: "comments", label: t("Comments"), icon: MessageSquare, badge: comments.filter((c) => !c.resolvedAt).length },
+            { id: "history", label: t("History"), icon: History, badge: 0 },
+          ] as const).map((tb) => (
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
+              key={tb.id}
+              onClick={() => setTab(tb.id)}
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-black transition",
-                tab === t.id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
+                "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition",
+                tab === tb.id ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <t.icon className="h-3.5 w-3.5" />
-              {t.label}
-              {t.badge > 0 && (
-                <span className="rounded-full bg-amber-500 px-1 text-[9px] font-black text-white">{t.badge}</span>
+              <tb.icon className="h-3.5 w-3.5" />
+              {tb.label}
+              {tb.badge > 0 && (
+                <span className="rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white">{tb.badge}</span>
               )}
             </button>
           ))}
           {busy && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-          <button onClick={onClose} className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} aria-label={t("Close")} className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -97,7 +99,7 @@ export function CellCommentThread({
           <>
             <div className="max-h-64 space-y-2 overflow-y-auto p-3">
               {comments.length === 0 && (
-                <p className="py-4 text-center text-xs text-muted-foreground">Belum ada komentar di sel ini.</p>
+                <p className="py-4 text-center text-xs text-muted-foreground">{t("No comments on this cell yet.")}</p>
               )}
               {comments.map((c) => (
                 <div key={c.id} className={cn("group flex gap-2", c.resolvedAt && "opacity-50")}>
@@ -106,7 +108,7 @@ export function CellCommentThread({
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-[11px] font-bold">{c.author.name ?? "—"}</span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">{when(c.createdAt)}</span>
-                      {c.resolvedAt && <span className="rounded-full bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-700">selesai</span>}
+                      {c.resolvedAt && <span className="rounded-full bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-700">{t("resolved")}</span>}
                     </div>
                     <p className="whitespace-pre-wrap break-words text-xs">{c.body}</p>
                   </div>
@@ -114,12 +116,12 @@ export function CellCommentThread({
                     <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition group-hover:opacity-100">
                       <button
                         onClick={() => onResolve(c.id, !c.resolvedAt)}
-                        title={c.resolvedAt ? "Buka lagi" : "Tandai selesai"}
+                        title={c.resolvedAt ? t("Reopen") : t("Mark resolved")}
                         className="rounded p-0.5 text-muted-foreground hover:text-emerald-600"
                       ><Check className="h-3 w-3" /></button>
                       {/* Delete is the author's (the server also lets a lead clean up). */}
                       {c.authorId === meId && (
-                        <button onClick={() => onDelete(c.id)} title="Hapus"
+                        <button onClick={() => onDelete(c.id)} title={t("Delete")}
                           className="rounded p-0.5 text-muted-foreground hover:text-rose-600"><Trash2 className="h-3 w-3" /></button>
                       )}
                     </div>
@@ -140,7 +142,7 @@ export function CellCommentThread({
                     if (e.key === "Escape") onClose();
                   }}
                   rows={1}
-                  placeholder="Tulis komentar… (@nama buat nge-tag)"
+                  placeholder={t("Write a comment… (@name to tag)")}
                   className="max-h-24 min-h-[2rem] flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary"
                 />
                 <button
@@ -155,11 +157,11 @@ export function CellCommentThread({
           <>
             <div className="max-h-64 space-y-2 overflow-y-auto p-3">
               {revisionsLoading && (
-                <p className="py-4 text-center text-xs text-muted-foreground">Ngambil riwayat…</p>
+                <p className="py-4 text-center text-xs text-muted-foreground">{t("Loading history…")}</p>
               )}
               {!revisionsLoading && revisions.length === 0 && (
                 <p className="py-4 text-center text-xs text-muted-foreground">
-                  Belum ada perubahan tercatat di sel ini.
+                  {t("No changes recorded on this cell yet.")}
                 </p>
               )}
               {revisions.map((r) => (
@@ -169,7 +171,7 @@ export function CellCommentThread({
                     <div className="flex items-center gap-1.5">
                       {/* The author FK is SET NULL, so a departed employee leaves the change intact
                           but nameless — say that plainly instead of rendering a blank. */}
-                      <span className="truncate text-[11px] font-bold">{r.author?.name ?? "akun terhapus"}</span>
+                      <span className="truncate text-[11px] font-bold">{r.author?.name ?? t("deleted account")}</span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">{when(r.createdAt)}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-1 text-xs">
@@ -181,7 +183,7 @@ export function CellCommentThread({
                   {canEdit && (
                     <button
                       onClick={() => onRestore(r.oldValue)}
-                      title={`Balikin ke ${show(r.oldValue)}`}
+                      title={t("Restore to {value}", { value: show(r.oldValue) })}
                       className="shrink-0 self-start rounded p-0.5 text-muted-foreground opacity-0 transition hover:text-primary group-hover:opacity-100"
                     ><RotateCcw className="h-3 w-3" /></button>
                   )}
@@ -189,8 +191,7 @@ export function CellCommentThread({
               ))}
             </div>
             <p className="border-t border-border px-3 py-1.5 text-[10px] leading-snug text-muted-foreground">
-              Riwayat disimpan 90 hari. Perubahan terakhir tiap sel disimpan selamanya, jadi
-              &quot;siapa yang naruh angka ini&quot; nggak pernah hilang.
+              {t("History is kept for 90 days. The latest change of every cell is kept forever, so \"who put this number here\" is never lost.")}
             </p>
           </>
         )}

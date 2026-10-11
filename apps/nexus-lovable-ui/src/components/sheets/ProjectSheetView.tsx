@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Loader2, Plus, Redo2, Sheet as SheetIcon, Undo2, Upload, X } from "lucide-react";
-import { nexusApi, type NexusSheet, type NexusSheetColumn, type NexusSheetRow } from "@/lib/nexus-api";
-import { useRef } from "react";
+import { Download, Loader2, Sheet as SheetIcon, Upload } from "lucide-react";
+import {
+  nexusApi, type NexusSheet, type NexusSheetCellStyle, type NexusSheetColumn, type NexusSheetColumnColor, type NexusSheetRow,
+  type NexusSheetSettings,
+} from "@/lib/nexus-api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { celebrate } from "@/components/Celebration";
-import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
 import { CellCommentThread } from "./CellComments";
 import { useSheetRealtime } from "./use-sheet-realtime";
 import { SheetGrid } from "./SheetGrid";
+import { SheetMobile } from "./SheetMobile";
+import { SheetTabs } from "./SheetTabs";
 import { useSheetUndo } from "./use-sheet-undo";
-import { buildSheetData, displayCell, editFormula, editValue, inputToCell, sameCell } from "./sheet-types";
 import { useLang } from "@/lib/lang";
+
+type SettingsPatch = { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null };
 
 /**
  * The Spreadsheet tab. Free-form rows that belong to nothing — unlike the Table view, whose rows are
@@ -37,23 +41,23 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         // Say what was RECOGNISED, not just what was counted — a dropdown or a link surviving the
         // trip is the part someone would otherwise have to go and check by hand.
         const extra = [
-          res.dropdowns ? `${res.dropdowns} kolom jadi dropdown` : "",
-          res.links ? `${res.links} kolom jadi link` : "",
+          res.dropdowns ? t("{n} columns became dropdowns", { n: res.dropdowns }) : "",
+          res.links ? t("{n} columns became links", { n: res.links }) : "",
         ].filter(Boolean).join(", ");
-        alert(`${res.imported} baris masuk. Sheet sekarang ${res.columns} kolom${extra ? ` · ${extra}` : ""}.`);
+        alert(t("{rows} rows imported. The sheet now has {cols} columns.", { rows: res.imported, cols: res.columns }) + (extra ? ` ${extra}.` : ""));
       }
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal import."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Import failed.")),
   });
   const addSheet = useMutation({
     mutationFn: (name: string) => nexusApi.createSheet(projectId, name),
     onSuccess: (created) => { setActiveId(created.id); refreshList(); },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal bikin sheet."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't create the sheet.")),
   });
   const removeSheet = useMutation({
     mutationFn: (id: string) => nexusApi.deleteSheet(id),
     onSuccess: () => { setActiveId(null); refreshList(); },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal hapus sheet."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't delete the sheet.")),
   });
 
   // Tasks for the "task" column type. Reuses the project's existing task query key, so opening the
@@ -128,14 +132,14 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         return { ...prev, rows: prev.rows.map((r) => (by.has(r.id) ? { ...r, height: by.get(r.id)! } : r)) };
       });
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal atur tinggi baris."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't change the row height.")),
   });
   const resizeRow = (rowId: string, height: number | null) => {
     const before = sheetRef.current?.rows.find((r) => r.id === rowId)?.height ?? null;
     if (before === height) return;
     setRowHeights.mutate([{ rowId, height }]);
     undo.push({
-      label: height === null ? "reset tinggi baris" : "atur tinggi baris",
+      label: height === null ? t("reset row height") : t("row height"),
       undo: () => setRowHeights.mutateAsync([{ rowId, height: before }]).then(() => {}),
       redo: () => setRowHeights.mutateAsync([{ rowId, height }]).then(() => {}),
     });
@@ -181,7 +185,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     mutationFn: (body: string) =>
       nexusApi.addSheetComment(sheetId as string, { rowId: thread!.rowId, columnId: thread!.columnId, body }),
     onSuccess: refreshComments,
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal ngirim komentar."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't send the comment.")),
   });
   const patchComment = useMutation({
     mutationFn: (payload: { commentId: string; resolved?: boolean; body?: string }) =>
@@ -287,7 +291,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
    * The previous values are read here, at the moment the caller has them — after the mutation lands
    * they're already gone, and a background refetch could arrive at any time in between.
    */
-  const editCells = (edits: { rowId: string; values: Record<string, unknown> }[], label = "edit sel") => {
+  const editCells = (edits: { rowId: string; values: Record<string, unknown> }[], label = t("edit cells")) => {
     // From the cache, not the last render: two quick edits must each see the other's value as "before".
     const current = qc.getQueryData<NexusSheet>(key)?.rows ?? sheetRef.current?.rows ?? [];
     const rowsById = new Map(current.map((r) => [r.id, r]));
@@ -306,7 +310,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   };
 
   const addRows = useMutation({
-    mutationFn: (payload: { count?: number; afterRowId?: string; beforeRowId?: string; rows?: Record<string, unknown>[]; positions?: number[] }) =>
+    mutationFn: (payload: { count?: number; afterRowId?: string; beforeRowId?: string; rows?: Record<string, unknown>[]; positions?: number[]; styles?: Record<string, unknown>[] }) =>
       nexusApi.addSheetRows(sheetId as string, payload),
     onSuccess: (res) => {
       qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, rows: [...old.rows, ...res.rows].sort((a, b) => a.position - b.position) } : old));
@@ -317,7 +321,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       nexusApi.reorderSheetRow(sheetId as string, rowId, afterRowId),
     // The server computes the midpoint, so the new order only exists once it answers.
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal mindahin baris."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't move the row.")),
   });
   const delRows = useMutation({
     mutationFn: (rowIds: string[]) => nexusApi.deleteSheetRows(sheetId as string, rowIds),
@@ -349,13 +353,15 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     const snapshot = (sheetRef.current?.rows ?? []).filter((r) => rowIds.includes(r.id));
     delRows.mutate(rowIds);
     undo.push({
-      label: `hapus ${rowIds.length} baris`,
+      label: t("delete {n} rows", { n: rowIds.length }),
       undo: async () => {
         // The restored rows get NEW ids — a formula that pointed at a deleted row stays #REF!, which
         // is the honest outcome rather than silently re-binding to a different row.
         await addRows.mutateAsync({
           rows: snapshot.map((r) => r.cells as Record<string, unknown>),
           positions: snapshot.map((r) => r.position),
+          // Formatting comes back with the values.
+          styles: snapshot.map((r) => (r.styles ?? {}) as Record<string, unknown>),
         });
       },
       redo: async () => {
@@ -368,7 +374,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   const saveColumns = useMutation({
     mutationFn: (columns: NexusSheetColumn[]) => nexusApi.updateSheet(sheetId as string, { columns }),
     onSuccess: (res) => qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, columns: res.columns } : old)),
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal nyimpen kolom."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't save the column.")),
   });
 
   /**
@@ -410,7 +416,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   const delColumn = useMutation({
     mutationFn: (columnId: string) => nexusApi.deleteSheetColumn(sheetId as string, columnId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal hapus kolom."),
+    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't delete the column.")),
   });
 
   /**
@@ -430,7 +436,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
 
     delColumn.mutate(columnId);
     undo.push({
-      label: `hapus kolom ${col.name || "tanpa nama"}`,
+      label: t("delete column {name}", { name: col.name || t("(untitled)") }),
       undo: async () => {
         const now = sheetRef.current?.columns ?? [];
         const restored = [...now];
@@ -453,62 +459,154 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     });
   };
 
+  // --- Formatting -------------------------------------------------------------
+  /** Apply per-cell formatting at once (optimistic) and save it; the server answer then wins. */
+  const sendStyles = async (edits: { rowId: string; values: Record<string, NexusSheetCellStyle | null> }[]) => {
+    const id = sheetRef.current?.id;
+    if (!id || !edits.length) return;
+    qc.setQueryData<NexusSheet>(key, (old) => {
+      if (!old) return old;
+      const byId = new Map(edits.map((e) => [e.rowId, e.values]));
+      return {
+        ...old,
+        rows: old.rows.map((r) => {
+          const values = byId.get(r.id);
+          if (!values) return r;
+          const styles = { ...(r.styles ?? {}) };
+          for (const [k, v] of Object.entries(values)) { if (v) styles[k] = v; else delete styles[k]; }
+          return { ...r, styles };
+        }),
+      };
+    });
+    setSaving((n) => n + 1);
+    try {
+      for (let i = 0; i < edits.length; i += 500) {
+        const res = await nexusApi.setSheetStyles(id, edits.slice(i, i + 500));
+        patchRows(res.rows);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t("Couldn't save."));
+      qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
+    } finally {
+      setSaving((n) => n - 1);
+    }
+  };
+  const editStyles = (edits: { rowId: string; values: Record<string, NexusSheetCellStyle | null> }[], label: string) => {
+    const current = qc.getQueryData<NexusSheet>(key)?.rows ?? [];
+    const rowsById = new Map(current.map((r) => [r.id, r]));
+    const before = edits.map((e) => ({
+      rowId: e.rowId,
+      values: Object.fromEntries(Object.keys(e.values).map((cid) => [cid, rowsById.get(e.rowId)?.styles?.[cid] ?? null])),
+    }));
+    void sendStyles(edits);
+    undo.push({ label, undo: () => sendStyles(before), redo: () => sendStyles(edits) });
+  };
+
+  // --- Sheet settings (freeze, hide, merge, tab colour) ---------------------------
+  const sendSettings = async (patch: SettingsPatch, id = sheetRef.current?.id) => {
+    if (!id) return;
+    if (id === sheetRef.current?.id) {
+      qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => {
+        if (!old) return old;
+        const next: Record<string, unknown> = { ...(old.settings ?? {}) };
+        for (const [k, v] of Object.entries(patch)) { if (v === null || v === undefined) delete next[k]; else next[k] = v; }
+        return { ...old, settings: next as NexusSheetSettings };
+      });
+    }
+    try {
+      const res = await nexusApi.updateSheet(id, { settings: patch });
+      qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => (old ? { ...old, settings: res.settings } : old));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t("Couldn't save."));
+      qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
+    }
+  };
+  const editSettings = (patch: SettingsPatch, label: string) => {
+    const cur = (sheetRef.current?.settings ?? {}) as Record<string, unknown>;
+    const before = Object.fromEntries(Object.keys(patch).map((k) => [k, cur[k] ?? null])) as SettingsPatch;
+    void sendSettings(patch);
+    undo.push({ label, undo: () => sendSettings(before), redo: () => sendSettings(patch) });
+  };
+
+  // --- Tabs ---------------------------------------------------------------------
+  const renameSheet = async (id: string, name: string) => {
+    try {
+      await nexusApi.updateSheet(id, { name });
+      qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => (old ? { ...old, name } : old));
+      refreshList();
+    } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't save.")); }
+  };
+  const duplicateSheet = async (id: string) => {
+    try {
+      const created = await nexusApi.duplicateSheet(projectId, id);
+      setActiveId(created.id);
+      refreshList();
+    } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't duplicate the sheet.")); }
+  };
+  const colorSheet = async (id: string, color: NexusSheetColumnColor | null) => {
+    await sendSettings({ tabColor: color }, id);
+    refreshList();
+  };
+  const moveSheet = async (id: string, dir: -1 | 1) => {
+    const order = sheets.map((s) => s.id);
+    const i = order.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    try { await nexusApi.reorderSheets(projectId, order); refreshList(); }
+    catch (e) { alert(e instanceof Error ? e.message : t("Couldn't move the sheet.")); }
+  };
+
   if (list.isLoading || sheetQ.isLoading) {
     return <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
   if (!sheet) {
-    return <p className="py-16 text-center text-sm text-muted-foreground">Spreadsheet-nya belum bisa dibuka.</p>;
+    return <p className="py-16 text-center text-sm text-muted-foreground">{t("This spreadsheet can't be opened yet.")}</p>;
   }
 
+  const tabs = (
+    <SheetTabs
+      sheets={sheets}
+      activeId={sheetId}
+      canEdit={sheet.canEdit}
+      canManage={sheet.canManage}
+      onSelect={(id) => setActiveId(id)}
+      onAdd={() => addSheet.mutate(`Sheet ${sheets.length + 1}`)}
+      onRename={(id, name) => void renameSheet(id, name)}
+      onDuplicate={(id) => void duplicateSheet(id)}
+      onDelete={(id) => {
+        const s = sheets.find((x) => x.id === id);
+        if (window.confirm(t("Delete sheet \"{name}\"? All of its rows go too (it can be restored from Audit).", { name: s?.name ?? "" }))) removeSheet.mutate(id);
+      }}
+      onColor={(id, c) => void colorSheet(id, c)}
+      onMove={(id, dir) => void moveSheet(id, dir)}
+    />
+  );
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 text-sm font-black">
-          <SheetIcon className="h-4 w-4 text-primary" /> {sheet.name}
+        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <SheetIcon className="h-4 w-4 shrink-0 text-muted-foreground" /> <span className="truncate">{sheet.name}</span>
         </div>
-        <span className="text-xs text-muted-foreground">{sheet.rows.length} baris · {sheet.columns.length} kolom</span>
-        {/* Who else has this sheet open. Each ring is that person's cursor colour, so the avatar up
-            here and the outlined cell down in the grid read as the same person. */}
+        {/* Who else has this sheet open. Each ring is that person's cursor colour. */}
         {otherPeers.length > 0 && (
           <div className="flex items-center -space-x-1.5" title={otherPeers.map((p) => p.name).join(", ")}>
             {otherPeers.slice(0, 4).map((p) => (
-              <span
-                key={p.userId}
-                className="rounded-full ring-2"
-                style={{ ["--tw-ring-color" as string]: p.color }}
-              >
+              <span key={p.userId} className="rounded-full ring-2" style={{ ["--tw-ring-color" as string]: p.color }}>
                 <Avatar userId={p.userId} name={p.name} avatar={p.avatar} size={20} />
               </span>
             ))}
             {otherPeers.length > 4 && (
-              <span className="grid h-5 w-5 place-items-center rounded-full bg-muted text-[9px] font-black text-muted-foreground ring-2 ring-background">
+              <span className="grid h-5 w-5 place-items-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground ring-2 ring-background">
                 +{otherPeers.length - 4}
               </span>
             )}
           </div>
         )}
-        {connected && otherPeers.length > 0 && (
-          <span className="text-[11px] font-semibold text-emerald-600">live</span>
-        )}
-        {setCells.isPending && <span className="text-xs text-muted-foreground">nyimpen…</span>}
-        {!sheet.canEdit && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">cuma bisa lihat</span>}
+        {connected && otherPeers.length > 0 && <span className="text-2xs font-medium text-success">{t("live")}</span>}
+        {!sheet.canEdit && <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">{t("view only")}</span>}
         <div className="ml-auto flex items-center gap-1">
-          {sheet.canEdit && (
-            <>
-              <button
-                disabled={!undo.canUndo}
-                onClick={async () => { const l = await undo.undo(); if (l) say(`Dibatalin: ${l}`); }}
-                title="Batalin (Ctrl+Z)"
-                className="grid h-7 w-7 place-items-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-30"
-              ><Undo2 className="h-3.5 w-3.5" /></button>
-              <button
-                disabled={!undo.canRedo}
-                onClick={async () => { const l = await undo.redo(); if (l) say(`Diulang: ${l}`); }}
-                title="Ulangi (Ctrl+Y / Ctrl+Shift+Z)"
-                className="grid h-7 w-7 place-items-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-30"
-              ><Redo2 className="h-3.5 w-3.5" /></button>
-            </>
-          )}
           {sheet.canEdit && (
             <>
               <input
@@ -518,20 +616,18 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
                   const file = e.target.files?.[0];
                   e.target.value = ""; // so picking the same file twice still fires
                   if (!file) return;
-                  const replace = window.confirm(
-                    `Import "${file.name}".\n\nOK = GANTI semua isi sheet ini.\nCancel = TAMBAH di bawah baris yang ada.`,
-                  );
+                  const replace = window.confirm(t("Import \"{file}\".\n\nOK = REPLACE everything in this sheet.\nCancel = ADD below the existing rows.", { file: file.name }));
                   importFile.mutate({ file, mode: replace ? "replace" : "append" });
                 }}
               />
               <button
                 disabled={importFile.isPending}
                 onClick={() => fileRef.current?.click()}
-                title="Import dari CSV atau Excel (.xlsx)"
-                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-50"
+                title={t("Import from CSV or Excel (.xlsx)")}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
               >
                 {importFile.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                Import
+                {t("Import")}
               </button>
             </>
           )}
@@ -539,13 +635,14 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             <button
               key={f}
               disabled={exporting !== null}
+              title={t("Download as {f}", { f: f.toUpperCase() })}
               onClick={async () => {
                 setExporting(f);
                 try { await nexusApi.exportSheet(sheet.id, f, `${sheet.name}.${f}`); }
-                catch (e) { alert(e instanceof Error ? e.message : "Gagal export."); }
+                catch (e) { alert(e instanceof Error ? e.message : t("Export failed.")); }
                 finally { setExporting(null); }
               }}
-              className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-50"
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
             >
               {exporting === f ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               {f.toUpperCase()}
@@ -555,8 +652,12 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       </div>
 
       {isMobile ? (
-        // A 6-column grid on a phone is unusable, and keyboard nav / paste mean nothing there.
-        <MobileCards sheet={sheet} onSet={(rowId, colId, v) => editCells([{ rowId, values: { [colId]: v } }])} />
+        <SheetMobile
+          sheet={sheet}
+          onSetCells={(edits) => editCells(edits)}
+          footer={tabs}
+          saving={setCells.isPending}
+        />
       ) : (
         <div
           onFocusCapture={() => setEditingCell(true)}
@@ -570,19 +671,22 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             e.preventDefault();
             const redo = k === "y" || e.shiftKey;
             const label = redo ? await undo.redo() : await undo.undo();
-            if (label) say(`${redo ? "Diulang" : "Dibatalin"}: ${label}`);
+            if (label) say(redo ? t("Redone: {what}", { what: label }) : t("Undone: {what}", { what: label }));
           }}
         >
           <SheetGrid
             columns={sheet.columns}
             rows={sheet.rows}
+            settings={sheet.settings ?? {}}
             canEdit={sheet.canEdit}
             canManage={sheet.canManage}
             onSetCells={(edits) => editCells(edits)}
+            onSetStyles={editStyles}
+            onSettings={editSettings}
             onAddRows={async (payload) => {
               const created = (await addRows.mutateAsync(payload)).rows;
               undo.push({
-                label: `tambah ${created.length} baris`,
+                label: t("add {n} rows", { n: created.length }),
                 undo: () => delRows.mutateAsync(created.map((r) => r.id)).then(() => {}),
                 redo: () => addRows.mutateAsync({
                   rows: created.map((r) => r.cells as Record<string, unknown>),
@@ -595,15 +699,12 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             onReorderRow={(rowId, afterRowId) => reorderRow(rowId, afterRowId)}
             onDeleteColumn={(columnId) => {
               const col = sheet.columns.find((c) => c.id === columnId);
-              // Undo covers this now, so the warning says what's true rather than scaring people off.
-              if (window.confirm(`Hapus kolom "${col?.name || "tanpa nama"}"?\n\nSemua isinya ikut hilang, tapi bisa dibalikin pakai Ctrl+Z.`)) {
+              if (window.confirm(t("Delete column \"{name}\"?\n\nEverything in it goes too, but Ctrl+Z brings it back.", { name: col?.name || t("(untitled)") }))) {
                 removeColumn(columnId);
               }
             }}
             onEditColumn={(columnId, patch) =>
-              editColumns(sheet.columns.map((c) => (c.id === columnId ? { ...c, ...patch } : c)), "ubah kolom")}
-            // Blank column straight away — no dialog. Naming and typing it happen in the header
-            // (double-click to rename, type picker in the same popover), like a real spreadsheet.
+              editColumns(sheet.columns.map((c) => (c.id === columnId ? { ...c, ...patch } : c)), t("edit column"))}
             tasks={taskOptions}
             onOpenTask={onOpenTask}
             commentCounts={commentCounts}
@@ -612,11 +713,16 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             onResizeRow={(rowId, height) => resizeRow(rowId, height)}
             onEditingChange={handleEditingChange}
             onCursor={sendCursor}
-            onAddColumn={() => addColumnAt(sheet.columns.length, "tambah kolom")}
+            onAddColumn={() => addColumnAt(sheet.columns.length, t("add column"))}
             // Splicing works because the server keeps array ORDER and only mints an id for the entry
-            // that has none — existing columns keep theirs, so not one cell has to be rewritten, and
-            // formulas (stored in id-space) keep pointing at the same data.
-            onInsertColumn={(index) => addColumnAt(index, "sisipin kolom")}
+            // that has none — existing columns keep theirs, so not one cell has to be rewritten.
+            onInsertColumn={(index) => addColumnAt(index, t("insert column"))}
+            canUndo={undo.canUndo}
+            canRedo={undo.canRedo}
+            onUndo={async () => { const l = await undo.undo(); if (l) say(t("Undone: {what}", { what: l })); }}
+            onRedo={async () => { const l = await undo.redo(); if (l) say(t("Redone: {what}", { what: l })); }}
+            footerLeft={tabs}
+            saving={setCells.isPending}
           />
         </div>
       )}
@@ -637,117 +743,13 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
           onDelete={(commentId) => dropComment.mutate(commentId)}
           onRestore={(value) => {
             // Restoring goes through the SAME cell-write path as typing, so it lands on the undo
-            // stack and gets logged as a new revision. History stays append-only; nothing rewinds.
-            editCells([{ rowId: thread.rowId, values: { [thread.columnId]: value ?? null } }], "balikin nilai sel");
+            // stack and gets logged as a new revision. History stays append-only.
+            editCells([{ rowId: thread.rowId, values: { [thread.columnId]: value ?? null } }], t("restore cell value"));
             setThread(null);
           }}
           onClose={() => setThread(null)}
         />
       )}
-
-      {/* Sheet tabs sit at the BOTTOM because that's where every spreadsheet app puts them. */}
-      {(sheets.length > 1 || sheet.canEdit) && (
-        <div className="flex flex-wrap items-center gap-1 border-t border-border pt-2">
-          {sheets.map((s) => (
-            <div key={s.id}
-              className={cn("group inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
-                s.id === sheetId ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
-              <button onClick={() => setActiveId(s.id)}>{s.name}</button>
-              {/* Slot 0 is the default sheet — the server refuses to delete it, so no button either. */}
-              {sheet.canManage && s.position !== 0 && (
-                <button
-                  onClick={() => {
-                    if (window.confirm(`Hapus sheet "${s.name}"? Semua barisnya ikut hilang.`)) removeSheet.mutate(s.id);
-                  }}
-                  className="hidden text-muted-foreground hover:text-rose-600 group-hover:block"
-                  title="Hapus sheet"
-                ><X className="h-3 w-3" /></button>
-              )}
-            </div>
-          ))}
-          {sheet.canEdit && (
-            <button
-              disabled={addSheet.isPending}
-              onClick={() => {
-                const name = window.prompt("Nama sheet baru", `Sheet ${sheets.length + 1}`);
-                if (name?.trim()) addSheet.mutate(name.trim());
-              }}
-              className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-primary"
-            ><Plus className="h-3 w-3" /> Sheet</button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Phone view: one card per row, tap a field to edit it. No grid, no keyboard nav — honest instead of
- * cramped. Cards are rendered in pages as you scroll (a 2.000-row sheet used to mount every card), show
- * computed values (formula results, link labels — never "[object Object]"), and edits go through the
- * same parser and undo stack as the grid.
- */
-function MobileCards({ sheet, onSet }: { sheet: NexusSheet; onSet: (rowId: string, colId: string, value: unknown) => void }) {
-  const PAGE = 30;
-  const [shown, setShown] = useState(PAGE);
-  const sentinel = useRef<HTMLDivElement>(null);
-  const data = useMemo(() => buildSheetData(sheet.columns, sheet.rows), [sheet.columns, sheet.rows]);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((x) => x.isIntersecting)) setShown((n) => Math.min(sheet.rows.length, n + PAGE));
-    }, { rootMargin: "600px" });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [sheet.rows.length]);
-  const { t } = useLang();
-
-  return (
-    <div className="space-y-2">
-      {sheet.rows.slice(0, shown).map((row, i) => (
-        <div key={row.id} className="rounded-2xl border border-border bg-card p-3">
-          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Sheet row {n}", { n: i + 1 })}</div>
-          <div className="space-y-1.5">
-            {sheet.columns.map((col, ci) => {
-              const raw = row.cells[col.id] as unknown;
-              const formula = editFormula(raw, data.shape);
-              const shownText = displayCell(col.type, raw, { data, rowId: row.id, colId: col.id });
-              const initial = formula ?? editValue(col.type, raw);
-              return (
-                <label key={col.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">{col.name || String.fromCharCode(65 + (ci % 26))}</span>
-                  {col.type === "checkbox" ? (
-                    <input type="checkbox" disabled={!sheet.canEdit} defaultChecked={Boolean(raw)}
-                      onChange={(e) => onSet(row.id, col.id, e.target.checked)} className="h-4 w-4 accent-primary" />
-                  ) : (
-                    <input
-                      key={`${row.id}:${col.id}:${JSON.stringify(raw ?? "")}`}
-                      disabled={!sheet.canEdit}
-                      type={col.type === "date" && !formula ? "date" : "text"}
-                      defaultValue={formula ? undefined : initial}
-                      // A formula shows its RESULT until tapped; focusing reveals the formula to edit.
-                      placeholder={shownText || "—"}
-                      onFocus={(e) => { if (formula && !e.target.value) e.target.value = formula; }}
-                      onBlur={(e) => {
-                        const text = e.target.value;
-                        if (formula && text === formula) { e.target.value = ""; return; }
-                        if (formula && text === "") return;
-                        const next = inputToCell(col, text, data.shape, raw);
-                        if (!sameCell(raw, next)) onSet(row.id, col.id, next);
-                        if (formula) e.target.value = "";
-                      }}
-                      className={cn("min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary",
-                        formula && "placeholder:text-primary")}
-                    />
-                  )}
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-      {shown < sheet.rows.length && <div ref={sentinel} className="h-10" aria-hidden />}
     </div>
   );
 }

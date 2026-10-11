@@ -204,8 +204,27 @@ export type NexusSheetColumn = {
 /** A clickable cell: `u` is the URL, `t` the label rendered in its place. */
 export type NexusSheetLink = { t: string; u: string };
 export type NexusSheetCellValue = string | number | boolean;
+/** Per-cell formatting (server: normalizeCellStyle). Short keys because it is stored per cell. */
+export type NexusSheetStyleColor = "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink" | "slate" | "black";
+export type NexusSheetCellStyle = {
+  b?: 1; i?: 1; s?: 1; u?: 1;
+  fc?: NexusSheetStyleColor; bg?: NexusSheetStyleColor;
+  ha?: "l" | "c" | "r"; va?: "t" | "m" | "b";
+  w?: 1; fs?: number;
+  nf?: "auto" | "num" | "idr" | "pct" | "date" | "text"; dp?: number;
+  bd?: string;
+};
+/** Sheet-level view settings shared by everyone. */
+export type NexusSheetSettings = {
+  frozenRows?: number; frozenCols?: number;
+  tabColor?: NexusSheetColumnColor;
+  hiddenRows?: string[]; hiddenCols?: string[];
+  merges?: { r: string; c: string; rs: number; cs: number }[];
+};
 export type NexusSheetRow = {
   id: string; position: number; cells: Record<string, NexusSheetCellValue>;
+  /** Per-cell formatting by column id; absent when the row has none. */
+  styles?: Record<string, NexusSheetCellStyle>;
   /** Pixels; null means the grid's default. */
   height: number | null;
   updatedAt: string;
@@ -213,6 +232,7 @@ export type NexusSheetRow = {
 export type NexusSheet = {
   id: string; projectId: string; name: string;
   columns: NexusSheetColumn[];
+  settings?: NexusSheetSettings;
   rows: NexusSheetRow[];
   /** Resolved server-side — never re-derive role rules in the client. */
   canEdit: boolean;
@@ -2909,14 +2929,23 @@ export const nexusApi = {
 
   // --- Project spreadsheet ---
   projectSheets: (projectId: string) =>
-    apiFetch<{ sheets: { id: string; name: string; position: number; rowCount: number }[] }>(
+    apiFetch<{ sheets: { id: string; name: string; position: number; rowCount: number; tabColor?: NexusSheetColumnColor | null }[] }>(
       `/api/projects/${projectId}/sheets`),
+  /** Full copy of a sheet (values, formulas re-pointed, formatting), placed as the last tab. */
+  duplicateSheet: (projectId: string, sheetId: string) =>
+    apiFetch<{ id: string; name: string; position: number }>(`/api/projects/${projectId}/sheets`, { method: "POST", body: JSON.stringify({ duplicateOf: sheetId }) }),
+  /** New tab order: every sheet id of the project. */
+  reorderSheets: (projectId: string, order: string[]) =>
+    apiFetch<{ ok: true }>(`/api/projects/${projectId}/sheets`, { method: "PATCH", body: JSON.stringify({ order }) }),
   sheet: (sheetId: string) => apiFetch<NexusSheet>(`/api/sheets/${sheetId}`),
   createSheet: (projectId: string, name?: string) =>
     apiFetch<{ id: string; name: string; position: number }>(`/api/projects/${projectId}/sheets`, { method: "POST", body: JSON.stringify({ name }) }),
   deleteSheet: (sheetId: string) => apiFetch<{ ok: true }>(`/api/sheets/${sheetId}`, { method: "DELETE" }),
-  updateSheet: (sheetId: string, payload: { name?: string; columns?: NexusSheetColumn[] }) =>
-    apiFetch<{ id: string; name: string; columns: NexusSheetColumn[] }>(`/api/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateSheet: (sheetId: string, payload: { name?: string; columns?: NexusSheetColumn[]; settings?: { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null } }) =>
+    apiFetch<{ id: string; name: string; columns: NexusSheetColumn[]; settings: NexusSheetSettings }>(`/api/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  /** Per-cell formatting: { rowId, values: { [columnId]: style | null } }[]. One request (≤ 500 rows). */
+  setSheetStyles: (sheetId: string, styles: { rowId: string; values: Record<string, NexusSheetCellStyle | null> }[]) =>
+    apiFetch<{ updated: number; rows: NexusSheetRow[] }>(`/api/sheets/${sheetId}/cells`, { method: "PATCH", body: JSON.stringify({ styles }) }),
   deleteSheetColumn: (sheetId: string, columnId: string) =>
     apiFetch<{ ok: true }>(`/api/sheets/${sheetId}/columns/${columnId}`, { method: "DELETE" }),
   // One shape for a single blur-save AND a pasted block.
@@ -2971,7 +3000,7 @@ export const nexusApi = {
    */
   addSheetRows: async (
     sheetId: string,
-    payload: { count?: number; afterRowId?: string; beforeRowId?: string; rows?: Record<string, unknown>[]; positions?: number[] },
+    payload: { count?: number; afterRowId?: string; beforeRowId?: string; rows?: Record<string, unknown>[]; positions?: number[]; styles?: Record<string, unknown>[] },
   ) => {
     const MAX_INSERT = 1000;
     const anchored = Boolean(payload.afterRowId || payload.beforeRowId || payload.positions);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
-import type { NexusSheet, NexusSheetCellValue } from "@/lib/nexus-api";
+import type { NexusSheet, NexusSheetCellStyle, NexusSheetCellValue } from "@/lib/nexus-api";
 
 export type SheetPeer = { userId: string; name: string; avatar: string | null; color: string };
 export type PeerCursor = { userId: string; name: string; color: string; rowId: string; columnId: string };
@@ -9,7 +9,7 @@ export type PeerCursor = { userId: string; name: string; color: string; rowId: s
 /** A peer cursor goes stale rather than lingering forever if someone's tab dies mid-session. */
 const CURSOR_TTL_MS = 45_000;
 
-type IncomingRow = { id: string; cells: Record<string, NexusSheetCellValue>; updatedAt: string };
+type IncomingRow = { id: string; cells: Record<string, NexusSheetCellValue>; styles?: Record<string, NexusSheetCellStyle>; updatedAt: string };
 
 /**
  * Live co-editing for one sheet: who else is here, where their cursor is, and other people's saves
@@ -76,9 +76,10 @@ export function useSheetRealtime({
               const cells = { ...inc.cells };
               if (editing.colId in row.cells) cells[editing.colId] = row.cells[editing.colId];
               else delete cells[editing.colId];
-              return { ...row, cells, updatedAt: inc.updatedAt };
+              return { ...row, cells, ...(inc.styles ? { styles: inc.styles } : {}), updatedAt: inc.updatedAt };
             }
-            return { ...row, cells: inc.cells, updatedAt: inc.updatedAt };
+            // Formatting travels with the cells (same row write), so a colleague's bold shows up live.
+            return { ...row, cells: inc.cells, ...(inc.styles ? { styles: inc.styles } : {}), updatedAt: inc.updatedAt };
           }),
         };
       });
