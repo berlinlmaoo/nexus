@@ -3064,6 +3064,13 @@ final class AppLanguage {
         "%@ of target": "%@ dari target",
         "Event": "Event",
 
+        // Calendar: Mac month cells + People table (11 Oct)
+        "%d overdue": "%d lewat tenggat",
+        "tasks that day": "tugas hari itu",
+        "Colours follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.": "Warna mengikuti Bagan IP & Divisi. Nama berikon fokus memfokuskan kalender ke divisi itu; nama lain memfilternya.",
+        "Opens the task": "Membuka tugas",
+        "Not in the chart yet": "Belum di bagan",
+
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",

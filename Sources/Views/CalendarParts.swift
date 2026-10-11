@@ -510,16 +510,69 @@ private struct CalYouBadge: View {
 
 // MARK: - Month grid
 
-/// Monday first, always six weeks. One dot per unit at the focus level (filled = still something to
-/// do, a small tick = only done / status-less), in Bagan order; a red bar = overdue within the window; days
-/// of other months are muted and carry no dots.
+/// One task as a line in a month cell (regular width): its division's colour, its title, and how it
+/// stands. Worked out once per month in CalendarView (`monthLines`), not per cell per frame.
+struct CalMonthLine: Hashable, Sendable {
+    let key: String
+    let title: String
+    let masked: Bool
+    /// Done, or a calendar-only entry: drawn quieter than the work still to do.
+    let quiet: Bool
+    let done: Bool
+    /// Overdue within the window.
+    let overdue: Bool
+    /// HIGH or URGENT.
+    let urgent: Bool
+    /// The unit at the focus level the line takes its colour from ("other" = placed nowhere).
+    let unitId: String
+}
+
+/// What a month cell shows beyond its dots: its tasks in the day list's order, and how many are overdue.
+struct CalMonthDay: Hashable, Sendable {
+    let lines: [CalMonthLine]
+    let overdue: Int
+
+    static let empty = CalMonthDay(lines: [], overdue: 0)
+}
+
+extension CalendarCore {
+    /// The month cell's lines for one day, in the day list's order (to do and overdue first).
+    static func monthDay(_ items: [CalItem], _ ix: CalIndex, focus focusId: String, today: String, now: Date, windowDays: Int) -> CalMonthDay {
+        let cmp = compareInDay(today: today, now: now, windowDays: windowDays)
+        var overdue = 0
+        let lines: [CalMonthLine] = items.sorted(by: cmp).map { i in
+            let late = overdueState(i, today: today, now: now, windowDays: windowDays) == .recent
+            if late { overdue += 1 }
+            let bucket = i.placements.lazy.compactMap { ix.bucketOf($0.unitId, focus: focusId) }.first ?? "other"
+            return CalMonthLine(key: i.key, title: i.masked ? T("Internal task") : (i.title ?? ""), masked: i.masked,
+                                quiet: !isOpen(i), done: i.done, overdue: late,
+                                urgent: i.priority == "HIGH" || i.priority == "URGENT", unitId: bucket)
+        }
+        return CalMonthDay(lines: lines, overdue: overdue)
+    }
+}
+
+/// Monday first, always six weeks.
 ///
-/// The grid grows with the reader's text size as far as AX1, like Apple's Calendar month (beyond
-/// that a seven-column month cannot hold its numbers); the day's list below it keeps scaling.
+/// Regular width (iPad, Mac): each day is a bordered cell, like Calendar's month on the Mac. The date
+/// and its counts sit together in the cell's top row (a red badge for what is overdue, a quiet one for
+/// the day's total), and under them as many of the day's tasks as the cell has room for, each a line
+/// with its division's colour; the rest is "+N more". The count used to sit at the cell's far edge,
+/// right beside the next day's number, with no line between them, so "1  4  2  14" read as counts of
+/// the wrong day (owner, 11 Oct 2026).
+///
+/// Compact width (iPhone): the date, then one dot per division (filled = still something to do, a
+/// small tick = only done / status-less) after a red badge with the overdue count. A red dash under
+/// the date used to mean "overdue" and read as an underline.
+///
+/// The grid grows with the reader's text size as far as AX1, like Apple's Calendar month (beyond that
+/// a seven-column month cannot hold its numbers); the day's list keeps scaling.
 struct CalMonthGrid: View {
     let days: [String]
     let month: String
     let cells: [String: CalDayCell]
+    /// The tasks of each day as lines (regular width).
+    var lines: [String: CalMonthDay] = [:]
     let selected: String
     let today: String
     let holidays: [String: String]
@@ -529,7 +582,7 @@ struct CalMonthGrid: View {
     /// counts, and VoiceOver must not hear "No tasks" about a month nobody has seen.
     var loaded: Bool = true
     /// Two panes: the height the whole grid may take (CalendarView.gridRoom). The tall weeks then
-    /// shrink from their 84 pt to fit it, down to 56 pt; nil = the weeks' own height.
+    /// shrink from their own height to fit it, down to a floor; nil = the weeks' own height.
     var fitHeight: CGFloat? = nil
     let onSelect: (String) -> Void
 
@@ -545,14 +598,14 @@ private struct CalMonthGridBody: View {
     /// Cell heights and the number's disc follow Dynamic Type, so a larger text size grows the rows
     /// instead of spilling a day into the week below it.
     @ScaledMetric(relativeTo: .body) private var phoneHeight: CGFloat = 54
-    @ScaledMetric(relativeTo: .body) private var wideHeight: CGFloat = 84
-    /// The least a tall week shrinks to when fitting two panes (`fitHeight`).
-    @ScaledMetric(relativeTo: .body) private var wideFloor: CGFloat = 56
-    /// From this height down a tall cell leaves the holiday's name out (its number stays red, and the
-    /// day list names it) and takes less padding, so its marks stay inside it.
-    @ScaledMetric(relativeTo: .body) private var holidayRoom: CGFloat = 76
-    @ScaledMetric(relativeTo: .body) private var disc: CGFloat = 26
-    @ScaledMetric(relativeTo: .body) private var dotRow: CGFloat = 8
+    /// Room for the date row and three task lines.
+    @ScaledMetric(relativeTo: .body) private var wideHeight: CGFloat = 104
+    /// The least a tall week shrinks to when fitting two panes (`fitHeight`): the date and one line.
+    @ScaledMetric(relativeTo: .body) private var wideFloor: CGFloat = 60
+    @ScaledMetric(relativeTo: .body) private var disc: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) private var dotRow: CGFloat = 12
+    /// One task line in a tall cell.
+    @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 16
     /// The weekday row's measured height, taken off `fitHeight` with the six dividers.
     @State private var headRow: CGFloat = 30
 
@@ -571,14 +624,14 @@ private struct CalMonthGridBody: View {
     var body: some View {
         let names = CalFormat.weekdays()
         let height = rowHeight
-        let roomy = height >= CalType.size(holidayRoom)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(0..<7, id: \.self) { i in
                     Text(names[i].uppercased()).calCaps()
-                        .foregroundStyle(NX.mutedFg)
+                        .foregroundStyle(i >= 5 ? NX.mutedFg.opacity(0.8) : NX.mutedFg)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: grid.wide ? .leading : .center)
+                        .padding(.horizontal, grid.wide ? 8 : 0)
                         .padding(.vertical, 8)
                 }
             }
@@ -597,7 +650,12 @@ private struct CalMonthGridBody: View {
             ForEach(0..<6, id: \.self) { w in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { d in
-                        dayCell(grid.days[w * 7 + d], weekend: d >= 5, height: height, roomy: roomy)
+                        dayCell(grid.days[w * 7 + d], weekend: d >= 5, height: height)
+                            // Regular width: a line between the days, so a cell's marks are seen to
+                            // belong to it and not to the day beside it.
+                            .overlay(alignment: .trailing) {
+                                if grid.wide && d < 6 { Rectangle().fill(CalTone.hairline).frame(width: 1) }
+                            }
                     }
                 }
                 if w < 5 { Divider().overlay(CalTone.hairline) }
@@ -608,7 +666,7 @@ private struct CalMonthGridBody: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
     }
 
-    private func dayCell(_ day: String, weekend: Bool, height: CGFloat, roomy: Bool) -> some View {
+    private func dayCell(_ day: String, weekend: Bool, height: CGFloat) -> some View {
         let g = grid
         let inMonth = day.hasPrefix(g.month)
         let cell = inMonth ? g.cells[day] : nil
@@ -616,77 +674,38 @@ private struct CalMonthGridBody: View {
         let isSel = day == g.selected
         let holiday = g.holidays[day]
         let dots = cell?.dots ?? []
-        let maxDots = g.wide ? 4 : 3
-        let shown = Array(dots.prefix(maxDots))
-        // Another month's days used to be the whole cell at 38% (2.2:1); muted type reads at 5:1.
-        // The picked day's number takes the accent too, so the pick reads by more than the tile's tint.
-        let numberColor: Color = isToday ? Color.white : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? CalTone.accent : NX.foreground))
-        // The disc and the row height follow the type on the Mac (CalType), or the number outgrows them.
-        let discSize = CalType.size(min(disc, g.wide ? 40 : 34))
+        let info = inMonth ? (g.lines[day] ?? .empty) : .empty
         let unitName: (CalDot) -> String = { dot in dot.unitId == "other" ? T("Other") : (g.ix.byId[dot.unitId]?.name ?? "") }
         return Button {
             Haptics.tap()
             g.onSelect(day)
         } label: {
-            VStack(spacing: 3) {
-                HStack(alignment: .top, spacing: 0) {
-                    Text("\(Int(day.suffix(2)) ?? 0)")
-                        .font(NXFont.text(CalType.size(13), inMonth ? .semibold : .regular)).monospacedDigit()
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .foregroundStyle(numberColor)
-                        .frame(minWidth: discSize, minHeight: discSize)
-                        .background { if isToday { Circle().fill(CalTone.accentFill) } }
-                    if g.wide {
-                        Spacer(minLength: 0)
-                        if let cell, cell.count > 0 {
-                            Text("\(cell.count)").font(NXFont.text(CalType.size(11), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
-                                .lineLimit(1)
-                        }
-                    }
+            Group {
+                if g.wide {
+                    wideContent(day, cell: cell, info: info, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday, height: height)
+                } else {
+                    compactContent(day, dots: dots, info: info, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
                 }
-                .frame(maxWidth: .infinity, alignment: g.wide ? .leading : .center)
-                if cell?.overdue == true {
-                    Capsule().fill(CalTone.overdue).frame(width: 14, height: 2)
-                        .frame(maxWidth: .infinity, alignment: g.wide ? .leading : .center)
-                }
-                if g.wide, roomy, let holiday {
-                    Text(holiday).font(NXFont.text(CalType.size(11), .medium)).foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Spacer(minLength: 0)
-                HStack(spacing: 3) {
-                    ForEach(shown, id: \.unitId) { dot in
-                        let tint = calUnitColor(g.ix.byId[dot.unitId])
-                        // Filled = something still to do; a tick = nothing left (done or status-less).
-                        // Owner, 8 Oct 2026: a ring read as "to do" beside the task list's ○.
-                        if dot.filled {
-                            Circle().fill(tint).frame(width: 6, height: 6)
-                        } else {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: CalType.size(7), weight: .black))
-                                .foregroundStyle(tint)
-                                .frame(width: 8, height: 8)
-                        }
-                    }
-                    if dots.count > shown.count {
-                        Text("+\(dots.count - shown.count)").font(NXFont.text(CalType.size(11), .bold)).foregroundStyle(NX.mutedFg)
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: dotRow, alignment: g.wide ? .leading : .center)
             }
-            .padding(.horizontal, g.wide ? 7 : 4)
-            .padding(.vertical, g.wide && roomy ? 7 : 4)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .frame(height: height)
-            .background(weekend ? NX.muted.opacity(0.3) : Color.clear)
+            // Weekends a shade off the weekdays; another month's days a shade further, so the month
+            // on screen reads as one block.
+            .background(!inMonth ? NX.muted.opacity(0.45) : weekend ? NX.muted.opacity(0.3) : Color.clear)
             // The picked day is a soft accent tile behind the cell: an area, not a line. A ring drawn
-            // 2 pt inside the 54 pt cell ran into today's disc (owner, 8 Oct 2026: "nabrak sama tanggal
-            // hari ini yang bulet"); a tile has no edge to collide with, and no division mark is a tile.
+            // 2 pt inside the 54 pt phone cell ran into today's disc (owner, 8 Oct 2026: "nabrak sama
+            // tanggal hari ini yang bulet"). The tall cell has room for an edge as well, well clear of
+            // the disc, so the pick is seen at a glance across a big grid.
             .background {
                 if isSel {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(CalTone.accent.opacity(0.14))
+                    RoundedRectangle(cornerRadius: g.wide ? 10 : 12, style: .continuous)
+                        .fill(CalTone.accent.opacity(g.wide ? 0.10 : 0.14))
+                        .overlay {
+                            if g.wide {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(CalTone.accent.opacity(0.55), lineWidth: 1.5)
+                            }
+                        }
                         .padding(2)
                 }
             }
@@ -694,19 +713,165 @@ private struct CalMonthGridBody: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
-        .accessibilityLabel(cellLabel(day, cell, holiday, isToday))
+        .accessibilityLabel(cellLabel(day, cell, info, holiday, isToday))
         .modifier(CalCellDivisions(todo: dots.filter(\.filled).map(unitName).joined(separator: ", "),
                                    done: dots.filter { !$0.filled }.map(unitName).joined(separator: ", ")))
         .accessibilityAddTraits(isSel ? .isSelected : [])
     }
 
-    private func cellLabel(_ day: String, _ cell: CalDayCell?, _ holiday: String?, _ isToday: Bool) -> String {
+    /// The date on today's violet disc, or plain; red on a holiday; the accent when picked.
+    private func number(_ day: String, inMonth: Bool, isToday: Bool, isSel: Bool, holiday: String?) -> some View {
+        let color: Color = isToday ? Color.white : !inMonth ? NX.mutedFg : (holiday != nil ? CalTone.overdue : (isSel ? CalTone.accent : NX.foreground))
+        let side = CalType.size(min(disc, grid.wide ? 36 : 32))
+        return Text("\(Int(day.suffix(2)) ?? 0)")
+            .font(NXFont.text(CalType.size(13), inMonth ? (isToday || isSel ? .bold : .semibold) : .regular)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .foregroundStyle(color)
+            .frame(minWidth: side, minHeight: side)
+            .background { if isToday { Circle().fill(CalTone.accentFill) } }
+    }
+
+    /// The red count of what is overdue that day: a filled badge, not a line under the date.
+    private func overdueBadge(_ n: Int, small: Bool) -> some View {
+        HStack(spacing: 2) {
+            if !small {
+                Image(systemName: "exclamationmark").font(NXFont.text(CalType.size(8.5), .black))
+            }
+            Text("\(n)").font(NXFont.text(CalType.size(small ? 9.5 : 10.5), .bold)).monospacedDigit()
+        }
+        .lineLimit(1)
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, small ? 4 : 5)
+        .frame(minWidth: CalType.size(small ? 14 : 18), minHeight: CalType.size(small ? 14 : 17))
+        .background(CalTone.overdue, in: Capsule())
+    }
+
+    /// The day's total, quiet: it says how much there is, the lines say what.
+    private func totalBadge(_ n: Int) -> some View {
+        Text("\(n)").font(NXFont.text(CalType.size(10.5), .semibold)).monospacedDigit()
+            .lineLimit(1)
+            .foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 5)
+            .frame(minWidth: CalType.size(18), minHeight: CalType.size(17))
+            .background(NX.muted, in: Capsule())
+    }
+
+    /// Date and counts in one row, then the tasks: as many lines as the cell holds, the last one
+    /// "+N more" when they do not all fit.
+    @ViewBuilder private func wideContent(_ day: String, cell: CalDayCell?, info: CalMonthDay, inMonth: Bool, isToday: Bool, isSel: Bool,
+                                          holiday: String?, height: CGFloat) -> some View {
+        let pad: CGFloat = 5
+        let line = CalType.size(lineHeight)
+        let top = CalType.size(min(disc, 36))
+        let room = height - pad * 2 - top - 3
+        let showHoliday = holiday != nil && room >= line * 2
+        let slots = max(0, Int((room - (showHoliday ? line : 0)) / line))
+        let all = info.lines
+        let fits = all.count <= slots
+        let shown = fits ? all : Array(all.prefix(max(slots - 1, 0)))
+        let rest = all.count - shown.count
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 3) {
+                number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
+                Spacer(minLength: 2)
+                if let cell, cell.count > 0 {
+                    // Both badges where the column has room; the red one alone where it has not.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 3) {
+                            if info.overdue > 0 { overdueBadge(info.overdue, small: false) }
+                            totalBadge(cell.count)
+                        }
+                        if info.overdue > 0 { overdueBadge(info.overdue, small: true) } else { totalBadge(cell.count) }
+                    }
+                }
+            }
+            .frame(height: top)
+            .padding(.bottom, 3)
+            if showHoliday, let holiday {
+                Text(holiday).font(NXFont.text(CalType.size(10.5), .semibold))
+                    .foregroundStyle(inMonth ? CalTone.overdue : NX.mutedFg).lineLimit(1)
+                    .frame(height: line, alignment: .leading)
+            }
+            ForEach(shown, id: \.key) { l in eventLine(l) }
+            if rest > 0 {
+                Text(String(format: T("+%d more"), rest))
+                    .font(NXFont.text(CalType.size(10.5), .semibold)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1)
+                    .frame(height: line, alignment: .leading)
+                    .padding(.leading, 7)
+            }
+        }
+        .padding(pad)
+    }
+
+    /// A task in a tall cell: its division's colour, then the title. Still to do in full type, overdue
+    /// in red, done struck through and muted.
+    private func eventLine(_ l: CalMonthLine) -> some View {
+        let tint = l.unitId == "other" ? CalTone.unknown : calUnitColor(grid.ix.byId[l.unitId])
+        let fg: Color = l.quiet || l.masked ? NX.mutedFg : (l.overdue ? CalTone.overdue : NX.foreground)
+        return HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(tint.opacity(l.quiet ? 0.45 : 1))
+                .frame(width: 3, height: CalType.size(11))
+            if l.urgent && !l.quiet {
+                Image(systemName: "flag.fill").font(NXFont.text(CalType.size(8), .bold)).foregroundStyle(CalTone.overdue)
+            }
+            Text(l.title)
+                .font(NXFont.text(CalType.size(11), l.quiet ? .regular : .medium))
+                .italic(l.masked)
+                .foregroundStyle(fg)
+                .strikethrough(l.done, color: NX.mutedFg.opacity(0.7))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, minHeight: CalType.size(lineHeight), maxHeight: CalType.size(lineHeight), alignment: .leading)
+    }
+
+    /// The phone's cell: the date, then the overdue badge and one dot per division.
+    @ViewBuilder private func compactContent(_ day: String, dots: [CalDot], info: CalMonthDay, inMonth: Bool, isToday: Bool, isSel: Bool,
+                                             holiday: String?) -> some View {
+        let room = info.overdue > 0 ? 2 : 3
+        let shown = Array(dots.prefix(room))
+        VStack(spacing: 2) {
+            number(day, inMonth: inMonth, isToday: isToday, isSel: isSel, holiday: holiday)
+            Spacer(minLength: 0)
+            HStack(spacing: 3) {
+                if info.overdue > 0 { overdueBadge(info.overdue, small: true) }
+                ForEach(shown, id: \.unitId) { dot in
+                    let tint = calUnitColor(grid.ix.byId[dot.unitId])
+                    // Filled = something still to do; a tick = nothing left (done or status-less),
+                    // quieter than the work still open. Owner, 8 Oct 2026: a ring read as "to do"
+                    // beside the task list's ○.
+                    if dot.filled {
+                        Circle().fill(tint).frame(width: 6, height: 6)
+                    } else {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: CalType.size(7), weight: .black))
+                            .foregroundStyle(tint.opacity(0.6))
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                if dots.count > shown.count {
+                    Text("+\(dots.count - shown.count)").font(NXFont.text(CalType.size(9.5), .bold)).foregroundStyle(NX.mutedFg)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: CalType.size(dotRow))
+        }
+        .padding(.horizontal, 3)
+        .padding(.top, 4).padding(.bottom, 5)
+    }
+
+    private func cellLabel(_ day: String, _ cell: CalDayCell?, _ info: CalMonthDay, _ holiday: String?, _ isToday: Bool) -> String {
         var parts = [CalFormat.day(day, "EEEEdMMMM")]
         // A day of another month never has a count; only a loaded month may say "No tasks".
         if grid.loaded && day.hasPrefix(grid.month) {
             parts.append(cell.map { $0.count > 0 ? CalFormat.tasks($0.count) : T("No tasks") } ?? T("No tasks"))
         }
-        if cell?.overdue == true { parts.append(T("Overdue")) }
+        if info.overdue > 0 {
+            parts.append(String(format: T("%d overdue"), info.overdue))
+        } else if cell?.overdue == true {
+            parts.append(T("Overdue"))
+        }
         if let holiday { parts.append(holiday) }
         if isToday { parts.append(T("Today")) }
         return parts.joined(separator: ", ")
@@ -834,7 +999,7 @@ struct CalItemRow: View {
         } else {
             let lines: Int? = large ? (compact ? 4 : nil) : (compact ? 1 : 2)
             Text(item.title ?? "")
-                .font(NXFont.text(CalType.size(compact ? 12.5 : 13.5), .medium))
+                .font(NXFont.text(CalType.size(compact ? 12.5 : 13), .medium))
                 .foregroundStyle(item.done || od == .stale ? NX.mutedFg : NX.foreground)
                 .strikethrough(item.done, color: NX.mutedFg)
                 .lineLimit(lines)
@@ -1202,9 +1367,10 @@ private struct CalWeekLine: Identifiable {
     let row: CalWeekRow
 }
 
-/// One week: a row per person under their Bagan card, a column per day. Phone = list (card › person ›
-/// up to three tasks with the day in front); iPad/Mac = a table that fits the width (no sideways
-/// scroll) when the window has room for it, the list otherwise.
+/// One week: a row per person under their Bagan card, a column per day. Phone (and the accessibility
+/// text sizes) = list (card › person › up to three tasks with the day in front); iPad/Mac = a table
+/// with the names held on the left and the seven days beside them, scrolling sideways only when the
+/// window is too narrow for seven readable days. Headings fold away the rows under them.
 struct CalPeopleWeek: View {
     let rows: [CalWeekRow]
     let days: [String]
@@ -1214,6 +1380,8 @@ struct CalPeopleWeek: View {
     let ix: CalIndex
     let people: CalPeople
     let wide: Bool
+    /// The width the table may take; under the name column and seven readable days the days scroll.
+    var room: CGFloat = 1024
     let onOpenDay: (String) -> Void
     let onOpen: (CalItem) -> Void
     /// Filters are on: an empty week offers to reset them, as the day panel does.
@@ -1230,26 +1398,37 @@ struct CalPeopleWeek: View {
     var scope: CalScope = .all
     var onShowEveryone: (() -> Void)? = nil
     @State private var expanded: Set<String> = []
+    /// Headings folded away, by unit; they stay folded from week to week.
+    @State private var folded: Set<String> = []
     @Environment(AuthStore.self) private var auth
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var dayLabelWidth: CGFloat = 52
-    @ScaledMetric(relativeTo: .body) private var nameColumn: CGFloat = 180
-    @ScaledMetric(relativeTo: .body) private var dayColumn: CGFloat = 90
-    @ScaledMetric(relativeTo: .body) private var headerDisc: CGFloat = 20
+    /// Wide enough for "Geraldo Valentino" and "Hary Ade Saputra" whole, with a face and a count.
+    @ScaledMetric(relativeTo: .body) private var nameColumn: CGFloat = 236
+    /// The least a day may be before the days scroll sideways: two words of a title a line.
+    @ScaledMetric(relativeTo: .body) private var dayColumn: CGFloat = 118
+    @ScaledMetric(relativeTo: .body) private var headerDisc: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) private var headRow: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var topRow: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var divisionRow: CGFloat = 38
+    @ScaledMetric(relativeTo: .body) private var subRow: CGFloat = 34
+    @ScaledMetric(relativeTo: .body) private var groupRow: CGFloat = 30
+    @ScaledMetric(relativeTo: .body) private var personRow: CGFloat = 56
+    /// A task tile in a day: two lines of 11.5 pt.
+    @ScaledMetric(relativeTo: .body) private var chipHeight: CGFloat = 38
+    @ScaledMetric(relativeTo: .body) private var moreHeight: CGFloat = 22
 
     var body: some View {
         // One container whatever is showing, so the week's reset below always runs.
         VStack(alignment: .leading, spacing: 0) {
             if rows.isEmpty {
                 emptyWeek
-            } else if wide {
-                // Regular width is not room enough by itself: Split View, Stage Manager and a Mac window
-                // beside another one are regular too. The table needs its name column and seven readable
-                // days; anything narrower gets the phone's list.
-                ViewThatFits(in: .horizontal) {
-                    table.frame(minWidth: tableWidth, idealWidth: tableWidth, maxWidth: .infinity)
-                    list(lazy: false)
-                }
+            } else if wide && !typeSize.isAccessibilitySize {
+                // The rows have set heights so the names and the days line up; at the accessibility
+                // text sizes a name or a title needs more lines than any set height, and the list,
+                // which grows with them, is the better read.
+                table
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             } else {
                 list(lazy: true)
             }
@@ -1258,7 +1437,32 @@ struct CalPeopleWeek: View {
         .onChange(of: days) { _, _ in expanded = [] }
     }
 
-    private var tableWidth: CGFloat { nameColumn + 12 + 7 * dayColumn }
+    /// `lines` with the rows under a folded heading left out.
+    private var visibleLines: [CalWeekLine] {
+        let all = lines
+        guard !folded.isEmpty else { return all }
+        var out: [CalWeekLine] = []
+        var hideBelow: Int? = nil
+        for line in all {
+            let d = Self.depth(line.row)
+            if let h = hideBelow {
+                if d > h { continue }
+                hideBelow = nil
+            }
+            out.append(line)
+            if case let .unit(unit, depth, _) = line.row, folded.contains(unit.id) { hideBelow = depth }
+        }
+        return out
+    }
+
+    private static func depth(_ row: CalWeekRow) -> Int {
+        switch row {
+        case let .unit(_, depth, _): return depth
+        case let .unplaced(depth, _): return depth
+        case let .person(_, _, depth, _): return depth
+        case let .loose(_, depth, _): return depth
+        }
+    }
 
     /// The rows with their identities, the viewer first among the people of each card. On screen only:
     /// CalendarCore keeps the Bagan order the web and Android share.
@@ -1333,7 +1537,7 @@ struct CalPeopleWeek: View {
     /// The phone's list builds its cards as they scroll into view (an "Everyone" week is about 46
     /// people under 20 cards); beside the table, where ViewThatFits measures it, it stays a plain stack.
     @ViewBuilder private func list(lazy: Bool) -> some View {
-        let shown = lines
+        let shown = visibleLines
         if lazy {
             LazyVStack(alignment: .leading, spacing: 8) { listRows(shown) }
         } else {
@@ -1346,28 +1550,49 @@ struct CalPeopleWeek: View {
         return ForEach(shown) { line in
             switch line.row {
             case let .unit(unit, depth, count):
-                if unit.isGroup {
-                    Text("\(unit.name.uppercased()) · \(count)").calCaps().foregroundStyle(NX.mutedFg)
-                        .padding(.leading, CGFloat(depth) * 10 + 4).padding(.top, 4)
-                        .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
-                        .accessibilityAddTraits(.isHeader)
-                } else {
-                    HStack(alignment: large ? VerticalAlignment.top : .center, spacing: 8) {
-                        CalUnitMark(unit: unit, size: 20)
-                        Text(unit.name.uppercased()).calCaps()
+                let isFolded = folded.contains(unit.id)
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { toggleFold(unit.id) }
+                } label: {
+                    if unit.isGroup {
+                        HStack(spacing: 6) {
+                            Text("\(unit.name.uppercased()) · \(count)").calCaps().foregroundStyle(NX.mutedFg)
+                            Spacer(minLength: 0)
+                            listChevron(isFolded)
+                        }
+                        .padding(.leading, CGFloat(depth) * 10 + 4).padding(.trailing, 10)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                    } else {
+                        HStack(alignment: large ? VerticalAlignment.top : .center, spacing: 8) {
+                            CalUnitMark(unit: unit, size: depth == 0 ? 22 : 20)
+                            Group {
+                                if depth == 0 {
+                                    Text(unit.name).font(NXFont.text(CalType.size(14), .bold))
+                                } else {
+                                    Text(unit.name.uppercased()).calCaps()
+                                }
+                            }
+                            .foregroundStyle(NX.foreground)
                             .lineLimit(large ? 3 : 1)
                             .fixedSize(horizontal: false, vertical: large)
-                        Spacer(minLength: 0)
-                        Text("\(count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                            Spacer(minLength: 0)
+                            Text("\(count)").font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+                            listChevron(isFolded)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 8)
+                        .frame(minHeight: 44)
+                        .background(depth == 0 ? NX.muted : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.leading, CGFloat(depth) * 10)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 10).padding(.vertical, 8)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(alignment: .leading) { Rectangle().fill(calUnitColor(unit)).frame(width: 3).clipShape(RoundedRectangle(cornerRadius: 1.5)) }
-                    .padding(.leading, CGFloat(depth) * 10)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
-                    .accessibilityAddTraits(.isHeader)
                 }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
+                .accessibilityValue(isFolded ? T("Collapsed") : T("Expanded"))
+                .accessibilityAddTraits(.isHeader)
             case let .unplaced(_, count):
                 Text(String(format: T("Not in the chart yet · %d"), count).uppercased()).calCaps().foregroundStyle(NX.mutedFg).padding(.top, 4)
                     .accessibilityAddTraits(.isHeader)
@@ -1377,6 +1602,20 @@ struct CalPeopleWeek: View {
                 personCard(key: line.id, userId: nil, depth: depth, perDay: perDay)
             }
         }
+    }
+
+    private func toggleFold(_ id: String) {
+        if folded.contains(id) {
+            folded.remove(id)
+        } else {
+            folded.insert(id)
+        }
+    }
+
+    private func listChevron(_ isFolded: Bool) -> some View {
+        Image(systemName: "chevron.down").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
+            .rotationEffect(.degrees(isFolded ? -90 : 0))
+            .accessibilityHidden(true)
     }
 
     private func personCard(key: String, userId: String?, depth: Int, perDay: [[CalItem]]) -> some View {
@@ -1495,40 +1734,57 @@ struct CalPeopleWeek: View {
         return calJoin(name ?? T("Tasks without a person"), isMe ? T("You") : nil, CalFormat.tasks(total), busy.joined(separator: ", "))
     }
 
+    // MARK: Table (regular width)
+
+    /// The table's sizes, on the Mac raised as the rest of the Calendar's type is (CalType).
+    private var nameWidth: CGFloat { CalType.size(nameColumn) }
+    private var dayWidth: CGFloat { CalType.size(dayColumn) }
+
+    /// A row's height, worked out from what it holds, the same on both sides of the table: the names
+    /// stay put while the days scroll sideways beside them, so the two halves are two stacks whose rows
+    /// must line up without being measured. A person's row is as tall as their busiest day needs (two
+    /// tasks, and "+N more" under them), never taller; rows used to be as uneven as their titles.
+    private func rowHeight(_ row: CalWeekRow) -> CGFloat {
+        switch row {
+        case let .unit(unit, depth, _):
+            if unit.isGroup { return CalType.size(groupRow) }
+            return CalType.size(depth == 0 ? topRow : depth == 1 ? divisionRow : subRow)
+        case .unplaced:
+            return CalType.size(divisionRow)
+        case let .person(_, _, _, perDay), let .loose(_, _, perDay):
+            let most = perDay.map(\.count).max() ?? 0
+            let chips = CGFloat(min(most, 2))
+            var h = 12 + chips * CalType.size(chipHeight) + max(chips - 1, 0) * 4
+            if most > 2 { h += CalType.size(moreHeight) + 2 }
+            return max(CalType.size(personRow), h)
+        }
+    }
+
+    /// Names on the left, held in place; the seven days beside them. The days share the width that is
+    /// left when it is enough for seven readable columns, and scroll sideways (the names staying) only
+    /// when it is not. One direction per scroll: this sideways scroll sits inside the screen's vertical
+    /// one, and both halves are plain stacks.
     private var table: some View {
-        let names = CalFormat.weekdays()
-        let shown = lines
-        return VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Text(T("Person").uppercased()).calCaps().foregroundStyle(NX.mutedFg)
-                    .frame(width: nameColumn, alignment: .leading).padding(.leading, 12)
-                ForEach(0..<7, id: \.self) { i in
-                    let isToday = days[i] == today
-                    Button { onOpenDay(days[i]) } label: {
-                        HStack(spacing: 4) {
-                            Text(names[i].uppercased()).calCaps()
-                                .foregroundStyle(isToday ? NX.foreground : NX.mutedFg)
-                            // Today is the month grid's own mark — the number on the violet disc — so it
-                            // is told by its shape, not by a violet the Bagan's divisions also wear.
-                            Text("\(Int(days[i].suffix(2)) ?? 0)").calCaps().monospacedDigit()
-                                .foregroundStyle(isToday ? Color.white : NX.mutedFg)
-                                .frame(minWidth: CalType.size(headerDisc), minHeight: CalType.size(headerDisc))
-                                .background { if isToday { Circle().fill(CalTone.accentFill) } }
-                        }
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .padding(.leading, 6)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .hoverEffect(.highlight)
-                    .accessibilityLabel(calJoin(CalFormat.day(days[i], "EEEEdMMMM"), isToday ? T("Today") : nil))
+        let shown = visibleLines
+        let fits = room >= nameWidth + 1 + 7 * dayWidth
+        return HStack(alignment: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                nameHeader
+                ForEach(shown) { line in
+                    nameCell(line.row)
+                        .frame(height: rowHeight(line.row))
+                        .background(rowBand(line.row))
+                    hairline
                 }
             }
-            .background(NX.muted.opacity(0.6))
-            ForEach(shown) { line in
-                tableRow(line.row)
-                Divider().overlay(CalTone.hairline)
+            .frame(width: nameWidth)
+            Rectangle().fill(NX.border).frame(width: 1)
+            if fits {
+                dayGrid(shown, flexible: true)
+            } else {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    dayGrid(shown, flexible: false)
+                }
             }
         }
         .background(NX.card)
@@ -1536,102 +1792,300 @@ struct CalPeopleWeek: View {
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
     }
 
-    @ViewBuilder private func tableRow(_ row: CalWeekRow) -> some View {
+    private var hairline: some View {
+        Rectangle().fill(CalTone.hairline).frame(height: 1)
+    }
+
+    /// The fill behind a heading row, across the names and the days alike: the company strongest, a
+    /// division lighter, a sub-division none, a group the Bagan's own ribbon colour.
+    private func rowBand(_ row: CalWeekRow) -> Color {
+        switch row {
+        case let .unit(unit, depth, _):
+            if unit.isGroup { return CalTone.group.opacity(0.45) }
+            return depth == 0 ? NX.muted.opacity(0.85) : depth == 1 ? NX.muted.opacity(0.45) : Color.clear
+        case .unplaced:
+            return NX.muted.opacity(0.45)
+        default:
+            return Color.clear
+        }
+    }
+
+    private var nameHeader: some View {
+        Text(T("Person").uppercased()).calCaps().foregroundStyle(NX.mutedFg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 14)
+            .frame(height: CalType.size(headRow))
+            .background(NX.muted.opacity(0.6))
+            .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 1) }
+    }
+
+    @ViewBuilder private func nameCell(_ row: CalWeekRow) -> some View {
         switch row {
         case let .unit(unit, depth, count):
+            unitHeading(unit: unit, depth: depth, count: count)
+        case let .unplaced(_, count):
             HStack(spacing: 8) {
-                if !unit.isGroup { RoundedRectangle(cornerRadius: 1.5).fill(calUnitColor(unit)).frame(width: 3, height: 14) }
-                Text(unit.name.uppercased()).calCaps()
-                    .foregroundStyle(unit.isGroup ? NX.mutedFg : NX.foreground)
-                Text("\(count)").font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(NX.mutedFg)
+                Text(T("Not in the chart yet").uppercased()).calCaps().foregroundStyle(NX.mutedFg).lineLimit(1)
+                countPill(count)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 12 + CGFloat(depth) * 14).padding(.vertical, 6)
-            .background(unit.isGroup ? CalTone.group.opacity(0.4) : NX.muted.opacity(0.3))
+            .padding(.horizontal, 14)
+            .frame(maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
+            .accessibilityLabel(calJoin(T("Not in the chart yet"), CalFormat.people(count)))
             .accessibilityAddTraits(.isHeader)
-        case let .unplaced(_, count):
-            Text(String(format: T("Not in the chart yet · %d"), count).uppercased()).calCaps().foregroundStyle(NX.mutedFg)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12).padding(.vertical, 6)
-                .accessibilityAddTraits(.isHeader)
-        case let .person(_, userId, depth, perDay):
-            dayCells(userId: userId, depth: depth, perDay: perDay)
-        case let .loose(_, depth, perDay):
-            dayCells(userId: nil, depth: depth, perDay: perDay)
+        case let .person(unitId, userId, depth, perDay):
+            personName(userId: userId, unitId: unitId, depth: depth, perDay: perDay)
+        case let .loose(unitId, depth, perDay):
+            personName(userId: nil, unitId: unitId, depth: depth, perDay: perDay)
         }
     }
 
-    private func dayCells(userId: String?, depth: Int, perDay: [[CalItem]]) -> some View {
+    private func countPill(_ n: Int) -> some View {
+        Text("\(n)").font(NXFont.text(CalType.size(11), .bold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 7).padding(.vertical, 1)
+            .background(NX.card.opacity(0.9), in: Capsule())
+            .overlay(Capsule().strokeBorder(NX.border))
+    }
+
+    /// Company › division › sub-division, each a step quieter: the company in full type with its mark,
+    /// a division in the Calendar's capitals with its mark, a sub-division in plain type behind its
+    /// colour, a group as the Bagan's ribbon label. A tap folds the rows under it away.
+    private func unitHeading(unit: CalUnit, depth: Int, count: Int) -> some View {
+        let isFolded = folded.contains(unit.id)
+        let indent = CGFloat(max(min(depth, 3) - 1, 0)) * 12
+        return Button {
+            withAnimation(.snappy(duration: 0.2)) { toggleFold(unit.id) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.down")
+                    .font(NXFont.text(CalType.size(10), .bold)).foregroundStyle(NX.mutedFg)
+                    .rotationEffect(.degrees(isFolded ? -90 : 0))
+                    .frame(width: CalType.size(12))
+                    .accessibilityHidden(true)
+                if unit.isGroup {
+                    Text(unit.name.uppercased()).calCaps().foregroundStyle(NX.mutedFg).lineLimit(1)
+                } else if depth == 0 {
+                    CalUnitMark(unit: unit, size: 22)
+                    Text(unit.name).font(NXFont.text(CalType.size(14), .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                } else if depth == 1 {
+                    CalUnitMark(unit: unit, size: 18)
+                    Text(unit.name.uppercased()).calCaps().foregroundStyle(NX.foreground).lineLimit(1)
+                } else {
+                    RoundedRectangle(cornerRadius: 1.5).fill(calUnitColor(unit)).frame(width: 3, height: CalType.size(14))
+                    Text(unit.name).font(NXFont.text(CalType.size(12.5), .semibold)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(1)
+                }
+                countPill(count)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 10 + indent).padding(.trailing, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityLabel(calJoin(unit.name, CalFormat.tasks(count)))
+        .accessibilityValue(isFolded ? T("Collapsed") : T("Expanded"))
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Face, the whole name (two lines when it needs them), and where the person sits, with the week's
+    /// count at the end.
+    private func personName(userId: String?, unitId: String?, depth: Int, perDay: [[CalItem]]) -> some View {
         let name = userId.map { people.name($0) }
         let isMe = userId != nil && userId == auth.session?.userId
-        let who = name ?? T("Tasks without a person")
-        return HStack(alignment: .top, spacing: 0) {
-            HStack(spacing: 6) {
-                if let name, let userId {
-                    CalAvatar(url: people.avatar(userId), initial: calInitials(name), size: 20).accessibilityHidden(true)
+        let total = perDay.reduce(0) { $0 + $1.count }
+        let place: String = unitId.flatMap { ix.byId[$0]?.name } ?? T("not in the chart")
+        let indent = CGFloat(max(min(depth, 4) - 1, 0)) * 8
+        return HStack(spacing: 10) {
+            if let name, let userId {
+                CalAvatar(url: people.avatar(userId), initial: calInitials(name), size: CalType.size(28))
+            } else {
+                Image(systemName: "tray")
+                    .font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(NX.mutedFg)
+                    .frame(width: CalType.size(28), height: CalType.size(28))
+                    .background(NX.muted, in: Circle())
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name ?? T("Tasks without a person"))
+                    .font(NXFont.text(CalType.size(13), name == nil ? .regular : .semibold))
+                    .italic(name == nil)
+                    .foregroundStyle(name == nil ? NX.mutedFg : NX.foreground)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 5) {
+                    if isMe { CalYouBadge() }
+                    Text(place).font(NXFont.text(CalType.size(11))).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
-                Text(who).font(NXFont.text(CalType.size(12), name == nil ? .regular : .semibold))
-                    .italic(name == nil).foregroundStyle(name == nil ? NX.mutedFg : NX.foreground).lineLimit(1)
-                if isMe { CalYouBadge() }
             }
-            .frame(width: max(nameColumn - CGFloat(depth) * 14, 60), alignment: .leading)
-            .padding(.leading, 12 + CGFloat(depth) * 14).padding(.vertical, 6)
-            .frame(minHeight: 44)
-            ForEach(0..<7, id: \.self) { i in
-                tableCell(who: calJoin(who, isMe ? T("You") : nil), day: days[i], items: perDay[i])
-            }
+            Spacer(minLength: 4)
+            Text("\(total)").font(NXFont.text(CalType.size(11.5), .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
         }
+        .padding(.leading, 14 + indent).padding(.trailing, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(weekLabel(name: name, isMe: isMe, total: total, perDay: perDay))
+        .accessibilityAddTraits(.isHeader)
     }
 
-    /// A day of one person: the whole cell is one target that opens the day (by person), instead of
-    /// 11 pt task lines nobody could hit with a finger. A long press (right-click on a Mac) still
-    /// opens a task straight away.
-    @ViewBuilder private func tableCell(who: String, day: String, items: [CalItem]) -> some View {
+    /// The seven days: a heading row, then one row per line of the names beside it, as tall.
+    private func dayGrid(_ shown: [CalWeekLine], flexible: Bool) -> some View {
+        let names = CalFormat.weekdays()
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { i in
+                    dayHeading(i, name: names[i])
+                        .modifier(CalDayColumn(width: flexible ? nil : dayWidth, last: i == 6))
+                }
+            }
+            .frame(height: CalType.size(headRow))
+            .background(NX.muted.opacity(0.6))
+            .overlay(alignment: .bottom) { Rectangle().fill(NX.border).frame(height: 1) }
+            ForEach(shown) { line in
+                dayRow(line.row, flexible: flexible)
+                    .frame(height: rowHeight(line.row))
+                    .background(rowBand(line.row))
+                hairline
+            }
+        }
+        .frame(minWidth: flexible ? nil : 7 * dayWidth)
+    }
+
+    /// "MON 6": today on the violet disc, its column tinted all the way down, a bar on top.
+    private func dayHeading(_ i: Int, name: String) -> some View {
+        let day = days[i]
         let isToday = day == today
-        let openable = items.filter { !$0.masked && $0.taskId != nil }
-        let cell = VStack(alignment: .leading, spacing: 2) {
-            ForEach(items.prefix(2)) { item in
-                HStack(spacing: 4) {
-                    CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays, size: CalType.size(11))
-                    Text(item.masked ? T("Internal task") : (item.title ?? ""))
-                        .font(NXFont.text(CalType.size(11))).lineLimit(1)
-                        .foregroundStyle(item.masked || item.done ? NX.mutedFg : NX.foreground)
-                        .strikethrough(item.done, color: NX.mutedFg)
-                }
+        return Button { onOpenDay(day) } label: {
+            HStack(spacing: 6) {
+                Text(name.uppercased()).calCaps()
+                    .foregroundStyle(isToday ? CalTone.accent : NX.mutedFg)
+                Text("\(Int(day.suffix(2)) ?? 0)")
+                    .font(NXFont.text(CalType.size(13), .bold)).monospacedDigit()
+                    .foregroundStyle(isToday ? Color.white : NX.foreground)
+                    .frame(minWidth: CalType.size(headerDisc), minHeight: CalType.size(headerDisc))
+                    .background { if isToday { Circle().fill(CalTone.accentFill) } }
             }
-            if items.count > 2 {
-                Text(String(format: T("+%d more"), items.count - 2))
-                    .font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(CalTone.accent)
-            }
+            .lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.leading, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(isToday ? CalTone.accent.opacity(0.12) : (i >= 5 ? NX.muted.opacity(0.35) : Color.clear))
+            .overlay(alignment: .top) { if isToday { Rectangle().fill(CalTone.accentFill).frame(height: 3) } }
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
-        .padding(4)
-        .background(isToday ? CalTone.accent.opacity(0.06) : Color.clear)
-        .overlay(alignment: .leading) { Rectangle().fill(CalTone.hairline).frame(width: 1) }
-        .contentShape(Rectangle())
-        let button = Button { onOpenDay(day) } label: { cell }
-            .buttonStyle(.plain)
-            .hoverEffect(.highlight)
-            .accessibilityLabel(tableCellLabel(who: who, day: day, items: items))
-            .accessibilityHint(T("Opens this day in the calendar"))
-        if items.isEmpty {
-            cell.accessibilityHidden(true)
-        } else if openable.isEmpty {
-            button
-        } else {
-            button.contextMenu {
-                ForEach(openable) { item in
-                    Button(item.title ?? T("Task details")) { onOpen(item) }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityLabel(calJoin(CalFormat.day(day, "EEEEdMMMM"), isToday ? T("Today") : nil))
+        .accessibilityHint(T("Opens this day in the calendar"))
+    }
+
+    @ViewBuilder private func dayRow(_ row: CalWeekRow, flexible: Bool) -> some View {
+        switch row {
+        case .unit, .unplaced:
+            // A heading's band runs on across the days, with today's column still showing through.
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { i in
+                    Color.clear
+                        .background(days[i] == today ? CalTone.accent.opacity(0.07) : Color.clear)
+                        .modifier(CalDayColumn(width: flexible ? nil : dayWidth, last: i == 6))
                 }
+            }
+            .accessibilityHidden(true)
+        case let .person(_, userId, _, perDay):
+            dayCells(who: calJoin(people.name(userId), userId == auth.session?.userId ? T("You") : nil), perDay: perDay, flexible: flexible)
+        case let .loose(_, _, perDay):
+            dayCells(who: T("Tasks without a person"), perDay: perDay, flexible: flexible)
+        }
+    }
+
+    private func dayCells(who: String, perDay: [[CalItem]], flexible: Bool) -> some View {
+        HStack(spacing: 0) {
+            ForEach(0..<7, id: \.self) { i in
+                tableCell(who: who, day: days[i], items: perDay[i], weekend: i >= 5)
+                    .modifier(CalDayColumn(width: flexible ? nil : dayWidth, last: i == 6))
             }
         }
     }
 
-    private func tableCellLabel(who: String, day: String, items: [CalItem]) -> String {
-        var titles = items.prefix(3).map { $0.masked ? T("Internal task") : ($0.title ?? "") }
-        if items.count > 3 { titles.append(String(format: T("+%d more"), items.count - 3)) }
-        return calJoin(CalFormat.day(day, "EEEEdMMMM"), who, "\(CalFormat.tasks(items.count)): \(titles.joined(separator: ", "))")
+    /// One person's day: up to two tasks, each opening the task, and "+N more" opening the day in the
+    /// month with its people. Every task used to be one 11 pt line cut after a few words.
+    @ViewBuilder private func tableCell(who: String, day: String, items: [CalItem], weekend: Bool) -> some View {
+        let isToday = day == today
+        let shown = items.count > 2 ? Array(items.prefix(2)) : items
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(shown) { item in chip(item) }
+            if items.count > shown.count {
+                Button { onOpenDay(day) } label: {
+                    Text(String(format: T("+%d more"), items.count - shown.count))
+                        .font(NXFont.text(CalType.size(11), .semibold)).foregroundStyle(CalTone.accent)
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .frame(maxWidth: .infinity, minHeight: CalType.size(moreHeight), alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel(calJoin(CalFormat.day(day, "EEEEdMMMM"), who, CalFormat.tasks(items.count)))
+                .accessibilityHint(T("Opens this day in the calendar"))
+            }
+        }
+        .padding(6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(isToday ? CalTone.accent.opacity(0.07) : (weekend ? NX.muted.opacity(0.25) : Color.clear))
+    }
+
+    /// A task in a day: its status mark and up to two lines of its title, on a quiet tile; overdue on a
+    /// red wash, done struck through without a tile, HIGH / URGENT flagged red.
+    private func chip(_ item: CalItem) -> some View {
+        let od = CalendarCore.overdueState(item, today: today, now: now, windowDays: windowDays)
+        let quiet = item.done || item.noStatus
+        let urgent = !quiet && (item.priority == "HIGH" || item.priority == "URGENT")
+        let fill: Color = od == .recent ? CalTone.overdue.opacity(0.09) : (quiet ? Color.clear : NX.muted.opacity(0.8))
+        return Button { onOpen(item) } label: {
+            HStack(alignment: .top, spacing: 5) {
+                CalStatusGlyph(item: item, today: today, now: now, windowDays: windowDays, size: CalType.size(12), state: od)
+                    .padding(.top, 1)
+                Text(item.masked ? T("Internal task") : (item.title ?? ""))
+                    .font(NXFont.text(CalType.size(11.5), quiet ? .regular : .medium))
+                    .italic(item.masked)
+                    .foregroundStyle(quiet || item.masked ? NX.mutedFg : (od == .recent ? CalTone.overdue : NX.foreground))
+                    .strikethrough(item.done, color: NX.mutedFg)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if urgent {
+                    Image(systemName: "flag.fill").font(NXFont.text(CalType.size(9), .bold)).foregroundStyle(CalTone.overdue)
+                        .padding(.top, 2)
+                        .accessibilityLabel(item.priority == "URGENT" ? T("Urgent") : T("High"))
+                }
+            }
+            .padding(.horizontal, 6).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: CalType.size(chipHeight), maxHeight: CalType.size(chipHeight), alignment: .topLeading)
+            .background(fill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(T("Opens the task"))
+    }
+}
+
+/// A day column of the People table: an equal share of the width, or a fixed width when the days
+/// scroll sideways; a hairline after every day but Sunday.
+private struct CalDayColumn: ViewModifier {
+    let width: CGFloat?
+    let last: Bool
+
+    func body(content: Content) -> some View {
+        Group {
+            if let width {
+                content.frame(width: width)
+            } else {
+                content.frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .trailing) { if !last { Rectangle().fill(CalTone.hairline).frame(width: 1) } }
     }
 }
 

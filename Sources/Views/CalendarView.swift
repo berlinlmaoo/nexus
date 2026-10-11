@@ -187,7 +187,7 @@ struct CalendarView: View {
     /// squeezed into a column narrower than any iPhone while the capped grid took the rest (impeccable
     /// re-audit, 7 Oct 2026).
     private var panelWidth: CGFloat {
-        let base: CGFloat = width >= 900 ? 360 : 320
+        let base: CGFloat = width >= 1180 ? 380 : width >= 900 ? 360 : 320
         let grown = max(base, base * panelScaled / 320)
         return min(grown, (width * 0.45).rounded(.down))
     }
@@ -215,10 +215,13 @@ struct CalendarView: View {
         guard twoPane, let h = layoutHeight, paneContent > 0, paneGrid > 0 else { return nil }
         return h - (paneContent - paneGrid)
     }
-    /// The People week as a table (a 180 pt name column and seven days) only where it has room.
-    private var peopleTable: Bool { hSize == .regular && width >= 820 }
+    /// The People week as a table (names held on the left, seven days beside them) on regular width
+    /// with room for the names and at least a few days; the days scroll sideways under 7 readable ones.
+    private var peopleTable: Bool { hSize == .regular && width >= 700 }
     /// Month / People and Everyone / Mine / My division side by side as two switches.
     private var headerWide: Bool { gridWidth >= 560 }
+    /// The month, Today and both switches as one toolbar line, where it holds them without squeezing.
+    private var toolbarLine: Bool { gridWidth >= 800 && !typeSize.isAccessibilitySize }
 
     // MARK: Derived once per change (see CalendarDerived)
 
@@ -292,6 +295,22 @@ struct CalendarView: View {
             memo.cellsKey = key
         }
         return memo.cells
+    }
+
+    /// The tasks of each grid day as the tall cells' lines (regular width only; the phone draws dots).
+    private func monthLines(_ days: [String]) -> [String: CalMonthDay] {
+        guard rangeLoaded else { return [:] }
+        let key = "\(visibleKey)|\(month)"
+        if memo.linesKey != key {
+            let byDay = visibleByDay
+            var out: [String: CalMonthDay] = [:]
+            for d in days where d.hasPrefix(month) {
+                out[d] = CalendarCore.monthDay(byDay[d] ?? [], ix, focus: focus, today: today, now: now, windowDays: windowDays)
+            }
+            memo.lines = out
+            memo.linesKey = key
+        }
+        return memo.lines
     }
 
     // The rest used to be worked out in body on every pass — a day tap, a poll tick, every frame of a
@@ -507,17 +526,8 @@ struct CalendarView: View {
                 }
                 .refreshable { await refreshAll(silent: true) }
                 Divider().overlay(NX.border)
-                ScrollViewReader { panel in
-                    ScrollView {
-                        dayPanel.padding(14).id(Self.panelTop)
-                    }
-                    .refreshable { await refreshAll(silent: true) }
-                    // Another day starts at its heading. The panel used to keep the last day's scroll,
-                    // so the new date, its count and its first divisions sat above the visible part
-                    // (impeccable re-audit, 7 Oct 2026). At once, not animated: it is a new page.
-                    .onChange(of: selected) { _, _ in panel.scrollTo(Self.panelTop, anchor: .top) }
-                }
-                .frame(width: panelWidth)
+                sidePanel
+                    .frame(width: panelWidth)
             }
         } else {
             ScrollViewReader { proxy in
@@ -557,12 +567,33 @@ struct CalendarView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            monthRow
-            switchRow
+            if toolbarLine {
+                toolbarRow
+            } else {
+                monthRow
+                switchRow
+            }
             if divisionFellBack { chartNote }
             legendRow
             if !chipFilters(filters).isEmpty { activeFilterRow }
             if let savedAt { CalSavedNotice(savedAt: savedAt) }
+        }
+    }
+
+    /// ‹ October 2026 › Today on the left, the view and whose tasks on the right: one line, the way a
+    /// desktop calendar's toolbar has them, instead of two loose rows over the grid.
+    private var toolbarRow: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 0) {
+                stepButton(-1)
+                monthTitle.fixedSize()
+                stepButton(1)
+            }
+            if selected != today { todayButton }
+            Spacer(minLength: 12)
+            modeSwitch.frame(width: CalType.size(200))
+            NXSegmented(selection: scopeBinding, options: scopeOptions, label: { scopeLabel($0) }, title: T("Show"))
+                .frame(maxWidth: CalType.size(scopeOptions.count > 2 ? 330 : 230))
         }
     }
 
@@ -586,7 +617,7 @@ struct CalendarView: View {
     }
 
     private var monthTitle: some View {
-        Text(title).font(NXFont.display(CalType.size(17), .bold)).monospacedDigit().foregroundStyle(NX.foreground)
+        Text(title).font(NXFont.display(CalType.size(toolbarLine ? 20 : 17), .bold)).monospacedDigit().foregroundStyle(NX.foreground)
             .lineLimit(2).minimumScaleFactor(0.8)
             .accessibilityAddTraits(.isHeader)
     }
@@ -975,7 +1006,7 @@ struct CalendarView: View {
             } else if shownThisMonth == 0 {
                 emptyMonthBanner
             }
-            CalMonthGrid(days: days, month: month, cells: cells, selected: selected, today: today, holidays: facts.holidays, ix: ix, wide: wideCells,
+            CalMonthGrid(days: days, month: month, cells: cells, lines: monthLines(days), selected: selected, today: today, holidays: facts.holidays, ix: ix, wide: wideCells,
                          loaded: loaded, fitHeight: gridRoom) { select($0, reveal: true) }
                 // Apple's Calendar month stops growing at the first accessibility size too: past it the
                 // fixed-height cells overflow into the next week. The day list below scales fully.
@@ -1002,7 +1033,8 @@ struct CalendarView: View {
                     HStack(spacing: 14) { legendKeys }
                 }
                 if !legendEntries.isEmpty {
-                    Text(T("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it."))
+                    Text(wideCells ? T("Colours follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.")
+                                   : T("Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it."))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -1028,11 +1060,28 @@ struct CalendarView: View {
         }
     }
 
-    /// The month's three marks, in words.
+    /// The month's marks, in words: the tall cells' badges and lines, or the phone's dots.
     @ViewBuilder private var legendKeys: some View {
-        legendKey(filled: true, T("has tasks to do"))
-        legendKey(filled: false, T("done or no status"))
-        HStack(spacing: 5) { Capsule().fill(CalTone.overdue).frame(width: 14, height: 2); Text(T("overdue")) }
+        HStack(spacing: 5) { keyBadge("1", fill: CalTone.overdue, fg: .white); Text(T("overdue")) }
+        if wideCells {
+            HStack(spacing: 5) { keyBadge("3", fill: NX.muted, fg: NX.mutedFg); Text(T("tasks that day")) }
+            HStack(spacing: 5) {
+                RoundedRectangle(cornerRadius: 1.5).fill(NX.mutedFg.opacity(0.45)).frame(width: 3, height: 10)
+                Text(T("done or no status")).strikethrough(true, color: NX.mutedFg.opacity(0.7))
+            }
+        } else {
+            legendKey(filled: true, T("has tasks to do"))
+            legendKey(filled: false, T("done or no status"))
+        }
+    }
+
+    /// A sample of the cells' count badges.
+    private func keyBadge(_ text: String, fill: Color, fg: Color) -> some View {
+        Text(text).font(NXFont.text(CalType.size(9.5), .bold)).monospacedDigit()
+            .foregroundStyle(fg)
+            .frame(minWidth: CalType.size(14), minHeight: CalType.size(14))
+            .background(fill, in: Capsule())
+            .accessibilityHidden(true)
     }
 
     /// The key draws a neutral sample: the real dots are each division's own colour.
@@ -1088,16 +1137,41 @@ struct CalendarView: View {
 
     // MARK: Day
 
+    /// iPhone and the stacked layout: the day's heading and its list in the one scroll.
     private var dayPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            dayHead
+            dayBody
+        }
+    }
+
+    /// Beside the grid: the heading stays put above the list, which scrolls under it on its own. The
+    /// heading used to scroll with the list, and the bar above it clipped the first task as soon as the
+    /// list moved ("FINAL PREVIEW" cut in half, owner, 11 Oct 2026).
+    private var sidePanel: some View {
+        VStack(spacing: 0) {
+            dayHead
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 12)
+                .background(NX.background)
+            Divider().overlay(NX.border)
+            ScrollViewReader { panel in
+                ScrollView {
+                    dayBody.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 20).id(Self.panelTop)
+                }
+                .refreshable { await refreshAll(silent: true) }
+                // Another day starts at its top. The panel used to keep the last day's scroll, so the
+                // new day's first divisions sat above the visible part (impeccable re-audit, 7 Oct
+                // 2026). At once, not animated: it is a new page.
+                .onChange(of: selected) { _, _ in panel.scrollTo(Self.panelTop, anchor: .top) }
+            }
+        }
+    }
+
+    /// The date, its counts, the day arrows and By division / By person.
+    private var dayHead: some View {
         let tree = dayTree
-        let rail = railItems
-        let ctx = CalRowContext(ix: ix, people: people, today: today, now: now, windowDays: windowDays, lensByPerson: lensByPerson, onOpen: openItem,
-                                meId: structure?.me?.userId ?? auth.session?.userId)
-        let mine = mineUnits
-        let above = mineOrAbove
         let rel = CalDays.dayDiff(today, selected)
         let holiday = monthFacts.holidays[selected]
-        let folded = collapsed
         return VStack(alignment: .leading, spacing: 12) {
             // At the accessibility text sizes the arrows go under the heading, as Today does under the
             // month: beside them the weekday was broken in the middle of the word.
@@ -1124,6 +1198,19 @@ struct CalendarView: View {
             .id(Self.headAnchor)
             NXSegmented(selection: Binding(get: { lensByPerson }, set: { lensRaw = $0 ? "person" : "division" }),
                         options: [false, true], label: { $0 ? T("By person") : T("By division") }, title: T("Group by"))
+        }
+    }
+
+    /// The day's overdue rail (today) and its tasks by division or by person.
+    private var dayBody: some View {
+        let tree = dayTree
+        let rail = railItems
+        let ctx = CalRowContext(ix: ix, people: people, today: today, now: now, windowDays: windowDays, lensByPerson: lensByPerson, onOpen: openItem,
+                                meId: structure?.me?.userId ?? auth.session?.userId)
+        let mine = mineUnits
+        let above = mineOrAbove
+        let folded = collapsed
+        return VStack(alignment: .leading, spacing: 12) {
             if !rail.isEmpty { overdueRail(rail) }
             if tree.total == 0 && !rangeLoaded {
                 notLoaded
@@ -1220,7 +1307,8 @@ struct CalendarView: View {
     /// cells, keys and buttons further on. At the accessibility text sizes the date has a line of its
     /// own, wrapping between words, with TODAY under it.
     private func dayHeading(tree: CalDayTree, rel: Int, holiday: String?) -> some View {
-        let date = Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(16), .bold)).foregroundStyle(NX.foreground)
+        let date = Text(CalFormat.day(selected, "EEEEdMMMyyyy")).font(NXFont.display(CalType.size(twoPane ? 19 : 17), .bold)).foregroundStyle(NX.foreground)
+        let late = rangeLoaded ? (visibleByDay[selected] ?? []).filter { CalendarCore.overdueState($0, today: today, now: now, windowDays: windowDays) == .recent }.count : 0
         let tag: String? = rel == 0 ? T("Today") : rel == 1 ? T("Tomorrow") : rel == -1 ? T("Yesterday") : nil
         return VStack(alignment: .leading, spacing: 3) {
             if typeSize.isAccessibilitySize {
@@ -1233,10 +1321,19 @@ struct CalendarView: View {
                 }
             }
             if let holiday { Text(holiday).font(NXFont.text(CalType.size(12), .semibold)).foregroundStyle(CalTone.overdue) }
-            Text(tree.total > 0 ? "\(CalFormat.tasks(tree.total)) · \(CalFormat.people(tree.people))"
-                 : !rangeLoaded ? (failedHere ? T("Couldn't load this") : T("Loading…"))
-                 : T("No tasks"))
-                .font(NXFont.text(CalType.size(12))).foregroundStyle(NX.mutedFg)
+            HStack(spacing: 6) {
+                Text(tree.total > 0 ? "\(CalFormat.tasks(tree.total)) · \(CalFormat.people(tree.people))"
+                     : !rangeLoaded ? (failedHere ? T("Couldn't load this") : T("Loading…"))
+                     : T("No tasks"))
+                    .font(NXFont.text(CalType.size(12.5))).foregroundStyle(NX.mutedFg)
+                if late > 0 {
+                    Text(String(format: T("%d overdue"), late))
+                        .font(NXFont.text(CalType.size(11.5), .bold)).monospacedDigit()
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(CalTone.overdue, in: Capsule())
+                }
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -1319,7 +1416,7 @@ struct CalendarView: View {
         let monday = CalDays.mondayOf(selected)
         let days = (0..<7).map { CalDays.addDays(monday, $0) }
         let thisWeek: (() -> Void)? = days.contains(today) ? nil : goToday
-        return CalPeopleWeek(rows: weekRows, days: days, today: today, now: now, windowDays: windowDays, ix: ix, people: people, wide: peopleTable,
+        return CalPeopleWeek(rows: weekRows, days: days, today: today, now: now, windowDays: windowDays, ix: ix, people: people, wide: peopleTable, room: width - 32,
                              onOpenDay: { d in mode = .month; lensRaw = "person"; select(d, reveal: true) }, onOpen: openItem,
                              filtered: filters.activeCount > 0, onResetFilters: resetFilters, onThisWeek: thisWeek,
                              focusName: focusUnit?.name, onAllDivisions: leaveFocus, scope: filters.scope, onShowEveryone: showEveryone)
@@ -1774,6 +1871,8 @@ private final class CalendarDerived {
     var byDay: [String: [CalItem]] = [:]
     var cellsKey: String?
     var cells: [String: CalDayCell] = [:]
+    var linesKey: String?
+    var lines: [String: CalMonthDay] = [:]
     var monthDaysKey: String?
     var monthDays: [String] = []
     var factsKey: String?
