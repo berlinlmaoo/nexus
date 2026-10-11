@@ -1,9 +1,14 @@
+import { docToText } from "@/lib/blockdoc"
+
 /**
  * Recursively extract plain text from TipTap JSON content.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractTextFromTipTap(node: any): string {
   if (!node) return ""
+  // A whole document: its line-per-block text (lib/blockdoc.ts), which released iOS shows as is. The old
+  // walk below joined every block with a space, so a multi-paragraph doc read as one run-on line.
+  if (node && typeof node === "object" && node.type === "doc") return docToText(node)
   if (typeof node === "string") return node
 
   const parts: string[] = []

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -73,14 +73,19 @@ function DocComposer({ onClose }: { onClose: () => void }) {
   const templates = useQuery({ queryKey: ["nexus", "doc-templates"], queryFn: () => nexusApi.docTemplates(), retry: false });
   const applyTemplate = (id: string) => {
     const tpl = (templates.data?.templates ?? []).find((t) => t.id === id);
-    if (tpl) { setContent(tiptapToText(tpl.content)); if (!title.trim()) setTitle(tpl.name); }
+    if (tpl) { const text = tiptapToText(tpl.content); setContent(text); setTemplate({ text, content: tpl.content }); if (!title.trim()) setTitle(tpl.name); }
   };
+  // A template keeps its formatting (headings, lists, to-dos…) unless the text was edited here.
+  const [template, setTemplate] = useState<{ text: string; content: unknown } | null>(null);
+  const navigate = useNavigate();
   const create = useMutation({
-    mutationFn: () => nexusApi.createDoc({ title, projectId, content: contentToTipTap(content) }),
-    onSuccess: () => {
+    mutationFn: () => nexusApi.createDoc({ title, projectId, content: template && template.text === content ? template.content : contentToTipTap(content) }),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
       celebrate("New lore added 📚✨");
       onClose();
+      // Straight into the block editor, like Notion.
+      if (res.doc?.id) navigate({ to: "/docs/$docId", params: { docId: res.doc.id } });
     },
   });
 

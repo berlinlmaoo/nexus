@@ -62,6 +62,7 @@ import {
   type ViewLayout,
 } from "@/lib/project-views";
 import { useLang } from "@/lib/lang";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
@@ -563,7 +564,7 @@ function ProjectDetail() {
             />
           )}
           {activeModule === "automations" && <AutomationsView projectId={data.id} />}
-          {activeModule === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
+          {activeModule === "pages" && <PagesView project={data} onOpen={(doc) => navigate({ to: "/docs/$docId", params: { docId: doc.id } })} />}
           {activeModule === "forms" && <ProjectFormsView projectId={data.id} />}
           {activeModule === "chat" && <ProjectChat projectId={data.id} />}
           {!activeModule && !activeView && (pv.query.isLoading
@@ -1813,9 +1814,22 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
 }
 
 
-function PagesView({ project, onCreate, onOpen }: { project: NexusProject; onCreate: () => void; onOpen: (doc: NexusDoc) => void }) {
+function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: NexusDoc) => void }) {
   const docs = useQuery({ queryKey: ["nexus", "project-docs", project.id], queryFn: () => nexusApi.projectDocs(project.id), retry: false });
   const items = docs.data?.docs ?? [];
+  const qc = useQueryClient();
+  const { t: tr } = useLang();
+  // "Add page" makes an empty page and opens it in the block editor, as Notion does (no composer).
+  const create = useMutation({
+    mutationFn: () => nexusApi.createDoc({ title: "Untitled", projectId: project.id }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["nexus", "project-docs", project.id] });
+      qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
+      if (res.doc?.id) onOpen(res.doc);
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the page.")),
+  });
+  const onCreate = () => create.mutate();
   return (
     <div className="p-4 md:p-8 space-y-5 bg-[radial-gradient(circle_at_top_left,rgba(78,179,1,0.08),transparent_30%)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1823,7 +1837,7 @@ function PagesView({ project, onCreate, onOpen }: { project: NexusProject; onCre
           <h2 className="text-xl font-black tracking-tight">Project Lore</h2>
           <p className="text-sm text-muted-foreground">Live docs scoped to this mission. SOP spells, meeting notes, briefs, and reference pages live here.</p>
         </div>
-        <Button variant="primary" onClick={onCreate}><Plus className="h-4 w-4" />Add page</Button>
+        <Button variant="primary" isDisabled={create.isPending} onClick={onCreate}><Plus className="h-4 w-4" />{tr("Add page")}</Button>
       </div>
       {docs.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">Loading project lore...</CardBody></Card>}
       {docs.isError && <Empty title="Pages locked" message="You need a login/session or project access to load this project's docs." />}
@@ -1833,7 +1847,7 @@ function PagesView({ project, onCreate, onOpen }: { project: NexusProject; onCre
           <Card key={doc.id} onClick={() => onOpen(doc)} className="border border-border bg-card text-left shadow-soft hover:border-primary/40">
             <CardBody className="gap-4 p-5">
               <div className="flex items-start gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg">📜</span>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg">{doc.icon || "📄"}</span>
                 <div className="min-w-0">
                   <h3 className="truncate text-base font-black tracking-tight">{doc.title}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">Updated {fmtDate(doc.updatedAt)} · {doc.owner?.name || doc.author?.name || "NEXUS keeper"}</p>

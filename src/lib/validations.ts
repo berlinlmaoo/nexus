@@ -215,7 +215,9 @@ export const createTaskSchema = z.object({
 
 export const updateTaskSchema = z.object({
   title: z.string().min(1).max(500).optional(),
-  description: z.string().max(10000).nullable().optional(),
+  // 100k, not 10k: since the block editor (12 Oct 2026) the description is the text form of a rich body,
+  // which can run longer; an older app sending that text back unchanged must not be refused.
+  description: z.string().max(100000).nullable().optional(),
   status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]).optional(),
   priority: z.enum(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]).optional(),
   dueDate: z.string().nullable().optional(),

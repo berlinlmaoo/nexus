@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import type { InputJsonValue } from "@prisma/client/runtime/client"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -185,6 +186,10 @@ export async function POST(
           parentId: crossProject ? null : existing.parentId,
         },
       })
+
+      // The block-editor body comes along (its text is the description copied above).
+      const body = await tx.taskBody.findUnique({ where: { taskId: existing.id }, select: { doc: true } })
+      if (body) await tx.taskBody.create({ data: { taskId: newTask.id, doc: body.doc as unknown as InputJsonValue, updatedById: session.user.id } })
 
       if (keptAssigneeIds.length > 0) {
         await tx.taskAssignee.createMany({

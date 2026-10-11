@@ -16,6 +16,7 @@ import { bumpStreak } from "@/lib/gamification"
 import { updateTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 
 export async function GET(
   _request: NextRequest,
@@ -516,6 +517,10 @@ export async function PATCH(
       changes: body,
       previousStatus: existing.status,
     }, effectiveProjectId).catch(() => {})
+
+    // The description written as text (released apps): a live block-editor room on this task reloads,
+    // and the body is rebuilt from this text the next time it is opened (lib/blockdoc.ts resolveTaskBody).
+    if (description !== undefined) eventBus.emit(BUS_EVENTS.COLLAB_EXTERNAL_WRITE, { key: `taskbody:${taskId}` })
 
     if (assigneeIds !== undefined) {
       await prisma.taskAssignee.deleteMany({

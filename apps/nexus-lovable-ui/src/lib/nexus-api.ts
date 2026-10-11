@@ -1127,6 +1127,11 @@ export type NexusDoc = {
   updatedAt?: string | null;
   parentId?: string | null;
   icon?: string | null;
+  /** Block editor page header: an uploaded image URL or "gradient:<name>". */
+  coverImage?: string | null;
+  /** Block editor: page uses the full width instead of the ~720px column. */
+  fullWidth?: boolean;
+  projectId?: string;
   author?: NexusUser | null;
   owner?: NexusUser | null;
   project?: { id?: string; name?: string; color?: string | null } | null;
@@ -2411,7 +2416,17 @@ export const nexusApi = {
   docTemplates: () => apiFetch<{ templates: NexusDocTemplate[] }>("/api/docs/templates"),
   projectDocs: (projectId: string) => apiFetch<{ docs: NexusDoc[] }>(`/api/docs?projectId=${encodeURIComponent(projectId)}`),
   createDoc: (payload: { title: string; content?: unknown; projectId: string; parentId?: string | null }) => apiFetch<{ doc: NexusDoc }>("/api/docs", { method: "POST", body: JSON.stringify(payload) }),
-  updateDoc: (docId: string, payload: { title?: string; content?: unknown; parentId?: string | null; position?: number; icon?: string | null }) => apiFetch<{ doc: NexusDoc }>(`/api/docs/${docId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateDoc: (docId: string, payload: { title?: string; content?: unknown; parentId?: string | null; position?: number; icon?: string | null; coverImage?: string | null; fullWidth?: boolean; baseUpdatedAt?: string }) => apiFetch<{ doc: NexusDoc & { content?: unknown } }>(`/api/docs/${docId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  /** Block editor body of a task (TipTap JSON + its text form in `description`). */
+  taskBody: (taskId: string) => apiFetch<{ doc: unknown; text: string; canEdit: boolean; updatedAt: string }>(`/api/tasks/${encodeURIComponent(taskId)}/body`),
+  /** Save it; `baseText` = the description the editor started from (409 when it changed meanwhile). */
+  saveTaskBody: (taskId: string, doc: unknown, baseText?: string) => apiFetch<{ doc: unknown; text: string; updatedAt: string }>(`/api/tasks/${encodeURIComponent(taskId)}/body`, { method: "PUT", body: JSON.stringify({ doc, baseText }) }),
+  /** An image/file dropped into a doc or task body (project storage, login-gated /api/files URL). */
+  uploadBlockFile: (projectId: string, file: File, onProgress?: (pct: number) => void) => {
+    const fd = new FormData();
+    fd.set("projectId", projectId); fd.set("file", file);
+    return xhrUpload<CustomFieldFile>("/api/custom-fields/upload", fd, file, onProgress ?? (() => undefined));
+  },
   deleteDoc: (docId: string) => apiFetch<{ success: boolean }>(`/api/docs/${docId}`, { method: "DELETE" }),
   notifications: (unreadOnly = false) => apiFetch<{ notifications?: NexusNotification[]; unreadCount?: number }>(`/api/notifications${unreadOnly ? "?unread=true" : ""}`),
   markNotificationRead: (id: string) => apiFetch<{ success: boolean }>("/api/notifications", { method: "PATCH", body: JSON.stringify({ id }) }),

@@ -140,6 +140,7 @@ model User {
   outletEventsUpdated  OutletSalesEvent[]   @relation("OutletEventUpdatedBy")
   outletEventsReported OutletSalesEvent[]   @relation("OutletEventReportedBy")
   outletTargetsUpdated OutletSalesTarget[]  @relation("OutletTargetUpdatedBy")
+  blockReminders       BlockReminder[]
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -739,6 +740,8 @@ model Task {
   followers         TaskFollower[]
   likes             TaskLike[]
   taskProjects      TaskProject[]
+  /// Block-editor body (TipTap JSON). `description` stays its text form for released apps (lib/blockdoc.ts).
+  body              TaskBody?
 
   @@index([parentId])
   @@index([taskListId])
@@ -902,6 +905,8 @@ model Doc {
   coverImage         String?
   verifiedAt         DateTime?
   verificationStatus String?  @default("NEEDS_REVIEW")
+  /// Block editor: the page uses the full width instead of the ~720px reading column.
+  fullWidth          Boolean  @default(false)
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -3507,4 +3512,41 @@ model OutletSalesEvent {
   updatedAt     DateTime  @updatedAt
 
   @@index([projectId, date])
+}
+
+/// Rich body of a task, written by the block editor (prisma/sql/2026-10-12-blocks-editor.sql).
+/// Task.description keeps the text form (docToText) that released iOS/Android apps read and edit; when
+/// that text no longer matches this document, resolveTaskBody (lib/blockdoc.ts) rebuilds it from the text.
+model TaskBody {
+  taskId      String   @id
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  doc         Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// Yjs state of a live editing room ("doc:<docId>" | "taskbody:<taskId>"), kept so reconnecting editors
+/// merge instead of starting over. Disposable: a missing or stale row is rebuilt from the JSON (lib/collab-rooms.ts).
+model CollabState {
+  key       String   @id
+  state     Bytes
+  epoch     String
+  updatedAt DateTime @updatedAt
+}
+
+/// A "Remind me" date chip inside a doc or a task body: notify `userId` at `remindAt` (cron/block-reminders).
+model BlockReminder {
+  id         String    @id @default(cuid())
+  sourceKind String
+  sourceId   String
+  key        String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  remindAt   DateTime
+  text       String    @default("")
+  firedAt    DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([sourceKind, sourceId, userId, key])
+  @@index([remindAt, firedAt])
 }
