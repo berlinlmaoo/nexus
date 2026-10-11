@@ -86,10 +86,11 @@ export type ExecutionResult = {
   created: boolean
 }
 
+// Sections are the status options (owner, 12 Oct 2026; lib/status-sections.ts).
 const STANDARD_LISTS = [
-  { name: "To Do", position: 0 },
-  { name: "In Progress", position: 1 },
-  { name: "Done", position: 2 },
+  { name: "To Do", position: 0, taskStatus: "TODO" as const },
+  { name: "In Progress", position: 1, taskStatus: "IN_PROGRESS" as const },
+  { name: "Done", position: 2, taskStatus: "DONE" as const },
 ]
 
 /**

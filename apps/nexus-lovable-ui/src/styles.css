@@ -120,6 +120,18 @@
   --control-border: #878e98;
   --scrim: rgb(15 23 42 / 0.4);
   color-scheme: light;
+  /* Status / option palette (owner, 12 Oct 2026, Notion's nine option colours): --st-<c>-lane is a
+     column's tint, -bg a pill, -fg its text, -dot the marker, -border a hairline. Dark mode below. */
+  --st-gray-lane: #f9f9f8; --st-gray-bg: #e3e2e0; --st-gray-fg: #32302c; --st-gray-dot: #91918e; --st-gray-border: #91918e55;
+  --st-brown-lane: #fbf8f6; --st-brown-bg: #eee0da; --st-brown-fg: #44291d; --st-brown-dot: #9f6b53; --st-brown-border: #9f6b5355;
+  --st-orange-lane: #fdf6f0; --st-orange-bg: #fadec9; --st-orange-fg: #49290e; --st-orange-dot: #d9730d; --st-orange-border: #d9730d55;
+  --st-yellow-lane: #fcf8ec; --st-yellow-bg: #fbecc8; --st-yellow-fg: #402c1b; --st-yellow-dot: #cb912f; --st-yellow-border: #cb912f55;
+  --st-green-lane: #f5f9f4; --st-green-bg: #dbeddb; --st-green-fg: #1c3829; --st-green-dot: #448361; --st-green-border: #44836155;
+  --st-blue-lane: #f3f8fb; --st-blue-bg: #d3e5ef; --st-blue-fg: #183347; --st-blue-dot: #337ea9; --st-blue-border: #337ea955;
+  --st-purple-lane: #f9f6fb; --st-purple-bg: #e8deee; --st-purple-fg: #412454; --st-purple-dot: #9065b0; --st-purple-border: #9065b055;
+  --st-pink-lane: #fcf5f8; --st-pink-bg: #f5e0e9; --st-pink-fg: #4c2337; --st-pink-dot: #c14c8a; --st-pink-border: #c14c8a55;
+  --st-red-lane: #fdf5f4; --st-red-bg: #ffe2dd; --st-red-fg: #5d1715; --st-red-dot: #d44c47; --st-red-border: #d44c4755;
+
 }
 
 .dark {
@@ -171,6 +183,17 @@
   --control-border: #6b7381;
   --scrim: rgb(0 0 0 / 0.6);
   color-scheme: dark;
+  /* Status palette, dark: low-alpha tints of each hue, light text that keeps ≥4.5:1 on them. */
+  --st-gray-lane: rgb(155 154 151 / 0.07); --st-gray-bg: rgb(155 154 151 / 0.22); --st-gray-fg: #c9c8c5; --st-gray-dot: #9b9a97; --st-gray-border: rgb(155 154 151 / 0.4);
+  --st-brown-lane: rgb(162 119 99 / 0.07); --st-brown-bg: rgb(162 119 99 / 0.22); --st-brown-fg: #dfab95; --st-brown-dot: #a27763; --st-brown-border: rgb(162 119 99 / 0.4);
+  --st-orange-lane: rgb(217 115 13 / 0.07); --st-orange-bg: rgb(217 115 13 / 0.22); --st-orange-fg: #ffa344; --st-orange-dot: #d9730d; --st-orange-border: rgb(217 115 13 / 0.4);
+  --st-yellow-lane: rgb(203 145 47 / 0.07); --st-yellow-bg: rgb(203 145 47 / 0.22); --st-yellow-fg: #ffdc49; --st-yellow-dot: #cb912f; --st-yellow-border: rgb(203 145 47 / 0.4);
+  --st-green-lane: rgb(77 171 154 / 0.07); --st-green-bg: rgb(77 171 154 / 0.22); --st-green-fg: #7dd3b8; --st-green-dot: #4dab9a; --st-green-border: rgb(77 171 154 / 0.4);
+  --st-blue-lane: rgb(82 156 202 / 0.07); --st-blue-bg: rgb(82 156 202 / 0.22); --st-blue-fg: #8cc4ec; --st-blue-dot: #529cca; --st-blue-border: rgb(82 156 202 / 0.4);
+  --st-purple-lane: rgb(154 109 215 / 0.07); --st-purple-bg: rgb(154 109 215 / 0.22); --st-purple-fg: #c7a6f0; --st-purple-dot: #9a6dd7; --st-purple-border: rgb(154 109 215 / 0.4);
+  --st-pink-lane: rgb(226 85 161 / 0.07); --st-pink-bg: rgb(226 85 161 / 0.22); --st-pink-fg: #f19bc9; --st-pink-dot: #e255a1; --st-pink-border: rgb(226 85 161 / 0.4);
+  --st-red-lane: rgb(255 115 105 / 0.07); --st-red-bg: rgb(255 115 105 / 0.22); --st-red-fg: #ff9d96; --st-red-dot: #ff7369; --st-red-border: rgb(255 115 105 / 0.4);
+
 }
 
 @layer base {

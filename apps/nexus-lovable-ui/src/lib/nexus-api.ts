@@ -421,7 +421,7 @@ export type NexusProject = {
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
   /** taskStatus (12 Oct 2026): the task status the section stands for; moving a task in sets it (server). */
-  taskLists?: Array<{ id: string; name: string; position?: number; taskStatus?: NexusTaskStatus | null; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
+  taskLists?: Array<{ id: string; name: string; position?: number; taskStatus?: NexusTaskStatus | null; color?: string | null; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
 };
 
 export type NexusTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED";
@@ -2323,10 +2323,10 @@ export const nexusApi = {
   statusUpdates: (projectId: string) => apiFetch<NexusStatusUpdate[]>(`/api/status-updates?projectId=${encodeURIComponent(projectId)}`),
   createStatusUpdate: (projectId: string, text: string, status?: string) => apiFetch<NexusStatusUpdate>("/api/status-updates", { method: "POST", body: JSON.stringify({ projectId, text, status }) }),
   generateStatusUpdate: (projectId: string) => apiFetch<{ content: string }>(`/api/projects/${projectId}/status-updates/generate`, { method: "POST" }),
-  createSection: (projectId: string, name: string) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "POST", body: JSON.stringify({ name }) }),
+  createSection: (projectId: string, name: string, opts: { taskStatus?: NexusTaskStatus | null; color?: string | null } = {}) => apiFetch<{ id: string; name: string; position?: number; taskStatus?: NexusTaskStatus | null; color?: string | null }>(`/api/projects/${projectId}/sections`, { method: "POST", body: JSON.stringify({ name, ...opts }) }),
   projectTemplates: () => apiFetch<{ templates: NexusProjectTemplate[] }>("/api/project-templates"),
-  updateSection: (projectId: string, payload: { id: string; name?: string; position?: number; taskStatus?: NexusTaskStatus | null }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
-  deleteSection: (projectId: string, id: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/sections`, { method: "DELETE", body: JSON.stringify({ id }) }),
+  updateSection: (projectId: string, payload: { id: string; name?: string; position?: number; taskStatus?: NexusTaskStatus | null; color?: string | null }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteSection: (projectId: string, id: string, moveTo?: string) => apiFetch<{ success?: boolean; movedTo?: string }>(`/api/projects/${projectId}/sections`, { method: "DELETE", body: JSON.stringify({ id, ...(moveTo ? { moveTo } : {}) }) }),
   employmentStartDates: () =>
     apiFetch<{ members: { userId: string; name: string | null; email: string | null; avatar: string | null; employmentStartDate: string | null; eligible: boolean; eligibleFrom: string | null }[]; quota: number }>(`/api/attendance/employment-start`),
   setEmploymentStartDate: (userId: string, date: string | null) =>

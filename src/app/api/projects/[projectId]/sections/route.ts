@@ -7,6 +7,10 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
 const SECTION_TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
+// A status option's colour (owner, 12 Oct 2026, Notion-style statuses): the web palette's keys
+// (lib/project-views.ts COLOR_PRESETS). Null = the colour of its group.
+const SECTION_COLORS = ["gray", "sky", "emerald", "amber", "orange", "rose", "violet", "pink"]
+const cleanColor = (v: unknown) => (typeof v === "string" && SECTION_COLORS.includes(v) ? v : null)
 
 export async function GET(
   _request: NextRequest,
@@ -50,10 +54,21 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { name } = body
+    const { name, taskStatus: rawStatus, color } = body
 
     if (!name?.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
+    }
+    if (rawStatus !== undefined && rawStatus !== null && !SECTION_TASK_STATUSES.includes(rawStatus)) {
+      return NextResponse.json({ error: "taskStatus tidak dikenal.", code: "INVALID_TASK_STATUS" }, { status: 400 })
+    }
+    // Sections are the status options (owner, 12 Oct 2026; lib/status-sections.ts). A new section names
+    // its status; one that does not (every released app) joins the To-do group when the project already
+    // works that way, and stays a plain section in a project that does not.
+    let taskStatus = rawStatus ?? null
+    if (taskStatus === null && rawStatus === undefined) {
+      const bound = await prisma.taskList.count({ where: { projectId: (await params).projectId, taskStatus: { not: null } } })
+      if (bound > 0) taskStatus = "TODO"
     }
 
     // Auto-set position to last
@@ -68,6 +83,8 @@ export async function POST(
         name: name.trim(),
         projectId: (await params).projectId,
         position: (lastSection?.position ?? -1) + 1,
+        taskStatus,
+        color: cleanColor(color),
       },
     })
 
@@ -92,7 +109,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { id, name, position, taskStatus } = body
+    const { id, name, position, taskStatus, color } = body
 
     if (!id) {
       return NextResponse.json({ error: "Section id is required" }, { status: 400 })
@@ -140,6 +157,7 @@ export async function PATCH(
         ...(name !== undefined && { name: name.trim() }),
         ...(position !== undefined && { position }),
         ...(taskStatus !== undefined && { taskStatus }),
+        ...(color !== undefined && { color: cleanColor(color) }),
       },
     })
 
@@ -164,7 +182,7 @@ export async function DELETE(
     }
 
     const body = await request.json()
-    const { id } = body
+    const { id, moveTo } = body
 
     if (!id) {
       return NextResponse.json({ error: "Section id is required" }, { status: 400 })
@@ -187,7 +205,10 @@ export async function DELETE(
     // Move tasks to first remaining section, delete, re-normalize positions — one transaction, after
     // keeping the section and where each task came from, so Control Room → Audit can restore it: the
     // section returns at its old place and its tasks move back (unless someone has moved them since).
-    const firstRemaining = allSections.find((s) => s.id !== id)!
+    // "Move tasks to…" (owner, 12 Oct 2026, Notion-style statuses): the section the deleting person
+    // picked, else the first remaining one. Moved tasks take its status when it stands for one, so the
+    // board stays true; a restore moves them back (their status stays as it is then).
+    const firstRemaining = allSections.find((s) => s.id === moveTo && s.id !== id) ?? allSections.find((s) => s.id !== id)!
     const projectId = (await params).projectId
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
     const tasksMoved = await prisma.task.count({ where: { taskListId: id } })
@@ -198,7 +219,7 @@ export async function DELETE(
       meta: { open: { type: "project", id: projectId }, projectId },
       before: async (tx) => {
         const moved = await tx.task.findMany({ where: { taskListId: id }, select: { id: true } })
-        await tx.task.updateMany({ where: { taskListId: id }, data: { taskListId: firstRemaining.id } })
+        await tx.task.updateMany({ where: { taskListId: id }, data: { taskListId: firstRemaining.id, ...(firstRemaining.taskStatus ? { status: firstRemaining.taskStatus } : {}) } })
         return moved.map((t) => ({ table: "Task", column: "taskListId", key: t.id, value: id, movedTo: firstRemaining.id }))
       },
       remove: async (tx) => {

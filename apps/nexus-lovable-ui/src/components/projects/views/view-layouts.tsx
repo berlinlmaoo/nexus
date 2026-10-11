@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ChevronRight, CircleCheck, Clock, ImageOff, ListChecks, MessageSquare, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
+import { StatusPill } from "@/components/tasks/StatusPicker";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { nexusApi, type NexusTask } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
@@ -52,6 +53,8 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
   const vals = taskValues(task, def.key);
   switch (def.key) {
     case "status": {
+      const opt = ctx.sections.find((x) => x.id === (task.taskListId ?? task.taskList?.id));
+      if (opt?.taskStatus) return <StatusPill option={opt} />;
       const s = vals[0] ?? "TODO";
       return <span className={cn(pill, STATUS_PILL[s] ?? STATUS_PILL.TODO)}>{t(STATUS_TEXT[s] ?? s)}</span>;
     }
@@ -72,7 +75,9 @@ export function PropValue({ task, def, ctx }: { task: NexusTask; def: PropDef; c
     }
     case "section": {
       const s = ctx.sections.find((x) => x.id === vals[0]);
-      return s ? <span className={cn(pill, "bg-muted text-muted-foreground")}>{s.name}</span> : null;
+      if (!s) return null;
+      // A section that stands for a status is the task's status option: a Notion pill in its colour.
+      return s.taskStatus || s.color ? <StatusPill option={s} /> : <span className={cn(pill, "bg-muted text-muted-foreground")}>{s.name}</span>;
     }
     case "subtasks": {
       const subs = task.subtasks ?? [];
@@ -150,14 +155,23 @@ export function GroupHeader({ group, groupBy, defs, cfg, collapsed, onToggle, ch
   const calc = groupCalcValue(group.tasks, cfg.groupCalc, defs);
   const label = groupLabelIsBuiltin(groupBy, group.key, defs) ? t(group.label) : group.label;
   const def = propDef(defs, groupBy);
-  const dot = def && (def.kind === "select" || def.kind === "multi") && group.key !== "__none__" && groupBy !== "section" ? COLOR_PRESETS[optionColor(groupBy!, group.key, defs)].dot : null;
+  // Options with a colour (status options, priorities, select values) show as their coloured pill, the
+  // count in the same hue (Notion's coloured groups, owner 12 Oct 2026). Plain sections stay plain.
+  const coloured = !!def && (def.kind === "select" || def.kind === "multi") && group.key !== "__none__" && (groupBy !== "section" || !!def.options?.find((o) => o.value === group.key)?.color);
+  const tone = coloured ? COLOR_PRESETS[optionColor(groupBy!, group.key, defs)] : null;
   return (
     <div className={cn("flex min-w-0 items-center gap-1.5", sticky && "sticky left-0", className)}>
       <button type="button" onClick={onToggle} aria-expanded={!collapsed} className="flex min-w-0 items-center gap-1.5 rounded-md py-1 pl-0.5 pr-1.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30">
         <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150", !collapsed && "rotate-90")} />
-        {dot && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dot }} />}
-        <span className="truncate text-sm font-semibold">{label}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground" title={t(calc.label)}>{calc.value}</span>
+        {tone ? (
+          <span className="inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-sm font-medium" style={{ backgroundColor: tone.bg, color: tone.text }}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
+            <span className="truncate">{label}</span>
+          </span>
+        ) : (
+          <span className="truncate text-sm font-semibold">{label}</span>
+        )}
+        <span className="shrink-0 text-xs tabular-nums" style={{ color: tone?.text ?? "var(--muted-foreground)" }} title={t(calc.label)}>{calc.value}</span>
       </button>
       {children}
     </div>

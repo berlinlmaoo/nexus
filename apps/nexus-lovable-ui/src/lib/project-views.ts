@@ -13,6 +13,7 @@
  *  visibleProps which properties a card / row / column shows, in order. null = the layout's default.
  */
 import type { NexusCustomField, NexusProjectView, NexusTask } from "./nexus-api";
+import { groupIndex, orderedOptions, usesStatusOptions } from "./status-options.ts";
 
 export type ViewLayout = NexusProjectView["layout"];
 export const VIEW_LAYOUTS: ViewLayout[] = ["board", "list", "table", "calendar", "timeline", "gallery"];
@@ -75,11 +76,13 @@ export function newId(): string {
 // ─── properties ──────────────────────────────────────────────────────────────────────────────────────
 
 export type PropKind = "title" | "text" | "select" | "multi" | "person" | "date" | "number" | "checkbox" | "count";
-export type PropOption = { value: string; label: string };
-export type PropDef = { key: string; label: string; kind: PropKind; options?: PropOption[]; fieldType?: string; builtin: boolean };
+export type PropOption = { value: string; label: string; color?: string | null };
+/** `hidden`: still evaluated (old saved filters keep working) but not offered in pickers. */
+export type PropDef = { key: string; label: string; kind: PropKind; options?: PropOption[]; fieldType?: string; builtin: boolean; hidden?: boolean };
 
 export type ViewCtx = {
-  sections: Array<{ id: string; name: string; position?: number | null }>;
+  /** The project's sections. With a taskStatus they are its status options (lib/status-options.ts). */
+  sections: Array<{ id: string; name: string; position?: number | null; taskStatus?: string | null; color?: string | null }>;
   fields: NexusCustomField[];
   /** Project members, for the person filter's options and the assignee group order. */
   people: Array<{ id: string; name: string }>;
@@ -127,11 +130,15 @@ function fieldKind(type: string): PropKind {
 
 /** Every property a view can show, filter, sort or group by, for this project. */
 export function propDefs(ctx: ViewCtx): PropDef[] {
-  const sections = [...ctx.sections].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  // Sections that stand for a status ARE the status options (owner, 12 Oct 2026): "Status" is then the
+  // section, in group order, with each option's colour; the fixed five-value status stays evaluable for
+  // older saved filters but is not offered.
+  const statusSections = usesStatusOptions(ctx.sections);
+  const sections = statusSections ? orderedOptions(ctx.sections) : [...ctx.sections].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const defs: PropDef[] = [
     { key: "title", label: "Name", kind: "title", builtin: true },
-    { key: "section", label: "Section", kind: "select", builtin: true, options: sections.map((s) => ({ value: s.id, label: s.name })) },
-    { key: "status", label: "Status", kind: "select", builtin: true, options: STATUS_ORDER.map((v) => ({ value: v, label: STATUS_LABEL[v] })) },
+    { key: "section", label: statusSections ? "Status" : "Section", kind: "select", builtin: true, options: sections.map((s) => ({ value: s.id, label: s.name, color: s.color ?? (statusSections ? STATUS_COLOR[s.taskStatus ?? "TODO"] : null) })) },
+    { key: "status", label: statusSections ? "Status type" : "Status", kind: "select", builtin: true, hidden: statusSections, options: STATUS_ORDER.map((v) => ({ value: v, label: STATUS_LABEL[v] })) },
     { key: "priority", label: "Priority", kind: "select", builtin: true, options: PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY_LABEL[v] })) },
     { key: "assignee", label: "Assignee", kind: "person", builtin: true, options: ctx.people.map((p) => ({ value: p.id, label: p.name })) },
     { key: "due", label: "Due date", kind: "date", builtin: true },
@@ -156,10 +163,10 @@ export function propDef(defs: PropDef[], key: string | null | undefined): PropDe
 
 /** Properties a view can group by: one value per task, or a list (a task in several groups). */
 export function groupableProps(defs: PropDef[]): PropDef[] {
-  return defs.filter((d) => d.kind === "select" || d.kind === "multi" || d.kind === "person" || d.kind === "date" || d.kind === "checkbox");
+  return defs.filter((d) => !d.hidden).filter((d) => d.kind === "select" || d.kind === "multi" || d.kind === "person" || d.kind === "date" || d.kind === "checkbox");
 }
 export function sortableProps(defs: PropDef[]): PropDef[] {
-  return defs.filter((d) => d.kind !== "multi" || d.key === "tags");
+  return defs.filter((d) => !d.hidden).filter((d) => d.kind !== "multi" || d.key === "tags");
 }
 export function dateProps(defs: PropDef[]): PropDef[] {
   return defs.filter((d) => d.kind === "date");
@@ -437,7 +444,7 @@ function sortKey(task: NexusTask, key: string, defs: PropDef[], ctx: ViewCtx): s
   if (key === "priority") return PRIORITY_ORDER.indexOf(vals[0]) === -1 ? 99 : PRIORITY_ORDER.indexOf(vals[0]);
   if (key === "section") {
     const s = ctx.sections.find((x) => x.id === vals[0]);
-    return s ? s.position ?? 0 : null;
+    return s ? groupIndex(s.taskStatus) * 100000 + (s.position ?? 0) : null;
   }
   if (vals.length === 0) return null;
   if (key === "assignee") {
@@ -531,7 +538,8 @@ export function groupSkeleton(key: string, defs: PropDef[], ctx: ViewCtx): Array
   if (def.kind === "checkbox") return [{ key: "true", label: "Checked" }, { key: "false", label: "Not checked" }];
   const opts = def.options ?? [];
   const none = key === "assignee" ? "No assignee" : "No value";
-  return [...opts.map((o) => ({ key: o.value, label: o.label })), ...(key === "status" || key === "priority" || key === "section" ? [] : [{ key: EMPTY_GROUP, label: none }])];
+  if (key === "section") return opts.map((o) => ({ key: o.value, label: o.label }));
+  return [...opts.map((o) => ({ key: o.value, label: o.label })), ...(key === "status" || key === "priority" ? [] : [{ key: EMPTY_GROUP, label: none }])];
 }
 
 export function groupTasks<T extends NexusTask>(tasks: T[], key: string, defs: PropDef[], ctx: ViewCtx): TaskGroup<T>[] {
@@ -659,7 +667,9 @@ export function resolveConfig(view: Pick<NexusProjectView, "layout" | "config">)
 
 /** Visible properties that still exist (a deleted custom field drops out). */
 export function visibleProps(cfg: ViewConfig, layout: ViewLayout, defs: PropDef[]): string[] {
-  const list = cfg.visibleProps ?? defaultVisibleProps(layout, defs);
+  let list = cfg.visibleProps ?? defaultVisibleProps(layout, defs);
+  // With status options, "status" means the option (the section): one Status, not two.
+  if (propDef(defs, "status")?.hidden) list = Array.from(new Set(list.map((k) => (k === "status" ? "section" : k))));
   const known = new Set(defs.map((d) => d.key));
   return list.filter((k) => known.has(k) && k !== "title");
 }
@@ -721,29 +731,38 @@ export function filterFromDrill(d: LegacyDrill): ViewFilter {
 
 // ─── colour ──────────────────────────────────────────────────────────────────────────────────────────
 
-/** Card colours (Notion's palette, calm tints). `bg` for the card, `dot` for the marker. */
-export const COLOR_PRESETS: Record<string, { label: string; bg: string; border: string; text: string; dot: string }> = {
-  gray: { label: "Gray", bg: "#f1f1ef", border: "#d3d1cb", text: "#37352f", dot: "#9b9a97" },
-  sky: { label: "Blue", bg: "#e7f3f8", border: "#9cc9de", text: "#183347", dot: "#2f80c3" },
-  emerald: { label: "Green", bg: "#edf3ec", border: "#a8cfa4", text: "#1c3829", dot: "#448361" },
-  amber: { label: "Yellow", bg: "#fbf3db", border: "#e9cf7f", text: "#402c1b", dot: "#c29243" },
-  orange: { label: "Orange", bg: "#faebdd", border: "#eab68b", text: "#49290e", dot: "#d9730d" },
-  rose: { label: "Red", bg: "#fdebec", border: "#efa9ab", text: "#5d1715", dot: "#d44c47" },
-  violet: { label: "Purple", bg: "#f4f0f7", border: "#c8b3d9", text: "#412454", dot: "#9065b0" },
-  pink: { label: "Pink", bg: "#f9eef3", border: "#e2adc6", text: "#4c2337", dot: "#c14c8a" },
-};
-export const COLOR_KEYS = Object.keys(COLOR_PRESETS);
+/**
+ * Option colours (owner, 12 Oct 2026): Notion's nine, as CSS tokens in styles.css (--st-<key>-*), so a
+ * custom status, a colour rule and a select pill all draw from one palette and follow dark mode.
+ * `lane` tints a board column, `bg` a pill or card, `text` its text, `dot` the marker.
+ */
+export const COLOR_KEYS = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] as const;
+export type ColorKey = (typeof COLOR_KEYS)[number];
+const COLOR_LABEL: Record<ColorKey, string> = { gray: "Gray", brown: "Brown", orange: "Orange", yellow: "Yellow", green: "Green", blue: "Blue", purple: "Purple", pink: "Pink", red: "Red" };
+export const COLOR_PRESETS: Record<string, { label: string; lane: string; bg: string; border: string; text: string; dot: string }> = Object.fromEntries(
+  COLOR_KEYS.map((k) => [k, { label: COLOR_LABEL[k], lane: `var(--st-${k}-lane)`, bg: `var(--st-${k}-bg)`, border: `var(--st-${k}-border)`, text: `var(--st-${k}-fg)`, dot: `var(--st-${k}-dot)` }]),
+);
+/** Older keys (the first views build, the calendar's old rules) → the palette's. */
+const COLOR_ALIAS: Record<string, ColorKey> = { sky: "blue", emerald: "green", amber: "yellow", rose: "red", violet: "purple", slate: "gray" };
+export function normalizeColor(c: string | null | undefined): ColorKey | null {
+  if (!c) return null;
+  if ((COLOR_KEYS as readonly string[]).includes(c)) return c as ColorKey;
+  return COLOR_ALIAS[c] ?? null;
+}
 
-const PRIORITY_COLOR: Record<string, string> = { URGENT: "rose", HIGH: "orange", MEDIUM: "sky", LOW: "emerald", NONE: "gray" };
-const STATUS_COLOR: Record<string, string> = { TODO: "gray", IN_PROGRESS: "sky", IN_REVIEW: "amber", DONE: "emerald", CANCELLED: "rose" };
+const PRIORITY_COLOR: Record<string, ColorKey> = { URGENT: "red", HIGH: "orange", MEDIUM: "blue", LOW: "green", NONE: "gray" };
+/** A status's colour when its option has none of its own. */
+export const STATUS_COLOR: Record<string, ColorKey> = { TODO: "gray", IN_PROGRESS: "blue", IN_REVIEW: "yellow", DONE: "green", CANCELLED: "red" };
 
 /** A stable colour for an option of a property (priority/status have fixed ones, others rotate). */
-export function optionColor(prop: string, value: string, defs: PropDef[]): string {
+export function optionColor(prop: string, value: string, defs: PropDef[]): ColorKey {
   if (prop === "priority") return PRIORITY_COLOR[value] ?? "gray";
   if (prop === "status") return STATUS_COLOR[value] ?? "gray";
   const def = propDef(defs, prop);
+  const own = normalizeColor(def?.options?.find((o) => o.value === value)?.color);
+  if (own) return own;
   const i = def?.options?.findIndex((o) => o.value === value) ?? -1;
-  const palette = COLOR_KEYS.filter((k) => k !== "gray");
+  const palette = COLOR_KEYS.filter((k) => k !== "gray" && k !== "brown");
   if (i >= 0) return palette[i % palette.length];
   let h = 0;
   for (const ch of value) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -755,7 +774,7 @@ export function taskColor(task: NexusTask, cfg: Pick<ViewConfig, "colorRules" | 
   for (const r of cfg.colorRules) {
     const vals = taskValues(task, r.prop);
     const want = r.value === ME ? ctx.meId ?? "" : r.value;
-    if (want && vals.includes(want)) return COLOR_PRESETS[r.color] ? r.color : null;
+    if (want && vals.includes(want)) return normalizeColor(r.color);
   }
   if (cfg.colorBy) {
     const v = taskValues(task, cfg.colorBy)[0];

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { sectionForStatus } from '@/lib/status-sections'
 import { minutesLateAgainstShift, safeAttendanceTimezone, resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
 import { isCheckInAway, placeLabel } from '@/lib/attendance-place'
 import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
@@ -1138,6 +1139,10 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
   if (taskListId) {
     const targetList = await resolveTaskList(actor, { taskListId }, status)
     data.taskList = { connect: { id: targetList.id } }
+  } else if (status && status !== existing.status) {
+    // Sections are the status options (lib/status-sections.ts): a new status moves the task to its column.
+    const moveTo = await sectionForStatus(prisma, existing.taskList.projectId, existing.taskListId, status)
+    if (moveTo) data.taskList = { connect: { id: moveTo } }
   }
 
   if (Object.keys(data).length === 0 && assigneeIds === undefined && customFieldUpdates.length === 0) throw new Error('No update fields provided')

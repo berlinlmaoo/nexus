@@ -99,7 +99,7 @@ export function PropPicker({ defs, onPick, exclude = [], placeholder }: { defs: 
   const { t } = useLang();
   const label = usePropLabel();
   const [q, setQ] = useState("");
-  const list = defs.filter((d) => !exclude.includes(d.key) && label(d).toLowerCase().includes(q.trim().toLowerCase()));
+  const list = defs.filter((d) => !d.hidden && !exclude.includes(d.key) && label(d).toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <div className="w-60">
       <div className="relative p-1">
@@ -120,7 +120,7 @@ export function PropPicker({ defs, onPick, exclude = [], placeholder }: { defs: 
 }
 
 /** A toolbar button: quiet until it holds something, then it takes the accent colour. */
-export function ToolbarButton({ icon: Icon, label, active, count, onClick, disabled, className, iconOnly }: {
+export function ToolbarButton({ icon: Icon, label, active, count, onClick, disabled, className }: {
   icon: typeof ListFilter; label: string; active?: boolean; count?: number; onClick?: () => void; disabled?: boolean; className?: string; iconOnly?: boolean;
 }) {
   return (
@@ -131,13 +131,13 @@ export function ToolbarButton({ icon: Icon, label, active, count, onClick, disab
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
+        "inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/30 disabled:opacity-40",
         active ? "text-[color:var(--accent-foreground)]" : "text-muted-foreground hover:text-foreground",
         className,
       )}
     >
       <Icon className="h-4 w-4" />
-      {!iconOnly && <span className="hidden xl:inline">{label}</span>}
+      {/* Icons only, like Notion's toolbar: the label is the tooltip and the accessible name. */}
       {!!count && <span className="tabular-nums text-xs font-semibold">{count}</span>}
     </button>
   );
@@ -497,7 +497,7 @@ export function GroupEditor({ cfg, layout, defs, ctx, onPatch, readOnly }: { cfg
   const calcValue = cfg.groupCalc.kind === "sum" || cfg.groupCalc.kind === "avg" ? `${cfg.groupCalc.kind}:${cfg.groupCalc.prop ?? ""}` : cfg.groupCalc.kind;
   const optLabel = (k: string, l: string) => (groupLabelIsBuiltin(cfg.groupBy, k, defs) ? t(l) : l);
   return (
-    <fieldset disabled={readOnly} className="w-[min(92vw,320px)] space-y-2 p-2 disabled:opacity-60">
+    <fieldset disabled={readOnly} className="w-[min(92vw,320px)] min-w-0 space-y-2 p-2 disabled:opacity-60">
       <label className="flex items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">{t("Group by")}</span>
         <select value={cfg.groupBy ?? ""} onChange={(e) => onPatch({ groupBy: e.target.value || null, hiddenGroups: [], collapsedGroups: [] })} className={cn(fieldCls, "w-44")}>

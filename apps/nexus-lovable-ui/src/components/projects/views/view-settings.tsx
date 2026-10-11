@@ -163,7 +163,7 @@ function PropertiesEditor({ cfg, layout, defs, onPatch }: { cfg: ViewConfig; lay
   const { t } = useLang();
   const label = usePropLabel();
   const shown = visibleProps(cfg, layout, defs);
-  const hidden = defs.filter((d) => d.key !== "title" && !shown.includes(d.key));
+  const hidden = defs.filter((d) => d.key !== "title" && !d.hidden && !shown.includes(d.key));
   const set = (list: string[]) => onPatch({ visibleProps: list });
   const move = (i: number, d: -1 | 1) => { const n = [...shown]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x); set(n); };
   return (
@@ -283,7 +283,7 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
             <button type="button" onClick={onDuplicate} className="mt-1.5 block font-medium text-[color:var(--accent-foreground)] hover:underline">{t("Make a personal copy")}</button>
           </div>
         )}
-        <fieldset disabled={!canEdit} className="disabled:opacity-70">
+        <fieldset disabled={!canEdit} className="min-w-0 disabled:opacity-70">
           <Section title={t("Name")}>
             <div className="flex items-center gap-2">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-border text-muted-foreground">{(() => { const I = LAYOUT_ICON[layout]; return <I className="h-4 w-4" />; })()}</span>

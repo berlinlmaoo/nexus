@@ -5,6 +5,9 @@ import { Avatar, AvatarFace, AvatarStack } from "@/components/Avatar";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { nexusApi, statusLabel, type NexusProject, type NexusTask } from "@/lib/nexus-api";
 import { priorityTone, STATUS } from "@/lib/calendar/tone";
+import { COLOR_PRESETS } from "@/lib/project-views";
+import { orderedOptions, usesStatusOptions } from "@/lib/status-options";
+import { optionColorKey } from "@/components/tasks/StatusPicker";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
@@ -176,6 +179,17 @@ export function ProjectOverview({
 
   const total = tasks.length;
   const pct = total ? Math.round((m.done / total) * 100) : 0;
+  // The status bar follows the project's status options when it has them (owner, 12 Oct 2026): one
+  // segment per option, in its colour; else the five fixed statuses as before.
+  const segs = useMemo(() => {
+    const lists = project.taskLists ?? [];
+    if (usesStatusOptions(lists)) {
+      const count = new Map<string, number>();
+      for (const task of tasks) { const k = task.taskListId ?? task.taskList?.id ?? ""; count.set(k, (count.get(k) ?? 0) + 1); }
+      return orderedOptions(lists).map((o) => ({ key: o.id, label: o.name, translate: false, dot: "", dotColor: COLOR_PRESETS[optionColorKey(o)].dot, n: count.get(o.id) ?? 0, always: false }));
+    }
+    return STATUS_SEGMENTS.map((x) => ({ key: x.key, label: x.label, translate: true, dot: x.dot, dotColor: undefined as string | undefined, n: m.byStatus[x.key] ?? 0, always: x.key === "TODO" || x.key === "DONE" }));
+  }, [project.taskLists, tasks, m.byStatus]);
 
   const memberById = useMemo(() => {
     const map = new Map<string, { name?: string | null; avatar?: string | null; role?: string }>();
@@ -241,25 +255,21 @@ export function ProjectOverview({
                 {m.doneLast7 > 0 ? tn(m.doneLast7, "1 finished in the last 7 days", "{n} finished in the last 7 days") : t("Nothing finished in the last 7 days")}
               </p>
             </div>
-            <div className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={STATUS_SEGMENTS.filter((s) => m.byStatus[s.key]).map((s) => `${t(s.label)} ${m.byStatus[s.key]}`).join(", ")}>
-              {STATUS_SEGMENTS.map((s) => {
-                const n = m.byStatus[s.key] ?? 0;
-                if (!n) return null;
-                return <span key={s.key} className={cn("h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300", s.dot)} style={{ width: `${(n / total) * 100}%` }} title={`${t(s.label)}: ${n}`} />;
+            <div className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={segs.filter((x) => x.n).map((x) => `${x.translate ? t(x.label) : x.label} ${x.n}`).join(", ")}>
+              {segs.map((x) => {
+                if (!x.n) return null;
+                return <span key={x.key} className={cn("h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300", x.dot)} style={{ width: `${(x.n / total) * 100}%`, ...(x.dotColor ? { backgroundColor: x.dotColor } : {}) }} title={`${x.translate ? t(x.label) : x.label}: ${x.n}`} />;
               })}
             </div>
             <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
-              {STATUS_SEGMENTS.filter((s) => (m.byStatus[s.key] ?? 0) > 0 || s.key === "TODO" || s.key === "DONE").map((s) => {
-                const n = m.byStatus[s.key] ?? 0;
-                return (
-                  <li key={s.key} className="flex items-center gap-1.5">
-                    <span aria-hidden className={cn("h-2 w-2 rounded-full", s.dot)} />
-                    <span className="text-muted-foreground">{t(s.label)}</span>
-                    <span className="font-semibold tabular-nums">{n}</span>
-                    <span className="text-muted-foreground tabular-nums">{Math.round((n / total) * 100)}%</span>
-                  </li>
-                );
-              })}
+              {segs.filter((x) => x.n > 0 || x.always).map((x) => (
+                <li key={x.key} className="flex items-center gap-1.5">
+                  <span aria-hidden className={cn("h-2 w-2 rounded-full", x.dot)} style={x.dotColor ? { backgroundColor: x.dotColor } : undefined} />
+                  <span className="text-muted-foreground">{x.translate ? t(x.label) : x.label}</span>
+                  <span className="font-semibold tabular-nums">{x.n}</span>
+                  <span className="text-muted-foreground tabular-nums">{total ? Math.round((x.n / total) * 100) : 0}%</span>
+                </li>
+              ))}
             </ul>
           </div>
           <dl className="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-5">

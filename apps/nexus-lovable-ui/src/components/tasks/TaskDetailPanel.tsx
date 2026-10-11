@@ -50,6 +50,8 @@ import { cn } from "@/lib/utils";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
 import { Avatar, AvatarFace } from "@/components/Avatar";
+import { StatusPicker, StatusPill } from "@/components/tasks/StatusPicker";
+import { usesStatusOptions } from "@/lib/status-options";
 import { useLang } from "@/lib/lang";
 import { displayName } from "@/lib/system-users";
 import { toast } from "sonner";
@@ -559,7 +561,22 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               </button>
               {/* Section = the project's board column (TaskList). Falls back to global status if the
                   task isn't in a project (no sections). */}
-              {sections.length > 0 ? (
+              {sections.length > 0 && projectId && usesStatusOptions(sections) ? (
+                // Status = the project's status options, grouped To-do / In progress / Complete (owner,
+                // 12 Oct 2026, Notion's picker). Picking one moves the task there; the server sets its status.
+                <StatusPicker
+                  projectId={projectId}
+                  sections={sections}
+                  value={t.taskListId}
+                  onPick={(id) => update.mutate({ taskListId: id } as never)}
+                  trigger={
+                    <button type="button" className="inline-flex items-center gap-1 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:bg-muted" aria-label={tr("Status")}>
+                      <StatusPill option={sections.find((x) => x.id === t.taskListId) ?? null} size="md" />
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  }
+                />
+              ) : sections.length > 0 ? (
                 <div className="relative">
                   <select value={t.taskListId ?? ""} onChange={(e) => update.mutate({ taskListId: e.target.value } as never)} className="max-w-[200px] appearance-none truncate rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
                     {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

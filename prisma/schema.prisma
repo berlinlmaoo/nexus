@@ -676,6 +676,10 @@ model TaskList {
   // (api/tasks PATCH and POST). Null = a plain section, as every section before templates. Named
   // taskStatus, not status, so no released app mistakes it for a field it already decodes.
   taskStatus TaskStatus?
+  /// Colour of the status option this section is (owner, 12 Oct 2026, Notion-style statuses): a key of
+  /// the web palette ("gray", "sky", "emerald", "amber", "orange", "rose", "violet", "pink"); null = its
+  /// group's colour. Additive; released apps ignore it.
+  color      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
