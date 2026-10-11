@@ -278,4 +278,20 @@ eq(F.decimalsShown("Rp 1.500,25"), 2, "decimals shown")
   eq(out.x.a.d, "25,6%", "computed view honours the cell's number format")
 }
 
+// Named ranges (Data › Named ranges): the formula keeps the name; evaluation sees the range.
+{
+  const cols = [{ id: "a", type: "number" }, { id: "b", type: "text" }]
+  const rows = [
+    { id: "r1", cells: { a: 2 } }, { id: "r2", cells: { a: 3 } },
+    { id: "r3", cells: { b: { f: "=SUM(Total)*2" } } },
+    { id: "r4", cells: { b: { f: '=CONCAT("Total";"x")' } } },
+    { id: "r5", cells: { b: { f: "=SUM(Nope)" } } },
+  ]
+  const out = F.computeSheet(cols, rows, { names: [{ name: "Total", range: "{a!r1}:{a!r2}" }] })
+  eq(out.r3.b.v, 10, "a named range evaluates as its range (case-insensitive)")
+  eq(out.r4.b.v, "Totalx", "a name inside a string stays text")
+  eq(out.r5.b.v, "#NAME?", "an undefined name is #NAME?")
+  eq(F.resolveNames("=SUM(total;SUM(1))", new Map([["TOTAL", "{a!r1}:{a!r2}"]])), "=SUM({a!r1}:{a!r2};SUM(1))", "function calls are not names")
+}
+
 console.log(`sheet-formula: ${n} checks passed`)

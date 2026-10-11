@@ -36,7 +36,7 @@ export function DatePicker({ anchor, value, locale, onPick, onClose }: {
   const [month, setMonth] = useState(() => { const d = serialToYmd(start); return { y: d.y, m: d.m }; });
   const gridRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { gridRef.current?.focus(); }, []);
+  useEffect(() => { const id = requestAnimationFrame(() => requestAnimationFrame(() => gridRef.current?.focus())); return () => cancelAnimationFrame(id); }, []);
 
   const title = useMemo(
     () => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(month.y, month.m - 1, 1))),
@@ -159,14 +159,15 @@ export function NotePopover({ anchor, value, editing, canEdit, onSave, onClose }
 }) {
   const { t } = useLang();
   const [text, setText] = useState(value);
-  const ref = useRef<HTMLTextAreaElement>(null);
   const live = editing && canEdit;
-  useEffect(() => {
-    if (!live) return;
-    const el = ref.current;
-    el?.focus();
-    el?.setSelectionRange(el.value.length, el.value.length);
-  }, [live]);
+  // Floating renders the card hidden until it has measured it, and a hidden textarea can't take focus.
+  const focused = useRef(false);
+  const ref = (el: HTMLTextAreaElement | null) => {
+    if (!el || !live || focused.current) return;
+    focused.current = true;
+    // Floating keeps the card invisible until it is placed; focus once it shows.
+    requestAnimationFrame(() => requestAnimationFrame(() => { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }));
+  };
   const commit = () => { if (text !== value) onSave(text); onClose(); };
   // Beside the cell's top-right corner.
   const at = { rect: { left: anchor.right + 4, right: anchor.right + 244, top: anchor.top - 4, bottom: anchor.top - 4 } };
@@ -235,7 +236,7 @@ export function LinkPopover({ anchor, text, url, sheets, namedRanges, onApply, o
   const [active, setActive] = useState(-1);
   const linkRef = useRef<HTMLInputElement>(null);
   const showText = text === "" || text !== url;
-  useEffect(() => { linkRef.current?.focus(); linkRef.current?.select(); }, []);
+  useEffect(() => { const id = requestAnimationFrame(() => requestAnimationFrame(() => { linkRef.current?.focus(); linkRef.current?.select(); })); return () => cancelAnimationFrame(id); }, []);
 
   const q = link.trim().toLowerCase();
   const suggestions = useMemo(() => [

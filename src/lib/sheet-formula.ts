@@ -1556,6 +1556,42 @@ export type SheetData = {
   cells: Map<string, Record<string, unknown>>
   /** colId -> column type. Optional; dates in date columns read as serials, and results take formats. */
   types?: Map<string, string>
+  /** Named ranges (Data › Named ranges): NAME in upper case -> stored range "{c!r}:{c!r}". */
+  names?: Map<string, string>
+}
+
+/**
+ * Put named ranges into a stored formula: a bare word (not a function call, not inside a string or
+ * an already-stored reference) that is a defined name becomes its stored range. The formula keeps
+ * the name as typed; only evaluation sees the range, so renaming or moving the range just works.
+ */
+export function resolveNames(f: string, names: Map<string, string> | undefined): string {
+  if (!names || !names.size) return f
+  let out = ""
+  let i = 0
+  while (i < f.length) {
+    const ch = f[i]
+    if (ch === '"') {
+      let j = i + 1
+      while (j < f.length) { if (f[j] === '"') { if (f[j + 1] === '"') { j += 2; continue } break } j += 1 }
+      out += f.slice(i, j + 1); i = j + 1; continue
+    }
+    if (ch === "{") { const end = f.indexOf("}", i); if (end > 0) { out += f.slice(i, end + 1); i = end + 1; continue } }
+    if (/[A-Za-z_]/.test(ch) && !(i > 0 && /[A-Za-z0-9_.$]/.test(f[i - 1]))) {
+      let j = i
+      while (j < f.length && /[A-Za-z0-9_.]/.test(f[j])) j += 1
+      const word = f.slice(i, j)
+      let k = j
+      while (k < f.length && f[k] === " ") k += 1
+      const range = f[k] === "(" || f[k] === "!" ? undefined : names.get(word.toUpperCase())
+      out += range ?? word
+      i = j
+      continue
+    }
+    out += ch
+    i += 1
+  }
+  return out
 }
 
 type Matrix = CellValue[][]
@@ -1747,7 +1783,7 @@ export class SheetEngine {
     const a = this.data.shape, b = next.shape
     const sameShape = a.columnIds.length === b.columnIds.length && a.rowIds.length === b.rowIds.length &&
       a.columnIds.every((c, i) => c === b.columnIds[i]) && a.rowIds.every((r, i) => r === b.rowIds[i]) &&
-      sameTypes(this.data.types, next.types)
+      sameTypes(this.data.types, next.types) && sameTypes(this.data.names, next.names)
     if (!sameShape) return fresh
     const changed: string[] = []
     for (const rowId of b.rowIds) {
@@ -1815,7 +1851,7 @@ export class SheetEngine {
     this.stackRows.push(rowId)
     let v: CellValue
     try {
-      const ast = compile(raw.f)
+      const ast = compile(resolveNames(raw.f, this.data.names))
       v = isError(ast) ? ast : this.evalScalar(ast)
       if (typeof v === "number" && !Number.isFinite(v)) v = ERR.num
     } catch {
@@ -1846,7 +1882,7 @@ export class SheetEngine {
     this.fmtVisiting.add(key)
     let nf: NumFmt | null = null
     try {
-      const ast = compile(raw.f)
+      const ast = compile(resolveNames(raw.f, this.data.names))
       nf = isError(ast) ? null : this.formatOf(ast)
     } finally {
       this.fmtVisiting.delete(key)
@@ -1860,7 +1896,7 @@ export class SheetEngine {
    * it were in row `rowId` (for implicit intersection). Reads made here are not recorded as deps.
    */
   evaluateFormula(stored: string, rowId: string | null = null): CellValue {
-    const ast = compile(stored.startsWith("=") ? stored : `=${stored}`)
+    const ast = compile(resolveNames(stored.startsWith("=") ? stored : `=${stored}`, this.data.names))
     if (isError(ast)) return ast
     this.stackRows.push(rowId ?? "")
     try {
@@ -2538,12 +2574,12 @@ export type ComputedCell = {
 export function computeSheet(
   columns: { id: string; type: string }[],
   rows: { id: string; cells: Record<string, unknown>; styles?: Record<string, { nf?: string; dp?: number; pt?: string }> | null }[],
-  opts?: { locale?: DisplayLocale },
+  opts?: { locale?: DisplayLocale; names?: { name: string; range: string }[] },
 ): Record<string, Record<string, ComputedCell>> {
   const before = displayLocale
   if (opts?.locale) setDisplayLocale(opts.locale)
   try {
-    return computeCells(columns, rows)
+    return computeCells(columns, rows, opts?.names)
   } finally {
     displayLocale = before
   }
@@ -2552,11 +2588,13 @@ export function computeSheet(
 function computeCells(
   columns: { id: string; type: string }[],
   rows: { id: string; cells: Record<string, unknown>; styles?: Record<string, { nf?: string; dp?: number; pt?: string }> | null }[],
+  names?: { name: string; range: string }[],
 ): Record<string, Record<string, ComputedCell>> {
   const data: SheetData = {
     shape: { columnIds: columns.map((c) => c.id), rowIds: rows.map((r) => r.id) },
     cells: new Map(rows.map((r) => [r.id, r.cells])),
     types: new Map(columns.map((c) => [c.id, c.type])),
+    ...(names?.length ? { names: new Map(names.map((n) => [n.name.toUpperCase(), n.range])) } : {}),
   }
   const engine = new SheetEngine(data)
   const out: Record<string, Record<string, ComputedCell>> = {}
