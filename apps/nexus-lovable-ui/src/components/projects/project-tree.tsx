@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import {
   ArrowUpRight, Check, Folder, FolderInput, FolderOpen, FolderOutput, FolderPlus, ImagePlus, Pencil,
   Pin, PinOff, Plus, Settings2, Trash2, type LucideIcon,
-  CheckSquare,
 } from "lucide-react";
 import {
   ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -24,7 +23,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { ProjectIcon, TaskTile } from "@/components/projects/ProjectIcon";
 import { nexusApi, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
 import { canMoveInto, folderPath } from "@/lib/folder-tree-client";
 import { canAddSubfolder } from "@/lib/project-tree-dnd";
@@ -52,7 +51,7 @@ export function FolderGlyph({ folder, open, size = 16, className }: { folder: Pi
 }
 
 /**
- * A project's mark: its photo, else the one default every project shares — the task icon
+ * A project's mark: its photo, else the one default every project shares — the coloured task tile
  * (owner, 11 Oct 2026: no per-project emoji or colour any more).
  */
 export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color">; size?: number; className?: string }) {
@@ -64,7 +63,7 @@ export function ProjectGlyph({ project, size = 16, className }: { project: Pick<
     );
   }
   return (
-    <CheckSquare aria-hidden className={cn("shrink-0 text-muted-foreground", className)} style={{ width: size, height: size }} strokeWidth={2} />
+    <TaskTile size={size} className={className} />
   );
 }
 
