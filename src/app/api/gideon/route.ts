@@ -8,8 +8,10 @@ import prisma from '@/lib/prisma'
 import { deleteGideonAttachmentFiles, storeGideonAttachments } from '@/lib/gideon-attachments'
 import { checkProjectAccess } from '@/lib/rbac'
 import {
-  approvalPromptLine, finishRun, parseApprovalMode, runMeta, startRun, subscribeRun, type ApprovalMode, type RunEvent,
+  approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
 } from '@/lib/gideon-runs'
+import { resolveGideonChat, gatherContext, personalPromptLines, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
+import { searchWorkspace } from '@/lib/workspace-search'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -112,8 +114,16 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { messages, model, image, file, stream: wantsStream, approvalMode: rawMode, context } = (await req.json()) as {
+  const { messages, model, image, file, stream: wantsStream, approvalMode: rawMode, context, chatId: rawChatId, newChat, search: wantsSearch } = (await req.json()) as {
     messages: { role: string; content: string }[]
+    /**
+     * The conversation (GideonChat, 12 Oct 2026). Absent = the person's most recent chat (what released
+     * iOS / Android get: they keep one running conversation). `newChat: true` = start a new one.
+     */
+    chatId?: string
+    newChat?: boolean
+    /** Workspace Q&A: search what the person can see before answering, and cite it. Default on for `stream` clients. */
+    search?: boolean
     model?: string
     /**
      * true = this client draws the new events (12 Oct 2026, web): `delta` text pieces, `reset`, `step`,
@@ -123,8 +133,11 @@ export async function POST(req: NextRequest) {
     stream?: boolean
     /** always_ask | review | dont_ask. Absent = dont_ask: released apps have no approval card to show. */
     approvalMode?: string
-    /** Where the person opened GIDEON from: a project (and optionally a task in it). Checked for access. */
-    context?: { projectId?: string; taskId?: string }
+    /**
+     * Where the person opened GIDEON from: a project (and optionally a task in it), plus (12 Oct 2026) a doc and
+     * any pages they @-mentioned in the composer (`refs`). Each is checked for access; what they cannot see is dropped.
+     */
+    context?: { projectId?: string; taskId?: string; docId?: string; refs?: GideonContextRef[] }
     /** A data URL or bare base64. Optional. */
     image?: string
     /** A document — PDF, Office, or plain text. Separate from `image`; both may be sent. */
@@ -163,6 +176,13 @@ export async function POST(req: NextRequest) {
   } catch {
     ctx = null
   }
+  // Every page the question carries (the page it was opened from + @-mentions), read with the asker's access.
+  const gathered = await gatherContext(userId, {
+    projectId: typeof context?.projectId === 'string' ? context.projectId : undefined,
+    taskId: typeof context?.taskId === 'string' ? context.taskId : undefined,
+    docId: typeof context?.docId === 'string' ? context.docId : undefined,
+    refs: Array.isArray(context?.refs) ? context.refs : [],
+  }).catch(() => ({ lines: [] as string[], refs: [] as GideonRef[] }))
 
   // The document is validated here, before the SSE stream exists, so a bad attachment comes back as
   // a plain HTTP status the client can branch on rather than an error event buried in a stream that
@@ -243,6 +263,9 @@ export async function POST(req: NextRequest) {
 
   ;(async () => {
     const asked = [...(messages || [])].reverse().find((m) => m?.role === 'user')?.content?.trim() || ''
+    // The conversation this turn belongs to (created here when it is new, titled by the question).
+    const chat = await resolveGideonChat(userId, { chatId: typeof rawChatId === 'string' ? rawChatId : null, newChat: newChat === true, title: asked }).catch(() => null)
+    if (chat) await sendEvent({ type: 'chat', id: chat.id, title: chat.title })
     const runId = await startRun({
       userId,
       trigger: 'CHAT',
@@ -266,7 +289,33 @@ export async function POST(req: NextRequest) {
         await sendEvent({ type: 'error', content: 'Gideon belum tersambung ke gateway Hermes.' })
         return
       }
+      // Workspace Q&A: what the person can see that matches the question, searched BEFORE the model answers so
+      // the answer stands on real records (and cites them) instead of a guess. Skipped for a file question.
+      const searchLines: string[] = []
+      if (streamClient && wantsSearch !== false && asked && !documentBase64 && !imageBase64) {
+        const started = Date.now()
+        try {
+          const { hits } = await searchWorkspace(userId, asked, { limit: 8 })
+          if (hits.length) {
+            searchLines.push('[HASIL PENCARIAN NEXUS — hanya yang boleh dilihat orang ini] Pakai ini sebagai sumber; sebut judulnya persis saat dipakai. Kalau tidak menjawab pertanyaannya, panggil nexus_search_workspace / tool lain dengan kata kunci lain. Jangan mengarang data yang tidak ada.')
+            hits.forEach((h, i) => searchLines.push(`${i + 1}. [${h.kind}] "${h.title}"${h.projectName ? ` (project ${h.projectName})` : ''} — ${h.excerpt || '—'} (id ${h.id})`))
+            const refs: GideonRef[] = hits.map((h) => ({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt || null }))
+            if (runId) {
+              const stepId = `ws${Date.now().toString(36)}`
+              publishRunEvent(runId, { type: 'step', step: { id: stepId, tool: 'search_workspace', arg: asked.slice(0, 80), label: 'Searching the workspace', status: 'done' } })
+              publishRunEvent(runId, { type: 'sources', sources: refs })
+              await recordStep(runId, { tool: 'search_workspace', arg: asked.slice(0, 80), ok: true, durationMs: Date.now() - started, refs })
+            }
+          }
+        } catch (error) {
+          console.error('GIDEON pre-search failed:', error)
+        }
+      }
+      const prefsLines = await personalPromptLines(userId, session.user?.name || '').catch(() => [] as string[])
       const extra = [
+        ...prefsLines,
+        ...gathered.lines,
+        ...searchLines,
         ctx
           ? (ctx.taskId
             ? `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari task "${ctx.taskTitle}" (taskId: ${ctx.taskId}) di project "${ctx.projectName}" (projectId: ${ctx.projectId}). Kalau pertanyaannya tidak menyebut hal lain, anggap tentang task ini.`
@@ -388,6 +437,7 @@ export async function POST(req: NextRequest) {
               ...(asked
                 ? [{
                     userId,
+                    ...(chat ? { chatId: chat.id } : {}),
                     role: 'user',
                     content: asked,
                     createdAt: new Date(now),
@@ -398,6 +448,7 @@ export async function POST(req: NextRequest) {
                 : []),
               {
                 userId,
+                ...(chat ? { chatId: chat.id } : {}),
                 role: 'assistant',
                 content: reply,
                 createdAt: new Date(now + 1),
@@ -407,6 +458,7 @@ export async function POST(req: NextRequest) {
               },
             ],
           })
+          if (chat) await touchGideonChat(chat.id)
         } catch (persistError) {
           // History is a convenience — never fail a reply the user already received.
           console.error('GIDEON history persist error:', persistError)

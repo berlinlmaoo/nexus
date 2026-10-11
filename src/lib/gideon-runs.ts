@@ -23,7 +23,7 @@ import { createLogger } from "@/lib/logger"
 
 const log = createLogger("gideon-runs")
 
-export type GideonTrigger = "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION"
+export type GideonTrigger = "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION" | "WRITE" | "AUTOFILL"
 export type ApprovalMode = "always_ask" | "review" | "dont_ask"
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["always_ask", "review", "dont_ask"]
 
@@ -56,7 +56,8 @@ export function needsApproval(mode: ApprovalMode, action: string, input: Record<
 
 // ── Shapes sent to the web (and stored in GideonMessage.meta) ─────────────────────────────────────────
 
-export type GideonRef = { kind: "task" | "project" | "doc"; id: string; title: string; projectId?: string | null; url: string }
+/** A source a run read. comment / form / message + excerpt: 12 Oct 2026 (workspace Q&A); older clients draw them as links. */
+export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null }
 export type GideonCard = {
   kind: "task" | "doc" | "comment"
   action: "created" | "updated" | "commented"
@@ -196,6 +197,7 @@ export function stepLabel(tool: string, arg?: string | null): string {
     case "list_members": return "Looking up people"
     case "list_tasks": return "Listing tasks"
     case "search_tasks": return a ? `Searching tasks for “${a}”` : "Searching tasks"
+    case "search_workspace": return a ? `Searching the workspace for “${a}”` : "Searching the workspace"
     case "get_project_summary": return a ? `Reading project ${a}` : "Reading a project"
     case "list_custom_fields": return "Reading the project's fields"
     case "get_task": return a ? `Reading task ${a}` : "Reading a task"
@@ -216,6 +218,7 @@ export async function stepArg(tool: string, input: Record<string, unknown>): Pro
     switch (tool) {
       case "search_tasks":
       case "search_docs":
+      case "search_workspace":
         return str(input.query)
       case "create_task":
       case "create_document":
@@ -289,6 +292,9 @@ export function refsFromResult(tool: string, data: unknown): GideonRef[] {
       break
     case "get_doc":
       if (d.id) push({ kind: "doc", id: d.id, title: d.title, projectId: d.projectId ?? null, url: docUrl(d.id) })
+      break
+    case "search_workspace":
+      if (Array.isArray(d.hits)) for (const h of d.hits.slice(0, 12)) if (h?.id && h?.kind) push({ kind: h.kind, id: h.id, title: h.title, projectId: h.projectId ?? null, url: h.url, excerpt: h.excerpt ?? null })
       break
   }
   return out

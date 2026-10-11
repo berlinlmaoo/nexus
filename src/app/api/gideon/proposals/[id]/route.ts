@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { cardFromResult, proposalView } from "@/lib/gideon-runs"
+import { markAiFill } from "@/lib/gideon-autofill"
 
 /** A proposal older than this is not applied: the task it describes has likely moved on. */
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -74,6 +75,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? { status: "APPLIED", decidedAt: new Date(), result: { card } as object, error: null }
       : { status: "FAILED", decidedAt: new Date(), error: (message || "Failed").slice(0, 500) },
   })
+  // An approved AI Autofill value keeps its ✨ marker (CustomFieldAiFill) like one written directly.
+  const aiFill = (proposal.input as { aiFill?: Array<{ fieldId?: unknown; value?: unknown }>; taskId?: unknown } | null)
+  if (ok && Array.isArray(aiFill?.aiFill) && typeof aiFill?.taskId === "string") {
+    for (const f of aiFill.aiFill) if (typeof f.fieldId === "string" && typeof f.value === "string") await markAiFill(f.fieldId, aiFill.taskId, f.value, proposal.runId)
+  }
   // No separate audit row: the action itself writes its ActivityLog (GIDEON_TASK_CREATED / _UPDATED /
   // GIDEON_COMMENT_ADDED) exactly as when GIDEON writes without asking.
   return NextResponse.json({ proposal: proposalView(updated) }, { status: ok ? 200 : 422 })

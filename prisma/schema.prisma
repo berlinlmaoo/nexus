@@ -3043,9 +3043,13 @@ model GideonMessage {
   runId     String?
   /// What the run showed beside the text: { steps, sources, cards, proposals } — see lib/gideon-runs.ts.
   meta      Json?
+  /// The conversation (GideonChat) this turn belongs to (12 Oct 2026). Null only on rows older than chats.
+  chatId    String?
+  chat      GideonChat? @relation(fields: [chatId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([chatId, createdAt])
 }
 
 /// One GIDEON run (12 Oct 2026, Notion-style "Insights"): a chat turn, an @GIDEON mention, a scheduled
@@ -3131,6 +3135,66 @@ model GideonProposal {
 
   @@index([userId, status, createdAt])
   @@index([runId])
+}
+
+/// One GIDEON conversation (12 Oct 2026, Notion AI parity): the chat-history list with search, "New chat"
+/// (⌘/Ctrl+O). Private to its owner. userId is a DB foreign key (cascade) without a Prisma relation, so the
+/// User model stays untouched.
+model GideonChat {
+  id        String          @id @default(cuid())
+  userId    String
+  /// The first question, trimmed; the person may rename it.
+  title     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @default(now()) @updatedAt
+  messages  GideonMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+/// Personalize GIDEON (Notion AI "Personalize"): what this person calls it and their own standing
+/// instructions. Read into every chat prompt of theirs, never anyone else's.
+model GideonPreference {
+  userId        String   @id
+  assistantName String?
+  instructions  String?  @db.Text
+  updatedAt     DateTime @default(now()) @updatedAt
+}
+
+/// AI Autofill on a project custom field (Notion "AI Autofill"): GIDEON fills the field from the task.
+/// mode: summary | classify | extract. approval: review (a proposal the person approves) | auto.
+/// Runs as the person who triggered it (on demand: the clicker; on create/update: the person whose edit
+/// fired it), with their access — never more.
+model CustomFieldAutofill {
+  customFieldId String    @id
+  projectId     String
+  enabled       Boolean   @default(true)
+  mode          String    @default("summary")
+  prompt        String?   @db.Text
+  onCreate      Boolean   @default(true)
+  onUpdate      Boolean   @default(false)
+  approval      String    @default("review")
+  createdById   String
+  lastRunAt     DateTime?
+  lastStatus    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  @@index([projectId])
+}
+
+/// A value GIDEON wrote into a custom field. The ✨ marker shows while the task still holds this value;
+/// a person editing the field makes it theirs again (the values differ).
+model CustomFieldAiFill {
+  id            String   @id @default(cuid())
+  customFieldId String
+  taskId        String
+  value         String   @db.Text
+  runId         String?
+  filledAt      DateTime @default(now())
+
+  @@unique([customFieldId, taskId])
+  @@index([taskId])
 }
 
 /// A GIDEON trigger "On a schedule" for one project (12 Oct 2026). Today one kind: WEEKLY_DIGEST, posted

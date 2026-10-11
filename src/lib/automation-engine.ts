@@ -6,6 +6,7 @@ import { emitAutomationsChanged, emitCommentAdded, emitTaskCreated, emitTaskDele
 import { webhookUrlError } from "@/lib/webhook-dispatcher"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+import { autofillOnEvent } from "@/lib/gideon-autofill"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
 import { normalizeCustomFieldType, parseCustomFieldValue, serializeCustomFieldValue } from "@/lib/custom-fields"
 import {
@@ -106,6 +107,8 @@ export async function executeAutomations(
 
 /** Run every enabled rule of the project that matches this event. Never throws. */
 export async function runAutomations(event: AutomationEvent): Promise<void> {
+  // AI Autofill fields of the project listen on the same events (12 Oct 2026); debounced, never throws.
+  autofillOnEvent(event)
   try {
     const rows = await prisma.automation.findMany({ where: { projectId: event.projectId, enabled: true }, select: ROW_SELECT })
     if (rows.length === 0) return
