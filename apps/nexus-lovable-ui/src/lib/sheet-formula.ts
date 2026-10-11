@@ -24,6 +24,9 @@
 //    "1.500.000", "Rp 1.500.000", "1,5", "15%" and "11/10/2026" (11 Oct) are what people type here.
 //    detectInput turns them into numbers / date serials plus a display format (TypedCell); text that
 //    is not clearly a number stays text, and nothing is ever silently dropped.
+//    A spreadsheet may switch its DISPLAY locale to en-US (File › Settings): setDisplayLocale then
+//    changes how numbers/dates read and are typed ("1,500.25", month-first dates). Stored values and
+//    formula separators never depend on it; id-ID is the default and behaves exactly as before.
 //
 // Functions beyond the core set come from @formulajs/formulajs (MIT). HyperFormula is GPLv3 and must
 // not be used here.
@@ -109,6 +112,16 @@ export function errorHint(v: string, lang: "en" | "id" = "id"): string {
 // Dates (serials, Asia/Jakarta)
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 
+/** The spreadsheet's display locale (settings.locale). Module-level: set it before rendering/computing. */
+export type DisplayLocale = "id-ID" | "en-US"
+let displayLocale: DisplayLocale = "id-ID"
+export function setDisplayLocale(l: DisplayLocale): void { displayLocale = l === "en-US" ? "en-US" : "id-ID" }
+export function getDisplayLocale(): DisplayLocale { return displayLocale }
+const isEn = () => displayLocale === "en-US"
+/** Decimal and grouping marks of the display locale. */
+export const decimalMark = (): string => (isEn() ? "." : ",")
+export const groupMark = (): string => (isEn() ? "," : ".")
+
 const EPOCH_MS = Date.UTC(1899, 11, 30)
 const DAY_MS = 86_400_000
 /** Asia/Jakarta is UTC+7 all year (no DST), so "today" never needs a tz database. */
@@ -168,6 +181,20 @@ const MONTHS: Record<string, number> = {
 const MONTH_SHORT_ID = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 const MONTH_LONG_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
 const DAY_LONG_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
+const DAY_SHORT_ID = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
+const MONTH_SHORT_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const MONTH_LONG_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+const DAY_LONG_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const DAY_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+/** Month (1–12) / weekday (0 = Sunday) names in the display locale. */
+export function monthName(m: number, long: boolean): string {
+  return (long ? (isEn() ? MONTH_LONG_EN : MONTH_LONG_ID) : (isEn() ? MONTH_SHORT_EN : MONTH_SHORT_ID))[m - 1] ?? ""
+}
+export function weekdayName(dow: number, long: boolean): string {
+  return (long ? (isEn() ? DAY_LONG_EN : DAY_LONG_ID) : (isEn() ? DAY_SHORT_EN : DAY_SHORT_ID))[dow] ?? ""
+}
+/** 0 = Sunday; serial 0 (1899-12-30) was a Saturday. */
+const weekdayOf = (serial: number) => ((Math.floor(serial) % 7) + 7 + 6) % 7
 
 /**
  * A date as Indonesians type it, to a serial. Day comes FIRST: "11/10/2026" is 11 October.
@@ -180,7 +207,8 @@ export function parseDateText(raw: string): number | null {
   if (iso !== null) return iso
   let m = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4}|\d{2})$/.exec(s)
   if (m) {
-    const d = Number(m[1]), mo = Number(m[2])
+    // en-US display locale: month first ("9/26/2008").
+    const d = Number(isEn() ? m[2] : m[1]), mo = Number(isEn() ? m[1] : m[2])
     let y = Number(m[3])
     if (m[3].length === 2) y += 2000
     return validYmd(y, mo, d) ? ymdToSerial(y, mo, d) : null
@@ -213,6 +241,7 @@ function validGrouping(x: string, g: string): boolean {
  * "(250)" -> -250. Indonesian rules: "." groups thousands and "," is the decimal point — except that
  * when BOTH appear, whichever comes last is the decimal point (so English exports still parse), and a
  * lone "." not followed by exactly three digits is a decimal point ("1.5", "0.500").
+ * In the en-US display locale the two marks swap roles ("1,500.25", "1,500" = 1500, "0.256").
  * `separators` is true when the text used any grouping/decimal mark (decides whether to keep a format).
  */
 export function parseLocaleNumber(raw: string): { n: number; separators: boolean } | null {
@@ -244,7 +273,8 @@ export function parseLocaleNumber(raw: string): { n: number; separators: boolean
       intPart = parts.join("")
     } else {
       const [a, b] = parts
-      const looksGrouped = ch === "." && b.length === 3 && /^[1-9]\d{0,2}$/.test(a)
+      // A lone grouping mark ("." in id-ID, "," in en-US) groups only when exactly three digits follow.
+      const looksGrouped = ch === groupMark() && b.length === 3 && /^[1-9]\d{0,2}$/.test(a)
       if (looksGrouped) intPart = a + b
       else { intPart = a; frac = b }
     }
@@ -314,10 +344,10 @@ export function numberFromText(s: string): number | null {
 
 const nfCache = new Map<string, Intl.NumberFormat>()
 function numberFormat(maxFrac: number, grouping: boolean, minFrac = 0): Intl.NumberFormat {
-  const key = `${maxFrac}|${grouping}|${minFrac}`
+  const key = `${displayLocale}|${maxFrac}|${grouping}|${minFrac}`
   let f = nfCache.get(key)
   if (!f) {
-    f = new Intl.NumberFormat("id-ID", { maximumFractionDigits: maxFrac, minimumFractionDigits: minFrac, useGrouping: grouping })
+    f = new Intl.NumberFormat(displayLocale, { maximumFractionDigits: maxFrac, minimumFractionDigits: minFrac, useGrouping: grouping })
     nfCache.set(key, f)
   }
   return f
@@ -325,15 +355,17 @@ function numberFormat(maxFrac: number, grouping: boolean, minFrac = 0): Intl.Num
 export const formatRupiah = (n: number) => `Rp ${numberFormat(2, true).format(n)}`
 export const formatGrouped = (n: number, maxFrac = 2) => numberFormat(maxFrac, true).format(n)
 
-/** "11 Okt 2026" — the same text the date column has always shown. */
+/** "11 Okt 2026" — the same text the date column has always shown ("Oct 11, 2026" in en-US). */
 export function formatDateSerial(serial: number): string {
   if (!Number.isFinite(serial)) return String(serial)
   const { y, m, d } = serialToYmd(serial)
+  if (isEn()) return `${MONTH_SHORT_EN[m - 1]} ${d}, ${y}`
   return `${pad2(d)} ${MONTH_SHORT_ID[m - 1]} ${y}`
 }
-/** What goes back into the editor for a date: day first, like it was typed. */
+/** What goes back into the editor for a date: day first, like it was typed (en-US: "9/26/2008"). */
 export function editDateSerial(serial: number): string {
   const { y, m, d } = serialToYmd(serial)
+  if (isEn()) return `${m}/${d}/${y}`
   return `${pad2(d)}/${pad2(m)}/${y}`
 }
 
@@ -402,22 +434,54 @@ export function formatScalar(type: string, value: unknown): string {
  * `nf` is the style's format ("auto" or undefined = keep the inferred one), `dp` its decimals.
  * Returns null when the style doesn't change how this value reads (not a number, or no format).
  */
-export function formatWithStyle(v: CellValue, nf: string | undefined, dp: number | undefined, inferred: NumFmt | null = null): string | null {
+export function formatWithStyle(v: CellValue, nf: string | undefined, dp: number | undefined, inferred: NumFmt | null = null, pt?: string): string | null {
+  // A custom pattern's 4th section (or a lone "@" section) formats text too.
+  if (nf === "custom" && pt && typeof v === "string" && v !== "" && !isError(v)) {
+    const r = formatNumberPattern(v, pt).text
+    return r === v ? null : r
+  }
   if (typeof v !== "number" || !Number.isFinite(v)) return null
   if ((!nf || nf === "auto") && dp === undefined) return null
   const kind = !nf || nf === "auto" ? inferred : nf
+  const fixed = dp ?? 2
+  const sym = currencySymbol()
   switch (kind) {
     case "idr": return `Rp ${numberFormat(dp ?? 2, true, dp ?? 0).format(v)}`
     case "pct": return `${numberFormat(dp ?? 2, true, dp ?? 0).format(v * 100)}%`
     case "date": return editDateSerial(v)
     case "text": return String(v)
+    case "sci": return formatNumberPattern(v, `0${fixed > 0 ? "." + "0".repeat(fixed) : ""}E+00`).text
+    case "acct": {
+      // Sheets' accounting: symbol at the left edge, negatives in brackets, zero as a dash; the
+      // trailing space lines positives up with the ")" of negatives.
+      if (v === 0) return `${sym} - `
+      const body = numberFormat(fixed, true, fixed).format(Math.abs(v))
+      return v < 0 ? `${sym} (${body})` : `${sym} ${body} `
+    }
+    case "fin": {
+      const body = numberFormat(fixed, true, fixed).format(Math.abs(v))
+      return v < 0 ? `(${body})` : body
+    }
+    case "cur":
+    case "cur0": {
+      const d = dp ?? (kind === "cur0" ? 0 : 2)
+      const body = numberFormat(d, true, d).format(Math.abs(v))
+      return `${v < 0 && /[1-9]/.test(body) ? "-" : ""}${sym}${body}`
+    }
+    case "time": return formatNumberPattern(v, isEn() ? "h:mm:ss AM/PM" : "hh.mm.ss").text
+    case "dt": return formatNumberPattern(v, isEn() ? "m/d/yyyy hh:mm:ss" : "dd/mm/yyyy hh.mm.ss").text
+    case "dur": return formatNumberPattern(v, "[h]:mm:ss").text
+    case "custom": return pt ? formatNumberPattern(v, pt).text : null
     default: return numberFormat(dp ?? 2, true, dp ?? 0).format(v)
   }
 }
 
+/** The display locale's currency symbol (Format › Number › Currency): Rupiah, or the dollar in en-US. */
+export const currencySymbol = (): string => (isEn() ? "$" : "Rp")
+
 /** How many decimals a number shows right now (for the toolbar's "decimals −/+"). */
 export function decimalsShown(text: string): number {
-  const m = /,(\d+)/.exec(text.replace(/%$/, ""))
+  const m = (isEn() ? /\.(\d+)/ : /,(\d+)/).exec(text.replace(/%$/, ""))
   return m ? m[1].length : 0
 }
 
@@ -430,6 +494,475 @@ export function formatResult(type: string, v: CellValue, nf: NumFmt | null): str
   if (typeof v === "number" && (type === "currency" || type === "number" || type === "date")) return formatScalar(type, v)
   if (type === "checkbox") return v === true || v === 1 ? "✓" : formatValue(v, null)
   return formatValue(v, null)
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// Custom number formats (Sheets/Excel pattern syntax, Format › Number › Custom …)
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Up to four ";" sections (positive; negative; zero; text), [Red]/[Blue]/[ColorN] colours, [>100]
+// conditions, 0 # ? digits, "," grouping / trailing-comma scaling, "." decimal point, %, E+00,
+// fractions (# ?/?), _x padding, *x fill, "literal" and \x escapes, @ text, [$€] currency, and date
+// tokens (d dd ddd dddd m … mmmmm yy yyyy h hh m mm s ss AM/PM A/P [h] [m] [s], .000 seconds).
+// The pattern is in Sheets syntax ("," groups, "." is the decimal point) whatever the locale; the
+// OUTPUT uses the display locale's marks and month names.
+
+export type PatternResult = { text: string; color?: string }
+
+type PTok =
+  | { k: "lit"; s: string }
+  | { k: "ph"; c: "0" | "#" | "?" }
+  | { k: "dot" }
+  | { k: "comma" }
+  | { k: "pct" }
+  | { k: "exp"; s: string; plus: boolean }
+  | { k: "at" }
+  | { k: "slash" }
+  | { k: "digit"; s: string }
+  | { k: "date"; s: string; raw: string }
+  | { k: "ampm"; s: string }
+  | { k: "elapsed"; u: "h" | "m" | "s"; n: number }
+  | { k: "general" }
+type PCond = { op: string; v: number }
+type PSection = { toks: PTok[]; color?: string; cond?: PCond; date: boolean; text: boolean }
+
+const PATTERN_COLORS: Record<string, string> = {
+  black: "#000000", white: "#ffffff", red: "#ff0000", green: "#00ff00", blue: "#0000ff",
+  yellow: "#ffff00", magenta: "#ff00ff", cyan: "#00ffff",
+}
+/** Excel's 56-colour palette for [Color1]…[Color56]. */
+const PATTERN_COLOR56 = [
+  "#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff", "#800000", "#008000",
+  "#000080", "#808000", "#800080", "#008080", "#c0c0c0", "#808080", "#9999ff", "#993366", "#ffffcc", "#ccffff",
+  "#660066", "#ff8080", "#0066cc", "#ccccff", "#000080", "#ff00ff", "#ffff00", "#00ffff", "#800080", "#800000",
+  "#008080", "#0000ff", "#00ccff", "#ccffff", "#ccffcc", "#ffff99", "#99ccff", "#ff99cc", "#cc99ff", "#ffcc99",
+  "#3366ff", "#33cccc", "#99cc00", "#ffcc00", "#ff9900", "#ff6600", "#666699", "#969696", "#003366", "#339966",
+  "#003300", "#333300", "#993300", "#993366", "#333399", "#333333",
+]
+
+function splitPatternSections(p: string): string[] {
+  const out: string[] = []
+  let cur = ""
+  for (let i = 0; i < p.length; i++) {
+    const ch = p[i]
+    if (ch === '"') {
+      const j = p.indexOf('"', i + 1)
+      const end = j < 0 ? p.length - 1 : j
+      cur += p.slice(i, end + 1)
+      i = end
+    } else if (ch === "\\" || ch === "_" || ch === "*") {
+      cur += ch + (p[i + 1] ?? "")
+      i++
+    } else if (ch === "[") {
+      const j = p.indexOf("]", i)
+      if (j < 0) { cur += ch; continue }
+      cur += p.slice(i, j + 1)
+      i = j
+    } else if (ch === ";") {
+      out.push(cur)
+      cur = ""
+    } else cur += ch
+  }
+  out.push(cur)
+  return out
+}
+
+function parsePatternSection(src: string): PSection {
+  const toks: PTok[] = []
+  let color: string | undefined
+  let cond: PCond | undefined
+  const lit = (s: string) => {
+    const last = toks[toks.length - 1]
+    if (last && last.k === "lit") last.s += s
+    else toks.push({ k: "lit", s })
+  }
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    const rest = src.slice(i)
+    if (ch === '"') {
+      const j = src.indexOf('"', i + 1)
+      const end = j < 0 ? src.length : j
+      lit(src.slice(i + 1, end))
+      i = end
+      continue
+    }
+    if (ch === "\\") { if (i + 1 < src.length) lit(src[i + 1]); i++; continue }
+    if (ch === "_") { lit(" "); i++; continue }
+    if (ch === "*") { if (src[i + 1] === " ") lit(" "); i++; continue }
+    if (ch === "[") {
+      const j = src.indexOf("]", i)
+      if (j < 0) { lit(ch); continue }
+      const inner = src.slice(i + 1, j)
+      i = j
+      let m: RegExpExecArray | null
+      if ((m = /^(h+|m+|s+)$/i.exec(inner))) toks.push({ k: "elapsed", u: m[1][0].toLowerCase() as "h" | "m" | "s", n: m[1].length })
+      else if ((m = /^(<=|>=|<>|<|>|=)\s*(-?\d+(?:\.\d+)?)$/.exec(inner))) cond = { op: m[1], v: Number(m[2]) }
+      else if ((m = /^\$([^-]*)(?:-[0-9a-f]+)?$/i.exec(inner))) { if (m[1]) lit(m[1]) }
+      else if ((m = /^colou?r\s*(\d+)$/i.exec(inner))) color = PATTERN_COLOR56[Number(m[1]) - 1] ?? color
+      else if (PATTERN_COLORS[inner.toLowerCase()]) color = PATTERN_COLORS[inner.toLowerCase()]
+      continue
+    }
+    if (ch === "0" || ch === "#" || ch === "?") { toks.push({ k: "ph", c: ch }); continue }
+    if (ch === ".") { toks.push({ k: "dot" }); continue }
+    if (ch === ",") { toks.push({ k: "comma" }); continue }
+    if (ch === "%") { toks.push({ k: "pct" }); continue }
+    if (ch === "@") { toks.push({ k: "at" }); continue }
+    if (ch === "/") { toks.push({ k: "slash" }); continue }
+    if ((ch === "E" || ch === "e") && (src[i + 1] === "+" || src[i + 1] === "-")) {
+      toks.push({ k: "exp", s: ch, plus: src[i + 1] === "+" })
+      i++
+      continue
+    }
+    if (/^[1-9]$/.test(ch)) { toks.push({ k: "digit", s: ch }); continue }
+    if (/^general/i.test(rest)) { toks.push({ k: "general" }); i += 6; continue }
+    if (/^am\/pm/i.test(rest)) { toks.push({ k: "ampm", s: rest.slice(0, 5) }); i += 4; continue }
+    if (/^a\/p/i.test(rest)) { toks.push({ k: "ampm", s: rest.slice(0, 3) }); i += 2; continue }
+    if (/[ymdhs]/i.test(ch)) {
+      let j = i
+      while (j + 1 < src.length && src[j + 1].toLowerCase() === ch.toLowerCase()) j++
+      const raw = src.slice(i, j + 1)
+      toks.push({ k: "date", s: raw.toLowerCase(), raw })
+      i = j
+      continue
+    }
+    lit(ch)
+  }
+  // A date/time section: date tokens and no digit placeholders, except ".000" fractional seconds.
+  const hasDate = toks.some((t) => t.k === "date" || t.k === "ampm" || t.k === "elapsed")
+  let fracSecondsOnly = true
+  for (let i = 0; i < toks.length; i++) {
+    if (toks[i].k !== "ph") continue
+    let j = i - 1
+    while (j >= 0 && toks[j].k === "ph") j--
+    const before = toks[j - 1]
+    const ok = toks[j]?.k === "dot" && before !== undefined &&
+      ((before.k === "date" && before.s[0] === "s") || (before.k === "elapsed" && before.u === "s"))
+    if (!ok) { fracSecondsOnly = false; break }
+  }
+  const date = hasDate && fracSecondsOnly
+  const text = !date && toks.some((t) => t.k === "at") && !toks.some((t) => t.k === "ph" || t.k === "general")
+  return { toks, color, cond, date, text }
+}
+
+const patternCache = new Map<string, PSection[]>()
+function patternSections(pattern: string): PSection[] {
+  let secs = patternCache.get(pattern)
+  if (!secs) {
+    secs = splitPatternSections(pattern).slice(0, 4).map(parsePatternSection)
+    if (patternCache.size > 500) patternCache.clear()
+    patternCache.set(pattern, secs)
+  }
+  return secs
+}
+
+function condHolds(c: PCond, n: number): boolean {
+  switch (c.op) {
+    case "<": return n < c.v
+    case "<=": return n <= c.v
+    case ">": return n > c.v
+    case ">=": return n >= c.v
+    case "<>": return n !== c.v
+    default: return n === c.v
+  }
+}
+
+/** x rounded to f decimals as a plain digit string (no exponent for ordinary sizes). */
+function fixedDigits(x: number, f: number): string {
+  if (Math.abs(x) < 1e15) {
+    const shifted = Number(`${x}e${f}`)
+    if (Number.isFinite(shifted)) return (Math.round(shifted) / 10 ** f).toFixed(f)
+  }
+  return x.toFixed(f)
+}
+
+function groupDigits(digits: string): string {
+  const sep = groupMark()
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, sep)
+}
+
+/** Fill integer placeholders right-to-left; the leftmost one takes every remaining digit. */
+function fillInt(digits: string, phs: ("0" | "#" | "?")[]): string[] {
+  const out: string[] = new Array(phs.length).fill("")
+  let rest = digits
+  for (let k = phs.length - 1; k >= 0; k--) {
+    if (rest) {
+      if (k === 0) { out[k] = rest; rest = "" }
+      else { out[k] = rest.slice(-1); rest = rest.slice(0, -1) }
+    } else out[k] = phs[k] === "0" ? "0" : phs[k] === "?" ? " " : ""
+  }
+  return out
+}
+
+function phChars(toks: PTok[], idx: number[]): ("0" | "#" | "?")[] {
+  return idx.map((i) => (toks[i] as { k: "ph"; c: "0" | "#" | "?" }).c)
+}
+
+function literalText(t: PTok): string {
+  switch (t.k) {
+    case "lit": case "digit": return t.s
+    case "dot": return "."
+    case "comma": return ","
+    case "pct": return "%"
+    case "slash": return "/"
+    case "date": return t.raw
+    case "ampm": return t.s
+    case "exp": return t.s + (t.plus ? "+" : "-")
+    case "ph": return t.c === "?" ? " " : t.c
+    default: return ""
+  }
+}
+
+/** Plain digits (0 # ?), grouping, scaling, decimals, % — no exponent, no fraction. x >= 0. */
+function renderPlainNumber(x: number, toks: PTok[]): string {
+  const ph = toks.flatMap((t, i) => (t.k === "ph" ? [i] : []))
+  if (!ph.length) return toks.map((t) => (t.k === "general" ? formatValue(x, null) : t.k === "at" ? formatValue(x, null) : literalText(t))).join("")
+  const first = ph[0], last = ph[ph.length - 1]
+  let dec = -1
+  for (let i = 0; i < toks.length; i++) {
+    if (toks[i].k !== "dot") continue
+    if ((i > first && i <= last + 1) || i === first - 1) { dec = i; break }
+  }
+  const intIdx = ph.filter((i) => dec < 0 || i < dec)
+  const fracIdx = ph.filter((i) => dec >= 0 && i > dec)
+  // Commas: between integer placeholders = grouping; right after the last integer placeholder = ÷1000 each.
+  const skip = new Set<number>()
+  let grouping = false
+  let scale = 0
+  if (intIdx.length) {
+    const li = intIdx[intIdx.length - 1]
+    for (let i = intIdx[0] + 1; i < li; i++) if (toks[i].k === "comma") { grouping = true; skip.add(i) }
+    for (let i = li + 1; i < toks.length && toks[i].k === "comma"; i++) { scale++; skip.add(i) }
+  }
+  const pcts = toks.filter((t) => t.k === "pct").length
+  const value = (x * 100 ** pcts) / 1000 ** scale
+  const fixed = fixedDigits(value, fracIdx.length)
+  const [intRaw, fracRaw = ""] = fixed.split(".")
+  const intDigits = intRaw === "0" ? "" : intRaw
+  const intPh = phChars(toks, intIdx)
+  const intFill = fillInt(intDigits, intPh)
+  const intMap = new Map<number, string>()
+  if (grouping) {
+    const joined = intFill.join("")
+    const lead = /^ */.exec(joined)?.[0] ?? ""
+    intMap.set(intIdx[0], lead + groupDigits(joined.slice(lead.length)))
+    for (const i of intIdx.slice(1)) intMap.set(i, "")
+  } else intIdx.forEach((i, k) => intMap.set(i, intFill[k]))
+  // Fraction digits: trailing zeros vanish under "#", turn into spaces under "?".
+  const fracPh = phChars(toks, fracIdx)
+  const fracOut = fracRaw.split("")
+  for (let k = fracOut.length - 1; k >= 0; k--) {
+    if (fracOut[k] !== "0" || fracPh[k] === "0") break
+    fracOut[k] = fracPh[k] === "?" ? " " : ""
+  }
+  const fracMap = new Map<number, string>()
+  fracIdx.forEach((i, k) => fracMap.set(i, fracOut[k] ?? ""))
+  let out = ""
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i]
+    if (skip.has(i)) continue
+    if (intMap.has(i)) out += intMap.get(i)
+    else if (fracMap.has(i)) out += fracMap.get(i)
+    else if (i === dec) out += (intIdx.length ? "" : intDigits) + decimalMark()
+    else if (t.k === "general" || t.k === "at") out += ""
+    else out += literalText(t)
+  }
+  return out
+}
+
+function renderScientific(x: number, toks: PTok[], expAt: number): string {
+  const mant = toks.slice(0, expAt)
+  const expTok = toks[expAt] as { k: "exp"; s: string; plus: boolean }
+  let j = expAt + 1
+  const expPh: ("0" | "#" | "?")[] = []
+  while (j < toks.length && toks[j].k === "ph") { expPh.push((toks[j] as { k: "ph"; c: "0" | "#" | "?" }).c); j++ }
+  const after = toks.slice(j)
+  let d = -1
+  for (let i = 0; i < mant.length; i++) if (mant[i].k === "dot") { d = i; break }
+  const intCount = mant.filter((t, i) => t.k === "ph" && (d < 0 || i < d)).length
+  const fracCount = d < 0 ? 0 : mant.filter((t, i) => t.k === "ph" && i > d).length
+  let e = 0
+  if (x !== 0) {
+    e = Math.floor(Math.log10(x))
+    if (intCount > 1) e = Math.floor(e / intCount) * intCount
+    else if (intCount === 0) e += 1
+  }
+  let m = x / 10 ** e
+  if (x !== 0 && intCount <= 1 && Number(fixedDigits(m, fracCount)) >= (intCount === 0 ? 1 : 10)) { e += 1; m = x / 10 ** e }
+  const body = renderPlainNumber(m, mant)
+  const sign = e < 0 ? "-" : expTok.plus ? "+" : ""
+  const minDigits = expPh.filter((c) => c === "0").length
+  const expDigits = String(Math.abs(e)).padStart(minDigits, "0")
+  return `${body}${expTok.s}${sign}${expDigits}${after.map(literalText).join("")}`
+}
+
+/** Best n/d for f with d <= maxDen (smallest denominator among the closest). */
+function approxFraction(f: number, maxDen: number): [number, number] {
+  let best: [number, number] = [Math.round(f), 1]
+  let err = Math.abs(f - best[0])
+  for (let den = 2; den <= maxDen && err > 1e-12; den++) {
+    const num = Math.round(f * den)
+    const e = Math.abs(f - num / den)
+    if (e < err - 1e-12) { best = [num, den]; err = e }
+  }
+  return best
+}
+
+function renderFraction(x: number, toks: PTok[], slashAt: number): string {
+  let a = slashAt - 1
+  while (a >= 0 && toks[a].k === "ph") a--
+  const numIdx: number[] = []
+  for (let i = a + 1; i < slashAt; i++) numIdx.push(i)
+  let b = slashAt + 1
+  const denIdx: number[] = []
+  while (b < toks.length && (toks[b].k === "ph" || toks[b].k === "digit")) { denIdx.push(b); b++ }
+  const denText = denIdx.map((i) => { const t = toks[i]; return t.k === "digit" ? t.s : (t as { c: string }).c }).join("")
+  const fixedDen = /^[1-9]\d*$/.test(denText) ? Number(denText) : 0
+  const intIdx = toks.flatMap((t, i) => (t.k === "ph" && i <= a ? [i] : []))
+  let whole = intIdx.length ? Math.floor(x) : 0
+  const f = x - whole
+  let [nu, de] = fixedDen ? [Math.round(f * fixedDen), fixedDen] : approxFraction(f, 10 ** denIdx.length - 1)
+  if (intIdx.length && nu === de && de > 0) { whole += 1; nu = 0 }
+  const intFill = fillInt(whole ? String(whole) : "", phChars(toks, intIdx))
+  const numFill = fillInt(String(nu), phChars(toks, numIdx))
+  let denOut = String(de)
+  if (!fixedDen) {
+    const denPh = phChars(toks, denIdx)
+    while (denOut.length < denPh.length) {
+      const c = denPh[denOut.length]
+      denOut += c === "?" ? " " : c === "0" ? "0" : ""
+      if (c === "#") break
+    }
+  }
+  // A whole number with nothing left over prints just the whole part (Sheets drops "0/1").
+  const dropFraction = intIdx.length > 0 && nu === 0
+  let out = ""
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i]
+    const k = intIdx.indexOf(i)
+    if (k >= 0) { out += intFill[k]; continue }
+    if (i > a && i < b) {
+      if (dropFraction) continue
+      const nk = numIdx.indexOf(i)
+      if (nk >= 0) out += numFill[nk]
+      else if (i === slashAt) out += "/" + denOut
+      continue
+    }
+    if (dropFraction && i > (intIdx[intIdx.length - 1] ?? -1) && i <= a) continue
+    out += t.k === "general" || t.k === "at" ? "" : literalText(t)
+  }
+  if (dropFraction && !whole) out = out.replace(/^\s*$/, "0")
+  return out
+}
+
+function renderNumberSection(x: number, sec: PSection): string {
+  const toks = sec.toks
+  const expAt = toks.findIndex((t) => t.k === "exp")
+  if (expAt >= 0 && toks.slice(0, expAt).some((t) => t.k === "ph")) return renderScientific(x, toks, expAt)
+  const slashAt = toks.findIndex((t, i) => t.k === "slash" && toks[i - 1]?.k === "ph" && (toks[i + 1]?.k === "ph" || toks[i + 1]?.k === "digit"))
+  if (slashAt >= 0) return renderFraction(x, toks, slashAt)
+  return renderPlainNumber(x, toks)
+}
+
+function renderDateSection(n: number, sec: PSection): string {
+  const toks = sec.toks
+  const elapsed = toks.some((t) => t.k === "elapsed")
+  const neg = n < 0
+  const v = Math.abs(n)
+  // Fractional seconds: ".0", ".00", ".000" after the seconds.
+  let fracDigits = 0
+  for (let i = 0; i < toks.length; i++) {
+    if (toks[i].k !== "ph") continue
+    let c = 0
+    while (toks[i + c]?.k === "ph") c++
+    fracDigits = Math.max(fracDigits, Math.min(c, 3))
+    i += c
+  }
+  const unit = 10 ** fracDigits
+  const totalUnits = Math.round(v * 86400 * unit)
+  const totalSec = Math.floor(totalUnits / unit)
+  const fracUnits = totalUnits - totalSec * unit
+  const day = Math.floor(totalSec / 86400)
+  const sod = totalSec - day * 86400
+  const H = Math.floor(sod / 3600), M = Math.floor((sod % 3600) / 60), S = sod % 60
+  const { y, m, d } = serialToYmd(day)
+  const dow = weekdayOf(day)
+  const ampm = toks.some((t) => t.k === "ampm")
+  // "m"/"mm" are minutes right after an hour or right before a second; otherwise the month.
+  const timeish = (t: PTok | undefined, unitCh: "h" | "s") =>
+    t !== undefined && ((t.k === "date" && t.s[0] === unitCh) || (t.k === "elapsed" && t.u === unitCh))
+  const sig = toks.map((t, i) => ({ t, i })).filter(({ t }) => t.k === "date" || t.k === "elapsed" || t.k === "ampm")
+  const minuteAt = new Set<number>()
+  sig.forEach(({ t, i }, k) => {
+    if (t.k !== "date" || t.s[0] !== "m" || t.s.length > 2) return
+    if (timeish(sig[k - 1]?.t, "h") || timeish(sig[k + 1]?.t, "s")) minuteAt.add(i)
+  })
+  let out = ""
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i]
+    if (t.k === "date") {
+      const len = t.s.length
+      switch (t.s[0]) {
+        case "y": out += len <= 2 ? pad2(y % 100) : String(y); break
+        case "d": out += len === 1 ? String(d) : len === 2 ? pad2(d) : weekdayName(dow, len >= 4); break
+        case "h": {
+          const h = ampm ? H % 12 || 12 : H
+          out += len === 1 ? String(h) : pad2(h)
+          break
+        }
+        case "s": out += len === 1 ? String(S) : pad2(S); break
+        default: // m
+          if (minuteAt.has(i)) out += len === 1 ? String(M) : pad2(M)
+          else out += len === 1 ? String(m) : len === 2 ? pad2(m) : len === 3 ? monthName(m, false) : len === 4 ? monthName(m, true) : monthName(m, true).slice(0, 1)
+      }
+    } else if (t.k === "elapsed") {
+      const total = t.u === "h" ? Math.floor(totalSec / 3600) : t.u === "m" ? Math.floor(totalSec / 60) : totalSec
+      out += String(total).padStart(t.n, "0")
+    } else if (t.k === "ampm") {
+      const pm = H >= 12
+      const word = t.s.length > 3 ? (pm ? "PM" : "AM") : pm ? "P" : "A"
+      out += t.s[0] === t.s[0].toLowerCase() ? word.toLowerCase() : word
+    } else if (t.k === "ph") {
+      let c = 0
+      while (toks[i + c]?.k === "ph") c++
+      out += String(fracUnits).padStart(fracDigits, "0").slice(0, c)
+      i += c - 1
+    } else out += t.k === "at" || t.k === "general" ? "" : literalText(t)
+  }
+  return neg && (elapsed || out) ? `-${out}` : out
+}
+
+/**
+ * A value under a Sheets custom number format, in the display locale. Text goes through the 4th
+ * section (or a lone "@" section) and is otherwise shown as-is. Colours come back as "#rrggbb".
+ */
+export function formatNumberPattern(value: CellValue, pattern: string): PatternResult {
+  if (value === null || value === "") return { text: "" }
+  if (typeof value === "boolean") return { text: value ? "TRUE" : "FALSE" }
+  const secs = patternSections(pattern)
+  if (typeof value === "string") {
+    const sec = secs[3] ?? (secs.length === 1 && secs[0].text ? secs[0] : null)
+    if (!sec || isError(value)) return { text: value }
+    return { text: sec.toks.map((t) => (t.k === "at" ? value : literalText(t))).join(""), color: sec.color }
+  }
+  if (!Number.isFinite(value)) return { text: ERR.num }
+  const n = value
+  let sec: PSection
+  let signed = false
+  const s0 = secs[0], s1 = secs[1], s2 = secs[2]
+  if (s0.cond || s1?.cond) {
+    if (s0.cond ? condHolds(s0.cond, n) : n > 0 || (n === 0 && !s2)) sec = s0
+    else if (s1 && (!s1.cond || condHolds(s1.cond, n))) sec = s1
+    else sec = s2 ?? s1 ?? s0
+    signed = n < 0 && !(sec === s1 && !s1.cond)
+  } else if (n > 0 || (n === 0 && !s2) || (n < 0 && !s1)) {
+    sec = s0
+    signed = n < 0
+  } else if (n < 0) sec = s1 as PSection
+  else sec = s2 as PSection
+  if (sec.text) return { text: formatValue(n, null), color: sec.color }
+  if (sec.date) return { text: renderDateSection(signed ? n : Math.abs(n), sec), color: sec.color }
+  const body = renderNumberSection(Math.abs(n), sec)
+  return { text: signed && /[1-9]/.test(body) ? `-${body}` : body, color: sec.color }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1927,18 +2460,18 @@ function textFormat(v: CellValue, fmt: string): CellValue {
     const s = typeof v === "number" ? v : typeof v === "string" ? numberFromText(v) : null
     if (s === null) return ERR.value
     const { y, m, d } = serialToYmd(s)
-    const dow = ((Math.floor(s) % 7) + 7 + 6) % 7 // 0 = Sunday; serial 0 (1899-12-30) was a Saturday
+    const dow = weekdayOf(s)
     return f.replace(/"([^"]*)"|yyyy|yy|mmmm|mmm|mm|m|dddd|ddd|dd|d/gi, (tok, lit: string | undefined) => {
       if (lit !== undefined) return lit
       switch (tok.toLowerCase()) {
         case "yyyy": return String(y)
         case "yy": return String(y).slice(-2)
-        case "mmmm": return MONTH_LONG_ID[m - 1]
-        case "mmm": return MONTH_SHORT_ID[m - 1]
+        case "mmmm": return monthName(m, true)
+        case "mmm": return monthName(m, false)
         case "mm": return pad2(m)
         case "m": return String(m)
-        case "dddd": return DAY_LONG_ID[dow]
-        case "ddd": return DAY_LONG_ID[dow].slice(0, 3)
+        case "dddd": return weekdayName(dow, true)
+        case "ddd": return isEn() ? weekdayName(dow, false) : DAY_LONG_ID[dow].slice(0, 3)
         case "dd": return pad2(d)
         default: return String(d)
       }
@@ -2004,7 +2537,21 @@ export type ComputedCell = {
  */
 export function computeSheet(
   columns: { id: string; type: string }[],
-  rows: { id: string; cells: Record<string, unknown>; styles?: Record<string, { nf?: string; dp?: number }> | null }[],
+  rows: { id: string; cells: Record<string, unknown>; styles?: Record<string, { nf?: string; dp?: number; pt?: string }> | null }[],
+  opts?: { locale?: DisplayLocale },
+): Record<string, Record<string, ComputedCell>> {
+  const before = displayLocale
+  if (opts?.locale) setDisplayLocale(opts.locale)
+  try {
+    return computeCells(columns, rows)
+  } finally {
+    displayLocale = before
+  }
+}
+
+function computeCells(
+  columns: { id: string; type: string }[],
+  rows: { id: string; cells: Record<string, unknown>; styles?: Record<string, { nf?: string; dp?: number; pt?: string }> | null }[],
 ): Record<string, Record<string, ComputedCell>> {
   const data: SheetData = {
     shape: { columnIds: columns.map((c) => c.id), rowIds: rows.map((r) => r.id) },
@@ -2022,7 +2569,7 @@ export function computeSheet(
       const formula = isFormulaCell(raw)
       const nf = formula ? engine.format(row.id, col.id) : isTypedCell(raw) ? raw.nf : null
       const st = row.styles?.[col.id]
-      const styled = st ? formatWithStyle(v, st.nf, st.dp, nf ?? (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null)) : null
+      const styled = st ? formatWithStyle(v, st.nf, st.dp, nf ?? (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null), st.pt) : null
       const d = styled ?? (formula ? formatResult(col.type, v, nf) : formatScalar(col.type, raw))
       const cell: ComputedCell = { v, d }
       if (nf && typeof v === "number") cell.nf = nf

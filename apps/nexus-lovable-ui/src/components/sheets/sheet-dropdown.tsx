@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { isHexColor, readableText } from "@/lib/sheet-palette";
 import { CHIP_COLOR_CLASS } from "./sheet-types";
 import { Floating } from "./sheet-float";
 
@@ -25,9 +26,16 @@ const STYLE_CHIP: Record<string, string> = {
 /** The default chip: Sheets' neutral grey. */
 export const CHIP_DEFAULT = "bg-muted text-foreground";
 
+/** Classes for a chip colour: legacy names map to a light/dark pair; hex is painted by chipStyle. */
 export function chipClass(color: string | undefined): string {
   if (!color) return CHIP_DEFAULT;
+  if (isHexColor(color)) return "";
   return CHIP_COLOR_CLASS[color] ?? STYLE_CHIP[color] ?? CHIP_DEFAULT;
+}
+
+/** Inline paint for a hex chip colour ("#ffcfc9", as Sheets stores it), with readable text on top. */
+export function chipStyle(color: string | undefined): CSSProperties | undefined {
+  return color && isHexColor(color) ? { backgroundColor: color, color: readableText(color) } : undefined;
 }
 
 /**
@@ -65,7 +73,7 @@ export function DropdownCell({ picked, colors, display, canEdit, wrap, onOpen }:
           <ChevronDown className="h-3 w-3 opacity-60" />
         </span>
       ) : picked.map((v, i) => (
-        <span key={`${v}${i}`} className={cn("inline-flex h-5 max-w-full shrink-0 items-center gap-0.5 rounded-full pl-2 pr-1 text-[12px] font-medium leading-5", chipClass(colors?.[v]))}>
+        <span key={`${v}${i}`} style={chipStyle(colors?.[v])} className={cn("inline-flex h-5 max-w-full shrink-0 items-center gap-0.5 rounded-full pl-2 pr-1 text-[12px] font-medium leading-5", chipClass(colors?.[v]))}>
           <span className="truncate">{v}</span>
           {i === picked.length - 1 && <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />}
         </span>
@@ -138,7 +146,7 @@ export function DropdownPicker({ anchor, options, colors, picked: initial, multi
             className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left", i === hi ? "bg-muted" : "")}
           >
             <span className="grid w-3.5 shrink-0 place-items-center">{picked.includes(o) && <Check className="h-3.5 w-3.5" />}</span>
-            <span className={cn("min-w-0 max-w-full truncate rounded-full px-2 text-[12px] font-medium leading-5", chipClass(colors?.[o]))}>{o}</span>
+            <span style={chipStyle(colors?.[o])} className={cn("min-w-0 max-w-full truncate rounded-full px-2 text-[12px] font-medium leading-5", chipClass(colors?.[o]))}>{o}</span>
             {!options.includes(o) && <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{t("not in the list")}</span>}
           </button>
         ))}

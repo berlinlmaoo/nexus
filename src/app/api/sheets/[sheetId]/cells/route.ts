@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
   MAX_CELLS_PER_WRITE, MAX_ROWS_PER_WRITE,
-  coerceCellValue, normalizeCellStyle, readCells, readStyles, resolveSheetAccess,
+  coerceCellValue, normalizeCellStyle, protectedCellsBlock, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
 import { emitSheetCells } from "@/lib/socket-emitter"
 
@@ -81,6 +81,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
     if (cellCount > MAX_CELLS_PER_WRITE) {
       return NextResponse.json({ error: `Maksimal ${MAX_CELLS_PER_WRITE} sel sekali kirim.` }, { status: 422 })
     }
+
+    // Protected ranges (Data › Protect sheets and ranges, "Restrict who can edit"): enforced here, not
+    // only in the grid — a hidden button is not a lock.
+    const touched: { rowId: string; colId: string }[] = []
+    for (const p of [...patches, ...stylePatches]) for (const colId of Object.keys(p.patch)) touched.push({ rowId: p.rowId, colId })
+    const blocked = await protectedCellsBlock(me, access.sheet, touched)
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
 
     // `sheetId` in the WHERE is the second lock on the door: even with a valid rowId from another
     // sheet, the update matches nothing.

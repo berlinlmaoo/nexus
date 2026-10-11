@@ -11,6 +11,9 @@ const SHEET_LIMIT = 100
 // GET /api/sheets/[sheetId]/revisions
 //   ?rowId=&columnId=  → history for ONE cell (what the cell popover shows)
 //   (no params)        → the sheet's recent activity, newest first
+//   ?after=ISO         → EVERY change after that moment, newest first (version history: the sheet
+//                        as of a moment = today's cells with these changes undone). Capped.
+//   ?limit=N           → recent activity, up to 2000 (version history list)
 //
 // Read-only. The rows themselves are written by the `sheet_row_revisions` Postgres trigger, never
 // from here — see prisma/migrations/manual/2026-08-04-sheet-revisions.sql for why.
@@ -27,10 +30,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
     const columnId = (req.nextUrl.searchParams.get("columnId") ?? "").trim()
     const perCell = Boolean(rowId && columnId)
 
+    const afterRaw = req.nextUrl.searchParams.get("after")
+    const after = afterRaw && !Number.isNaN(Date.parse(afterRaw)) ? new Date(afterRaw) : null
+    const limit = Math.max(1, Math.min(2000, Number(req.nextUrl.searchParams.get("limit")) || SHEET_LIMIT))
     const revisions = await prisma.sheetCellRevision.findMany({
-      where: perCell ? { sheetId, rowId, columnId } : { sheetId },
+      where: perCell ? { sheetId, rowId, columnId } : after ? { sheetId, createdAt: { gt: after } } : { sheetId },
       orderBy: { createdAt: "desc" },
-      take: perCell ? CELL_LIMIT : SHEET_LIMIT,
+      take: perCell ? CELL_LIMIT : after ? 50_000 : limit,
       select: {
         id: true, rowId: true, columnId: true, oldValue: true, newValue: true, createdAt: true,
         author: { select: { id: true, name: true, avatar: true } },

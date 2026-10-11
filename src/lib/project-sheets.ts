@@ -137,24 +137,37 @@ export function ensureSheetFormattingColumns(): Promise<void> {
 
 // ── Per-cell formatting ─────────────────────────────────────────────────────────────────────────
 
-/** Palette for text and fill colours. Named tokens, never free hex: a sheet can't drift off the app's palette. */
+/** Palette names for text and fill colours (legacy); hex colours ("#ffe599") are accepted too. */
 export const STYLE_COLORS = ["red", "orange", "amber", "green", "teal", "blue", "violet", "pink", "slate", "black"] as const
 export type StyleColor = (typeof STYLE_COLORS)[number]
-export const STYLE_NUMBER_FORMATS = ["auto", "num", "idr", "pct", "date", "text"] as const
+export const STYLE_NUMBER_FORMATS = ["auto", "num", "idr", "pct", "date", "text", "sci", "acct", "fin", "cur", "cur0", "time", "dt", "dur", "custom"] as const
+const HEX = /^#[0-9a-f]{6}$/i
+const isHex = (v: unknown): v is string => typeof v === "string" && HEX.test(v)
+const colorOf = (v: unknown): string | undefined =>
+  STYLE_COLORS.includes(v as StyleColor) ? (v as string) : isHex(v) ? (v as string).toLowerCase() : undefined
+const BORDER_LINES = ["thin", "medium", "thick", "dotted", "dashed", "double"] as const
+type BorderEdge = { s: (typeof BORDER_LINES)[number]; c?: string }
+/** Font families the toolbar offers (anything else is dropped, so a cell can't carry CSS). */
+const FONT_RE = /^[A-Za-z0-9 \-]{1,40}$/
 
 /**
  * One cell's formatting. Short keys because it is stored per cell:
- *   b bold · i italic · s strikethrough · u underline · fc text colour · bg fill colour
- *   ha horizontal align l|c|r · va vertical align t|m|b · w wrap · fs font size (px)
- *   nf number format (auto|num|idr|pct|date|text) · dp decimals · bd borders ("tblr" sides)
+ *   b bold · i italic · s strikethrough · u underline · fc text colour · bg fill colour (name or hex)
+ *   ha horizontal align l|c|r · va vertical align t|m|b · w wrap (legacy) · wr o|w|c overflow/wrap/clip
+ *   fs font size px (legacy) · fp font size pt · ff font family · rt rotation (deg or "v")
+ *   nf number format · dp decimals · pt custom pattern · bd border sides (legacy) · bx borders with
+ *   style + colour per side · nt note text
  */
 export type CellStyle = {
   b?: 1; i?: 1; s?: 1; u?: 1
-  fc?: StyleColor; bg?: StyleColor
+  fc?: string; bg?: string
   ha?: "l" | "c" | "r"; va?: "t" | "m" | "b"
-  w?: 1; fs?: number
-  nf?: (typeof STYLE_NUMBER_FORMATS)[number]; dp?: number
+  w?: 1; wr?: "o" | "w" | "c"; fs?: number; fp?: number; ff?: string
+  rt?: number | "v"
+  nf?: (typeof STYLE_NUMBER_FORMATS)[number]; dp?: number; pt?: string
   bd?: string
+  bx?: { t?: BorderEdge; b?: BorderEdge; l?: BorderEdge; r?: BorderEdge }
+  nt?: string
 }
 
 /** Validate one incoming style; null/empty means "no formatting". Unknown keys are dropped. */
@@ -163,17 +176,33 @@ export function normalizeCellStyle(raw: unknown): CellStyle | null {
   const o = raw as Record<string, unknown>
   const out: CellStyle = {}
   for (const k of ["b", "i", "s", "u", "w"] as const) if (o[k] === 1 || o[k] === true) out[k] = 1
-  if (STYLE_COLORS.includes(o.fc as StyleColor)) out.fc = o.fc as StyleColor
-  if (STYLE_COLORS.includes(o.bg as StyleColor)) out.bg = o.bg as StyleColor
+  const fc = colorOf(o.fc); if (fc) out.fc = fc
+  const bg = colorOf(o.bg); if (bg) out.bg = bg
   if (o.ha === "l" || o.ha === "c" || o.ha === "r") out.ha = o.ha
   if (o.va === "t" || o.va === "m" || o.va === "b") out.va = o.va
-  if (typeof o.fs === "number" && o.fs >= 8 && o.fs <= 36) out.fs = Math.round(o.fs)
+  if (o.wr === "o" || o.wr === "w" || o.wr === "c") out.wr = o.wr
+  if (typeof o.fs === "number" && o.fs >= 6 && o.fs <= 96) out.fs = Math.round(o.fs)
+  if (typeof o.fp === "number" && o.fp >= 6 && o.fp <= 72) out.fp = Math.round(o.fp)
+  if (typeof o.ff === "string" && FONT_RE.test(o.ff)) out.ff = o.ff
+  if (o.rt === "v") out.rt = "v"
+  else if (typeof o.rt === "number" && o.rt >= -90 && o.rt <= 90 && o.rt !== 0) out.rt = Math.round(o.rt)
   if (STYLE_NUMBER_FORMATS.includes(o.nf as CellStyle["nf"] & string) && o.nf !== "auto") out.nf = o.nf as CellStyle["nf"]
   if (typeof o.dp === "number" && o.dp >= 0 && o.dp <= 10) out.dp = Math.round(o.dp)
+  if (typeof o.pt === "string" && o.pt.trim()) out.pt = o.pt.slice(0, 200)
   if (typeof o.bd === "string") {
     const sides = [...new Set(o.bd.split(""))].filter((c) => "tblr".includes(c)).sort().join("")
     if (sides) out.bd = sides
   }
+  if (o.bx && typeof o.bx === "object" && !Array.isArray(o.bx)) {
+    const bx: NonNullable<CellStyle["bx"]> = {}
+    for (const side of ["t", "b", "l", "r"] as const) {
+      const e = (o.bx as Record<string, unknown>)[side] as Record<string, unknown> | undefined
+      if (!e || typeof e !== "object" || !BORDER_LINES.includes(e.s as BorderEdge["s"])) continue
+      bx[side] = { s: e.s as BorderEdge["s"], ...(isHex(e.c) ? { c: (e.c as string).toLowerCase() } : {}) }
+    }
+    if (Object.keys(bx).length) out.bx = bx
+  }
+  if (typeof o.nt === "string" && o.nt.trim()) out.nt = o.nt.slice(0, 5000)
   return Object.keys(out).length ? out : null
 }
 
@@ -207,7 +236,7 @@ export type SheetValidation = {
   /** Dropdown items, or the criteria value(s) (two for "between"). */
   values?: string[]
   /** Dropdown item -> chip colour. */
-  colors?: Record<string, StyleColor>
+  colors?: Record<string, string>
   /** Dropdown (from a range): the source range, stored form. */
   source?: string
   /** Custom formula, stored form (relative to the first range's top-left cell). */
@@ -241,8 +270,8 @@ export function readValidations(raw: unknown): SheetValidation[] {
     }
     if (Array.isArray(o.values)) rule.values = o.values.map((v) => String(v).slice(0, 200)).slice(0, 500)
     if (o.colors && typeof o.colors === "object" && !Array.isArray(o.colors)) {
-      const colors: Record<string, StyleColor> = {}
-      for (const [k, v] of Object.entries(o.colors as Record<string, unknown>)) if (STYLE_COLORS.includes(v as StyleColor)) colors[k.slice(0, 200)] = v as StyleColor
+      const colors: Record<string, string> = {}
+      for (const [k, v] of Object.entries(o.colors as Record<string, unknown>)) { const c = colorOf(v); if (c) colors[k.slice(0, 200)] = c }
       if (Object.keys(colors).length) rule.colors = colors
     }
     const source = str(o.source, 300); if (source && STORED_RANGE.test(source)) rule.source = source
@@ -257,15 +286,141 @@ export function readValidations(raw: unknown): SheetValidation[] {
   }
   return out
 }
+// ── The rest of Google Sheets' sheet-level model (12 Oct 2026; client: lib/sheet-model.ts) ──────
+// Every key below is narrowed field by field: settings arrive from the browser and are shown to
+// everyone, so nothing is stored that the grid doesn't understand.
+
+type Obj = Record<string, unknown>
+const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null)
+const str = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.length ? v.slice(0, max) : undefined)
+const num = (v: unknown, lo: number, hi: number): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : undefined
+const hex = (v: unknown): string | undefined => (isHex(v) ? (v as string).toLowerCase() : undefined)
+const range = (v: unknown): string | undefined => (typeof v === "string" && v.length < 300 && STORED_RANGE.test(v) ? v : undefined)
+const ranges = (v: unknown, max = 20): string[] => (Array.isArray(v) ? v.map(range).filter((x): x is string => Boolean(x)).slice(0, max) : [])
+const idOf = (v: unknown, prefix: string) => str(v, 40) ?? `${prefix}_${randomUUID().slice(0, 8)}`
+const list = <T>(v: unknown, max: number, fn: (o: Obj) => T | null): T[] => {
+  if (!Array.isArray(v)) return []
+  const out: T[] = []
+  for (const x of v.slice(0, max)) { const o = obj(x); const r = o ? fn(o) : null; if (r) out.push(r) }
+  return out
+}
+const strings = (v: unknown, max: number, len: number): string[] | undefined =>
+  Array.isArray(v) ? v.map((x) => String(x).slice(0, len)).slice(0, max) : undefined
+
+const COND_KINDS = ["empty", "notEmpty", "textContains", "textNotContains", "textStarts", "textEnds", "textIs",
+  "dateIs", "dateBefore", "dateAfter", "gt", "gte", "lt", "lte", "eq", "neq", "between", "notBetween", "formula"] as const
+type CondKind = (typeof COND_KINDS)[number]
+const condKind = (v: unknown): CondKind | undefined => (COND_KINDS.includes(v as CondKind) ? (v as CondKind) : undefined)
+const SCALE_TYPES = ["min", "max", "num", "pct", "pctile", "none"] as const
+
+function condStyle(v: unknown) {
+  const o = obj(v); if (!o) return undefined
+  const out: Obj = {}
+  for (const k of ["b", "i", "u", "s"]) if (o[k] === 1 || o[k] === true) out[k] = 1
+  const fc = hex(o.fc); if (fc) out.fc = fc
+  const bg = hex(o.bg); if (bg) out.bg = bg
+  return Object.keys(out).length ? out : undefined
+}
+function scalePoint(v: unknown) {
+  const o = obj(v); if (!o || !SCALE_TYPES.includes(o.type as (typeof SCALE_TYPES)[number])) return undefined
+  const color = hex(o.color); if (!color) return undefined
+  return { type: o.type, color, ...(str(o.value, 200) !== undefined ? { value: str(o.value, 200) } : {}) }
+}
+function filterCrit(v: unknown) {
+  const o = obj(v); if (!o) return undefined
+  const out: Obj = {}
+  const hidden = strings(o.hidden, 2000, 500); if (hidden?.length) out.hidden = hidden
+  const c = obj(o.cond)
+  if (c && condKind(c.kind)) out.cond = { kind: c.kind, ...(strings(c.values, 2, 500) ? { values: strings(c.values, 2, 500) } : {}), ...(str(c.formula, 2000) ? { formula: str(c.formula, 2000) } : {}) }
+  const fill = hex(o.fill); if (fill) out.fill = fill
+  const text = hex(o.text); if (text) out.text = text
+  return Object.keys(out).length ? out : undefined
+}
+function sortSpec(v: unknown) {
+  const o = obj(v); const colId = str(o?.colId, 100)
+  return o && colId && (o.dir === "asc" || o.dir === "desc") ? { colId, dir: o.dir } : undefined
+}
+function sheetFilter(o: Obj): Obj | null {
+  const r = range(o.range); if (!r) return null
+  const out: Obj = { range: r }
+  const cr = obj(o.criteria)
+  if (cr) {
+    const criteria: Obj = {}
+    for (const [k, v] of Object.entries(cr).slice(0, MAX_COLUMNS)) { const c = filterCrit(v); if (c) criteria[k.slice(0, 100)] = c }
+    if (Object.keys(criteria).length) out.criteria = criteria
+  }
+  const sort = sortSpec(o.sort); if (sort) out.sort = sort
+  return out
+}
+function anchor(v: unknown) {
+  const o = obj(v); const r = str(o?.r, 100), c = str(o?.c, 100)
+  if (!o || !r || !c) return undefined
+  return { r, c, ...(num(o.dx, -5000, 5000) !== undefined ? { dx: Math.round(num(o.dx, -5000, 5000)!) } : {}), ...(num(o.dy, -5000, 50000) !== undefined ? { dy: Math.round(num(o.dy, -5000, 50000)!) } : {}) }
+}
+const CHART_TYPES = ["column", "columnStacked", "column100", "bar", "barStacked", "bar100", "line", "lineSmooth", "area", "areaStacked",
+  "area100", "areaStepped", "pie", "donut", "scatter", "bubble", "combo", "histogram", "radar", "waterfall", "scorecard", "table"]
+const TABLE_TYPES = ["text", "number", "pct", "currency", "date", "time", "dt", "dur", "checkbox", "dropdown", "none"]
+const PIVOT_FNS = ["SUM", "COUNTA", "COUNT", "COUNTUNIQUE", "AVERAGE", "MAX", "MIN", "MEDIAN", "PRODUCT", "STDEV", "STDEVP", "VAR", "VARP"]
+const NAME_RE = /^[A-Za-z_][A-Za-z0-9_.]{0,99}$/
+
+function chartSpec(o: Obj): Obj | null {
+  if (!CHART_TYPES.includes(o.type as string)) return null
+  const at = anchor(o.at); if (!at) return null
+  const out: Obj = { id: idOf(o.id, "ch"), type: o.type, ranges: ranges(o.ranges, 10), at, w: Math.round(num(o.w, 80, 2400) ?? 600), h: Math.round(num(o.h, 60, 1600) ?? 371) }
+  for (const k of ["title", "subtitle", "xTitle", "yTitle"]) { const v = str(o[k], 200); if (v) out[k] = v }
+  for (const k of ["headers", "labels", "transpose", "dataLabels", "gridlines"]) if (typeof o[k] === "boolean") out[k] = o[k]
+  if (["sum", "avg", "count", "min", "max"].includes(o.aggregate as string)) out.aggregate = o.aggregate
+  if (["top", "bottom", "right", "left", "none"].includes(o.legend as string)) out.legend = o.legend
+  const colors = Array.isArray(o.colors) ? o.colors.map(hex).filter(Boolean).slice(0, 30) : []
+  if (colors.length) out.colors = colors
+  const bg = hex(o.bg); if (bg) out.bg = bg
+  for (const k of ["yMin", "yMax"]) { const v = num(o[k], -1e15, 1e15); if (v !== undefined) out[k] = v }
+  for (const k of ["key", "baseline"]) { const v = range(o[k]); if (v) out[k] = v }
+  return out
+}
+function pivotSpec(v: unknown): Obj | undefined {
+  const o = obj(v); const source = str(o?.source, 40); const r = str(o?.range, 300)
+  if (!o || !source || !r || !STORED_RANGE.test(r)) return undefined
+  const group = (x: Obj) => { const colId = str(x.colId, 100); return colId ? { colId, ...(x.order === "desc" ? { order: "desc" } : {}), ...(x.totals === false ? { totals: false } : {}) } : null }
+  return {
+    source, range: r,
+    rows: list(o.rows, 10, group), cols: list(o.cols, 10, group),
+    values: list(o.values, 20, (x) => { const colId = str(x.colId, 100); return colId && PIVOT_FNS.includes(x.fn as string) ? { colId, fn: x.fn, ...(["row", "col", "total"].includes(x.showAs as string) ? { showAs: x.showAs } : {}) } : null }),
+    filters: list(o.filters, 20, (x) => { const colId = str(x.colId, 100); return colId ? { colId, ...(strings(x.hidden, 2000, 500)?.length ? { hidden: strings(x.hidden, 2000, 500) } : {}) } : null }),
+  }
+}
+
 export type SheetSettings = {
   frozenRows?: number
   frozenCols?: number
-  tabColor?: ColumnColor
+  tabColor?: string
   hiddenRows?: string[]
   hiddenCols?: string[]
   merges?: SheetMerge[]
   validations?: SheetValidation[]
+  condFormats?: Obj[]
+  bandings?: Obj[]
+  filter?: Obj
+  filterViews?: Obj[]
+  slicers?: Obj[]
+  namedRanges?: { id: string; name: string; range: string }[]
+  protections?: Protection[]
+  rowGroups?: Obj[]
+  colGroups?: Obj[]
+  tables?: Obj[]
+  charts?: Obj[]
+  pivot?: Obj
+  theme?: Obj
+  locale?: "id-ID" | "en-US"
+  timeZone?: string
+  recalc?: "change" | "minute" | "hour"
+  iterative?: { on: boolean; max: number; threshold: number }
+  versions?: { id: string; name: string; at: string }[]
+  hidden?: true
+  noGrid?: true
 }
+export type Protection = { id: string; range?: string; sheet?: true; except?: string[]; desc?: string; mode: "warn" | "restrict"; editors?: string[]; by?: string }
 
 const MAX_FROZEN_ROWS = 20
 const MAX_FROZEN_COLS = 10
@@ -279,6 +434,7 @@ export function readSheetSettings(raw: unknown): SheetSettings {
   const fr = int(o.frozenRows, MAX_FROZEN_ROWS); if (fr) out.frozenRows = fr
   const fc = int(o.frozenCols, MAX_FROZEN_COLS); if (fc) out.frozenCols = fc
   if (COLUMN_COLORS.includes(o.tabColor as ColumnColor)) out.tabColor = o.tabColor as ColumnColor
+  else if (isHex(o.tabColor)) out.tabColor = (o.tabColor as string).toLowerCase()
   const ids = (v: unknown, max: number) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length < 100))].slice(0, max) : [])
   const hr = ids(o.hiddenRows, 2000); if (hr.length) out.hiddenRows = hr
   const hc = ids(o.hiddenCols, MAX_COLUMNS); if (hc.length) out.hiddenCols = hc
@@ -295,7 +451,171 @@ export function readSheetSettings(raw: unknown): SheetSettings {
   }
   const validations = readValidations(o.validations)
   if (validations.length) out.validations = validations
+
+  const condFormats = list(o.condFormats, 200, (x) => {
+    const rs = ranges(x.ranges); if (!rs.length) return null
+    if (x.type === "scale") {
+      const sc = obj(x.scale); const min = scalePoint(sc?.min), max = scalePoint(sc?.max)
+      if (!min || !max) return null
+      const mid = scalePoint(sc?.mid)
+      return { id: idOf(x.id, "cf"), ranges: rs, type: "scale", scale: { min, max, ...(mid ? { mid } : {}) } }
+    }
+    const cond = condKind(x.cond); if (!cond) return null
+    return {
+      id: idOf(x.id, "cf"), ranges: rs, type: "single", cond,
+      ...(strings(x.values, 2, 500) ? { values: strings(x.values, 2, 500) } : {}),
+      ...(str(x.formula, 2000) ? { formula: str(x.formula, 2000) } : {}),
+      ...(condStyle(x.style) ? { style: condStyle(x.style) } : {}),
+    }
+  })
+  if (condFormats.length) out.condFormats = condFormats
+  const bandings = list(o.bandings, 100, (x) => {
+    const r = range(x.range), c1 = hex(x.c1), c2 = hex(x.c2)
+    if (!r || !c1 || !c2) return null
+    return { id: idOf(x.id, "bd"), range: r, c1, c2, ...(hex(x.header) ? { header: hex(x.header) } : {}), ...(hex(x.footer) ? { footer: hex(x.footer) } : {}) }
+  })
+  if (bandings.length) out.bandings = bandings
+  const filter = obj(o.filter) ? sheetFilter(obj(o.filter)!) : null
+  if (filter) out.filter = filter
+  const views = list(o.filterViews, 50, (x) => { const f = sheetFilter(x); return f ? { ...f, id: idOf(x.id, "fv"), name: str(x.name, 100) ?? "Filter 1" } : null })
+  if (views.length) out.filterViews = views
+  const slicers = list(o.slicers, 50, (x) => {
+    const r = range(x.range), colId = str(x.colId, 100), at = anchor(x.at)
+    if (!r || !colId || !at) return null
+    return { id: idOf(x.id, "sl"), range: r, colId, at, ...(num(x.w, 80, 800) ? { w: Math.round(num(x.w, 80, 800)!) } : {}), ...(str(x.title, 100) ? { title: str(x.title, 100) } : {}), ...(filterCrit(x.crit) ? { crit: filterCrit(x.crit) } : {}), ...(hex(x.bg) ? { bg: hex(x.bg) } : {}) }
+  })
+  if (slicers.length) out.slicers = slicers
+  const seenNames = new Set<string>()
+  const named = list(o.namedRanges, 200, (x) => {
+    const name = str(x.name, 100), r = range(x.range)
+    if (!name || !r || !NAME_RE.test(name) || /^[A-Za-z]{1,3}\d+$/.test(name) || /^(TRUE|FALSE)$/i.test(name) || seenNames.has(name.toUpperCase())) return null
+    seenNames.add(name.toUpperCase())
+    return { id: idOf(x.id, "nr"), name, range: r }
+  })
+  if (named.length) out.namedRanges = named
+  const protections = list(o.protections, 100, (x): Protection | null => {
+    const r = range(x.range)
+    if (!r && x.sheet !== true) return null
+    return {
+      id: idOf(x.id, "pr"), mode: x.mode === "restrict" ? "restrict" : "warn",
+      ...(r ? { range: r } : { sheet: true as const }),
+      ...(ranges(x.except, 20).length ? { except: ranges(x.except, 20) } : {}),
+      ...(str(x.desc, 200) ? { desc: str(x.desc, 200) } : {}),
+      ...(Array.isArray(x.editors) ? { editors: x.editors.filter((e): e is string => typeof e === "string").map((e) => e.slice(0, 40)).slice(0, 200) } : {}),
+      ...(str(x.by, 40) ? { by: str(x.by, 40) } : {}),
+    }
+  })
+  if (protections.length) out.protections = protections
+  for (const key of ["rowGroups", "colGroups"] as const) {
+    const groups = list(o[key], 200, (x) => { const from = str(x.from, 100), to = str(x.to, 100); return from && to ? { id: idOf(x.id, "gr"), from, to, ...(x.collapsed === true ? { collapsed: true } : {}) } : null })
+    if (groups.length) out[key] = groups
+  }
+  const tableNames = new Set<string>()
+  const tables = list(o.tables, 50, (x) => {
+    const r = range(x.range), name = str(x.name, 100)
+    if (!r || !name || tableNames.has(name.toUpperCase())) return null
+    tableNames.add(name.toUpperCase())
+    const types: Obj = {}
+    for (const [k, v] of Object.entries(obj(x.types) ?? {}).slice(0, MAX_COLUMNS)) if (TABLE_TYPES.includes(v as string)) types[k.slice(0, 100)] = v
+    return { id: idOf(x.id, "tb"), name, range: r, ...(hex(x.header) ? { header: hex(x.header) } : {}), ...(x.banded === false ? { banded: false } : {}), ...(x.footer === true ? { footer: true } : {}), ...(Object.keys(types).length ? { types } : {}) }
+  })
+  if (tables.length) out.tables = tables
+  const charts = list(o.charts, 30, chartSpec)
+  if (charts.length) out.charts = charts
+  const pivot = pivotSpec(o.pivot); if (pivot) out.pivot = pivot
+  const th = obj(o.theme)
+  if (th && str(th.name, 60)) {
+    const accents = Array.isArray(th.accents) ? th.accents.map(hex).filter((x): x is string => Boolean(x)).slice(0, 6) : []
+    out.theme = { name: str(th.name, 60), accents, ...(typeof th.font === "string" && FONT_RE.test(th.font) ? { font: th.font } : {}), ...(hex(th.text) ? { text: hex(th.text) } : {}), ...(hex(th.link) ? { link: hex(th.link) } : {}) }
+  }
+  if (o.locale === "id-ID" || o.locale === "en-US") out.locale = o.locale
+  const tz = str(o.timeZone, 60); if (tz && /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(tz)) out.timeZone = tz
+  if (o.recalc === "change" || o.recalc === "minute" || o.recalc === "hour") out.recalc = o.recalc
+  const it = obj(o.iterative)
+  if (it) out.iterative = { on: it.on === true, max: Math.round(num(it.max, 1, 10000) ?? 50), threshold: num(it.threshold, 0, 1e6) ?? 0.05 }
+  const versions = list(o.versions, 200, (x) => { const name = str(x.name, 100), at = str(x.at, 40); return name && at && !Number.isNaN(Date.parse(at)) ? { id: idOf(x.id, "vr"), name, at } : null })
+  if (versions.length) out.versions = versions
+  if (o.hidden === true) out.hidden = true
+  if (o.noGrid === true) out.noGrid = true
   return out
+}
+
+// ── Protected ranges: server-side enforcement ───────────────────────────────────────────────────
+
+/** May this user edit through `p`? The creator, the listed editors and project leads always may. */
+async function mayEditProtected(userId: string, projectId: string, p: Protection): Promise<boolean> {
+  if (p.mode !== "restrict") return true
+  if (p.by === userId || p.editors?.includes(userId)) return true
+  const { allowed } = await checkProjectAccess(userId, projectId, ["LEAD"])
+  return allowed
+}
+
+type ProtSheet = { id: string; projectId: string; columns: SheetColumn[]; settings: SheetSettings }
+
+/** The restricting protections this user is NOT allowed through, or [] (no query when there are none). */
+async function lockedFor(userId: string, sheet: ProtSheet): Promise<Protection[]> {
+  const restrict = (sheet.settings.protections ?? []).filter((p) => p.mode === "restrict")
+  const out: Protection[] = []
+  for (const p of restrict) if (!(await mayEditProtected(userId, sheet.projectId, p))) out.push(p)
+  return out
+}
+
+const RANGE_PARTS = /^\{\$?([^!}]+)!\$?([^}]+)\}:\{\$?([^!}]+)!\$?([^}]+)\}$/
+function rectOfRange(stored: string, colIdx: Map<string, number>, rowIdx: Map<string, number>, rowCount: number) {
+  const m = RANGE_PARTS.exec(stored)
+  if (!m) return null
+  const c1 = colIdx.get(m[1]), c2 = colIdx.get(m[3])
+  if (c1 === undefined || c2 === undefined) return null
+  const r1 = m[2] === "*" ? 0 : rowIdx.get(m[2]), r2 = m[4] === "*" ? rowCount - 1 : rowIdx.get(m[4])
+  if (r1 === undefined || r2 === undefined) return null
+  return { top: Math.min(r1, r2), bottom: Math.max(r1, r2), left: Math.min(c1, c2), right: Math.max(c1, c2) }
+}
+
+/**
+ * Refuse a write that touches a protected range the user may not edit. Returns the error text, or
+ * null when the write is allowed. Rows are resolved by their CURRENT order (one id-only query, and
+ * only when the sheet has a restricting protection this user isn't exempt from).
+ */
+export async function protectedCellsBlock(userId: string, sheet: ProtSheet, cells: { rowId: string; colId: string }[]): Promise<string | null> {
+  if (!cells.length) return null
+  const locked = await lockedFor(userId, sheet)
+  if (!locked.length) return null
+  const order = await prisma.sheetRow.findMany({ where: { sheetId: sheet.id }, orderBy: { position: "asc" }, select: { id: true } })
+  const rowIdx = new Map(order.map((r, i) => [r.id, i]))
+  const colIdx = new Map(sheet.columns.map((c, i) => [c.id, i]))
+  const inside = (stored: string, r: number, c: number) => {
+    const rc = rectOfRange(stored, colIdx, rowIdx, order.length)
+    return Boolean(rc && r >= rc.top && r <= rc.bottom && c >= rc.left && c <= rc.right)
+  }
+  for (const { rowId, colId } of cells) {
+    const r = rowIdx.get(rowId), c = colIdx.get(colId)
+    if (r === undefined || c === undefined) continue
+    for (const p of locked) {
+      const hit = p.sheet ? !(p.except ?? []).some((x) => inside(x, r, c)) : p.range ? inside(p.range, r, c) : false
+      if (hit) return `Bagian ini dilindungi${p.desc ? ` (${p.desc})` : ""}. Minta pemiliknya kalau perlu mengubah.`
+    }
+  }
+  return null
+}
+
+/** Deleting or reordering rows is refused when any of them holds a protected cell. */
+export async function protectedRowsBlock(userId: string, sheet: ProtSheet, rowIds: string[]): Promise<string | null> {
+  if (!rowIds.length || !(sheet.settings.protections ?? []).some((p) => p.mode === "restrict")) return null
+  return protectedCellsBlock(userId, sheet, rowIds.flatMap((rowId) => sheet.columns.map((c) => ({ rowId, colId: c.id }))))
+}
+
+/**
+ * A settings PATCH may not remove or loosen a restricting protection unless the user may edit
+ * through it (creator, listed editor, lead) — otherwise "protect" would be one request away from off.
+ */
+export async function protectionChangeBlock(userId: string, sheet: ProtSheet, next: SheetSettings): Promise<string | null> {
+  const before = (sheet.settings.protections ?? []).filter((p) => p.mode === "restrict")
+  for (const p of before) {
+    const after = (next.protections ?? []).find((x) => x.id === p.id)
+    const same = after && JSON.stringify(after) === JSON.stringify(p)
+    if (!same && !(await mayEditProtected(userId, sheet.projectId, p))) return "Cuma pembuat proteksi, editor yang dipilih, atau lead yang boleh mengubah proteksi ini."
+  }
+  return null
 }
 
 let revisionTriggerChecked = false

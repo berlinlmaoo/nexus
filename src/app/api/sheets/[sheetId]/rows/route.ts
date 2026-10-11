@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
   MAX_ROWS_PER_WRITE, ROW_HEIGHT_MAX, ROW_HEIGHT_MIN,
-  coerceCellValue, normalizeCellStyle, readCells, readStyles, resolveSheetAccess,
+  coerceCellValue, normalizeCellStyle, protectedRowsBlock, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
@@ -177,7 +177,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
     if (!access.allowed) return NextResponse.json({ error: access.error }, { status: access.status })
 
     const body = (await req.json().catch(() => ({}))) as {
-      rowId?: unknown; afterRowId?: unknown; heights?: unknown
+      rowId?: unknown; afterRowId?: unknown; heights?: unknown; order?: unknown
+    }
+
+    // Bulk reorder (Data › Sort sheet, sort/randomise by rows, undo of either): { order: rowId[] }.
+    // The listed rows trade places among the positions they already hold, so rows NOT listed (a
+    // frozen header, rows outside the sorted block) stay exactly where they are.
+    if (Array.isArray(body.order)) {
+      const order = [...new Set(body.order.filter((x): x is string => typeof x === "string"))]
+      if (!order.length) return NextResponse.json({ error: "order kosong." }, { status: 400 })
+      if (order.length > 20000) return NextResponse.json({ error: "Kebanyakan baris." }, { status: 422 })
+      const found = await prisma.sheetRow.findMany({ where: { id: { in: order }, sheetId }, select: { id: true, position: true } })
+      if (found.length !== order.length) return NextResponse.json({ error: "Ada baris yang nggak ketemu." }, { status: 404 })
+      const slots = found.map((r) => r.position).sort((a, b) => a - b)
+      const blocked = await protectedRowsBlock(session.user.id, access.sheet, order)
+      if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
+      await prisma.$executeRaw`
+        UPDATE "SheetRow" r SET "position" = v.pos
+        FROM (SELECT unnest(${order}::text[]) AS id, unnest(${slots}::float8[]) AS pos) v
+        WHERE r."id" = v.id AND r."sheetId" = ${sheetId}
+      `
+      emitSheetStructure(sheetId, session.user.id)
+      return NextResponse.json({ ok: true, reordered: order.length })
     }
 
     // Resize branch. Batched so selecting several rows and dragging once is a single write, and so a
@@ -260,6 +281,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     // Scoped by sheetId so a row id from another sheet deletes nothing.
     const ids = (await prisma.sheetRow.findMany({ where: { id: { in: rowIds }, sheetId }, select: { id: true } })).map((r) => r.id)
     if (!ids.length) return NextResponse.json({ deleted: 0 })
+    const blocked = await protectedRowsBlock(session.user.id, access.sheet, ids)
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
     // In the audit, and kept (with their comments and cell history) first, so Control Room → Audit
     // can put the rows back where they were — all of them or none.
     let count = 0
