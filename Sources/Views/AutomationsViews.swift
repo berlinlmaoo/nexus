@@ -285,40 +285,58 @@ struct AutomationSheet: View {
                         if automation == nil { dismiss() } else { editing = false }
                     }
                 } else if let a = automation {
-                    VStack(spacing: 0) {
-                        Picker("", selection: $pane) {
-                            Text(T("Rule")).tag(AutomationSheetRoute.Pane.rule)
-                            Text(T("Run log") + ((a.runCount ?? 0) > 0 ? " · \(a.runCount ?? 0)" : "")).tag(AutomationSheetRoute.Pane.runs)
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
-                        if pane == .rule {
-                            AutomationReadView(automation: a, ctx: ctx, canEdit: canEdit)
-                        } else {
-                            AutomationRunLog(automationId: a.id, projectId: projectId).id(runLogVersion)
-                        }
-                        if canEdit { runBar(a) }
-                    }
-                    .background(NX.background)
+                    detailPane(a)
                 }
             }
             .navigationTitle(automation?.name ?? T("New automation"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(editing ? T("Cancel") : (automation == nil ? T("Cancel") : T("Close"))) {
-                        if editing { editing = false } else { dismiss() }
-                    }
-                }
-                if canEdit, automation != nil, !editing {
-                    ToolbarItem(placement: .topBarTrailing) { Button(T("Edit")) { editing = true } }
-                }
-            }
+            .toolbar { sheetToolbar }
         }
         .onAppear { if case .detail(_, let p) = route { pane = p } }
         .alert(T("Run now"), isPresented: Binding(get: { runMessage != nil }, set: { if !$0 { runMessage = nil } })) {
             Button("OK") { runMessage = nil }
         } message: { Text(runMessage ?? "") }
+    }
+
+    // Split out of `body` so the type checker gets small expressions (Xcode gave up on the whole body).
+    private func detailPane(_ a: Automation) -> some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $pane) {
+                Text(T("Rule")).tag(AutomationSheetRoute.Pane.rule)
+                Text(runLogTitle(a)).tag(AutomationSheetRoute.Pane.runs)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            if pane == .rule {
+                AutomationReadView(automation: a, ctx: ctx, canEdit: canEdit)
+            } else {
+                AutomationRunLog(automationId: a.id, projectId: projectId).id(runLogVersion)
+            }
+            if canEdit { runBar(a) }
+        }
+        .background(NX.background)
+    }
+
+    private func runLogTitle(_ a: Automation) -> String {
+        let count: Int = a.runCount ?? 0
+        return count > 0 ? T("Run log") + " · \(count)" : T("Run log")
+    }
+
+    private var closeTitle: String {
+        if editing || automation == nil { return T("Cancel") }
+        return T("Close")
+    }
+
+    @ToolbarContentBuilder
+    private var sheetToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(closeTitle) {
+                if editing { editing = false } else { dismiss() }
+            }
+        }
+        if canEdit, automation != nil, !editing {
+            ToolbarItem(placement: .topBarTrailing) { Button(T("Edit")) { editing = true } }
+        }
     }
 
     /// "Run now", once, optionally on one task (project leads; the run lands in the log as "manual").
