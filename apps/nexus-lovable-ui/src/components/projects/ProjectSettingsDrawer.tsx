@@ -16,7 +16,6 @@ import { Avatar, AvatarFace } from "@/components/Avatar";
 export const TUNE_MORPH_ID = "project-tune-card";
 
 const STATUSES = ["ACTIVE", "ARCHIVED", "COMPLETED"];
-const COLORS = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#64748b"];
 
 /** A member's photo (looked up in the workspace directory when the payload carries none), initials as fallback. */
 function MiniAvatar({ user, size = 26 }: { user?: NexusUser | null; size?: number }) {
@@ -120,7 +119,6 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   // Every project shows the same default mark unless it has an uploaded photo (owner, 11 Oct 2026), so
   // the only icon choice left is "photo or not". Removing the photo stores the column's default "folder".
   const [icon, setIcon] = useState(project.icon ?? "folder");
-  const [color, setColor] = useState(project.color ?? COLORS[0]);
   const [status, setStatus] = useState(project.status ?? "ACTIVE");
   const [inviteEmail, setInviteEmail] = useState("");
   const [showPicker, setShowPicker] = useState(false);
@@ -150,7 +148,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
 
   const save = useMutation({
-    mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, color, status }),
+    mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, status }),
     onSuccess: () => { invalidate(); qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); },
   });
   const removeMember = useMutation({
@@ -252,7 +250,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             <div className="flex items-center gap-3">
               <div className="relative shrink-0">
                 <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-2xl border border-border bg-muted text-3xl">
-                  <ProjectMark icon={icon} color={color} className="h-full w-full object-cover" />
+                  <ProjectMark icon={icon} className="h-full w-full object-cover" />
                 </span>
                 {uploadIcon.isPending && <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/60"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
               </div>
@@ -266,12 +264,6 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             </div>
             {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{(uploadIcon.error as Error)?.message ?? "Icon upload failed."}</p>}
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description…" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Color</span>
-              {COLORS.map((c) => (
-                <button key={c} onClick={() => setColor(c)} className={cn("h-6 w-6 rounded-full ring-2 transition", color === c ? "ring-foreground" : "ring-transparent")} style={{ background: c }} />
-              ))}
-            </div>
             <label className="block space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</span>
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">

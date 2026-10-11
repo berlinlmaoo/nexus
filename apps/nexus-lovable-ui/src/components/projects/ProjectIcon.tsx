@@ -1,6 +1,7 @@
 // Resolves a NEXUS project `icon` value to something renderable.
 // Backend stores either an uploaded path ("/..."), an inline emoji, or a
 // named icon ("folder", "rocket", ...). We map names → emoji.
+import { CheckSquare } from "lucide-react";
 
 const EMOJI_MAP: Record<string, string> = {
   folder: "📁", rocket: "🚀", star: "⭐", zap: "⚡", target: "🎯",
@@ -33,14 +34,14 @@ export function ProjectIcon({ icon, className }: { icon?: string | null; classNa
 }
 
 /**
- * A PROJECT's mark (owner, 11 Oct 2026): one default for every project — a small rounded square in the
- * project's colour — unless the project has an uploaded photo. Emoji and named icons stored by older
- * screens are ignored on purpose. Sized in em, so it follows the font size of the slot it sits in.
+ * A PROJECT's mark (owner, 11 Oct 2026): one default for every project — the task icon (the same
+ * CheckSquare as My Mission) — unless the project has an uploaded photo. Emoji, named icons and the
+ * project colour are ignored on purpose. Sized in em, so it follows the font size of the slot it sits in.
  * Folders keep their own emoji/photo through ProjectIcon above.
  */
-export function ProjectMark({ icon, color, className }: { icon?: string | null; color?: string | null; className?: string }) {
+export function ProjectMark({ icon, className }: { icon?: string | null; color?: string | null; className?: string }) {
   if (isProjectPhoto(icon)) {
     return <img src={icon} alt="" className={className ?? "h-full w-full rounded-md object-cover"} />;
   }
-  return <span aria-hidden className="inline-block shrink-0" style={{ width: "0.6em", height: "0.6em", borderRadius: "0.17em", background: color || "#7B2FBE" }} />;
+  return <CheckSquare aria-hidden className="h-[1em] max-h-full w-[1em] max-w-full shrink-0 text-muted-foreground" strokeWidth={2} />;
 }

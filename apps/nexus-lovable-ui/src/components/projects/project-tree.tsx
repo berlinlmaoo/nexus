@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   ArrowUpRight, Check, Folder, FolderInput, FolderOpen, FolderOutput, FolderPlus, ImagePlus, Pencil,
   Pin, PinOff, Plus, Settings2, Trash2, type LucideIcon,
+  CheckSquare,
 } from "lucide-react";
 import {
   ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -51,8 +52,8 @@ export function FolderGlyph({ folder, open, size = 16, className }: { folder: Pi
 }
 
 /**
- * A project's mark: its photo, else the one default every project shares — a small square in the
- * project's colour (owner, 11 Oct 2026: no per-project emoji any more).
+ * A project's mark: its photo, else the one default every project shares — the task icon
+ * (owner, 11 Oct 2026: no per-project emoji or colour any more).
  */
 export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color">; size?: number; className?: string }) {
   if (isUploadedIcon(project.icon)) {
@@ -63,9 +64,7 @@ export function ProjectGlyph({ project, size = 16, className }: { project: Pick<
     );
   }
   return (
-    <span className={cn("grid shrink-0 place-items-center", className)} style={{ width: size, height: size }} aria-hidden>
-      <span className="rounded-[3px]" style={{ width: Math.round(size * 0.55), height: Math.round(size * 0.55), background: project.color || "#7b68ee" }} />
-    </span>
+    <CheckSquare aria-hidden className={cn("shrink-0 text-muted-foreground", className)} style={{ width: size, height: size }} strokeWidth={2} />
   );
 }
 

@@ -106,7 +106,6 @@ function ProjectsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
-  const [newProjectColor, setNewProjectColor] = useState("#a168be");
   const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
   // New project, step one (owner, 9 Oct 2026): what the project is for. null = the picker is showing.
   const [newProjectType, setNewProjectType] = useState<ProjectTypeId | null>(null);
@@ -213,7 +212,6 @@ function ProjectsPage() {
       nexusApi.createProject({
         name: newProjectName.trim(),
         description: newProjectDescription.trim() || null,
-        color: newProjectColor,
         workspaceId: newProjectWorkspaceId || workspaceOptions[0]?.id || "",
         type: newProjectType ?? "TASK",
         ...(newProjectFolderId ? { folderId: newProjectFolderId } : {}),
@@ -486,9 +484,8 @@ function ProjectsPage() {
 
               {/* Workspace picker only matters when you belong to >1 workspace. With a single workspace
                   (the normal case) it's auto-selected and hidden — a project always lives in your one space. */}
-              <div className={cn("grid gap-3", workspaceOptions.length > 1 ? "md:grid-cols-[1fr_160px]" : "md:grid-cols-[160px]")}>
-                {workspaceOptions.length > 1 && (
-                  <label className="text-xs font-semibold text-muted-foreground">
+              {workspaceOptions.length > 1 && (
+                  <label className="block text-xs font-semibold text-muted-foreground">
                     Workspace
                     <select
                       value={newProjectWorkspaceId}
@@ -504,16 +501,6 @@ function ProjectsPage() {
                     </select>
                   </label>
                 )}
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Color
-                  <input
-                    value={newProjectColor}
-                    onChange={(e) => setNewProjectColor(e.target.value)}
-                    type="color"
-                    className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-2 py-1"
-                  />
-                </label>
-              </div>
 
               {!workspaceOptions.length && (
                 <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
