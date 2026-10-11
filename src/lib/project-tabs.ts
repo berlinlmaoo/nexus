@@ -48,6 +48,20 @@ export const PROJECT_TAB_KEYS = [
 ] as const
 export type ProjectTabKey = (typeof PROJECT_TAB_KEYS)[number]
 
+/**
+ * "sprints" (owner, 11 Oct 2026): the Sprints tab was removed from the web — prod only ever had one
+ * sprint, never started. The key stays in PROJECT_TAB_KEYS on purpose: released iOS/Android builds still
+ * send it inside hiddenTabs, and dropping it would answer them 400 UNKNOWN_TAB. /api/sprints keeps working.
+ */
+export const RETIRED_TAB_KEYS: readonly ProjectTabKey[] = ["sprints"]
+
+/**
+ * The tabs a NEW Task Project starts without when the client does not send hiddenTabs (owner, 11 Oct
+ * 2026: automations off by default). A client that sends hiddenTabs (even []) gets exactly what it sent.
+ * Existing projects are not touched.
+ */
+export const DEFAULT_HIDDEN_TABS_NEW_TASK_PROJECT: readonly ProjectTabKey[] = ["automations"]
+
 /** A project must keep at least one of these visible: it is still a task project. */
 export const TASK_VIEW_TAB_KEYS: readonly ProjectTabKey[] = ["board", "list"]
 

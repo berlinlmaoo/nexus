@@ -8,7 +8,7 @@ import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
-import { checkCreatableProjectType, normalizeHiddenTabs } from "@/lib/project-tabs"
+import { checkCreatableProjectType, DEFAULT_HIDDEN_TABS_NEW_TASK_PROJECT, normalizeHiddenTabs } from "@/lib/project-tabs"
 import { notifyProjectInvite } from "@/lib/notification-service"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 
@@ -297,13 +297,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Set up in the create dialog (owner, 11 Oct 2026). Both optional: a client that sends neither gets
-    // exactly what it always got (every tab shown, the creator as the only member).
+    // Set up in the create dialog (owner, 11 Oct 2026). Both optional.
     //  - hiddenTabs: the tabs a TASK project starts without, same keys and rule as PATCH (Board or List
-    //    stays). Ignored for the other types, whose views are fixed.
+    //    stays). Ignored for the other types, whose views are fixed. Not sent → the project starts with
+    //    Automations hidden (owner, 11 Oct 2026: off by default for new projects); sent → stored as sent.
     //  - memberIds: people of THIS workspace to add as MEMBER next to the creator (LEAD). The creator
     //    and duplicates are dropped; anyone outside the workspace refuses the whole request.
-    let initialHiddenTabs: string[] = []
+    let initialHiddenTabs: string[] = typeCheck.type === "TASK" ? [...DEFAULT_HIDDEN_TABS_NEW_TASK_PROJECT] : []
     if (body.hiddenTabs !== undefined && body.hiddenTabs !== null && typeCheck.type === "TASK") {
       const tabs = normalizeHiddenTabs(body.hiddenTabs)
       if (!tabs.ok) {
