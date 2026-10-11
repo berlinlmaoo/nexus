@@ -111,6 +111,8 @@ struct LoginView: View {
                     .font(NXFont.display(22, .bold))
                     .tracking(4)
                     .foregroundStyle(NX.onyx)
+                    // Dev builds: a long press picks Production or the DEV server (ServerSwitchViews.swift).
+                    .modifier(LoginServerSwitch())
                     .padding(.bottom, 30)
 
                 // Access ID

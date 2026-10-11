@@ -93,6 +93,8 @@ final class LANRoute {
     /// The host to build the next request against. Never blocks and never touches the network on the
     /// calling thread.
     func currentBase() -> URL {
+        // The office shortcut is production's other name; the DEV server (branch dev) has none.
+        if ServerEnvironment.isDev { return Config.baseURL }
         lock.lock()
         let current = choice
         lock.unlock()

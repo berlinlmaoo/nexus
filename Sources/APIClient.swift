@@ -3251,3 +3251,117 @@ extension Notification.Name {
     /// instead of on the next month switch (owner, 30 Sep 2026).
     static let nexusAttendanceChanged = Notification.Name("nexusAttendanceChanged")
 }
+
+// MARK: - Branch dev (12 Oct 2026): templates, section status, saved views, automations
+//
+// Server features that exist only on the DEV server so far (ServerEnvironment). In this file because
+// `run` and `enc` are private to it.
+
+/// GET /api/projects/:id/views — only what the app reads: the Calendar's date field and the template's
+/// "My …" preset (builtin "mine").
+struct ProjectViewLite: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String?
+    let layout: String?
+    let builtin: String?
+    let config: Config?
+    struct Config: Decodable, Sendable { let dateProp: String? }
+}
+struct ProjectViewsResponse: Decodable, Sendable { let views: [ProjectViewLite]? }
+
+extension APIClient {
+    func projectTemplates() async throws -> [ProjectTemplate] {
+        (try await run(makeRequest("/api/project-templates"), decode: ProjectTemplatesResponse.self)).templates ?? []
+    }
+
+    /// POST /api/projects for the New project gallery: blank (no templateId) or a template, built in the
+    /// app's language. Returns the new project's id so it can open straight away, as on the web.
+    func createProjectFromGallery(workspaceId: String, name: String, description: String?, folderId: String?,
+                                  hiddenTabs: [String], memberIds: [String],
+                                  templateId: String?, starter: Bool) async throws -> String {
+        var req = makeRequest("/api/projects", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "type": "TASK", "hiddenTabs": hiddenTabs]
+        if let description, !description.isEmpty { body["description"] = description }
+        if let folderId { body["folderId"] = folderId }
+        if !memberIds.isEmpty { body["memberIds"] = memberIds }
+        if let templateId {
+            body["templateId"] = templateId
+            body["lang"] = AppLanguage.shared.lang == .id ? "id" : "en"
+            body["starter"] = starter
+        }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return (try await run(req, decode: CreatedTaskRef.self)).id
+    }
+
+    /// The task status a section stands for (PATCH /api/projects/:id/sections { id, taskStatus }); nil
+    /// makes it a plain section again. Tasks moved in from now on take the status.
+    func setSectionTaskStatus(projectId: String, sectionId: String, taskStatus: String?) async throws {
+        var req = makeRequest("/api/projects/\(projectId)/sections", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": sectionId, "taskStatus": taskStatus.map { $0 as Any } ?? NSNull()])
+        struct Ok: Decodable {}
+        _ = try await run(req, decode: Ok.self)
+    }
+
+    func projectViews(_ projectId: String) async throws -> [ProjectViewLite] {
+        (try await run(makeRequest("/api/projects/\(projectId)/views"), decode: ProjectViewsResponse.self)).views ?? []
+    }
+
+    func automationRuns(automationId: String, before: String? = nil) async throws -> AutomationRunsResponse {
+        var path = "/api/automations/runs?automationId=\(encValue(automationId))&limit=50"
+        if let before { path += "&before=\(encValue(before))" }
+        return try await run(makeRequest(path), decode: AutomationRunsResponse.self)
+    }
+
+    /// "Run now" (project leads): once, by hand, optionally on one task.
+    func runAutomation(id: String, taskId: String?) async throws -> AutomationRunNowResponse {
+        var req = makeRequest("/api/automations/run", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["id": id]
+        if let taskId, !taskId.isEmpty { body["taskId"] = taskId }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await run(req, decode: AutomationRunNowResponse.self)
+    }
+
+    /// Create (id nil) or update a rule. `body` carries name, trigger, actions, conditions.
+    @discardableResult
+    func saveAutomation(id: String?, projectId: String, body: [String: Any]) async throws -> Automation? {
+        var req = makeRequest("/api/automations", method: id == nil ? "POST" : "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var b = body
+        if let id { b["id"] = id } else { b["projectId"] = projectId; b["enabled"] = true }
+        req.httpBody = try JSONSerialization.data(withJSONObject: b)
+        return try await run(req, decode: AutomationSaveResponse.self).automation
+    }
+
+    /// A new private webhook URL for a WEBHOOK_RECEIVED rule; the old one stops working.
+    func regenerateAutomationWebhook(id: String) async throws {
+        var req = makeRequest("/api/automations", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "regenerateWebhookToken": true])
+        _ = try await run(req, decode: AutomationSaveResponse.self)
+    }
+
+    /// Restorable from Control Room → Audit.
+    func deleteAutomation(id: String) async throws {
+        let req = makeRequest("/api/automations?id=\(encValue(id))", method: "DELETE")
+        _ = try await run(req, decode: SuccessResponse.self)
+    }
+}
+
+/// GET /api/notifications/preferences — only the key the app sets (automation, DEV server 12 Oct 2026).
+struct NotificationPrefsLite: Decodable, Sendable { let automation: Bool? }
+
+extension APIClient {
+    func notificationPrefs() async throws -> NotificationPrefsLite {
+        try await run(makeRequest("/api/notifications/preferences"), decode: NotificationPrefsLite.self)
+    }
+    /// PATCH writes only the keys sent, so the web's other notification settings stay as they are.
+    func setAutomationNotifications(_ on: Bool) async throws {
+        var req = makeRequest("/api/notifications/preferences", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["automation": on])
+        _ = try await run(req, decode: NotificationPrefsLite.self)
+    }
+}

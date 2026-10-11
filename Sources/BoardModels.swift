@@ -23,11 +23,14 @@ struct ProjectDetail: Decodable, Sendable {
     let type: String?
     /// Tab keys this project hides (ProjectTab.key). A key this build does not know is ignored.
     let hiddenTabs: [String]?
+    /// The template it was built from (project templates, 12 Oct 2026; DEV server): its tab is where the
+    /// project opens, and its "My …" preset is offered. nil for every other project.
+    let templateId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, icon, description, workspaceId, taskLists, members
         case autoAssignEnabled, autoAssignAssigneeIds
-        case type, hiddenTabs
+        case type, hiddenTabs, templateId
     }
 
     /// Written out only so type and hiddenTabs can be read leniently. Every other field decodes
@@ -46,12 +49,16 @@ struct ProjectDetail: Decodable, Sendable {
         autoAssignAssigneeIds = try c.decodeIfPresent([String].self, forKey: .autoAssignAssigneeIds)
         type = try? c.decodeIfPresent(String.self, forKey: .type)
         hiddenTabs = try? c.decodeIfPresent([String].self, forKey: .hiddenTabs)
+        templateId = try? c.decodeIfPresent(String.self, forKey: .templateId)
     }
 
     struct Lane: Decodable, Identifiable, Sendable {
         let id: String
         let name: String
         let tasks: [BoardTask]?
+        /// The task status this section stands for (project templates, 12 Oct 2026; DEV server): a task
+        /// moved in takes it. nil = a plain section, and every section from an older server.
+        var taskStatus: String? = nil
     }
     struct ProjectMember: Decodable, Identifiable, Sendable {
         let userId: String?
@@ -170,7 +177,8 @@ struct TaskDetail: Decodable, Sendable {
         let details: String?
         let createdAt: String?
         let user: UserRef?
-        struct UserRef: Decodable, Sendable { let name: String? }
+        /// `avatar` tells the system user "Automation" apart (SystemUsers).
+        struct UserRef: Decodable, Sendable { let name: String?; let avatar: String? }
     }
 
     struct TaskListInfo: Decodable, Sendable {

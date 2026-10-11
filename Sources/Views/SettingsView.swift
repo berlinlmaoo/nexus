@@ -132,6 +132,8 @@ struct SettingsView: View {
 
                     AppearanceCard()
                     LanguageCard()
+                    // DEV server: automation pushes on/off (NotificationPreference.automation).
+                    AutomationNotificationsCard()
                     OfflineCard()
                     if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
                     SecurityCard()
@@ -169,6 +171,9 @@ struct SettingsView: View {
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.danger.opacity(0.3)))
                     .padding(.top, 10)
+
+                    // Branch dev only: Production or the DEV server (ServerSwitchViews.swift).
+                    ServerSwitchCard()
 
                     // Whether this device is live, so a Mac that shows nothing new can be told apart
                     // from a Mac that is not connected.

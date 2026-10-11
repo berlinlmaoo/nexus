@@ -81,6 +81,9 @@ targets:
         # It also dropped CFBundleDisplayName and the camera/location/photo usage strings, which
         # would have crashed attendance the first time it asked for the camera.
         INFOPLIST_FILE: Sources/Info.plist
+        # BRANCH dev ONLY — never merge this line to main. Turns on the Production / Dev server switch
+        # (Sources/Config.swift ServerEnvironment, Tuning Room → Server, long press on the login title).
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_DEV_SERVER"
         PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
         PRODUCT_NAME: NEXUS
         # Associated Domains (passkeys) live in BOTH entitlement files: this one for iOS/iPadOS,

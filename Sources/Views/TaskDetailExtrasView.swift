@@ -44,7 +44,8 @@ struct TaskCustomFieldsCard: View {
                 // Who made the task, as on the web, tagged "Left" once they were offboarded.
                 if let who = f.createdMeta?.userName, !who.isEmpty {
                     HStack(spacing: 6) {
-                        Text(who).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        // The system user signs automation-made tasks with its English name.
+                        Text(who == "Automation" ? T("Automation") : who).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         if creatorLeft { LeftTag() }
                     }
                 }
@@ -564,7 +565,7 @@ struct TaskActivityCard: View {
                 taskCardHeader("Activity", "waveform.path.ecg")
                 ForEach(logs.prefix(12)) { a in
                     HStack(alignment: .top, spacing: 8) {
-                        Text(a.user?.name ?? "Someone").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
+                        Text(SystemUsers.name(a.user?.name, avatar: a.user?.avatar, fallback: "Someone")).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
                         Text(humanizeEnum(a.action ?? "") + (a.details.map { " — \($0)" } ?? "")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                         Spacer(minLength: 6)
                         Text(ProjDate.parse(a.createdAt).map { ProjDate.dayLabel($0) } ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.8))

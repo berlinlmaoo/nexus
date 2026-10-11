@@ -160,6 +160,7 @@ final class RealtimeClient {
         center.post(name: .nexusInboxChanged, object: nil)
         center.post(name: .nexusPipelineChanged, object: nil)
         center.post(name: .nexusOutletSalesChanged, object: nil)
+        center.post(name: .nexusAutomationsChanged, object: nil)
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
     }
@@ -218,6 +219,13 @@ final class RealtimeClient {
             var info: [String: String] = [:]
             if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
             center.post(name: .nexusOutletSalesChanged, object: nil, userInfo: info)
+        case "automations-changed":
+            // A rule edited, toggled, deleted or run anywhere (12 Oct 2026): the open Automations tab and
+            // run log refetch.
+            var info: [String: String] = [:]
+            if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
+            if let automationId = payload?["automationId"]?.string { info[RealtimeKey.automationId] = automationId }
+            center.post(name: .nexusAutomationsChanged, object: nil, userInfo: info)
         default:
             // presence-*, sheet-*, cursor-move, content-change, the web's own task-update relay:
             // nothing on iOS draws them.

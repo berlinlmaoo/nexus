@@ -959,36 +959,42 @@ struct FolderIconTile: View {
     }
 }
 
-/// Create a new project (web "Create a new project"): the type first, then name, icon and colour.
+/// Create a new project (web "Create a new project", 12 Oct 2026): the template gallery first (Blank,
+/// the server's templates, the Outlet Sales and Pipeline dashboards), then name, brief, tabs, starter
+/// pages and members. Every project but a dashboard opens straight away, as on the web.
 struct CreateProjectSheet: View {
     let workspaceId: String
-    /// Opens the project just made: an Outlet Sales or Pipeline Dashboard opens straight away.
+    /// Opens the project just made.
     var onOpenProject: (ProjectRef) -> Void = { _ in }
     /// Made inside this folder (folder → New project here). The one Pipeline board is never filed.
     var folder: ProjectFolder? = nil
     let onCreated: () async -> Void
-    @State private var viewer = Viewer.shared
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
-    /// Step one (owner, 9 Oct 2026): what the project is for. nil = the type cards are showing.
-    @State private var kind: ProjectKind?
+    /// Step one: what the gallery card picked. nil = the gallery is showing.
+    @State private var pick: GalleryPick?
     @State private var name = ""
-    /// Tabs the new Task Project starts without (owner, 11 Oct 2026). Automations starts off (owner,
-    /// 11 Oct 2026); empty = every tab on.
+    @State private var brief = ""
+    /// Tabs the new Task Project starts without. Blank: Automations off (owner, 11 Oct 2026); a template
+    /// pre-ticks its own tabs (its hiddenTabs). Empty = every tab on.
     @State private var hiddenTabs: Set<String> = [ProjectTab.automations.key ?? "automations"]
+    /// "Add starter pages" (a template's starter docs and tasks); on by default, as on the web.
+    @State private var starter = true
     /// People added to the new project from the start, any type (owner, 11 Oct 2026).
     @State private var memberIds: Set<String> = []
     @State private var busy = false
     @State private var err: String?
 
+    private var kind: ProjectKind? { pick?.kind }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
-                if let kind {
+                if let pick, let kind {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        chosenKind(kind)
+                        GalleryChosenHeader(pick: pick) { self.pick = nil; err = nil }
                         if let folder, kind != .pipeline { FolderPlacementNote(folder: folder) }
                         field(T("PROJECT NAME")) {
                             TextField("mis. Z Networks Multimedia", text: $name)
@@ -996,11 +1002,28 @@ struct CreateProjectSheet: View {
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
-                        // No icon and no colour field (owner, 11 Oct 2026): every project is drawn with
-                        // the Tasks icon (ProjectMark), the server picks the default colour, and a photo
-                        // can be added later in Project settings.
                         if kind == .task {
+                            field(T("Brief")) {
+                                TextField(T("What's the project, who owns it, and what should move first?"), text: $brief, axis: .vertical)
+                                    .lineLimit(3...6)
+                                    .font(NXFont.text(15)).padding(12)
+                                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                            }
                             field(T("Tabs")) { NewProjectTabsPicker(hiddenTabs: $hiddenTabs) }
+                        }
+                        if let tp = pick.template, tp.hasStarter {
+                            Toggle(isOn: $starter) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(T("Add starter pages")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                                    Text(tp.starterDocs.map { "\($0.icon ?? "📄") \($0.title.text)" }.joined(separator: ", "))
+                                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                }
+                            }
+                            .tint(NX.violet)
+                            .padding(12)
+                            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
                         field(T("Members")) {
                             NewProjectMembersPicker(picked: $memberIds, selfUserId: auth.session?.userId)
@@ -1017,9 +1040,11 @@ struct CreateProjectSheet: View {
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                     .padding(20)
+                    .frame(maxWidth: 720)
+                    .frame(maxWidth: .infinity)
                 }
                 } else {
-                    kindPicker
+                    TemplateGallery { choose($0) }
                 }
             }
             .navigationTitle(T("New project"))
@@ -1035,62 +1060,15 @@ struct CreateProjectSheet: View {
         }
     }
 
-    /// Four cards. Task Project, Outlet Sales Dashboard and Pipeline Dashboard can be picked; Content
-    /// Planner says "Coming soon" and does nothing (owner, 9 Oct 2026; Outlet Sales took Finance
-    /// Dashboard's card on 10 Oct 2026).
-    private var kindPicker: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(T("What is this project for?")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                // Pipeline Dashboard is offered to the company's own people only (the server refuses it
-                // elsewhere). Since 11 Oct 2026 there is no one-company board: every pick makes a new one.
-                ForEach(ProjectKind.allCases.filter { $0 != .pipeline || viewer.isCompanyMember }) { k in
-                    Button { kind = k } label: { kindCard(k) }
-                        .buttonStyle(.plain)
-                        .disabled(!k.available)
-                }
-            }
-            .padding(20)
+    private func choose(_ p: GalleryPick) {
+        pick = p
+        err = nil
+        starter = true
+        if let tp = p.template {
+            hiddenTabs = Set(tp.hiddenTabs)
+        } else {
+            hiddenTabs = [ProjectTab.automations.key ?? "automations"]
         }
-        .task { await viewer.loadIfNeeded() }
-    }
-
-    private func kindCard(_ k: ProjectKind) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: k.symbol).font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(k.available ? NX.violetText : NX.mutedFg)
-                .frame(width: 40, height: 40)
-                .background(k.available ? NX.violet.opacity(0.12) : NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(k.title).font(NXFont.text(15, .bold)).foregroundStyle(k.available ? NX.foreground : NX.mutedFg)
-                    if !k.available { NexusChip(text: T("Coming soon")) }
-                }
-                Text(k.blurb).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            if k.available {
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg).padding(.top, 12)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(k.available ? NX.card : NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: k.available ? [] : [4])))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    /// The chosen type above the form, with the way back to the cards.
-    private func chosenKind(_ k: ProjectKind) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: k.symbol).font(.system(size: 12, weight: .semibold))
-            Text(k.title).font(NXFont.text(13, .semibold))
-            Spacer(minLength: 4)
-            Button(T("Change type")) { kind = nil }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-        }
-        .foregroundStyle(NX.violetText)
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func create() async {
@@ -1115,16 +1093,17 @@ struct CreateProjectSheet: View {
                 dismiss()
                 onOpenProject(made)
                 return
-            } else {
-                let type = kind ?? .task
-                // Starting tabs are a Task Project thing; the server refuses them on any other type.
-                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed,
-                                                        type: type.rawValue, folderId: folder?.id,
-                                                        hiddenTabs: type == .task ? hiddenTabs.sorted() : nil,
-                                                        memberIds: Array(memberIds))
             }
+            // Blank or a template: a Task Project. Hidden tabs always sent, [] included (the server hides
+            // Automations only when the key is absent). A template is built in the app's language.
+            let id = try await APIClient.shared.createProjectFromGallery(
+                workspaceId: workspaceId, name: trimmed,
+                description: brief.trimmingCharacters(in: .whitespacesAndNewlines),
+                folderId: folder?.id, hiddenTabs: hiddenTabs.sorted(), memberIds: Array(memberIds),
+                templateId: pick?.template?.id, starter: starter)
             await onCreated()
             dismiss()
+            onOpenProject(ProjectRef(id: id, name: trimmed, icon: nil))
         } catch {
             err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create project.")
         }

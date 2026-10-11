@@ -14,7 +14,12 @@ enum Config {
     /// built from. A value that moved with the network would quietly change both. The office
     /// shortcut below is therefore chosen per REQUEST by `LANRoute`, and never by editing this — so
     /// a URL held anywhere in the app names a picture, never the route it happened to take.
-    static let baseURL = URL(string: "https://nexus.znetworks.id")!
+    ///
+    /// Branch `dev` only (NEXUS_DEV_SERVER build flag): the server this build talks to can be switched
+    /// to the DEV server for testing the web redesign's features before they reach production
+    /// (ServerEnvironment below). On `main` the flag is absent and this is always production.
+    static var baseURL: URL { ServerEnvironment.current.baseURL }
+    static let productionBaseURL = URL(string: "https://nexus.znetworks.id")!
 
     /// The same server reached from inside the office instead of out through Cloudflare and back:
     /// same nginx, same app container, same `/api` and `/auth` routes, real Let's Encrypt
@@ -43,4 +48,51 @@ enum Config {
     }
 
     static let appName = "NEXUS by Z Networks"
+}
+
+/// Which NEXUS server this build talks to (owner, 12 Oct 2026: test the redesign's features on DEV from
+/// the app). Production unless the build carries the NEXUS_DEV_SERVER flag (set in project.yml on branch
+/// `dev` only, never on `main`), so an App Store build cannot even offer the switch.
+///
+/// DEV is the same app container reached through Tailscale, so it answers only on a device that has
+/// Tailscale on. Sessions differ between the two servers, which is why switching signs out
+/// (ServerSwitch.apply). The choice is kept across launches.
+enum ServerEnvironment: String, CaseIterable, Identifiable {
+    case production, dev
+
+    var id: String { rawValue }
+
+    var baseURL: URL {
+        switch self {
+        case .production: return Config.productionBaseURL
+        case .dev: return URL(string: "https://nexus-prod.tail765d02.ts.net:8443")!
+        }
+    }
+
+    /// Whether this build can switch at all.
+    static var isAvailable: Bool {
+        #if NEXUS_DEV_SERVER
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    private static let key = "nexus.serverEnvironment"
+
+    /// Read once at launch and changed only by `set`, so every request of a session agrees on the host.
+    private static var stored: ServerEnvironment = {
+        guard isAvailable else { return .production }
+        return ServerEnvironment(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .production
+    }()
+
+    static var current: ServerEnvironment { isAvailable ? stored : .production }
+    static var isDev: Bool { current == .dev }
+
+    /// Persists the choice. Callers sign out first: a session of one server means nothing on the other.
+    static func set(_ env: ServerEnvironment) {
+        guard isAvailable else { return }
+        stored = env
+        UserDefaults.standard.set(env.rawValue, forKey: key)
+    }
 }

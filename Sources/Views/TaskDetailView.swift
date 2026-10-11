@@ -241,7 +241,7 @@ struct TaskDetailView: View {
             }
             if let creator = t.creator, let name = creator.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
                 Divider().overlay(NX.border)
-                creatorLine(name, creator)
+                creatorLine(SystemUsers.name(name, avatar: creator.avatar), creator)
             }
         }
         .padding(14).nexusCard(padding: 14, radius: 18)
@@ -263,7 +263,11 @@ struct TaskDetailView: View {
         let before = parts.first ?? ""
         let after = parts.count > 1 ? parts[1] : ""
         return HStack(spacing: 8) {
-            AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22)
+            if SystemUsers.isAutomation(avatar: creator.avatar) {
+                AutomationAvatar(size: 22)
+            } else {
+                AvatarView(url: creator.avatar, initial: String(name.prefix(1)).uppercased(), size: 22)
+            }
             (Text(before).foregroundColor(NX.mutedFg)
                 + Text(name).font(NXFont.text(13, .semibold)).foregroundColor(NX.foreground)
                 + Text(after).foregroundColor(NX.mutedFg))
@@ -368,8 +372,13 @@ struct TaskDetailView: View {
                 ForEach(comments) { c in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20)
-                            Text(c.user?.name ?? "Someone").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                            // An automation's comment (system user "Automation"): ⚡, its name in the app's language.
+                            if SystemUsers.isAutomation(avatar: c.user?.avatar) {
+                                AutomationAvatar(size: 20)
+                            } else {
+                                AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20)
+                            }
+                            Text(SystemUsers.name(c.user?.name, avatar: c.user?.avatar, fallback: "Someone")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                             Spacer()
                             Text(dateText(c.createdAt)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }

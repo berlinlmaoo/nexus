@@ -34,6 +34,30 @@ struct ProjectDetailView: View {
     /// Multi-select for Duplicate on Board and List (always on since 11 Oct 2026, TaskBatchDuplicate.swift).
     @State private var selection = TaskSelection()
     @Environment(\.dismiss) private var dismiss
+    // Project templates (12 Oct 2026; DEV server): the template this project was built from, the
+    // project's saved views (only the Calendar's date field and the "My …" preset are read here), the
+    // project's DATE fields for Calendar → Plot by, and the "My …" chip.
+    @State private var template: ProjectTemplate?
+    @State private var savedViews: [ProjectViewLite] = []
+    @State private var dateFields: [CustomField] = []
+    /// The Calendar's date: nil = due date, else a DATE custom field's id.
+    @State private var plotBy: String?
+    @State private var extrasLoaded = false
+    /// "My meetings" & co.: only tasks assigned to me, on every task tab.
+    @State private var mineOnly = false
+
+    private var meId: String? { auth.session?.userId }
+
+    static func isMine(_ t: BoardTask, me: String?) -> Bool {
+        guard let me else { return false }
+        return (t.assignees ?? []).contains { $0.user?.id == me }
+    }
+
+    /// The "My …" preset's name: the saved view the server made for it, else the template's.
+    private var myViewName: String? {
+        if let v = savedViews.first(where: { $0.builtin == "mine" }), let n = v.name, !n.isEmpty { return n }
+        return template?.myView?.name.text
+    }
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
 
@@ -54,7 +78,7 @@ struct ProjectDetailView: View {
     private var filteredLanes: [ProjectDetail.Lane] {
         let tokens = searchTokens
         let drill = self.drill
-        guard !tokens.isEmpty || drill != nil else { return lanes }
+        guard !tokens.isEmpty || drill != nil || mineOnly else { return lanes }
         let now = Date()
         return lanes.map { lane in
             ProjectDetail.Lane(
@@ -63,7 +87,9 @@ struct ProjectDetailView: View {
                 tasks: (lane.tasks ?? []).filter {
                     (tokens.isEmpty || Self.matches($0, laneName: lane.name, tokens: tokens))
                         && (drill?.matches($0, laneId: lane.id, today: now) ?? true)
-                }
+                        && (!mineOnly || Self.isMine($0, me: meId))
+                },
+                taskStatus: lane.taskStatus
             )
         }
     }
@@ -90,6 +116,67 @@ struct ProjectDetailView: View {
         }
         .padding(.horizontal, 14)
         .background(NX.accentBg.opacity(0.6))
+    }
+
+    /// The template's "My …" preset as a chip (web: a saved view filtered on assignee = me).
+    private func myViewBar(_ name: String) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                mineOnly.toggle()
+                // Turning it on lands on the preset's own tab when this one draws no tasks for it.
+                if mineOnly, let t = template?.myViewTab, visibleTabs.contains(t), !ProjectTab.taskViews.contains(tab) && tab != .sheet {
+                    tab = t
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: mineOnly ? "person.crop.circle.fill" : "person.crop.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(name).font(NXFont.text(12, .semibold)).lineLimit(1)
+                    if mineOnly { Text("\(matchCount)").font(NXFont.text(11, .semibold)).monospacedDigit() }
+                }
+                .foregroundStyle(mineOnly ? Color.white : NX.violetText)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(mineOnly ? NX.violet : NX.violet.opacity(0.10), in: Capsule())
+                .frame(minHeight: 36)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(mineOnly ? .isSelected : [])
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 2)
+    }
+
+    /// Calendar → Plot by: the due date, or one of the project's DATE fields. Remembered per project on
+    /// this device; until picked, the project's Calendar view decides (a template sets it).
+    private var plotChoices: [CalendarPlotChoice] {
+        guard !dateFields.isEmpty else { return [] }
+        return [CalendarPlotChoice(id: nil, name: T("Due date"))] + dateFields.map { CalendarPlotChoice(id: $0.id, name: $0.name) }
+    }
+    private var plotKey: String { "nexus.calendarPlot.\(projectId)" }
+    private func choosePlot(_ id: String?) {
+        plotBy = id
+        UserDefaults.standard.set(id ?? "due", forKey: plotKey)
+    }
+
+    /// Once per screen: the template, the saved views and the DATE fields. Each is optional: a server
+    /// without templates or views answers 404 and the screen is exactly what it was before.
+    private func loadTemplateExtras(_ d: ProjectDetail) async {
+        guard !extrasLoaded, d.type == nil || d.type == "TASK" else { return }
+        extrasLoaded = true
+        template = await ProjectTemplateStore.find(d.templateId)
+        // A project built from a template opens on the template's tab (web: defaultTab).
+        if let t = template?.defaultProjectTab, visibleTabs.contains(t), AppRouter.shared.projectLink == nil {
+            tab = t
+        }
+        savedViews = (try? await APIClient.shared.projectViews(projectId)) ?? []
+        dateFields = ((try? await APIClient.shared.projectCustomFields(projectId)) ?? []).filter { $0.type.uppercased() == "DATE" }
+        if let saved = UserDefaults.standard.string(forKey: plotKey) {
+            plotBy = saved == "due" ? nil : (dateFields.contains { $0.id == saved } ? saved : nil)
+        } else if let prop = savedViews.first(where: { $0.builtin == "calendar" })?.config?.dateProp, prop.hasPrefix("cf:") {
+            let id = String(prop.dropFirst(3))
+            plotBy = dateFields.contains { $0.id == id } ? id : nil
+        }
     }
 
     /// Semua kata harus cocok, urutannya bebas — "budi invoice" menemukan task milik Budi yang
@@ -189,6 +276,7 @@ struct ProjectDetailView: View {
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
             if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty { searchBar }
             if drill != nil && searchApplies && !isOutlet { drillBar }
+            if let mine = myViewName, searchApplies && !isOutlet && !isPipeline { myViewBar(mine) }
             content
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selection.active && selectionApplies {
@@ -417,7 +505,8 @@ struct ProjectDetailView: View {
                 case .board:    boardTab(detail)
                 case .list:     ListTab(lanes: filteredLanes, onOpen: { openTaskId = $0 }, selection: selection)
                 case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { openTaskId = $0 })
-                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
+                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true },
+                                            dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
                 case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { openTaskId = $0 })
                 default:        EmptyView()
                 }
@@ -474,7 +563,8 @@ struct ProjectDetailView: View {
                     ForEach(lanes) { lane in
                         LaneColumn(lane: lane, allLanes: lanes, selection: selection, onOpen: { openTaskId = $0 },
                                    onAddTask: { title in await addTask(laneId: lane.id, title: title) },
-                                   onMove: { tid, lid in await moveTask(tid, to: lid) })
+                                   onMove: { tid, lid in await moveTask(tid, to: lid) },
+                                   onSetStatus: { status in await setSectionStatus(lane.id, status) })
                     }
                 }
                 .padding(16)
@@ -504,6 +594,7 @@ struct ProjectDetailView: View {
             // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
             if !visibleTabs.contains(tab) { tab = fallbackTab }
             cachedFrom = nil
+            Task { await loadTemplateExtras(d) }
         }
         catch APIError.unauthorized { auth.logout() }
         // Not restored from cache on purpose: 403 is the server saying this person is no longer on
@@ -574,7 +665,7 @@ struct ProjectDetailView: View {
             var out: [BoardTask] = []
             for p in parents { out.append(p); out.append(contentsOf: byParent[p.id] ?? []) }
             out.append(contentsOf: orphans)
-            return ProjectDetail.Lane(id: lane.id, name: lane.name, tasks: out)
+            return ProjectDetail.Lane(id: lane.id, name: lane.name, tasks: out, taskStatus: lane.taskStatus)
         }
     }
 
@@ -584,6 +675,13 @@ struct ProjectDetailView: View {
         do { _ = try await APIClient.shared.createTask(projectId: projectId, taskListId: laneId, title: t) }
         catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't created.") }
         await load()
+    }
+
+    /// Lane menu → Section status (12 Oct 2026): what tasks moved into this section become.
+    private func setSectionStatus(_ laneId: String, _ status: String?) async {
+        do { try await APIClient.shared.setSectionTaskStatus(projectId: projectId, sectionId: laneId, taskStatus: status) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't change it.") }
+        await reloadQuietly()
     }
 
     private func moveTask(_ taskId: String, to laneId: String) async {
@@ -600,6 +698,8 @@ struct LaneColumn: View {
     let onOpen: (String) -> Void
     let onAddTask: (String) async -> Void
     let onMove: (String, String) async -> Void
+    /// Section status (12 Oct 2026): nil = the lane offers no menu.
+    var onSetStatus: ((String?) async -> Void)? = nil
     @State private var composing = false
     @State private var newTitle = ""
     @State private var adding = false
@@ -628,7 +728,14 @@ struct LaneColumn: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(lane.name).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                if let status = lane.taskStatus {
+                    Text(TaskStatusName.label(status)).font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(NX.violet.opacity(0.10), in: Capsule())
+                        .lineLimit(1)
+                }
                 Spacer()
+                if let onSetStatus { sectionStatusMenu(onSetStatus) }
                 Text("\(lane.tasks?.count ?? 0)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
                     .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
             }
@@ -736,6 +843,32 @@ struct LaneColumn: View {
         } isTargeted: { targeted in
             withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
         }
+    }
+
+    /// The web's lane menu "Section status": tasks moved into this section get the status picked here;
+    /// "None" makes it a plain section. Tasks already in it keep theirs.
+    private func sectionStatusMenu(_ set: @escaping (String?) async -> Void) -> some View {
+        Menu {
+            Section(T("Tasks moved into this section get this status.")) {
+                Button { Task { await set(nil) } } label: {
+                    if lane.taskStatus == nil { Label(T("None (plain section)"), systemImage: "checkmark") }
+                    else { Text(T("None (plain section)")) }
+                }
+                ForEach(TaskStatusName.all, id: \.self) { s in
+                    Button { Task { await set(s) } } label: {
+                        if lane.taskStatus == s { Label(TaskStatusName.label(s), systemImage: "checkmark") }
+                        else { Text(TaskStatusName.label(s)) }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: lane.taskStatus == nil ? "checkmark.circle" : "checkmark.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(lane.taskStatus == nil ? NX.mutedFg : NX.violetText)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(T("Section status"))
     }
 
     private func submit() {

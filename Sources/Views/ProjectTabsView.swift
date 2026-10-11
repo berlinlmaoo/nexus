@@ -382,10 +382,21 @@ struct TimelineTab: View {
 
 // MARK: - Calendar
 
+/// One "Plot by" option: nil id = the due date, else a DATE custom field.
+struct CalendarPlotChoice: Hashable, Identifiable {
+    let id: String?
+    let name: String
+}
+
 struct CalendarTab: View {
     let tasks: [BoardTask]   // full set incl. merged subtasks, so dated subtasks land on the calendar too
     let onOpen: (String) -> Void
     var onCreate: (Date?) -> Void = { _ in }
+    /// Plot by (12 Oct 2026): nil = the due date, else the id of a DATE custom field.
+    var dateFieldId: String? = nil
+    /// Empty = the project has no DATE field, so there is nothing to choose and no menu.
+    var plotChoices: [CalendarPlotChoice] = []
+    var onPlotBy: ((String?) -> Void)? = nil
     @State private var monthOffset = 0
     @State private var selected: Int?
 
@@ -401,16 +412,50 @@ struct CalendarTab: View {
     private var tasksByDay: [Int: [BoardTask]] {
         var map: [Int: [BoardTask]] = [:]
         for t in tasks {
-            guard let d = ProjDate.parse(t.dueDate) else { continue }
+            guard let d = plotDate(t) else { continue }
             let c = cal.dateComponents([.year, .month, .day], from: d)
             if c.year == comps.year, c.month == comps.month, let day = c.day { map[day, default: []].append(t) }
         }
         return map
     }
 
+    /// The day a task lands on: its due date, or the picked DATE field's value ("2026-10-12" or ISO).
+    private func plotDate(_ t: BoardTask) -> Date? {
+        guard let fid = dateFieldId else { return ProjDate.parse(t.dueDate) }
+        guard let raw = t.customFieldValues?.first(where: { $0.customFieldId == fid })?.value,
+              !raw.isEmpty else { return nil }
+        let v = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\" "))
+        return ProjDate.parse(v) ?? ProjDate.fmt("yyyy-MM-dd").date(from: String(v.prefix(10)))
+    }
+
+    private var plotName: String {
+        plotChoices.first { $0.id == dateFieldId }?.name ?? T("Due date")
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                if !plotChoices.isEmpty, let onPlotBy {
+                    HStack {
+                        Menu {
+                            ForEach(plotChoices) { c in
+                                Button { onPlotBy(c.id) } label: {
+                                    if c.id == dateFieldId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "calendar.badge.clock").font(.system(size: 12, weight: .semibold))
+                                Text("\(T("Plot by")): \(plotName)").font(NXFont.text(12, .semibold)).lineLimit(1)
+                                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(NX.violetText)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(NX.violet.opacity(0.10), in: Capsule())
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
                 header
                 weekdayRow
                 grid

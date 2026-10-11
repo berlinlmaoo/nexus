@@ -45,6 +45,11 @@ extension Notification.Name {
     /// target changed (server since 10 Oct 2026: `outlet-sales-changed` to the project's room). userInfo,
     /// optional: `RealtimeKey.projectId`. A ping: the open outlet refetches the month it shows.
     static let nexusOutletSalesChanged = Notification.Name("nexus.outletSales.changed")
+
+    /// A project's automations changed: a rule created, edited, toggled, deleted or run, by anyone or by
+    /// the clock (DEV server since 12 Oct 2026: `automations-changed` { projectId, automationId, actorId }
+    /// to the project's room). userInfo, optional: `RealtimeKey.projectId`, `RealtimeKey.automationId`.
+    static let nexusAutomationsChanged = Notification.Name("nexus.automations.changed")
 }
 
 /// The userInfo keys of the notifications above.
@@ -59,6 +64,8 @@ enum RealtimeKey {
     static let conversationId = "conversationId"
     /// On `.nexusPipelineChanged`: the deal that changed.
     static let dealId = "dealId"
+    /// On `.nexusAutomationsChanged`: the rule that changed or ran.
+    static let automationId = "automationId"
 }
 
 /// The values of `RealtimeKey.kind`.
