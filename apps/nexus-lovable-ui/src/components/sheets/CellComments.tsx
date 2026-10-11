@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { isFormulaCell, toDisplay, type SheetShape } from "@/lib/sheet-formula";
 import { formatCell } from "./sheet-types";
 import { useLang } from "@/lib/lang";
+import { Floating } from "./sheet-float";
 import type {
   NexusSheetCellValue, NexusSheetColumnType, NexusSheetComment, NexusSheetRevision,
 } from "@/lib/nexus-api";
@@ -65,9 +66,9 @@ export function CellCommentThread({
   return createPortal(
     <>
       <div className="fixed inset-0 z-[60]" onClick={onClose} />
-      <div
-        style={{ left: Math.min(anchor.left, window.innerWidth - 320), top: anchor.top }}
-        className="fixed z-[61] w-80 overflow-hidden rounded-2xl border border-border bg-card shadow-pop"
+      <Floating
+        anchor={{ rect: { left: anchor.left, right: anchor.left + 320, top: anchor.top - 30, bottom: anchor.top - 4 } }}
+        className="w-80 rounded-2xl border border-border bg-card shadow-pop"
       >
         <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
           {([
@@ -195,7 +196,7 @@ export function CellCommentThread({
             </p>
           </>
         )}
-      </div>
+      </Floating>
     </>,
     document.body,
   );

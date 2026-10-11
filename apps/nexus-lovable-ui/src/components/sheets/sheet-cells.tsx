@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { NexusSheetColumnColor } from "@/lib/nexus-api";
 import { SUPPORTED_FUNCTIONS } from "@/lib/sheet-formula";
+import { Floating } from "./sheet-float";
 import {
   COLUMN_COLOR_CLASS, COLUMN_COLOR_LABEL, COLUMN_TYPE_LABEL, CHIP_COLORS, CHIP_COLOR_CLASS, RULE_OP_LABEL, RULE_STYLE_CLASS,
   optionColor, readMulti,
@@ -34,12 +35,11 @@ export function ChoiceEditor({ col, multi, initial, onCommit, onCancel }: {
   const { t } = useLang();
   const [picked, setPicked] = useState<string[]>(() => (multi ? readMulti(initial) : initial ? [initial] : []));
   const boxRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
 
   useEffect(() => {
-    const cell = boxRef.current?.closest("td");
-    const r = cell?.getBoundingClientRect();
-    if (r) setAnchor({ left: Math.min(r.left, window.innerWidth - 232), top: Math.min(r.bottom + 2, window.innerHeight - 260) });
+    const r = boxRef.current?.closest("td")?.getBoundingClientRect();
+    if (r) setAnchor(r);
   }, []);
 
   const toggle = (v: string) => {
@@ -62,9 +62,9 @@ export function ChoiceEditor({ col, multi, initial, onCommit, onCancel }: {
       {anchor && createPortal(
         <>
           <div className="fixed inset-0 z-[60]" onClick={() => onCommit(multi ? picked.join(", ") : (picked[0] ?? ""))} />
-          <div
-            style={{ left: anchor.left, top: anchor.top }}
-            className="fixed z-[61] max-h-60 w-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-pop"
+          <Floating
+            anchor={{ rect: anchor }}
+            className="w-56 rounded-xl border border-border bg-card p-1 shadow-pop"
             onKeyDown={(e) => {
               e.stopPropagation();
               if (e.key === "Escape") onCancel();
@@ -101,7 +101,7 @@ export function ChoiceEditor({ col, multi, initial, onCommit, onCancel }: {
                 className="mt-1 w-full rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-600"
               >{t("Clear")}</button>
             )}
-          </div>
+          </Floating>
         </>,
         document.body,
       )}
@@ -148,18 +148,14 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
   // Portaled and fixed, for the same reason as the autocomplete and the comment thread: anchored
   // inside the <th> it was clipped by the grid's overflow:auto, which hid the colour picker and the
   // rules editor below the fold entirely.
-  const left = Math.min(anchor?.left ?? 80, window.innerWidth - 248);
-  // Height is bound to the space actually left below the header, not to a guessed constant: the
-  // popover grows with the number of choices and rules, so any fixed number is wrong eventually —
-  // and being 27px too tall is enough to put the save button off-screen.
-  const top = Math.min((anchor?.bottom ?? 120) + 4, Math.max(8, window.innerHeight - 240));
-  const maxHeight = Math.max(200, window.innerHeight - top - 12);
+  // Placed by useFloating: below the header when it fits, flipped/clamped and scrolling otherwise —
+  // the popover grows with the number of choices and rules, so no fixed number is ever right.
   return createPortal(
     <>
       <div className="fixed inset-0 z-[60]" onClick={onClose} />
-      <div
-        style={{ left, top, maxHeight }}
-        className="fixed z-[61] w-56 space-y-2 overflow-y-auto rounded-xl border border-border bg-card p-3 font-normal shadow-pop"
+      <Floating
+        anchor={{ rect: anchor ?? { left: 80, top: 120, right: 80, bottom: 120 } }}
+        className="w-56 space-y-2 rounded-xl border border-border bg-card p-3 font-normal shadow-pop"
       >
         <input
           autoFocus value={name} maxLength={80} placeholder={t("Column name (optional)")}
@@ -307,7 +303,7 @@ export function ColumnPopover({ col, anchor, onClose, onSave }: {
 
         <button onClick={save}
           className="w-full rounded-lg bg-primary px-2 py-1.5 text-xs font-bold text-primary-foreground">{t("Save")}</button>
-      </div>
+      </Floating>
     </>,
     document.body,
   );
@@ -469,7 +465,7 @@ function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [pick, setPick] = useState(0);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
 
   /**
    * What to complete right now.
@@ -495,7 +491,7 @@ function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDr
   useEffect(() => {
     if (!open) { setAnchor(null); return; }
     const r = inputRef.current?.getBoundingClientRect();
-    if (r) setAnchor({ left: r.left, top: r.bottom + 2, width: Math.max(240, r.width) });
+    if (r) setAnchor(r);
   }, [open, text, inputRef]);
 
   const accept = (name: string) => {
@@ -545,9 +541,10 @@ function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDr
         className="h-full w-full select-text bg-card px-1.5 text-[13px] text-foreground outline-none [box-shadow:inset_0_0_0_2px_var(--info)]"
       />
       {open && anchor && createPortal(
-        <div
-          style={{ left: anchor.left, top: anchor.top, width: anchor.width }}
-          className="fixed z-[60] overflow-hidden rounded-xl border border-border bg-card shadow-pop"
+        <Floating
+          anchor={{ rect: anchor }}
+          style={{ width: Math.max(240, anchor.width) }}
+          className="rounded-xl border border-border bg-card shadow-pop"
         >
           <div className="max-h-64 overflow-y-auto">
           {matches.map((f, i) => (
@@ -567,7 +564,7 @@ function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDr
           <div className="border-t border-border px-3 py-1 text-[10px] text-muted-foreground">
             <b>Tab</b> {t("to pick")} · <b>↑↓</b> {t("to move")}
           </div>
-        </div>,
+        </Floating>,
         document.body,
       )}
     </>

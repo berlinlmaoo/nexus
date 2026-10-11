@@ -23,6 +23,7 @@ import {
   type ClipCell, type PasteBlock,
 } from "./sheet-clipboard";
 import { CellEditor, ColumnPopover, TaskCell, type Next } from "./sheet-cells";
+import { Floating } from "./sheet-float";
 import { SheetToolbar, Menu, MenuItem } from "./SheetToolbar";
 import {
   borderShadows, bordersFor, horizontalClass, patchStyle, styleClasses, styleInline, verticalClass,
@@ -1554,10 +1555,10 @@ export function SheetGrid({
     {menu && menuEntries.length > 0 && createPortal(
       <>
         <div className="fixed inset-0 z-[60]" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
-        <div
+        <Floating
+          anchor={{ x: menu.left, y: menu.top }}
           role="menu"
-          style={{ left: Math.min(menu.left, window.innerWidth - 250), top: Math.max(8, Math.min(menu.top, window.innerHeight - 440)) }}
-          className="fixed z-[61] max-h-[80vh] w-60 overflow-y-auto rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
+          className="w-60 rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
         >
           {menuEntries.map((item, i) =>
             item === "sep" ? (
@@ -1569,7 +1570,7 @@ export function SheetGrid({
               </MenuItem>
             ),
           )}
-        </div>
+        </Floating>
       </>,
       document.body,
     )}

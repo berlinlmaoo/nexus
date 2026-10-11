@@ -6,6 +6,7 @@ import { useLang } from "@/lib/lang";
 import type { NexusSheetColumnColor } from "@/lib/nexus-api";
 import { COLUMN_COLOR_LABEL } from "./sheet-types";
 import { MenuItem } from "./SheetToolbar";
+import { Floating } from "./sheet-float";
 
 export type SheetTab = { id: string; name: string; position: number; tabColor?: NexusSheetColumnColor | null };
 
@@ -115,8 +116,8 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
       {list && createPortal(
         <>
           <div className="fixed inset-0 z-[60]" onMouseDown={() => setList(null)} />
-          <div role="menu" style={{ left: list.left, top: Math.max(8, list.top - Math.min(320, 34 * sheets.length + 12)) }}
-            className="fixed z-[61] max-h-80 w-56 overflow-y-auto rounded-xl border border-border bg-popover py-1 shadow-pop">
+          <Floating anchor={{ x: list.left, y: list.top }} role="menu"
+            className="w-56 rounded-xl border border-border bg-popover py-1 shadow-pop">
             {sheets.map((s) => (
               <MenuItem key={s.id} active={s.id === activeId} onClick={() => { onSelect(s.id); setList(null); }}>
                 <span className="flex items-center gap-2">
@@ -125,7 +126,7 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
                 </span>
               </MenuItem>
             ))}
-          </div>
+          </Floating>
         </>,
         document.body,
       )}
@@ -134,8 +135,8 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
       {menu && tab && createPortal(
         <>
           <div className="fixed inset-0 z-[60]" onMouseDown={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
-          <div role="menu" style={{ left: Math.min(menu.left, window.innerWidth - 230), top: Math.max(8, menu.top - 290) }}
-            className="fixed z-[61] w-56 rounded-xl border border-border bg-popover py-1 shadow-pop">
+          <Floating anchor={{ x: menu.left, y: menu.top }} role="menu"
+            className="w-56 rounded-xl border border-border bg-popover py-1 shadow-pop">
             <MenuItem icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => { setRenaming(tab.id); setMenu(null); }}>{t("Rename")}</MenuItem>
             <MenuItem icon={<CopyPlus className="h-3.5 w-3.5" />} onClick={() => { onDuplicate(tab.id); setMenu(null); }}>{t("Duplicate")}</MenuItem>
             <div className="px-3 py-1.5">
@@ -160,7 +161,7 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
                 <MenuItem danger icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => { onDelete(tab.id); setMenu(null); }}>{t("Delete")}</MenuItem>
               </>
             )}
-          </div>
+          </Floating>
         </>,
         document.body,
       )}

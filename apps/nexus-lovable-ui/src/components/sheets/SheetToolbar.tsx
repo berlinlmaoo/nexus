@@ -12,6 +12,7 @@ import {
   COLOR_NAME, DEFAULT_FONT_SIZE, FONT_SIZES, STYLE_COLORS, SWATCH_CLASS,
   type BorderPreset, type CellStyle, type StyleColor,
 } from "./sheet-style";
+import { Floating } from "./sheet-float";
 
 export type ToolbarProps = {
   canEdit: boolean;
@@ -178,7 +179,7 @@ export function Menu({ label, trigger, disabled, children }: {
   label: string; trigger: ReactNode; disabled?: boolean;
   children: (close: () => void) => ReactNode;
 }) {
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  const [at, setAt] = useState<DOMRect | null>(null);
   const ref = useRef<HTMLButtonElement>(null);
   const close = () => setAt(null);
   useEffect(() => {
@@ -199,7 +200,7 @@ export function Menu({ label, trigger, disabled, children }: {
         disabled={disabled}
         onClick={() => {
           const r = ref.current?.getBoundingClientRect();
-          setAt(at || !r ? null : { left: Math.min(r.left, window.innerWidth - 230), top: r.bottom + 4 });
+          setAt(at || !r ? null : r);
         }}
         className={cn(
           "flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-foreground/80 transition-colors",
@@ -213,13 +214,13 @@ export function Menu({ label, trigger, disabled, children }: {
       {at && createPortal(
         <>
           <div className="fixed inset-0 z-[60]" onMouseDown={close} />
-          <div
+          <Floating
+            anchor={{ rect: at }}
             role="menu"
-            style={{ left: at.left, top: at.top }}
-            className="fixed z-[61] max-h-[70vh] min-w-40 overflow-y-auto rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
+            className="min-w-40 rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
           >
             {children(close)}
-          </div>
+          </Floating>
         </>,
         document.body,
       )}
