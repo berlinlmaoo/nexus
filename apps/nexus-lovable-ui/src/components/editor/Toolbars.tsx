@@ -5,11 +5,12 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import { useEditorState } from "@tiptap/react";
 import {
   Bold, Code, Italic, Link2, ListChecks, MoreHorizontal, Strikethrough, Underline, Baseline, IndentIncrease, IndentDecrease,
-  Slash, ChevronDown, Rows3, Columns3, Trash2, Heading2, List,
+  Slash, ChevronDown, Rows3, Columns3, Trash2, Heading2, List, Sparkles,
 } from "lucide-react";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { BLOCK_COLORS } from "./block-actions";
+import { openAskAi } from "./AskAI";
 
 function Btn({ on, active, label, children, onClick }: { on?: boolean; active?: boolean; label: string; children: ReactNode; onClick: () => void }) {
   return (
@@ -88,6 +89,16 @@ export function SelectionToolbar({ editor }: { editor: Editor }) {
         </div>
       ) : (
         <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => openAskAi(editor, "selection")}
+            title={t("Ask AI (⌘J)")}
+            className="flex h-8 items-center gap-1 rounded-md px-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+          >
+            <Sparkles className="h-4 w-4" />{t("Ask AI")}
+          </button>
+          <span className="mx-0.5 h-5 w-px bg-border" />
           <Btn label={t("Bold")} active={st.bold} onClick={() => editor.chain().focus().toggleBold().run()}><Bold className="h-4 w-4" /></Btn>
           <Btn label={t("Italic")} active={st.italic} onClick={() => editor.chain().focus().toggleItalic().run()}><Italic className="h-4 w-4" /></Btn>
           <Btn label={t("Underline")} active={st.underline} onClick={() => editor.chain().focus().toggleUnderline().run()}><Underline className="h-4 w-4" /></Btn>

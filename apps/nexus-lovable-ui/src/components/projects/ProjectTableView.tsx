@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
+import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
 import { useLang } from "@/lib/lang";
 import { propDef, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
 import { PropIcon, usePropLabel } from "@/components/projects/views/view-controls";
@@ -105,8 +106,10 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
   };
   const setCf = async (fieldId: string, taskId: string, value: unknown) => {
-    try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
+    try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); } catch { toast.error(t("Couldn't save the change")); }
   };
+  // ✨ on AI Autofill columns and on the values GIDEON wrote (a person's edit makes a value theirs again).
+  const ai = useAutofillMarks(projectId);
 
   // Multi-select (owner, 11 Oct 2026): ⌘/Ctrl+click or Shift+click a row, right-click for Duplicate.
   const bulk = useTaskBulk();
@@ -117,7 +120,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
-        <div key={key} className="min-w-0 border-l border-border px-1.5 py-1">
+        <div key={key} className="relative min-w-0 border-l border-border px-1.5 py-1">
+          {key.startsWith("cf:") && ai.isMarked(key.slice(3), task.id) && <Sparkles aria-label={t("Filled by GIDEON")} className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-primary/70" />}
           <Cell colKey={key} task={task} members={members} cfById={cfById} sections={sections} projectId={projectId} patchTask={patchTask} toggleAssignee={toggleAssignee} setCf={setCf} />
         </div>
       ))}
@@ -143,7 +147,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
               const def = propDef(defs, key);
               return (
                 <div key={key} className="group flex items-center justify-between gap-1 border-l border-border px-3 py-2">
-                  <span className="flex min-w-0 items-center gap-1.5"><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span></span>
+                  <span className="flex min-w-0 items-center gap-1.5"><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span>{key.startsWith("cf:") && ai.aiFields.has(key.slice(3)) && <Sparkles aria-label={t("AI Autofill")} className="h-3 w-3 shrink-0 text-primary" />}</span>
                   {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"><X className="h-3 w-3" /></button>}
                 </div>
               );

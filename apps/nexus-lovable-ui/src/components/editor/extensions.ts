@@ -18,6 +18,7 @@ import type * as Y from "yjs";
 import { t } from "@/lib/lang";
 import type { SocketYProvider, CollabUser } from "@/lib/collab-provider";
 import type { EditorCtx } from "./editor-context";
+import { openAskAi } from "./AskAI";
 import { ctxOf } from "./editor-context";
 import type { MenuStore } from "./menu-store";
 import { filterSlash, pendingMention, type SlashItem } from "./slash-items";
@@ -71,6 +72,36 @@ const BlockShortcuts = Extension.create({
       "Mod-d": () => { const p = at(); if (p === null) return false; duplicateBlock(this.editor, p); return true; },
       "Mod-Shift-ArrowUp": () => { const p = at(); return p === null ? false : moveBlock(this.editor, p, -1); },
       "Mod-Shift-ArrowDown": () => { const p = at(); return p === null ? false : moveBlock(this.editor, p, 1); },
+    };
+  },
+});
+
+/**
+ * Ask AI (Notion AI parity, 12 Oct 2026): Space on an empty top-level line, or ⌘/Ctrl+J anywhere, opens
+ * GIDEON's writing menu (AskAI.tsx). Space only on a truly empty paragraph that is not inside a list, a
+ * table or a toggle, so typing a space anywhere else still types a space.
+ */
+const AskAiShortcut = Extension.create({
+  name: "askAiShortcut",
+  addStorage() {
+    return { open: null as ((mode: "selection" | "cursor") => void) | null };
+  },
+  addKeyboardShortcuts() {
+    return {
+      Space: () => {
+        const { state } = this.editor;
+        const { selection } = state;
+        if (!this.editor.isEditable || !selection.empty) return false;
+        const $from = selection.$from;
+        if ($from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parent.content.size !== 0) return false;
+        openAskAi(this.editor, "cursor");
+        return true;
+      },
+      "Mod-j": () => {
+        if (!this.editor.isEditable) return false;
+        openAskAi(this.editor, this.editor.state.selection.empty ? "cursor" : "selection");
+        return true;
+      },
     };
   },
 });
@@ -244,6 +275,7 @@ export function buildExtensions(o: BuildOptions): AnyExtension[] {
     NotionBlockquote,
     ToggleShortcut,
     BlockShortcuts,
+    AskAiShortcut,
     BlockAttrs,
     TaskList,
     TaskItem.configure({ nested: true }),

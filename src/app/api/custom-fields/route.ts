@@ -528,6 +528,9 @@ export async function PATCH(req: NextRequest) {
         },
       })
 
+      // A person set this value by hand: it is theirs now, not GIDEON's (AI Autofill ✨ marker, 12 Oct 2026).
+      await prisma.customFieldAiFill.deleteMany({ where: { customFieldId: id, taskId } }).catch(() => {})
+
       // "Field changed" automations on this custom field (12 Oct 2026). Values are compared as stored.
       runAutomations({
         kind: "task_updated",

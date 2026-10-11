@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
+import { GideonMark } from "@/components/gideon/GideonMark";
 import nexusLogo from "@/assets/nexus-logo.png";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -25,6 +26,8 @@ const groups = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
+      // GIDEON full page (12 Oct 2026, Notion AI's chat page): conversations with search.
+      { title: "GIDEON", url: "/gideon", icon: GideonMark },
       { title: "Notification", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "Z Vault", url: "/vault", icon: HardDrive },
