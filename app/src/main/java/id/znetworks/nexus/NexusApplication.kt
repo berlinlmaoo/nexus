@@ -16,6 +16,8 @@ class NexusApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Production or the DEV server (DEV-REDESIGN.md): before anything builds a client.
+        id.znetworks.nexus.core.net.ServerEnvStore.load(this)
         container = AppContainer(this)
         id.znetworks.nexus.core.offline.DiskFiles.init(cacheDir)
         LocalNotifier.ensureChannels(this)

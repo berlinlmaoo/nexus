@@ -3008,4 +3008,20 @@
     <plurals name="ov_hint_next7"><item quantity="other">Lihat %d task bertenggat 7 hari ke depan</item></plurals>
     <plurals name="ov_hint_nodue"><item quantity="other">Lihat %d task terbuka tanpa tenggat</item></plurals>
     <plurals name="ov_hint_unassigned"><item quantity="other">Lihat %d task terbuka yang belum ada orangnya</item></plurals>
+    <!-- Server switch (DEV-REDESIGN.md) -->
+    <string name="server_caps">SERVER</string>
+    <string name="server_hint">Dev adalah server uji redesign, hanya bisa lewat Tailscale. Ganti server akan mengeluarkan akunmu dan memulai ulang app.</string>
+    <string name="server_production">Produksi</string>
+    <string name="server_dev">Dev (Tailscale)</string>
+    <string name="server_dev_badge">DEV</string>
+    <string name="server_switch_title">Pindah ke %1$s?</string>
+    <string name="server_switch_body">App akan dimulai ulang di server %1$s.</string>
+    <string name="server_switch_body_signed_in">Kamu akan keluar, lalu app dimulai ulang di server %1$s.</string>
+    <string name="server_switch_dev_note">Dev hanya jalan selama Tailscale menyala.</string>
+    <string name="server_switch_cta">Pindah</string>
+    <string name="server_switch_cta_signed_in">Keluar dan pindah</string>
+    <string name="server_switch_blocked_title">Belum bisa pindah</string>
+    <string name="server_switch_blocked_workday">Kamu tidak bisa keluar selama hari kerja masih terbuka. Check out dulu, lalu pindah.</string>
+    <string name="server_switch_blocked_queue">Masih ada absen yang menunggu terkirim. Pindah setelah semuanya masuk.</string>
+    <string name="login_server_dev">Server Dev (Tailscale) · Pakai Produksi</string>
 </resources>

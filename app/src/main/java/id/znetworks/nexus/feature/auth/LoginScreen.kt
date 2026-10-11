@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -136,7 +137,8 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                             Spacer(Modifier.height(26.dp))
                             PrimaryButton(stringResource(R.string.login_cta), state.busy, arrow = true) { focus.clearFocus(); vm.submit() }
                             Spacer(Modifier.height(10.dp))
-                            TextButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null) {
+                            // Passkeys belong to nexus.znetworks.id (their RP id): not offered on the DEV server.
+                            if (NexusConfig.env == id.znetworks.nexus.core.net.ServerEnv.PRODUCTION) TextButton(onClick = { activity?.let(vm::passkey) }, enabled = !state.busy && activity != null) {
                                 Icon(Icons.Filled.Key, null, Modifier.size(16.dp), tint = c.onyx)
                                 Spacer(Modifier.size(6.dp))
                                 Text(stringResource(R.string.passkey_sign_in), color = c.onyx, fontFamily = TextFont, fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -152,6 +154,14 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                             TextButton(onClick = { vm.go(AuthMode.FORGOT) }, enabled = !state.busy) {
                                 Text(stringResource(R.string.login_forgot_password), color = c.mutedFg, fontFamily = TextFont,
                                     fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            }
+                            // Signed out on the DEV server (DEV-REDESIGN.md): the way back to Production.
+                            if (NexusConfig.env == id.znetworks.nexus.core.net.ServerEnv.DEV) {
+                                var toProd by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+                                TextButton(onClick = { toProd = true }, enabled = !state.busy) {
+                                    Text(stringResource(R.string.login_server_dev), color = c.mutedFg, fontFamily = TextFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                }
+                                if (toProd) id.znetworks.nexus.ui.components.ServerSwitchDialog(id.znetworks.nexus.core.net.ServerEnv.PRODUCTION) { toProd = false }
                             }
                         }
                         AuthMode.SIGNUP -> {

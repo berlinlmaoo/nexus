@@ -3059,4 +3059,20 @@
     <plurals name="ov_hint_next7"><item quantity="one">Show %d task due in 7 days</item><item quantity="other">Show %d tasks due in 7 days</item></plurals>
     <plurals name="ov_hint_nodue"><item quantity="one">Show %d open task without a due date</item><item quantity="other">Show %d open tasks without a due date</item></plurals>
     <plurals name="ov_hint_unassigned"><item quantity="one">Show %d open task nobody is on</item><item quantity="other">Show %d open tasks nobody is on</item></plurals>
+    <!-- Server switch (DEV-REDESIGN.md) -->
+    <string name="server_caps">SERVER</string>
+    <string name="server_hint">Dev is the redesign test server, reachable only over Tailscale. Switching signs you out and restarts the app.</string>
+    <string name="server_production">Production</string>
+    <string name="server_dev">Dev (Tailscale)</string>
+    <string name="server_dev_badge">DEV</string>
+    <string name="server_switch_title">Switch to %1$s?</string>
+    <string name="server_switch_body">The app restarts on the %1$s server.</string>
+    <string name="server_switch_body_signed_in">You\'ll be signed out, then the app restarts on the %1$s server.</string>
+    <string name="server_switch_dev_note">Dev only works while Tailscale is on.</string>
+    <string name="server_switch_cta">Switch</string>
+    <string name="server_switch_cta_signed_in">Sign out and switch</string>
+    <string name="server_switch_blocked_title">Can\'t switch yet</string>
+    <string name="server_switch_blocked_workday">You can\'t sign out while your workday is open. Check out first, then switch.</string>
+    <string name="server_switch_blocked_queue">Some check-ins are still waiting to be sent. Switch once they\'re in.</string>
+    <string name="login_server_dev">Dev server (Tailscale) · Use Production</string>
 </resources>

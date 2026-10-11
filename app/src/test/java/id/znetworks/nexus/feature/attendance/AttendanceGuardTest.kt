@@ -124,7 +124,10 @@ class AttendanceGuardTest {
         val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
         assertEquals(1, Regex("""onSignOut\(\)""").findAll(shell).count())
         assertTrue(shell.contains("if (container.signOutBlocked()) logoutBlocked = true else onSignOut()"))
-        assertEquals(sortedSetOf("MainActivity.kt"), filesMatching(Regex("""auth::signOut|auth\.signOut\(""")))
+        // A server switch (DEV-REDESIGN.md) signs out too, behind the same rule.
+        assertEquals(sortedSetOf("AppContainer.kt", "MainActivity.kt"), filesMatching(Regex("""auth::signOut|auth\.signOut\(""")))
+        val container = sources.entries.first { it.key.name == "AppContainer.kt" }.value
+        assertTrue(container.substringAfter("suspend fun switchServer").substringBefore("auth.signOut()").contains("signOutBlocked()"))
     }
 
     @Test fun checkInNeedsLocationAllTheTime() {

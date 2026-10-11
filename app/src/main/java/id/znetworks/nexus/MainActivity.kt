@@ -8,7 +8,10 @@ import id.znetworks.nexus.feature.inbox.InboxApi
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
@@ -65,6 +68,11 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            // The DEV server (DEV-REDESIGN.md) is marked on every screen, drawn last so it sits on top, signed in or not.
+            if (id.znetworks.nexus.core.net.NexusConfig.env == id.znetworks.nexus.core.net.ServerEnv.DEV) androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier.fillMaxSize().statusBarsPadding().zIndex(10f),
+                contentAlignment = androidx.compose.ui.Alignment.TopCenter,
+            ) { id.znetworks.nexus.ui.components.DevBadge() }
         }
     }
 

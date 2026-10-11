@@ -766,7 +766,7 @@ private fun DeleteAccountDialog(onDone: () -> Unit, onCancel: () -> Unit) {
     )
 }
 
-fun openWeb(context: Context, path: String) = openUrl(context, NexusConfig.PUBLIC_BASE + path)
+fun openWeb(context: Context, path: String) = openUrl(context, NexusConfig.base + path)
 
 private fun openUrl(context: Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

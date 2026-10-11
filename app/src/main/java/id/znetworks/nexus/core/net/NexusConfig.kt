@@ -12,9 +12,38 @@ object NexusConfig {
     const val LAN_HOST = "lan.nexus.znetworks.id"
     const val PUBLIC_BASE = "https://$PUBLIC_HOST"
 
-    /** Exact match, never a suffix match: the session cookie goes to these two hosts only. */
-    fun isNexusHost(host: String?): Boolean =
-        host != null && (host.equals(PUBLIC_HOST, ignoreCase = true) || host.equals(LAN_HOST, ignoreCase = true))
+    /** The redesign's DEV server (DEV-REDESIGN.md, 12 Oct 2026): Tailscale only, a copy of the prod database. */
+    const val DEV_HOST = "nexus-prod.tail765d02.ts.net"
+    const val DEV_BASE = "https://$DEV_HOST:8443"
+
+    /**
+     * Which server this process talks to. Read once at start (ServerEnvStore.load, before the
+     * AppContainer is built) and never changed while the process lives: a switch signs out and restarts.
+     */
+    @Volatile var env: ServerEnv = ServerEnv.PRODUCTION
+
+    /** Where the API, images, realtime and web links point for [env]. */
+    val base: String get() = env.base
+
+    /**
+     * Exact match, never a suffix match: the session cookie goes to the production host and its LAN
+     * twin, or, on the DEV server, to the DEV host only.
+     */
+    fun isNexusHost(host: String?): Boolean = host != null && when (env) {
+        ServerEnv.PRODUCTION -> host.equals(PUBLIC_HOST, ignoreCase = true) || host.equals(LAN_HOST, ignoreCase = true)
+        ServerEnv.DEV -> host.equals(DEV_HOST, ignoreCase = true)
+    }
+}
+
+/** Production, or the redesign's DEV server (DEV-REDESIGN.md). [key] is what the preference stores. */
+enum class ServerEnv(val key: String, val base: String) {
+    PRODUCTION("production", NexusConfig.PUBLIC_BASE),
+    DEV("dev", NexusConfig.DEV_BASE);
+
+    companion object {
+        /** Anything unknown or missing is production. */
+        fun of(key: String?): ServerEnv = entries.firstOrNull { it.key == key } ?: PRODUCTION
+    }
 }
 
 /** What this build tells the server about itself on every request (API.md §1.4). */

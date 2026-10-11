@@ -201,6 +201,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLo
             }
             AppearanceCard()
             LanguageCard()
+            ServerCard()
             OfflineCard()
             WorkspaceMembersCard(onOpenProfile)
             Section(stringResource(R.string.acct_password)) {
@@ -352,6 +353,27 @@ private fun LanguageCard() {
             }
         }
     }
+}
+
+/** Settings › Server (DEV-REDESIGN.md): Production or the redesign's DEV server; a switch signs out. */
+@Composable
+private fun ServerCard() {
+    val c = Nx.colors
+    var switchTo by remember { mutableStateOf<id.znetworks.nexus.core.net.ServerEnv?>(null) }
+    val current = id.znetworks.nexus.core.net.NexusConfig.env
+    SettingsCard(stringResource(R.string.server_caps), stringResource(R.string.server_hint)) {
+        id.znetworks.nexus.core.net.ServerEnv.entries.forEach { env ->
+            val on = current == env
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (on) c.violet.copy(alpha = 0.1f) else Color.Transparent)
+                .clickable { if (!on) switchTo = env }.padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(id.znetworks.nexus.ui.components.serverLabel(env)), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                if (env == id.znetworks.nexus.core.net.ServerEnv.DEV) { Spacer(Modifier.width(8.dp)); id.znetworks.nexus.ui.components.DevBadge() }
+                Spacer(Modifier.weight(1f))
+                Icon(if (on) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null, tint = if (on) c.violetText else c.mutedFg.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+    switchTo?.let { id.znetworks.nexus.ui.components.ServerSwitchDialog(it) { switchTo = null } }
 }
 
 /** The iOS `.nexusCard()` with a small violet caps label. */

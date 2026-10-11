@@ -127,6 +127,8 @@ class LanRoute(
             val route = LanRoute(
                 toLan = { url -> if (url.host.equals(NexusConfig.PUBLIC_HOST, true)) url.newBuilder().host(NexusConfig.LAN_HOST).build() else null },
                 probe = probe@{
+                    // The office shortcut is production's; a DEV session never goes to the LAN host.
+                    if (NexusConfig.env != ServerEnv.PRODUCTION) return@probe false
                     val s = session() ?: return@probe false
                     val net = wifi.get() ?: return@probe false
                     val client = OkHttpClient.Builder()

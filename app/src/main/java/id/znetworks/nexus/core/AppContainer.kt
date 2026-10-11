@@ -116,7 +116,7 @@ class AppContainer(private val context: Context) {
      * [chatEvents] (the list and an open thread refresh), anything unread-related refreshes [badges];
      * every screen listens for its own pings through LiveRefresh.
      */
-    val realtime = id.znetworks.nexus.core.realtime.Realtime(api.http, id.znetworks.nexus.core.net.NexusConfig.PUBLIC_BASE, session = { sessionStore.current })
+    val realtime = id.znetworks.nexus.core.realtime.Realtime(api.http, id.znetworks.nexus.core.net.NexusConfig.base, session = { sessionStore.current })
 
     /** Unread counts for More (Inbox) and the Messages entry points (chat) (Berlin, 8 Oct). */
     val badges = Badges(appScope,
@@ -230,7 +230,7 @@ class AppContainer(private val context: Context) {
                 // Logout revokes the token on the server too (Berlin, 29 Sep; iOS f068bbf): fire and forget,
                 // with the session's own cookie, after the push device is gone (it needs that cookie).
                 // Offline, a 404 while the route is new, any error: the phone signs out regardless.
-                if (deliberate && session != null) appScope.launch {
+                if (deliberate && session != null) signOutWork = appScope.launch {
                     runCatching { pushGone?.join() }
                     runCatching { auth.revokeOnServer(session) }
                 }
@@ -277,6 +277,28 @@ class AppContainer(private val context: Context) {
     }
 
     /** The person's own logout is held now: a workday runs and the server's flag says to hold it. */
+    /** The deliberate sign-out's server calls (push device, token revoke), so a server switch can wait for them. */
+    @Volatile private var signOutWork: kotlinx.coroutines.Job? = null
+
+    /**
+     * Settings › Server (DEV-REDESIGN.md): sign out on the server being left (its push device and token
+     * go there, with its cookie), then save the other one and relaunch. Never returns, unless the switch
+     * is held (workday open, check-ins waiting).
+     */
+    suspend fun switchServer(to: id.znetworks.nexus.core.net.ServerEnv) {
+        // The dialog already refused these; checked again as the logout rule (Berlin 28 Sep) is checked twice.
+        if (serverSwitchHeld() || (sessionStore.current != null && signOutBlocked())) return
+        if (sessionStore.current != null) {
+            auth.signOut()
+            kotlinx.coroutines.withTimeoutOrNull(8_000) { signOutWork?.join() }
+        }
+        id.znetworks.nexus.core.net.ServerEnvStore.save(context, to)
+        id.znetworks.nexus.core.net.ServerEnvStore.relaunch(context)
+    }
+
+    /** Taps still waiting to be sent: a switch would lose them (sign-out empties the queue). */
+    fun serverSwitchHeld(): Boolean = attendanceQueue.state.value.count > 0
+
     fun signOutBlocked(): Boolean = remoteConfig.current.blockSignOutDuringWorkday && workdayOpen()
 
     /** A workday is running on this phone (see WorkdayRule). */

@@ -38,7 +38,7 @@ data class BuilderForm(val raw: JsonObject) {
 }
 
 object FormLink {
-    fun url(slug: String?, formId: String) = NexusConfig.PUBLIC_BASE + "/f/" + (slug?.takeIf { it.isNotEmpty() } ?: formId)
+    fun url(slug: String?, formId: String) = NexusConfig.base + "/f/" + (slug?.takeIf { it.isNotEmpty() } ?: formId)
 }
 
 data class BuilderCondition(val fieldId: String, val op: String, val value: String)

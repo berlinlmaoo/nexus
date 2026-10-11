@@ -316,13 +316,14 @@ class ApiClient(
     companion object {
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
         fun String.toJsonBody(): RequestBody = toRequestBody(JSON_MEDIA)
+        /** The API of whichever server this process talks to (NexusConfig.env). */
         fun production(
             identity: ClientIdentity,
             sessionProvider: () -> Session?,
             onUnauthorized: (Session) -> Unit,
             onUpgradeRequired: (ApiError.UpgradeRequired) -> Unit,
             routeInterceptor: Interceptor? = null,
-        ) = ApiClient(NexusConfig.PUBLIC_BASE.toHttpUrl(), identity, sessionProvider, onUnauthorized, onUpgradeRequired,
+        ) = ApiClient(NexusConfig.base.toHttpUrl(), identity, sessionProvider, onUnauthorized, onUpgradeRequired,
             routeInterceptor = routeInterceptor)
     }
 }

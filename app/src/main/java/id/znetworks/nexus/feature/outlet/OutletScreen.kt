@@ -239,7 +239,7 @@ private fun MonthBar(d: OutletMonth, vm: OutletViewModel, onAdd: () -> Unit) {
 
 /** NEXUS link to the form (§8): it needs a login and project access; there is no public form. */
 internal fun copyFormLink(context: android.content.Context, projectId: String, eventId: String?) {
-    val url = id.znetworks.nexus.core.net.NexusConfig.PUBLIC_BASE + "/projects/$projectId?view=form" + (eventId?.let { "&event=$it" } ?: "")
+    val url = id.znetworks.nexus.core.net.NexusConfig.base + "/projects/$projectId?view=form" + (eventId?.let { "&event=$it" } ?: "")
     val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     cm.setPrimaryClip(android.content.ClipData.newPlainText("NEXUS", url))
     Toast.makeText(context, context.getString(R.string.os_link_copied), Toast.LENGTH_LONG).show()
