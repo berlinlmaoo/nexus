@@ -205,6 +205,7 @@ if [ "$BAGIAN" = "all" ] || [ "$BAGIAN" = "frontend" ]; then
   grep -rqs "not production" "$APP/dist-dev/assets" || { red "DEV marker missing from the build — refusing"; exit 1; }
   rm -rf "$APP/dist-dev/.well-known"     # no universal-link claims from dev
   rsync -a --delete "$APP/dist-dev/" "$DIST/"     # in place: nginx bind-mounts this directory
+  rm -rf "$APP/dist-dev"
   green "dev SPA deployed ($n files)"
 fi
 
