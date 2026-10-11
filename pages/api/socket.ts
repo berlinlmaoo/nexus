@@ -542,6 +542,12 @@ export function initializeSocketServer(
     io.to(`project:${data.projectId}`).emit("outlet-sales-changed", { projectId: data.projectId, eventId: data.eventId, month: data.month, actorId: data.actorId })
   })
 
+  // A project's automations changed or ran (lib/socket-emitter.ts emitAutomationsChanged): ids only, to the
+  // project's room (VIEWER access to join). The Automations tab refetches its list and run log.
+  eventBus.on(BUS_EVENTS.AUTOMATIONS_CHANGED, (data: { projectId: string; automationId: string | null; actorId: string | null }) => {
+    io.to(`project:${data.projectId}`).emit("automations-changed", { projectId: data.projectId, automationId: data.automationId, actorId: data.actorId })
+  })
+
   // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes
   // out once, after the last write in the window has committed. Nothing is looked up per write.
   let auditPing: ReturnType<typeof setTimeout> | null = null

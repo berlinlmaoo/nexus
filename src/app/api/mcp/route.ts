@@ -10,6 +10,7 @@ import prisma from "@/lib/prisma"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { logAudit } from "@/lib/audit"
+import { runAutomations } from "@/lib/automation-engine"
 import { verifyMcpToken, mcpUserId } from "@/lib/mcp-token-auth"
 import { MCP_ISSUER } from "@/lib/mcp-oauth"
 
@@ -166,6 +167,7 @@ const handler = createMcpHandler(
           select: { id: true, title: true, status: true, taskListId: true },
         })
         try { await logAudit({ action: "create", entityType: "task", entityId: task.id, entityName: task.title, userId, metadata: { via: "mcp" } }) } catch { /* best-effort */ }
+        runAutomations({ kind: "task_created", projectId: list.projectId, actorId: userId, taskId: task.id }).catch(() => {})
         return ok({ created: true, task })
       },
     )
@@ -186,7 +188,7 @@ const handler = createMcpHandler(
       async (args: { taskId: string; taskListId?: string; status?: string; priority?: string; title?: string; description?: string | null; dueDate?: string | null; assigneeIds?: string[] }, extra: { authInfo?: AuthInfo }) => {
         const userId = mcpUserId(extra)
         if (!hasScope(extra, "tasks:write")) return forbidden("Forbidden: token ini read-only (butuh scope tasks:write).")
-        const existing = await prisma.task.findUnique({ where: { id: args.taskId }, select: { taskList: { select: { projectId: true } } } })
+        const existing = await prisma.task.findUnique({ where: { id: args.taskId }, select: { status: true, priority: true, title: true, dueDate: true, taskListId: true, assignees: { select: { userId: true } }, taskList: { select: { projectId: true } } } })
         if (!existing) return ok("Task not found.")
         const { allowed } = await checkProjectAccess(userId, existing.taskList.projectId, ["MEMBER"])
         if (!allowed) return forbidden()
@@ -212,6 +214,19 @@ const handler = createMcpHandler(
           select: { id: true, title: true, status: true, priority: true, taskListId: true },
         })
         try { await logAudit({ action: "update", entityType: "task", entityId: updated.id, entityName: updated.title, userId, metadata: { via: "mcp" } }) } catch { /* best-effort */ }
+        // Project automations (12 Oct 2026): the same "task_updated" event the task PATCH route raises.
+        const beforeAssignees = existing.assignees.map((a) => a.userId)
+        runAutomations({
+          kind: "task_updated", projectId: existing.taskList.projectId, actorId: userId, taskId: updated.id,
+          changes: {
+            ...(args.status ? { status: { from: existing.status, to: args.status } } : {}),
+            ...(args.priority ? { priority: { from: existing.priority, to: args.priority } } : {}),
+            ...(args.title ? { title: { from: existing.title, to: args.title.trim() } } : {}),
+            ...(args.dueDate !== undefined ? { dueDate: { from: existing.dueDate?.toISOString() ?? null, to: args.dueDate ? new Date(args.dueDate).toISOString() : null } } : {}),
+            ...(args.taskListId ? { section: { from: existing.taskListId, to: args.taskListId } } : {}),
+            ...(args.assigneeIds ? { assignee: { added: args.assigneeIds.filter((id) => !beforeAssignees.includes(id)), removed: beforeAssignees.filter((id) => !args.assigneeIds!.includes(id)) } } : {}),
+          },
+        }).catch(() => {})
         return ok({ updated: true, task: updated })
       },
     )

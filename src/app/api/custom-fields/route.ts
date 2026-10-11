@@ -22,6 +22,7 @@ import {
   formatCustomFieldValueForExport,
 } from "@/lib/custom-fields"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+import { runAutomations } from "@/lib/automation-engine"
 
 /** A stored custom-field value as a person reads it (option label, "Rp 2.000.000", file names). */
 function auditDisplayValue(type: SupportedCustomFieldType, options: unknown, raw: string | null | undefined): string | null {
@@ -526,6 +527,15 @@ export async function PATCH(req: NextRequest) {
           value: serializedValue,
         },
       })
+
+      // "Field changed" automations on this custom field (12 Oct 2026). Values are compared as stored.
+      runAutomations({
+        kind: "task_updated",
+        projectId: existingField.projectId,
+        actorId: session.user.id,
+        taskId,
+        changes: { [`cf:${id}`]: { from: parseCustomFieldValue(normalizedType, task.customFieldValues[0]?.value ?? "", task.createdAt), to: parseCustomFieldValue(normalizedType, fieldValue.value, task.createdAt) } },
+      }).catch(() => {})
 
       logAudit({
         action: "update",

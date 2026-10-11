@@ -1,11 +1,131 @@
 export const dynamic = "force-dynamic"
 
+import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { checkProjectAccess } from '@/lib/rbac'
 import { logAudit } from '@/lib/audit'
 import { restorableDelete } from '@/lib/deletion-snapshot'
+import { emitAutomationsChanged } from '@/lib/socket-emitter'
+import { webhookUrlError } from '@/lib/webhook-dispatcher'
+import {
+  MAX_ACTIONS,
+  actionError,
+  actionsOf,
+  nextSlot,
+  normalizeAction,
+  normalizeConditions,
+  normalizeTrigger,
+  scheduleOf,
+  triggerError,
+  type Conditions,
+  type Rule,
+} from '@/lib/automation-rules'
+import type { InputJsonValue } from '@prisma/client/runtime/client'
+
+/**
+ * Project automations (rebuilt 12 Oct 2026). Anyone who can see the project lists them; only people who
+ * manage it (LEAD: Manager, BoD, One Above All — lib/rbac.ts) create, edit, toggle or delete.
+ *
+ * Every trigger/action type is normalised on save AND on read (lib/automation-rules.ts): the old web UI
+ * stored "task_created" while the engine matched "TASK_CREATED", so its rules never fired.
+ *
+ * Released apps: iOS/Android read GET (decoding trigger/action as {type, field?, value?} strings) and
+ * PATCH {id, enabled}. Both shapes are unchanged; everything new is additive.
+ */
+
+type Row = {
+  id: string; name: string; enabled: boolean; projectId: string
+  trigger: unknown; action: unknown; actions: unknown; condition: unknown; conditions: unknown
+  createdAt: Date; updatedAt: Date; createdById: string | null
+  lastRunAt: Date | null; lastRunStatus: string | null; runCount: number; webhookToken: string | null
+}
+
+function publicBase(req: NextRequest): string {
+  const env = process.env.NEXUS_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL
+  if (env) return env.replace(/\/+$/, '')
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+  return host ? `${proto}://${host}` : ''
+}
+
+/** A row as clients see it: normalised types, `action` = the first action (released apps), webhook URL for editors only. */
+function present(row: Row, canEdit: boolean, req: NextRequest) {
+  const trigger = normalizeTrigger(row.trigger) ?? { type: String((row.trigger as { type?: unknown } | null)?.type ?? 'UNKNOWN') }
+  const actions = actionsOf(row)
+  const conditions = normalizeConditions(row.conditions, row.condition)
+  const schedule = trigger.type === 'SCHEDULED' ? scheduleOf(trigger) : null
+  return {
+    id: row.id,
+    name: row.name,
+    enabled: row.enabled,
+    projectId: row.projectId,
+    trigger,
+    action: actions[0] ? { type: actions[0].type, ...(actions[0].field ? { field: actions[0].field } : {}), ...(actions[0].value !== undefined ? { value: actions[0].value } : {}) } : null,
+    actions,
+    conditions,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    createdById: row.createdById,
+    lastRunAt: row.lastRunAt,
+    lastRunStatus: row.lastRunStatus,
+    runCount: row.runCount,
+    nextRunAt: schedule && row.enabled ? nextSlot(schedule, new Date()) : null,
+    ...(canEdit && trigger.type === 'WEBHOOK_RECEIVED' && row.webhookToken
+      ? { webhookUrl: `${publicBase(req)}/api/automations/hook/${row.webhookToken}` }
+      : {}),
+  }
+}
+
+type Parsed = { trigger: Rule; actions: Rule[]; conditions: Conditions | null }
+
+/** Validate a posted rule. `partial` (PATCH) lets any of the three be absent. */
+async function parseRule(
+  body: { trigger?: unknown; action?: unknown; actions?: unknown; condition?: unknown; conditions?: unknown },
+  partial: boolean,
+): Promise<{ ok: true; value: Partial<Parsed> } | { ok: false; error: string }> {
+  const out: Partial<Parsed> = {}
+  if (body.trigger !== undefined || !partial) {
+    const trigger = normalizeTrigger(body.trigger)
+    if (!trigger) return { ok: false, error: 'Unknown trigger' }
+    const err = triggerError(trigger)
+    if (err) return { ok: false, error: err }
+    out.trigger = trigger
+  }
+  if (body.actions !== undefined || body.action !== undefined || !partial) {
+    const raw = Array.isArray(body.actions) ? body.actions : body.action ? [body.action] : []
+    if (raw.length === 0) return { ok: false, error: 'Add at least one action' }
+    if (raw.length > MAX_ACTIONS) return { ok: false, error: `At most ${MAX_ACTIONS} actions` }
+    const actions: Rule[] = []
+    for (const a of raw) {
+      const n = normalizeAction(a)
+      if (!n) return { ok: false, error: `Unknown action ${(a as { type?: unknown })?.type ?? ''}` }
+      const err = actionError(n)
+      if (err) return { ok: false, error: err }
+      if (n.type === 'CALL_WEBHOOK') {
+        // Private and internal addresses are refused now; a host that does not resolve yet is allowed
+        // (checked again before every call, as for project webhooks).
+        const blocked = await webhookUrlError(n.value)
+        if (blocked && blocked !== 'Webhook host does not resolve') return { ok: false, error: blocked }
+      }
+      actions.push(n)
+    }
+    out.actions = actions
+  }
+  if (body.conditions !== undefined || body.condition !== undefined) {
+    out.conditions = normalizeConditions(body.conditions, body.condition)
+  } else if (!partial) out.conditions = null
+  return { ok: true, value: out }
+}
+
+function newToken() {
+  return randomBytes(24).toString('base64url')
+}
+
+function json(v: unknown): InputJsonValue {
+  return v as InputJsonValue
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,8 +136,9 @@ export async function GET(req: NextRequest) {
     if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
     const { allowed } = await checkProjectAccess(session.user.id, projectId, ['MEMBER'])
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    const automations = await prisma.automation.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
-    return NextResponse.json({ automations })
+    const { allowed: canEdit } = await checkProjectAccess(session.user.id, projectId, ['LEAD'])
+    const rows = (await prisma.automation.findMany({ where: { projectId }, orderBy: [{ createdAt: 'asc' }, { name: 'asc' }] })) as Row[]
+    return NextResponse.json({ automations: rows.map((r) => present(r, canEdit, req)), canEdit })
   } catch (error) {
     console.error('Error fetching automations:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -28,19 +149,37 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { name, projectId, trigger, action } = await req.json()
-    if (!name || !projectId || !trigger || !action) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+    const body = await req.json()
+    const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 200) : ''
+    const projectId = typeof body?.projectId === 'string' ? body.projectId : ''
+    if (!name || !projectId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
     const { allowed } = await checkProjectAccess(session.user.id, projectId, ['LEAD'])
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden: LEAD role required to create automations' }, { status: 403 })
     }
 
-    const automation = await prisma.automation.create({ data: { name, projectId, trigger, action } })
+    const parsed = await parseRule(body, false)
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    const { trigger, actions, conditions } = parsed.value as Parsed
 
-    logAudit({ action: "create", entityType: "automation", entityId: automation.id, entityName: name, userId: session.user.id, request: req })
+    const automation = (await prisma.automation.create({
+      data: {
+        name, projectId,
+        trigger: json(trigger),
+        action: json(actions[0]),
+        actions: json(actions),
+        ...(conditions ? { conditions: json(conditions) } : {}),
+        enabled: body.enabled === false ? false : true,
+        createdById: session.user.id,
+        webhookToken: trigger.type === 'WEBHOOK_RECEIVED' ? newToken() : null,
+      },
+    })) as Row
 
-    return NextResponse.json({ automation }, { status: 201 })
+    logAudit({ action: "create", entityType: "automation", entityId: automation.id, entityName: name, userId: session.user.id, request: req, metadata: { projectId, trigger: trigger.type, actions: actions.map((a) => a.type) } })
+    emitAutomationsChanged(projectId, automation.id, session.user.id)
+
+    return NextResponse.json({ automation: present(automation, true, req) }, { status: 201 })
   } catch (error) {
     console.error('Error creating automation:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -51,10 +190,11 @@ export async function PATCH(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { id, enabled, name, trigger, action } = await req.json()
+    const body = await req.json()
+    const { id, enabled } = body ?? {}
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const existing = await prisma.automation.findUnique({ where: { id }, select: { projectId: true } })
+    const existing = await prisma.automation.findUnique({ where: { id }, select: { projectId: true, webhookToken: true, trigger: true } })
     if (!existing) return NextResponse.json({ error: 'Automation not found' }, { status: 404 })
 
     const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ['LEAD'])
@@ -62,14 +202,35 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: LEAD role required to update automations' }, { status: 403 })
     }
 
-    const automation = await prisma.automation.update({
-      where: { id },
-      data: { ...(enabled !== undefined && { enabled }), ...(name !== undefined && { name }), ...(trigger !== undefined && { trigger }), ...(action !== undefined && { action }) },
-    })
+    const parsed = await parseRule(body, true)
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    const { trigger, actions, conditions } = parsed.value
 
-    logAudit({ action: "update", entityType: "automation", entityId: id, entityName: automation.name, userId: session.user.id, request: req, metadata: { changes: { enabled, name, trigger, action } } })
+    const data: Record<string, unknown> = {}
+    if (typeof enabled === 'boolean') data.enabled = enabled
+    if (typeof body.name === 'string') {
+      const name = body.name.trim().slice(0, 200)
+      if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+      data.name = name
+    }
+    if (trigger) {
+      data.trigger = json(trigger)
+      if (trigger.type === 'WEBHOOK_RECEIVED') { if (!existing.webhookToken) data.webhookToken = newToken() }
+      else data.webhookToken = null
+    }
+    if (body.regenerateWebhookToken === true) {
+      const t = trigger ?? normalizeTrigger(existing.trigger)
+      if (t?.type === 'WEBHOOK_RECEIVED') data.webhookToken = newToken()
+    }
+    if (actions) { data.actions = json(actions); data.action = json(actions[0]) }
+    if (conditions !== undefined) data.conditions = conditions ? json(conditions) : null
 
-    return NextResponse.json({ automation })
+    const automation = (await prisma.automation.update({ where: { id }, data })) as Row
+
+    logAudit({ action: "update", entityType: "automation", entityId: id, entityName: automation.name, userId: session.user.id, request: req, metadata: { projectId: existing.projectId, changes: { enabled, name: body.name, trigger: trigger?.type, actions: actions?.map((a) => a.type), conditions: conditions === undefined ? undefined : conditions?.rules.length ?? 0 } } })
+    emitAutomationsChanged(existing.projectId, id, session.user.id)
+
+    return NextResponse.json({ automation: present(automation, true, req) })
   } catch (error) {
     console.error('Error updating automation:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -99,6 +260,7 @@ export async function DELETE(req: NextRequest) {
       meta: { open: { type: "project", id: existing.projectId }, projectId: existing.projectId },
       remove: (tx) => tx.automation.delete({ where: { id } }),
     })
+    emitAutomationsChanged(existing.projectId, id, session.user.id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

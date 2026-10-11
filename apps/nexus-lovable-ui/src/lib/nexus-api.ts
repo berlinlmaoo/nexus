@@ -1311,15 +1311,52 @@ export type NexusAutomationRule = {
   type: string;
   field?: string;
   value?: string;
+  config?: Record<string, unknown>;
 };
+
+export type NexusAutomationConditions = { match: "all" | "any"; rules: Array<{ field: string; op: string; value?: string }> };
 
 export type NexusAutomation = {
   id: string;
   name: string;
   enabled?: boolean;
   trigger?: NexusAutomationRule | null;
+  /** The first action (what released apps read); `actions` has all of them (12 Oct 2026). */
   action?: NexusAutomationRule | null;
+  actions?: NexusAutomationRule[];
+  conditions?: NexusAutomationConditions | null;
   projectId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdById?: string | null;
+  lastRunAt?: string | null;
+  lastRunStatus?: string | null;
+  runCount?: number;
+  nextRunAt?: string | null;
+  /** Inbound URL of a "Webhook received" rule; only sent to people who can edit. */
+  webhookUrl?: string;
+};
+
+export type NexusAutomationRun = {
+  id: string;
+  createdAt: string;
+  event: string;
+  trigger: string;
+  status: string;
+  steps: Array<{ type: string; ok: boolean; skipped?: boolean; message: string }>;
+  error?: string | null;
+  durationMs?: number | null;
+  taskId?: string | null;
+  task?: { id: string; title: string } | null;
+  actor?: { id: string; name?: string | null; avatar?: string | null } | null;
+};
+
+export type NexusAutomationInput = {
+  name: string;
+  trigger: NexusAutomationRule;
+  actions: NexusAutomationRule[];
+  conditions: NexusAutomationConditions | null;
+  enabled?: boolean;
 };
 
 export type NexusFormField = {
@@ -2909,9 +2946,11 @@ export const nexusApi = {
   },
 
   // --- Automations ---
-  automations: (projectId: string) => apiFetch<{ automations: NexusAutomation[] }>(`/api/automations?projectId=${encodeURIComponent(projectId)}`),
-  createAutomation: (payload: { name: string; projectId: string; trigger: NexusAutomationRule; action: NexusAutomationRule }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "POST", body: JSON.stringify(payload) }),
-  updateAutomation: (payload: { id: string; enabled?: boolean; name?: string; trigger?: NexusAutomationRule; action?: NexusAutomationRule }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "PATCH", body: JSON.stringify(payload) }),
+  automations: (projectId: string) => apiFetch<{ automations: NexusAutomation[]; canEdit?: boolean }>(`/api/automations?projectId=${encodeURIComponent(projectId)}`),
+  createAutomation: (payload: { name: string; projectId: string; trigger: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null; enabled?: boolean }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "POST", body: JSON.stringify(payload) }),
+  updateAutomation: (payload: { id: string; enabled?: boolean; name?: string; trigger?: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null; regenerateWebhookToken?: boolean }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "PATCH", body: JSON.stringify(payload) }),
+  automationRuns: (automationId: string, before?: string) => apiFetch<{ runs: NexusAutomationRun[]; hasMore: boolean }>(`/api/automations/runs?automationId=${encodeURIComponent(automationId)}&limit=50${before ? `&before=${encodeURIComponent(before)}` : ""}`),
+  runAutomation: (id: string, taskId?: string) => apiFetch<{ run: { runId: string | null; status: string; steps: NexusAutomationRun["steps"] } | null; skipped?: boolean; reason?: string }>("/api/automations/run", { method: "POST", body: JSON.stringify({ id, taskId }) }),
   deleteAutomation: (id: string) => apiFetch<{ success?: boolean }>(`/api/automations?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   automationSuggestions: (projectId: string) => apiFetch<{ suggestions: Array<{ name: string; trigger: NexusAutomationRule; action: NexusAutomationRule }> }>(`/api/automations/suggestions?projectId=${encodeURIComponent(projectId)}`, { method: "POST" }),
 

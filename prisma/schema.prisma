@@ -913,16 +913,64 @@ model SprintTask {
   @@unique([sprintId, taskId])
 }
 
+/// A project rule "When <trigger> (If <conditions>) Do <actions>" (builder rebuilt 12 Oct 2026). The shapes are
+/// defined in src/lib/automation-rules.ts. `action` stays the FIRST action so released iOS/Android, which decode
+/// {type, field?, value?} as strings, keep showing the rule; `actions` holds all of them.
 model Automation {
-  id        String  @id @default(cuid())
-  name      String
-  trigger   Json
-  action    Json
-  condition Json?
-  enabled   Boolean @default(true)
+  id         String    @id @default(cuid())
+  name       String
+  trigger    Json
+  action     Json
+  condition  Json?
+  /// { match: "all" | "any", rules: [{ field, op, value? }] } — null = no conditions.
+  conditions Json?
+  /// [{ type, value?, field?, config? }] in order — null on rows made before 12 Oct 2026 (then `action` alone runs).
+  actions    Json?
+  enabled    Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  /// Who made it; clock- and webhook-driven runs act as this person (else a project lead).
+  createdById String?
+  lastRunAt     DateTime?
+  /// SUCCESS | PARTIAL | FAILED | SKIPPED of the last run.
+  lastRunStatus String?
+  runCount      Int       @default(0)
+  /// Secret path part of the inbound webhook (/api/automations/hook/<token>) for WEBHOOK_RECEIVED rules.
+  webhookToken  String?   @unique
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  runs AutomationRun[]
+
+  @@index([projectId])
+}
+
+/// One firing of an automation: the run log. Kept 90 days (automation-engine.ts pruneAutomationRuns).
+model AutomationRun {
+  id           String   @id @default(cuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  projectId    String
+  /// No FK: the task may be archived/deleted by the run itself and the log must survive it.
+  taskId       String?
+  /// task_created | task_updated | comment_added | form_submitted | due_approaching | due_reached | scheduled | webhook | manual
+  event        String
+  trigger      String
+  /// RUNNING | SUCCESS | PARTIAL | FAILED | SKIPPED
+  status       String
+  /// [{ type, ok, skipped?, message }] per action.
+  steps        Json?
+  error        String?
+  actorId      String?
+  /// Makes a clock-driven firing happen once (per task + due date, per schedule slot).
+  dedupKey     String?
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+
+  @@unique([automationId, dedupKey])
+  @@index([automationId, createdAt])
+  @@index([createdAt])
 }
 
 model CustomField {

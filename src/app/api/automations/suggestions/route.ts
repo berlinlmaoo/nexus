@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { checkProjectAccess } from '@/lib/rbac'
+import { normalizeAction, normalizeTrigger } from '@/lib/automation-rules'
 
 interface Suggestion {
   name: string
@@ -133,7 +134,13 @@ export async function GET(req: NextRequest) {
     // Limit to top 5 by confidence
     suggestions.sort((a, b) => b.confidence - a.confidence)
 
-    return NextResponse.json({ suggestions: suggestions.slice(0, 5) })
+    // Canonical types (12 Oct 2026), so a suggestion added as-is is a rule the engine actually runs.
+    const canonical = suggestions.slice(0, 5).flatMap((sg) => {
+      const trigger = normalizeTrigger(sg.trigger)
+      const action = normalizeAction(sg.action)
+      return trigger && action ? [{ ...sg, trigger, action }] : []
+    })
+    return NextResponse.json({ suggestions: canonical })
   } catch (error) {
     console.error('Error generating automation suggestions:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

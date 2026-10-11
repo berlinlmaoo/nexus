@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
-import { executeAutomations } from "@/lib/automation-engine"
+import { runAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
 import { notifyTaskAssigned, notifyTaskCompleted, notifySubmissionStatus } from "@/lib/notification-service"
@@ -429,24 +429,33 @@ export async function PATCH(
       },
     })
 
-    // Fire automations for status changes
-    if (status !== undefined && status !== existing.status) {
-      executeAutomations(existing.taskList.projectId, "task_status_changed", {
-        taskId: taskId,
-        userId: session.user.id!,
-        projectId: effectiveProjectId,
-        oldStatus: existing.status,
-        newStatus: status,
-      }).catch(() => {})
-    }
-
-    // Fire automations for assignee changes
+    // Automations (rebuilt 12 Oct 2026): one "task_updated" event with what actually moved, fired after
+    // every write of this request (assignees included: they are rewritten further down, and the old call
+    // here raced that rewrite). The engine drops fields whose value did not change.
+    const previousAssigneeSet = new Set(existing.assignees.map((assignee) => assignee.userId))
+    const automationChanges: Record<string, { from?: unknown; to?: unknown; added?: string[]; removed?: string[] }> = {}
+    if (status !== undefined) automationChanges.status = { from: existing.status, to: status }
+    if (priority !== undefined) automationChanges.priority = { from: existing.priority, to: priority }
+    if (title !== undefined) automationChanges.title = { from: existing.title, to: title }
+    if (description !== undefined) automationChanges.description = { from: existing.description, to: description }
+    if (tags !== undefined) automationChanges.tags = { from: existing.tags, to: tags }
+    if (updateData.dueDate !== undefined) automationChanges.dueDate = { from: existing.dueDate?.toISOString() ?? null, to: (updateData.dueDate as Date | null)?.toISOString() ?? null }
+    if (updateData.startDate !== undefined) automationChanges.startDate = { from: existing.startDate?.toISOString() ?? null, to: (updateData.startDate as Date | null)?.toISOString() ?? null }
+    if (taskListId !== undefined && !isLinkedProjectContext) automationChanges.section = { from: existing.taskListId, to: taskListId }
     if (assigneeIds !== undefined) {
-      executeAutomations(existing.taskList.projectId, "task_assigned", {
-        taskId: taskId,
-        userId: session.user.id!,
-        projectId: effectiveProjectId,
-        assigneeIds,
+      const nextAssignees = new Set<string>(assigneeIds)
+      automationChanges.assignee = {
+        added: [...nextAssignees].filter((id) => !previousAssigneeSet.has(id)),
+        removed: [...previousAssigneeSet].filter((id) => !nextAssignees.has(id)),
+      }
+    }
+    const fireAutomations = () => {
+      runAutomations({
+        kind: "task_updated",
+        projectId: existing.taskList.projectId,
+        actorId: session.user.id!,
+        taskId,
+        changes: automationChanges,
       }).catch(() => {})
     }
 
@@ -527,6 +536,7 @@ export async function PATCH(
         emitTaskUpdated(projectId, JSON.parse(JSON.stringify(updatedTask)))
       }
 
+      fireAutomations()
       return NextResponse.json(updatedTask)
     }
 
@@ -538,6 +548,7 @@ export async function PATCH(
       emitTaskUpdated(projectId, JSON.parse(JSON.stringify(task)))
     }
 
+    fireAutomations()
     return NextResponse.json(task)
   } catch (error) {
     console.error("Error updating task:", error)
