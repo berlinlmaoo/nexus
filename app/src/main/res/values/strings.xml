@@ -669,8 +669,6 @@
     <string name="ptab_pages">Pages</string>
     <string name="ptab_forms">Forms</string>
     <string name="ptab_chat">Chat</string>
-    <string name="ptab_finance">Finance</string>
-    <string name="ptab_pnl">P&amp;L</string>
     <string name="pt_sheet_empty">No tasks to show in the spreadsheet yet.</string>
     <string name="pt_col_task">Task</string>
     <string name="pt_col_section">Section</string>
@@ -703,10 +701,6 @@
     <string name="pt_auto_empty">No automations yet. Set up rules from the web app (desktop).</string>
     <string name="pt_auto_if">IF</string>
     <string name="pt_auto_then">THEN</string>
-    <string name="pt_finance_none">Finance isn\'t available for this project yet.</string>
-    <string name="pt_pnl_none">P&amp;L isn\'t enabled / BoD access required.</string>
-    <string name="pt_paid">Paid %1$s</string>
-    <string name="pt_outstanding">Left %1$s</string>
     <string name="btn_check_in">Check in</string>
     <string name="btn_check_out">Check out</string>
     <string name="btn_done">Done for today</string>
@@ -737,11 +731,6 @@
     <string name="ps_photo_remove">Remove photo</string>
     <string name="ps_save_identity">Save identity</string>
     <string name="ps_customize">Customize</string>
-    <string name="ps_batch_dup">Task duplicate mode</string>
-    <string name="ps_batch_dup_sub">Multi-select duplicate + a due-date popup for recurring tasks.</string>
-    <string name="ps_proof">Proof required for DONE</string>
-    <string name="ps_proof_sub">A task can only be marked done with at least one disbursement proof attached.</string>
-    <string name="ps_pnl_sub">Standalone finance view: daily spend, incoming-cash pipeline.</string>
     <string name="ps_auto_sub">Auto-assign the selected members to new tasks in this project.</string>
     <string name="ps_auto_to">Auto-assign to:</string>
     <string name="ps_auto_pick_first">Pick at least one member first.</string>
@@ -2406,7 +2395,6 @@
     <string name="ps_tabs_sub">Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back.</string>
     <string name="ps_tabs_board_or_list">Board or List stays on</string>
     <string name="ps_tabs_managers">Only managers and above can change the tabs.</string>
-    <string name="ps_finance_sub">Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&amp;L. Turning it off only hides the tab — the numbers stay.</string>
     <string name="pt_question">What is this project for?</string>
     <string name="pt_soon">Coming soon</string>
     <string name="pt_change">Change type</string>
@@ -2987,4 +2975,16 @@
         <item quantity="one">%1$d night is waiting for its report</item>
         <item quantity="other">%1$d nights are waiting for their report</item>
     </plurals>
+    <string name="bulk_select">Select multiple</string>
+    <string name="bulk_duplicate">Duplicate</string>
+    <string name="bulk_duplicate_date">Duplicate + date…</string>
+    <string name="bulk_dup_sub">Set a new due date for the copies (optional).</string>
+    <string name="bulk_dup_label">Copy\'s due date</string>
+    <string name="bulk_dup_pick">Pick a date</string>
+    <string name="bulk_dup_clear">Clear date</string>
+    <string name="bulk_dup_keep">Leave it blank to keep each task\'s own due date.</string>
+    <string name="bulk_dup_failed">Couldn\'t duplicate %1$d of %2$d tasks</string>
+    <plurals name="bulk_selected"><item quantity="one">%d selected</item><item quantity="other">%d selected</item></plurals>
+    <plurals name="bulk_dup_title"><item quantity="one">Duplicate %d task</item><item quantity="other">Duplicate %d tasks</item></plurals>
+    <plurals name="bulk_dup_done"><item quantity="one">%d task duplicated</item><item quantity="other">%d tasks duplicated</item></plurals>
 </resources>

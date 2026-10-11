@@ -80,10 +80,10 @@ class OutletSalesTest {
     @Test fun projectTypeAndTabs() {
         assertEquals(listOf("TASK", "OUTLET_SALES", "CONTENT", "PIPELINE"), ProjectType.entries.map { it.code })
         assertTrue(ProjectType.OUTLET_SALES.ready)
-        val tabs = ProjectTabsLogic.visible(emptySet(), financeOn = false, pnlOn = false, isBoD = false, isOutlet = true)
+        val tabs = ProjectTabsLogic.visible(emptySet(), isOutlet = true)
         assertEquals(listOf(ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM, ProjectTab.CHAT), tabs)
         assertEquals(ProjectTab.OUTLET_OVERVIEW, ProjectTabsLogic.fallback(ProjectTab.BOARD, tabs))
-        assertFalse(ProjectTabsLogic.visible(emptySet(), false, false, false).any { it.name.startsWith("OUTLET") })
+        assertFalse(ProjectTabsLogic.visible(emptySet()).any { it.name.startsWith("OUTLET") })
         val e = RealtimeEvents.parse(RealtimeEvents.OUTLET_SALES_CHANGED, """{"projectId":"p","eventId":null,"month":"2026-10","actorId":"u"}""")
         assertEquals("p", e.projectId); assertTrue(RealtimeEvents.OUTLET_SALES_CHANGED in RealtimeEvents.LISTENED)
     }

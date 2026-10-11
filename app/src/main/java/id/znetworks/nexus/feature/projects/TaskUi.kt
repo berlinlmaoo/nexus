@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Icon
@@ -125,10 +127,13 @@ fun TaskCard(
     onLongClick: (() -> Unit)? = null,
     showProject: Boolean = false,
     modifier: Modifier = Modifier,
+    /** Multi-select (TaskBulk): null = not selecting; true draws the card picked. */
+    selected: Boolean? = null,
 ) {
     val c = Nx.colors
     Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (selected == true) c.accentBg else c.card)
+            .border(if (selected == true) 2.dp else 1.dp, if (selected == true) c.violet else c.border, RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -136,6 +141,10 @@ fun TaskCard(
             Text("↳ " + stringResource(R.string.task_subtask_of, t.parentTitle ?: "…"), fontSize = 10.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(verticalAlignment = Alignment.Top) {
+            if (selected != null) {
+                Icon(if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank, null, Modifier.size(24.dp), tint = if (selected) c.violet else c.mutedFg)
+                Spacer(Modifier.size(8.dp))
+            }
             if (onToggleDone != null) {
                 IconButton(onClick = onToggleDone, modifier = Modifier.size(24.dp)) {
                     Icon(if (t.isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, stringResource(R.string.task_toggle_done),

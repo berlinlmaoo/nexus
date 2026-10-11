@@ -55,39 +55,6 @@ data class Automation(val id: String, val name: String = "", val enabled: Boolea
 data class AutomationsResponse(val automations: List<Automation> = emptyList())
 
 @Serializable
-data class FinLine(val id: String, val name: String = "", val total: Double? = null)
-
-@Serializable
-data class FinCategory(val id: String, val kind: String = "", val name: String = "", val lineItems: List<FinLine> = emptyList(), val subtotal: Double? = null)
-
-@Serializable
-data class FinTotals(val opexTotal: Double? = null, val revenueTotal: Double? = null, val profitTotal: Double? = null)
-
-@Serializable
-data class FinanceDashboard(val year: Int? = null, val categories: List<FinCategory> = emptyList(), val totals: FinTotals? = null)
-
-@Serializable
-data class PnlTotals(val income: Double? = null, val expense: Double? = null, val profit: Double? = null, val pipelineOutstanding: Double? = null)
-
-@Serializable
-data class PnlStage(val id: String, val name: String = "", val color: String? = null, val count: Int? = null, val outstanding: Double? = null)
-
-@Serializable
-data class PnlIncome(val id: String, val title: String = "", val totalAmount: Double? = null, val paid: Double? = null, val outstanding: Double? = null)
-
-@Serializable
-data class PnlCategory(val id: String, val name: String = "", val color: String? = null, val total: Double? = null)
-
-@Serializable
-data class PnlDashboard(
-    val year: Int? = null,
-    val totals: PnlTotals? = null,
-    val stages: List<PnlStage> = emptyList(),
-    val incomes: List<PnlIncome> = emptyList(),
-    val categories: List<PnlCategory> = emptyList(),
-)
-
-@Serializable
 data class CustomFieldDef(
     val id: String,
     val name: String = "",

@@ -241,20 +241,8 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             }
             // Flags
             Section(stringResource(R.string.ps_customize)) {
-                Flag(stringResource(R.string.ps_batch_dup), stringResource(R.string.ps_batch_dup_sub), d.enableTaskBatchDuplicate == true) {
-                    vm.save("enableTaskBatchDuplicate" to JsonPrimitive(it))
-                }
-                Flag(stringResource(R.string.ps_proof), stringResource(R.string.ps_proof_sub), d.requireAttachmentForDone == true) {
-                    vm.save("requireAttachmentForDone" to JsonPrimitive(it))
-                }
-                // Turning P&L on needs BoD+ on the server too.
-                if (s.isBoD) Flag("P&L Dashboard", stringResource(R.string.ps_pnl_sub), d.enablePnlDashboard == true) {
-                    vm.save("enablePnlDashboard" to JsonPrimitive(it))
-                }
-                // Finance is opt-in now, like P&L (9 Oct): BoD+ only; off only hides the tab.
-                if (s.isBoD) Flag("Finance", stringResource(R.string.ps_finance_sub), ProjectTabsLogic.financeOn(d.financeEnabled, d.name)) {
-                    vm.save("financeEnabled" to JsonPrimitive(it))
-                }
+                // Only Auto assign is left (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct): duplicate mode is always on (multi-select
+                // on Board / List), P&L, Finance and the proof-before-Done rule are gone, and the server ignores those keys.
                 var autoIds by remember(d.autoAssignAssigneeIds) { mutableStateOf(d.autoAssignAssigneeIds.toSet()) }
                 Flag("Auto assign", stringResource(R.string.ps_auto_sub), d.autoAssignEnabled == true) { on ->
                     if (on && autoIds.isEmpty()) vm.say(R.string.ps_auto_pick_first) else vm.save("autoAssignEnabled" to JsonPrimitive(on), "autoAssignAssigneeIds" to JsonArray(autoIds.map { JsonPrimitive(it) }))

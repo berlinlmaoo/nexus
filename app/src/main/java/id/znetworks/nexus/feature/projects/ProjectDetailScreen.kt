@@ -107,7 +107,7 @@ enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
     SHEET(R.string.ptab_sheet, true), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
     SPRINTS(R.string.ptab_sprints), AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
-    CHAT(R.string.ptab_chat), FINANCE(R.string.ptab_finance), PNL(R.string.ptab_pnl),
+    CHAT(R.string.ptab_chat),
 }
 
 data class ProjectDetailState(
@@ -121,14 +121,14 @@ data class ProjectDetailState(
     val busy: Boolean = false,
     val actionError: String? = null,
     val isBoD: Boolean = false,
+    /** Multi-select on Board / List (PROJECT-CUSTOMIZE-CLEANUP §1): non-empty = selecting. */
+    val selected: Set<String> = emptySet(),
+    /** "3 tasks duplicated", shown once as a toast. */
+    val notice: String? = null,
 ) {
-    /**
-     * The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out, Finance only when opted in
-     * (older server: the name says finance), P&L only with its flag AND a BoD-tier viewer.
-     */
+    /** The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out. No Finance / P&L (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct). */
     val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
-        ProjectTabsLogic.financeOn(detail?.financeEnabled, detail?.name), detail?.enablePnlDashboard == true, isBoD, isPipeline = detail?.type == "PIPELINE",
-        isOutlet = detail?.type == "OUTLET_SALES")
+        isPipeline = detail?.type == "PIPELINE", isOutlet = detail?.type == "OUTLET_SALES")
 }
 
 class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -159,6 +159,30 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
     }
 
     fun setQuery(q: String) = _state.update { it.copy(query = q) }
+
+    fun toggleSelect(id: String) = _state.update { it.copy(selected = TaskBulkLogic.toggle(it.selected, id)) }
+    fun clearSelection() = _state.update { it.copy(selected = emptySet()) }
+    fun noticeShown() = _state.update { it.copy(notice = null) }
+
+    /** One POST per task, in board order (as the web); some failing still keeps the copies that worked. */
+    fun duplicate(ids: List<String>, due: LocalDate?, onDone: () -> Unit = {}) = viewModelScope.launch {
+        if (ids.isEmpty()) return@launch
+        _state.update { it.copy(busy = true) }
+        val body = TaskBulkLogic.body(due)
+        var failed = 0
+        var reason: String? = null
+        ids.forEach { id ->
+            try { api.duplicateTask(id, body) } catch (e: ApiError) { failed++; if (reason == null) reason = (e as? ApiError.Http)?.serverMessage }
+        }
+        val ok = ids.size - failed
+        _state.update {
+            it.copy(busy = false, selected = if (failed == 0) emptySet() else it.selected,
+                notice = if (ok > 0) res.getQuantityString(R.plurals.bulk_dup_done, ok, ok) else null,
+                actionError = if (failed > 0) listOfNotNull(res.getString(R.string.bulk_dup_failed, failed, ids.size), reason).joinToString("\n") else null)
+        }
+        onDone()
+        load()
+    }
     fun dismissError() = _state.update { it.copy(actionError = null) }
 
     fun move(taskId: String, laneId: String) {
@@ -206,10 +230,16 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     id.znetworks.nexus.core.realtime.RealtimeRoom("project:${vm.projectId}")
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(it, vm.projectId) }) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
+    // A selection belongs to the view it was made in (Board / List share the same cards, so they keep it).
+    LaunchedEffect(tab) { if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) vm.clearSelection() }
     var newDealRequest by rememberSaveable { mutableStateOf(0) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Duplicate + date…: the ids waiting for the optional due-date popup.
+    var dupDateFor by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
+    androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
     val lanes = BoardLogic.filter(s.lanes, s.query)
     val total = s.lanes.sumOf { it.tasks.size }
     val shown = lanes.sumOf { it.tasks.size }
@@ -257,8 +287,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                         val web = { id.znetworks.nexus.ui.shell.openWeb(context, "/projects/${vm.projectId}") }
                         when (tab) {
                             ProjectTab.OVERVIEW -> Overview(s.detail!!, s.lanes)
-                            ProjectTab.BOARD -> Board(lanes, s.lanes, onOpenTask, vm)
-                            ProjectTab.LIST -> ListTab(lanes, onOpenTask, vm)
+                            ProjectTab.BOARD -> Board(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
+                            ProjectTab.LIST -> ListTab(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
                             ProjectTab.SHEET -> SheetTab(vm.projectId, lanes, onOpenTask)
                             ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask) { d -> createDue = d; creating = true }
                             ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
@@ -272,8 +302,6 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                                     ProjectTab.OUTLET_FORM to id.znetworks.nexus.feature.outlet.OutletView.FORM)
                                 id.znetworks.nexus.feature.outlet.OutletTab(views.getValue(tab), goTo = { v -> tab = views.entries.first { it.value == v }.key })
                             }
-                            ProjectTab.FINANCE -> FinanceTab(vm.projectId)
-                            ProjectTab.PNL -> PnlTab(vm.projectId)
                             ProjectTab.PAGES -> id.znetworks.nexus.feature.docs.ProjectPagesTab(vm.projectId, onOpenDoc)
                             ProjectTab.FORMS -> id.znetworks.nexus.feature.forms.ProjectFormsTab(vm.projectId, onOpenForm, onBuildForm)
                             ProjectTab.CHAT -> id.znetworks.nexus.feature.chat.ProjectChatTab(vm.projectId) { onOpenChat(it); tab = ProjectTab.BOARD }
@@ -292,10 +320,17 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             FloatingActionButton(onClick = { onBuildForm(null) }, containerColor = c.violet, contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.fb_new)) }
         }
-        if (s.detail != null && s.detail?.type != "PIPELINE" && s.detail?.type != "OUTLET_SALES" && s.lanes.isNotEmpty() && tab.searches) {
+        if (s.selected.isNotEmpty() && (tab == ProjectTab.BOARD || tab == ProjectTab.LIST)) {
+            TaskSelectionBar(s.selected.size, s.busy, onDuplicate = { vm.duplicate(TaskBulkLogic.ordered(s.lanes, s.selected), null) },
+                onDuplicateDate = { dupDateFor = TaskBulkLogic.ordered(s.lanes, s.selected) }, onClear = vm::clearSelection,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        } else if (s.detail != null && s.detail?.type != "PIPELINE" && s.detail?.type != "OUTLET_SALES" && s.lanes.isNotEmpty() && tab.searches) {
             FloatingActionButton(onClick = { createDue = null; creating = true }, containerColor = c.violet, contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.task_new)) }
         }
+    }
+    dupDateFor?.let { ids ->
+        DuplicateDateDialog(ids.size, s.busy, onDismiss = { dupDateFor = null }) { due -> vm.duplicate(ids, due) { dupDateFor = null } }
     }
     if (creating) CreateTaskDialog(s.lanes, busy = s.busy, initialDue = createDue, projectId = vm.projectId, onDismiss = { creating = false }) { lane, title, prio, due, fields ->
         vm.create(lane, title, prio, due, fields) { id -> creating = false; if (id.isNotBlank()) onOpenTask(id) }
@@ -305,7 +340,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
 }
 
 @Composable
-private fun Board(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel) {
+private fun Board(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     val context = androidx.compose.ui.platform.LocalContext.current
     if (allLanes.isEmpty()) {
@@ -328,21 +363,29 @@ private fun Board(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) 
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f, fill = false)) {
                     if (lane.tasks.isEmpty()) item { Text(stringResource(R.string.board_empty_lane), fontSize = 12.sp, color = c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.padding(8.dp)) }
-                    items(lane.tasks, key = { it.id }) { t -> MovableTask(t, allLanes, onOpenTask, vm) }
+                    items(lane.tasks, key = { it.id }) { t -> MovableTask(t, allLanes, onOpenTask, vm, selected, onDuplicateDate) }
                 }
             }
         }
     }
 }
 
-/** A card whose long-press offers "Move to" another lane (drag on iOS; a menu works everywhere). */
+/**
+ * A card whose long-press opens its menu: Select multiple / Duplicate / Duplicate + date… (always on,
+ * PROJECT-CUSTOMIZE-CLEANUP §1), then "Move to" another lane (drag on iOS; a menu works everywhere).
+ * While selecting, a tap (or long-press) toggles the card instead.
+ */
 @Composable
-private fun MovableTask(t: BoardTask, lanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel) {
+private fun MovableTask(t: BoardTask, lanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, onDuplicateDate: (List<String>) -> Unit) {
     var menu by remember { mutableStateOf(false) }
+    val selecting = selected.isNotEmpty()
     Box {
-        TaskCard(t, onClick = { onOpenTask(t.id) }, onToggleDone = { vm.toggleDone(t) }, onLongClick = { menu = true })
+        TaskCard(t, onClick = { if (selecting) vm.toggleSelect(t.id) else onOpenTask(t.id) }, onToggleDone = if (selecting) null else ({ vm.toggleDone(t) }),
+            onLongClick = { if (selecting) vm.toggleSelect(t.id) else menu = true }, selected = if (selecting) t.id in selected else null)
         DropdownMenu(menu, { menu = false }) {
-            Text(stringResource(R.string.board_move_to), fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+            TaskBulkMenuItems(onSelect = { menu = false; vm.toggleSelect(t.id) }, onDuplicate = { menu = false; vm.duplicate(listOf(t.id), null) },
+                onDuplicateDate = { menu = false; onDuplicateDate(listOf(t.id)) })
+            if (lanes.size > 1) Text(stringResource(R.string.board_move_to), fontSize = 12.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             lanes.filter { it.id != t.taskListId }.forEach { l ->
                 DropdownMenuItem(text = { Text(l.name) }, onClick = { menu = false; vm.move(t.id, l.id) })
             }
@@ -382,7 +425,7 @@ private fun InlineAdd(onAdd: (String) -> Unit) {
 }
 
 @Composable
-private fun ListTab(lanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel) {
+private fun ListTab(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel, selected: Set<String>, onDuplicateDate: (List<String>) -> Unit) {
     val c = Nx.colors
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
         lanes.forEach { lane ->
@@ -393,7 +436,7 @@ private fun ListTab(lanes: List<Lane>, onOpenTask: (String) -> Unit, vm: Project
                 }
             }
             if (lane.tasks.isEmpty()) item(key = "e-" + lane.id) { Text(stringResource(R.string.board_empty_lane), fontSize = 12.sp, color = c.mutedFg) }
-            items(lane.tasks, key = { it.id }) { t -> TaskCard(t, onClick = { onOpenTask(t.id) }, onToggleDone = { vm.toggleDone(t) }) }
+            items(lane.tasks, key = { it.id }) { t -> MovableTask(t, allLanes, onOpenTask, vm, selected, onDuplicateDate) }
         }
     }
 }

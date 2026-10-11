@@ -123,6 +123,9 @@ class ProjectsApi(private val api: ApiClient) {
 
     suspend fun deleteTask(taskId: String) = delete("/api/tasks/$taskId")
 
+    /** A copy in the same list (subtasks, assignees, fields come along); [body] from TaskBulkLogic. */
+    suspend fun duplicateTask(taskId: String, body: JsonObject) = post("/api/tasks/$taskId/duplicate", body)
+
     // endregion
 
     // region project tabs
@@ -142,10 +145,6 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun automations(projectId: String) = api.get("/api/automations?projectId=$projectId", AutomationsResponse.serializer()).automations
 
     suspend fun setAutomation(id: String, enabled: Boolean) = patch("/api/automations", buildJsonObject { put("id", id); put("enabled", enabled) })
-
-    suspend fun finance(projectId: String, year: Int) = api.get("/api/finance/dashboard?projectId=$projectId&year=$year", FinanceDashboard.serializer())
-
-    suspend fun pnl(projectId: String, year: Int) = api.get("/api/pnl/dashboard?projectId=$projectId&year=$year", PnlDashboard.serializer())
 
     suspend fun customFields(projectId: String) = api.get("/api/custom-fields?projectId=$projectId", CustomFieldsResponse.serializer()).fields.sortedBy { it.position ?: Int.MAX_VALUE }
 

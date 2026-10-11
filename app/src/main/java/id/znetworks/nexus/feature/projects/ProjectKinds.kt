@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
-// Project types, per-project tabs, Finance opt-in, named icons (Berlin, 9 Oct; PROJECT-TYPES-TABS, server 12db577/76d1ae4).
+// Project types, per-project tabs, named icons (Berlin, 9 Oct; PROJECT-TYPES-TABS, server 12db577/76d1ae4).
 
 object ProjectTabsLogic {
     /** The server's tab keys, in tab-bar order. "table" is web-only: never drawn here, kept when saving. */
@@ -16,7 +16,6 @@ object ProjectTabsLogic {
         ProjectTab.OVERVIEW -> "overview"; ProjectTab.BOARD -> "board"; ProjectTab.LIST -> "list"; ProjectTab.SHEET -> "sheet"
         ProjectTab.CALENDAR -> "calendar"; ProjectTab.TIMELINE -> "timeline"; ProjectTab.SPRINTS -> "sprints"
         ProjectTab.AUTOMATIONS -> "automations"; ProjectTab.PAGES -> "pages"; ProjectTab.FORMS -> "forms"; ProjectTab.CHAT -> "chat"
-        ProjectTab.FINANCE, ProjectTab.PNL -> null // flags, not tab keys
         ProjectTab.PIPELINE -> null // the project's type, not a tab key
         ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> null // the type's own tabs
     }
@@ -25,21 +24,16 @@ object ProjectTabsLogic {
     fun hidden(raw: JsonElement?): Set<String> =
         (raw as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }?.toSet() ?: emptySet()
 
-    /** `financeEnabled`; an older server (no field) keeps the old rule: the name says "finance". */
-    fun financeOn(raw: JsonElement?, name: String?): Boolean =
-        (raw as? JsonPrimitive)?.booleanOrNull ?: name.orEmpty().contains("finance", ignoreCase = true)
-
     /**
-     * [isPipeline]: a Pipeline Dashboard shows Pipeline, Chat, and Finance / P&L when on — none of the task tabs
-     * (its default task sections stay on the server only so older apps open it as an empty task project).
+     * [isPipeline]: a Pipeline Dashboard shows Pipeline and Chat — none of the task tabs (its default task
+     * sections stay on the server only so older apps open it as an empty task project). Finance and P&L are
+     * gone from every project (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct).
      */
-    fun visible(hidden: Set<String>, financeOn: Boolean, pnlOn: Boolean, isBoD: Boolean, isPipeline: Boolean = false, isOutlet: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
+    fun visible(hidden: Set<String>, isPipeline: Boolean = false, isOutlet: Boolean = false): List<ProjectTab> = ProjectTab.entries.filter {
         when (it) {
             ProjectTab.PIPELINE -> isPipeline
-            // [isOutlet] (OUTLET-SALES §1): Overview · Calendar · Board · Report form · Chat (+ Finance / P&L when on).
+            // [isOutlet] (OUTLET-SALES §1): Overview · Calendar · Board · Report form · Chat.
             ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> isOutlet
-            ProjectTab.FINANCE -> financeOn
-            ProjectTab.PNL -> pnlOn && isBoD
             ProjectTab.CHAT -> key(it) !in hidden
             else -> !isPipeline && !isOutlet && key(it) !in hidden
         }

@@ -137,6 +137,8 @@ data class ProjectDetail(
     val workspaceId: String? = null,
     val taskLists: List<Lane> = emptyList(),
     val members: List<ProjectMemberRef> = emptyList(),
+    // Decoded but no longer read (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct): the server always reports duplicate mode on
+    // and P&L, Finance, proof-before-Done and calendar mode off, and ignores writes to them.
     val enableTaskBatchDuplicate: Boolean? = null,
     val enablePnlDashboard: Boolean? = null,
     val autoAssignEnabled: Boolean? = null,
@@ -145,7 +147,7 @@ data class ProjectDetail(
     val disableTaskStatus: Boolean? = null,
     /** "TASK" | "FINANCE" | "CONTENT" | "PIPELINE" (9 Oct); missing = TASK. */
     val type: String? = null,
-    /** Tab keys this project hides, and the Finance opt-in: raw, read leniently by ProjectTabsLogic. */
+    /** Tab keys this project hides: raw, read leniently by ProjectTabsLogic. */
     val hiddenTabs: kotlinx.serialization.json.JsonElement? = null,
     val financeEnabled: kotlinx.serialization.json.JsonElement? = null,
 )

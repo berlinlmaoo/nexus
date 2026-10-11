@@ -82,10 +82,10 @@ class PipelineTest {
     }
 
     @Test fun pipelineProjectTabs() {
-        val v = ProjectTabsLogic.visible(emptySet(), financeOn = true, pnlOn = false, isBoD = true, isPipeline = true)
-        assertEquals(listOf(ProjectTab.PIPELINE, ProjectTab.CHAT, ProjectTab.FINANCE), v)
+        val v = ProjectTabsLogic.visible(emptySet(), isPipeline = true)
+        assertEquals(listOf(ProjectTab.PIPELINE, ProjectTab.CHAT), v)
         assertEquals(ProjectTab.PIPELINE, ProjectTabsLogic.fallback(ProjectTab.BOARD, v))
-        assertFalse(ProjectTab.PIPELINE in ProjectTabsLogic.visible(emptySet(), false, false, false))
+        assertFalse(ProjectTab.PIPELINE in ProjectTabsLogic.visible(emptySet()))
     }
 
     @Test fun liveAndRestorable() {

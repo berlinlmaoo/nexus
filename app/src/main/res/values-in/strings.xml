@@ -663,8 +663,6 @@
     <string name="ptab_pages">Halaman</string>
     <string name="ptab_forms">Formulir</string>
     <string name="ptab_chat">Chat</string>
-    <string name="ptab_finance">Finance</string>
-    <string name="ptab_pnl">P&amp;L</string>
     <string name="pt_sheet_empty">Belum ada task buat ditampilin di spreadsheet.</string>
     <string name="pt_col_task">Task</string>
     <string name="pt_col_section">Bagian</string>
@@ -697,10 +695,6 @@
     <string name="pt_auto_empty">Belum ada automation. Atur rule otomatis lewat web (desktop).</string>
     <string name="pt_auto_if">JIKA</string>
     <string name="pt_auto_then">MAKA</string>
-    <string name="pt_finance_none">Finance belum tersedia buat project ini.</string>
-    <string name="pt_pnl_none">P&amp;L belum diaktifin / akses BoD diperlukan.</string>
-    <string name="pt_paid">Dibayar %1$s</string>
-    <string name="pt_outstanding">Sisa %1$s</string>
     <string name="btn_check_in">Check in</string>
     <string name="btn_check_out">Check out</string>
     <string name="btn_done">Selesai hari ini</string>
@@ -731,11 +725,6 @@
     <string name="ps_photo_remove">Hapus foto</string>
     <string name="ps_save_identity">Simpan identitas</string>
     <string name="ps_customize">Kustomisasi</string>
-    <string name="ps_batch_dup">Mode duplicate task</string>
-    <string name="ps_batch_dup_sub">Multi-select duplicate + popup due date buat task berulang.</string>
-    <string name="ps_proof">Wajib bukti sebelum DONE</string>
-    <string name="ps_proof_sub">Task baru bisa DONE kalau ada minimal satu Bukti Pencairan.</string>
-    <string name="ps_pnl_sub">View keuangan standalone: pengeluaran harian, pipeline uang masuk.</string>
     <string name="ps_auto_sub">Otomatis assign member kepilih ke task baru di project ini.</string>
     <string name="ps_auto_to">Assign otomatis ke:</string>
     <string name="ps_auto_pick_first">Pilih minimal satu member dulu.</string>
@@ -2372,7 +2361,6 @@
     <string name="ps_tabs_sub">Pilih tab yang tampil di project ini. Mematikan tab cuma menyembunyikannya: isinya tidak dihapus, dan begitu dinyalakan lagi semuanya kembali.</string>
     <string name="ps_tabs_board_or_list">Board atau Daftar tetap nyala</string>
     <string name="ps_tabs_managers">Hanya manager ke atas yang bisa mengubah tab.</string>
-    <string name="ps_finance_sub">OPEX dan revenue bulanan project ini, per tahun. Mati sampai BoD menyalakannya, sama seperti P&amp;L. Mematikannya cuma menyembunyikan tab — angkanya tetap ada.</string>
     <string name="pt_question">Project ini untuk apa?</string>
     <string name="pt_soon">Segera hadir</string>
     <string name="pt_change">Ganti tipe</string>
@@ -2936,4 +2924,16 @@
     <plurals name="os_waiting_nights">
         <item quantity="other">%1$d malam menunggu laporannya</item>
     </plurals>
+    <string name="bulk_select">Pilih beberapa</string>
+    <string name="bulk_duplicate">Duplikat</string>
+    <string name="bulk_duplicate_date">Duplikat + tanggal…</string>
+    <string name="bulk_dup_sub">Atur tanggal jatuh tempo baru untuk salinannya (opsional).</string>
+    <string name="bulk_dup_label">Jatuh tempo salinan</string>
+    <string name="bulk_dup_pick">Pilih tanggal</string>
+    <string name="bulk_dup_clear">Hapus tanggal</string>
+    <string name="bulk_dup_keep">Kosongkan untuk mempertahankan tanggal jatuh tempo tiap task.</string>
+    <string name="bulk_dup_failed">Gagal menduplikat %1$d dari %2$d task</string>
+    <plurals name="bulk_selected"><item quantity="other">%d dipilih</item></plurals>
+    <plurals name="bulk_dup_title"><item quantity="other">Duplikat %d task</item></plurals>
+    <plurals name="bulk_dup_done"><item quantity="other">%d task diduplikat</item></plurals>
 </resources>
