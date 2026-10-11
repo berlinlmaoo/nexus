@@ -573,8 +573,8 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
                                 onDismiss: () -> Unit, onCreate: (String, String?, ProjectType, ProjectSetup) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var folder by rememberSaveable { mutableStateOf(initialFolder) }
-    // PROJECT-SETUP-MEMBERS A: starting tabs (Task Project; all on) and members (any type).
-    var hidden by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    // PROJECT-SETUP-MEMBERS A: starting tabs (Task Project; all on but Automations) and members (any type).
+    var hidden by rememberSaveable { mutableStateOf(ProjectSetupLogic.DEFAULT_HIDDEN.toList()) }
     var members by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var picking by remember { mutableStateOf(false) }
     // First: what the project is for (9 Oct). Only Task Project is built; the rest say "Coming soon".

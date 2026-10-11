@@ -13,14 +13,17 @@ class ProjectSetupMembersTest {
 
     @Test fun tabsOfferedAreTheSettingsOnes() {
         val keys = ProjectSetupLogic.TABS.map { ProjectTabsLogic.key(it) }
-        assertEquals(listOf("overview", "board", "list", "sheet", "calendar", "timeline", "sprints", "automations", "pages", "forms", "chat"), keys)
+        assertEquals(listOf("overview", "board", "list", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat"), keys)
         assertFalse(ProjectSetupLogic.TABS.any { it == ProjectTab.PIPELINE || it.name.startsWith("OUTLET_") })
     }
 
     @Test fun whatIsSent() {
-        assertNull(ProjectSetupLogic.hiddenToSend(emptySet()))
+        // Always a list for a Task Project (empty too, so the server's Automations-off default doesn't kick in).
+        assertEquals(emptyList<String>(), ProjectSetupLogic.hiddenToSend(emptySet()))
         // Tab-bar order, whatever order they were switched off in.
-        assertEquals(listOf("sprints", "chat"), ProjectSetupLogic.hiddenToSend(setOf("chat", "sprints")))
+        assertEquals(listOf("automations", "chat"), ProjectSetupLogic.hiddenToSend(setOf("chat", "automations")))
+        // Automations starts off (SPRINTS-OVERVIEW §2).
+        assertEquals(setOf("automations"), ProjectSetupLogic.DEFAULT_HIDDEN)
         assertNull(ProjectSetupLogic.membersToSend(emptySet(), "me"))
         assertNull(ProjectSetupLogic.membersToSend(setOf("me"), "me"))
         assertEquals(listOf("a", "b"), ProjectSetupLogic.membersToSend(setOf("b", "me", "a"), "me"))
@@ -62,7 +65,7 @@ class ProjectSetupMembersTest {
         val setup = src("feature/projects/ProjectSetup.kt")
         assertTrue(setup.contains("TabPreviewCards(hidden, enabled, onChange)")); assertFalse(setup.contains("FilterChip("))
         val cards = src("feature/projects/TabPreview.kt")
-        listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "sprints", "automations", "pages", "forms", "chat").forEach {
+        listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "automations", "pages", "forms", "chat").forEach {
             assertTrue(it, cards.contains("\"$it\" ->") || cards.contains("\"$it\", "))
         }
         assertTrue(cards.contains("height(56.dp)") && cards.contains("alpha(if (on) 1f else 0.6f)"))

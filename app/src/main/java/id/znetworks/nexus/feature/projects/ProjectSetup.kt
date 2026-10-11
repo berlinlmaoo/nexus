@@ -62,8 +62,14 @@ object ProjectSetupLogic {
     /** The tabs a new Task Project can start without: the ones Project settings › Tabs offers (web-only "table" left out). */
     val TABS: List<ProjectTab> get() = ProjectTab.entries.filter { ProjectTabsLogic.key(it) != null }
 
-    /** `hiddenTabs` for POST /api/projects, in tab-bar order; null when nothing is hidden (key left out). */
-    fun hiddenToSend(hidden: Set<String>): List<String>? = ProjectTabsLogic.KEYS.filter { it in hidden }.takeIf { it.isNotEmpty() }
+    /** A new Task Project starts with Automations off (SPRINTS-OVERVIEW §2, 11 Oct). */
+    val DEFAULT_HIDDEN = setOf("automations")
+
+    /**
+     * `hiddenTabs` for POST /api/projects, in tab-bar order — always sent for a Task Project, an empty list too, so
+     * switching Automations back on is not undone by the server's own default (which applies when the key is missing).
+     */
+    fun hiddenToSend(hidden: Set<String>): List<String> = ProjectTabsLogic.KEYS.filter { it in hidden }
 
     /** `memberIds`: the creator is the LEAD already (the server drops them too); null when nobody is picked. */
     fun membersToSend(picked: Set<String>, meId: String?): List<String>? = picked.filter { it != meId }.sorted().takeIf { it.isNotEmpty() }
@@ -76,7 +82,7 @@ object ProjectSetupLogic {
             .filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), ignoreCase = true) } }
 }
 
-/** Task Project only: which tabs it starts with — preview cards ([TabPreviewCards]), all on by default, Board or List stays on. */
+/** Task Project only: which tabs it starts with — preview cards ([TabPreviewCards]), all on but Automations by default, Board or List stays on. */
 @Composable
 fun StartingTabs(hidden: Set<String>, enabled: Boolean, onChange: (Set<String>) -> Unit) {
     val c = Nx.colors

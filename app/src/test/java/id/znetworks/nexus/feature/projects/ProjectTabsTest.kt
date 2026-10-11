@@ -25,19 +25,6 @@ class ProjectTabsTest {
         assertEquals(setOf(28), m.keys)
     }
 
-    @Test fun sprintProgressAndNextStatus() {
-        val s = NexusJson.decodeFromString(Sprint.serializer(), """{"id":"s","name":"W1","status":"ACTIVE","tasks":[{"task":{"id":"1","status":"DONE"}},{"task":{"id":"2","status":"TODO"}},{}]}""")
-        assertEquals(1, s.done); assertEquals(0.5f, s.progress, 0.001f); assertEquals("COMPLETED", s.next)
-        assertNull(s.copy(status = "COMPLETED").next)
-        assertEquals("ACTIVE", s.copy(status = null).next)
-    }
-
-    @Test fun completingWithOpenCardsIsDetected() {
-        val r = NexusJson.decodeFromString(SprintPatchReply.serializer(), """{"incompleteTasks":[{"id":"2","title":"x"}],"requiresAction":true}""")
-        assertEquals(true, r.requiresAction); assertEquals(1, r.incompleteTasks.size)
-        assertNull(NexusJson.decodeFromString(SprintPatchReply.serializer(), """{"sprint":{"id":"s"}}""").requiresAction)
-    }
-
     @Test fun ruleTextAndRupiah() {
         assertEquals("Status changed · Priority = HIGH", Rule("STATUS_CHANGED", "priority", kotlinx.serialization.json.JsonPrimitive("HIGH")).text())
         assertEquals("Rp1.250.000", idr(1_250_000.0))

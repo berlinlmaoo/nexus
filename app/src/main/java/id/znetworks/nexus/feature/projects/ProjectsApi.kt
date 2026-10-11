@@ -134,18 +134,6 @@ class ProjectsApi(private val api: ApiClient) {
 
     // region project tabs
 
-    suspend fun sprints(projectId: String) = api.get("/api/sprints?projectId=$projectId", SprintsResponse.serializer()).sprints
-
-    suspend fun createSprint(projectId: String, name: String, start: String, end: String) = post("/api/sprints", buildJsonObject {
-        put("projectId", projectId); put("name", name.trim()); put("startDate", start); put("endDate", end)
-    })
-
-    /** [moveIncompleteTo]: a sprint id or "backlog"; without it, completing with open cards changes nothing. */
-    suspend fun setSprintStatus(id: String, status: String, moveIncompleteTo: String? = null): SprintPatchReply =
-        api.send(Request.Builder().url(api.url("/api/sprints")).patch(buildJsonObject {
-            put("id", id); put("status", status); moveIncompleteTo?.let { put("moveIncompleteTo", it) }
-        }.toString().toJsonBody()).build(), SprintPatchReply.serializer())
-
     suspend fun automations(projectId: String) = api.get("/api/automations?projectId=$projectId", AutomationsResponse.serializer()).automations
 
     suspend fun setAutomation(id: String, enabled: Boolean) = patch("/api/automations", buildJsonObject { put("id", id); put("enabled", enabled) })

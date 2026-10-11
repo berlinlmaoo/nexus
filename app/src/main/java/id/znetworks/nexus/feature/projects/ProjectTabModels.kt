@@ -5,37 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import java.text.NumberFormat
 import java.util.Locale
 
-// Project tabs beyond the board (API.md §2.4 sprints, automations, finance/P&L, custom fields).
-
-@Serializable
-data class SprintTaskRef(val id: String, val title: String? = null, val status: String? = null)
-
-@Serializable
-data class SprintTask(val task: SprintTaskRef? = null)
-
-@Serializable
-data class Sprint(
-    val id: String,
-    val name: String = "",
-    val status: String? = null,
-    val startDate: String? = null,
-    val endDate: String? = null,
-    val tasks: List<SprintTask> = emptyList(),
-) {
-    val refs: List<SprintTaskRef> get() = tasks.mapNotNull { it.task }
-    val done: Int get() = refs.count { it.status.equals("DONE", true) }
-    val progress: Float get() = if (refs.isEmpty()) 0f else done.toFloat() / refs.size
-    val state: String get() = (status ?: "PLANNING").uppercase()
-    /** PLANNING → ACTIVE → COMPLETED. */
-    val next: String? get() = when (state) { "PLANNING" -> "ACTIVE"; "ACTIVE" -> "COMPLETED"; else -> null }
-}
-
-@Serializable
-data class SprintsResponse(val sprints: List<Sprint> = emptyList())
-
-/** PATCH reply: the sprint, or (completing with open tasks and no destination) nothing changed. */
-@Serializable
-data class SprintPatchReply(val requiresAction: Boolean? = null, val incompleteTasks: List<SprintTaskRef> = emptyList())
+// Project tabs beyond the board (API.md §2.4 automations, custom fields).
 
 @Serializable
 data class Rule(val type: String? = null, val field: String? = null, val value: JsonElement? = null) {

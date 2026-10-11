@@ -61,7 +61,6 @@ object RealtimeEvents {
     const val MESSAGE_CREATED = "message-created"
     const val NEW_NOTIFICATION = "new-notification"
     val TASK = setOf("task-created", "task-updated", "task-deleted", "comment-added")
-    const val SPRINT_UPDATED = "sprint-updated"
     /** "… is typing" (TYPING.md): realtime only, nothing stored or pushed. */
     const val TYPING = "typing"
     /** A Pipeline Dashboard deal changed (project room; PIPELINE-DASHBOARD §6): refetch the pipeline. */
@@ -69,7 +68,7 @@ object RealtimeEvents {
     /** An outlet's event or month target changed (project room; OUTLET-SALES §9): a ping, refetch the month shown. */
     const val OUTLET_SALES_CHANGED = "outlet-sales-changed"
 
-    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, SPRINT_UPDATED, TYPING, PIPELINE_CHANGED,
+    val LISTENED = listOf(WORKSPACE_CHANGED, AUDIT_CHANGED, CONVERSATION_UPDATED, MESSAGE_CREATED, NEW_NOTIFICATION, TYPING, PIPELINE_CHANGED,
         OUTLET_SALES_CHANGED) + TASK
 
     /**
@@ -102,7 +101,6 @@ object RealtimeEvents {
             // the task itself / { taskId } / { taskId, comment }
             "task-created", "task-updated" -> RealtimeEvent(name, taskId = o.str("id"), projectId = o.str("projectId"))
             "task-deleted", "comment-added" -> RealtimeEvent(name, taskId = o.str("taskId"))
-            SPRINT_UPDATED -> RealtimeEvent(name, projectId = o.str("projectId"))
             PIPELINE_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("dealId"), userId = o.str("actorId"))
             OUTLET_SALES_CHANGED -> RealtimeEvent(name, projectId = o.str("projectId"), taskId = o.str("eventId"), userId = o.str("actorId"))
             else -> RealtimeEvent(name)
@@ -120,7 +118,7 @@ object RealtimeEvents {
     fun isProjectsOrFolders(e: RealtimeEvent) = e.name == WORKSPACE_CHANGED && (e.kind == "projects" || e.kind == "folders")
     /** Something about this project: its tasks (project room) or the project itself (workspace room). */
     fun touchesProject(e: RealtimeEvent, projectId: String) =
-        e.name in TASK || e.name == SPRINT_UPDATED || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId))
+        e.name in TASK || (e.name == WORKSPACE_CHANGED && e.kind == "projects" && (e.projectId == null || e.projectId == projectId))
     /** Something about this task (task-created never is: it is a new one). */
     fun touchesTask(e: RealtimeEvent, taskId: String) = e.name != "task-created" && e.name in TASK && e.taskId == taskId
 }

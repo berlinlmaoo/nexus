@@ -53,7 +53,7 @@ import id.znetworks.nexus.ui.theme.Nx
 object TabPreviewLogic {
     fun description(key: String): Int? = when (key) {
         "overview" -> R.string.tp_overview; "board" -> R.string.tp_board; "list" -> R.string.tp_list; "table" -> R.string.tp_table
-        "sheet" -> R.string.tp_sheet; "calendar" -> R.string.tp_calendar; "timeline" -> R.string.tp_timeline; "sprints" -> R.string.tp_sprints
+        "sheet" -> R.string.tp_sheet; "calendar" -> R.string.tp_calendar; "timeline" -> R.string.tp_timeline
         "automations" -> R.string.tp_automations; "pages" -> R.string.tp_pages; "forms" -> R.string.tp_forms; "chat" -> R.string.tp_chat
         else -> null
     }
@@ -171,16 +171,6 @@ private fun DrawScope.thumb(key: String, fg: Color, bg: Color, accent: Color) {
             val bh = 8.dp.toPx(); val step = h / 4
             listOf(0f to 0.45f, 0.2f to 0.4f, 0.45f to 0.35f, 0.6f to 0.3f).forEachIndexed { i, (l, bw) ->
                 bar(w * l, step * i + (step - bh) / 2, w * bw, bh, if (i == 1) hit else fg.copy(alpha = 0.2f))
-            }
-        }
-        "sprints" -> {
-            val label = 18.dp.toPx(); val bh = 6.dp.toPx(); val step = h / 3; val tw = w - label
-            listOf(1f, 0.6f, 0f).forEachIndexed { i, p ->
-                val y = step * i + (step - bh) / 2
-                // "S1".."S3" as a short tag: a tiny block stands in for the letters at this size.
-                bar(0f, y + 1f, 12.dp.toPx(), bh - 2f, fg.copy(alpha = 0.35f))
-                bar(label, y, tw, bh, edge)
-                if (p > 0f) bar(label, y, tw * p, bh, if (i == 1) hit else fg.copy(alpha = 0.3f))
             }
         }
         "automations" -> {

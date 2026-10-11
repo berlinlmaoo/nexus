@@ -106,7 +106,7 @@ enum class ProjectTab(val label: Int, val searches: Boolean = false) {
     OUTLET_OVERVIEW(R.string.os_tab_overview), OUTLET_CALENDAR(R.string.ptab_calendar), OUTLET_BOARD(R.string.ptab_board), OUTLET_FORM(R.string.os_tab_form),
     OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
     SHEET(R.string.ptab_sheet, true), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
-    SPRINTS(R.string.ptab_sprints), AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
+    AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
     CHAT(R.string.ptab_chat),
 }
 
@@ -292,7 +292,6 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.SHEET -> SheetTab(vm.projectId, lanes, onOpenTask)
                             ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask) { d -> createDue = d; creating = true }
                             ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
-                            ProjectTab.SPRINTS -> SprintsTab(vm.projectId, onOpenTask)
                             ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId)
                             ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
                             ProjectTab.OUTLET_OVERVIEW, ProjectTab.OUTLET_CALENDAR, ProjectTab.OUTLET_BOARD, ProjectTab.OUTLET_FORM -> {
