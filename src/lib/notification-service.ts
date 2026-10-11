@@ -665,6 +665,54 @@ export async function notifyMention(data: {
   }
 }
 
+/**
+ * Someone @-mentioned a person in a doc / page body (block editor). In-app + push under the same
+ * preference as comment mentions; no WhatsApp or email (a page is not a conversation). The link
+ * opens the doc (web /docs/<id>; Android routes it; iOS shows it in the inbox).
+ */
+export async function notifyDocMention(data: {
+  mentionedUserId: string
+  mentionedByName: string
+  docId: string
+  docTitle: string
+  snippet: string
+  projectId?: string
+}) {
+  if (await isUserDnd(data.mentionedUserId)) return
+  const prefs = await getUserPrefs(data.mentionedUserId)
+  await createInAppNotification({
+    userId: data.mentionedUserId,
+    type: "doc_mention",
+    title: `${data.mentionedByName} mentioned you in: ${data.docTitle || "Untitled"}`,
+    message: data.snippet ? data.snippet.slice(0, 140) : `${data.mentionedByName} mentioned you in "${data.docTitle || "Untitled"}"`,
+    projectId: data.projectId,
+    link: `/docs/${data.docId}`,
+    push: prefs.commentMention,
+    dedupeWindowMs: 60_000,
+  })
+}
+
+/** A "Remind me" chip in a doc or task body came due (cron/block-reminders). In-app + push. */
+export async function notifyBlockReminder(data: {
+  userId: string
+  title: string
+  text: string
+  link: string
+  taskId?: string
+  projectId?: string
+}) {
+  await createInAppNotification({
+    userId: data.userId,
+    type: "block_reminder",
+    title: `Reminder: ${data.title || "Untitled"}`,
+    message: data.text ? data.text.slice(0, 140) : data.title,
+    taskId: data.taskId,
+    projectId: data.projectId,
+    link: data.link,
+    push: true,
+  })
+}
+
 // ── Threads (Feed) ──────────────────────────────────────────
 // Feed mentions/comments reuse the `commentMention` preference (no new flag → no migration).
 // No taskId is set (a postId isn't a Task); the link points at /threads?post=<id>.

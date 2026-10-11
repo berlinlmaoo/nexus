@@ -25,6 +25,7 @@ import { ID_SHEETS_TOOLBAR } from "@/lib/i18n/id-sheets-toolbar";
 import { ID_SHEETS_GRID } from "@/lib/i18n/id-sheets-grid";
 import { ID_SHEETS_PIVOT } from "@/lib/i18n/id-sheets-pivot";
 import { ID_SHEETS_FORMATS } from "@/lib/i18n/id-sheets-formats";
+import { ID_EDITOR } from "@/lib/i18n/id-editor";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -40,7 +41,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_FOLDERS, ...ID_OUTLET, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_FOLDERS, ...ID_OUTLET, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_EDITOR };
 
 function read(): Lang {
   try {

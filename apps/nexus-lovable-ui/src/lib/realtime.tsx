@@ -236,6 +236,26 @@ export function RealtimeProvider({
         socket.on("connect_error", onConnectError);
         socket.on("workspace-changed", onWorkspaceChanged);
         socket.on("audit-changed", onAuditChanged);
+        // A doc/page changed (block editor, server since 12 Oct 2026): `{ projectId, docId, actorId }` to the
+        // project room. Lists and the open page header refetch, folded per burst (a live editing session
+        // saves every second or two). The body itself syncs through its own live room.
+        const docBurst = { ids: new Set<string>(), projects: new Set<string>(), timer: null as ReturnType<typeof setTimeout> | null };
+        const onDocChanged = (payload?: unknown) => {
+          const data = (payload && typeof payload === "object" ? payload : {}) as { docId?: unknown; projectId?: unknown };
+          if (typeof data.docId === "string") docBurst.ids.add(data.docId);
+          if (typeof data.projectId === "string") docBurst.projects.add(data.projectId);
+          if (docBurst.timer) return;
+          docBurst.timer = setTimeout(() => {
+            docBurst.timer = null;
+            queryClient.invalidateQueries({ queryKey: ["nexus", "docs"] });
+            docBurst.ids.forEach((id) => queryClient.invalidateQueries({ queryKey: ["nexus", "doc", id] }));
+            docBurst.projects.forEach((id) => queryClient.invalidateQueries({ queryKey: ["nexus", "project-docs", id] }));
+            docBurst.ids.clear();
+            docBurst.projects.clear();
+          }, 1500);
+        };
+        socket.on("doc-changed", onDocChanged);
+        cleanups.push(() => { socket.off("doc-changed", onDocChanged); if (docBurst.timer) clearTimeout(docBurst.timer); });
         if (socket.connected) onConnect();
 
         const eventHandlers = REALTIME_EVENTS.map((evt) => {

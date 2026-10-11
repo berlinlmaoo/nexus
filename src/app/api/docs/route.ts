@@ -6,7 +6,9 @@ import { isWorkspaceMemberOrAdmin } from '@/lib/read-access'
 import { docWriteRefusal } from '@/lib/write-access'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
-import { extractTextFromTipTap } from '@/lib/tiptap-utils'
+import { docToText, sanitizeDoc } from '@/lib/blockdoc'
+import type { InputJsonValue } from '@prisma/client/runtime/client'
+import { contentForClient } from '@/lib/block-bodies'
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [{ position: 'asc' }, { updatedAt: 'desc' }],
     })
-    return NextResponse.json({ docs })
+    return NextResponse.json({ docs: docs.map((d) => contentForClient(req, d)) })
   } catch (error) {
     console.error('Error fetching docs:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -59,19 +61,20 @@ export async function POST(req: NextRequest) {
     }
 
     // If templateId provided, use template content
-    let finalContent = content || null
+    let finalContent = content ? sanitizeDoc(content) : null
+    if (content && !finalContent) return NextResponse.json({ error: 'content must be a document ({ type: "doc", content: [...] })' }, { status: 400 })
     if (templateId && !content) {
       const template = await prisma.docTemplate.findUnique({ where: { id: templateId } })
       if (template?.content && (await isWorkspaceMemberOrAdmin(session.user.id, template.workspaceId))) {
-        finalContent = template.content
+        finalContent = sanitizeDoc(template.content)
       }
     }
 
     const doc = await prisma.doc.create({
       data: {
         title,
-        content: finalContent,
-        contentText: finalContent ? extractTextFromTipTap(finalContent) : null,
+        content: finalContent ? (finalContent as unknown as InputJsonValue) : undefined,
+        contentText: finalContent ? docToText(finalContent) || null : null,
         projectId,
         authorId: session.user.id,
         ownerId: session.user.id,

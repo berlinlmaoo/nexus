@@ -37,4 +37,8 @@ export const BUS_EVENTS = {
   PIPELINE_CHANGED: "pipeline-changed",
   /** An event or target of an Outlet Sales Dashboard project changed → the `project:<id>` room. Ids only (owner, 10 Oct 2026). */
   OUTLET_SALES_CHANGED: "outlet-sales-changed",
+  /** A doc's body or header changed → `project:<id>` ("doc-changed", ids only) for lists and open pages (block editor, 12 Oct 2026). */
+  DOC_CHANGED: "doc-changed",
+  /** A block-editor body was written outside its live room (REST save, an app) → that room reloads (lib/collab-rooms.ts). */
+  COLLAB_EXTERNAL_WRITE: "collab-external-write",
 } as const

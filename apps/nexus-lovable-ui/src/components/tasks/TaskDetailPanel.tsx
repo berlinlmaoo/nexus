@@ -33,13 +33,11 @@ import {
   X,
 } from "lucide-react";
 import {
-  blockText,
   fmtDate,
   fmtDue,
   fmtTime,
   nexusApi,
   statusLabel,
-  textToBlocks,
   type CustomFieldFile,
   type NexusAttachment,
   type NexusComment,
@@ -53,6 +51,7 @@ import { useLang } from "@/lib/lang";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
+import { TaskBodyEditor } from "@/components/editor/TaskBodyEditor";
 
 // On every pointer-down we record both the tap point AND the rect of the tapped card (the element with a
 // `data-morph-id`). The panel uses that rect to do a MANUAL FLIP morph — it starts the box exactly on the
@@ -289,12 +288,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
   // local mirrors for inline edits
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   useEffect(() => {
-    if (t) {
-      setTitle(t.title ?? "");
-      setDescription(blockText(t.description));
-    }
+    if (t) setTitle(t.title ?? "");
   }, [t?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const invalidateAll = () => {
@@ -738,16 +733,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               </div>
             </SecCard>
 
-            {/* description */}
-            <SecCard icon={AlignLeft} label="Description">
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onBlur={() => { if (description !== blockText(t.description)) update.mutate({ description: description.trim() ? textToBlocks(description) : null }); }}
-                rows={4}
-                placeholder="Add a description…"
-                className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none transition focus:border-primary"
-              />
+            {/* description: a block document (slash menu, @mentions, live with everyone who has it open) */}
+            <SecCard icon={AlignLeft} label={tr("Description")}>
+              <TaskBodyEditor taskId={t.id} projectId={projectId ?? null} onOpenTask={setOpenSub} />
             </SecCard>
 
             {/* subtasks — Asana-style: each is a full task (own assignee/due/comments), hidden

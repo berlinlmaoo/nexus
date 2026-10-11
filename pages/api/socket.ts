@@ -14,6 +14,7 @@ import { sessionVersionRejects } from "@/lib/session-version"
 import { conversationMemberAccess } from "@/lib/chat-access"
 import { resolveAuditAccess } from "@/lib/audit-query"
 import { TypingGate, parseTypingEvent, type TypingRelay } from "@/lib/chat-typing"
+import { attachCollabSocket } from "@/lib/collab-rooms"
 
 const log = createLogger("socket")
 
@@ -266,6 +267,8 @@ export function initializeSocketServer(
   io.on("connection", (socket) => {
     const serverRooms = socket.data.serverRooms as string[] | undefined
     if (serverRooms?.length) socket.join(serverRooms)
+    // Block editor live rooms (Yjs): their own events and access checks, lib/collab-rooms.ts.
+    attachCollabSocket(io, socket)
 
     let currentRoom: string | null = null
     let currentUser: { userId: string; name: string; avatar: string | null } | null = null
@@ -540,6 +543,12 @@ export function initializeSocketServer(
   // emitOutletSalesChanged): ids only, to the project's room (VIEWER access to join, as for the pipeline).
   eventBus.on(BUS_EVENTS.OUTLET_SALES_CHANGED, (data: { projectId: string; eventId: string | null; month: string | null; actorId: string | null }) => {
     io.to(`project:${data.projectId}`).emit("outlet-sales-changed", { projectId: data.projectId, eventId: data.eventId, month: data.month, actorId: data.actorId })
+  })
+
+  // A doc's body or header changed (block editor, lib/block-bodies.ts / docs routes): ids only, to the
+  // project's room, so its Pages list and any open copy of the page refetch.
+  eventBus.on(BUS_EVENTS.DOC_CHANGED, (data: { projectId: string; docId: string; actorId: string | null }) => {
+    io.to(`project:${data.projectId}`).emit("doc-changed", { projectId: data.projectId, docId: data.docId, actorId: data.actorId })
   })
 
   // Some audit row was written. Folded: the first write of a burst starts the clock and the ping goes

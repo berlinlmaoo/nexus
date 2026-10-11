@@ -7,8 +7,9 @@ import { canReadProjectContent } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { restorableDelete } from '@/lib/deletion-snapshot'
-import { extractTextFromTipTap } from '@/lib/tiptap-utils'
-
+import { sanitizeDoc } from '@/lib/blockdoc'
+import { contentForClient, loadBody, saveBody } from '@/lib/block-bodies'
+import { eventBus, BUS_EVENTS } from '@/lib/event-bus'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
     const session = await auth()
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
       },
     })
     if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json({ doc })
+    return NextResponse.json({ doc: contentForClient(req, doc) })
   } catch (error) {
     console.error('Error fetching doc:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -41,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const body = await req.json()
+    const docId = (await params).docId
 
     // Signed in is not enough (writes batch): the doc page's own rule (GET above) — whoever opens a doc
     // there can edit it.
@@ -55,22 +57,45 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
       }
     }
 
+    // The body (block editor): checked, stored with its text form, mentions notified, live rooms told.
+    // `baseUpdatedAt` (optional) = the doc's updatedAt the editor started from; a newer one → 409, nothing written.
+    let nextContent: ReturnType<typeof sanitizeDoc> = null
+    if (body.content !== undefined && body.content !== null) {
+      nextContent = sanitizeDoc(body.content)
+      if (!nextContent) return NextResponse.json({ error: 'content must be a document ({ type: "doc", content: [...] }) under 2 MB' }, { status: 400 })
+    }
+    if (typeof body.baseUpdatedAt === 'string') {
+      const now = await prisma.doc.findUnique({ where: { id: docId }, select: { updatedAt: true } })
+      if (now && now.updatedAt.toISOString() !== body.baseUpdatedAt) {
+        const current = await prisma.doc.findUnique({ where: { id: docId }, include: { author: { select: { id: true, name: true, avatar: true } }, owner: { select: { id: true, name: true, avatar: true } }, project: { select: { id: true, name: true, color: true } } } })
+        return NextResponse.json({ error: 'This page was changed by someone else.', conflict: true, doc: current }, { status: 409 })
+      }
+    }
+
     const data: Record<string, unknown> = {}
-    if (body.title !== undefined) data.title = body.title
-    if (body.content !== undefined) {
-      data.content = body.content
-      data.contentText = body.content ? extractTextFromTipTap(body.content) : null
+    if (body.title !== undefined) data.title = String(body.title ?? '').slice(0, 500) || 'Untitled'
+    if (body.content === null) {
+      data.content = null
+      data.contentText = null
     }
     if (body.parentId !== undefined) data.parentId = body.parentId
     if (body.position !== undefined) data.position = body.position
-    if (body.icon !== undefined) data.icon = body.icon
-    if (body.coverImage !== undefined) data.coverImage = body.coverImage
+    if (body.icon !== undefined) data.icon = body.icon ? String(body.icon).slice(0, 64) : null
+    if (body.coverImage !== undefined) data.coverImage = typeof body.coverImage === 'string' && /^(\/|https:\/\/|gradient:)/.test(body.coverImage) ? body.coverImage.slice(0, 1000) : null
+    if (body.fullWidth !== undefined) data.fullWidth = !!body.fullWidth
     if (body.verificationStatus !== undefined) data.verificationStatus = body.verificationStatus
     if (body.verifiedAt !== undefined) data.verifiedAt = new Date(body.verifiedAt)
     if (body.ownerId !== undefined) data.ownerId = body.ownerId
 
+    if (nextContent) {
+      const loaded = await loadBody('doc', docId)
+      if (!loaded) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      if (data.title) loaded.title = data.title as string
+      await saveBody(loaded, nextContent, { actorId: session.user.id })
+    }
+
     const doc = await prisma.doc.update({
-      where: { id: (await params).docId },
+      where: { id: docId },
       data,
       include: {
         author: { select: { id: true, name: true, avatar: true } },
@@ -78,10 +103,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
         project: { select: { id: true, name: true, color: true } },
       },
     })
+    if (!nextContent) eventBus.emit(BUS_EVENTS.DOC_CHANGED, { projectId: doc.projectId, docId, actorId: session.user.id })
 
     logAudit({ action: "update", entityType: "doc", entityId: (await params).docId, entityName: doc.title, userId: session.user.id, request: req, metadata: { changes: Object.keys(body) } })
 
-    return NextResponse.json({ doc })
+    return NextResponse.json({ doc: contentForClient(req, doc) })
   } catch (error) {
     console.error('Error updating doc:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

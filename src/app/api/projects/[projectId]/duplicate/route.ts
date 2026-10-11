@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import type { InputJsonValue } from "@prisma/client/runtime/client"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { ensureSheetFormattingColumns } from "@/lib/project-sheets"
@@ -157,6 +158,10 @@ export async function POST(
           },
           select: { id: true },
         })
+
+        // The block-editor body comes along (its text is the description copied above).
+        const body = await prisma.taskBody.findUnique({ where: { taskId: task.id }, select: { doc: true } })
+        if (body) await prisma.taskBody.create({ data: { taskId: newTask.id, doc: body.doc as unknown as InputJsonValue, updatedById: me } })
 
         if (task.assignees.length > 0) {
           await prisma.taskAssignee.createMany({
