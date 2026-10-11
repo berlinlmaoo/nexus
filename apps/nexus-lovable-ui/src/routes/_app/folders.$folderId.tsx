@@ -7,7 +7,7 @@ import {
 import { nexusApi, type NexusTask, type NexusProject } from "@/lib/nexus-api";
 import { descendantFolderIds, folderPath } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
-import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { ProjectIcon, ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar } from "@/components/Avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PageHeader } from "@/components/PageHeader";
@@ -181,7 +181,7 @@ function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
                     style={{ borderColor: tint(color, 0.4), background: tint(color, 0.12), color }}
                   >
                     <span className="h-3 w-3 rounded-full ring-1 ring-black/10" style={{ background: color }} />
-                    <span className="grid h-4 w-4 place-items-center"><ProjectIcon icon={p.icon} className="max-h-4 max-w-4" /></span>
+                    <span className="grid h-4 w-4 place-items-center"><ProjectMark icon={p.icon} color={p.color} className="max-h-4 max-w-4" /></span>
                     <span className="max-w-[140px] truncate">{p.name}</span>
                   </button>
                 </PopoverTrigger>
@@ -341,7 +341,7 @@ function MobileTaskRow({ t, projById }: { t: NexusTask; projById: ProjLookup }) 
       <div className="min-w-0 flex-1">
         <div className={cn("truncate text-sm font-semibold", done && "text-muted-foreground line-through")}>{t.title}</div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          {proj && <span className="grid h-3.5 w-3.5 shrink-0 place-items-center"><ProjectIcon icon={proj.icon} className="max-h-3.5 max-w-3.5" /></span>}
+          {proj && <span className="grid h-3.5 w-3.5 shrink-0 place-items-center"><ProjectMark icon={proj.icon} color={proj.color} className="max-h-3.5 max-w-3.5" /></span>}
           <span className="truncate font-medium" style={{ color }}>{proj?.name ?? projectName(t, projById)}</span>
           {due && <><span className="shrink-0">·</span><Clock className="h-3 w-3 shrink-0" /><span className="shrink-0">{due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></>}
         </div>
@@ -475,7 +475,7 @@ function ProjectPicker({ folderId, allProjects, selected, usingAll, onClose }: {
               <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", picked.has(p.id) ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
                 {picked.has(p.id) && <Check className="h-3 w-3" />}
               </span>
-              <span className="grid h-5 w-5 shrink-0 place-items-center"><ProjectIcon icon={p.icon} className="max-h-5 max-w-5" /></span>
+              <span className="grid h-5 w-5 shrink-0 place-items-center"><ProjectMark icon={p.icon} color={p.color} className="max-h-5 max-w-5" /></span>
               <span className="truncate">{p.name}</span>
             </button>
           ))}

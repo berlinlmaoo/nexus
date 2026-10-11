@@ -6,7 +6,7 @@ import { CheckCircle2, Circle, ImagePlus, Loader2, Mail, Trash2, UserPlus, X } f
 import { nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
 import { ProjectCustomFieldsManager } from "@/components/projects/ProjectCustomFieldsManager";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
-import { projectEmoji } from "@/components/projects/ProjectIcon";
+import { ProjectMark, isProjectPhoto } from "@/components/projects/ProjectIcon";
 import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, financeTabEnabled, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -117,12 +117,9 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   }, []);
   const [name, setName] = useState(project.name ?? "");
   const [description, setDescription] = useState(project.description ?? "");
-  // An icon is an uploaded picture, an emoji, or a NAMED icon ("briefcase", "folder" — the column's
-  // default, and what older screens stored). The field shows the emoji the name stands for; it used to
-  // show the name itself (iOS cut it to "br"). Saving keeps the name unless another emoji is picked.
-  const storedIcon = project.icon ?? "🚀";
-  const shownIcon = /^(\/|https?:)/.test(storedIcon) ? storedIcon : projectEmoji(storedIcon, "🚀");
-  const [icon, setIcon] = useState(shownIcon);
+  // Every project shows the same default mark unless it has an uploaded photo (owner, 11 Oct 2026), so
+  // the only icon choice left is "photo or not". Removing the photo stores the column's default "folder".
+  const [icon, setIcon] = useState(project.icon ?? "folder");
   const [color, setColor] = useState(project.color ?? COLORS[0]);
   const [status, setStatus] = useState(project.status ?? "ACTIVE");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -153,7 +150,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
 
   const save = useMutation({
-    mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, icon: icon === shownIcon ? storedIcon : icon, color, status }),
+    mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, color, status }),
     onSuccess: () => { invalidate(); qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); },
   });
   const removeMember = useMutation({
@@ -185,7 +182,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     onSuccess: (r) => { setIcon(r.url); settings.mutate({ icon: r.url }); },
   });
   const onPickIcon = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) uploadIcon.mutate(f); e.target.value = ""; };
-  const iconIsImage = /^(\/|https?:)/.test(icon);
+  const iconIsImage = isProjectPhoto(icon);
   const toggleBatch = (checked: boolean) => { setEnableBatch(checked); settings.mutate({ enableTaskBatchDuplicate: checked }); };
   const togglePnl = (checked: boolean) => {
     setEnablePnl(checked);
@@ -254,18 +251,16 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="relative shrink-0">
-                {iconIsImage ? (
-                  <img src={icon} alt="" className="h-12 w-12 rounded-2xl border border-border object-cover" />
-                ) : (
-                  <input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={2} className="h-12 w-12 rounded-2xl border border-border bg-background text-center text-2xl outline-none focus:border-primary" />
-                )}
+                <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-2xl border border-border bg-muted text-3xl">
+                  <ProjectMark icon={icon} color={color} className="h-full w-full object-cover" />
+                </span>
                 {uploadIcon.isPending && <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/60"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
               </div>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => iconFileRef.current?.click()} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-3.5 w-3.5" />Upload icon image</button>
-              {iconIsImage && <button onClick={() => { setIcon("🚀"); settings.mutate({ icon: "🚀" }); }} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />Use an emoji again</button>}
+              <button onClick={() => iconFileRef.current?.click()} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-3.5 w-3.5" />{iconIsImage ? t("Change photo") : t("Add photo")}</button>
+              {iconIsImage && <button onClick={() => { setIcon("folder"); settings.mutate({ icon: "folder" }); }} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />{t("Remove photo")}</button>}
               <span className="text-[11px] text-muted-foreground">PNG/JPG/SVG/WEBP, max 5MB</span>
               <input ref={iconFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={onPickIcon} />
             </div>

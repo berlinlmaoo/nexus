@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 // ── Glyphs: a folder looks like a folder, a project never does ───────────────────────────────────────
 
 const FOLDERISH = new Set(["📁", "📂", "🗂️", "🗂", "folder"]);
-const isUploadedIcon = (icon?: string | null) => !!icon && icon.startsWith("/");
+const isUploadedIcon = (icon?: string | null) => !!icon && /^(\/|https?:)/.test(icon);
 const isCustomIcon = (icon?: string | null) => !!icon && !FOLDERISH.has(icon.trim().toLowerCase());
 
 /** A folder's mark: its own photo or emoji if it has one, else a drawn folder in the folder's colour. */
@@ -51,11 +51,11 @@ export function FolderGlyph({ folder, open, size = 16, className }: { folder: Pi
 }
 
 /**
- * A project's mark: its photo or emoji, or a small square in the project's colour. A project whose icon
- * is the folder emoji gets the square, so it can't be mistaken for a folder (owner, 10 Oct 2026).
+ * A project's mark: its photo, else the one default every project shares — a small square in the
+ * project's colour (owner, 11 Oct 2026: no per-project emoji any more).
  */
 export function ProjectGlyph({ project, size = 16, className }: { project: Pick<NexusProject, "icon" | "color">; size?: number; className?: string }) {
-  if (isUploadedIcon(project.icon) || isCustomIcon(project.icon)) {
+  if (isUploadedIcon(project.icon)) {
     return (
       <span className={cn("grid shrink-0 place-items-center overflow-hidden rounded leading-none", className)} style={{ width: size, height: size, fontSize: size - 3 }}>
         <ProjectIcon icon={project.icon} className="h-full w-full rounded object-cover" />

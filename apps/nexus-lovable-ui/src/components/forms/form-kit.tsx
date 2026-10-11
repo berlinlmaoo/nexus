@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignLeft, Calendar, Check, CheckSquare, ChevronDown, Copy, FileText, GitBranch, GripVertical, Hash, ListChecks, Loader2, Mail, Paperclip, Plus, Trash2, Type, User, X } from "lucide-react";
 import { nexusApi, ApiError, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
@@ -539,7 +540,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
               {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">Loading projects…</div>}
               {(projectsQ.data ?? []).filter((p) => p.id !== projectId).map((p) => (
                 <button key={p.id} disabled={dup.isPending || !dupName.trim()} onClick={() => dup.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-muted text-sm">{p.icon && !p.icon.startsWith("/") ? p.icon : "📁"}</span>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-sm"><ProjectMark icon={p.icon} color={p.color} className="h-full w-full object-cover" /></span>
                   <span className="truncate">{p.name}</span>
                   {dup.isPending && dup.variables === p.id && <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" />}
                 </button>

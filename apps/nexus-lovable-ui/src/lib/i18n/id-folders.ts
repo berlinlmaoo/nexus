@@ -48,4 +48,6 @@ export const ID_FOLDERS: Record<string, string> = {
   "Folder “{name}” deleted": "Folder “{name}” dihapus",
   "What was inside moved up one level.": "Isinya naik satu tingkat.",
   "Couldn't delete “{name}”": "Gagal menghapus “{name}”",
+  "Add photo": "Tambah foto",
+  "Remove photo": "Hapus foto",
 };

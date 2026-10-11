@@ -4,7 +4,7 @@ import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { celebrate } from "@/components/Celebration";
@@ -232,7 +232,7 @@ function ProjectDetail() {
   return (
     <div>
       <PageHeader
-        icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none">{data?.icon ? <ProjectIcon icon={data.icon} className="max-h-9 max-w-9 rounded-lg object-cover" /> : "🚀"}</span>}
+        icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || "Mission Board"}
         subtitle={data?.description || (project.isLoading ? "Loading live NEXUS board..." : "Project detail board needs login/session or access.")}
         actions={

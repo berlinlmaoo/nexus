@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
-import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { ProjectTypeChosen, ProjectTypePicker } from "@/components/projects/ProjectTypePicker";
 import { projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
@@ -106,7 +106,6 @@ function ProjectsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
-  const [newProjectIcon, setNewProjectIcon] = useState("🚀");
   const [newProjectColor, setNewProjectColor] = useState("#a168be");
   const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
   // New project, step one (owner, 9 Oct 2026): what the project is for. null = the picker is showing.
@@ -214,7 +213,6 @@ function ProjectsPage() {
       nexusApi.createProject({
         name: newProjectName.trim(),
         description: newProjectDescription.trim() || null,
-        icon: newProjectIcon.trim() || "🚀",
         color: newProjectColor,
         workspaceId: newProjectWorkspaceId || workspaceOptions[0]?.id || "",
         type: newProjectType ?? "TASK",
@@ -464,16 +462,7 @@ function ProjectsPage() {
                   <button type="button" onClick={() => setNewProjectFolderId(null)} className="shrink-0 rounded-md px-1.5 py-0.5 font-semibold text-muted-foreground hover:bg-accent hover:text-foreground">{tr("No folder")}</button>
                 </div>
               )}
-              <div className="grid grid-cols-[72px_1fr] gap-3">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Icon
-                  <input
-                    value={newProjectIcon}
-                    onChange={(e) => setNewProjectIcon(e.target.value)}
-                    maxLength={8}
-                    className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-center text-xl"
-                  />
-                </label>
+              <div>
                 <label className="text-xs font-semibold text-muted-foreground">
                   {tr("Project name")}
                   <input
@@ -750,7 +739,7 @@ function ProjectCard({ project: p, folders, canMove, onMove, dragProps, dragging
           </div>
           <div className="flex items-start gap-3 relative">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-muted text-2xl">
-              <ProjectIcon icon={p.icon} />
+              <ProjectMark icon={p.icon} color={p.color} />
             </div>
             <div className="min-w-0 flex-1">
               <h3 className="truncate font-semibold tracking-tight transition group-hover:text-primary">
@@ -820,7 +809,7 @@ function ProjectRow({ project: p, folders, canMove, onMove, dragProps, dragging 
     >
       <div className="flex items-center gap-3 min-w-0">
         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-muted text-xl shrink-0">
-          <ProjectIcon icon={p.icon} />
+          <ProjectMark icon={p.icon} color={p.color} />
         </div>
         <div className="min-w-0">
           <div className="font-semibold truncate group-hover:text-primary">{p.name}</div>
