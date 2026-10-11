@@ -115,6 +115,8 @@ data class ProjectsState(
     val collapsed: Set<String> = emptySet(),
     /** "Moved X to Y" with Undo, once. */
     val toast: TreeToast? = null,
+    /** Workspace people for New project's members (PROJECT-SETUP-MEMBERS); loaded when the form opens. */
+    val roster: List<RosterMember> = emptyList(),
 )
 
 data class TreeToast(val text: String, val undo: (() -> Unit)? = null, val at: Long = System.nanoTime())
@@ -181,13 +183,21 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
             ?: _state.value.folders.firstNotNullOfOrNull { it.workspaceId }
             ?: runCatching { c.attendanceApi.today().workspace?.id }.getOrNull()
 
-    fun createProject(name: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
+    fun loadRoster() = viewModelScope.launch {
+        runCatching { api.roster().members }.getOrNull()?.let { r -> _state.update { it.copy(roster = r) } }
+    }
+
+    fun createProject(name: String, folderId: String?, type: ProjectType = ProjectType.TASK, setup: ProjectSetup = ProjectSetup(), onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
-        val id = try { api.createProject(name, ws, folderId, type) } catch (e: ApiError) {
+        val id = try { api.createProject(name, ws, folderId, type, setup.hiddenTabs, setup.memberIds) } catch (e: ApiError) {
             // Many boards (PIPELINE-DASHBOARD §16, 11 Oct): a Pipeline is created like any project, never "opened
             // instead"; the only refusal left is the company-workspace rule.
             val h = e as? ApiError.Http
             when {
+                // PROJECT-SETUP-MEMBERS: the server words these in Indonesian only, so the app says them in both.
+                h?.code == "MEMBER_NOT_IN_WORKSPACE" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_outside)) }; return@act }
+                h?.code == "TOO_MANY_MEMBERS" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_too_many)) }; return@act }
+                h?.code == "TASK_VIEW_REQUIRED" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_view)) }; return@act }
                 h?.code == "PIPELINE_COMPANY_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.pl_company_only)) }; return@act }
                 else -> throw e
             }
@@ -439,9 +449,12 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     // Who may make a Pipeline board (company workspace, §16): read once from the viewer.
     val viewer = (LocalContext.current.applicationContext as NexusApplication).container.viewer
     var pipelineAccess by remember { mutableStateOf(false) }
-    LaunchedEffect(creating) { if (creating) { viewer.load(); pipelineAccess = viewer.canAccessPipeline } }
-    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipelineAccess, initialFolder = createIn, onDismiss = { creating = false; createIn = null }) { name, folder, type ->
-        vm.createProject(name, folder, type) { id -> creating = false; createIn = null; onOpenProject(id) }
+    LaunchedEffect(creating) { if (creating) { vm.loadRoster(); viewer.load(); pipelineAccess = viewer.canAccessPipeline } }
+    val meId = (LocalContext.current.applicationContext as NexusApplication).container.sessionStore.current?.userId
+    if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipelineAccess, initialFolder = createIn,
+        roster = s.roster.filter { ProjectSetupLogic.id(it).let { id -> id != null && id != meId } }, meId = meId,
+        onDismiss = { creating = false; createIn = null }) { name, folder, type, setup ->
+        vm.createProject(name, folder, type, setup) { id -> creating = false; createIn = null; onOpenProject(id) }
     }
     if (folderCreate || folderEdit != null || subfolderOf != null) FolderDialog(folderEdit, parent = subfolderOf, busy = s.busy,
         onDismiss = { folderCreate = false; folderEdit = null; subfolderOf = null }) { name, icon, color, photo ->
@@ -556,9 +569,14 @@ private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
 
 @Composable
 private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, initialFolder: String? = null,
-                                onDismiss: () -> Unit, onCreate: (String, String?, ProjectType) -> Unit) {
+                                roster: List<RosterMember> = emptyList(), meId: String? = null,
+                                onDismiss: () -> Unit, onCreate: (String, String?, ProjectType, ProjectSetup) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var folder by rememberSaveable { mutableStateOf(initialFolder) }
+    // PROJECT-SETUP-MEMBERS A: starting tabs (Task Project; all on) and members (any type).
+    var hidden by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var members by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var picking by remember { mutableStateOf(false) }
     // First: what the project is for (9 Oct). Only Task Project is built; the rest say "Coming soon".
     var type by rememberSaveable { mutableStateOf<ProjectType?>(null) }
     val c = Nx.colors
@@ -575,7 +593,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(stringResource(R.string.projects_new)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(type!!.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
                     TextButton(onClick = { type = null }, enabled = !busy) { Text(stringResource(R.string.pt_change)) }
@@ -592,16 +610,25 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
                         }
                     }
                 }
+                if (type == ProjectType.TASK) StartingTabs(hidden.toSet(), enabled = !busy) { hidden = ProjectTabsLogic.KEYS.filter { k -> k in it } }
+                StartingMembers(members.toSet(), roster, enabled = !busy, onEdit = { picking = true }) { uid -> members = members - uid }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name, folder, type ?: ProjectType.TASK) }, enabled = name.isNotBlank() && !busy) {
+            TextButton(onClick = { onCreate(name, folder, type ?: ProjectType.TASK, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId))) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) } },
     )
+    if (picking) {
+        val ctx = LocalContext.current
+        PeoplePickerDialog(roster, members.toSet(), stringResource(R.string.setup_members), { n -> if (n == 0) ctx.getString(R.string.setup_done) else ctx.getString(R.string.setup_pick_n, n) },
+            stringResource(R.string.setup_nobody), stringResource(R.string.setup_nobody_hint), allowNone = true, onDismiss = { picking = false }) { picked ->
+            members = picked.toList(); picking = false
+        }
+    }
 }
 
 @Composable

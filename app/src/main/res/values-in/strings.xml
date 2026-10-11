@@ -2934,4 +2934,18 @@
     <plurals name="bulk_selected"><item quantity="other">%d dipilih</item></plurals>
     <plurals name="bulk_dup_title"><item quantity="other">Duplikat %d task</item></plurals>
     <plurals name="bulk_dup_done"><item quantity="other">%d task diduplikat</item></plurals>
+    <string name="setup_tabs">Tab</string>
+    <string name="setup_tabs_sub">Tab yang dipakai project ini sejak awal. Bisa diubah nanti di Pengaturan; Board atau List selalu tetap nyala.</string>
+    <string name="setup_members">Anggota</string>
+    <string name="setup_members_sub">Kamu jadi lead. Tambahkan orang yang akan mengerjakannya sekarang, atau nanti di Pengaturan.</string>
+    <string name="setup_add_members">Tambah anggota</string>
+    <string name="setup_edit_members">Ubah</string>
+    <string name="setup_remove_person">Hapus %s</string>
+    <string name="setup_pick_n">Tambah %d</string>
+    <string name="setup_done">Selesai</string>
+    <string name="setup_nobody">Belum ada orang lain di workspace ini</string>
+    <string name="setup_nobody_hint">Undang orang ke workspace dulu, lalu tambahkan di sini.</string>
+    <string name="setup_err_outside">Ada orang yang dipilih sudah tidak ada di workspace ini. Cek anggotanya lalu coba lagi.</string>
+    <string name="setup_err_too_many">Terlalu banyak orang sekaligus: maksimal 200.</string>
+    <string name="setup_err_view">Board atau List harus tetap nyala.</string>
 </resources>

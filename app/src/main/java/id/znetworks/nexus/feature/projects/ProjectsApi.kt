@@ -39,13 +39,17 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun searchTasks(q: String): List<BoardTask> =
         api.get("/api/tasks?search=${URLEncoder.encode(q, "UTF-8")}", ListSerializer(BoardTask.serializer()))
 
-    suspend fun createProject(name: String, workspaceId: String, folderId: String?, type: ProjectType = ProjectType.TASK): String {
+    suspend fun createProject(name: String, workspaceId: String, folderId: String?, type: ProjectType = ProjectType.TASK,
+                              hiddenTabs: List<String>? = null, memberIds: List<String>? = null): String {
         val body = buildJsonObject {
             put("name", name.trim()); put("workspaceId", workspaceId)
             // No "icon" or "color": every project shares one default mark, the server stores its defaults (PROJECT-ICON, 11 Oct).
             folderId?.let { put("folderId", it) }
             // Task Project and Pipeline Dashboard exist; the others are 400 TYPE_COMING_SOON (PROJECT-TYPES-TABS).
             put("type", type.code)
+            // PROJECT-SETUP-MEMBERS (server eecca18): starting tabs (TASK only) and members; left out when empty.
+            if (type == ProjectType.TASK) hiddenTabs?.let { put("hiddenTabs", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))) }
+            memberIds?.let { put("memberIds", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))) }
         }
         return (post("/api/projects", body)["id"] as? JsonPrimitive)?.content.orEmpty()
     }

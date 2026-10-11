@@ -2985,4 +2985,18 @@
     <plurals name="bulk_selected"><item quantity="one">%d selected</item><item quantity="other">%d selected</item></plurals>
     <plurals name="bulk_dup_title"><item quantity="one">Duplicate %d task</item><item quantity="other">Duplicate %d tasks</item></plurals>
     <plurals name="bulk_dup_done"><item quantity="one">%d task duplicated</item><item quantity="other">%d tasks duplicated</item></plurals>
+    <string name="setup_tabs">Tabs</string>
+    <string name="setup_tabs_sub">Which tabs the project starts with. You can change them later in Settings; Board or List always stays on.</string>
+    <string name="setup_members">Members</string>
+    <string name="setup_members_sub">You\'re the lead. Add the people who\'ll work on it now, or later in Settings.</string>
+    <string name="setup_add_members">Add members</string>
+    <string name="setup_edit_members">Edit</string>
+    <string name="setup_remove_person">Remove %s</string>
+    <string name="setup_pick_n">Add %d</string>
+    <string name="setup_done">Done</string>
+    <string name="setup_nobody">No one else in this workspace</string>
+    <string name="setup_nobody_hint">Invite people to the workspace first, then add them here.</string>
+    <string name="setup_err_outside">Someone you picked isn\'t in this workspace any more. Check the members and try again.</string>
+    <string name="setup_err_too_many">That\'s too many people at once: 200 at most.</string>
+    <string name="setup_err_view">Keep Board or List on.</string>
 </resources>

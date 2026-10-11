@@ -12,7 +12,10 @@ class MemberPickerTest {
         assertTrue(api.contains("put(\"userIds\""))
         val screen = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectSettingsScreen.kt").readText()
         assertTrue(screen.contains("api.addMembers(projectId, ids)")); assertFalse(screen.contains("ids.forEach { api.addMember("))
-        assertTrue(screen.contains("usePlatformDefaultWidth = false")); assertTrue(screen.contains("focusRequester(focus)"))
+        // The full-height picker is shared with New project (PROJECT-SETUP-MEMBERS).
+        assertTrue(screen.contains("PeoplePickerDialog("))
+        val picker = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectSetup.kt").readText()
+        assertTrue(picker.contains("usePlatformDefaultWidth = false")); assertTrue(picker.contains("focusRequester(focus)"))
         assertTrue(screen.contains("PipelineViewModel.membersChanged()"))
         listOf("values", "values-in").forEach { v ->
             val s = File("src/main/res/$v/strings.xml").readText()

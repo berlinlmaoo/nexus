@@ -402,72 +402,18 @@ private fun FieldEditorDialog(onDismiss: () -> Unit, onCreate: (String, String, 
  */
 @Composable
 private fun AddPeopleDialog(s: ProjectSettingsState, onDismiss: () -> Unit, onAdd: (Set<String>, (String?) -> Unit) -> Unit) {
-    val c = Nx.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val inProject = s.detail?.members.orEmpty().mapNotNull { it.userId ?: it.user?.id }.toSet()
-    var q by rememberSaveable { mutableStateOf("") }
-    var picked by remember { mutableStateOf(setOf<String>()) }
     var adding by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val candidates = s.roster.filter { m -> (m.userId ?: m.id).let { it != null && it !in inProject } }.sortedBy { (it.name ?: it.email).orEmpty().lowercase() }
-    val results = candidates.filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), ignoreCase = true) } }
-    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-                Text(stringResource(R.string.ps_add_member), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.foreground,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
-                TextButton(onClick = { adding = true; error = null; onAdd(picked) { err -> adding = false; error = err } }, enabled = picked.isNotEmpty() && !adding) {
-                    if (adding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    else Text(stringResource(R.string.ps_add_n, picked.size), fontWeight = FontWeight.Bold)
-                }
-            }
-            OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                placeholder = { Text(stringResource(R.string.ps_search_name_email)) }, shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(focus))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (picked.isEmpty()) stringResource(R.string.ps_pick_people) else stringResource(R.string.ps_n_selected, picked.size),
-                    fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.weight(1f))
-                if (picked.isNotEmpty()) TextButton(onClick = { picked = emptySet() }) { Text(stringResource(R.string.ps_clear)) }
-            }
-            error?.let { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.dangerText, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
-            when {
-                candidates.isEmpty() -> EmptyNote(stringResource(R.string.ps_everyone_here), stringResource(R.string.ps_everyone_hint))
-                results.isEmpty() -> EmptyNote(stringResource(R.string.ps_no_match), stringResource(R.string.ps_no_match_hint))
-                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-                    items(results, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
-                        val uid = m.userId ?: m.id ?: return@items
-                        val on = uid in picked
-                        Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(m.name ?: m.email, m.avatar, 32.dp); Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(m.name ?: m.email ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
-                                m.email?.takeIf { it != m.name }?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1) }
-                            }
-                            m.role?.takeIf { it.isNotBlank() }?.let { r ->
-                                Text(r.lowercase().replaceFirstChar(Char::titlecase).replace('_', ' '), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg,
-                                    modifier = Modifier.background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Checkbox(on, { picked = if (on) picked - uid else picked + uid })
-                        }
-                    }
-                }
-            }
-        }
+    // Multi-select, one "Add N" — no team step (PROJECT-SETUP-MEMBERS B); the picker is shared with New project.
+    PeoplePickerDialog(s.roster.filter { m -> ProjectSetupLogic.id(m).let { it != null && it !in inProject } }, emptySet(),
+        stringResource(R.string.ps_add_member), { n -> ctx.getString(R.string.ps_add_n, n) },
+        stringResource(R.string.ps_everyone_here), stringResource(R.string.ps_everyone_hint), busy = adding, error = error, onDismiss = onDismiss) { picked ->
+        adding = true; error = null; onAdd(picked) { err -> adding = false; error = err }
     }
 }
 
-@Composable
-private fun EmptyNote(title: String, hint: String) {
-    val c = Nx.colors
-    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        Text(hint, fontSize = 13.sp, color = c.mutedFg, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-    }
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
