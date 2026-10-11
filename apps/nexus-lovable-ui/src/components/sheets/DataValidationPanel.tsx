@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { toDisplay, toStored, type SheetShape } from "@/lib/sheet-formula";
 import { newRuleId, rangeFromA1, rangeToA1, type ValidationKind, type ValidationRule } from "@/lib/sheet-validation";
-import { chipClass } from "./sheet-dropdown";
+import { chipClass, chipStyle } from "./sheet-dropdown";
 import { Floating } from "./sheet-float";
 import { COLOR_NAME, STYLE_COLORS, SWATCH_CLASS, type StyleColor } from "./sheet-style";
 
@@ -203,7 +203,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
                 <div className="mt-0.5 truncate text-xs font-medium">{summary(r)}</div>
                 {r.kind === "list" && (r.values?.length ?? 0) > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
-                    {(r.values ?? []).slice(0, 6).map((v) => <span key={v} className={cn("max-w-[120px] truncate rounded-full px-2 text-[11px] leading-5", chipClass(r.colors?.[v]))}>{v}</span>)}
+                    {(r.values ?? []).slice(0, 6).map((v) => <span key={v} style={chipStyle(r.colors?.[v])} className={cn("max-w-[120px] truncate rounded-full px-2 text-[11px] leading-5", chipClass(r.colors?.[v]))}>{v}</span>)}
                     {(r.values?.length ?? 0) > 6 && <span className="text-[11px] text-muted-foreground">+{(r.values?.length ?? 0) - 6}</span>}
                   </div>
                 )}
@@ -295,6 +295,7 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
                         onClick={(e) => setPalette({ key: it.key, rect: e.currentTarget.getBoundingClientRect() })}
                         title={t("Chip colour")}
                         aria-label={t("Chip colour")}
+                        style={chipStyle(it.color)}
                         className={cn("h-5 w-5 shrink-0 rounded-full border border-border", it.color ? SWATCH_CLASS[it.color as StyleColor] ?? chipClass(it.color) : "bg-muted")}
                       />
                       <input
