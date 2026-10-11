@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import type { Prisma, SystemRole } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
+import { SYSTEM_USER_EMAILS } from "@/lib/system-users"
 import { getAdminSessionContext } from "@/lib/admin-access"
 
 const SYSTEM_ROLES: SystemRole[] = ["ADMIN", "MEMBER"]
@@ -26,7 +27,8 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number(request.nextUrl.searchParams.get("page") || "1"))
     const pageSize = Math.min(50, Math.max(1, Number(request.nextUrl.searchParams.get("pageSize") || "20")))
 
-    const where: Prisma.UserWhereInput = {}
+    // System identities (GIDEON, Automation) sign writes; they are not people to manage here.
+    const where: Prisma.UserWhereInput = { email: { notIn: SYSTEM_USER_EMAILS } }
 
     if (q) {
       where.OR = [

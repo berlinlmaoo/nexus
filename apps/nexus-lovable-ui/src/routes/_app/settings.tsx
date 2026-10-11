@@ -543,11 +543,13 @@ function NotificationsSection() {
   const prefs = useQuery({ queryKey: ["nexus", "notif-prefs"], queryFn: nexusApi.notificationPreferences, retry: false });
   const p = prefs.data?.preferences;
   const update = useMutation({ mutationFn: (patch: Record<string, boolean>) => nexusApi.updateNotificationPreferences(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }) });
-  const toggles: Array<{ key: "emailEnabled" | "slackEnabled" | "desktopEnabled" | "desktopSoundEnabled"; label: string; desc: string }> = [
+  const { t } = useLang();
+  const toggles: Array<{ key: "emailEnabled" | "slackEnabled" | "desktopEnabled" | "desktopSoundEnabled" | "automation"; label: string; desc: string; defaultOn?: boolean }> = [
     { key: "emailEnabled", label: "Email notifications", desc: "Mentions, assignments, and updates via email" },
     { key: "slackEnabled", label: "Slack notifications", desc: "Push key events to your Slack" },
     { key: "desktopEnabled", label: "Desktop notifications", desc: "Browser/desktop push" },
     { key: "desktopSoundEnabled", label: "Desktop sound", desc: "Play a sound on desktop alerts" },
+    { key: "automation", label: t("Automation notifications"), desc: t("Push when a project automation notifies you. Off: they still land in your inbox, silently."), defaultOn: true },
   ];
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
@@ -555,7 +557,7 @@ function NotificationsSection() {
       {prefs.isLoading && <p className="text-sm text-muted-foreground">Loading preferences…</p>}
       <div className="space-y-2">
         {toggles.map((o) => {
-          const on = Boolean(p?.[o.key]);
+          const on = p?.[o.key] === undefined ? !!o.defaultOn : Boolean(p?.[o.key]);
           return (
             <label key={o.key} className="flex items-start justify-between p-3 rounded-lg border border-border hover:bg-accent/30 cursor-pointer">
               <div>

@@ -48,6 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 import { useLang } from "@/lib/lang";
+import { displayName } from "@/lib/system-users";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
@@ -131,7 +132,7 @@ function CreatedByLine({ creator, createdAt }: { creator: NexusUser; createdAt: 
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
       <span>{lang.t("Created by")}</span>
       <MiniAvatar user={creator} size={18} />
-      <span className="font-semibold text-foreground">{creator.name}</span>
+      <span className="font-semibold text-foreground">{displayName(creator)}</span>
       {creator.deactivatedAt && <PersonLeftTag />}
       {date && <span>· {date}</span>}
     </div>
@@ -1019,7 +1020,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   {t.activityLogs!.slice(0, 12).map((a) => (
                     <div key={a.id} className="flex gap-2">
-                      <span className="font-semibold text-foreground/80">{a.user?.name ?? "Someone"}</span>
+                      <span className="font-semibold text-foreground/80">{displayName(a.user, "Someone")}</span>
                       <span className="flex-1">{statusLabel(a.action)}{a.details ? ` — ${a.details}` : ""}</span>
                       <span className="shrink-0 text-muted-foreground/70">{fmtDate(a.createdAt)}</span>
                     </div>
@@ -1374,7 +1375,7 @@ function CommentItem({ comment, currentUserId, onReact, onDelete }: { comment: N
     <div className="rounded-xl bg-muted/50 p-3">
       <div className="flex items-center gap-2">
         <MiniAvatar user={comment.user} size={24} />
-        <span className="text-sm font-semibold">{comment.user?.name}</span>
+        <span className="text-sm font-semibold">{displayName(comment.user)}</span>
         <span className="text-[11px] text-muted-foreground">{fmtDate(comment.createdAt)} {fmtTime(comment.createdAt)}</span>
         {isMine && <button onClick={onDelete} className="ml-auto rounded p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>}
       </div>

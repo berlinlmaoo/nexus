@@ -1790,6 +1790,8 @@ export type NexusNotificationPrefs = {
   desktopEnabled?: boolean;
   desktopSoundEnabled?: boolean;
   slackWebhook?: string | null;
+  /** Push for project automations' "Send notification" (12 Oct 2026); off = in-app only. */
+  automation?: boolean;
 };
 
 export type NexusPortfolio = {

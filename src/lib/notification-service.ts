@@ -35,6 +35,7 @@ const DEFAULT_PREFS = {
   commentMention: true,
   projectInvite: true,
   statusUpdate: true,
+  automation: true,
 }
 
 type NotifPrefs = typeof DEFAULT_PREFS
@@ -65,6 +66,7 @@ async function getUserPrefs(userId: string): Promise<NotifPrefs> {
     commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
     projectInvite: pref?.projectInvite ?? DEFAULT_PREFS.projectInvite,
     statusUpdate: pref?.statusUpdate ?? DEFAULT_PREFS.statusUpdate,
+    automation: pref?.automation ?? DEFAULT_PREFS.automation,
   }
 }
 
@@ -101,6 +103,7 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
       commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
       projectInvite: pref?.projectInvite ?? DEFAULT_PREFS.projectInvite,
       statusUpdate: pref?.statusUpdate ?? DEFAULT_PREFS.statusUpdate,
+      automation: pref?.automation ?? DEFAULT_PREFS.automation,
     })
   }
   return map
@@ -1345,6 +1348,36 @@ export async function notifyTaskCompleted(data: {
       push: true,
     })
   }
+}
+
+/**
+ * "Send notification" of a project automation (12 Oct 2026). Respects each recipient like the other task
+ * notifications: Do Not Disturb (dndUntil) = nothing at all; the "Automation notifications" preference off
+ * = the in-app row only, no push. Offboarded recipients are skipped by createInAppNotification.
+ */
+export async function notifyAutomation(data: {
+  userIds: string[]
+  title: string
+  message: string
+  taskId?: string
+  projectId: string
+  link: string
+}): Promise<{ sent: number; dnd: number; noPush: number }> {
+  const dndSet = await getBatchDndStatus(data.userIds)
+  let sent = 0
+  let noPush = 0
+  for (const userId of data.userIds) {
+    if (dndSet.has(userId)) continue
+    const prefs = await getUserPrefs(userId)
+    if (!prefs.automation) noPush++
+    const row = await createInAppNotification({
+      userId, type: "automation", title: data.title, message: data.message,
+      taskId: data.taskId, projectId: data.projectId, link: data.link,
+      push: prefs.automation,
+    })
+    if (row) sent++
+  }
+  return { sent, dnd: dndSet.size, noPush }
 }
 
 export async function notifyCommentAdded(data: {

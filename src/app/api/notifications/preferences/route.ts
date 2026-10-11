@@ -45,6 +45,7 @@ export async function GET() {
         commentMention: true,
         projectInvite: true,
         statusUpdate: true,
+        automation: true,
       }),
       waPhone: pref?.waPhone ?? userPhoneNumber,
     }
@@ -92,6 +93,7 @@ export async function PUT(req: NextRequest) {
         commentMention: body.commentMention ?? true,
         projectInvite: body.projectInvite ?? true,
         statusUpdate: body.statusUpdate ?? true,
+        automation: body.automation ?? true,
       },
       update: {
         emailEnabled: body.emailEnabled,
@@ -106,6 +108,8 @@ export async function PUT(req: NextRequest) {
         commentMention: body.commentMention,
         projectInvite: body.projectInvite,
         statusUpdate: body.statusUpdate,
+        // Released apps PUT without this key: undefined leaves it as it is.
+        automation: typeof body.automation === "boolean" ? body.automation : undefined,
       },
     })
 
@@ -145,6 +149,7 @@ const PATCHABLE_BOOLEANS = [
   "commentMention",
   "projectInvite",
   "statusUpdate",
+  "automation",
 ] as const
 
 type PreferencePatch = Partial<Record<(typeof PATCHABLE_BOOLEANS)[number], boolean>> & {
