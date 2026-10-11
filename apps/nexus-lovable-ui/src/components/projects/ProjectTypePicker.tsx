@@ -19,19 +19,15 @@ const META: Record<ProjectTypeId, { icon: typeof ListChecks; title: string; body
 };
 
 /**
- * `pipeline` (owner/GM, 9 Oct 2026): the company has ONE pipeline board for every deal, open to its project
- * members (added by its lead, like any project — owner, 9 Oct 2026 evening). The card is offered to its
- * members, where picking it opens the board, and to everyone while no board exists yet; not to anyone
- * else, for whom a second one would only be refused (409).
+ * `pipeline`: the Pipeline card is offered to people in the company workspace (`allowed`). Each pick
+ * creates a new, empty board (owner, 11 Oct 2026); `exists` is no longer used.
  */
 export function ProjectTypePicker({ onPick, pipeline }: { onPick: (type: ProjectTypeId) => void; pipeline?: { allowed: boolean; exists: boolean } }) {
   const { t } = useLang();
   return (
     <div className="grid gap-2.5 sm:grid-cols-2">
       {PROJECT_TYPES.filter(({ id }) => id !== "PIPELINE" || !pipeline || pipeline.allowed).map(({ id, available }) => {
-        const m = id === "PIPELINE" && pipeline?.exists
-          ? { ...META.PIPELINE, body: "Opens the company's pipeline: one board for every deal." }
-          : META[id];
+        const m = META[id];
         const Icon = m.icon;
         return (
           <button

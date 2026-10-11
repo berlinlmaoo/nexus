@@ -444,7 +444,7 @@ function ProjectsPage() {
               <div className="mt-5 space-y-3">
                 <p className="text-sm font-semibold">{tr("What is this project for?")}</p>
                 <ProjectTypePicker
-                  onPick={(type) => (type === "PIPELINE" && pipelineInfo?.pipelineProjectId ? openPipelineBoard(pipelineInfo.pipelineProjectId) : setNewProjectType(type))}
+                  onPick={(type) => setNewProjectType(type)}
                   pipeline={pipelineInfo ? { allowed: pipelineInfo.canAccessPipeline === true, exists: !!pipelineInfo.pipelineProjectId } : undefined}
                 />
               </div>

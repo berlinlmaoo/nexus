@@ -26,26 +26,15 @@ export async function companyPipelineProject(): Promise<{ id: string; name: stri
 }
 
 /**
- * The two flags of GET /api/workspaces/members (names kept from the afternoon so clients need no change):
- * - pipelineProjectId: the board, when this person is a member of it (the nav entry opens it). Only
- *   members get the entry, even someone whose workspace role could open it from the project list — the
- *   owner wants the board to be the members' board.
- * - canAccessPipeline: may pick "Pipeline Dashboard" in New project — a member (the pick opens the board),
- *   or anyone of the company while no board exists yet (they create it and become its lead, like any
- *   project). A non-member while it exists: hidden, a second one would only be refused.
+ * The two flags of GET /api/workspaces/members (names kept so clients need no change):
+ * - canAccessPipeline: may pick "Pipeline Dashboard" in New project — anyone in the company workspace.
+ * - pipelineProjectId: always null since boards are no longer one per company (owner, 11 Oct 2026).
+ *   Clients used it to OPEN the existing board instead of creating one; null makes them create.
  */
 export async function pipelineFlags(userId: string): Promise<{ canAccessPipeline: boolean; pipelineProjectId: string | null }> {
-  const board = await companyPipelineProject()
-  if (!board) {
-    const inCompany = await prisma.workspaceMember.findUnique({
-      where: { userId_workspaceId: { userId, workspaceId: ORG_WORKSPACE_ID } },
-      select: { id: true },
-    })
-    return { canAccessPipeline: !!inCompany, pipelineProjectId: null }
-  }
-  const member = await prisma.projectMember.findUnique({
-    where: { userId_projectId: { userId, projectId: board.id } },
+  const inCompany = await prisma.workspaceMember.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId: ORG_WORKSPACE_ID } },
     select: { id: true },
   })
-  return member ? { canAccessPipeline: true, pipelineProjectId: board.id } : { canAccessPipeline: false, pipelineProjectId: null }
+  return { canAccessPipeline: !!inCompany, pipelineProjectId: null }
 }
