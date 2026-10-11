@@ -74,15 +74,32 @@ SCHEMAS = {
         "proposing a time is useless: the time is not what is wrong. Call it only after "
         "nexus_get_attendance_day, and only when that call shows a penalty still on the ledger "
         "(xpPenalties.hasPenaltyToCancel) — it refuses a day with nothing left to cancel, which usually "
-        "means the XP already came back on its own. Takes no times, deliberately. Only an ATTENDANCE or "
-        "EXP ticket can carry one; a DAY_OFF ticket is refused, and a day-off quota is not something "
-        "you can restore. Never claim the XP is back: a BoD decides.",
+        "means the XP already came back on its own. Takes no times, deliberately. ATTENDANCE, EXP and "
+        "DAY_OFF tickets can all carry one: approving it also restores the AUTO-deducted day-off "
+        "allowance for that date (alpha / late >120), which is what nearly every DAY_OFF ticket is "
+        "about. A day off the person filed themselves is not a penalty and cannot be cancelled here. "
+        "Never claim the XP or the allowance is back: a BoD decides.",
         {
             "complaintId": {"type": "string", "description": "The ticket this proposal belongs to."},
             "date": {"type": "string", "description": "YYYY-MM-DD, the day whose penalty should be cancelled. Default to the day the ticket was filed, never a date read off a photo."},
             "reason": {"type": "string", "description": "Why the penalty is unearned, in one sentence, citing what the record shows — which request covers the day and its status, or what says NEXUS was down. Minimum 10 characters."},
         },
         ["complaintId", "date", "reason"],
+    ),
+    "nexus_resolve_ticket": object_schema(
+        "Mark the ticket RESOLVED because there is genuinely nothing left to do for the day in question: "
+        "the penalties already came back, no day-off allowance is still deducted, and no proposal is "
+        "waiting on a BoD. Call it ONLY after nexus_get_attendance_day shows xpPenalties.hasPenaltyToCancel "
+        "= false and no autoDayOffs, AND the day already has an attendance record (if the record is missing "
+        "and the person says they worked, propose an attendance correction instead so the day is recorded "
+        "present). The server re-checks all of that and refuses otherwise — if refused, do not retry; report "
+        "the reason. Your note is posted to the thread as the closing message the reporter reads.",
+        {
+            "complaintId": {"type": "string", "description": "The ticket to resolve."},
+            "date": {"type": "string", "description": "YYYY-MM-DD, the day the ticket is about — the server verifies nothing remains for it."},
+            "note": {"type": "string", "description": "One or two sentences, Bahasa Indonesia, telling the reporter what was already restored and that nothing else remains. Minimum 10 characters."},
+        },
+        ["complaintId", "date", "note"],
     ),
     "nexus_get_attendance_day": object_schema(
         "Read ONE day of the requesting user's own attendance AND everything needed to choose a remedy "
@@ -115,6 +132,28 @@ SCHEMAS = {
             "parentId": {"type": "string", "description": "Optional parent document, to nest this one under it."},
         },
         ["projectId", "title", "markdown"],
+    ),
+    "nexus_get_task": object_schema(
+        "Read ONE NEXUS task in full: title, description, status, priority, due date, assignees, project, "
+        "section, custom fields, and its latest comments (newest last). Use it before changing a task, and "
+        "whenever someone asks about a specific task.",
+        {"taskId": {"type": "string"}},
+        required=["taskId"],
+    ),
+    "nexus_search_docs": object_schema(
+        "Search the NEXUS Knowledge Library (documents/pages) by title or text, optionally inside one project. "
+        "Returns id, title, project, a short excerpt and the URL. Use nexus_get_doc to read one in full.",
+        {
+            "query": {"type": "string"},
+            "projectId": {"type": "string"},
+            "limit": LIMIT,
+        },
+        required=["query"],
+    ),
+    "nexus_get_doc": object_schema(
+        "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
+        {"docId": {"type": "string"}},
+        required=["docId"],
     ),
     "nexus_list_projects": object_schema(
         "List NEXUS projects visible to the GIDEON service actor.",

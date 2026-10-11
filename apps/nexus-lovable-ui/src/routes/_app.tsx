@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { SearchModal } from "@/components/SearchModal";
 import { Loader2 } from "lucide-react";
 import { isAuthError, nexusApi } from "@/lib/nexus-api";
-import { GideonPanel } from "@/components/gideon/GideonPanel";
-import { GideonMark } from "@/components/gideon/GideonMark";
+import { GideonLauncher } from "@/components/gideon/GideonLauncher";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { MobileTabBar } from "@/components/MobileTabBar";
@@ -124,28 +123,6 @@ function AppLayout() {
         <ChatUnreadTitle />
       </SidebarProvider>
     </RealtimeProvider>
-  );
-}
-
-function GideonLauncher() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          aria-label="Open Gideon AI"
-          className="fixed bottom-32 right-4 z-50 grid h-12 w-12 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
-        >
-          <GideonMark className="h-5 w-5" />
-        </button>
-      )}
-      {open && (
-        <div className="fixed bottom-4 right-4 z-50 h-[70vh] w-[calc(100vw-2rem)] max-w-md md:bottom-6 md:right-6">
-          <GideonPanel onClose={() => setOpen(false)} />
-        </div>
-      )}
-    </>
   );
 }
 

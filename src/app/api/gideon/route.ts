@@ -6,7 +6,10 @@ import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { deleteGideonAttachmentFiles, storeGideonAttachments } from '@/lib/gideon-attachments'
-import { TaskStatus, TaskPriority } from '@/generated/prisma'
+import { checkProjectAccess } from '@/lib/rbac'
+import {
+  approvalPromptLine, finishRun, parseApprovalMode, runMeta, startRun, subscribeRun, type ApprovalMode, type RunEvent,
+} from '@/lib/gideon-runs'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
 // it appeared exactly once in this file, its own declaration, so every rule written in it did
@@ -20,7 +23,7 @@ import { TaskStatus, TaskPriority } from '@/generated/prisma'
 // they kept a dependency alive that nothing used. GIDEON's tools are Hermes's, served by
 // /api/gideon/tools.
 
-function buildGideonPrompt(history: { role: string; content: string }[], who: { name: string; email: string }): string {
+function buildGideonPrompt(history: { role: string; content: string }[], who: { name: string; email: string }, extra = ''): string {
   const recent = (history || []).filter((m) => m && typeof m.content === "string").slice(-8)
   const last = recent[recent.length - 1]?.content?.trim() || ""
   const name = who.name?.trim() || "anggota tim NEXUS"
@@ -36,9 +39,10 @@ function buildGideonPrompt(history: { role: string; content: string }[], who: { 
     `sama saja membocorkan). Kalau ditanya kamu dibangun di atas apa: satu kalimat pendek bahwa itu internal ` +
     `dan tidak kamu bahas, lalu langsung balik ke pertanyaan aslinya. Jangan minta maaf, jangan kasih petunjuk, ` +
     `jangan menawarkan untuk memberitahu. Ditanya kedua kalinya, jawabannya kalimat yang sama — bukan yang lebih panjang.\n\n`
-  if (recent.length <= 1) return `${header}Pesan dari ${name}: ${last}`
+  const head = extra ? `${header}${extra}\n\n` : header
+  if (recent.length <= 1) return `${head}Pesan dari ${name}: ${last}`
   const ctx = recent.slice(0, -1).map((m) => `${m.role === "user" ? name : "Gideon"}: ${m.content}`).join("\n")
-  return `${header}Konteks percakapan:\n${ctx}\n\nPesan terbaru dari ${name}: ${last}`
+  return `${head}Konteks percakapan:\n${ctx}\n\nPesan terbaru dari ${name}: ${last}`
 }
 
 // File types GIDEON can actually be asked about. This is not a wish list: Hermes reaches a document
@@ -105,9 +109,19 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { messages, model, image, file } = (await req.json()) as {
+  const { messages, model, image, file, stream: wantsStream, approvalMode: rawMode, context } = (await req.json()) as {
     messages: { role: string; content: string }[]
     model?: string
+    /**
+     * true = this client draws the new events (12 Oct 2026, web): `delta` text pieces, `reset`, `step`,
+     * `sources`, `card`, `proposal`, then `final`. Absent (released iOS / Android) = the old contract:
+     * one `text` with the whole answer, then `done`. Both get `run` first, which old clients ignore.
+     */
+    stream?: boolean
+    /** always_ask | review | dont_ask. Absent = dont_ask: released apps have no approval card to show. */
+    approvalMode?: string
+    /** Where the person opened GIDEON from: a project (and optionally a task in it). Checked for access. */
+    context?: { projectId?: string; taskId?: string }
     /** A data URL or bare base64. Optional. */
     image?: string
     /** A document — PDF, Office, or plain text. Separate from `image`; both may be sent. */
@@ -126,6 +140,26 @@ export async function POST(req: NextRequest) {
   const TIERS = ['astra', 'luna', 'terra', 'experimental']
   const tier = TIERS.includes((model || '').toLowerCase()) ? (model as string).toLowerCase() : 'luna'
   const userId = session.user.id
+  const streamClient = wantsStream === true
+  const approvalMode: ApprovalMode = parseApprovalMode(rawMode) ?? 'dont_ask'
+
+  // The page GIDEON was opened from — only if the person can see it; otherwise it is silently dropped
+  // rather than leaking a name through the prompt.
+  let ctx: { projectId: string; projectName: string; taskId?: string; taskTitle?: string } | null = null
+  try {
+    const wantTask = typeof context?.taskId === 'string' ? context.taskId.slice(0, 40) : ''
+    const wantProject = typeof context?.projectId === 'string' ? context.projectId.slice(0, 40) : ''
+    if (wantTask) {
+      const t = await prisma.task.findUnique({ where: { id: wantTask }, select: { id: true, title: true, taskList: { select: { project: { select: { id: true, name: true } } } } } })
+      const p = t?.taskList?.project
+      if (t && p && (await checkProjectAccess(userId, p.id, ['VIEWER'])).allowed) ctx = { projectId: p.id, projectName: p.name, taskId: t.id, taskTitle: t.title }
+    } else if (wantProject) {
+      const p = await prisma.project.findUnique({ where: { id: wantProject }, select: { id: true, name: true } })
+      if (p && (await checkProjectAccess(userId, p.id, ['VIEWER'])).allowed) ctx = { projectId: p.id, projectName: p.name }
+    }
+  } catch {
+    ctx = null
+  }
 
   // The document is validated here, before the SSE stream exists, so a bad attachment comes back as
   // a plain HTTP status the client can branch on rather than an error event buried in a stream that
@@ -192,49 +226,137 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder()
   const stream = new TransformStream()
   const writer = stream.writable.getWriter()
+  // A client that went away (panel closed) must not abort the run: the answer is still saved to the
+  // history and shows up when the panel is opened again. So a failed write is swallowed.
+  let clientGone = false
   const sendEvent = async (data: Record<string, unknown>) => {
-    await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+    if (clientGone) return
+    try {
+      await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+    } catch {
+      clientGone = true
+    }
   }
 
   ;(async () => {
+    const asked = [...(messages || [])].reverse().find((m) => m?.role === 'user')?.content?.trim() || ''
+    const runId = await startRun({
+      userId,
+      trigger: 'CHAT',
+      approvalMode,
+      tier,
+      title: asked.split('\n')[0] || null,
+      projectId: ctx?.projectId ?? null,
+      taskId: ctx?.taskId ?? null,
+    })
+    // Steps, sources, cards and proposals raised by /api/gideon/tools while this run is going.
+    // Old clients get none of them (they would not know what to draw).
+    const unsubscribe = runId && streamClient ? subscribeRun(runId, (ev: RunEvent) => { void sendEvent(ev as unknown as Record<string, unknown>).catch(() => {}) }) : () => {}
+    let reply = ''
+    let failure: string | null = null
+    let tokens: number | null = null
     try {
+      if (runId) await sendEvent({ type: 'run', id: runId })
       const url = process.env.GIDEON_CHAT_URL
       if (!url) {
+        failure = 'not configured'
         await sendEvent({ type: 'error', content: 'Gideon belum tersambung ke gateway Hermes.' })
         return
       }
-      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' })
-      if (!prompt) { await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
+      const extra = [
+        ctx
+          ? (ctx.taskId
+            ? `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari task "${ctx.taskTitle}" (taskId: ${ctx.taskId}) di project "${ctx.projectName}" (projectId: ${ctx.projectId}). Kalau pertanyaannya tidak menyebut hal lain, anggap tentang task ini.`
+            : `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari project "${ctx.projectName}" (projectId: ${ctx.projectId}). Kalau pertanyaannya tidak menyebut project lain, anggap tentang project ini.`)
+          : '',
+        approvalPromptLine(approvalMode),
+        // Only for a client that renders Markdown; the released apps show the text as is.
+        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar.' : '',
+      ].filter(Boolean).join('\n\n')
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, extra)
+      if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-oracle-secret': process.env.ORACLE_LLM_SECRET || '' },
+      const payload = JSON.stringify({
+        prompt,
+        model: tier,
+        user: session.user?.name || '',
         // actorEmail → the shim sets it as NEXUS_GIDEON_ACTOR_EMAIL on the hermes spawn, so Gideon's
         // NEXUS tools act AS this logged-in user (role-scoped), not the fixed service identity.
-        body: JSON.stringify({
-          prompt,
-          model: tier,
-          user: session.user?.name || '',
-          actorEmail: session.user?.email || session.user?.id || '',
-          ...(imageBase64 ? { imageBase64, imageType: 'jpg' } : {}),
-          // The shim writes these to a file in its workdir and names the path in the prompt, the
-          // same trick the image uses — Hermes has no attachment channel. documentName is passed
-          // through only so the model can refer to the file the way the user does; the shim takes
-          // nothing but the extension from it when building the path.
-          ...(documentBase64 ? { documentBase64, documentType, documentName } : {}),
-        }),
-        signal: AbortSignal.timeout(150000), // Hermes agent + tool call can take ~30s+
+        actorEmail: session.user?.email || session.user?.id || '',
+        // The run id rides beside the actor (shim → NEXUS_GIDEON_RUN_ID → plugin → x-gideon-run).
+        ...(runId ? { runId } : {}),
+        ...(imageBase64 ? { imageBase64, imageType: 'jpg' } : {}),
+        // The shim writes these to a file in its workdir and names the path in the prompt, the
+        // same trick the image uses — Hermes has no attachment channel. documentName is passed
+        // through only so the model can refer to the file the way the user does; the shim takes
+        // nothing but the extension from it when building the path.
+        ...(documentBase64 ? { documentBase64, documentType, documentName } : {}),
       })
-      if (!res.ok) { await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` }); return }
-      const data = (await res.json()) as { reply?: string }
-      const reply = (data.reply || '').trim()
-      await sendEvent({ type: 'text', content: reply || '(Gideon balas kosong — coba ulang.)' })
+      const headers = { 'Content-Type': 'application/json', 'x-oracle-secret': process.env.ORACLE_LLM_SECRET || '' }
+      const timeoutMs = tier === 'experimental' ? 440000 : 150000
+      // Token-by-token when the shim offers it (GIDEON_STREAM_URL) and there is no document: the
+      // streaming runner reads images but has no document reader.
+      const streamUrl = process.env.GIDEON_STREAM_URL
+      if (streamUrl && !documentBase64) {
+        const res = await fetch(streamUrl, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        if (!res.ok || !res.body) {
+          failure = `shim ${res.status}`
+          await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` })
+          return
+        }
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let pending = ''
+        let acc = ''
+        let upstreamError: string | null = null
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          pending += decoder.decode(value, { stream: true })
+          let nl: number
+          while ((nl = pending.indexOf('\n')) >= 0) {
+            const line = pending.slice(0, nl).trim()
+            pending = pending.slice(nl + 1)
+            if (!line) continue
+            let ev: { t?: string; c?: string; usage?: { total_tokens?: number }; phase?: string; id?: string; name?: string }
+            try { ev = JSON.parse(line) } catch { continue }
+            if (ev.t === 'delta' && typeof ev.c === 'string') {
+              acc += ev.c
+              if (streamClient) await sendEvent({ type: 'delta', content: ev.c })
+            } else if (ev.t === 'reset') {
+              // A tool round starts: what streamed so far was the model thinking aloud, not the answer.
+              if (acc && streamClient) await sendEvent({ type: 'reset' })
+              acc = ''
+            } else if (ev.t === 'tool' && streamClient && ev.name && !ev.name.startsWith('nexus_')) {
+              // Non-NEXUS tools (reading an attached image) have no tools-route step of their own.
+              await sendEvent({ type: 'step', step: { id: `h${ev.id || ev.name}`, tool: ev.name, label: ev.name, status: ev.phase === 'done' ? 'done' : 'running' } })
+            } else if (ev.t === 'final' && typeof ev.c === 'string') {
+              reply = ev.c.trim()
+              tokens = typeof ev.usage?.total_tokens === 'number' ? ev.usage.total_tokens : null
+            } else if (ev.t === 'error') {
+              upstreamError = String(ev.c || 'failed').slice(0, 300)
+            }
+          }
+        }
+        if (!reply && upstreamError) failure = upstreamError
+      } else {
+        const res = await fetch(url, { method: 'POST', headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
+        if (!res.ok) {
+          failure = `shim ${res.status}`
+          await sendEvent({ type: 'error', content: res.status === 415 ? 'Dokumen belum bisa dibaca GIDEON di server ini.' : `Gideon error (${res.status}).` })
+          return
+        }
+        const data = (await res.json()) as { reply?: string }
+        reply = (data.reply || '').trim()
+      }
+      if (!reply) failure = failure || 'empty reply'
+      const finalText = reply || '(Gideon balas kosong — coba ulang.)'
+      await sendEvent(streamClient ? { type: 'final', content: finalText } : { type: 'text', content: finalText })
 
       // Persist the turn so the panel can restore it later (survives close/refresh/device switch).
       // Only completed turns are stored — a failed one would leave a question with no answer in the
       // history. createdAt is stamped explicitly so the question always sorts before the answer.
       if (reply) {
-        const asked = [...(messages || [])].reverse().find((m) => m?.role === 'user')?.content?.trim() || ''
         const now = Date.now()
         // The attachment is kept HERE and not on the way in, for the same reason the rows are: a
         // request that failed leaves nothing behind to sweep up. What is written is what GIDEON was
@@ -253,6 +375,10 @@ export async function POST(req: NextRequest) {
               documentMime,
             })
           : []
+        // What the run showed (steps, sources, cards, proposals) and the tools it used — the latter is
+        // what Control Room › GIDEON counts; it was always 0 because nothing ever wrote it.
+        const meta = runId ? await runMeta(runId).catch(() => null) : null
+        const toolsUsed = meta ? [...new Set(meta.steps.map((st) => st.tool))] : []
         try {
           await prisma.gideonMessage.createMany({
             data: [
@@ -267,7 +393,15 @@ export async function POST(req: NextRequest) {
                     ...(stored.length ? { attachments: stored as unknown as InputJsonValue } : {}),
                   }]
                 : []),
-              { userId, role: 'assistant', content: reply, createdAt: new Date(now + 1) },
+              {
+                userId,
+                role: 'assistant',
+                content: reply,
+                createdAt: new Date(now + 1),
+                tools: toolsUsed,
+                ...(runId ? { runId } : {}),
+                ...(meta && (meta.steps.length || meta.proposals.length) ? { meta: meta as unknown as InputJsonValue } : {}),
+              },
             ],
           })
         } catch (persistError) {
@@ -282,10 +416,13 @@ export async function POST(req: NextRequest) {
       }
     } catch (error) {
       console.error('GIDEON API error:', error)
+      failure = failure || (error instanceof Error ? error.message : 'error')
       await sendEvent({ type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
+      unsubscribe()
+      await finishRun(runId, { ok: !failure && Boolean(reply), error: failure, replyChars: reply.length || null, tokens })
       await sendEvent({ type: 'done' })
-      await writer.close()
+      await writer.close().catch(() => {})
     }
   })()
 

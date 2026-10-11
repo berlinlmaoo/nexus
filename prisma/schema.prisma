@@ -3037,9 +3037,126 @@ model GideonMessage {
   // Assistant turns never have one. The files live under public/uploads/attachments/gideon/ and
   // are deleted with the row by DELETE /api/gideon/history.
   attachments Json?
+  /// The GideonRun this turn came from (12 Oct 2026). Assistant turns only; null on older rows.
+  runId     String?
+  /// What the run showed beside the text: { steps, sources, cards, proposals } — see lib/gideon-runs.ts.
+  meta      Json?
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+/// One GIDEON run (12 Oct 2026, Notion-style "Insights"): a chat turn, an @GIDEON mention, a scheduled
+/// digest, a support-ticket review or a reflection summary. Every run is logged, success or failure, so a
+/// broken chain is visible instead of only in console.error. userId/projectId are plain ids on purpose
+/// (no FK): the log must outlive the person or project.
+model GideonRun {
+  id           String    @id @default(cuid())
+  /// The person GIDEON acted for (its permissions are theirs). Null = no actor.
+  userId       String?
+  /// CHAT | MENTION | SCHEDULE | TICKET | REFLECTION
+  trigger      String
+  /// RUNNING | SUCCEEDED | FAILED
+  status       String    @default("RUNNING")
+  /// always_ask | review | dont_ask — which writes wait for the person's approval (GideonProposal).
+  approvalMode String    @default("dont_ask")
+  tier         String?
+  /// First line of the question / "Weekly digest" / the task title. Chat titles are private to the asker.
+  title        String?
+  projectId    String?
+  taskId       String?
+  scheduleId   String?
+  toolsUsed    String[]  @default([])
+  toolCalls    Int       @default(0)
+  tokens       Int?
+  replyChars   Int?
+  error        String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  durationMs   Int?
+  steps        GideonRunStep[]
+  proposals    GideonProposal[]
+
+  @@index([startedAt])
+  @@index([userId, startedAt])
+  @@index([projectId, startedAt])
+  @@index([status, startedAt])
+}
+
+/// One tool call inside a run: what the chat shows as "Searching tasks…", plus the sources it read
+/// (refs) and the card for what it created or changed.
+model GideonRunStep {
+  id         String    @id @default(cuid())
+  runId      String
+  run        GideonRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  /// The /api/gideon/tools action, e.g. search_tasks.
+  tool       String
+  /// English, for logs and Insights; the web builds its own (translated) label from tool + arg.
+  label      String
+  arg        String?
+  ok         Boolean?
+  error      String?
+  durationMs Int?
+  refs       Json?
+  card       Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([runId, createdAt])
+}
+
+/// A write GIDEON wanted to make and the person has to approve first (approval mode). Applying runs the
+/// exact same /api/gideon/tools action, as the same person, so every permission check runs again.
+model GideonProposal {
+  id        String     @id @default(cuid())
+  runId     String?
+  run       GideonRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  /// Who must approve: the person GIDEON acted for.
+  userId    String
+  /// create_task | update_task | add_task_comment | create_document
+  action    String
+  input     Json
+  summary   String
+  /// [{ field, from, to }] — what changes, for the card.
+  diff      Json?
+  projectId String?
+  taskId    String?
+  /// PENDING | APPLYING | APPLIED | DISCARDED | FAILED
+  status    String     @default("PENDING")
+  result    Json?
+  error     String?
+  createdAt DateTime   @default(now())
+  decidedAt DateTime?
+
+  @@index([userId, status, createdAt])
+  @@index([runId])
+}
+
+/// A GIDEON trigger "On a schedule" for one project (12 Oct 2026). Today one kind: WEEKLY_DIGEST, posted
+/// as a project status update signed by GIDEON. weekdays: 0 = Sunday … 6 = Saturday; time "HH:MM" in
+/// `timezone`. Runs as createdById (GIDEON never sees more than that person).
+model GideonSchedule {
+  id           String    @id @default(cuid())
+  projectId    String
+  kind         String    @default("WEEKLY_DIGEST")
+  enabled      Boolean   @default(true)
+  weekdays     Int[]     @default([1])
+  time         String    @default("09:00")
+  timezone     String    @default("Asia/Jakarta")
+  /// "id" | "en": the language the digest is written in.
+  language     String    @default("id")
+  /// Optional extra focus, e.g. "highlight anything blocking the launch".
+  instructions String?
+  createdById  String
+  lastRunAt    DateTime?
+  lastRunId    String?
+  /// SUCCEEDED | FAILED | SKIPPED
+  lastStatus   String?
+  nextRunAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@index([projectId])
 }
 
 // A day (or part of one) NEXUS was unreachable, so staff physically could not check in or out.

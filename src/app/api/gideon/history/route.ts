@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic"
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { deleteGideonAttachmentFiles, parseGideonAttachments } from '@/lib/gideon-attachments'
+import { proposalView, type GideonRunMeta } from '@/lib/gideon-runs'
 
 // Newest N turns are enough to resume a conversation; older ones stay in the table but are not
 // shipped to the client (keeps the payload and the prompt context bounded).
@@ -22,8 +23,20 @@ export async function GET() {
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       take: HISTORY_LIMIT,
-      select: { role: true, content: true, tools: true, attachments: true },
+      select: { role: true, content: true, tools: true, attachments: true, runId: true, meta: true },
     })
+    // A proposal's status moves after the turn was saved (Apply / Discard), so the stored meta is
+    // refreshed from GideonProposal: a reopened panel must not offer to apply something already applied.
+    const runIds = rows.map((r) => r.runId).filter((x): x is string => Boolean(x))
+    const proposals = runIds.length
+      ? await prisma.gideonProposal.findMany({ where: { runId: { in: runIds } }, orderBy: { createdAt: 'asc' } })
+      : []
+    const metaOf = (row: { runId: string | null; meta: unknown }) => {
+      if (!row.meta || typeof row.meta !== 'object') return null
+      const meta = row.meta as GideonRunMeta
+      const mine = proposals.filter((p) => p.runId === row.runId).map(proposalView)
+      return { ...meta, proposals: mine.length ? mine : (meta.proposals ?? []) }
+    }
     // Fetched newest-first to apply the cap, rendered oldest-first.
     //
     // `attachments` is always an ARRAY on the way out, empty where the column is NULL — which is
@@ -37,6 +50,9 @@ export async function GET() {
         content: row.content,
         tools: row.tools,
         attachments: parseGideonAttachments(row.attachments),
+        // Added 12 Oct 2026; older clients ignore them.
+        runId: row.runId,
+        meta: metaOf(row),
       })),
     })
   } catch (error) {

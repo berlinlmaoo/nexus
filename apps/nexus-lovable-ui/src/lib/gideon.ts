@@ -1,5 +1,9 @@
 // Streaming client for the Gideon AI assistant (POST /api/gideon, SSE response).
-// Backend emits `data: {json}\n\n` lines with {type:'text'|'tool_result'|'done'|'error', content}.
+// Since 12 Oct 2026 the web asks for the streaming contract (`stream: true`): `run`, `delta` pieces of
+// text, `reset` (a tool round started; drop the interim text), `step` (tool progress), `sources`
+// (what it read), `card` (what it created/changed), `proposal` (a write waiting for approval), `final`
+// (the authoritative answer), `error`, `done`. Released iOS/Android keep the old one: `text` + `done`.
+import { useSyncExternalStore } from "react";
 
 /** The three GIDEON tiers. Which model each one runs is decided on the server side. */
 export const GIDEON_TIERS = [
@@ -39,14 +43,64 @@ export type GideonAttachment = {
   size: number;
 };
 
+// ── What a run shows beside the text (mirrors src/lib/gideon-runs.ts on the server) ─────────────────
+export type GideonRef = { kind: "task" | "project" | "doc"; id: string; title: string; projectId?: string | null; url: string };
+export type GideonCard = {
+  kind: "task" | "doc" | "comment";
+  action: "created" | "updated" | "commented";
+  id: string;
+  title: string;
+  url: string;
+  projectName?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  dueDate?: string | null;
+  assignees?: string[];
+};
+export type GideonDiffRow = { field: string; from?: string | null; to?: string | null };
+export type GideonProposal = {
+  id: string;
+  action: "create_task" | "update_task" | "add_task_comment" | "create_document" | string;
+  summary: string;
+  diff: GideonDiffRow[];
+  status: "PENDING" | "APPLYING" | "APPLIED" | "DISCARDED" | "FAILED" | string;
+  projectId?: string | null;
+  taskId?: string | null;
+  createdAt: string;
+  card?: GideonCard | null;
+  error?: string | null;
+};
+export type GideonStep = { id: string; tool: string; arg?: string | null; label: string; status: "running" | "done" | "error"; error?: string | null };
+export type GideonRunMeta = { steps: GideonStep[]; sources: GideonRef[]; cards: GideonCard[]; proposals: GideonProposal[] };
+
 /** History sends `attachments` on every message, always an array, empty where nothing was attached. */
-export type GideonTurn = GideonMessage & { tools?: string[]; attachments?: GideonAttachment[] };
+export type GideonTurn = GideonMessage & { tools?: string[]; attachments?: GideonAttachment[]; runId?: string | null; meta?: GideonRunMeta | null };
 
 export type GideonEvent =
   | { type: "text"; content: string }
   | { type: "tool_result"; content?: unknown; name?: string }
+  | { type: "run"; id: string }
+  | { type: "delta"; content: string }
+  | { type: "reset" }
+  | { type: "final"; content: string }
+  | { type: "step"; step: GideonStep }
+  | { type: "sources"; sources: GideonRef[] }
+  | { type: "card"; card: GideonCard }
+  | { type: "proposal"; proposal: GideonProposal }
   | { type: "done" }
   | { type: "error"; content?: string };
+
+/** Which writes wait for the person. Same names as the server (gideon-runs.ts needsApproval). */
+export const GIDEON_APPROVAL_MODES = [
+  { id: "always_ask", name: "Always ask", blurb: "Every change GIDEON wants to make waits for you." },
+  { id: "review", name: "Review before writing", blurb: "Edits, comments and tasks for other people wait for you. Your own new tasks and docs are made directly." },
+  { id: "dont_ask", name: "Don't ask", blurb: "GIDEON makes changes right away, as you." },
+] as const;
+export type GideonApprovalMode = (typeof GIDEON_APPROVAL_MODES)[number]["id"];
+export const GIDEON_DEFAULT_APPROVAL: GideonApprovalMode = "review";
+
+/** Where GIDEON was opened from. The server checks access and ignores what the person cannot see. */
+export type GideonContext = { projectId: string; projectName: string; taskId?: string; taskTitle?: string };
 
 /**
  * A document attachment — PDF, Office, or plain text. Separate from an image, and both may ride in
@@ -119,7 +173,7 @@ export function gideonAttachmentLink(a: GideonAttachment): { href: string; downl
 export async function streamGideon(
   messages: GideonMessage[],
   onEvent: (event: GideonEvent) => void,
-  opts: { model?: string; signal?: AbortSignal; image?: string | null; file?: GideonFile | null } = {},
+  opts: { model?: string; signal?: AbortSignal; image?: string | null; file?: GideonFile | null; approvalMode?: GideonApprovalMode; context?: GideonContext | null } = {},
 ): Promise<void> {
   const res = await fetch("/api/gideon", {
     method: "POST",
@@ -128,6 +182,9 @@ export async function streamGideon(
     body: JSON.stringify({
       messages,
       model: opts.model ?? GIDEON_DEFAULT_TIER,
+      stream: true,
+      approvalMode: opts.approvalMode ?? GIDEON_DEFAULT_APPROVAL,
+      ...(opts.context ? { context: { projectId: opts.context.projectId, ...(opts.context.taskId ? { taskId: opts.context.taskId } : {}) } } : {}),
       ...(opts.image ? { image: opts.image } : {}),
       ...(opts.file ? { file: opts.file } : {}),
     }),
@@ -192,7 +249,7 @@ export async function loadGideonHistory(): Promise<GideonTurn[]> {
     // The route promises an array here on every message and sanitises each entry before sending it,
     // so this is not re-validation — it is the one thing the renderer would crash on if a build of
     // the server that predates the promise is ever what answers.
-    return data.messages.map((row) => ({ ...row, attachments: Array.isArray(row?.attachments) ? row.attachments : [] }));
+    return data.messages.map((row) => ({ ...row, attachments: Array.isArray(row?.attachments) ? row.attachments : [], meta: row?.meta && typeof row.meta === "object" ? row.meta : null }));
   } catch {
     // An unreachable history endpoint must not block a fresh chat.
     return [];
@@ -206,4 +263,116 @@ export async function clearGideonHistory(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ── Proposals (approval mode) ──────────────────────────────────────────────────────────────────────────
+
+async function gjson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: "include", ...init, headers: { Accept: "application/json", "Content-Type": "application/json", "X-Nexus-Client": "web/1", ...(init?.headers || {}) } });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = new Error(typeof body?.error === "string" ? body.error : `Request failed (${res.status})`) as Error & { status?: number; body?: unknown };
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body as T;
+}
+
+export const pendingGideonProposals = () => gjson<{ proposals: GideonProposal[] }>("/api/gideon/proposals");
+
+/** Apply or discard. A 409/410/422 still carries the proposal's new state, which is returned. */
+export async function decideGideonProposal(id: string, decision: "apply" | "discard"): Promise<GideonProposal> {
+  try {
+    const r = await gjson<{ proposal: GideonProposal }>(`/api/gideon/proposals/${id}`, { method: "POST", body: JSON.stringify({ decision }) });
+    return r.proposal;
+  } catch (e) {
+    const p = (e as { body?: { proposal?: GideonProposal } }).body?.proposal;
+    if (p) return p;
+    throw e;
+  }
+}
+
+// ── Schedules and runs (triggers, Insights) ────────────────────────────────────────────────────────────
+
+export type GideonSchedule = {
+  id: string;
+  projectId: string;
+  kind: string;
+  enabled: boolean;
+  weekdays: number[];
+  time: string;
+  timezone: string;
+  language: "id" | "en" | string;
+  instructions: string | null;
+  runsAs: { id: string; name: string | null } | null;
+  lastRunAt: string | null;
+  lastRunId: string | null;
+  lastStatus: string | null;
+  nextRunAt: string | null;
+};
+export type GideonRunRow = {
+  id: string;
+  trigger: "CHAT" | "MENTION" | "SCHEDULE" | "TICKET" | "REFLECTION" | string;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED" | string;
+  approvalMode: string;
+  tier: string | null;
+  title: string | null;
+  titleHidden: boolean;
+  user: { id: string; name: string | null; avatar: string | null } | null;
+  projectId: string | null;
+  taskId: string | null;
+  scheduleId: string | null;
+  toolsUsed: string[];
+  toolCalls: number;
+  tokens: number | null;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+};
+export type GideonRunTotals = { days: number; runs: number; failures: number; completionRate: number | null; activeUsers: number };
+
+export const gideonSchedules = (projectId: string) =>
+  gjson<{ schedules: GideonSchedule[]; canManage: boolean; configured: boolean }>(`/api/gideon/schedules?projectId=${encodeURIComponent(projectId)}`);
+export const createGideonSchedule = (body: Partial<GideonSchedule> & { projectId: string }) =>
+  gjson<{ schedule: GideonSchedule }>("/api/gideon/schedules", { method: "POST", body: JSON.stringify(body) });
+export const updateGideonSchedule = (id: string, body: Partial<GideonSchedule>) =>
+  gjson<{ schedule: GideonSchedule }>(`/api/gideon/schedules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const deleteGideonSchedule = (id: string) => gjson<{ ok: boolean }>(`/api/gideon/schedules/${id}`, { method: "DELETE" });
+export const runGideonScheduleNow = (id: string) => gjson<{ started: boolean }>(`/api/gideon/schedules/${id}/run`, { method: "POST" });
+
+export function gideonRuns(q: { projectId?: string; trigger?: string; status?: string; before?: string; limit?: number } = {}) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "") sp.set(k, String(v));
+  return gjson<{ runs: GideonRunRow[]; totals: GideonRunTotals }>(`/api/gideon/runs${sp.size ? `?${sp}` : ""}`);
+}
+export const gideonRunDetail = (id: string) =>
+  gjson<{ run: GideonRunRow; steps: { id: string; tool: string; label: string; ok: boolean | null; error: string | null; durationMs: number | null; at: string }[]; stepsHidden: boolean }>(`/api/gideon/runs/${id}`);
+
+// ── Opening the panel from anywhere (project header "Ask GIDEON") ──────────────────────────────────────
+
+type LauncherState = { open: boolean; context: GideonContext | null; nonce: number };
+let launcher: LauncherState = { open: false, context: null, nonce: 0 };
+const launcherListeners = new Set<() => void>();
+function setLauncher(next: LauncherState) {
+  launcher = next;
+  launcherListeners.forEach((f) => f());
+}
+/** Open GIDEON, optionally about a project/task (the context chip). */
+export function openGideon(context?: GideonContext | null) {
+  setLauncher({ open: true, context: context ?? null, nonce: launcher.nonce + 1 });
+}
+export function closeGideon() {
+  setLauncher({ ...launcher, open: false });
+}
+export function clearGideonContext() {
+  setLauncher({ ...launcher, context: null });
+}
+export function useGideonLauncher(): LauncherState {
+  return useSyncExternalStore(
+    (f) => { launcherListeners.add(f); return () => { launcherListeners.delete(f); }; },
+    () => launcher,
+    () => launcher,
+  );
 }

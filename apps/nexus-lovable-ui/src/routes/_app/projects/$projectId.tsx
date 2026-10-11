@@ -15,6 +15,9 @@ import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { AutomationsView } from "@/components/automations/AutomationsView";
+import { GideonMark } from "@/components/gideon/GideonMark";
+import { GideonProjectCard } from "@/components/gideon/GideonProjectCard";
+import { openGideon } from "@/lib/gideon";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
 import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
@@ -62,7 +65,6 @@ import {
   type ViewLayout,
 } from "@/lib/project-views";
 import { useLang } from "@/lib/lang";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { priorityTone } from "@/lib/calendar/tone";
@@ -509,6 +511,8 @@ function ProjectDetail() {
         actions={
           <>
             {data && <ProjectMembersAvatars project={data} />}
+            {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
+            {data && <Button size="sm" variant="outline" onClick={() => openGideon({ projectId: data.id, projectName: data.name })}><GideonMark className="h-3.5 w-3.5" />{tr("Ask GIDEON")}</Button>}
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
               <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />{tr("Project settings")}</Button>
             </motion.div>
@@ -563,7 +567,7 @@ function ProjectDetail() {
               }}
             />
           )}
-          {activeModule === "automations" && <AutomationsView projectId={data.id} />}
+          {activeModule === "automations" && <><GideonProjectCard projectId={data.id} projectName={data.name} /><AutomationsView projectId={data.id} /></>}
           {activeModule === "pages" && <PagesView project={data} onOpen={(doc) => navigate({ to: "/docs/$docId", params: { docId: doc.id } })} />}
           {activeModule === "forms" && <ProjectFormsView projectId={data.id} />}
           {activeModule === "chat" && <ProjectChat projectId={data.id} />}
