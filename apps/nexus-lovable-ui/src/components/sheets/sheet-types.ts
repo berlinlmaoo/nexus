@@ -1,5 +1,9 @@
 import type { NexusSheetCellValue, NexusSheetColumn, NexusSheetColumnType, NexusSheetRow, NexusSheetRule } from "@/lib/nexus-api";
-import { evaluateCell, isError, isFormulaCell, toDisplay, type SheetData, type SheetShape } from "@/lib/sheet-formula";
+import {
+  detectInput, editTyped, engineFor, formatResult, formatScalar, formatValue, isError, isFormulaCell, isTypedCell,
+  isoToSerial, parseDateText, parseLocaleNumber, serialToIso, toDisplay, toStored,
+  type CellValue, type SheetData, type SheetEngine, type SheetShape, type TypedCell,
+} from "@/lib/sheet-formula";
 
 export type { NexusSheetCellValue, NexusSheetColumn, NexusSheetColumnType, NexusSheetRow, NexusSheetRule };
 
@@ -77,22 +81,25 @@ export const RULE_STYLE_CLASS: Record<NexusSheetRule["style"], string> = {
  * First matching rule wins. Comparison is numeric when both sides look numeric, otherwise text —
  * so a rule like "lebih dari 1000000" behaves on a Rupiah column and "mengandung batal" on a text one.
  */
-export function matchRule(rules: NexusSheetRule[] | undefined, value: NexusSheetCellValue | undefined): NexusSheetRule | null {
+export function matchRule(rules: NexusSheetRule[] | undefined, value: CellValue | undefined): NexusSheetRule | null {
   if (!rules?.length) return null;
   const empty = value === undefined || value === null || value === "";
+  // An error result is not "empty" and not a match for anything but notEmpty.
+  if (isError(value)) return rules.find((r) => r.op === "notEmpty") ?? null;
   for (const rule of rules) {
     if (rule.op === "empty") { if (empty) return rule; continue; }
     if (rule.op === "notEmpty") { if (!empty) return rule; continue; }
     if (empty) continue;
     const target = rule.value ?? "";
-    const bothNumeric = typeof value === "number" && target !== "" && Number.isFinite(Number(target));
+    const targetNum = target === "" ? null : parseLocaleNumber(target)?.n ?? null;
+    const bothNumeric = typeof value === "number" && targetNum !== null;
     if (rule.op === "contains") {
       if (String(value).toLowerCase().includes(target.toLowerCase())) return rule;
       continue;
     }
     if (bothNumeric) {
       const a = value as number;
-      const b = Number(target);
+      const b = targetNum as number;
       const hit = rule.op === "gt" ? a > b : rule.op === "lt" ? a < b
         : rule.op === "gte" ? a >= b : rule.op === "lte" ? a <= b
         : rule.op === "neq" ? a !== b : a === b;
@@ -108,14 +115,18 @@ export function matchRule(rules: NexusSheetRule[] | undefined, value: NexusSheet
   return null;
 }
 
-const idr = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 });
-
 /** Build the evaluation context once per render, not once per cell. */
 export function buildSheetData(columns: NexusSheetColumn[], rows: NexusSheetRow[]): SheetData {
   return {
     shape: { columnIds: columns.map((c) => c.id), rowIds: rows.map((r) => r.id) },
     cells: new Map(rows.map((r) => [r.id, r.cells as Record<string, unknown>])),
+    types: new Map(columns.map((c) => [c.id, c.type])),
   };
+}
+
+/** The value a cell COMPUTES to (formula result, typed number, link label…), for sort/filter/rules. */
+export function cellValue(data: SheetData, rowId: string, colId: string): CellValue {
+  return engineFor(data).value(rowId, colId);
 }
 
 /**
@@ -133,59 +144,120 @@ export function isLinkCell(v: unknown): v is { t: string; u: string } {
   return Boolean(v) && typeof v === "object" && typeof (v as { u?: unknown }).u === "string";
 }
 
-/** A formula cell shows its RESULT; everything else shows itself. */
+/**
+ * A formula cell shows its RESULT; everything else shows itself. The same functions build the
+ * server's GET ?computed=1 text (lib/sheet-formula), so web and phones read identical text.
+ */
 export function displayCell(
   type: NexusSheetColumnType,
   raw: unknown,
   ctx: { data: SheetData; rowId: string; colId: string } | null,
 ): string {
-  // The label is what a link READS as — sorting, filtering, find & replace and the footer counts all
-  // go through here, so they all see the text rather than a URL nobody typed.
-  if (Array.isArray(raw)) return raw.join(", ");
-  if (isLinkCell(raw)) return raw.t || raw.u;
   if (isFormulaCell(raw)) {
     if (!ctx) return raw.f;
-    const v = evaluateCell(ctx.data, ctx.rowId, ctx.colId);
-    // Errors print as-is (#REF!, #CYCLE!) — formatting them as Rupiah would hide the problem.
-    if (isError(v)) return v;
-    return formatCell(type, v as NexusSheetCellValue);
+    const engine = engineFor(ctx.data);
+    return formatResult(type, engine.value(ctx.rowId, ctx.colId), engine.format(ctx.rowId, ctx.colId));
   }
-  return formatCell(type, raw as NexusSheetCellValue | undefined);
+  return formatScalar(type, raw);
 }
 
-/** What goes in the editor for a formula cell: the A1 form, translated from the stored ids. */
+/** What goes in the editor for a formula cell: the A1 form (Indonesian separators) from the stored ids. */
 export function editFormula(raw: unknown, shape: SheetShape): string | null {
   return isFormulaCell(raw) ? toDisplay(raw.f, shape) : null;
 }
 
-/** What a cell shows when it's NOT being edited. */
-export function formatCell(type: NexusSheetColumnType, value: NexusSheetCellValue | undefined): string {
-  if (value === undefined || value === null || value === "") return "";
-  switch (type) {
-    case "currency":
-      return typeof value === "number" ? `Rp ${idr.format(value)}` : String(value);
-    case "number":
-      return typeof value === "number" ? idr.format(value) : String(value);
-    case "date": {
-      const d = new Date(String(value));
-      return Number.isNaN(d.getTime())
-        ? String(value)
-        : d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-    }
-    case "checkbox":
-      return value ? "✓" : "";
-    default:
-      return String(value);
-  }
+/** What a cell shows when it's NOT being edited (stored values only — formulas go through displayCell). */
+export function formatCell(type: NexusSheetColumnType, value: unknown): string {
+  return formatScalar(type, value);
 }
 
-/** What goes INTO the input when editing — raw, so numbers stay editable. */
-export function editValue(type: NexusSheetColumnType, value: NexusSheetCellValue | undefined): string {
+/** A computed value under its column type (footer totals, status bar). */
+export function formatComputed(type: NexusSheetColumnType, v: CellValue, nf: TypedCell["nf"] | null = null): string {
+  return formatResult(type, v, nf);
+}
+
+/**
+ * What goes INTO the input when editing — text that, typed back, gives the same value: numbers with
+ * an Indonesian decimal comma ("1,5"), typed values in the style they were typed ("Rp 1.500.000").
+ */
+export function editValue(type: NexusSheetColumnType, value: unknown): string {
   if (value === undefined || value === null) return "";
   if (type === "checkbox") return value ? "true" : "";
   // Multi-select round-trips as a comma list, which is also what a paste from Excel looks like.
-  if (Array.isArray(value)) return (value as unknown as string[]).join(", ");
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  if (isTypedCell(value)) return editTyped(value);
+  if (isLinkCell(value)) return value.t || value.u;
+  if (isFormulaCell(value)) return value.f;
+  if (typeof value === "number") return formatValue(value, null);
+  if (typeof value === "object") return "";
   return String(value);
+}
+
+/**
+ * Typed text -> the value to store for this column. The one path for typing, paste, fill-from-text,
+ * replace and the phone view, so they can never disagree.
+ *
+ *   "=…"          -> a formula, bound to ids at the current positions
+ *   text column   -> "Rp 1.500.000" / "15%" / "1.500" / "11/10/2026" become numbers or dates with a
+ *                    format; anything else stays text exactly as typed (never silently dropped)
+ *   number/Rupiah -> a number when it reads as one ("007" is 7 here), else the text itself
+ *   date          -> ISO date (day first: 11/10/2026 is 11 Oct), else the text itself
+ */
+export function inputToCell(
+  col: NexusSheetColumn,
+  text: string,
+  shape: SheetShape,
+  prevRaw?: unknown,
+): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("=") && trimmed.length > 1 && col.type !== "checkbox") return { f: toStored(trimmed, shape) };
+  switch (col.type) {
+    case "checkbox":
+      return ["true", "1", "ya", "yes", "y", "✓", "x"].includes(trimmed.toLowerCase());
+    case "link": {
+      // Typing over a link edits what it SAYS; the URL survives (it's the part nobody can retype).
+      const prevUrl = isLinkCell(prevRaw) ? prevRaw.u : "";
+      return prevUrl ? { t: trimmed, u: prevUrl } : trimmed;
+    }
+    case "multiselect":
+    case "select":
+    case "task":
+      return trimmed;
+    case "number":
+    case "currency": {
+      const d = detectInput(trimmed);
+      if (d.kind === "number") return d.nf === "pct" || d.nf === "date" ? { v: d.v, nf: d.nf } : d.v;
+      const plain = parseLocaleNumber(trimmed);
+      return plain ? plain.n : text;
+    }
+    case "date": {
+      const serial = parseDateText(trimmed);
+      return serial === null ? text : serialToIso(serial);
+    }
+    default: {
+      const d = detectInput(text);
+      if (d.kind === "number") return d.nf ? { v: d.v, nf: d.nf } : d.v;
+      return text;
+    }
+  }
+}
+
+/** Two stored values are the same cell content (so a no-op edit doesn't spend a request). */
+export function sameCell(a: unknown, b: unknown): boolean {
+  const norm = (v: unknown) => (v === undefined || v === "" ? null : v);
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+}
+
+/** Sort key: numbers (and dates, typed values, numeric text) sort as numbers, the rest as text. */
+export function sortKey(v: CellValue): { n: number } | { s: string } | null {
+  if (v === null || v === "") return null;
+  if (typeof v === "number") return { n: v };
+  if (typeof v === "boolean") return { n: v ? 1 : 0 };
+  if (isError(v)) return { s: `\uffff${v}` };
+  const iso = isoToSerial(v);
+  if (iso !== null) return { n: iso };
+  return { s: v };
 }
 
 /** Copy/paste interchange. Excel and Google Sheets both put TSV on `text/plain`. */
@@ -225,23 +297,22 @@ export function parseTsv(text: string): string[][] {
   return rows;
 }
 
-export type Aggregate = { sum: number; avg: number; filled: number; count: number };
+export type Aggregate = { sum: number; avg: number; filled: number; numeric: number; count: number; min: number; max: number };
 
-/** Footer aggregates, computed client-side from the loaded rows. */
-export function aggregate(rows: NexusSheetRow[], col: NexusSheetColumn, data?: SheetData): Aggregate {
-  let sum = 0;
-  let numeric = 0;
-  let filled = 0;
+/**
+ * Footer / status-bar aggregates over computed values: a formula's RESULT and a typed "Rp 1.500.000"
+ * count as numbers. Callers memoise this — evaluating every formula per selection change was the lag.
+ */
+export function aggregate(rows: NexusSheetRow[], col: NexusSheetColumn, engine?: SheetEngine): Aggregate {
+  let sum = 0, numeric = 0, filled = 0, min = Infinity, max = -Infinity;
   for (const r of rows) {
-    let v: unknown = r.cells[col.id];
-    // A formula's RESULT is what the column total should count — otherwise a sheet full of
-    // computed line totals shows a footer of 0.
-    if (isFormulaCell(v)) v = data ? evaluateCell(data, r.id, col.id) : null;
+    const raw: unknown = r.cells[col.id];
+    const v = engine ? engine.value(r.id, col.id) : isFormulaCell(raw) ? null : (raw as CellValue);
     if (v === undefined || v === null || v === "" || isError(v)) continue;
     filled += 1;
-    if (typeof v === "number") { sum += v; numeric += 1; }
+    if (typeof v === "number") { sum += v; numeric += 1; min = Math.min(min, v); max = Math.max(max, v); }
   }
-  return { sum, avg: numeric ? sum / numeric : 0, filled, count: rows.length };
+  return { sum, avg: numeric ? sum / numeric : 0, filled, numeric, count: rows.length, min, max };
 }
 
 /**
@@ -250,9 +321,57 @@ export function aggregate(rows: NexusSheetRow[], col: NexusSheetColumn, data?: S
  * Copies the source block, except when it looks like a series — 1,2,3 or 10,20,30 or "Hari 1","Hari 2"
  * — in which case it continues the series, which is the whole reason people drag the handle.
  */
-export function fillValues(source: (NexusSheetCellValue | undefined)[], count: number): (NexusSheetCellValue | null)[] {
-  const clean = source.filter((v) => v !== undefined && v !== null && v !== "") as NexusSheetCellValue[];
-  const out: (NexusSheetCellValue | null)[] = [];
+export function fillValues(source: unknown[], count: number): unknown[] {
+  const out: unknown[] = [];
+  const present = source.filter((v) => v !== undefined && v !== null && v !== "");
+
+  // Dates — ISO strings (date columns) or typed date serials — continue by day, or by month when the
+  // source steps by whole months (1 Jan, 1 Feb -> 1 Mar). "2026-10-31" + 1 is 1 Nov, never "2026-10-32".
+  const serials = present.map((v) => (isTypedCell(v) && v.nf === "date" ? v.v : isoToSerial(v)));
+  if (present.length >= 1 && serials.every((s) => s !== null)) {
+    const iso = typeof present[0] === "string";
+    const wrap = (serial: number) => (iso ? serialToIso(serial) : { v: serial, nf: "date" as const });
+    const ss = serials as number[];
+    const ymd = (s: number) => { const d = new Date(Date.UTC(1899, 11, 30) + s * 86_400_000); return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() }; };
+    if (ss.length >= 2) {
+      const a = ymd(ss[0]), b = ymd(ss[1]);
+      const monthStep = (b.y - a.y) * 12 + (b.m - a.m);
+      const byMonth = a.d === b.d && monthStep !== 0 && ss.every((s, i) => { const x = ymd(s); return x.d === a.d && (x.y - a.y) * 12 + (x.m - a.m) === monthStep * i; });
+      if (byMonth) {
+        const last = ymd(ss[ss.length - 1]);
+        for (let i = 1; i <= count; i += 1) {
+          const t = new Date(Date.UTC(last.y, last.m + monthStep * i, 1));
+          const dim = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+          out.push(wrap(Math.round((Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), Math.min(a.d, dim)) - Date.UTC(1899, 11, 30)) / 86_400_000)));
+        }
+        return out;
+      }
+    }
+    const step = ss.length >= 2 ? ss[1] - ss[0] : 1;
+    const constant = ss.every((s, i) => i === 0 || s - ss[i - 1] === step);
+    if (constant && step !== 0) {
+      let next = ss[ss.length - 1];
+      for (let i = 0; i < count; i += 1) { next += step; out.push(wrap(next)); }
+      return out;
+    }
+  }
+
+  // Typed numbers (Rp, %) continue their series and keep their format.
+  if (present.length >= 2 && present.every((v) => isTypedCell(v) && v.nf !== "date")) {
+    const typed = present as TypedCell[];
+    const step = typed[1].v - typed[0].v;
+    if (step !== 0 && typed.every((t, i) => i === 0 || Math.abs(t.v - typed[i - 1].v - step) < 1e-9)) {
+      let next = typed[typed.length - 1].v;
+      for (let i = 0; i < count; i += 1) { next += step; out.push({ v: next, nf: typed[0].nf }); }
+      return out;
+    }
+  }
+
+  const clean = present.filter((v) => typeof v !== "object") as NexusSheetCellValue[];
+  if (clean.length !== present.length) {
+    for (let i = 0; i < count; i += 1) out.push(source[i % source.length] ?? null);
+    return out;
+  }
 
   // Numeric series: two or more numbers with a constant gap.
   if (clean.length >= 2 && clean.every((v) => typeof v === "number")) {
@@ -291,6 +410,6 @@ export function fillValues(source: (NexusSheetCellValue | undefined)[], count: n
   }
 
   // Otherwise repeat the block.
-  for (let i = 0; i < count; i += 1) out.push((source[i % source.length] ?? null) as NexusSheetCellValue | null);
+  for (let i = 0; i < count; i += 1) out.push(source[i % source.length] ?? null);
   return out;
 }

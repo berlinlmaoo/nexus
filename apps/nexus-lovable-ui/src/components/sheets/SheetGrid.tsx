@@ -29,10 +29,18 @@ import {
   COLUMN_TYPE_LABEL, RULE_OP_LABEL, RULE_STYLE_CLASS, aggregate, buildSheetData, displayCell, editFormula, editValue,
   COLUMN_COLOR_CLASS, COLUMN_COLOR_LABEL,
   CHIP_COLORS, CHIP_COLOR_CLASS,
-  fillValues, formatCell, isLinkCell, matchRule, optionColor, parseTsv, readMulti, toTsv,
-  type NexusSheetCellValue, type NexusSheetColumn, type NexusSheetColumnType, type NexusSheetRow, type NexusSheetRule,
+  fillValues, formatComputed, inputToCell, isLinkCell, matchRule, optionColor, readMulti, sameCell, sortKey,
+  type NexusSheetColumn, type NexusSheetColumnType, type NexusSheetRow, type NexusSheetRule,
 } from "./sheet-types";
-import { SUPPORTED_FUNCTIONS, letterToIndex, toStored } from "@/lib/sheet-formula";
+import {
+  SUPPORTED_FUNCTIONS, engineFor, errorHint, findA1Ranges, isError, isFormulaCell, shiftFormula, toDisplay, toStored,
+  type SheetEngine,
+} from "@/lib/sheet-formula";
+import {
+  buildClipboard, consumeCut, foreignFormulaAt, readClipboard, readClipboardAsync, writeClipboardAsync, writeClipboardEvent,
+  type ClipCell, type PasteBlock,
+} from "./sheet-clipboard";
+import { useLang } from "@/lib/lang";
 
 /**
  * The grid.
@@ -47,6 +55,8 @@ import { SUPPORTED_FUNCTIONS, letterToIndex, toStored } from "@/lib/sheet-formul
 
 export type Selection = { r: number; c: number; r2: number; c2: number };
 type Editing = { rowId: string; colId: string; seed?: string } | null;
+/** Where the cursor goes after a commit. */
+type Next = "down" | "up" | "right" | "left" | null;
 
 /** Dashed outline colours for referenced ranges, cycled per distinct reference. */
 const REF_COLORS = [
@@ -141,8 +151,17 @@ export function SheetGrid({
   const [dragRow, setDragRow] = useState<string | null>(null);
   const [dropRow, setDropRow] = useState<string | null>(null);
   const rect = useMemo(() => rectOf(sel), [sel]);
-  // Formulas are evaluated at render, never stored — so the context is rebuilt whenever the data is.
+  // Formulas are evaluated, never stored — so the context is rebuilt whenever the data is. The engine
+  // carries over every cached result an edit didn't touch (dependency graph), so typing in one cell
+  // doesn't recompute the sheet.
   const data = useMemo(() => buildSheetData(columns, rows), [columns, rows]);
+  const engineRef = useRef<SheetEngine | null>(null);
+  const engine = useMemo(() => {
+    const e = engineFor(data, engineRef.current);
+    engineRef.current = e;
+    return e;
+  }, [data]);
+  const { lang, t } = useLang();
 
   // While a FORMULA is being edited, clicking a cell inserts its reference instead of moving the
   // selection — that's the behaviour that makes formulas usable without memorising addresses.
@@ -177,31 +196,31 @@ export function SheetGrid({
 
     const active = Object.entries(filters).filter(([, q]) => q.trim());
     if (active.length) {
+      // Filters match what the cell SHOWS — a formula's result, a typed "Rp 1.500.000" — not its source.
       list = list.filter(({ row }) => active.every(([colId, q]) => {
         const col = columns.find((c) => c.id === colId);
-        const shown = col ? displayCell(col.type, row.cells[colId], null) : String(row.cells[colId] ?? "");
+        const shown = col ? displayCell(col.type, row.cells[colId], { data, rowId: row.id, colId }) : String(row.cells[colId] ?? "");
         return shown.toLowerCase().includes(q.trim().toLowerCase());
       }));
     }
 
     if (sort) {
-      const col = columns.find((c) => c.id === sort.colId);
       const dir = sort.dir === "asc" ? 1 : -1;
-      list = [...list].sort((a, b) => {
-        const av = a.row.cells[sort.colId];
-        const bv = b.row.cells[sort.colId];
-        const aEmpty = av === undefined || av === null || av === "";
-        const bEmpty = bv === undefined || bv === null || bv === "";
+      // Sorted by the COMPUTED value: a formula column sorts by its results, numbers (and dates,
+      // typed Rupiah, numeric text) numerically before text, like Sheets.
+      const keyed = list.map((item) => ({ item, k: sortKey(engine.value(item.row.id, sort.colId)) }));
+      keyed.sort((a, b) => {
         // Empties always sink, in both directions — a column of blanks on top is never what you want.
-        if (aEmpty || bEmpty) return aEmpty && bEmpty ? 0 : aEmpty ? 1 : -1;
-        if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
-        const as = col ? displayCell(col.type, av, null) : String(av);
-        const bs = col ? displayCell(col.type, bv, null) : String(bv);
-        return as.localeCompare(bs, "id") * dir;
+        if (!a.k || !b.k) return !a.k && !b.k ? 0 : !a.k ? 1 : -1;
+        if ("n" in a.k && "n" in b.k) return (a.k.n - b.k.n) * dir;
+        if ("n" in a.k) return -dir;
+        if ("n" in b.k) return dir;
+        return a.k.s.localeCompare(b.k.s, "id", { sensitivity: "base" }) * dir;
       });
+      list = keyed.map((x) => x.item);
     }
     return list;
-  }, [rows, columns, sort, filters]);
+  }, [rows, columns, sort, filters, data, engine]);
 
   /** Running pixel offset of every row, so the window and the spacers agree to the pixel. */
   const offsets = useMemo(() => {
@@ -268,6 +287,8 @@ export function SheetGrid({
   }, [offsets, scroll.top, scroll.height, view.length]);
 
   const viewRows = useMemo(() => view.map((v) => v.row), [view]);
+  // Column totals over COMPUTED values, memoised on the data — not recomputed on every selection move.
+  const footer = useMemo(() => columns.map((col) => aggregate(viewRows, col, engine)), [viewRows, columns, engine]);
   const maxR = view.length - 1;
   const filtering = Object.values(filters).some((q) => q.trim()) || Boolean(sort);
 
@@ -288,24 +309,11 @@ export function SheetGrid({
    */
   const refRects = useMemo(() => {
     if (!editing || !draft.startsWith("=")) return [];
-    const out: { top: number; left: number; bottom: number; right: number; color: number }[] = [];
-    const re = /([A-Za-z]{1,3})(\d+)(?::([A-Za-z]{1,3})(\d+))?/g;
-    let m: RegExpExecArray | null;
-    let i = 0;
-    while ((m = re.exec(draft))) {
-      const c1 = letterToIndex(m[1]);
-      const r1 = Number(m[2]) - 1;
-      const c2 = m[3] ? letterToIndex(m[3]) : c1;
-      const r2 = m[4] ? Number(m[4]) - 1 : r1;
-      if (c1 < 0 || r1 < 0 || c1 > maxC || r1 > maxR) continue;
-      out.push({
-        top: Math.min(r1, r2), bottom: Math.max(r1, r2),
-        left: Math.min(c1, c2), right: Math.max(c1, c2),
-        color: i % REF_COLORS.length,
-      });
-      i += 1;
-    }
-    return out;
+    // The same scanner the engine uses: refs inside "quoted text" and function names like LOG10
+    // aren't outlined, $A$1 and whole columns (A:A) are.
+    return findA1Ranges(draft)
+      .filter((x) => x.left <= maxC && x.top <= maxR)
+      .map((x, i) => ({ top: x.top, bottom: Math.min(x.bottom, maxR), left: x.left, right: x.right, color: i % REF_COLORS.length }));
   }, [editing, draft, maxR, maxC]);
 
   /** Put `textToInsert` at the caret, or replace the ref a drag is currently widening. */
@@ -337,37 +345,19 @@ export function SheetGrid({
     });
   }, [clamp]);
 
+  /**
+   * Save what was typed. Every path that turns text into a cell value (typing, the formula bar,
+   * paste, replace, the phone view) goes through inputToCell, so "Rp 1.500.000" is a number and
+   * "=A1*2" a formula everywhere — and nothing typed is ever silently dropped.
+   */
   const commit = useCallback((rowId: string, colId: string, raw: string) => {
     const col = columns.find((x) => x.id === colId);
     if (!col) return;
     const prevRaw = rows.find((x) => x.id === rowId)?.cells[colId];
-
-    // A leading "=" makes it a formula. It's translated into id-space HERE, while the current row
-    // and column order is known — after that, inserting rows or moving columns can never break it.
-    if (raw.trim().startsWith("=")) {
-      const stored = toStored(raw.trim(), data.shape);
-      const prevF = prevRaw && typeof prevRaw === "object" && "f" in prevRaw ? (prevRaw as { f: string }).f : null;
-      if (prevF === stored) return;
-      onSetCells([{ rowId, values: { [colId]: { f: stored } } }]);
-      return;
-    }
-
-    // Typing over a link edits what it SAYS, not where it goes — the URL is the part you can't
-    // retype from memory, so it survives unless the cell is cleared. "Atur URL…" in the right-click
-    // menu is how the address itself changes.
-    if (col.type === "link") {
-      const text = raw.trim();
-      const prevUrl = isLinkCell(prevRaw) ? prevRaw.u : "";
-      if (!text) { onSetCells([{ rowId, values: { [colId]: null } }]); return; }
-      onSetCells([{ rowId, values: { [colId]: prevUrl ? { t: text, u: prevUrl } : text } }]);
-      return;
-    }
-
-    const next = col.type === "checkbox" ? raw === "true" : raw;
-    const prevPlain = prevRaw && typeof prevRaw === "object" ? "\u0000formula" : prevRaw;
+    const next = inputToCell(col, raw, data.shape, prevRaw);
     // Don't spend a request when nothing actually changed (blur fires on every exit).
-    if (String(prevPlain ?? "") === String(next ?? "")) return;
-    onSetCells([{ rowId, values: { [colId]: raw === "" ? null : next } }]);
+    if (sameCell(prevRaw, next)) return;
+    onSetCells([{ rowId, values: { [colId]: next } }]);
   }, [columns, rows, onSetCells, data.shape]);
 
   /** Clear every cell in the current rectangle in one request. */
@@ -387,6 +377,15 @@ export function SheetGrid({
     if (edits.length) onSetCells(edits);
   }, [canEdit, rect, view, columns, onSetCells]);
 
+  /**
+   * A formula moved from (fromRow, fromCol) to (toRow, toCol), all in UNDERLYING positions: relative
+   * references shift by the offset, "$" parts stay — what copy/paste and the fill handle do in Sheets.
+   */
+  const moveFormula = useCallback((stored: string, from: { r: number; c: number }, to: { r: number; c: number }) => {
+    const a1 = toDisplay(stored, data.shape);
+    return { f: toStored(shiftFormula(a1, to.r - from.r, to.c - from.c), data.shape) };
+  }, [data.shape]);
+
   /** Same helper the write uses, so the dashed outline can never promise a different block. */
   const fillPreviewRect = useMemo(() => fillTarget(rect, fillTo), [rect, fillTo]);
 
@@ -397,7 +396,7 @@ export function SheetGrid({
     if (!t) return;
 
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
-    const put = (rowIdx: number, colIdx: number, value: NexusSheetCellValue | null | undefined) => {
+    const put = (rowIdx: number, colIdx: number, value: unknown) => {
       const row = view[rowIdx]?.row;
       const col = columns[colIdx];
       if (!row || !col) return;
@@ -408,33 +407,49 @@ export function SheetGrid({
       })();
       entry.values[col.id] = value ?? null;
     };
-    /** A formula never seeds a series — its value belongs to its own position, not the pattern. */
-    const raw = (r: number, c: number) => {
+    const rawAt = (r: number, c: number) => {
       const col = columns[c];
-      const v = col ? view[r]?.row.cells[col.id] : undefined;
-      return isFormula(v) ? undefined : (v as NexusSheetCellValue | undefined);
+      return col ? view[r]?.row.cells[col.id] : undefined;
+    };
+    const posOf = (r: number, c: number) => ({ r: view[r]?.rawIndex ?? r, c });
+
+    /**
+     * One line of the fill (a column for up/down, a row for left/right). A line containing a formula
+     * repeats its block with every formula SHIFTED to its new place (=A1*2 filled down is =A2*2);
+     * otherwise series continue (1,2 -> 3,4; dates by day or month) or the block repeats.
+     */
+    const fillLine = (sources: { r: number; c: number }[], targets: { r: number; c: number }[]) => {
+      const raws = sources.map((p) => rawAt(p.r, p.c));
+      if (raws.some((v) => isFormulaCell(v))) {
+        targets.forEach((tgt, i) => {
+          const k = i % sources.length;
+          const v = raws[k];
+          put(tgt.r, tgt.c, isFormulaCell(v) ? moveFormula(v.f, posOf(sources[k].r, sources[k].c), posOf(tgt.r, tgt.c)) : v ?? null);
+        });
+        return;
+      }
+      const produced = fillValues(raws, targets.length);
+      targets.forEach((tgt, i) => put(tgt.r, tgt.c, produced[i]));
     };
 
     if (t.axis === "down" || t.axis === "up") {
       // Targets ordered AWAY from the block, so a series counts in the direction it grows.
-      const targets: number[] = [];
-      if (t.axis === "down") for (let r = t.top; r <= t.bottom; r += 1) targets.push(r);
-      else for (let r = t.bottom; r >= t.top; r -= 1) targets.push(r);
+      const rowsOut: number[] = [];
+      if (t.axis === "down") for (let r = t.top; r <= t.bottom; r += 1) rowsOut.push(r);
+      else for (let r = t.bottom; r >= t.top; r -= 1) rowsOut.push(r);
       for (let c = rect.left; c <= rect.right; c += 1) {
-        const source: (NexusSheetCellValue | undefined)[] = [];
-        for (let r = rect.top; r <= rect.bottom; r += 1) source.push(raw(r, c));
-        const produced = fillValues(t.axis === "down" ? source : [...source].reverse(), targets.length);
-        targets.forEach((r, i) => put(r, c, produced[i]));
+        const src: { r: number; c: number }[] = [];
+        for (let r = rect.top; r <= rect.bottom; r += 1) src.push({ r, c });
+        fillLine(t.axis === "down" ? src : [...src].reverse(), rowsOut.map((r) => ({ r, c })));
       }
     } else {
-      const targets: number[] = [];
-      if (t.axis === "right") for (let c = t.left; c <= t.right; c += 1) targets.push(c);
-      else for (let c = t.right; c >= t.left; c -= 1) targets.push(c);
+      const colsOut: number[] = [];
+      if (t.axis === "right") for (let c = t.left; c <= t.right; c += 1) colsOut.push(c);
+      else for (let c = t.right; c >= t.left; c -= 1) colsOut.push(c);
       for (let r = rect.top; r <= rect.bottom; r += 1) {
-        const source: (NexusSheetCellValue | undefined)[] = [];
-        for (let c = rect.left; c <= rect.right; c += 1) source.push(raw(r, c));
-        const produced = fillValues(t.axis === "right" ? source : [...source].reverse(), targets.length);
-        targets.forEach((c, i) => put(r, c, produced[i]));
+        const src: { r: number; c: number }[] = [];
+        for (let c = rect.left; c <= rect.right; c += 1) src.push({ r, c });
+        fillLine(t.axis === "right" ? src : [...src].reverse(), colsOut.map((c) => ({ r, c })));
       }
     }
     if (edits.length) onSetCells(edits);
@@ -443,28 +458,50 @@ export function SheetGrid({
       r: Math.min(rect.top, t.top), c: Math.min(rect.left, t.left),
       r2: Math.max(rect.bottom, t.bottom), c2: Math.max(rect.right, t.right),
     });
-  }, [canEdit, rect, columns, view, onSetCells]);
+  }, [canEdit, rect, columns, view, onSetCells, moveFormula]);
 
-  const copySelection = useCallback(() => {
-    const out: string[][] = [];
+  /**
+   * The selected block for the clipboard: what each cell SHOWS (formula results, "Rp 1.500.000",
+   * a link's label — never "[object Object]"), plus raw values and A1 formulas for a NEXUS paste.
+   */
+  const clipSelection = useCallback((cut: boolean) => {
+    const cells: ClipCell[][] = [];
     for (let r = rect.top; r <= rect.bottom; r += 1) {
       const row = view[r]?.row;
       if (!row) continue;
-      const line: string[] = [];
+      const line: ClipCell[] = [];
       for (let c = rect.left; c <= rect.right; c += 1) {
         const col = columns[c];
-        line.push(col ? editValue(col.type, row.cells[col.id]) : "");
+        if (!col) { line.push({ text: "" }); continue; }
+        const raw = row.cells[col.id];
+        const text = col.type === "checkbox"
+          ? (raw === true ? "TRUE" : raw === false ? "FALSE" : "")
+          : displayCell(col.type, raw, { data, rowId: row.id, colId: col.id });
+        const cell: ClipCell = { text, raw: raw ?? null };
+        if (isFormulaCell(raw)) cell.formula = toDisplay(raw.f, data.shape);
+        line.push(cell);
       }
-      out.push(line);
+      cells.push(line);
     }
-    return toTsv(out);
-  }, [rect, view, columns]);
+    return buildClipboard(
+      cells,
+      { r: view[rect.top]?.rawIndex ?? rect.top, c: rect.left },
+      cut,
+      columns.slice(rect.left, rect.right + 1).map((c) => c.type),
+    );
+  }, [rect, view, columns, data]);
 
-  /** Paste a TSV block starting at the selection's top-left. */
-  const applyPaste = useCallback(async (text: string) => {
-    if (!canEdit) return;
-    const block = parseTsv(text);
-    if (!block.length) return;
+  /**
+   * Paste a block at the selection. A single value pasted onto a bigger selection fills all of it
+   * (Sheets does the same). Formulas shift by the distance from where they were copied (a cut pastes
+   * them unchanged); foreign text goes through the typing parser.
+   */
+  const applyPaste = useCallback(async (block: PasteBlock) => {
+    if (!canEdit || !block.cells.length) return;
+    let cells = block.cells;
+    const selRows = rect.bottom - rect.top + 1, selCols = rect.right - rect.left + 1;
+    const single = cells.length === 1 && cells[0].length === 1;
+    if (single && selRows * selCols > 1) cells = Array.from({ length: selRows }, () => Array.from({ length: selCols }, () => block.cells[0][0]));
 
     const startR = rect.top;
     const startC = rect.left;
@@ -472,32 +509,55 @@ export function SheetGrid({
     // silently widening the schema from a paste is a footgun, so the block is clipped instead.
     // Growing the sheet while a filter hides rows would land the paste in unpredictable places, so
     // the paste is clipped to what's visible instead.
-    const needed = filtering ? 0 : startR + block.length - view.length;
-    let workingRows = view.map((v) => v.row);
+    const needed = filtering ? 0 : startR + cells.length - view.length;
+    let working = view.map((v) => ({ row: v.row, rawIndex: v.rawIndex }));
     if (needed > 0) {
       const created = await onAddRows({ count: needed });
-      workingRows = [...workingRows, ...created];
+      working = [...working, ...created.map((row, i) => ({ row, rawIndex: rows.length + i }))];
     }
+    const shape = needed > 0
+      ? { columnIds: data.shape.columnIds, rowIds: [...data.shape.rowIds, ...working.slice(view.length).map((w) => w.row.id)] }
+      : data.shape;
 
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
-    block.forEach((line, i) => {
-      const row = workingRows[startR + i];
-      if (!row) return;
+    cells.forEach((line, i) => {
+      const target = working[startR + i];
+      if (!target) return;
       const values: Record<string, unknown> = {};
-      line.forEach((cellText, j) => {
+      line.forEach((cell, j) => {
         const col = columns[startC + j];
         if (!col) return; // clipped
-        values[col.id] = cellText === "" ? null : cellText;
+        const at = { r: target.rawIndex, c: startC + j };
+        const srcI = single ? 0 : i, srcJ = single ? 0 : j;
+        if (cell.formula && block.origin) {
+          // A NEXUS formula: shift by the distance it travelled (cut = moved, no shift).
+          const from = { r: block.origin.r + srcI, c: block.origin.c + srcJ };
+          const a1 = block.cut ? cell.formula : shiftFormula(cell.formula, at.r - from.r, at.c - from.c);
+          values[col.id] = { f: toStored(a1, shape) };
+          return;
+        }
+        if (cell.formulaR1C1) {
+          values[col.id] = { f: toStored(foreignFormulaAt(cell.formulaR1C1, at.r, at.c), shape) };
+          return;
+        }
+        // A NEXUS value into a column of the same type keeps its raw form (links keep their URL,
+        // typed numbers their format); anything else is read like typed text.
+        if (block.internal && cell.raw !== undefined && block.types?.[srcJ] === col.type) {
+          values[col.id] = cell.raw;
+          return;
+        }
+        values[col.id] = inputToCell(col, cell.text, shape);
       });
-      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
+      if (Object.keys(values).length) edits.push({ rowId: target.row.id, values });
     });
     if (edits.length) onSetCells(edits);
+    if (block.cut) consumeCut();
     setSel({
       r: startR, c: startC,
-      r2: Math.min(view.length + Math.max(0, needed) - 1, startR + block.length - 1),
-      c2: Math.min(maxC, startC + Math.max(...block.map((l) => l.length)) - 1),
+      r2: Math.min(view.length + Math.max(0, needed) - 1, startR + cells.length - 1),
+      c2: Math.min(maxC, startC + Math.max(...cells.map((l) => l.length)) - 1),
     });
-  }, [canEdit, rect, view, columns, onAddRows, onSetCells, maxC, filtering]);
+  }, [canEdit, rect, view, rows.length, columns, onAddRows, onSetCells, maxC, filtering, data.shape]);
 
   /** Opens the comment thread for a cell by grid position, anchored under the cell itself. */
   const openCommentsAt = (r: number, c: number) => {
@@ -541,24 +601,29 @@ export function SheetGrid({
     if (canEdit) {
       items.push({
         label: "Potong", icon: Scissors, hint: "⌘X",
-        run: () => { void navigator.clipboard.writeText(copySelection()); clearSelection(); },
+        // Cleared only once the clipboard really holds the block — a failed write must not lose data.
+        run: () => { void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => alert(t("The browser blocked the clipboard. Use Ctrl+X / ⌘X instead."))); },
       });
     }
     items.push({
       label: "Salin", icon: Copy, hint: "⌘C",
-      run: () => void navigator.clipboard.writeText(copySelection()),
+      run: () => void writeClipboardAsync(clipSelection(false)).catch(() => alert(t("The browser blocked the clipboard. Use Ctrl+C / ⌘C instead."))),
     });
     if (canEdit) {
-      items.push({
-        label: "Tempel", icon: ClipboardPaste, hint: "⌘V",
-        // Reading the clipboard needs the browser's permission prompt, which Ctrl+V never triggers.
-        // If it's refused, say so instead of failing silently.
-        run: () => {
-          navigator.clipboard.readText()
-            .then((text) => { if (text) void applyPaste(text); })
-            .catch(() => alert("Browser-nya nggak ngasih akses clipboard. Pakai Ctrl+V / ⌘V aja."));
-        },
-      });
+      // Reading the clipboard needs the browser's permission prompt, which Ctrl+V never triggers.
+      // If it's refused, say so instead of failing silently.
+      const pasteVia = (valuesOnly: boolean) => () => {
+        readClipboardAsync()
+          .then((block) => {
+            if (!block) return;
+            void applyPaste(valuesOnly
+              ? { cells: block.cells.map((r) => r.map((c) => ({ text: c.text }))), internal: false }
+              : block);
+          })
+          .catch(() => alert(t("The browser blocked the clipboard. Use Ctrl+V / ⌘V instead.")));
+      };
+      items.push({ label: "Tempel", icon: ClipboardPaste, hint: "⌘V", run: pasteVia(false) });
+      items.push({ label: t("Paste values only"), icon: ClipboardPaste, hint: "⌘⇧V", run: pasteVia(true) });
       items.push({
         label: rowsInBlock * colsInBlock > 1 ? "Kosongin isi seleksi" : "Kosongin isi sel",
         icon: Eraser, hint: "Del", run: clearSelection,
@@ -616,8 +681,74 @@ export function SheetGrid({
       run: () => setOpenFilterFor(col.id),
     });
     return items;
-  }, [cellMenu, view, columns, rect, canEdit, canManage, copySelection, clearSelection, applyPaste,
+  }, [cellMenu, view, columns, rect, canEdit, canManage, clipSelection, clearSelection, applyPaste, t,
       onAddRows, onInsertColumn, onDeleteRows, onDeleteColumn, openCommentsAt]);
+
+  /** Is there anything in this cell? (Ctrl+Arrow jumps by filled blocks, like Sheets.) */
+  const filledAt = (r: number, c: number) => {
+    const row = view[r]?.row;
+    const col = columns[c];
+    if (!row || !col) return false;
+    const v = row.cells[col.id];
+    return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
+  };
+  /**
+   * Ctrl/Cmd+Arrow: inside a block of filled cells, go to its far edge; otherwise go to the next
+   * filled cell; with nothing ahead, go to the edge of the sheet.
+   */
+  const jump = (r: number, c: number, dr: number, dc: number) => {
+    const inside = (y: number, x: number) => y >= 0 && y <= maxR && x >= 0 && x <= maxC;
+    let nr = r + dr, nc = c + dc;
+    if (!inside(nr, nc)) return { r, c };
+    if (filledAt(r, c) && filledAt(nr, nc)) {
+      while (inside(nr + dr, nc + dc) && filledAt(nr + dr, nc + dc)) { nr += dr; nc += dc; }
+      return { r: nr, c: nc };
+    }
+    while (!filledAt(nr, nc)) {
+      if (!inside(nr + dr, nc + dc)) return { r: nr, c: nc };
+      nr += dr; nc += dc;
+    }
+    return { r: nr, c: nc };
+  };
+  /** Ctrl+End: the last row and column that hold anything. */
+  const lastFilled = () => {
+    let r2 = 0, c2 = 0;
+    view.forEach(({ row }, r) => columns.forEach((col, c) => {
+      const v = row.cells[col.id];
+      if (v !== undefined && v !== null && v !== "") { r2 = Math.max(r2, r); c2 = Math.max(c2, c); }
+    }));
+    return { r: r2, c: c2 };
+  };
+  const goTo = (r: number, c: number, extend: boolean) => {
+    const p = clamp(r, c);
+    setSel((s) => (extend ? { ...s, r2: p.r, c2: p.c } : { r: p.r, c: p.c, r2: p.r, c2: p.c }));
+  };
+  /** Column a run of Tabs started in: Enter after Tab, Tab, Tab returns there on the next row. */
+  const tabRun = useRef<number | null>(null);
+  const pageRows = Math.max(1, Math.floor((scroll.height - 34) / ROW_H_DEFAULT) - 1);
+
+  /** After a commit: where the cursor goes, honouring a Tab run. */
+  // Read through a ref: Row is memoised and may hold an older closure of this function.
+  const selRef = useRef(sel);
+  selRef.current = sel;
+  const afterCommit = (next: Next) => {
+    const sel = selRef.current;
+    if (next === "right") {
+      if (tabRun.current === null) tabRun.current = sel.c;
+      move(0, 1, false);
+      return;
+    }
+    if (next === "down" && tabRun.current !== null) {
+      const c = tabRun.current;
+      tabRun.current = null;
+      goTo(sel.r + 1, c, false);
+      return;
+    }
+    tabRun.current = null;
+    if (next === "down") move(1, 0, false);
+    if (next === "up") move(-1, 0, false);
+    if (next === "left") move(0, -1, false);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (editing) return; // the input owns the keyboard while editing
@@ -629,15 +760,39 @@ export function SheetGrid({
       openCommentsAt(sel.r, sel.c);
       return;
     }
+    const from = e.shiftKey ? { r: sel.r2, c: sel.c2 } : { r: sel.r, c: sel.c };
+    const arrow = (dr: number, dc: number) => {
+      e.preventDefault();
+      tabRun.current = null;
+      if (meta) { const p = jump(from.r, from.c, dr, dc); goTo(p.r, p.c, e.shiftKey); return; }
+      move(dr, dc, e.shiftKey);
+    };
     switch (e.key) {
-      case "ArrowUp": e.preventDefault(); return move(-1, 0, e.shiftKey);
-      case "ArrowDown": e.preventDefault(); return move(1, 0, e.shiftKey);
-      case "ArrowLeft": e.preventDefault(); return move(0, -1, e.shiftKey);
-      case "ArrowRight": e.preventDefault(); return move(0, 1, e.shiftKey);
-      case "Tab": e.preventDefault(); return move(0, e.shiftKey ? -1 : 1, false);
+      case "ArrowUp": return arrow(-1, 0);
+      case "ArrowDown": return arrow(1, 0);
+      case "ArrowLeft": return arrow(0, -1);
+      case "ArrowRight": return arrow(0, 1);
+      case "Home": e.preventDefault(); tabRun.current = null; return goTo(meta ? 0 : from.r, 0, e.shiftKey);
+      case "End": {
+        e.preventDefault(); tabRun.current = null;
+        if (meta) { const p = lastFilled(); return goTo(p.r, p.c, e.shiftKey); }
+        return goTo(from.r, maxC, e.shiftKey);
+      }
+      case "PageDown": e.preventDefault(); tabRun.current = null; return goTo(from.r + pageRows, from.c, e.shiftKey);
+      case "PageUp": e.preventDefault(); tabRun.current = null; return goTo(from.r - pageRows, from.c, e.shiftKey);
+      case "Tab":
+        e.preventDefault();
+        if (!e.shiftKey && tabRun.current === null) tabRun.current = sel.c;
+        return move(0, e.shiftKey ? -1 : 1, false);
       case "Enter":
       case "F2": {
         e.preventDefault();
+        if (e.key === "Enter" && tabRun.current !== null && !e.shiftKey) {
+          // Enter at the end of a Tab run: next row, back in the column the run started from.
+          const c = tabRun.current;
+          tabRun.current = null;
+          return goTo(sel.r + 1, c, false);
+        }
         if (!canEdit) return;
         const row = view[sel.r]?.row; const col = columns[sel.c];
         if (row && col) setEditing({ rowId: row.id, colId: col.id });
@@ -650,7 +805,7 @@ export function SheetGrid({
       case "f": if (meta) { e.preventDefault(); setFindOpen(true); } return;
       default: break;
     }
-    // Any printable character starts editing and replaces the cell — the spreadsheet reflex.
+    // Any printable character starts editing and REPLACES the cell (F2 / double-click append instead).
     if (!meta && !e.altKey && e.key.length === 1 && canEdit) {
       const row = view[sel.r]?.row; const col = columns[sel.c];
       if (row && col) { e.preventDefault(); setEditing({ rowId: row.id, colId: col.id, seed: e.key }); }
@@ -683,15 +838,16 @@ export function SheetGrid({
     view.forEach(({ row }, r) => {
       columns.forEach((col, c) => {
         const raw = row.cells[col.id];
+        // Search what the cell SHOWS (a formula's result, a link's label), like Sheets does by default.
         const text = isFormula(raw)
-          ? (raw as unknown as { f: string }).f
-          : editValue(col.type, raw as NexusSheetCellValue | undefined);
+          ? displayCell(col.type, raw, { data, rowId: row.id, colId: col.id })
+          : editValue(col.type, raw);
         const hay = find.matchCase ? text : text.toLowerCase();
         if (text && hay.includes(needle)) out.push({ r, c });
       });
     });
     return out;
-  }, [find, view, columns]);
+  }, [find, view, columns, data]);
 
   const replaceAll = useCallback(() => {
     if (!canEdit || !find.q.trim()) return;
@@ -704,21 +860,26 @@ export function SheetGrid({
       // Formula cells are skipped on purpose: replacing text inside a stored formula would rewrite
       // its id-space references and quietly break it.
       if (isFormula(raw)) continue;
-      const text = editValue(col.type, raw as NexusSheetCellValue | undefined);
-      const next = find.matchCase
+      const text = editValue(col.type, raw);
+      const replaced = find.matchCase
         ? text.split(find.q).join(find.to)
         : text.replace(new RegExp(find.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), find.to);
-      if (next === text) continue;
+      if (replaced === text) continue;
+      // A link keeps its URL (only the label is text); everything else is re-read like typing, so a
+      // replaced "Rp 1.500.000" is still a number — never "[object Object]".
+      const next = isLinkCell(raw)
+        ? (replaced.trim() ? { t: replaced, u: raw.u } : null)
+        : inputToCell(col, replaced, data.shape, raw);
       const entry = edits.find((e) => e.rowId === row.id) ?? (() => {
         const fresh = { rowId: row.id, values: {} as Record<string, unknown> };
         edits.push(fresh);
         return fresh;
       })();
-      entry.values[col.id] = next === "" ? null : next;
+      entry.values[col.id] = next;
     }
     if (edits.length) onSetCells(edits);
     return edits.length;
-  }, [canEdit, find, findHits, view, columns, onSetCells]);
+  }, [canEdit, find, findHits, view, columns, onSetCells, data.shape]);
 
   return (
     <>
@@ -773,7 +934,7 @@ export function SheetGrid({
         defaultValue={
           isFormula(activeRaw)
             ? editFormula(activeRaw, data.shape) ?? ""
-            : editValue(activeCol?.type ?? "text", activeRaw as NexusSheetCellValue | undefined)
+            : editValue(activeCol?.type ?? "text", activeRaw)
         }
         readOnly={!canEdit}
         placeholder={canEdit ? "Ketik isi sel atau rumus…" : ""}
@@ -806,13 +967,20 @@ export function SheetGrid({
       ref={gridRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      onCopy={(e) => { if (!editing) { e.preventDefault(); e.clipboardData.setData("text/plain", copySelection()); } }}
+      onCopy={(e) => { if (!editing) { e.preventDefault(); writeClipboardEvent(e, clipSelection(false)); } }}
+      onCut={(e) => {
+        if (editing || !canEdit) return;
+        e.preventDefault();
+        // Written synchronously into the event before clearing, so the block can't be lost.
+        writeClipboardEvent(e, clipSelection(true));
+        clearSelection();
+      }}
       onPaste={(e) => {
         if (editing) return; // let the native input handle a single-cell paste
-        const text = e.clipboardData.getData("text/plain");
-        if (!text) return;
+        const block = readClipboard(e.clipboardData);
+        if (!block) return;
         e.preventDefault();
-        void applyPaste(text);
+        void applyPaste(block);
       }}
       onScroll={onGridScroll}
       // select-none because dragging across cells is a RANGE selection, not a text selection — without
@@ -878,6 +1046,7 @@ export function SheetGrid({
               editing={editing}
               canEdit={canEdit}
               data={data}
+              lang={lang}
               refMode={refMode}
               refRects={refRects}
               onPickRef={(c) => {
@@ -907,16 +1076,15 @@ export function SheetGrid({
               fillRect={fillPreviewRect}
               onFillStart={() => { filling.current = true; setFillTo({ r: ri, c: rect.right }); }}
               onFillOver={(ci) => { if (filling.current) setFillTo({ r: ri, c: ci }); }}
-              onSelect={(c, extend) => setSel((s) => (extend ? { ...s, r2: ri, c2: c } : { r: ri, c, r2: ri, c2: c }))}
+              onSelect={(c, extend) => { tabRun.current = null; setSel((s) => (extend ? { ...s, r2: ri, c2: c } : { r: ri, c, r2: ri, c2: c })); }}
               onDragOver={(c) => { if (dragging.current) setSel((s) => ({ ...s, r2: ri, c2: c })); }}
-              onStartDrag={(c) => { dragging.current = true; setSel({ r: ri, c, r2: ri, c2: c }); }}
+              onStartDrag={(c) => { tabRun.current = null; dragging.current = true; setSel({ r: ri, c, r2: ri, c2: c }); }}
               onEdit={(colId) => setEditing({ rowId: row.id, colId })}
               onCommit={(colId, raw, next) => {
                 commit(row.id, colId, raw);
                 setEditing(null);
                 gridRef.current?.focus();
-                if (next === "down") move(1, 0, false);
-                if (next === "right") move(0, 1, false);
+                afterCommit(next);
               }}
               onCancel={() => { setEditing(null); gridRef.current?.focus(); }}
               onRowMenu={(at) => setRowMenu({ rowId: row.id, number: rawIndex + 1, height: row.height, ...at })}
@@ -949,14 +1117,14 @@ export function SheetGrid({
         <tfoot className="sticky bottom-0 z-20">
           <tr>
             <td className="sticky left-0 z-30 border-t border-r border-border bg-muted" />
-            {columns.map((col) => {
-              const a = aggregate(viewRows, col, data);
+            {columns.map((col, ci) => {
+              const a = footer[ci];
               const numeric = col.type === "number" || col.type === "currency";
               return (
                 <td key={col.id} className="border-t border-border bg-muted px-2 py-1.5 text-right text-[11px] font-bold tabular-nums text-muted-foreground">
                   {numeric
-                    ? formatCell(col.type, a.sum)
-                    : a.filled > 0 ? `${a.filled} terisi` : ""}
+                    ? formatComputed(col.type, a.sum)
+                    : a.filled > 0 ? t("{n} filled", { n: a.filled }) : ""}
                 </td>
               );
             })}
@@ -1574,6 +1742,7 @@ type RowProps = {
   row: NexusSheetRow; rowIndex: number; gutterNumber: number; columns: NexusSheetColumn[];
   selected: boolean; rect: ReturnType<typeof rectOf>; editing: Editing; canEdit: boolean;
   data: ReturnType<typeof buildSheetData>;
+  lang: "en" | "id";
   refMode: boolean;
   refRects: { top: number; left: number; bottom: number; right: number; color: number }[];
   onPickRef: (c: number) => void;
@@ -1594,7 +1763,7 @@ type RowProps = {
   onDragOver: (c: number) => void;
   onStartDrag: (c: number) => void;
   onEdit: (colId: string) => void;
-  onCommit: (colId: string, raw: string, next: "down" | "right" | null) => void;
+  onCommit: (colId: string, raw: string, next: Next) => void;
   onCancel: () => void;
   onRowMenu: (at: { left: number; top: number }) => void;
   dragging: boolean;
@@ -1690,7 +1859,11 @@ const Row = memo(function Row(p: RowProps) {
         );
         const isEditing = Boolean(editingHere && p.editing!.colId === col.id);
         const value = p.row.cells[col.id];
-        const ruleHit = matchRule(col.rules, isFormula(value) ? undefined : (value as NexusSheetCellValue | undefined));
+        // Rules test what the cell COMPUTES to: a formula's result, a typed number — so "empty"
+        // no longer matches every formula cell, and "> 1000000" works on computed totals.
+        const engine = engineFor(p.data);
+        const computed = col.rules?.length || isFormula(value) ? engine.value(p.row.id, col.id) : null;
+        const ruleHit = col.rules?.length ? matchRule(col.rules, computed) : null;
         const peerHere = p.peerCursors[`${p.row.id}:${col.id}`];
         return (
           <td
@@ -1769,7 +1942,7 @@ const Row = memo(function Row(p: RowProps) {
             {isEditing ? (
               <CellEditor
                 col={col}
-                initial={p.editing?.seed ?? editFormula(value, p.data.shape) ?? editValue(col.type, value as never)}
+                initial={p.editing?.seed ?? editFormula(value, p.data.shape) ?? editValue(col.type, value)}
                 seeded={Boolean(p.editing?.seed)}
                 onCommit={(raw, next) => p.onCommit(col.id, raw, next)}
                 onCancel={p.onCancel}
@@ -1837,8 +2010,10 @@ const Row = memo(function Row(p: RowProps) {
                 />
               )}
               <span
-                className={cn("block truncate", isFormula(value) && "text-primary")}
-                title={isFormula(value) ? "Sel rumus — klik 2x buat lihat rumusnya" : undefined}
+                className={cn("block truncate", isFormula(value) && (isError(computed) ? "font-semibold text-rose-600" : "text-primary"))}
+                title={isFormula(value)
+                  ? (isError(computed) ? `${computed} — ${errorHint(computed, p.lang)}` : p.lang === "en" ? "Formula cell — double-click to see the formula" : "Sel rumus — klik 2x buat lihat rumusnya")
+                  : undefined}
               >
                 {displayCell(col.type, value, { data: p.data, rowId: p.row.id, colId: col.id })}
               </span>
@@ -1856,6 +2031,7 @@ const Row = memo(function Row(p: RowProps) {
   // A formula in THIS row can read cells in another row, so its rendered value changes when the
   // sheet data does — comparing only `row` would leave stale results on screen.
   a.data === b.data &&
+  a.lang === b.lang &&
   a.rowIndex === b.rowIndex &&
   a.gutterNumber === b.gutterNumber &&
   a.canEdit === b.canEdit &&
@@ -1880,7 +2056,7 @@ function CellEditor({ col, initial, seeded, onCommit, onCancel, onDraftChange, r
   col: NexusSheetColumn; initial: string;
   /** True when `initial` is the keystroke that OPENED the editor, rather than the cell's value. */
   seeded: boolean;
-  onCommit: (raw: string, next: "down" | "right" | null) => void;
+  onCommit: (raw: string, next: Next) => void;
   onCancel: () => void;
   onDraftChange: (text: string) => void;
   registerEditor: (el: HTMLInputElement | null) => void;
@@ -1892,16 +2068,13 @@ function CellEditor({ col, initial, seeded, onCommit, onCancel, onDraftChange, r
     if (!el) return;
     el.focus();
     if (!(el instanceof HTMLInputElement)) return;
-    // Select-all is right when you open an existing value with F2 or a double-click: the next
-    // keystroke should replace it. It is WRONG when the editor was opened BY a keystroke — that
-    // character is already in the box, and selecting it makes the following keystroke eat it. That
-    // is what broke formula entry: typing "=SUM(...)" stored "SUM(...)" as text, because "S"
-    // replaced the selected "=".
-    if (seeded) el.setSelectionRange(el.value.length, el.value.length);
-    else el.select();
+    // Caret at the END, like Sheets: F2 / double-click / Enter APPEND to what's there (typing a
+    // character instead replaces the cell — that path arrives here already seeded with the key).
+    // Never select-all: a keystroke opening the editor would then eat the next one ("=SUM" -> "SUM").
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* date inputs */ }
   }, [seeded]);
 
-  const finish = (next: "down" | "right" | null) => {
+  const finish = (next: Next) => {
     if (done.current) return;
     done.current = true;
     onCommit(ref.current?.value ?? "", next);
@@ -1924,6 +2097,7 @@ function CellEditor({ col, initial, seeded, onCommit, onCancel, onDraftChange, r
       inputRef={ref as React.RefObject<HTMLInputElement>}
       col={col}
       initial={initial}
+      seeded={seeded}
       onFinish={finish}
       onCancel={() => { done.current = true; onCancel(); }}
       onDraftChange={onDraftChange}
@@ -1940,16 +2114,19 @@ function CellEditor({ col, initial, seeded, onCommit, onCancel, onDraftChange, r
  * suggesting it. Rendered through a portal with fixed positioning because the grid scroll container
  * has `overflow:auto`, which would otherwise clip a dropdown anchored inside a <td>.
  */
-function FormulaInput({ inputRef, col, initial, onFinish, onCancel, onDraftChange, registerEditor }: {
+function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDraftChange, registerEditor }: {
   inputRef: React.RefObject<HTMLInputElement>;
   col: NexusSheetColumn;
   initial: string;
-  onFinish: (next: "down" | "right" | null) => void;
+  /** Opened by typing (replace mode): arrow keys commit and move, like Sheets. */
+  seeded: boolean;
+  onFinish: (next: Next) => void;
   onCancel: () => void;
   onDraftChange: (text: string) => void;
   registerEditor: (el: HTMLInputElement | null) => void;
 }) {
   const [text, setTextRaw] = useState(initial);
+  const { lang } = useLang();
   // The grid needs the live draft to know whether a click should insert a reference, and to draw the
   // dashed outlines — so every change goes up as well as into local state.
   const setText = useCallback((v: string) => { setTextRaw(v); onDraftChange(v); }, [onDraftChange]);
@@ -2021,9 +2198,15 @@ function FormulaInput({ inputRef, col, initial, onFinish, onCancel, onDraftChang
             if (e.key === "Enter" && token) { e.preventDefault(); accept(matches[pick].name); return; }
             if (e.key === "Escape") { e.preventDefault(); setText(`${text} `); return; } // close list, keep editing
           }
-          if (e.key === "Enter") { e.preventDefault(); onFinish("down"); }
-          else if (e.key === "Tab") { e.preventDefault(); onFinish("right"); }
+          if (e.key === "Enter") { e.preventDefault(); onFinish(e.shiftKey ? "up" : "down"); }
+          else if (e.key === "Tab") { e.preventDefault(); onFinish(e.shiftKey ? "left" : "right"); }
           else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+          else if (seeded && !text.startsWith("=") && !e.shiftKey && !e.metaKey && !e.ctrlKey &&
+            (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+            // Typed straight into the cell (not F2): arrows commit and move on, as in Sheets.
+            e.preventDefault();
+            onFinish(e.key === "ArrowDown" ? "down" : e.key === "ArrowUp" ? "up" : e.key === "ArrowLeft" ? "left" : "right");
+          }
         }}
         className="w-full select-text rounded border border-primary bg-background px-1 py-0.5 text-sm outline-none"
       />
@@ -2043,7 +2226,7 @@ function FormulaInput({ inputRef, col, initial, onFinish, onCancel, onDraftChang
               <div className="font-mono text-xs font-bold">
                 {f.name}<span className="font-normal text-muted-foreground">{f.args}</span>
               </div>
-              <div className="text-[11px] text-muted-foreground">{f.desc}</div>
+              <div className="text-[11px] text-muted-foreground">{lang === "en" ? f.descEn : f.desc}</div>
             </button>
           ))}
           </div>

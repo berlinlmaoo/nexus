@@ -69,6 +69,8 @@ export function useSheetRealtime({
           rows: prev.rows.map((row) => {
             const inc = incoming.get(row.id);
             if (!inc) return row;
+            // Out-of-order delivery: never replace a row with an OLDER version of itself.
+            if (Date.parse(inc.updatedAt) < Date.parse(row.updatedAt)) return row;
             if (editing && editing.rowId === row.id) {
               // Take everything they changed EXCEPT the cell under this person's cursor.
               const cells = { ...inc.cells };

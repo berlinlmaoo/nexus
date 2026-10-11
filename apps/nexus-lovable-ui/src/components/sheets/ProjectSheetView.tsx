@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2, Plus, Redo2, Sheet as SheetIcon, Undo2, Upload, X } from "lucide-react";
 import { nexusApi, type NexusSheet, type NexusSheetColumn, type NexusSheetRow } from "@/lib/nexus-api";
@@ -11,7 +11,8 @@ import { CellCommentThread } from "./CellComments";
 import { useSheetRealtime } from "./use-sheet-realtime";
 import { SheetGrid } from "./SheetGrid";
 import { useSheetUndo } from "./use-sheet-undo";
-import { editValue, formatCell } from "./sheet-types";
+import { buildSheetData, displayCell, editFormula, editValue, inputToCell, sameCell } from "./sheet-types";
+import { useLang } from "@/lib/lang";
 
 /**
  * The Spreadsheet tab. Free-form rows that belong to nothing — unlike the Table view, whose rows are
@@ -19,6 +20,7 @@ import { editValue, formatCell } from "./sheet-types";
  */
 export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string; onOpenTask?: (taskId: string) => void }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const isMobile = useIsMobile();
   const [editingCell, setEditingCell] = useState(false);
   const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
@@ -192,24 +194,92 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   });
 
   const key = useMemo(() => ["nexus", "sheet", sheetId] as const, [sheetId]);
-  /** Patch only the rows that changed — a blanket invalidate would blow away the editing cell. */
-  const patchRows = (rows: NexusSheetRow[]) => {
+  /**
+   * Patch only the rows that changed — a blanket invalidate would blow away the editing cell.
+   *
+   * A row is only replaced by a version at least as NEW as the one on screen: a slow response to my
+   * own save can arrive after a colleague's later edit (pushed over realtime), and must not put the
+   * older row back on top of it.
+   */
+  const patchRows = (rows: { id: string; cells: NexusSheetRow["cells"]; updatedAt: string }[]) => {
     qc.setQueryData<NexusSheet>(key, (old) => {
       if (!old) return old;
       const byId = new Map(rows.map((r) => [r.id, r]));
-      return { ...old, rows: old.rows.map((r) => (byId.has(r.id) ? { ...r, ...byId.get(r.id)! } : r)) };
+      return {
+        ...old,
+        rows: old.rows.map((r) => {
+          const inc = byId.get(r.id);
+          if (!inc) return r;
+          if (Date.parse(inc.updatedAt) < Date.parse(r.updatedAt)) return r;
+          return { ...r, ...inc };
+        }),
+      };
     });
   };
 
   const undo = useSheetUndo();
   const say = (msg: string) => celebrate(msg);
 
-  const setCells = useMutation({
-    mutationFn: (edits: { rowId: string; values: Record<string, unknown> }[]) =>
-      nexusApi.setSheetCells(sheetId as string, edits),
-    onSuccess: (res) => patchRows(res.rows),
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal nyimpen."),
-  });
+  // --- Saving cells -----------------------------------------------------------
+  // Edits land on screen at once (optimistic) and are sent in ONE request per burst: everything
+  // queued within ~120 ms (a fill, a paste, quick typing across cells, undo) is merged per row.
+  // The server answer then replaces the optimistic rows — unless something newer arrived meanwhile.
+  type Edit = { rowId: string; values: Record<string, unknown> };
+  const pending = useRef(new Map<string, Record<string, unknown>>());
+  const waiters = useRef<{ resolve: () => void; reject: (e: unknown) => void }[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saving, setSaving] = useState(0);
+  const flush = useCallback(async () => {
+    timer.current = null;
+    const id = sheetRef.current?.id;
+    const batch = [...pending.current.entries()].map(([rowId, values]) => ({ rowId, values }));
+    const done = waiters.current;
+    pending.current = new Map();
+    waiters.current = [];
+    if (!id || !batch.length) { done.forEach((w) => w.resolve()); return; }
+    setSaving((n) => n + 1);
+    try {
+      const res = await nexusApi.setSheetCells(id, batch);
+      patchRows(res.rows);
+      done.forEach((w) => w.resolve());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t("Couldn't save."));
+      // The optimistic values may be wrong now — take the server's truth.
+      qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
+      done.forEach((w) => w.reject(e));
+    } finally {
+      setSaving((n) => n - 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qc]);
+  // Leaving the sheet must not drop a queued edit.
+  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); void flush(); } }, [sheetId, flush]);
+  const queueCells = (edits: Edit[]): Promise<void> => {
+    if (!edits.length) return Promise.resolve();
+    qc.setQueryData<NexusSheet>(key, (old) => {
+      if (!old) return old;
+      const byId = new Map(edits.map((e) => [e.rowId, e.values]));
+      return {
+        ...old,
+        rows: old.rows.map((r) => {
+          const values = byId.get(r.id);
+          if (!values) return r;
+          const cells = { ...r.cells } as Record<string, unknown>;
+          for (const [k, v] of Object.entries(values)) { if (v === null || v === undefined || v === "") delete cells[k]; else cells[k] = v; }
+          return { ...r, cells: cells as NexusSheetRow["cells"] };
+        }),
+      };
+    });
+    for (const e of edits) pending.current.set(e.rowId, { ...(pending.current.get(e.rowId) ?? {}), ...e.values });
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void flush(), 120);
+    return new Promise<void>((resolve, reject) => waiters.current.push({ resolve, reject }));
+  };
+  const setCells = {
+    mutate: (edits: Edit[]) => { queueCells(edits).catch(() => {}); },
+    mutateAsync: (edits: Edit[]) => queueCells(edits),
+    isPending: saving > 0,
+  };
 
   /**
    * Apply a cell edit AND record how to reverse it.
@@ -218,7 +288,9 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
    * they're already gone, and a background refetch could arrive at any time in between.
    */
   const editCells = (edits: { rowId: string; values: Record<string, unknown> }[], label = "edit sel") => {
-    const rowsById = new Map(sheetRef.current?.rows.map((r) => [r.id, r]) ?? []);
+    // From the cache, not the last render: two quick edits must each see the other's value as "before".
+    const current = qc.getQueryData<NexusSheet>(key)?.rows ?? sheetRef.current?.rows ?? [];
+    const rowsById = new Map(current.map((r) => [r.id, r]));
     const before = edits.map((e) => ({
       rowId: e.rowId,
       values: Object.fromEntries(
@@ -249,11 +321,28 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   });
   const delRows = useMutation({
     mutationFn: (rowIds: string[]) => nexusApi.deleteSheetRows(sheetId as string, rowIds),
-    onSuccess: (_r, rowIds) => {
+    onSuccess: (res, rowIds) => {
       const gone = new Set(rowIds);
       qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, rows: old.rows.filter((r) => !gone.has(r.id)) } : old));
+      // Formulas whose range lost a corner row were shrunk by the server; show the new versions.
+      const rewritten = (res as { rows?: { id: string; cells: NexusSheetRow["cells"]; updatedAt: string }[] }).rows;
+      if (rewritten?.length) patchRows(rewritten);
     },
   });
+
+  /** Move a row, remembering the row it used to follow so the move can be undone. */
+  const reorderRow = (rowId: string, afterRowId: string | null) => {
+    const list = sheetRef.current?.rows ?? [];
+    const i = list.findIndex((r) => r.id === rowId);
+    if (i < 0) return;
+    const before = i > 0 ? list[i - 1].id : null;
+    moveRow.mutate({ rowId, afterRowId });
+    undo.push({
+      label: t("move row"),
+      undo: () => moveRow.mutateAsync({ rowId, afterRowId: before }).then(() => {}),
+      redo: () => moveRow.mutateAsync({ rowId, afterRowId }).then(() => {}),
+    });
+  };
 
   /** Delete rows, remembering their VALUES AND POSITIONS so undo puts them back where they were. */
   const removeRows = (rowIds: string[]) => {
@@ -345,7 +434,10 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       undo: async () => {
         const now = sheetRef.current?.columns ?? [];
         const restored = [...now];
-        restored.splice(Math.min(index, restored.length), 0, { name: col.name, type: col.type, width: col.width } as NexusSheetColumn);
+        // The WHOLE definition comes back — choices, chip colours, header colour, rules — only the id
+        // is new (the server mints it).
+        const { id: _oldId, ...definition } = col;
+        restored.splice(Math.min(index, restored.length), 0, definition as NexusSheetColumn);
         const saved = await saveColumns.mutateAsync(restored);
         const newId = saved.columns[Math.min(index, saved.columns.length - 1)]?.id;
         if (newId && values.length) {
@@ -412,7 +504,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
               <button
                 disabled={!undo.canRedo}
                 onClick={async () => { const l = await undo.redo(); if (l) say(`Diulang: ${l}`); }}
-                title="Ulangi (Ctrl+Shift+Z)"
+                title="Ulangi (Ctrl+Y / Ctrl+Shift+Z)"
                 className="grid h-7 w-7 place-items-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/50 hover:text-primary disabled:opacity-30"
               ><Redo2 className="h-3.5 w-3.5" /></button>
             </>
@@ -464,18 +556,21 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
 
       {isMobile ? (
         // A 6-column grid on a phone is unusable, and keyboard nav / paste mean nothing there.
-        <MobileCards sheet={sheet} onSet={(rowId, colId, v) => setCells.mutate([{ rowId, values: { [colId]: v } }])} />
+        <MobileCards sheet={sheet} onSet={(rowId, colId, v) => editCells([{ rowId, values: { [colId]: v } }])} />
       ) : (
         <div
           onFocusCapture={() => setEditingCell(true)}
           onBlurCapture={() => setEditingCell(false)}
           onKeyDown={async (e) => {
-            if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+            const k = e.key.toLowerCase();
+            // Ctrl/Cmd+Z undo; Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y redo.
+            if (!(e.metaKey || e.ctrlKey) || (k !== "z" && k !== "y")) return;
             // While a cell editor is open, Ctrl+Z belongs to the text field, not the sheet.
             if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
             e.preventDefault();
-            const label = e.shiftKey ? await undo.redo() : await undo.undo();
-            if (label) say(`${e.shiftKey ? "Diulang" : "Dibatalin"}: ${label}`);
+            const redo = k === "y" || e.shiftKey;
+            const label = redo ? await undo.redo() : await undo.undo();
+            if (label) say(`${redo ? "Diulang" : "Dibatalin"}: ${label}`);
           }}
         >
           <SheetGrid
@@ -497,7 +592,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
               return created;
             }}
             onDeleteRows={(ids) => removeRows(ids)}
-            onReorderRow={(rowId, afterRowId) => moveRow.mutate({ rowId, afterRowId })}
+            onReorderRow={(rowId, afterRowId) => reorderRow(rowId, afterRowId)}
             onDeleteColumn={(columnId) => {
               const col = sheet.columns.find((c) => c.id === columnId);
               // Undo covers this now, so the warning says what's true rather than scaring people off.
@@ -586,39 +681,73 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   );
 }
 
-/** Phone view: one card per row, tap a field to edit it. No grid, no keyboard nav — honest instead of cramped. */
+/**
+ * Phone view: one card per row, tap a field to edit it. No grid, no keyboard nav — honest instead of
+ * cramped. Cards are rendered in pages as you scroll (a 2.000-row sheet used to mount every card), show
+ * computed values (formula results, link labels — never "[object Object]"), and edits go through the
+ * same parser and undo stack as the grid.
+ */
 function MobileCards({ sheet, onSet }: { sheet: NexusSheet; onSet: (rowId: string, colId: string, value: unknown) => void }) {
+  const PAGE = 30;
+  const [shown, setShown] = useState(PAGE);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const data = useMemo(() => buildSheetData(sheet.columns, sheet.rows), [sheet.columns, sheet.rows]);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((x) => x.isIntersecting)) setShown((n) => Math.min(sheet.rows.length, n + PAGE));
+    }, { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [sheet.rows.length]);
+  const { t } = useLang();
+
   return (
     <div className="space-y-2">
-      {sheet.rows.map((row, i) => (
+      {sheet.rows.slice(0, shown).map((row, i) => (
         <div key={row.id} className="rounded-2xl border border-border bg-card p-3">
-          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Baris {i + 1}</div>
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Sheet row {n}", { n: i + 1 })}</div>
           <div className="space-y-1.5">
-            {sheet.columns.map((col) => (
-              <label key={col.id} className="flex items-center gap-2 text-sm">
-                <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">{col.name}</span>
-                {col.type === "checkbox" ? (
-                  <input type="checkbox" disabled={!sheet.canEdit} defaultChecked={Boolean(row.cells[col.id])}
-                    onChange={(e) => onSet(row.id, col.id, e.target.checked)} className="h-4 w-4 accent-primary" />
-                ) : (
-                  <input
-                    disabled={!sheet.canEdit}
-                    type={col.type === "date" ? "date" : "text"}
-                    defaultValue={editValue(col.type, row.cells[col.id])}
-                    placeholder={formatCell(col.type, row.cells[col.id]) || "—"}
-                    onBlur={(e) => {
-                      if (e.target.value !== editValue(col.type, row.cells[col.id])) {
-                        onSet(row.id, col.id, e.target.value === "" ? null : e.target.value);
-                      }
-                    }}
-                    className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary"
-                  />
-                )}
-              </label>
-            ))}
+            {sheet.columns.map((col, ci) => {
+              const raw = row.cells[col.id] as unknown;
+              const formula = editFormula(raw, data.shape);
+              const shownText = displayCell(col.type, raw, { data, rowId: row.id, colId: col.id });
+              const initial = formula ?? editValue(col.type, raw);
+              return (
+                <label key={col.id} className="flex items-center gap-2 text-sm">
+                  <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">{col.name || String.fromCharCode(65 + (ci % 26))}</span>
+                  {col.type === "checkbox" ? (
+                    <input type="checkbox" disabled={!sheet.canEdit} defaultChecked={Boolean(raw)}
+                      onChange={(e) => onSet(row.id, col.id, e.target.checked)} className="h-4 w-4 accent-primary" />
+                  ) : (
+                    <input
+                      key={`${row.id}:${col.id}:${JSON.stringify(raw ?? "")}`}
+                      disabled={!sheet.canEdit}
+                      type={col.type === "date" && !formula ? "date" : "text"}
+                      defaultValue={formula ? undefined : initial}
+                      // A formula shows its RESULT until tapped; focusing reveals the formula to edit.
+                      placeholder={shownText || "—"}
+                      onFocus={(e) => { if (formula && !e.target.value) e.target.value = formula; }}
+                      onBlur={(e) => {
+                        const text = e.target.value;
+                        if (formula && text === formula) { e.target.value = ""; return; }
+                        if (formula && text === "") return;
+                        const next = inputToCell(col, text, data.shape, raw);
+                        if (!sameCell(raw, next)) onSet(row.id, col.id, next);
+                        if (formula) e.target.value = "";
+                      }}
+                      className={cn("min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary",
+                        formula && "placeholder:text-primary")}
+                    />
+                  )}
+                </label>
+              );
+            })}
           </div>
         </div>
       ))}
+      {shown < sheet.rows.length && <div ref={sentinel} className="h-10" aria-hidden />}
     </div>
   );
 }

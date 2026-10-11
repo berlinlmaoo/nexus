@@ -54,8 +54,8 @@ export function CellCommentThread({
   /** A stored value as a person reads it: formulas as their A1 form, empty as an explicit label. */
   const show = (v: unknown) => {
     if (v === null || v === undefined || v === "") return "(kosong)";
-    if (isFormulaCell(v)) return `=${toDisplay(v.f, shape)}`;
-    return formatCell(columnType, v as NexusSheetCellValue) || String(v);
+    if (isFormulaCell(v)) { const f = toDisplay(v.f, shape); return f.startsWith("=") ? f : `=${f}`; }
+    return formatCell(columnType, v) || (typeof v === "object" ? "" : String(v));
   };
   const when = (iso: string) =>
     new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
