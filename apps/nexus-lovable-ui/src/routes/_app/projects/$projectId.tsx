@@ -215,7 +215,7 @@ function ProjectDetail() {
       <PageHeader
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || "Mission Board"}
-        subtitle={data?.description || (project.isLoading ? "Loading live NEXUS board..." : "Project detail board needs login/session or access.")}
+        subtitle={data?.description || (project.isLoading ? tr("Loading…") : project.isError ? tr("Couldn't open this project. You may not be a member.") : undefined)}
         actions={
           <>
             {data && <ProjectMembersAvatars project={data} />}
@@ -1899,6 +1899,7 @@ function DocDrawer({ doc, projectId, onClose }: { doc: NexusDoc; projectId: stri
 
 
 function SprintsView({ project, tasks, onOpenTask }: { project: NexusProject; tasks: NexusTask[]; onOpenTask: (task: NexusTask) => void }) {
+  const { t } = useLang();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState(toDateInput(new Date().toISOString()));
@@ -1953,7 +1954,7 @@ function SprintsView({ project, tasks, onOpenTask }: { project: NexusProject; ta
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary"><Target className="h-3.5 w-3.5" /> Sprint Arena</div>
             <h2 className="mt-3 text-2xl font-black tracking-tight">Run the mission in cycles.</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Live from `/api/sprints`: create cycles, start/complete them, and attach cards from this board.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("Group tasks into a time-boxed cycle, start it, then close it when the work ships.")}</p>
             <div className="mt-4 grid grid-cols-3 gap-2 max-w-xl">
               <SprintMetric label="Active" value={activeSprint ? "1" : "0"} />
               <SprintMetric label="Planning" value={String(plannedSprints)} />

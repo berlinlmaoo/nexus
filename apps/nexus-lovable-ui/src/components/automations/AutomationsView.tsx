@@ -1,3 +1,4 @@
+import { useLang } from "@/lib/lang";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Loader2, Plus, Sparkles, Trash2, Zap } from "lucide-react";
@@ -24,6 +25,7 @@ function ruleLabel(rule?: NexusAutomationRule | null) {
 }
 
 export function AutomationsView({ projectId }: { projectId: string }) {
+  const { t } = useLang();
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   const list = useQuery({ queryKey: ["nexus", "automations", projectId], queryFn: () => nexusApi.automations(projectId), retry: false });
@@ -45,7 +47,7 @@ export function AutomationsView({ projectId }: { projectId: string }) {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary"><Zap className="h-3.5 w-3.5" /> Automation rules</div>
           <h2 className="mt-2 font-display text-xl font-bold tracking-tight">When this happens, do that.</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Live from /api/automations — triggers fire actions on your board.</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("Rules that act on their own: when something happens on the board, NEXUS does the next step.")}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => suggest.mutate()} disabled={suggest.isPending} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">{suggest.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-primary" />} Suggest</button>

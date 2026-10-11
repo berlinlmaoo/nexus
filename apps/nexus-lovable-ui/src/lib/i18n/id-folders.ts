@@ -62,4 +62,7 @@ export const ID_FOLDERS: Record<string, string> = {
   "Docs and notes for the project": "Dokumen dan catatan project",
   "Collect requests as tasks": "Kumpulkan permintaan jadi task",
   "The project's group chat": "Grup chat project",
+  "Couldn't open this project. You may not be a member.": "Project ini nggak bisa dibuka. Mungkin kamu belum jadi anggota.",
+  "Group tasks into a time-boxed cycle, start it, then close it when the work ships.": "Kelompokkan task ke satu siklus waktu, mulai, lalu tutup saat kerjaannya beres.",
+  "Rules that act on their own: when something happens on the board, NEXUS does the next step.": "Aturan yang jalan sendiri: kalau ada kejadian di board, NEXUS kerjain langkah berikutnya.",
 };
