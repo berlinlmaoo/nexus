@@ -94,7 +94,7 @@ export async function summarizeReflectionDay(recordId: string): Promise<void> {
       `Reflection:`,
       text.slice(0, 4000),
     ].join("\n")
-    const summary = await askGideon({ prompt, user: rec.user?.name || "", actorEmail: rec.user?.email || rec.userId, tag: `reflection-day ${date}` })
+    const summary = await askGideon({ prompt, user: rec.user?.name || "", actorEmail: rec.user?.email || rec.userId, tag: `reflection-day ${date}`, trigger: "REFLECTION", touchesAttendance: true })
     if (!summary) return
     await prisma.reflectionSummary.upsert({
       where: { userId_kind_periodKey: { userId: rec.userId, kind: DAY_KIND, periodKey: date } },
@@ -142,7 +142,7 @@ export async function summarizeReflectionMonth(
     ``,
     body,
   ].join("\n")
-  const summary = await askGideon({ prompt, user: user?.name || "", actorEmail: user?.email || userId, tag: `reflection-month ${monthKey}` })
+  const summary = await askGideon({ prompt, user: user?.name || "", actorEmail: user?.email || userId, tag: `reflection-month ${monthKey}`, trigger: "REFLECTION", touchesAttendance: true })
   if (!summary) {
     return existing
       ? { monthly: { summary: existing.summary, sourceDays: existing.sourceDays, updatedAt: existing.updatedAt.toISOString() }, cached: true, sourceDays: days.length }

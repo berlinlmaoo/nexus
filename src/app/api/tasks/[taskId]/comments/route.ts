@@ -9,6 +9,7 @@ import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitCommentAdded } from "@/lib/socket-emitter"
 import { checkProjectAccess } from "@/lib/rbac"
+import { answerGideonMention, mentionsGideon } from "@/lib/gideon-triggers"
 
 export async function GET(
   _request: NextRequest,
@@ -203,6 +204,10 @@ export async function POST(
 
     // Real-time: broadcast to project room
     emitCommentAdded(task.taskList.projectId, (await params).taskId, JSON.parse(JSON.stringify(comment)))
+
+    // @GIDEON (12 Oct 2026): GIDEON answers in this thread, as the person who asked. In the background:
+    // the comment is saved and shown now; the answer arrives as its own comment (realtime) when ready.
+    if (mentionsGideon(content)) void answerGideonMention(comment.id)
 
     return NextResponse.json(comment, { status: 201 })
   } catch (error) {

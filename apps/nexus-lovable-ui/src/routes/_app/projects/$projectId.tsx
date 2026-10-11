@@ -14,6 +14,9 @@ import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { AutomationsView } from "@/components/automations/AutomationsView";
+import { GideonMark } from "@/components/gideon/GideonMark";
+import { GideonProjectCard } from "@/components/gideon/GideonProjectCard";
+import { openGideon } from "@/lib/gideon";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
 import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
@@ -242,6 +245,8 @@ function ProjectDetail() {
         actions={
           <>
             {data && <ProjectMembersAvatars project={data} />}
+            {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
+            {data && <Button size="sm" variant="outline" onClick={() => openGideon({ projectId: data.id, projectName: data.name })}><GideonMark className="h-3.5 w-3.5" />{tr("Ask GIDEON")}</Button>}
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
               <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />Tune</Button>
             </motion.div>
@@ -347,7 +352,7 @@ function ProjectDetail() {
           )}
           {view === "calendar" && <CalendarView key={calendarDefault} projectId={data.id} defaultDateField={calendarDefault} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
-          {view === "automations" && <AutomationsView projectId={data.id} />}
+          {view === "automations" && <><GideonProjectCard projectId={data.id} projectName={data.name} /><AutomationsView projectId={data.id} /></>}
           {view === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
           {view === "forms" && <ProjectFormsView projectId={data.id} />}
           {view === "chat" && <ProjectChat projectId={data.id} />}

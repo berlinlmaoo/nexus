@@ -1,3 +1,4 @@
+import { GideonInsights } from "@/components/gideon/GideonInsights";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
@@ -227,7 +228,7 @@ function Admin() {
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
-        {view === "gideon" && canAnnounce && <GideonUsage />}
+        {view === "gideon" && canAnnounce && <GideonAdmin />}
         {view === "app" && canAnnounce && <AppInstalls />}
 
         {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">You need the system-admin role to view user management.</p></div>}
@@ -2126,6 +2127,22 @@ function AnnouncementsAdmin() {
  * showed the questions would change how people use it, and the ones who most need the help would
  * stop asking.
  */
+/** Control Room › GIDEON: Insights (every run, 12 Oct 2026) and People (who uses it, counts only). */
+function GideonAdmin() {
+  const { t } = useLang();
+  const [tab, setTab] = useState<"insights" | "people">("insights");
+  const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent");
+  return (
+    <div className="space-y-4">
+      <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+        <button type="button" className={btn(tab === "insights")} onClick={() => setTab("insights")}>{t("Insights")}</button>
+        <button type="button" className={btn(tab === "people")} onClick={() => setTab("people")}>{t("People")}</button>
+      </div>
+      {tab === "insights" ? <GideonInsights /> : <GideonUsage />}
+    </div>
+  );
+}
+
 function GideonUsage() {
   const q = useQuery({ queryKey: ["nexus", "gideon-usage"], queryFn: nexusApi.gideonUsage, retry: false });
   const users = q.data?.users ?? [];

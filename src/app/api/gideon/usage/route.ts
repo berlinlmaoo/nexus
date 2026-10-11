@@ -47,6 +47,7 @@ export async function GET() {
              u.avatar,
              COUNT(*) FILTER (WHERE g.role = 'user')      AS "asked",
              COUNT(*) FILTER (WHERE g.role = 'assistant') AS "answered",
+             -- Written since 12 Oct 2026 (the assistant turn stores the tools its run used); older rows are 0.
              COALESCE(SUM(CARDINALITY(g.tools)), 0)       AS "toolCalls",
              MIN(g."createdAt")                           AS "firstUsed",
              MAX(g."createdAt")                           AS "lastUsed"

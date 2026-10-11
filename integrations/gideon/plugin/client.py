@@ -43,6 +43,12 @@ def call_nexus(action: str, input_data: Optional[dict]) -> str:
     actor = os.getenv("NEXUS_GIDEON_ACTOR_EMAIL", "").strip()
     if actor:
         headers["x-gideon-actor"] = actor
+    # Per-run id (NEXUS GideonRun), injected by the shim beside the actor. NEXUS uses it to show this
+    # call as a step of the conversation that caused it, collect sources and cards, and to hold writes
+    # for approval when the person chose "Review before writing". Absent = behave exactly as before.
+    run_id = os.getenv("NEXUS_GIDEON_RUN_ID", "").strip()
+    if run_id:
+        headers["x-gideon-run"] = run_id
     request = urllib.request.Request(
         f"{_base_url()}/api/gideon/tools",
         data=payload,

@@ -44,6 +44,38 @@ const TIERS = {
   experimental: { model: "gideon-experimental", provider: "ollama-local", timeoutMs: 420000 },
 }
 const DEFAULT_TIER = "luna"
+
+// ── Instance knobs (12 Oct 2026). All optional: unset, the shim behaves exactly as before. ──────────
+// HERMES_PROFILE_HOME: run every Hermes child with this HERMES_HOME (a profile dir). The DEV instance
+//   points it at ~/.hermes/profiles/gideon-dev, whose .env aims the NEXUS plugin at the dev server and
+//   whose plugin copy has no attendance tools. Prod leaves it unset (default profile).
+// GIDEON_RUNNER: path to gideon-stream-runner.py. Enables POST /chat-stream (NDJSON, token by token).
+// GIDEON_PYTHON: the python that can import Hermes (the Hermes venv).
+// GIDEON_TOOLSETS: the toolsets the streaming runner may use. Explicit on purpose; default nexus,vision.
+// GIDEON_DOCS=0: refuse document attachments (the dev instance has no file toolset to read them with).
+const PROFILE_HOME = process.env.HERMES_PROFILE_HOME || ""
+const RUNNER = process.env.GIDEON_RUNNER || ""
+const PYTHON = process.env.GIDEON_PYTHON || path.join(os.homedir(), ".hermes", "hermes-agent", ".venv", "bin", "python")
+const STREAM_TOOLSETS = process.env.GIDEON_TOOLSETS || "nexus,vision"
+const DOCS_ENABLED = process.env.GIDEON_DOCS !== "0"
+const SHIM_NAME = process.env.GIDEON_SHIM_NAME || "hermes-chat"
+// A NEXUS GideonRun id (cuid). Forwarded to the plugin as NEXUS_GIDEON_RUN_ID, which sends it back to
+// /api/gideon/tools as x-gideon-run: that is how NEXUS ties each tool call (steps, sources, cards,
+// approval) to the conversation that caused it. Anything that does not look like an id is dropped.
+function cleanRunId(v) {
+  const s = String(v || "")
+  return /^[a-z0-9]{10,40}$/i.test(s) ? s : ""
+}
+function childEnv(actorEmail, runId) {
+  const env = { ...process.env }
+  if (PROFILE_HOME) env.HERMES_HOME = PROFILE_HOME
+  if (actorEmail) env.NEXUS_GIDEON_ACTOR_EMAIL = actorEmail
+  if (runId) env.NEXUS_GIDEON_RUN_ID = runId
+  else delete env.NEXUS_GIDEON_RUN_ID
+  // The shim's own secret has no business inside the agent's environment.
+  delete env.ORACLE_LLM_SECRET
+  return env
+}
 // Neutral, empty workdir so Codex has nothing to act on even if it tried.
 const WORKDIR = path.join(os.homedir(), ".hermes", "oracle-workdir")
 try { fs.mkdirSync(WORKDIR, { recursive: true }) } catch {}
@@ -164,10 +196,9 @@ function buildAttachedPrompt(prompt, imagePath, doc) {
 // Gideon chatbox → run the full Hermes agent one-shot (gpt-5.5 + live NEXUS tools). Slower (~30s).
 // actorEmail (the logged-in NEXUS user) is injected as NEXUS_GIDEON_ACTOR_EMAIL on THIS spawn only, so
 // the NEXUS plugin sends it as x-gideon-actor and the tools act as that user (role-scoped).
-function runHermes(prompt, actorEmail, tier, imagePath, doc) {
+function runHermes(prompt, actorEmail, tier, imagePath, doc, runId) {
   return new Promise((resolve) => {
-    const env = { ...process.env }
-    if (actorEmail) env.NEXUS_GIDEON_ACTOR_EMAIL = actorEmail
+    const env = childEnv(actorEmail, runId)
     // An unknown tier falls back rather than failing: a client sending a name this shim has not
     // learned yet should get an answer from the default, not an error.
     const chosen = TIERS[tier] || TIERS[DEFAULT_TIER]
@@ -188,10 +219,58 @@ function runHermes(prompt, actorEmail, tier, imagePath, doc) {
     child.on("close", () => {
       clearTimeout(timer)
       const reply = out.trim()
-      if (!reply) console.error("[hermes-chat] empty reply; err:", err.slice(-200).replace(/\n/g, " "))
+      if (!reply) console.error(`[${SHIM_NAME}] empty reply; err:`, err.slice(-200).replace(/\n/g, " "))
       resolve(reply)
     })
     child.on("error", (e) => { clearTimeout(timer); console.error("[hermes-chat] spawn error", e.message); resolve("") })
+  })
+}
+
+// The streaming twin of runHermes: gideon-stream-runner.py prints NDJSON lines (delta / reset / tool /
+// final / error) and each line is passed straight through to NEXUS as it arrives. The prompt goes in on
+// stdin, never argv. A run that times out is killed and reported as an error line, so the caller always
+// sees an end to the stream.
+function runHermesStream(prompt, actorEmail, tier, imagePath, res, runId) {
+  return new Promise((resolve) => {
+    const env = childEnv(actorEmail, runId)
+    const chosen = TIERS[tier] || TIERS[DEFAULT_TIER]
+    const { model, provider, timeoutMs } = chosen
+    const full = buildAttachedPrompt(prompt, imagePath, null)
+    const child = spawn(PYTHON, [RUNNER, "--model", model, "--provider", provider, "--toolsets", STREAM_TOOLSETS], { cwd: WORKDIR, env })
+    let err = "", sawFinal = false, outChars = 0, pending = ""
+    child.stdout.on("data", (d) => {
+      pending += d.toString()
+      let nl
+      while ((nl = pending.indexOf("\n")) >= 0) {
+        const line = pending.slice(0, nl).trim()
+        pending = pending.slice(nl + 1)
+        if (!line) continue
+        try {
+          const ev = JSON.parse(line)
+          if (ev.t === "final") { sawFinal = true; outChars = String(ev.c || "").length }
+        } catch { continue }
+        try { res.write(line + "\n") } catch {}
+      }
+    })
+    child.stderr.on("data", (d) => { err += d.toString(); if (err.length > 4000) err = err.slice(-2000) })
+    try { child.stdin.end(full) } catch {}
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL") } catch {}
+      try { res.write(JSON.stringify({ t: "error", c: "timeout" }) + "\n") } catch {}
+    }, timeoutMs)
+    // NEXUS hung up (user closed the panel): stop paying for an answer nobody will read.
+    res.on("close", () => { if (child.exitCode === null) { try { child.kill("SIGKILL") } catch {} } })
+    child.on("close", (code) => {
+      clearTimeout(timer)
+      if (!sawFinal) console.error(`[${SHIM_NAME}] stream ended without final (code ${code}); err:`, err.slice(-200).replace(/\n/g, " "))
+      resolve({ ok: sawFinal, outChars })
+    })
+    child.on("error", (e) => {
+      clearTimeout(timer)
+      console.error(`[${SHIM_NAME}] stream spawn error`, e.message)
+      try { res.write(JSON.stringify({ t: "error", c: "spawn failed" }) + "\n") } catch {}
+      resolve({ ok: false, outChars: 0 })
+    })
   })
 }
 
@@ -199,9 +278,11 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") { res.writeHead(200); return res.end("ok") }
   if (req.method !== "POST") { res.writeHead(404); return res.end("not found") }
   if (!SECRET || req.headers["x-oracle-secret"] !== SECRET) { res.writeHead(401); return res.end("unauthorized") }
-  const isChat = req.url.startsWith("/chat")
+  const isStream = req.url.startsWith("/chat-stream")
+  const isChat = req.url.startsWith("/chat") && !isStream
   const isInterpret = req.url.startsWith("/interpret")
-  if (!isChat && !isInterpret) { res.writeHead(404); return res.end("not found") }
+  if (!isChat && !isInterpret && !isStream) { res.writeHead(404); return res.end("not found") }
+  if (isStream && !RUNNER) { res.writeHead(404); return res.end("streaming not enabled on this shim") }
   let body = ""
   // 8 KB was right for a prompt and wrong the moment an image had to travel with it. NEXUS
   // downscales before sending, so this is a ceiling for the pathological case, not the normal one.
@@ -232,7 +313,12 @@ const server = http.createServer((req, res) => {
     // attachment produces a confident answer about nothing, which reads as GIDEON lying about a
     // file it never saw. Both refusals are decided BEFORE anything is written, so an early return
     // here cannot leave an orphaned attachment in the workdir.
+    const runId = cleanRunId(payload.runId)
     const hasDoc = typeof payload.documentBase64 === "string" && payload.documentBase64.length > 32
+    if (hasDoc && (!DOCS_ENABLED || isStream)) {
+      res.writeHead(415, { "Content-Type": "application/json" })
+      return res.end(JSON.stringify({ error: "documents_not_supported_here" }))
+    }
     const docExt = hasDoc ? pickDocExt(payload.documentName, payload.documentType) : null
     if (hasDoc && !docExt) {
       res.writeHead(415, { "Content-Type": "application/json" })
@@ -279,17 +365,28 @@ const server = http.createServer((req, res) => {
     }
 
     const started = Date.now()
+    if (isStream) {
+      res.writeHead(200, { "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" })
+      let r = { ok: false, outChars: 0 }
+      try {
+        r = await runHermesStream(prompt, actorEmail, chosen, imagePath, res, runId)
+      } finally {
+        if (imagePath) { try { fs.unlinkSync(imagePath) } catch {} }
+      }
+      console.log(`[${SHIM_NAME}] stream ${chosen}${imagePath ? " +gambar" : ""} in=${prompt.length}c -> ${r.ok ? `out=${r.outChars}c` : "FAILED"} (${Date.now() - started}ms)`)
+      return res.end()
+    }
     let reply
     try {
-      reply = await runHermes(prompt, actorEmail, chosen, imagePath, doc)
+      reply = await runHermes(prompt, actorEmail, chosen, imagePath, doc, runId)
     } finally {
       if (imagePath) { try { fs.unlinkSync(imagePath) } catch {} }
       if (doc) { try { fs.unlinkSync(doc.path) } catch {} }
     }
-    console.log(`[hermes-chat] ${chosen}${imagePath ? " +gambar" : ""}${doc ? " +dokumen" : ""} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
+    console.log(`[${SHIM_NAME}] ${chosen}${imagePath ? " +gambar" : ""}${doc ? " +dokumen" : ""} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
     res.writeHead(200, { "Content-Type": "application/json" })
     return res.end(JSON.stringify({ reply }))
   })
 })
 
-server.listen(PORT, process.env.ORACLE_LLM_HOST || "127.0.0.1", () => console.log(`[oracle-shim] listening on 127.0.0.1:${PORT} (codex=${CODEX})`))
+server.listen(PORT, process.env.ORACLE_LLM_HOST || "127.0.0.1", () => console.log(`[${SHIM_NAME}] listening on ${process.env.ORACLE_LLM_HOST || "127.0.0.1"}:${PORT} (profile=${PROFILE_HOME || "default"}, stream=${RUNNER ? "on" : "off"}, docs=${DOCS_ENABLED ? "on" : "off"})`))

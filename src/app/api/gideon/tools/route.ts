@@ -22,7 +22,11 @@ import { BODY_MAX, isBodPlus } from '@/lib/complaints'
 import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import { runAutomations } from '@/lib/automation-engine'
+import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
+import {
+  cardFromResult, needsApproval, parseApprovalMode, proposalView, publishRunEvent, recordStep, refsFromResult,
+  resolveRunForToolCall, stepArg, stepLabel, type GideonDiffRow } from '@/lib/gideon-runs'
 
 type GideonAction =
   | 'list_projects'
@@ -38,6 +42,10 @@ type GideonAction =
   | 'propose_attendance_correction'
   | 'propose_penalty_cancellation'
   | 'resolve_ticket'
+  | 'get_task'
+  | 'search_docs'
+  | 'get_doc'
+  | 'create_document'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -384,7 +392,8 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
 /** Where a person can actually open what GIDEON wrote. */
 const PUBLIC_BASE = (process.env.NEXUS_PUBLIC_URL || 'https://nexus.znetworks.id').replace(/\/+$/, '')
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// RE-ENABLED 12 Oct 2026 (owner: GIDEON cards "for tasks/docs it creates"): project Pages are browsable
+// again (project → Pages tab, /docs/<id>), so a doc GIDEON writes has somewhere to be opened from.
 async function createDocument(actor: User, input: Record<string, unknown>) {
   const projectId = String(input.projectId ?? '').trim()
   const title = String(input.title ?? '').trim()
@@ -1096,6 +1105,8 @@ async function createTask(actor: User, input: Record<string, unknown>) {
   runAutomations({ kind: 'task_created', projectId: taskList.projectId, actorId: actor.id, taskId: task.id }).catch(() => {})
 
   const verified = await prisma.task.findUnique({ where: { id: task.id }, include: taskInclude })
+  // Realtime (12 Oct 2026): a task GIDEON made appears on open boards like any other new task.
+  emitTaskCreated(taskList.projectId, JSON.parse(JSON.stringify(verified || task)))
   return serializeTask(verified || task)
 }
 
@@ -1192,6 +1203,7 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
     },
   }).catch(() => {})
 
+  emitTaskUpdated(existing.taskList.projectId, JSON.parse(JSON.stringify(verified)))
   return serializeTask(verified)
 }
 
@@ -1211,6 +1223,7 @@ async function addTaskComment(actor: User, input: Record<string, unknown>) {
     data: { taskId, userId: await getGideonUserId(), content: signed },
     select: { id: true, content: true, createdAt: true, user: { select: { id: true, name: true, email: true } } },
   })
+  emitCommentAdded(task.taskList.projectId, taskId, JSON.parse(JSON.stringify({ ...comment, taskId, parentId: null })))
 
   await prisma.activityLog.create({
     data: {
@@ -1234,6 +1247,58 @@ async function addTaskComment(actor: User, input: Record<string, unknown>) {
   return { task: serializeTask(task), comment }
 }
 
+/** The support-ticket tools (the requester's own attendance day, remedy proposals, closing a ticket). */
+const ATTENDANCE_ACTIONS = new Set(['get_attendance_day', 'propose_attendance_correction', 'propose_penalty_cancellation', 'resolve_ticket'])
+
+async function dispatch(actor: User, action: string, input: Record<string, unknown>): Promise<unknown> {
+  switch (action) {
+    case 'list_projects':
+      return listProjects(actor, input)
+    case 'list_members':
+      return listMembers(actor, input)
+    case 'list_tasks':
+      return listTasks(actor, input)
+    case 'search_tasks':
+      return searchTasks(actor, input)
+    case 'get_project_summary':
+      return getProjectSummary(actor, input)
+    case 'list_custom_fields':
+      return listCustomFields(actor, input)
+    case 'get_task':
+      return getTaskDetail(actor, input)
+    case 'search_docs':
+      return searchDocs(actor, input)
+    case 'get_doc':
+      return getDoc(actor, input)
+    case 'create_task':
+      return createTask(actor, input)
+    case 'update_task':
+      return updateTask(actor, input)
+    case 'add_task_comment':
+      return addTaskComment(actor, input)
+    case 'create_document':
+      return createDocument(actor, input)
+    case 'get_attendance_day':
+      return getAttendanceDay(actor, input)
+    case 'propose_attendance_correction':
+      return proposeAttendanceCorrection(actor, input, undefined, { enforceTicketDate: true })
+    // The second remedy. Still a proposal: it writes an AttendanceCorrection row and a thread
+    // message, and no XP moves until a BoD taps approve. There is no tool action here that applies
+    // one, by design and not by omission.
+    case 'propose_penalty_cancellation':
+      return proposeAttendancePenaltyCancellation(actor, input, undefined, { enforceTicketDate: true })
+    // Menutup tiket yang memang sudah tidak menyisakan apa pun. SERVER yang membuktikan itu (lihat
+    // resolveTicketByGideon); model hanya boleh memintanya. Tiket yang masih punya potongan, jatah
+    // day-off terpotong, atau usulan yang menunggu, ditolak di sini apa pun kata modelnya.
+    case 'resolve_ticket':
+      return resolveTicketByGideon(actor, input)
+    default:
+      throw new UnknownActionError(`Unknown GIDEON tool action: ${action}`)
+  }
+}
+
+class UnknownActionError extends Error {}
+
 export async function POST(req: Request) {
   const auth = await authenticateGideonService(req)
   if (!auth.ok) return auth.response
@@ -1246,48 +1311,266 @@ export async function POST(req: Request) {
   }
 
   const input = body.input && typeof body.input === 'object' && !Array.isArray(body.input) ? body.input : {}
+  const action = String(body.action ?? '')
+
+  // A server that must never hand GIDEON attendance (the DEV server, 12 Oct 2026) refuses those tools
+  // here too, on top of its plugin not registering them.
+  if (ATTENDANCE_ACTIONS.has(action) && process.env.NEXUS_GIDEON_NO_ATTENDANCE === '1') {
+    return error('Attendance tools are not available on this server', 403)
+  }
+
+  // Applying a write the person approved (POST /api/gideon/proposals/[id]): the proposal decides what
+  // runs, not this body, and only for the person it was proposed to.
+  const approvedId = req.headers.get('x-gideon-approved')
+  if (approvedId) {
+    const proposal = await prisma.gideonProposal.findUnique({ where: { id: approvedId } })
+    if (!proposal || proposal.status !== 'APPLYING' || proposal.userId !== auth.actor.id) return error('Proposal is not being applied', 409)
+    try {
+      return ok(await dispatch(auth.actor, proposal.action, (proposal.input as Record<string, unknown>) ?? {}))
+    } catch (err) {
+      return error(err instanceof Error ? err.message : 'NEXUS GIDEON tool failed', 400)
+    }
+  }
+
+  // Which conversation this call belongs to (steps, sources, cards, approval). No run = exactly the
+  // behaviour every caller had before 12 Oct 2026.
+  const run = await resolveRunForToolCall(req.headers.get('x-gideon-run'), auth.actor.id).catch(() => null)
+  if (!run) {
+    try {
+      return ok(await dispatch(auth.actor, action, input))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'NEXUS GIDEON tool failed'
+      return error(message, 400)
+    }
+  }
+
+  const arg = await stepArg(action, input)
+  const stepId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+  const label = stepLabel(action, arg)
+  publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'running' } })
+  const started = Date.now()
 
   try {
-    switch (body.action) {
-      case 'list_projects':
-        return ok(await listProjects(auth.actor, input))
-      case 'list_members':
-        return ok(await listMembers(auth.actor, input))
-      case 'list_tasks':
-        return ok(await listTasks(auth.actor, input))
-      case 'search_tasks':
-        return ok(await searchTasks(auth.actor, input))
-      case 'get_project_summary':
-        return ok(await getProjectSummary(auth.actor, input))
-      case 'list_custom_fields':
-        return ok(await listCustomFields(auth.actor, input))
-      case 'create_task':
-        return ok(await createTask(auth.actor, input))
-      case 'update_task':
-        return ok(await updateTask(auth.actor, input))
-      case 'add_task_comment':
-        return ok(await addTaskComment(auth.actor, input))
-      case 'get_attendance_day':
-        return ok(await getAttendanceDay(auth.actor, input))
-      case 'propose_attendance_correction':
-        return ok(await proposeAttendanceCorrection(auth.actor, input, undefined, { enforceTicketDate: true }))
-      // The second remedy. Still a proposal: it writes an AttendanceCorrection row and a thread
-      // message, and no XP moves until a BoD taps approve. There is no tool action here that applies
-      // one, by design and not by omission.
-      case 'propose_penalty_cancellation':
-        return ok(await proposeAttendancePenaltyCancellation(auth.actor, input, undefined, { enforceTicketDate: true }))
-      // Menutup tiket yang memang sudah tidak menyisakan apa pun. SERVER yang membuktikan itu (lihat
-      // resolveTicketByGideon); model hanya boleh memintanya. Tiket yang masih punya potongan, jatah
-      // day-off terpotong, atau usulan yang menunggu, ditolak di sini apa pun kata modelnya.
-      case 'resolve_ticket':
-        return ok(await resolveTicketByGideon(auth.actor, input))
-      default:
-        return error(`Unknown GIDEON tool action: ${body.action}`)
+    if (needsApproval(parseApprovalMode(run.approvalMode) ?? 'dont_ask', action, input, auth.actor.id)) {
+      const proposal = await proposeWrite(auth.actor, run.id, action, input)
+      publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
+      publishRunEvent(run.id, { type: 'proposal', proposal: proposalView(proposal) })
+      await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started })
+      return ok({
+        proposed: true,
+        proposalId: proposal.id,
+        status: 'PENDING',
+        summary: proposal.summary,
+        note: 'NOT applied yet. It is waiting for the person to approve it in NEXUS; tell them so, do not say it is done.',
+      })
     }
+
+    const data = await dispatch(auth.actor, action, input)
+    const refs = refsFromResult(action, data)
+    const card = cardFromResult(action, data)
+    publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'done' } })
+    if (refs.length) publishRunEvent(run.id, { type: 'sources', sources: refs })
+    if (card) publishRunEvent(run.id, { type: 'card', card })
+    await recordStep(run.id, { tool: action, arg, ok: true, durationMs: Date.now() - started, refs, card })
+    return ok(data)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'NEXUS GIDEON tool failed'
+    publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'error', error: message.slice(0, 200) } })
+    await recordStep(run.id, { tool: action, arg, ok: false, error: message, durationMs: Date.now() - started })
     return error(message, 400)
   }
+}
+
+// ── Reads added 12 Oct 2026 (sources / citations) ─────────────────────────────────────────────────────
+
+async function getTaskDetail(actor: User, input: Record<string, unknown>) {
+  const taskId = asString(input.taskId)
+  if (!taskId) throw new Error('taskId is required')
+  const task = await getAccessibleTask(actor, taskId)
+  const comments = await prisma.comment.findMany({
+    where: { taskId },
+    orderBy: { createdAt: 'desc' },
+    take: 15,
+    select: { id: true, content: true, createdAt: true, parentId: true, user: { select: { name: true } } },
+  })
+  return {
+    ...serializeTask(task),
+    description: task.description ? String(task.description).slice(0, 4000) : null,
+    url: `${PUBLIC_BASE}/tasks/${task.id}`,
+    comments: comments.reverse().map((c) => ({ id: c.id, by: c.user?.name ?? null, at: c.createdAt, replyTo: c.parentId, text: c.content.slice(0, 600) })),
+  }
+}
+
+function docProjectScope(actor: Pick<User, 'id' | 'role'>): Prisma.DocWhereInput {
+  if (actor.role === 'ADMIN') return {}
+  return {
+    project: {
+      OR: [
+        { members: { some: { userId: actor.id } } },
+        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+      ],
+    },
+  }
+}
+
+async function searchDocs(actor: User, input: Record<string, unknown>) {
+  const query = asString(input.query)
+  if (!query) throw new Error('query is required')
+  const projectId = asString(input.projectId)
+  const docs = await prisma.doc.findMany({
+    where: {
+      ...docProjectScope(actor),
+      ...(projectId ? { projectId } : {}),
+      OR: [
+        { title: { contains: query, mode: 'insensitive' } },
+        { contentText: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: asLimit(input.limit, 10),
+    select: { id: true, title: true, projectId: true, updatedAt: true, contentText: true, project: { select: { name: true } } },
+  })
+  return docs.map((d) => ({
+    id: d.id,
+    title: d.title,
+    projectId: d.projectId,
+    project: d.project?.name ?? null,
+    updatedAt: d.updatedAt,
+    excerpt: (d.contentText ?? '').replace(/\s+/g, ' ').slice(0, 280),
+    url: `${PUBLIC_BASE}/docs/${d.id}`,
+  }))
+}
+
+async function getDoc(actor: User, input: Record<string, unknown>) {
+  const docId = asString(input.docId)
+  if (!docId) throw new Error('docId is required')
+  const doc = await prisma.doc.findFirst({
+    where: { id: docId, ...docProjectScope(actor) },
+    select: { id: true, title: true, projectId: true, updatedAt: true, contentText: true, project: { select: { name: true } } },
+  })
+  if (!doc) throw new Error('Doc not found or not accessible')
+  return {
+    id: doc.id,
+    title: doc.title,
+    projectId: doc.projectId,
+    project: doc.project?.name ?? null,
+    updatedAt: doc.updatedAt,
+    text: (doc.contentText ?? '').slice(0, 12000),
+    url: `${PUBLIC_BASE}/docs/${doc.id}`,
+  }
+}
+
+// ── Approval mode: a write held as a proposal (12 Oct 2026) ───────────────────────────────────────────
+
+const STATUS_WORD: Record<string, string> = { TODO: 'To do', IN_PROGRESS: 'In progress', IN_REVIEW: 'In review', DONE: 'Done', CANCELLED: 'Cancelled' }
+const fmtDate = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
+
+async function userNames(ids: string[]): Promise<string> {
+  if (!ids.length) return '—'
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+  return ids.map((id) => users.find((u) => u.id === id)?.name ?? '?').join(', ')
+}
+
+/**
+ * Check the write exactly as far as it can be checked without making it (access, the task and list it
+ * names), describe it as a diff, and store it. Applying it later re-runs the real action as the same
+ * person, so a permission lost in between still refuses.
+ */
+async function proposeWrite(actor: User, runId: string, action: string, input: Record<string, unknown>) {
+  let summary = ''
+  const diff: GideonDiffRow[] = []
+  let projectId: string | null = null
+  let taskId: string | null = null
+
+  if (action === 'create_task') {
+    const title = asString(input.title)
+    if (!title) throw new Error('title is required')
+    const status = asTaskStatus(input.status) || 'TODO'
+    const taskList = await resolveTaskList(actor, input, status)
+    await assertCanWrite(actor, taskList.projectId)
+    projectId = taskList.projectId
+    summary = `Create task “${title}” in ${taskList.project.name}`
+    diff.push({ field: 'Title', to: title }, { field: 'Section', to: taskList.name }, { field: 'Status', to: STATUS_WORD[status] ?? status })
+    const priority = asTaskPriority(input.priority)
+    if (priority) diff.push({ field: 'Priority', to: priority })
+    const due = asDate(input.dueDate)
+    if (due) diff.push({ field: 'Due', to: fmtDate(due) })
+    const assignees = asStringArray(input.assigneeIds)
+    if (assignees?.length) diff.push({ field: 'Assignees', to: await userNames(assignees) })
+    const description = asString(input.description)
+    if (description) diff.push({ field: 'Description', to: description.slice(0, 300) })
+  } else if (action === 'update_task') {
+    const id = asString(input.taskId)
+    if (!id) throw new Error('taskId is required')
+    const existing = await getAccessibleTask(actor, id)
+    await assertCanWrite(actor, existing.taskList.projectId)
+    projectId = existing.taskList.projectId
+    taskId = existing.id
+    summary = `Update task “${existing.title}”`
+    const title = asString(input.title)
+    if (title && title !== existing.title) diff.push({ field: 'Title', from: existing.title, to: title })
+    const status = asTaskStatus(input.status)
+    if (status && status !== existing.status) diff.push({ field: 'Status', from: STATUS_WORD[existing.status] ?? existing.status, to: STATUS_WORD[status] ?? status })
+    const priority = asTaskPriority(input.priority)
+    if (priority && priority !== existing.priority) diff.push({ field: 'Priority', from: existing.priority, to: priority })
+    const due = asDate(input.dueDate)
+    if (due !== undefined && fmtDate(due) !== fmtDate(existing.dueDate)) diff.push({ field: 'Due', from: fmtDate(existing.dueDate) ?? '—', to: fmtDate(due) ?? '—' })
+    const listId = asString(input.taskListId)
+    if (listId && listId !== existing.taskListId) {
+      const target = await resolveTaskList(actor, { taskListId: listId })
+      diff.push({ field: 'Section', from: existing.taskList.name, to: target.name })
+    }
+    const assignees = asStringArray(input.assigneeIds)
+    if (assignees !== undefined) {
+      const before = existing.assignees.map((a: { user: { id: string } }) => a.user.id)
+      if (before.slice().sort().join() !== assignees.slice().sort().join()) diff.push({ field: 'Assignees', from: await userNames(before), to: await userNames(assignees) })
+    }
+    if (input.description === null || asString(input.description) !== undefined) {
+      const next = input.description === null ? '' : String(input.description)
+      if (next !== (existing.description ?? '')) diff.push({ field: 'Description', from: (existing.description ?? '').slice(0, 200) || '—', to: next.slice(0, 300) || '—' })
+    }
+    const cf = await resolveCustomFieldUpdates(actor, existing.taskList.projectId, input)
+    if (cf.length) diff.push({ field: 'Custom fields', to: `${cf.length} change${cf.length === 1 ? '' : 's'}` })
+    if (!diff.length) throw new Error('Nothing would change on this task')
+  } else if (action === 'add_task_comment') {
+    const id = asString(input.taskId)
+    const content = asString(input.content)
+    if (!id) throw new Error('taskId is required')
+    if (!content) throw new Error('content is required')
+    const task = await getAccessibleTask(actor, id)
+    await assertCanWrite(actor, task.taskList.projectId)
+    projectId = task.taskList.projectId
+    taskId = task.id
+    summary = `Comment on “${task.title}”`
+    diff.push({ field: 'Comment', to: content.slice(0, 600) })
+  } else if (action === 'create_document') {
+    const pid = String(input.projectId ?? '').trim()
+    const title = String(input.title ?? '').trim()
+    const markdown = String(input.markdown ?? input.content ?? '')
+    if (!pid) throw new Error('projectId is required')
+    if (!title) throw new Error('title is required')
+    if (!markdown.trim()) throw new Error('markdown is required')
+    const project = await getAccessibleProject(actor, pid)
+    await assertCanWrite(actor, pid)
+    projectId = pid
+    summary = `Write doc “${title}” in ${project.name}`
+    diff.push({ field: 'Title', to: title }, { field: 'Body', to: markdown.slice(0, 400) })
+  } else {
+    throw new Error(`${action} cannot be proposed`)
+  }
+
+  return prisma.gideonProposal.create({
+    data: {
+      runId,
+      userId: actor.id,
+      action,
+      input: input as Prisma.InputJsonValue,
+      summary: summary.slice(0, 300),
+      diff: diff as unknown as Prisma.InputJsonValue,
+      projectId,
+      taskId,
+    },
+  })
 }
 
 /**

@@ -1,4 +1,5 @@
 import path from "path"
+import { finishRun, startRun } from "@/lib/gideon-runs"
 import { readFile } from "fs/promises"
 import sharp from "sharp"
 import prisma from "@/lib/prisma"
@@ -402,7 +403,13 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
   const url = process.env.GIDEON_CHAT_URL
   const secret = process.env.ORACLE_LLM_SECRET || ""
   if (!url) return
+  // Tickets are about attendance. A server where GIDEON must never see attendance (the dev server,
+  // NEXUS_GIDEON_NO_ATTENDANCE=1) does not send them at all.
+  if (process.env.NEXUS_GIDEON_NO_ATTENDANCE === "1") return
 
+  let runId: string | null = null
+  let runOk = false
+  let runError: string | null = null
   try {
     const complaint = await prisma.complaint.findUnique({
       where: { id: complaintId },
@@ -430,6 +437,15 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       if (lastGideon && Date.now() - lastGideon.createdAt.getTime() < 60_000) return
     }
 
+    // Logged like every other GIDEON run (Insights), so a review that fails is visible there and not
+    // only in console.error.
+    runId = await startRun({
+      userId: complaint.reporter?.id ?? null,
+      trigger: "TICKET",
+      approvalMode: "dont_ask",
+      tier: "luna",
+      title: `Ticket · ${category}`,
+    })
     const imageBase64 = await loadEvidence(complaint.evidenceUrl)
     const prompt = buildPrompt({
       complaintId: complaint.id,
@@ -463,12 +479,14 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
         user: complaint.reporter?.name || "",
         // As the reporter — GIDEON must not see further than the person who filed the ticket.
         actorEmail: complaint.reporter?.email || complaint.reporter?.id || "",
+        ...(runId ? { runId } : {}),
         ...(imageBase64 ? { imageBase64, imageType: "jpg" } : {}),
       }),
       signal: AbortSignal.timeout(280000),
     })
     if (!res.ok) {
       console.error("gideon-ticket: shim refused", { complaintId, status: res.status })
+      runError = `shim ${res.status}`
       return
     }
     const reply = ((await res.json()) as { reply?: string }).reply?.trim()
@@ -478,8 +496,10 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       // GIDEON mati berhari-hari tanpa satu baris pun yang menyebutnya. Kalimatnya sengaja mudah
       // di-grep: "gideon-ticket: balasan kosong".
       console.error("gideon-ticket: balasan kosong dari shim — agen Hermes kemungkinan gagal (cek journal gideon-shim di VM agents)", { complaintId, category })
+      runError = "empty reply"
       return
     }
+    runOk = true
 
     // Posted under GIDEON's own name, on the reviewer side of the thread — it is answering the
     // reporter, not speaking as them.
@@ -520,5 +540,8 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
     }
   } catch (error) {
     console.error("gideon-ticket: review failed", { complaintId, error })
+    runError = error instanceof Error ? error.message : "review failed"
+  } finally {
+    if (runId) await finishRun(runId, { ok: runOk, error: runError })
   }
 }
