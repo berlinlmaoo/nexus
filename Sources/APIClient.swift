@@ -700,11 +700,15 @@ struct APIClient {
     /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
     /// No `icon` and no `color` (owner, 11 Oct 2026): the server gives a new project its defaults and
     /// the app draws the Tasks icon (ProjectMark) until someone adds a photo in Project settings.
-    func createProject(workspaceId: String, name: String, type: String = "TASK", folderId: String? = nil) async throws -> Bool {
+    /// `hiddenTabs` (Task Project only) and `memberIds` are sent only when there is something in them.
+    func createProject(workspaceId: String, name: String, type: String = "TASK", folderId: String? = nil,
+                       hiddenTabs: [String] = [], memberIds: [String] = []) async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "type": type]
         if let folderId { body["folderId"] = folderId }
+        if !hiddenTabs.isEmpty { body["hiddenTabs"] = hiddenTabs }
+        if !memberIds.isEmpty { body["memberIds"] = memberIds }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
         return true

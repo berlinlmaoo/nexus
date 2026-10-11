@@ -968,10 +968,15 @@ struct CreateProjectSheet: View {
     var folder: ProjectFolder? = nil
     let onCreated: () async -> Void
     @State private var viewer = Viewer.shared
+    @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     /// Step one (owner, 9 Oct 2026): what the project is for. nil = the type cards are showing.
     @State private var kind: ProjectKind?
     @State private var name = ""
+    /// Tabs the new Task Project starts without (owner, 11 Oct 2026). Empty = every tab on.
+    @State private var hiddenTabs: Set<String> = []
+    /// People added to the new project from the start, any type (owner, 11 Oct 2026).
+    @State private var memberIds: Set<String> = []
     @State private var busy = false
     @State private var err: String?
 
@@ -993,6 +998,12 @@ struct CreateProjectSheet: View {
                         // No icon and no colour field (owner, 11 Oct 2026): every project is drawn with
                         // the Tasks icon (ProjectMark), the server picks the default colour, and a photo
                         // can be added later in Project settings.
+                        if kind == .task {
+                            field(T("Tabs")) { NewProjectTabsPicker(hiddenTabs: $hiddenTabs) }
+                        }
+                        field(T("Members")) {
+                            NewProjectMembersPicker(picked: $memberIds, selfUserId: auth.session?.userId)
+                        }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
                             // An outlet opens straight away (web: "Create project + open dashboard").
@@ -1088,7 +1099,8 @@ struct CreateProjectSheet: View {
             if kind == .pipeline {
                 // A new, empty board every time (owner, 11 Oct 2026: the one-company-board rule is gone),
                 // opened straight away like an outlet.
-                let made = try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed)
+                let made = try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed,
+                                                                          memberIds: Array(memberIds))
                 await onCreated()
                 dismiss()
                 onOpenProject(made)
@@ -1097,14 +1109,18 @@ struct CreateProjectSheet: View {
                 // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
                 // Overview once the list knows it.
                 let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed,
-                                                                          folderId: folder?.id)
+                                                                          folderId: folder?.id, memberIds: Array(memberIds))
                 await onCreated()
                 dismiss()
                 onOpenProject(made)
                 return
             } else {
+                let type = kind ?? .task
+                // Starting tabs are a Task Project thing; the server refuses them on any other type.
                 try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed,
-                                                        type: (kind ?? .task).rawValue, folderId: folder?.id)
+                                                        type: type.rawValue, folderId: folder?.id,
+                                                        hiddenTabs: type == .task ? hiddenTabs.sorted() : [],
+                                                        memberIds: Array(memberIds))
             }
             await onCreated()
             dismiss()

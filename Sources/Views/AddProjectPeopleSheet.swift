@@ -68,7 +68,7 @@ struct AddProjectPeopleSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(T("Add")) { Task { await add() } }.disabled(picked.isEmpty || busy)
+                    Button(addPeopleTitle(picked.count)) { Task { await add() } }.disabled(picked.isEmpty || busy)
                 }
             }
             .task { await load() }
@@ -157,18 +157,15 @@ struct AddProjectPeopleSheet: View {
         defer { busy = false }
         switch target {
         case .project(let projectId):
-            // One call per person: the project endpoint takes a single userId, and a partial
-            // success here is real — some may already be members, or the caller may lack rights.
-            var failed: [String] = []
-            for uid in picked {
-                do { try await APIClient.shared.addProjectMember(projectId: projectId, userId: uid) }
-                catch { failed.append(uid) }
-            }
-            if failed.isEmpty {
+            // One call for everyone (`{ userIds }`); people already in are skipped by the server, not
+            // an error.
+            do {
+                _ = try await APIClient.shared.addProjectMembers(projectId: projectId, userIds: Array(picked))
                 onAdded()
                 dismiss()
-            } else {
-                error = T("Couldn't add everyone. Some people were left out.")
+            } catch {
+                self.error = (error as? LocalizedError)?.errorDescription
+                    ?? T("Couldn't add everyone. Some people were left out.")
             }
 
         case .group(let conversationId):

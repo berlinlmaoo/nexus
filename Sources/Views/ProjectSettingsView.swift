@@ -409,14 +409,6 @@ struct ProjectSettingsView: View {
     private func deleteField(_ f: CustomField) async {
         busy = true; try? await APIClient.shared.deleteCustomFieldDef(id: f.id); await reloadFields(); busy = false
     }
-    private func addMember(_ r: WorkspaceRoster.Member) async {
-        guard let uid = r.userId ?? (r.idv.isEmpty ? nil : r.idv) else { return }
-        busy = true
-        if (try? await APIClient.shared.addProjectMember(projectId: projectId, userId: uid)) != nil {
-            projectMembers.append(.init(userId: uid, user: .init(id: uid, name: r.displayName, avatar: r.avatarURL)))
-        }
-        busy = false; await onChange()
-    }
     private func membersAdded(_ added: [ProjectDetail.ProjectMember]) async {
         let known = Set(projectMembers.map(\.uid))
         projectMembers.append(contentsOf: added.filter { !known.contains($0.uid) })

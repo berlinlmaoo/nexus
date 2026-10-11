@@ -37,10 +37,6 @@ struct AddProjectMembersSheet: View {
         }
     }
 
-    private var addTitle: String {
-        picked.isEmpty ? T("Add") : String(format: T("Add (%d)"), picked.count)
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
@@ -57,14 +53,21 @@ struct AddProjectMembersSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(T("Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if adding {
-                        ProgressView()
-                    } else {
-                        Button(addTitle) { Task { await add() } }
-                            .fontWeight(.bold)
-                            .disabled(picked.isEmpty)
+            }
+            // One button for everyone picked (owner, 11 Oct 2026): "Add N people", no further step.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !candidates.isEmpty {
+                    Button { Task { await add() } } label: {
+                        HStack(spacing: 8) {
+                            if adding { ProgressView().tint(.white) }
+                            Text(addPeopleTitle(picked.count))
+                        }
+                        .font(NXFont.text(15, .bold))
                     }
+                    .buttonStyle(NexusPrimaryButton())
+                    .disabled(picked.isEmpty || adding)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(NX.background)
                 }
             }
             .interactiveDismissDisabled(adding)
@@ -178,4 +181,6 @@ struct AddProjectMembersSheet: View {
 struct AddProjectMembersResult: Decodable, Sendable {
     let added: [ProjectDetail.ProjectMember]?
     let alreadyMembers: [String]?
+    /// Ids that are not people of this workspace; skipped, not an error (servers from 11 Oct 2026).
+    let unknown: [String]?
 }

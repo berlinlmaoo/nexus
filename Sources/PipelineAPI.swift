@@ -136,10 +136,12 @@ extension APIClient {
     /// New project → Pipeline Dashboard: a new, empty board each time (owner, 11 Oct 2026 — there is no
     /// longer one board for the whole company). A refusal (e.g. outside the company workspace) comes back
     /// as the server's own sentence.
-    func pipelineBoardCreate(workspaceId: String, name: String) async throws -> ProjectRef {
+    func pipelineBoardCreate(workspaceId: String, name: String, memberIds: [String] = []) async throws -> ProjectRef {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "type": "PIPELINE"])
+        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "type": "PIPELINE"]
+        if !memberIds.isEmpty { body["memberIds"] = memberIds }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let made = try await pipelineRun(req, as: OutletCreatedProject.self)
         return ProjectRef(id: made.id, name: made.name ?? name, icon: nil)
     }

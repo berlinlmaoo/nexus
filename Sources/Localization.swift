@@ -2842,7 +2842,6 @@ final class AppLanguage {
         "Type the amount as a number.": "Tulis jumlahnya sebagai angka.",
         // Project settings → Add members: searchable multi-select (owner, 9 Oct)
         "Add members": "Tambah member",
-        "Add (%d)": "Tambah (%d)",
         "Search by name or email": "Cari nama atau email",
         "Pick one or more people": "Pilih satu orang atau lebih",
         "Everyone is already in this project.": "Semua orang sudah ada di project ini.",
@@ -2985,6 +2984,13 @@ final class AppLanguage {
         "New due date": "Tenggat baru",
         "Duplicating…": "Menduplikat…",
         "%d of %d tasks weren't duplicated. Try again.": "%d dari %d task gagal diduplikat. Coba lagi.",
+
+        // Projects: tabs and members at create, "Add N people" (11 Oct)
+        "Turn off the tabs this project doesn't need. You can change them later in Project settings → Tabs.": "Matikan tab yang tidak dibutuhkan project ini. Bisa diubah nanti di Setting Project → Tab.",
+        "No one else is in this workspace yet.": "Belum ada orang lain di workspace ini.",
+        "%d more — search to find them.": "%d lagi — cari untuk menemukannya.",
+        "Add 1 person": "Tambah 1 orang",
+        "Add %d people": "Tambah %d orang",
 
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
