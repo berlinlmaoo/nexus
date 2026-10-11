@@ -169,6 +169,15 @@ export function emitOutletSalesChanged(projectId: string, eventId: string | null
 }
 
 /**
+ * `automations-changed` { projectId, automationId, actorId } to the `project:<id>` room (12 Oct 2026): a rule
+ * was created, edited, toggled, deleted or restored, or it ran (new run-log row). A ping: the open Automations
+ * tab refetches through GET /api/automations, which applies the access rules. Apps that do not know it ignore it.
+ */
+export function emitAutomationsChanged(projectId: string, automationId: string | null, actorId?: string) {
+  publishSafely(BUS_EVENTS.AUTOMATIONS_CHANGED, { projectId, automationId, actorId: actorId ?? null })
+}
+
+/**
  * These two are called right after a write has succeeded (inside logAudit's try, among others). A
  * listener that throws would otherwise surface there as a failed write: logAudit would return null and
  * a restorable delete would lose the link to its audit row. A ping is never worth that.

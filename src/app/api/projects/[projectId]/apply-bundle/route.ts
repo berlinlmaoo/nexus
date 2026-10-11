@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { actionsOf, normalizeConditions, normalizeTrigger } from "@/lib/automation-rules"
 import { logAudit } from "@/lib/audit"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import { normalizeCustomFieldOptions, normalizeCustomFieldType } from "@/lib/custom-fields"
@@ -84,12 +85,20 @@ export async function POST(
     // Create automation rules
     if (config.automations?.length) {
       for (const auto of config.automations) {
+        // Same normalisation as POST /api/automations (12 Oct 2026): a bundle saved with lower-case
+        // types ("task_created") would otherwise never fire. Unknown types are skipped, not stored.
+        const trigger = normalizeTrigger(auto.trigger)
+        const actions = actionsOf({ action: auto.action, actions: (auto as { actions?: unknown }).actions })
+        if (!trigger || actions.length === 0) continue
+        const conditions = normalizeConditions((auto as { conditions?: unknown }).conditions, auto.condition)
         await prisma.automation.create({
           data: {
             name: auto.name,
-            trigger: auto.trigger as InputJsonValue,
-            action: auto.action as InputJsonValue,
-            condition: auto.condition ? (auto.condition as InputJsonValue) : undefined,
+            trigger: trigger as unknown as InputJsonValue,
+            action: actions[0] as unknown as InputJsonValue,
+            actions: actions as unknown as InputJsonValue,
+            ...(conditions ? { conditions: conditions as unknown as InputJsonValue } : {}),
+            createdById: session.user.id,
             projectId,
           },
         })

@@ -21,6 +21,7 @@ import {
 import { BODY_MAX, isBodPlus } from '@/lib/complaints'
 import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
+import { runAutomations } from '@/lib/automation-engine'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 
 type GideonAction =
@@ -1091,6 +1092,9 @@ async function createTask(actor: User, input: Record<string, unknown>) {
     })
   ))
 
+  // Project automations see a task GIDEON made like any other new task (12 Oct 2026).
+  runAutomations({ kind: 'task_created', projectId: taskList.projectId, actorId: actor.id, taskId: task.id }).catch(() => {})
+
   const verified = await prisma.task.findUnique({ where: { id: task.id }, include: taskInclude })
   return serializeTask(verified || task)
 }
@@ -1170,6 +1174,23 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
       completedById: actor.id,
     })
   }
+
+  // Project automations (12 Oct 2026): the same "task_updated" event the task PATCH route raises.
+  const beforeAssignees: string[] = existing.assignees.map((entry: any) => entry.user.id)
+  runAutomations({
+    kind: 'task_updated',
+    projectId: existing.taskList.projectId,
+    actorId: actor.id,
+    taskId,
+    changes: {
+      ...(status ? { status: { from: existing.status, to: status } } : {}),
+      ...(priority ? { priority: { from: existing.priority, to: priority } } : {}),
+      ...(title ? { title: { from: existing.title, to: title } } : {}),
+      ...(dueDate !== undefined ? { dueDate: { from: existing.dueDate ? new Date(existing.dueDate).toISOString() : null, to: dueDate ? new Date(dueDate).toISOString() : null } } : {}),
+      ...(taskListId ? { section: { from: existing.taskListId, to: verified.taskListId } } : {}),
+      ...(assigneeIds !== undefined ? { assignee: { added: assigneeIds.filter((id) => !beforeAssignees.includes(id)), removed: beforeAssignees.filter((id) => !assigneeIds.includes(id)) } } : {}),
+    },
+  }).catch(() => {})
 
   return serializeTask(verified)
 }

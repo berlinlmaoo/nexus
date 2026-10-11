@@ -612,33 +612,14 @@ function WhatsAppLinkCard() {
   );
 }
 
+// Was a static mock with two made-up rules and a dead "+ New rule" button (fixed 12 Oct 2026). Automations
+// belong to a project; this points there.
 function AutomationSection() {
-  const rules = [
-    { id: "r1", name: "Auto-assign bugs to QA", trigger: "form.bug_report submitted", action: "Create task in Atlas → assign Marcus" },
-    { id: "r2", name: "Move stale tasks", trigger: "Task idle > 7 days", action: "Add 'stale' tag, notify owner" },
-  ];
+  const { t } = useLang();
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">Automation rules</h2>
-          <button className="text-xs rounded-md bg-primary text-primary-foreground px-3 py-1.5">+ New rule</button>
-        </div>
-        <div className="space-y-2">
-          {rules.map((r) => (
-            <div key={r.id} className="rounded-lg border border-border p-3 hover:bg-accent/30">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">{r.name}</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" defaultChecked className="sr-only peer" />
-                  <div className="w-9 h-5 bg-muted peer-checked:bg-primary rounded-full relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-background after:rounded-full after:h-4 after:w-4 after:transition peer-checked:after:translate-x-4" />
-                </label>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1.5"><span className="font-medium text-foreground/70">When</span> {r.trigger} <span className="font-medium text-foreground/70">→ then</span> {r.action}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
+      <h2 className="flex items-center gap-2 font-semibold"><Zap className="h-4 w-4 text-primary" /> {t("Automations")}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{t("Automations live in each project. Open a project, then its Automations tab, to set up “When … do …” rules and see their run log. Project leads edit them.")}</p>
     </div>
   );
 }

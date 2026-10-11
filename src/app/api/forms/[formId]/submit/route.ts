@@ -12,7 +12,7 @@ import {
   serializeCustomFieldValue,
 } from "@/lib/custom-fields"
 import { getFormAccessStatus } from "@/lib/form-access-schedule"
-import { executeAutomations } from "@/lib/automation-engine"
+import { executeAutomations, runAutomations } from "@/lib/automation-engine"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
@@ -558,6 +558,8 @@ export async function POST(
       projectId: form.projectId,
       assigneeIds: finalAssigneeIds,
     }).catch(() => {})
+    // "Form submitted" automations (12 Oct 2026): the same task, as a submission of THIS form.
+    runAutomations({ kind: "form_submitted", projectId: form.projectId, actorId: fallbackCreatorId, taskId: result.task.id, formId: form.id }).catch(() => {})
 
     dispatchWebhookEvent("task.created", {
       taskId: result.task.id,
