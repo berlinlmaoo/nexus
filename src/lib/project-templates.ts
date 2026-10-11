@@ -198,14 +198,15 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
     icon: "Target",
     tint: "orange",
     color: "#EA580C",
-    // Notion's board order and status groups (Blocked/Not started = To-do, … , In Flight/Complete = Complete).
+    // Notion's board order. A campaign in flight is still running, so it counts as in progress
+    // (Notion files it under Complete; changed 12 Oct 2026 so live work is not reported as finished).
     sections: [
       { name: l("Blocked", "Terhambat"), status: "TODO", color: "red" },
       { name: l("Not started", "Belum mulai"), status: "TODO", color: "gray" },
       { name: l("Planning", "Perencanaan"), status: "IN_PROGRESS", color: "yellow" },
       { name: l("On hold", "Ditahan"), status: "IN_PROGRESS", color: "orange" },
       { name: l("In production", "Produksi"), status: "IN_PROGRESS", color: "purple" },
-      { name: l("In flight", "Sedang tayang"), status: "DONE", color: "blue" },
+      { name: l("In flight", "Sedang tayang"), status: "IN_PROGRESS", color: "blue" },
       { name: l("Complete", "Selesai"), status: "DONE", color: "green" },
     ],
     fields: [
