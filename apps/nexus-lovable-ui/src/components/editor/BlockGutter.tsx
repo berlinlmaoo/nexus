@@ -39,7 +39,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
     if (!h) return;
     const node = blockAt(editor, h.pos);
     if (!node) return;
-    editor.commands.lockDragHandle();
+    editor.commands.setMeta("lockDragHandle", true);
     // Select the block, as Notion highlights it while its menu is open.
     if (node.isAtom) editor.commands.setNodeSelection(h.pos);
     setMenu({ target: { node, pos: h.pos }, rect: el.getBoundingClientRect() });
@@ -47,7 +47,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
 
   const close = () => {
     setMenu(null);
-    editor.commands.unlockDragHandle();
+    editor.commands.setMeta("lockDragHandle", false);
   };
 
   return (

@@ -135,7 +135,7 @@ function DocPage() {
   })();
 
   return (
-    <div className="min-h-full bg-card pb-24">
+    <div className="min-h-dvh bg-card pb-24">
       <div className="sticky top-0 z-20 flex h-11 items-center gap-2 border-b border-transparent bg-card/90 px-3 backdrop-blur md:px-4">
         <button type="button" onClick={back} className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label={t("Back")}>
           <ArrowLeft className="h-4 w-4" />
