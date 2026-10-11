@@ -262,10 +262,8 @@ export const updateProjectSchema = z.object({
   icon: z.string().max(50).optional(),
   status: z.enum(["ACTIVE", "ARCHIVED", "COMPLETED"]).optional(),
   folderId: z.string().min(1).nullable().optional(),
-  enableTaskBatchDuplicate: z.boolean().optional(),
   autoAssignEnabled: z.boolean().optional(),
   autoAssignAssigneeIds: z.array(idString).max(50).optional(),
-  requireAttachmentForDone: z.boolean().optional(),
 })
 
 // ── Webhooks ────────────────────────────────────────────────────

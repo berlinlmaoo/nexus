@@ -18,8 +18,9 @@ import { getPeriodScores, levelForXp, PERIOD_BASELINE_XP, xpPenaltyKind, type Xp
  *  - WHO may be looked at is decided before this file is reached (reportableUserIds); nothing in
  *    here widens or narrows the set it is given.
  *
- * Work counts only top-level tasks (parentId = null, same as the old /api/reports), never CANCELLED,
- * never from calendar-only projects (disableTaskStatus). Open / overdue / due-soon also leave out
+ * Work counts only top-level tasks (parentId = null, same as the old /api/reports), never CANCELLED.
+ * (Calendar-only projects — Project.disableTaskStatus — used to be left out; that mode was retired on
+ * 11 Oct 2026 with nothing in its place, so every project counts.) Open / overdue / due-soon also leave out
  * ARCHIVED projects: a task nobody can see any more is not somebody's overdue work.
  */
 
@@ -299,7 +300,7 @@ async function overdueSnapshot(workspaceId: string, userIds: string[], at: Date)
       dueDate: { lt: cutAt },
       createdAt: { lt: at },
       OR: [{ completedAt: null }, { completedAt: { gte: at } }],
-      taskList: { project: { workspaceId, disableTaskStatus: false, status: { not: "ARCHIVED" } } },
+      taskList: { project: { workspaceId, status: { not: "ARCHIVED" } } },
     },
     select: { assignees: { select: { userId: true } } },
   })
@@ -421,8 +422,8 @@ export async function buildPeopleReports(opts: {
   const latestToAt = previous.toAt.getTime() > current.toAt.getTime() ? previous.toAt : current.toAt
   const snapshotAt = (w: ReportWindow) => (w.toAt.getTime() < now.getTime() ? w.toAt : now)
   const inUsers = { some: { userId: { in: userIds } } }
-  const liveProject = { workspaceId, disableTaskStatus: false }
-  const openProject = { workspaceId, disableTaskStatus: false, status: { not: "ARCHIVED" as const } }
+  const liveProject = { workspaceId }
+  const openProject = { workspaceId, status: { not: "ARCHIVED" as const } }
 
   const [completedTasks, openTasks, assignments, attendanceDays, curScores, prevScores, penaltyTxns, streaks, curOverdue, prevOverdue] =
     await Promise.all([

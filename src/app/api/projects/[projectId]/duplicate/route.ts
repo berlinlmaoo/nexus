@@ -69,17 +69,12 @@ export async function POST(
         workspaceId: original.workspaceId,
         // Land beside the original instead of at the sidebar root.
         folderId: original.folderId,
-        // Per-project behaviour toggles — a copy that silently loses these isn't a copy.
-        enableTaskBatchDuplicate: original.enableTaskBatchDuplicate,
+        // Per-project behaviour toggles (the retired ones in lib/project-retired-flags.ts are not copied) — a copy that silently loses these isn't a copy.
         autoAssignEnabled: original.autoAssignEnabled,
         autoAssignAssigneeIds: original.autoAssignAssigneeIds,
-        enablePnlDashboard: original.enablePnlDashboard,
-        requireAttachmentForDone: original.requireAttachmentForDone,
-        disableTaskStatus: original.disableTaskStatus,
         // Type and tabs (9 Oct 2026) — the copy looks like the original.
         type: original.type,
         hiddenTabs: original.hiddenTabs,
-        financeEnabled: original.financeEnabled,
       },
     })
 

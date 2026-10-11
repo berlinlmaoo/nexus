@@ -132,7 +132,7 @@ const TASK_SELECT = {
       assignees: { select: { userId: true } },
     },
   },
-  taskList: { select: { project: { select: { id: true, name: true, color: true, disableTaskStatus: true } } } },
+  taskList: { select: { project: { select: { id: true, name: true, color: true } } } },
   taskProjects: { select: { project: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
   assignees: { select: { userId: true }, orderBy: { assignedAt: "asc" } },
 } satisfies Prisma.TaskSelect
@@ -149,7 +149,8 @@ function toRow(t: TaskSelected, dueDate: Date): TaskRow {
       assigneeIds: t.parent.assignees.map((a) => a.userId),
     },
     project: { id: home.id, name: home.name, color: home.color },
-    noStatus: home.disableTaskStatus,
+    // Calendar mode (Project.disableTaskStatus) was retired on 11 Oct 2026: every task has a status.
+    noStatus: false,
     linkedProjects: t.taskProjects.map((l) => l.project).filter((p) => p.id !== home.id),
     assigneeIds: t.assignees.map((a) => a.userId),
   }
@@ -158,7 +159,7 @@ function toRow(t: TaskSelected, dueDate: Date): TaskRow {
 /**
  * Tasks of the company workspace (home project there and not archived), not cancelled, with a due
  * date matching `dueDate`. One query; the assignees come in the order they were assigned. `open`
- * = still to do: not done, and not in a project without status (those can never be ticked done).
+ * = still to do: not done.
  */
 export async function loadTaskRows(dueDate: Prisma.TaskWhereInput["dueDate"], opts: { open?: boolean; take?: number; order?: "asc" | "desc" } = {}): Promise<{ rows: TaskRow[]; truncated: boolean }> {
   const take = opts.take ?? ROW_CAP
@@ -166,7 +167,7 @@ export async function loadTaskRows(dueDate: Prisma.TaskWhereInput["dueDate"], op
     where: {
       dueDate,
       status: opts.open ? { notIn: ["DONE", "CANCELLED"] } : { not: "CANCELLED" },
-      taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" }, ...(opts.open ? { disableTaskStatus: false } : {}) } },
+      taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } } },
     },
     orderBy: [{ dueDate: opts.order ?? "asc" }, { id: "asc" }],
     take: take + 1,
@@ -186,7 +187,7 @@ export async function loadUndatedRows(assigneeId: string | null, take: number): 
     where: {
       dueDate: null,
       status: { notIn: ["DONE", "CANCELLED"] },
-      taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" }, disableTaskStatus: false } },
+      taskList: { project: { workspaceId: ORG_WORKSPACE_ID, status: { not: "ARCHIVED" } } },
       ...(assigneeId ? { assignees: { some: { userId: assigneeId } } } : {}),
     },
     orderBy: [{ priority: "asc" }, { updatedAt: "desc" }, { id: "asc" }],

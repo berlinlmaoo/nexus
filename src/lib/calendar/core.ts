@@ -457,8 +457,9 @@ export type TaskRow = {
   parent: { id: string; title: string; creatorId: string; projects: { id: string; name: string }[]; assigneeIds: string[] } | null
   project: { id: string; name: string; color: string }
   /**
-   * The home project has no status (Project.disableTaskStatus — a calendar-only project): its tasks
-   * cannot be ticked done, so they are never open work and never overdue (as in people-reports).
+   * The task has no status, so it is never open work and never overdue. It came from the home
+   * project's "calendar mode" (Project.disableTaskStatus), retired on 11 Oct 2026: the server now
+   * always sends false. Kept so the wire shape (`ns`) and the fixtures stay as released apps know them.
    */
   noStatus: boolean
   /** Projects the task is linked into besides its home project (TaskProject). */

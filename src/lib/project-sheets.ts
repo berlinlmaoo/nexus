@@ -91,8 +91,8 @@ const DEFAULT_ROW_COUNT = 50
 /**
  * Give a project its default sheet so the tab is never empty.
  *
- * Idempotent and race-safe via an advisory lock, the same shape as ensurePnlDefaults in
- * src/lib/pnl.ts — two tabs opening the view at once can't create two sheets, and an existing sheet
+ * Idempotent and race-safe via an advisory lock, the same shape the P&L defaults used
+ * (retired 11 Oct 2026) — two tabs opening the view at once can't create two sheets, and an existing sheet
  * is never touched. Called lazily on GET (which is what covers the ~70 projects that predate this
  * feature) and best-effort at project create.
  */

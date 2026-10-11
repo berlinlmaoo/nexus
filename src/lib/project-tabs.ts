@@ -11,8 +11,8 @@
  * later then appears on every existing project without a backfill. Hiding is presentational only;
  * nothing a tab holds is deleted or locked, and its API keeps working.
  *
- * Finance and P&L are not in this list. Each is an opt-in flag of its own (financeEnabled,
- * enablePnlDashboard), off by default, because they hold money data and are switched on by BoD.
+ * Finance and P&L are not in this list: both were retired on 11 Oct 2026 (lib/project-retired-flags.ts),
+ * and financeEnabled / enablePnlDashboard always read false.
  *
  * The same keys are used by web (apps/nexus-lovable-ui) and iOS (ProjectTab.key). A client must ignore
  * a key it does not know, so this list can grow without breaking an older app.

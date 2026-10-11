@@ -7,7 +7,7 @@ import { nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser
 import { ProjectCustomFieldsManager } from "@/components/projects/ProjectCustomFieldsManager";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { ProjectMark, isProjectPhoto } from "@/components/projects/ProjectIcon";
-import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, financeTabEnabled, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
+import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFace } from "@/components/Avatar";
@@ -123,18 +123,13 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const [inviteEmail, setInviteEmail] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
-  // Customize-project settings (shared columns with core NEXUS).
-  const [enableBatch, setEnableBatch] = useState(!!project.enableTaskBatchDuplicate);
+  // Customize project holds only Auto assign since 11 Oct 2026 (owner): task duplicate mode, P&L, Finance,
+  // "Bukti Pencairan before Done" and calendar mode were retired (server: lib/project-retired-flags.ts).
   const [autoAssignEnabled, setAutoAssignEnabled] = useState(!!project.autoAssignEnabled);
   const [autoAssignIds, setAutoAssignIds] = useState<string[]>(project.autoAssignAssigneeIds ?? []);
   const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
-  const [enablePnl, setEnablePnl] = useState(!!project.enablePnlDashboard);
-  const [reqAttach, setReqAttach] = useState(!!project.requireAttachmentForDone);
-  const [noStatus, setNoStatus] = useState(!!project.disableTaskStatus);
-  const [financeOn, setFinanceOn] = useState(financeTabEnabled(project));
   const { t } = useLang();
-  // P&L toggle is BoD-and-above only (financial data) — hidden from managers/staff entirely.
-  // Role is checked against THIS project's workspace, not the user's first workspace.
+  // The viewer's role in THIS project's workspace, not the user's first workspace.
   const wsm = useQuery({
     queryKey: ["nexus", "workspace-members", project.workspaceId ?? ""],
     queryFn: () => nexusApi.workspaceMembers(project.workspaceId ?? undefined),
@@ -169,7 +164,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     mutationFn: () => nexusApi.deleteProject(project.id),
     onSuccess: () => { qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); onDeleted(); },
   });
-  // One mutation for all "Customize project" toggles; mirrors core-NEXUS optimistic + revert.
+  // One mutation for the remaining project settings (auto assign, icon).
   const settings = useMutation({
     mutationFn: (payload: Parameters<typeof nexusApi.updateProject>[1]) => nexusApi.updateProject(project.id, payload),
     onSuccess: () => { invalidate(); qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); },
@@ -181,25 +176,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   });
   const onPickIcon = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) uploadIcon.mutate(f); e.target.value = ""; };
   const iconIsImage = isProjectPhoto(icon);
-  const toggleBatch = (checked: boolean) => { setEnableBatch(checked); settings.mutate({ enableTaskBatchDuplicate: checked }); };
-  const togglePnl = (checked: boolean) => {
-    setEnablePnl(checked);
-    settings.mutate({ enablePnlDashboard: checked }, { onError: () => setEnablePnl(!checked) });
-  };
-  const toggleReqAttach = (checked: boolean) => {
-    setReqAttach(checked);
-    settings.mutate({ requireAttachmentForDone: checked }, { onError: () => setReqAttach(!checked) });
-  };
-  const toggleNoStatus = (checked: boolean) => {
-    setNoStatus(checked);
-    settings.mutate({ disableTaskStatus: checked }, { onError: () => setNoStatus(!checked) });
-  };
-  const toggleFinance = (checked: boolean) => {
-    setFinanceOn(checked);
-    settings.mutate({ financeEnabled: checked }, { onError: () => setFinanceOn(!checked) });
-  };
   const toggleAutoAssign = (checked: boolean) => {
-    if (checked && autoAssignIds.length === 0) { setAutoAssignError("Pick at least one member before turning on auto assign."); return; }
+    if (checked && autoAssignIds.length === 0) { setAutoAssignError(t("Pick at least one member before turning on auto assign.")); return; }
     setAutoAssignError(null);
     setAutoAssignEnabled(checked);
     settings.mutate({ autoAssignEnabled: checked });
@@ -276,73 +254,24 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             {save.isError && <p className="text-xs font-semibold text-destructive">Couldn't save.</p>}
           </div>
 
-          {/* customize project — task duplicate mode + auto assign (parity with core NEXUS) */}
+          {/* customize project — only auto assign since 11 Oct 2026 */}
           <div className="space-y-4 border-t border-border pt-5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Customize project</span>
-
-            {/* task duplicate mode */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Task duplicate mode</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">Turn on multi-select duplicate with a due-date popup for setting up recurring tasks (e.g. PATS Socials).</p>
-              </div>
-              <Toggle checked={enableBatch} onChange={toggleBatch} disabled={settings.isPending} />
-            </div>
-
-            {/* P&L dashboard — BoD-and-above only */}
-            {isBod && (
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">P&L Dashboard</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Standalone finance view: log daily expenses (+receipts), incoming-money pipeline (deposits/installments), monthly budget. Only visible to BoD and above.</p>
-                </div>
-                <Toggle checked={enablePnl} onChange={togglePnl} disabled={settings.isPending} />
-              </div>
-            )}
-
-            {/* Finance tab — opt-in exactly like P&L (owner, 9 Oct 2026), BoD-and-above only */}
-            {isBod && (
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">Finance</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{t("Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&L. Turning it off only hides the tab — the numbers stay.")}</p>
-                </div>
-                <Toggle checked={financeOn} onChange={toggleFinance} disabled={settings.isPending} />
-              </div>
-            )}
-
-            {/* Require ≥1 attachment before a task can be marked Done — finance proof-of-completion */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Wajib Bukti Pencairan sebelum Done</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">Task di project ini nggak bisa dipindah ke <b>Done</b> sebelum ada minimal 1 <b>Bukti Pencairan</b> — slot terpisah dari Attachments biasa (dokumen pengajuan dari form nggak ke-hitung). Cocok buat pengajuan finance.</p>
-              </div>
-              <Toggle checked={reqAttach} onChange={toggleReqAttach} disabled={settings.isPending} />
-            </div>
-
-            {/* Calendar-only project (Master Calendar): status/done is noise, so hide it */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Mode kalender (matikan status)</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">Buat project yang isinya cuma jadwal, bukan task — misal <b>Master Calendar</b>. Kalau nyala, <b>checkbox Done</b>, <b>pilihan status</b>, dan kolom <b>Status</b> di Table view disembunyiin. Datanya nggak dihapus, tinggal matiin lagi kalau mau balik.</p>
-              </div>
-              <Toggle checked={noStatus} onChange={toggleNoStatus} disabled={settings.isPending} />
-            </div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Customize project")}</span>
 
             {/* auto assign */}
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold">Auto assign</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Automatically assign the selected members to new tasks in this project. If you pick an assignee manually while creating a task, auto assign is skipped.</p>
+                  <div className="text-sm font-semibold">{t("Auto assign")}</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t("Automatically assign the selected members to new tasks in this project. If you pick an assignee manually while creating a task, auto assign is skipped.")}</p>
                 </div>
                 <Toggle checked={autoAssignEnabled} onChange={toggleAutoAssign} disabled={settings.isPending} />
               </div>
               {autoAssignError && <p className="text-xs font-semibold text-destructive">{autoAssignError}</p>}
 
               <div className="rounded-2xl border border-border bg-muted/30 p-2">
-                <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Default assignees · {autoAssignIds.length}</div>
-                {currentMembers.length === 0 && <p className="px-1 py-1 text-xs text-muted-foreground">No members in this project yet — add some below first.</p>}
+                <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Default assignees · {n}", { n: autoAssignIds.length })}</div>
+                {currentMembers.length === 0 && <p className="px-1 py-1 text-xs text-muted-foreground">{t("No members in this project yet — add some below first.")}</p>}
                 <div className="space-y-1">
                   {currentMembers.map((m) => {
                     const id = (m.userId || m.user?.id) ?? "";

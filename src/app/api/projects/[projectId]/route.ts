@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
-import { checkProjectAccess, checkWorkspaceAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import {
   normalizeAutoAssignConfig,
@@ -178,16 +178,14 @@ export async function PATCH(
       status,
       folderId,
       position,
-      enableTaskBatchDuplicate,
       autoAssignEnabled,
       autoAssignAssigneeIds,
-      enablePnlDashboard,
-      requireAttachmentForDone,
-      disableTaskStatus,
       tableColumns,
-      financeEnabled,
       hiddenTabs,
     } = body
+    // enableTaskBatchDuplicate, enablePnlDashboard, financeEnabled, requireAttachmentForDone and
+    // disableTaskStatus are retired (owner, 11 Oct 2026 — lib/project-retired-flags.ts). Released apps
+    // still send them; they are accepted and ignored, never an error.
 
     const existing = await prisma.project.findUnique({
       where: { id: (await params).projectId },
@@ -243,27 +241,6 @@ export async function PATCH(
       }
     }
 
-    // The P&L view holds the project's money data — only BoD-and-above may switch it on/off,
-    // even though the rest of the customize toggles only need LEAD (which includes managers).
-    if (enablePnlDashboard !== undefined) {
-      const { allowed: isBod } = await checkWorkspaceAccess(session.user.id!, existing.workspaceId, "BOD")
-      if (!isBod) {
-        return NextResponse.json({ error: "Forbidden: hanya BoD ke atas yang bisa mengaktifkan P&L Dashboard" }, { status: 403 })
-      }
-    }
-
-    // The Finance tab is opt-in exactly like P&L (owner, 9 Oct 2026: "perlu di aktifin manual deh di
-    // project settings sama kaya PnL"): money data, so the same BoD-and-above gate.
-    if (financeEnabled !== undefined) {
-      if (typeof financeEnabled !== "boolean") {
-        return NextResponse.json({ error: "financeEnabled harus true atau false.", code: "INVALID_FINANCE_FLAG" }, { status: 400 })
-      }
-      const { allowed: isBod } = await checkWorkspaceAccess(session.user.id!, existing.workspaceId, "BOD")
-      if (!isBod) {
-        return NextResponse.json({ error: "Forbidden: hanya BoD ke atas yang bisa mengaktifkan Finance", code: "BOD_REQUIRED" }, { status: 403 })
-      }
-    }
-
     // Which tabs the project shows (owner, 9 Oct 2026): a project setting like the others, so LEAD
     // (checked above). Validated here, because a client that hid both Board and List would leave a
     // task project with no way to see its tasks.
@@ -286,12 +263,7 @@ export async function PATCH(
         ...(status !== undefined && { status }),
         ...(folderId !== undefined && { folderId }),
         ...(Number.isInteger(position) && position >= 0 && { position }),
-        ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
-        ...(enablePnlDashboard !== undefined && { enablePnlDashboard: !!enablePnlDashboard }),
-        ...(financeEnabled !== undefined && { financeEnabled }),
         ...(normalizedHiddenTabs !== undefined && { hiddenTabs: normalizedHiddenTabs }),
-        ...(requireAttachmentForDone !== undefined && { requireAttachmentForDone: !!requireAttachmentForDone }),
-        ...(disableTaskStatus !== undefined && { disableTaskStatus: !!disableTaskStatus }),
         ...(Array.isArray(tableColumns) && { tableColumns: tableColumns.filter((c: unknown) => typeof c === "string") }),
         ...(normalizedAutoAssignConfig && normalizedAutoAssignConfig),
       },

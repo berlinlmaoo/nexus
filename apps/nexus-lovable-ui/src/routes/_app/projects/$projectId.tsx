@@ -17,11 +17,9 @@ import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
 import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
-import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
-import { PnlDashboardView } from "@/components/pnl/PnlDashboardView";
 import { PipelineView } from "@/components/pipeline/PipelineView";
 import { OutletSalesView, type OutletView } from "@/components/outlet-sales/OutletSalesView";
-import { financeTabEnabled, hiddenTabsOf } from "@/components/projects/project-tabs";
+import { hiddenTabsOf } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { priorityTone } from "@/lib/calendar/tone";
@@ -43,7 +41,6 @@ import {
   FileText,
   Filter,
   FormInput,
-  BarChart3,
   GanttChart,
   GripVertical,
   CornerDownRight,
@@ -64,7 +61,6 @@ import {
   Sparkles,
   Tag,
   Target,
-  Wallet,
   X,
   Zap,
   Sheet as SheetIcon,
@@ -83,7 +79,7 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   }),
 });
 
-type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
+type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
 type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
 const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
@@ -101,8 +97,6 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "os-board", label: "Board", icon: LayoutGrid },
   { id: "os-form", label: "Report form", icon: ClipboardList },
   { id: "overview", label: "Overview", icon: Activity },
-  // P&L sits early so it's visible without scrolling the tab strip on mobile (BoD-only anyway).
-  { id: "pnl", label: "P&L", icon: Wallet },
   { id: "board", label: "Board", icon: LayoutGrid },
   { id: "list", label: "List", icon: List },
   { id: "table", label: "Table", icon: Table2 },
@@ -113,7 +107,6 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "automations", label: "Automations", icon: Zap },
   { id: "pages", label: "Pages", icon: FileText },
   { id: "forms", label: "Forms", icon: FormInput },
-  { id: "finance", label: "Finance Dashboard", icon: BarChart3 },
   { id: "chat", label: "Chat", icon: MessageSquare },
 ];
 
@@ -136,34 +129,21 @@ function ProjectDetail() {
     setSettingsOpen(true);
     navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
   }, [search.settings, data, projectId, navigate]);
-  // P&L is BoD-and-above only: the tab renders only when the Tune toggle is on AND the viewer is
-  // BoD+ — checked against THIS project's workspace (a multi-workspace user's role can differ).
-  const wsm = useQuery({
-    queryKey: ["nexus", "workspace-members", data?.workspaceId ?? ""],
-    queryFn: () => nexusApi.workspaceMembers(data?.workspaceId ?? undefined),
-    retry: false,
-    staleTime: 60_000,
-    enabled: !!data,
-  });
-  const isBod = wsm.data?.role === "BOD" || wsm.data?.role === "ONE_ABOVE_ALL";
   const { t: tr } = useLang();
   // Which tabs this project shows (owner, 9 Oct 2026): a project hides the ones it doesn't need
-  // (Project settings → Tabs), Finance is opt-in like P&L (it used to follow the project's NAME), and
-  // P&L stays BoD-only. Hiding only hides — nothing in the tab is touched.
+  // (Project settings → Tabs). Hiding only hides — nothing in the tab is touched. The Finance and P&L
+  // tabs were retired on 11 Oct 2026.
   const hiddenTabs = hiddenTabsOf(data);
-  // A Pipeline Dashboard project (owner, 9 Oct 2026) is its pipeline, plus its chat and the money tabs
-  // BoD switched on. Its task tabs are not offered: the three default sections exist only so that apps
+  // A Pipeline Dashboard project (owner, 9 Oct 2026) is its pipeline, plus its chat. Its task tabs are not offered: the three default sections exist only so that apps
   // which do not know the type yet open it as an empty task project instead of failing.
   const isPipeline = data?.type === "PIPELINE";
-  // An Outlet Sales Dashboard (owner, 10 Oct 2026) likewise: its four views, chat and the money tabs.
+  // An Outlet Sales Dashboard (owner, 10 Oct 2026) likewise: its four views and chat.
   const isOutlet = data?.type === "OUTLET_SALES";
   const isSpecial = isPipeline || isOutlet;
   const visibleTabs = TABS.filter((tab) => {
     if (tab.id === "pipeline") return isPipeline;
     if (tab.id.startsWith("os-")) return isOutlet;
-    if (isSpecial && tab.id !== "chat" && tab.id !== "finance" && tab.id !== "pnl") return false;
-    if (tab.id === "finance") return financeTabEnabled(data);
-    if (tab.id === "pnl") return !!data?.enablePnlDashboard && isBod;
+    if (isSpecial && tab.id !== "chat") return false;
     return !hiddenTabs.has(tab.id);
   });
   const visibleKey = visibleTabs.map((tab) => tab.id).join(",");
@@ -275,14 +255,10 @@ function ProjectDetail() {
       {project.isError && <div className="p-8"><Empty title="Board locked" message="You need a login/session or project access to open this live board." /></div>}
       {!project.isLoading && !project.isError && data && isPipeline && (
         view === "chat" ? <ProjectChat projectId={data.id} />
-          : view === "finance" && financeTabEnabled(data) ? <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>
-          : view === "pnl" && !!data.enablePnlDashboard && isBod ? <PnlDashboardView projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />
       )}
       {!project.isLoading && !project.isError && data && isOutlet && (
         view === "chat" ? <ProjectChat projectId={data.id} />
-          : view === "finance" && financeTabEnabled(data) ? <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>
-          : view === "pnl" && !!data.enablePnlDashboard && isBod ? <PnlDashboardView projectId={data.id} />
           : (
             <OutletSalesView
               key={outletLink.nonce}
@@ -294,11 +270,11 @@ function ProjectDetail() {
           )
       )}
       {!project.isLoading && !project.isError && data && !isSpecial && (
-        // Provider gates multi-select duplicate behind the project's "Task duplicate mode" flag.
-        <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
+        // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
+        <TaskBulkProvider projectId={data.id}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}
           {view === "board" && <BoardView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} onCreate={setComposerListId} />}
-          {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} hideStatus={!!data.disableTaskStatus} />}
+          {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
           {view === "table" && <ProjectTableView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
           {view === "sheet" && (
             <ProjectSheetView
@@ -309,14 +285,12 @@ function ProjectDetail() {
               }}
             />
           )}
-          {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} hideStatus={!!data.disableTaskStatus} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
+          {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
           {view === "sprints" && <SprintsView project={data} tasks={filteredTasks} onOpenTask={setOpenTask} />}
           {view === "automations" && <AutomationsView projectId={data.id} />}
           {view === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
           {view === "forms" && <ProjectFormsView projectId={data.id} />}
-          {view === "finance" && financeTabEnabled(data) && <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>}
-          {view === "pnl" && !!data.enablePnlDashboard && isBod && <PnlDashboardView projectId={data.id} />}
           {view === "chat" && <ProjectChat projectId={data.id} />}
         </TaskBulkProvider>
       )}
@@ -539,7 +513,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
             </div>
             <div className="space-y-3 min-h-32">
               {lane.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => {}} moving={false} hideStatus={!!project.disableTaskStatus} />
+                <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => {}} moving={false} />
               ))}
             </div>
           </section>
@@ -582,7 +556,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
               <div className="space-y-3 min-h-32">
                 <button onClick={() => onCreate(list.id)} className="w-full rounded-2xl border border-dashed border-border bg-muted/50 py-3 text-xs font-bold text-muted-foreground transition hover:border-primary/40 hover:text-primary">+ Spawn card</button>
                 {items.map((task) => (
-                  <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => setDraggingId(task.id)} moving={moveTask.isPending && draggingId === task.id} hideStatus={!!project.disableTaskStatus} />
+                  <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => setDraggingId(task.id)} moving={moveTask.isPending && draggingId === task.id} />
                 ))}
               </div>
             </section>
@@ -740,7 +714,7 @@ function TaskCfChips({ task, max = 2, className }: { task: NexusTask; max?: numb
   );
 }
 
-function TaskCard({ task, currentProjectId, onOpen, onDrag, moving, hideStatus }: { task: NexusTask; currentProjectId?: string; onOpen: () => void; onDrag: () => void; moving: boolean; hideStatus?: boolean }) {
+function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: NexusTask; currentProjectId?: string; onOpen: () => void; onDrag: () => void; moving: boolean }) {
   const qc = useQueryClient();
   const bulk = useTaskBulk();
   const cardProps = bulk.bindCard(task, onOpen);
@@ -757,7 +731,7 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving, hideStatus }
     },
   });
   return (
-    <motion.div layoutId={`board-taskcard-${task.id}`} data-morph-id={`board-taskcard-${task.id}`} style={{ borderRadius: 24 }} onContextMenu={cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", isDone && "opacity-60", selected && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
+    <motion.div layoutId={`board-taskcard-${task.id}`} data-morph-id={`board-taskcard-${task.id}`} data-bulk-task={cardProps["data-bulk-task"]} style={{ borderRadius: 24 }} onContextMenu={cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", isDone && "opacity-60", selected && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
     <Card
       draggable={!linkedFrom}
       onDragStart={onDrag}
@@ -767,20 +741,17 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving, hideStatus }
       <CardBody className="gap-3 p-4">
         <div className="flex items-start gap-2">
           <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
-          {/* Calendar-only projects (disableTaskStatus) have no notion of done — hide the toggle. */}
-          {!hideStatus && (
-            <button
-              type="button"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); toggleDone.mutate(); }}
-              disabled={toggleDone.isPending}
-              className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
-              aria-label={isDone ? "Mark as not done" : "Mark as done"}
-              title={isDone ? "Mark as not done" : "Mark as done"}
-            >
-              {toggleDone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isDone ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 opacity-70" />}
-            </button>
-          )}
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); toggleDone.mutate(); }}
+            disabled={toggleDone.isPending}
+            className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
+            aria-label={isDone ? "Mark as not done" : "Mark as done"}
+            title={isDone ? "Mark as not done" : "Mark as done"}
+          >
+            {toggleDone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isDone ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 opacity-70" />}
+          </button>
           <div className="min-w-0 flex-1">
             {linkedFrom && <span className="mb-1 block truncate text-[11px] font-semibold text-muted-foreground">From {linkedFrom}</span>}
             {task.parentId && (
@@ -1253,7 +1224,7 @@ function ListRow({ task, onOpen }: { task: NexusTask; onOpen: (task: NexusTask) 
   );
 }
 
-function ListView({ taskLists, onOpen, hideStatus }: { taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void; hideStatus?: boolean }) {
+function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const total = taskLists.reduce((n, l) => n + (l.tasks?.length ?? 0), 0);
@@ -1271,7 +1242,7 @@ function ListView({ taskLists, onOpen, hideStatus }: { taskLists: NonNullable<Ne
             <button onClick={() => toggle(list.id)} className="mb-2 flex w-full items-center gap-2 border-b border-border pb-1.5 text-left transition-colors hover:text-primary">
               <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", !isCollapsed && "rotate-90")} />
               <span className="font-display text-sm font-semibold tracking-tight">{list.name}</span>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">{hideStatus ? tasks.length : `${doneCount}/${tasks.length}`}</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">{`${doneCount}/${tasks.length}`}</span>
             </button>
             {!isCollapsed && (
               <div className="space-y-1.5 rounded-2xl bg-muted/40 p-2">
@@ -1329,7 +1300,7 @@ function calRuleValues(task: NexusTask, rule: CalColorRule): string[] {
   }
 }
 
-function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue, hideStatus }: { projectId: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void; hideStatus?: boolean }) {
+function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projectId: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void }) {
   const bulk = useTaskBulk();
   const isMobile = useIsMobile();
   const [colorPanelOpen, setColorPanelOpen] = useState(false);
@@ -1482,7 +1453,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue, hideStatus
                     <span className="text-xs text-muted-foreground">· {items.length}</span>
                   </div>
                   {items.map((task) => {
-                    const done = !hideStatus && isDone(task.status);
+                    const done = isDone(task.status);
                     const assignee = task.assignees?.[0]?.user;
                     const cs = styleForTask(task);
                     return (
@@ -1551,7 +1522,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue, hideStatus
                   </div>
                   <div className="space-y-0.5">
                     {dayTasks.slice(0, 3).map((task) => {
-                      const done = !hideStatus && isDone(task.status);
+                      const done = isDone(task.status);
                       const cs = styleForTask(task);
                       return (
                         // Draggable so a dated task can be moved to another day — the day cells are
@@ -1581,7 +1552,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue, hideStatus
                           <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day.getDate()} {viewMonth.toLocaleDateString("en-US", { month: "short" })} · {dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}</div>
                           <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                             {dayTasks.map((task) => {
-                              const done = !hideStatus && isDone(task.status);
+                              const done = isDone(task.status);
                               const cs = styleForTask(task);
                               return (
                                 <button key={task.id} type="button" onClick={() => onOpen(task)} style={cs && !done ? { backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : undefined} className={cn("truncate rounded px-1.5 py-1 text-left text-[11px] font-medium transition hover:brightness-95", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE))}>

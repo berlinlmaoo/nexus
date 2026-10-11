@@ -15,6 +15,7 @@ import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
+import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
 
 // Built-in columns (Name is always the implicit first column, not configurable away).
@@ -59,14 +60,11 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
   const cfDefs = useMemo(() => cfDefsQ.data?.fields ?? [], [cfDefsQ.data]);
   const cfById = useMemo(() => new Map(cfDefs.map((f) => [f.id, f])), [cfDefs]);
 
-  // Resolve the active columns; drop any cf:<id> whose field was deleted, and drop Status entirely
-  // on calendar-only projects (disableTaskStatus) — the saved column list is left untouched, so
-  // turning the toggle back off restores it.
+  // Resolve the active columns; drop any cf:<id> whose field was deleted.
   const columns = useMemo(() => {
     const raw = project.tableColumns && project.tableColumns.length ? project.tableColumns : DEFAULT_COLUMNS;
-    return raw.filter((c) => (c.startsWith("cf:") ? cfById.has(c.slice(3)) : BUILTIN.some((b) => b.key === c)))
-      .filter((c) => !(project.disableTaskStatus && c === "status"));
-  }, [project.tableColumns, cfById, project.disableTaskStatus]);
+    return raw.filter((c) => (c.startsWith("cf:") ? cfById.has(c.slice(3)) : BUILTIN.some((b) => b.key === c)));
+  }, [project.tableColumns, cfById]);
 
   const colLabel = (key: string) => (key.startsWith("cf:") ? cfById.get(key.slice(3))?.name ?? "Field" : BUILTIN.find((b) => b.key === key)?.label ?? key);
 
@@ -90,9 +88,7 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
   });
 
   const available = [
-    // Status is filtered out of `columns` on calendar-only projects, so exclude it here too —
-    // otherwise it would show up in "add column" as if it were merely hidden.
-    ...BUILTIN.filter((b) => !columns.includes(b.key) && !(project.disableTaskStatus && b.key === "status")),
+    ...BUILTIN.filter((b) => !columns.includes(b.key)),
     ...cfDefs.filter((f) => !columns.includes(`cf:${f.id}`)).map((f) => ({ key: `cf:${f.id}`, label: f.name })),
   ];
 
@@ -106,6 +102,9 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
   const setCf = async (fieldId: string, taskId: string, value: unknown) => {
     try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); } catch { toast.error("Update failed"); }
   };
+
+  // Multi-select (owner, 11 Oct 2026): ⌘/Ctrl+click or Shift+click a row, right-click for Duplicate.
+  const bulk = useTaskBulk();
 
   const gridTemplate = `minmax(220px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
 
@@ -151,7 +150,7 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
                   {list.name} <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 tabular-nums">{tasks.length}</span>
                 </div>
                 {tasks.map((task) => (
-                  <div key={task.id} className="grid items-stretch border-b border-border text-sm last:border-b-0 hover:bg-accent/30" style={{ gridTemplateColumns: gridTemplate }}>
+                  <div key={task.id} {...bulk.bindRow(task)} className={cn("grid items-stretch border-b border-border text-sm last:border-b-0 hover:bg-accent/30", bulk.isSelected(task.id) && "bg-primary/10 ring-1 ring-inset ring-primary")} style={{ gridTemplateColumns: gridTemplate }}>
                     <NameCell task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
                     {columns.map((key) => (
                       <div key={key} className="min-w-0 border-l border-border px-2 py-1.5">

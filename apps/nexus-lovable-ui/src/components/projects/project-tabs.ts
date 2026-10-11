@@ -5,8 +5,8 @@ import type { NexusProject } from "@/lib/nexus-api";
  * src/lib/project-tabs.ts of the Next app; these keys must match them, and iOS uses the same ones.
  *
  * A project stores the tabs it HIDES. Hiding only hides: nothing in the tab is deleted, its API keeps
- * working, and switching it back on brings everything back. Finance and P&L are not hideable tabs —
- * each has its own opt-in flag (financeEnabled, enablePnlDashboard), BoD and above.
+ * working, and switching it back on brings everything back. The Finance and P&L tabs were retired on
+ * 11 Oct 2026 (financeEnabled / enablePnlDashboard always read false).
  */
 export const PROJECT_TAB_KEYS = [
   "overview",
@@ -48,17 +48,6 @@ export function hiddenTabsOf(project?: Pick<NexusProject, "hiddenTabs"> | null):
 }
 
 /**
- * The Finance tab is opt-in like P&L. A server from before 9 Oct 2026 does not send the flag; then
- * the old rule (the project's name contains "finance") still applies, so deploying the SPA first
- * changes nothing.
- */
-export function financeTabEnabled(project?: Pick<NexusProject, "financeEnabled" | "name"> | null): boolean {
-  if (!project) return false;
-  if (typeof project.financeEnabled === "boolean") return project.financeEnabled;
-  return /finance/i.test(project.name ?? "");
-}
-
-/**
  * Project types offered when creating a project. TASK; since 9 Oct 2026 PIPELINE (the GM's pipeline board —
  * components/pipeline); since 10 Oct 2026 OUTLET_SALES (owner, for Ryan: one project per outlet —
  * components/outlet-sales), in the place the Finance Dashboard card had. Content Planner waits for
@@ -80,8 +69,6 @@ export function projectSettingsErrorText(code: unknown): string | null {
     case "UNKNOWN_TAB":
     case "INVALID_TABS":
       return "That tab can't be changed here. Refresh the page and try again.";
-    case "BOD_REQUIRED":
-      return "Only BoD and above can turn Finance on or off.";
     case "TYPE_COMING_SOON":
       return "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.";
     // The company's one pipeline (owner/GM, 9 Oct 2026). PIPELINE_EXISTS opens the board when the answer

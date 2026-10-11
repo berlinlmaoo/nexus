@@ -477,15 +477,14 @@ model Project {
   description String?
   color       String   @default("#7B2FBE")
   icon        String   @default("folder")
-  enableTaskBatchDuplicate Boolean @default(false)
+  // RETIRED 11 Oct 2026 (owner) with the four switches below — lib/project-retired-flags.ts. Multi-select
+  // duplicate is on in every project; the column stays for released apps and always reads true.
+  enableTaskBatchDuplicate Boolean @default(true)
   autoAssignEnabled Boolean @default(false)
   autoAssignAssigneeIds String[] @default([])
-  // Standalone per-project P&L dashboard (transaction-level expenses + income pipeline, BoD-only).
-  // Toggled from the Tune drawer; unrelated to the legacy FinanceValue monthly matrix.
+  // RETIRED 11 Oct 2026: the per-project P&L dashboard and the legacy Finance tab (FinanceValue monthly
+  // matrix) were removed with their API routes. Kept for released apps; both always read false.
   enablePnlDashboard Boolean @default(false)
-  // The legacy Finance tab (FinanceValue monthly OPEX/Revenue matrix) is opt-in per project, exactly
-  // like P&L above (owner, 9 Oct 2026). It used to appear on any project whose NAME contained
-  // "finance". Backfilled true only where FinanceValue rows already existed. Presentational only.
   financeEnabled Boolean @default(false)
   // What the project is for (owner, 9 Oct 2026): "TASK" | "FINANCE" | "CONTENT" | "PIPELINE". Every
   // project before this is TASK, and creation accepts only TASK for now (the rest are "coming soon",
@@ -495,13 +494,9 @@ model Project {
   // src/lib/project-tabs.ts. Hiding never deletes anything. Stored as the HIDDEN set so a tab added
   // later shows on every existing project by default. Board or List always stays visible.
   hiddenTabs String[] @default([])
-  // Gate: when true, a task in this project can't be moved to DONE until it has ≥1 attachment
-  // (finance proof-of-completion). Enforced in the task PATCH; toggled from the Tune drawer.
+  // RETIRED 11 Oct 2026: the "Bukti Pencairan before Done" gate and "calendar mode" (hide status) are
+  // gone, with nothing in their place. Kept for released apps; both always read false.
   requireAttachmentForDone Boolean @default(false)
-  // Calendar-only projects (e.g. the per-division "Master Calendar"s) hold dated entries, not work
-  // items — so status/done is noise there. When true the UI hides the done checkbox, the status
-  // select and the Table view's status column. Purely presentational: the column still exists and
-  // tasks keep their default TODO, so flipping this back off loses nothing.
   disableTaskStatus Boolean @default(false)
   // Notion-style Table view: shared, ordered list of column keys ("assignee"/"dueDate"/"priority"/
   // "status"/"tags" or "cf:<customFieldId>"). Name is always the implicit first column. Null = defaults.
@@ -1592,8 +1587,9 @@ model Attachment {
   url       String
   mimeType  String
   size      Int
-  // "GENERAL" = normal attachment / form-submission document; "PROOF" = "Bukti Pencairan" completion
-  // proof, a SEPARATE channel that the requireAttachmentForDone gate checks (never mixed with GENERAL).
+  // "GENERAL" = normal attachment / form-submission document; "PROOF" = "Bukti Pencairan", the payout
+  // proof finance uploads and the submitter sees on /submissions (kept separate from GENERAL). It used
+  // to also feed the requireAttachmentForDone gate, retired 11 Oct 2026.
   kind      String   @default("GENERAL")
   createdAt DateTime @default(now())
 

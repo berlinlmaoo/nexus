@@ -42,14 +42,12 @@ export async function GET() {
       }),
 
       // Overdue the way the Calendar counts it (lib/calendar/core.ts isOverdueAt): a task due today
-      // without a time is overdue only once the WIB day is over — it used to count from 07:00 WIB — and
-      // a task of a project without status (calendar-only) can never be done, so it is never overdue.
+      // without a time is overdue only once the WIB day is over — it used to count from 07:00 WIB.
       prisma.task.findMany({
         where: {
           assignees: { some: { userId } },
           status: { notIn: ["DONE", "CANCELLED"] },
           dueDate: { not: null, lt: now },
-          taskList: { project: { disableTaskStatus: false } },
         },
         select: { dueDate: true },
       }).then((rows) => rows.filter((t) => t.dueDate && isOverdueAt(t.dueDate, false, now)).length),

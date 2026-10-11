@@ -276,9 +276,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const [copyOpen, setCopyOpen] = useState(false);
   const projDetail = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId!), enabled: !!projectId, staleTime: 60_000 });
   const sections = (projDetail.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-  // Calendar-only project (Master Calendar): hide the done toggle + status select. The Section
-  // picker stays — that's the board column, not a status.
-  const noStatus = !!projDetail.data?.disableTaskStatus;
+  const { t: tr } = useLang();
   const deps = useQuery({ queryKey: ["task-deps", taskId], queryFn: () => nexusApi.taskDependencies(taskId) });
   const times = useQuery({ queryKey: ["task-times", taskId], queryFn: () => nexusApi.timeEntries(taskId) });
   // Only fetch the whole-workspace member list as a FALLBACK for tasks with no project. For a project
@@ -358,7 +356,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     onSettled: () => setUploadPct(null),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
   });
-  // Separate "Bukti Pencairan" (PROOF) channel — this is what the requireAttachmentForDone gate checks.
+  // Separate "Bukti Pencairan" (PROOF) channel: the payout proof finance uploads, which the person who
+  // submitted the form sees on /submissions. (It also fed the "before Done" gate, retired 11 Oct 2026.)
   const uploadProofMut = useMutation({
     mutationFn: (file: File) => nexusApi.uploadAttachmentProgress(taskId, file, setProofPct, "PROOF"),
     onMutate: () => setProofPct(0),
@@ -553,11 +552,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             ))}
             {/* toolbar: mark done + status + priority (old-NEXUS pills) */}
             <div className="flex flex-wrap items-center gap-2">
-              {!noStatus && (
-                <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
-                  {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? "Done" : "Mark done"}
-                </button>
-              )}
+              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
+                {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? "Done" : "Mark done"}
+              </button>
               {/* Section = the project's board column (TaskList). Falls back to global status if the
                   task isn't in a project (no sections). */}
               {sections.length > 0 ? (
@@ -567,7 +564,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 </div>
-              ) : noStatus ? null : (
+              ) : (
                 <div className="relative">
                   <select value={t.status ?? "TODO"} onChange={(e) => update.mutate({ status: e.target.value as never })} className="appearance-none rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
@@ -870,13 +867,13 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               </div>
             </SecCard>
 
-            {/* Bukti Pencairan — the SEPARATE proof channel the "wajib lampiran sebelum Done" gate checks */}
+            {/* Bukti Pencairan — the SEPARATE payout-proof channel (shown to the submitter on /submissions) */}
             <SecCard
               icon={Paperclip}
-              label="Bukti Pencairan"
+              label={tr("Bukti Pencairan")}
               action={
                 <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-emerald-400/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:border-emerald-500 hover:text-emerald-700">
-                  {uploadProofMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Upload bukti
+                  {uploadProofMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload proof")}
                   <input type="file" className="hidden" disabled={uploadProofMut.isPending} onChange={(e) => {
                     const f = e.target.files?.[0]; e.target.value = "";
                     if (!f) return;
@@ -890,7 +887,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {proofPct != null && (
                   <div className="rounded-xl border border-border bg-background px-3 py-2">
                     <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-muted-foreground">Uploading bukti…</span>
+                      <span className="font-semibold text-muted-foreground">{tr("Uploading proof…")}</span>
                       <span className="font-bold tabular-nums text-emerald-600">{proofPct}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-all duration-150" style={{ width: `${proofPct}%` }} /></div>
@@ -911,16 +908,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   </div>
                 ))}
                 {(attachments.data ?? []).filter((a) => a.kind === "PROOF").length === 0 && (
-                  // Say what's actually true for THIS project. The old copy said "wajib kalau project
-                  // ini butuh" for everyone, which reads as a warning even where nothing is enforced.
-                  <p className="text-xs text-muted-foreground">
-                    Belum ada bukti pencairan.{" "}
-                    {projDetail.data?.requireAttachmentForDone
-                      ? <b className="text-foreground">Wajib diisi sebelum task ini bisa ditandai Done.</b>
-                      : "Opsional — task tetap bisa ditandai Done tanpa ini."}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tr("No Bukti Pencairan yet.")}</p>
                 )}
-                {uploadProofMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadProofMut.error as Error)?.message || "Upload bukti gagal."}</p>}
+                {uploadProofMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadProofMut.error as Error)?.message || tr("Proof upload failed.")}</p>}
               </div>
             </SecCard>
 

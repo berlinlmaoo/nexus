@@ -42,7 +42,7 @@ import { SUPPORTED_FUNCTIONS, letterToIndex, toStored } from "@/lib/sheet-formul
  * once: thousands of mounted inputs would kill the browser; a background refetch can't steal focus
  * from an input that doesn't exist; and Rupiah/date formatting renders as text instead of fighting
  * the input's value. The uncontrolled-input-with-composite-key idea is lifted from
- * FinanceDashboardView, which is the app's other editable grid.
+ * the Finance tab's grid (retired 11 Oct 2026).
  */
 
 export type Selection = { r: number; c: number; r2: number; c2: number };

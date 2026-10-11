@@ -5,7 +5,7 @@
  * so a cell containing `=cmd|'/c calc'!A1` becomes code execution on whoever opens the export. A
  * leading apostrophe forces the cell to render as text.
  *
- * Lifted out of src/app/api/pnl/export/route.ts so the spreadsheet export shares one copy — this is
+ * Lifted out of the P&L export (retired 11 Oct 2026) so the spreadsheet export shares one copy — this is
  * exactly the kind of guard that silently drifts when it gets retyped in a second file. The
  * spreadsheet export is the MORE exposed of the two, because every cell is free user input.
  *

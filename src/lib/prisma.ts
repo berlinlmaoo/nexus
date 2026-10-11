@@ -1,6 +1,7 @@
 import { PrismaClient } from '@/generated/prisma'
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
+import { RETIRED_PROJECT_FLAGS } from '@/lib/project-retired-flags'
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
@@ -17,7 +18,22 @@ function createPrismaClient() {
   // places that must read the hash (credentials-auth, user/password) ask with an explicit `select`.
   // Typed as the plain client on purpose: helpers across the codebase take `PrismaClient`, and the
   // omit-specialised type is not assignable to it. The omission still happens at runtime.
-  return new PrismaClient({ adapter, omit: { user: { password: true, waLinkCode: true } } }) as unknown as PrismaClient
+  const base = new PrismaClient({ adapter, omit: { user: { password: true, waLinkCode: true } } })
+  // The retired "Customize project" switches (owner, 11 Oct 2026; see lib/project-retired-flags.ts) read
+  // as their fixed values wherever a project is returned, whatever the row still holds, so released apps
+  // that decode them behave the same before and after the backfill SQL runs.
+  const fixed = <V extends boolean>(value: V) => ({ needs: {}, compute: () => value })
+  return base.$extends({
+    result: {
+      project: {
+        enableTaskBatchDuplicate: fixed(RETIRED_PROJECT_FLAGS.enableTaskBatchDuplicate),
+        enablePnlDashboard: fixed(RETIRED_PROJECT_FLAGS.enablePnlDashboard),
+        financeEnabled: fixed(RETIRED_PROJECT_FLAGS.financeEnabled),
+        requireAttachmentForDone: fixed(RETIRED_PROJECT_FLAGS.requireAttachmentForDone),
+        disableTaskStatus: fixed(RETIRED_PROJECT_FLAGS.disableTaskStatus),
+      },
+    },
+  }) as unknown as PrismaClient
 }
 
 const prismaClient = globalForPrisma.prisma ?? createPrismaClient()

@@ -12,13 +12,42 @@ export const ID_PROJECTS: Record<string, string> = {
   "Automations": "Otomasi",
   "Pages": "Halaman",
   "Forms": "Formulir",
-  "Finance Dashboard": "Dashboard Finance",
   "Tabs": "Tab",
   "Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back.": "Pilih tab yang tampil di project ini. Mematikan tab cuma menyembunyikannya: isinya tidak dihapus, dan begitu dinyalakan lagi semuanya kembali.",
   "Board or List stays on": "Board atau Daftar tetap nyala",
   "Only managers and above can change the tabs.": "Hanya manager ke atas yang bisa mengubah tab.",
-  // Project settings → Customize project: the Finance switch next to P&L
-  "Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&L. Turning it off only hides the tab — the numbers stay.": "OPEX dan revenue bulanan project ini, per tahun. Mati sampai BoD menyalakannya, sama seperti P&L. Mematikannya cuma menyembunyikan tab — angkanya tetap ada.",
+  // Project settings → Customize project (only Auto assign since 11 Oct 2026)
+  "Customize project": "Kustomisasi project",
+  "Automatically assign the selected members to new tasks in this project. If you pick an assignee manually while creating a task, auto assign is skipped.": "Member yang dipilih otomatis di-assign ke task baru di project ini. Kalau saat bikin task kamu pilih assignee sendiri, auto assign dilewati.",
+  "Pick at least one member before turning on auto assign.": "Pilih minimal satu member dulu sebelum menyalakan auto assign.",
+  "Default assignees · {n}": "Assignee default · {n}",
+  "No members in this project yet — add some below first.": "Belum ada member di project ini — tambahkan dulu di bawah.",
+  // Task multi-select (⌘/Ctrl+click, Shift+click, right-click) — on in every project since 11 Oct 2026
+  "Task duplicated": "Task diduplikasi",
+  "{n} tasks duplicated": "{n} task diduplikasi",
+  "Task deleted": "Task dihapus",
+  "{n} tasks deleted": "{n} task dihapus",
+  "Duplicate": "Duplikat",
+  "Duplicate + set due date": "Duplikat + atur tenggat",
+  "Duplicate + date…": "Duplikat + tanggal…",
+  "Copy to project": "Salin ke project",
+  "Copy link": "Salin tautan",
+  "Select multiple": "Pilih beberapa",
+  "{n} task selected": "{n} task dipilih",
+  "{n} tasks selected": "{n} task dipilih",
+  "Delete {n} task?": "Hapus {n} task?",
+  "Delete {n} tasks?": "Hapus {n} task?",
+  "Hold to delete…": "Tahan untuk menghapus…",
+  "Duplicate {n} task": "Duplikat {n} task",
+  "Duplicate {n} tasks": "Duplikat {n} task",
+  "Set a new due date for the copies (optional).": "Atur tenggat baru untuk salinannya (opsional).",
+  "Copy's due date": "Tenggat salinan",
+  "Leave blank = keep the task's original date.": "Kosongkan = pakai tanggal asli task.",
+  // Task detail: the Bukti Pencairan slot (payout proof finance uploads; the submitter sees it on Submissions)
+  "Upload proof": "Upload bukti",
+  "Uploading proof…": "Mengunggah bukti…",
+  "No Bukti Pencairan yet.": "Belum ada bukti pencairan.",
+  "Proof upload failed.": "Upload bukti gagal.",
   // New project: the type picker
   "What is this project for?": "Project ini untuk apa?",
   "Coming soon": "Segera hadir",
@@ -30,7 +59,6 @@ export const ID_PROJECTS: Record<string, string> = {
   // Refusals from /api/projects, by code
   "Board or List has to stay on — at least one way to see the tasks.": "Board atau Daftar harus tetap nyala — minimal satu cara untuk melihat task.",
   "That tab can't be changed here. Refresh the page and try again.": "Tab itu tidak bisa diubah di sini. Muat ulang halaman lalu coba lagi.",
-  "Only BoD and above can turn Finance on or off.": "Hanya BoD ke atas yang bisa menyalakan atau mematikan Finance.",
   "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.": "Tipe project itu segera hadir. Untuk sekarang kamu bisa membuat Task Project, Pipeline Dashboard, atau Outlet Sales Dashboard.",
   // Mission Control: projects are called projects (owner, 9 Oct 2026 — "kok masih new mission?").
   // The page names "Mission Control" and "My Mission" stay.

@@ -372,21 +372,16 @@ export type NexusProject = {
   totalTasks?: number;
   completedTasks?: number;
   progress?: number;
-  // Customize-project settings (shared with core NEXUS — same DB columns).
-  enableTaskBatchDuplicate?: boolean;
+  // Customize-project settings (shared with core NEXUS — same DB columns). enableTaskBatchDuplicate,
+  // enablePnlDashboard, financeEnabled, requireAttachmentForDone and disableTaskStatus were retired on
+  // 11 Oct 2026: the server still sends them (fixed values, for released apps) but the web ignores them.
   autoAssignEnabled?: boolean;
   autoAssignAssigneeIds?: string[];
-  enablePnlDashboard?: boolean;
-  requireAttachmentForDone?: boolean;
-  /** Calendar-only project: hide the done checkbox, status select and Table status column. */
-  disableTaskStatus?: boolean;
   tableColumns?: string[] | null;
   /** "TASK" | "FINANCE" | "CONTENT" | "PIPELINE" (9 Oct 2026). Absent on an older server = TASK. */
   type?: string;
   /** Tab keys this project hides (components/projects/project-tabs.ts). Unknown keys are ignored. */
   hiddenTabs?: string[];
-  /** The Finance tab is opt-in, like enablePnlDashboard (9 Oct 2026). */
-  financeEnabled?: boolean;
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
   taskLists?: Array<{ id: string; name: string; position?: number; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
@@ -1336,39 +1331,6 @@ export type NexusAnnouncement = { id: string; title: string; body: string; tone:
 // makes the number mean "seen since it last went out" rather than an all-time total.
 export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number; targets?: Array<{ id: string; name: string | null }>; repeatUntil?: string | null; repeatAtTime?: string | null; lastRepeatedAt?: string | null };
 
-export type NexusFinanceLineItem = { id: string; name: string; order: number; monthly: number[]; total: number };
-export type NexusFinanceCategory = { id: string; kind: "OPEX" | "REVENUE"; name: string; order: number; lineItems: NexusFinanceLineItem[]; subtotalByMonth: number[]; subtotal: number };
-export type NexusFinanceDashboard = {
-  year: number;
-  categories: NexusFinanceCategory[];
-  totals: { opexByMonth: number[]; revenueByMonth: number[]; profitByMonth: number[]; opexTotal: number; revenueTotal: number; profitTotal: number };
-};
-
-// --- P&L dashboard (standalone per-project: transaction expenses + income pipeline, BoD-only) ---
-export type PnlAttachment = { id: string; filename: string; url: string; mimeType: string; size: number };
-export type PnlExpense = { id: string; date: string; amount: number; description?: string | null; categoryId?: string | null; recurringId?: string | null; attachments: PnlAttachment[] };
-export type PnlPayment = { id: string; date: string; amount: number; note?: string | null };
-export type PnlIncome = { id: string; title: string; totalAmount: number; stageId?: string | null; expectedDate?: string | null; notes?: string | null; createdAt?: string; paid: number; outstanding: number; payments: PnlPayment[] };
-export type PnlCategory = { id: string; name: string; color: string; order: number; total: number; byMonth: number[] };
-export type PnlStage = { id: string; name: string; color: string; order: number; count: number; outstanding: number };
-export type PnlRecurring = { id: string; description: string; amount: number; categoryId?: string | null; dayOfMonth: number; active: boolean };
-export type PnlMonthDetail = {
-  month: number;
-  days: { day: number; income: number; expense: number }[];
-  expenses: PnlExpense[];
-  payments: (PnlPayment & { incomeId: string; incomeTitle: string })[];
-};
-export type PnlDashboard = {
-  year: number;
-  months: { income: number[]; expense: number[]; budget: (number | null)[] };
-  totals: { income: number; expense: number; profit: number; pipelineTotal: number; pipelineOutstanding: number; paidAllTime: number };
-  categories: PnlCategory[];
-  stages: PnlStage[];
-  incomes: PnlIncome[];
-  recurring: PnlRecurring[];
-  monthDetail: PnlMonthDetail | null;
-};
-
 export type NexusForm = {
   id: string;
   name: string;
@@ -2190,7 +2152,7 @@ export const nexusApi = {
   workspaceProjects: (workspaceId: string) => apiFetch<NexusProject[]>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),
   createProject: (payload: CreateProjectPayload) => apiFetch<NexusProject>("/api/projects", { method: "POST", body: JSON.stringify(payload) }),
   project: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}`),
-  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard" | "requireAttachmentForDone" | "disableTaskStatus" | "hiddenTabs" | "financeEnabled">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "hiddenTabs">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteProject: (projectId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}`, { method: "DELETE" }),
   duplicateProject: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}/duplicate`, { method: "POST" }),
   workflowBundles: () => apiFetch<{ bundles: NexusWorkflowBundle[] }>("/api/workflow-bundles"),
@@ -2938,11 +2900,6 @@ export const nexusApi = {
   updateAnnouncement: (id: string, payload: { title?: string; body?: string; tone?: string; active?: boolean }) => apiFetch<{ announcement: NexusAdminAnnouncement }>(`/api/announcements/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}`, { method: "DELETE" }),
 
-  // --- Finance dashboard (per Finance project, monthly OPEX/Revenue) ---
-  financeDashboard: (projectId: string, year: number) => apiFetch<NexusFinanceDashboard>(`/api/finance/dashboard?projectId=${encodeURIComponent(projectId)}&year=${year}`),
-  setFinanceValue: (payload: { projectId: string; lineItemId: string; year: number; month: number; amount: number }) => apiFetch<{ value: unknown }>("/api/finance/value", { method: "PATCH", body: JSON.stringify(payload) }),
-
-  // --- P&L dashboard (standalone, BoD-only) ---
   // --- Project spreadsheet ---
   projectSheets: (projectId: string) =>
     apiFetch<{ sheets: { id: string; name: string; position: number; rowCount: number }[] }>(
@@ -3067,32 +3024,6 @@ export const nexusApi = {
   deleteSheetRows: (sheetId: string, rowIds: string[]) =>
     apiFetch<{ deleted: number }>(`/api/sheets/${sheetId}/rows`, { method: "DELETE", body: JSON.stringify({ rowIds }) }),
 
-  pnlDashboard: (projectId: string, year: number, month?: number | null) => apiFetch<PnlDashboard>(`/api/pnl/dashboard?projectId=${encodeURIComponent(projectId)}&year=${year}${month ? `&month=${month}` : ""}`),
-  pnlCreateExpense: (payload: { projectId: string; date: string; amount: number; description?: string | null; categoryId?: string | null }) => apiFetch<PnlExpense>("/api/pnl/expenses", { method: "POST", body: JSON.stringify(payload) }),
-  pnlUpdateExpense: (expenseId: string, payload: { date?: string; amount?: number; description?: string | null; categoryId?: string | null }) => apiFetch<PnlExpense>(`/api/pnl/expenses/${expenseId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  pnlDeleteExpense: (expenseId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/expenses/${expenseId}`, { method: "DELETE" }),
-  pnlUploadExpenseAttachment: (expenseId: string, file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    return apiFetch<PnlAttachment>(`/api/pnl/expenses/${expenseId}/attachments`, { method: "POST", body: fd });
-  },
-  pnlDeleteAttachment: (attachmentId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/attachments/${attachmentId}`, { method: "DELETE" }),
-  pnlCreateIncome: (payload: { projectId: string; title: string; totalAmount: number; stageId?: string | null; expectedDate?: string | null; notes?: string | null }) => apiFetch<PnlIncome>("/api/pnl/incomes", { method: "POST", body: JSON.stringify(payload) }),
-  pnlUpdateIncome: (incomeId: string, payload: { title?: string; totalAmount?: number; stageId?: string | null; expectedDate?: string | null; notes?: string | null }) => apiFetch<PnlIncome>(`/api/pnl/incomes/${incomeId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  pnlDeleteIncome: (incomeId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/incomes/${incomeId}`, { method: "DELETE" }),
-  pnlCreatePayment: (incomeId: string, payload: { date: string; amount: number; note?: string | null }) => apiFetch<PnlPayment>(`/api/pnl/incomes/${incomeId}/payments`, { method: "POST", body: JSON.stringify(payload) }),
-  pnlDeletePayment: (paymentId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/payments/${paymentId}`, { method: "DELETE" }),
-  pnlCreateStage: (payload: { projectId: string; name: string; color?: string }) => apiFetch<PnlStage>("/api/pnl/stages", { method: "POST", body: JSON.stringify(payload) }),
-  pnlUpdateStage: (stageId: string, payload: { name?: string; color?: string; order?: number }) => apiFetch<PnlStage>(`/api/pnl/stages/${stageId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  pnlDeleteStage: (stageId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/stages/${stageId}`, { method: "DELETE" }),
-  pnlCreateCategory: (payload: { projectId: string; name: string; color?: string }) => apiFetch<PnlCategory>("/api/pnl/categories", { method: "POST", body: JSON.stringify(payload) }),
-  pnlUpdateCategory: (categoryId: string, payload: { name?: string; color?: string; order?: number }) => apiFetch<PnlCategory>(`/api/pnl/categories/${categoryId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  pnlDeleteCategory: (categoryId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/categories/${categoryId}`, { method: "DELETE" }),
-  pnlSetBudget: (payload: { projectId: string; year: number; month: number; amount: number }) => apiFetch<{ success?: boolean }>("/api/pnl/budget", { method: "PUT", body: JSON.stringify(payload) }),
-  pnlCreateRecurring: (payload: { projectId: string; description: string; amount: number; categoryId?: string | null; dayOfMonth?: number }) => apiFetch<PnlRecurring>("/api/pnl/recurring", { method: "POST", body: JSON.stringify(payload) }),
-  pnlUpdateRecurring: (recurringId: string, payload: { description?: string; amount?: number; categoryId?: string | null; dayOfMonth?: number; active?: boolean }) => apiFetch<PnlRecurring>(`/api/pnl/recurring/${recurringId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  pnlDeleteRecurring: (recurringId: string) => apiFetch<{ success?: boolean }>(`/api/pnl/recurring/${recurringId}`, { method: "DELETE" }),
-  pnlExportUrl: (projectId: string, year: number) => `/api/pnl/export?projectId=${encodeURIComponent(projectId)}&year=${year}`,
   submitForm: (formId: string, data: Record<string, unknown>) => apiFetch<{ submission?: unknown }>(`/api/forms/${formId}/submit`, { method: "POST", body: JSON.stringify({ data }) }),
 
   gideonUsage: () => apiFetch<{
