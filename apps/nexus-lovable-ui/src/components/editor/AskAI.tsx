@@ -62,6 +62,21 @@ const CURSOR_ACTIONS: ActionDef[] = [
 ];
 
 const PAGE_TEXT_MAX = 12000;
+
+type Member = { id: string; name: string };
+/**
+ * The project member an action item's owner names — only when exactly one member matches the full name or
+ * the first name (case-insensitive). Anything else stays unassigned (the name goes into the description).
+ */
+export function matchOwner(owner: string | null | undefined, members: Member[]): string | null {
+  const o = (owner ?? "").trim().toLowerCase();
+  if (!o) return null;
+  const full = members.filter((m) => m.name.trim().toLowerCase() === o);
+  if (full.length === 1) return full[0].id;
+  if (full.length > 1) return null;
+  const first = members.filter((m) => m.name.trim().toLowerCase().split(/\s+/)[0] === o.split(/\s+/)[0] && o.split(/\s+/).length === 1);
+  return first.length === 1 ? first[0].id : null;
+}
 const TONE_LABEL: Record<string, string> = { professional: "Professional", casual: "Casual", friendly: "Friendly", confident: "Confident", straightforward: "Straightforward" };
 
 function snapshot(editor: Editor, mode: AskAiMode): Snapshot | null {
@@ -106,7 +121,8 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
   const [phase, setPhase] = useState<"menu" | "running" | "done" | "error">("menu");
   const [result, setResult] = useState("");
   const [doc, setDoc] = useState<JSONContent | null>(null);
-  const [items, setItems] = useState<Array<GideonActionItem & { on: boolean }> | null>(null);
+  const [items, setItems] = useState<Array<GideonActionItem & { on: boolean; assigneeId: string | null }> | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<{ def: ActionDef | null; prompt: string } | null>(null);
   const [creating, setCreating] = useState(false);
@@ -215,7 +231,7 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
           acc = ev.content;
           setResult(ev.content);
           setDoc(markdownToDoc(ev.content));
-          if (ev.items) setItems(ev.items.map((i) => ({ ...i, on: true })));
+          if (ev.items) setItems(ev.items.map((i) => ({ ...i, on: true, assigneeId: null })));
         } else if (ev.type === "error") failed = ev.content ?? t("Something went wrong.");
       },
       controller.signal,
@@ -236,6 +252,22 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
     if (typed) void run(null, typed);
     else if (filtered[index]) void run(filtered[index], "");
   };
+
+  // Action items: the page's project members, so an owner the text names can be assigned (owner, 12 Oct 2026).
+  const itemsKey = items ? items.map((i) => i.owner ?? "").join("|") : null;
+  useEffect(() => {
+    const projectId = ctxOf(editor)?.projectId;
+    if (itemsKey === null || !projectId) return;
+    let alive = true;
+    nexusApi.projectMembers(projectId).then((res) => {
+      if (!alive) return;
+      const rows = Array.isArray(res) ? res : res.members ?? [];
+      const list = rows.map((r) => ({ id: r.user?.id ?? r.userId ?? "", name: r.user?.name ?? "" })).filter((m) => m.id && m.name);
+      setMembers(list);
+      setItems((cur) => cur?.map((i) => ({ ...i, assigneeId: i.assigneeId ?? matchOwner(i.owner, list) })) ?? cur);
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [itemsKey, editor]);
 
   const content = () => doc ?? markdownToDoc(result);
   const replace = () => {
@@ -272,12 +304,17 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
     setCreating(true);
     try {
       const project = await nexusApi.project(projectId);
+      // The default To-do section: the first section bound to the To-do status, else the first section.
       const lists = [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-      const list = lists[0];
+      const list = lists.find((l) => l.taskStatus === "TODO") ?? lists[0];
       if (!list) throw new Error(t("This project has no section to put tasks in."));
       let made = 0;
       for (const i of picked) {
-        await nexusApi.createTask({ title: i.title, projectId, taskListId: list.id, dueDate: i.due ?? null, description: i.owner ? t("Owner (from the page): {name}", { name: i.owner }) : null });
+        await nexusApi.createTask({
+          title: i.title, projectId, taskListId: list.id, status: "TODO", dueDate: i.due ?? null,
+          ...(i.assigneeId ? { assigneeIds: [i.assigneeId] } : {}),
+          description: i.owner && !i.assigneeId ? t("Owner (from the page): {name}", { name: i.owner }) : null,
+        });
         made++;
       }
       qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
@@ -313,9 +350,20 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
                       <input type="checkbox" checked={i.on} onChange={(e) => setItems((cur) => cur!.map((x, k) => (k === n ? { ...x, on: e.target.checked } : x)))} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
                       <span className="min-w-0">
                         <span className="block">{i.title}</span>
-                        {(i.due || i.owner) && <span className="block text-[11px] text-muted-foreground">{[i.due, i.owner].filter(Boolean).join(" · ")}</span>}
+                        {i.due && <span className="block text-[11px] text-muted-foreground">{i.due}</span>}
                       </span>
                     </label>
+                    {canTasks && (
+                      <select
+                        value={i.assigneeId ?? ""}
+                        onChange={(e) => setItems((cur) => cur!.map((x, k) => (k === n ? { ...x, assigneeId: e.target.value || null } : x)))}
+                        aria-label={t("Assignee")}
+                        className="ml-6 mt-1 max-w-[16rem] rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground outline-none focus:border-primary"
+                      >
+                        <option value="">{i.owner ? t("Unassigned (“{name}” in the description)", { name: i.owner }) : t("Unassigned")}</option>
+                        {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    )}
                   </li>
                 ))}
               </ul>

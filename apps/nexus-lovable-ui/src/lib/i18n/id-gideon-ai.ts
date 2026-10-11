@@ -135,6 +135,7 @@ export const ID_GIDEON_AI: Record<string, string> = {
   "Understand": "Pahami",
   "Write": "Tulis",
   "AI": "AI",
+  "Unassigned (“{name}” in the description)": "Tanpa PIC (“{name}” ditulis di deskripsi)",
   "Ask anything. Type @ to add a page": "Tanya apa saja. Ketik @ untuk menambah halaman",
   "Professional": "Profesional",
   "Casual": "Santai",
