@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
+    "@formulajs/formulajs": "^4.6.1",
     "@heroui/react": "^3.1.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
