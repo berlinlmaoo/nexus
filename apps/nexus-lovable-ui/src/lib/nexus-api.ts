@@ -2085,6 +2085,10 @@ export type CreateProjectPayload = {
   icon?: string;
   workspaceId: string;
   folderId?: string | null;
+  /** Tabs a TASK project starts without (PROJECT_TAB_KEYS; Board or List stays). Ignored for other types. 11 Oct 2026. */
+  hiddenTabs?: string[];
+  /** People of that workspace added as MEMBER next to the creator (LEAD). 11 Oct 2026. */
+  memberIds?: string[];
 };
 
 export type CreateTaskPayload = {

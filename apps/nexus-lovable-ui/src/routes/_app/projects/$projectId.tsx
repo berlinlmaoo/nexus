@@ -12,6 +12,7 @@ import { blockText, fmtDate, fmtDue, nexusApi, statusLabel, type CreateTaskPaylo
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
+import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { AutomationsView } from "@/components/automations/AutomationsView";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
@@ -789,100 +790,55 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   const qc = useQueryClient();
   const members = project.members ?? [];
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"list" | "add" | "team">("list");
-  const [search, setSearch] = useState("");
-  const [pending, setPending] = useState<{ id: string; name: string } | null>(null);
+  const [picking, setPicking] = useState(false);
+  const { t } = useLang();
 
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const myRole = wsm.data?.role ?? "";
   const canAdd = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD ke atas
-  const teamsQ = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, retry: false, enabled: open && canAdd });
 
   const ids = members.map((m) => m.userId || m.user?.id).filter(Boolean) as string[];
   const memberIds = new Set(ids);
-  const addable = (wsm.data?.members ?? []).filter((m) => !memberIds.has(m.userId) && (!search.trim() || (m.name ?? "").toLowerCase().includes(search.toLowerCase()) || (m.email ?? "").toLowerCase().includes(search.toLowerCase())));
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
-  const addPerson = useMutation({ mutationFn: (userId: string) => nexusApi.addProjectMember(project.id, userId, "MEMBER"), onSuccess: refresh });
-  const addToTeam = useMutation({ mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) => nexusApi.addTeamMember(teamId, userId), onSuccess: () => { qc.invalidateQueries({ queryKey: ["nexus", "teams"] }); refresh(); } });
 
   if (ids.length === 0 && !canAdd) return null;
-  const close = () => { setOpen(false); setMode("list"); setSearch(""); setPending(null); };
+  const close = () => setOpen(false);
   const labelCls = "px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center rounded-full transition hover:opacity-80" title="View / manage project members" aria-label="Project members">
-        {ids.length > 0 ? <AvatarStack ids={ids} size={26} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ Members</span>}
+      <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center rounded-full transition hover:opacity-80" title={t("Project members")} aria-label={t("Project members")}>
+        {ids.length > 0 ? <AvatarStack ids={ids} size={26} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ {t("Members")}</span>}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
           <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-pop">
-            {mode === "list" && (
-              <>
-                <div className={labelCls}>Project members · {members.length}</div>
-                <div className="max-h-72 space-y-0.5 overflow-y-auto">
-                  {members.map((m) => {
-                    const uid = m.userId || m.user?.id || "";
-                    return (
-                      <div key={uid} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
-                        <Avatar userId={uid} name={m.user?.name} avatar={m.user?.avatar} size={28} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? "—"}</div>
-                          {m.role && <div className="text-[11px] capitalize text-muted-foreground">{m.role.toLowerCase()}</div>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {canAdd && (
-                  <button onClick={() => setMode("add")} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border px-2 py-2 text-sm font-semibold text-primary transition hover:bg-accent">
-                    <Plus className="h-4 w-4" /> Add people to project
-                  </button>
-                )}
-              </>
-            )}
-
-            {mode === "add" && (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className={labelCls}>Add people</span>
-                  <button onClick={() => { setMode("list"); setSearch(""); }} className="px-2 text-xs font-semibold text-muted-foreground hover:text-foreground">Back</button>
-                </div>
-                <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name / email…" className="mb-1 w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
-                <div className="max-h-64 space-y-0.5 overflow-y-auto">
-                  {addable.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Everyone's already a member / no match found.</div>}
-                  {addable.map((m) => (
-                    <button key={m.userId} disabled={addPerson.isPending} onClick={() => addPerson.mutate(m.userId, { onSuccess: () => { setPending({ id: m.userId, name: m.name }); setMode("team"); setSearch(""); } })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent disabled:opacity-50">
-                      <Avatar userId={m.userId} name={m.name} avatar={m.avatar} size={26} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{m.name || m.email}</span>
-                      {addPerson.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : <Plus className="h-3.5 w-3.5 text-muted-foreground" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {mode === "team" && pending && (
-              <>
-                <div className="px-2 py-1.5 text-sm"><b>{pending.name}</b> ✅ added to project.<div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Which team should they join?</div></div>
-                <div className="max-h-56 space-y-0.5 overflow-y-auto">
-                  {(teamsQ.data ?? []).map((t) => (
-                    <button key={t.id} disabled={addToTeam.isPending} onClick={() => addToTeam.mutate({ teamId: t.id, userId: pending.id }, { onSuccess: () => { setMode("list"); setPending(null); } })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent disabled:opacity-50">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />
-                      <span className="flex-1 truncate text-sm font-semibold">{t.name}</span>
-                      {addToTeam.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-                    </button>
-                  ))}
-                  {(teamsQ.data ?? []).length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">No teams yet.</div>}
-                </div>
-                <button onClick={() => { setMode("list"); setPending(null); }} className="mt-1 w-full rounded-lg px-2 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Later / skip team</button>
-              </>
+            <div className={labelCls}>{t("Project members · {n}", { n: members.length })}</div>
+            <div className="max-h-72 space-y-0.5 overflow-y-auto">
+              {members.map((m) => {
+                const uid = m.userId || m.user?.id || "";
+                return (
+                  <div key={uid} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
+                    <Avatar userId={uid} name={m.user?.name} avatar={m.user?.avatar} size={28} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? "—"}</div>
+                      {m.role && <div className="text-[11px] capitalize text-muted-foreground">{m.role.toLowerCase()}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {canAdd && (
+              // Multi-select (owner, 11 Oct 2026): tick several people, one "Add N people", and no
+              // "which team should they join?" step afterwards.
+              <button onClick={() => { setOpen(false); setPicking(true); }} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border px-2 py-2 text-sm font-semibold text-primary transition hover:bg-accent">
+                <Plus className="h-4 w-4" /> {t("Add people to project")}
+              </button>
             )}
           </div>
         </>
       )}
+      {picking && <AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setPicking(false)} onAdded={() => setPicking(false)} />}
     </div>
   );
 }

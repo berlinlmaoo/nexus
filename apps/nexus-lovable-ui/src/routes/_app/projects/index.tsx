@@ -8,7 +8,8 @@ import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { ProjectTypeChosen, ProjectTypePicker } from "@/components/projects/ProjectTypePicker";
-import { projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
+import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
+import { MemberMultiPicker } from "@/components/projects/MemberMultiPicker";
 import { useLang } from "@/lib/lang";
 import { projects as fallbackProjects } from "@/lib/mock-data";
 import { nexusApi, ORG_HIERARCHY, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
@@ -111,6 +112,10 @@ function ProjectsPage() {
   const [newProjectType, setNewProjectType] = useState<ProjectTypeId | null>(null);
   // The folder a new project goes into (from a folder's "New project here"); null = no folder.
   const [newProjectFolderId, setNewProjectFolderId] = useState<string | null>(null);
+  // Set up in the same dialog (owner, 11 Oct 2026): the tabs a Task Project starts without (same keys
+  // and Board-or-List rule as Project settings → Tabs) and the people added next to the creator.
+  const [newProjectHiddenTabs, setNewProjectHiddenTabs] = useState<string[]>([]);
+  const [newProjectMemberIds, setNewProjectMemberIds] = useState<string[]>([]);
   const { t: tr } = useLang();
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1 });
@@ -215,12 +220,16 @@ function ProjectsPage() {
         workspaceId: newProjectWorkspaceId || workspaceOptions[0]?.id || "",
         type: newProjectType ?? "TASK",
         ...(newProjectFolderId ? { folderId: newProjectFolderId } : {}),
+        ...((newProjectType ?? "TASK") === "TASK" && newProjectHiddenTabs.length > 0 ? { hiddenTabs: newProjectHiddenTabs } : {}),
+        ...(newProjectMemberIds.length > 0 ? { memberIds: newProjectMemberIds } : {}),
       }),
     onSuccess: async (project) => {
       invalidateProjectData(queryClient);
       setIsCreateOpen(false);
       setNewProjectName("");
       setNewProjectDescription("");
+      setNewProjectHiddenTabs([]);
+      setNewProjectMemberIds([]);
       navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
     },
     // Someone made the board a moment ago (or this page's copy of the roster is stale): open that one.
@@ -244,6 +253,8 @@ function ProjectsPage() {
     if (!newProjectWorkspaceId && workspaceOptions[0]) setNewProjectWorkspaceId(workspaceOptions[0].id);
     setNewProjectType(null);
     setNewProjectFolderId(folderId);
+    setNewProjectHiddenTabs([]);
+    setNewProjectMemberIds([]);
     setIsCreateOpen(true);
   };
   const search = Route.useSearch();
@@ -489,7 +500,7 @@ function ProjectsPage() {
                     Workspace
                     <select
                       value={newProjectWorkspaceId}
-                      onChange={(e) => setNewProjectWorkspaceId(e.target.value)}
+                      onChange={(e) => { setNewProjectWorkspaceId(e.target.value); setNewProjectMemberIds([]); }}
                       className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                     >
                       <option value="">Select workspace…</option>
@@ -501,6 +512,44 @@ function ProjectsPage() {
                     </select>
                   </label>
                 )}
+
+              {newProjectType === "TASK" && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground">{tr("Tabs")}</div>
+                  <p className="text-xs text-muted-foreground">{tr("The tabs this project starts with. You can change them later in Project settings.")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PROJECT_TAB_KEYS.map((key) => {
+                      const shown = !newProjectHiddenTabs.includes(key);
+                      // Board or List stays on, as in Project settings: a task project needs a way to see its tasks.
+                      const lastTaskView = shown && (TASK_VIEW_TAB_KEYS as readonly string[]).includes(key) && TASK_VIEW_TAB_KEYS.filter((k) => !newProjectHiddenTabs.includes(k)).length === 1;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          aria-pressed={shown}
+                          disabled={lastTaskView}
+                          title={lastTaskView ? tr("Board or List stays on") : undefined}
+                          onClick={() => setNewProjectHiddenTabs((cur) => (shown ? [...cur, key] : cur.filter((k) => k !== key)))}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed",
+                            shown ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground line-through hover:bg-accent",
+                          )}
+                        >
+                          {shown && <Check className="h-3 w-3" />} {tr(PROJECT_TAB_LABELS[key])}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(newProjectWorkspaceId || workspaceOptions[0]?.id) && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground">{tr("Members")}{newProjectMemberIds.length > 0 && ` · ${newProjectMemberIds.length}`}</div>
+                  <p className="text-xs text-muted-foreground">{tr("Optional. You lead the project; the people you pick join as members.")}</p>
+                  <MemberMultiPicker workspaceId={newProjectWorkspaceId || workspaceOptions[0]?.id || ""} value={newProjectMemberIds} onChange={setNewProjectMemberIds} />
+                </div>
+              )}
 
               {!workspaceOptions.length && (
                 <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">

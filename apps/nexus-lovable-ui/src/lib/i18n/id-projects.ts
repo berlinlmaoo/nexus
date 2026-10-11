@@ -22,6 +22,18 @@ export const ID_PROJECTS: Record<string, string> = {
   "Pick at least one member before turning on auto assign.": "Pilih minimal satu member dulu sebelum menyalakan auto assign.",
   "Default assignees · {n}": "Assignee default · {n}",
   "No members in this project yet — add some below first.": "Belum ada member di project ini — tambahkan dulu di bawah.",
+  // New project: tabs and members chosen in the create dialog (11 Oct 2026)
+  "The tabs this project starts with. You can change them later in Project settings.": "Tab yang tampil saat project dibuat. Bisa diubah nanti di Pengaturan project.",
+  "Members": "Member",
+  "Optional. You lead the project; the people you pick join as members.": "Opsional. Kamu jadi lead project; orang yang kamu pilih masuk sebagai member.",
+  "No one else in this workspace yet.": "Belum ada orang lain di workspace ini.",
+  "Someone you picked isn't in this workspace any more. Refresh and pick again.": "Ada orang yang kamu pilih sudah tidak di workspace ini. Muat ulang lalu pilih lagi.",
+  // Adding people to a project (header and Project settings), multi-select (11 Oct 2026)
+  "Add 1 person": "Tambah 1 orang",
+  "Add {n} people": "Tambah {n} orang",
+  "Project members": "Member project",
+  "Project members · {n}": "Member project · {n}",
+  "Add people to project": "Tambah orang ke project",
   // Task multi-select (⌘/Ctrl+click, Shift+click, right-click) — on in every project since 11 Oct 2026
   "Task duplicated": "Task diduplikasi",
   "{n} tasks duplicated": "{n} task diduplikasi",

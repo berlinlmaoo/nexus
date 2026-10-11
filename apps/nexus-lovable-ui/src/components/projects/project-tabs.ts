@@ -69,6 +69,8 @@ export function projectSettingsErrorText(code: unknown): string | null {
     case "UNKNOWN_TAB":
     case "INVALID_TABS":
       return "That tab can't be changed here. Refresh the page and try again.";
+    case "MEMBER_NOT_IN_WORKSPACE":
+      return "Someone you picked isn't in this workspace any more. Refresh and pick again.";
     case "TYPE_COMING_SOON":
       return "That project type is coming soon. For now you can create a Task Project, a Pipeline Dashboard or an Outlet Sales Dashboard.";
     // The company's one pipeline (owner/GM, 9 Oct 2026). PIPELINE_EXISTS opens the board when the answer

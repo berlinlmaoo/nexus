@@ -16,7 +16,8 @@ function rosterOf(data: { members?: NexusUser[] } | NexusUser[] | undefined): Ne
 }
 
 /**
- * Project settings → Members → "Add members" (owner, 9 Oct 2026: "kenapa drop down gini doang? gaada
+ * Project settings → Members → "Add members", and the project header's "Add people" (owner, 11 Oct 2026:
+ * tick several, one "Add N people" button, no team step afterwards) (owner, 9 Oct 2026: "kenapa drop down gini doang? gaada
  * search bar dan gabisa select multiple org"). A searchable multi-select over the workspace people who
  * are not in the project yet, for every project type (task projects and the Pipeline Dashboard alike).
  * Keyboard: type to filter, ↑/↓ to move, Enter or Space to tick, Ctrl/⌘+Enter to add, Esc to close.
@@ -198,7 +199,7 @@ export function AddProjectMembersDialog({
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50"
           >
             {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-            {n === 0 ? t("Add members") : n === 1 ? t("Add 1 member") : t("Add {n} members", { n })}
+            {n === 0 ? t("Add people") : n === 1 ? t("Add 1 person") : t("Add {n} people", { n })}
           </button>
         </div>
       </div>

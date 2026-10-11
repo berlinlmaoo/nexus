@@ -8,7 +8,8 @@ import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
-import { checkCreatableProjectType } from "@/lib/project-tabs"
+import { checkCreatableProjectType, normalizeHiddenTabs } from "@/lib/project-tabs"
+import { notifyProjectInvite } from "@/lib/notification-service"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 
 const projectListSelect = {
@@ -250,6 +251,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const MAX_INITIAL_MEMBERS = 200
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -294,6 +297,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Set up in the create dialog (owner, 11 Oct 2026). Both optional: a client that sends neither gets
+    // exactly what it always got (every tab shown, the creator as the only member).
+    //  - hiddenTabs: the tabs a TASK project starts without, same keys and rule as PATCH (Board or List
+    //    stays). Ignored for the other types, whose views are fixed.
+    //  - memberIds: people of THIS workspace to add as MEMBER next to the creator (LEAD). The creator
+    //    and duplicates are dropped; anyone outside the workspace refuses the whole request.
+    let initialHiddenTabs: string[] = []
+    if (body.hiddenTabs !== undefined && body.hiddenTabs !== null && typeCheck.type === "TASK") {
+      const tabs = normalizeHiddenTabs(body.hiddenTabs)
+      if (!tabs.ok) {
+        return NextResponse.json({ error: tabs.error, code: tabs.code, ...(tabs.tab !== undefined && { tab: tabs.tab }) }, { status: 400 })
+      }
+      initialHiddenTabs = tabs.hiddenTabs
+    }
+    let initialMemberIds: string[] = []
+    if (body.memberIds !== undefined && body.memberIds !== null) {
+      if (!Array.isArray(body.memberIds) || body.memberIds.some((x: unknown) => typeof x !== "string" || !x)) {
+        return NextResponse.json({ error: "memberIds harus berupa daftar id user.", code: "INVALID_MEMBERS" }, { status: 400 })
+      }
+      const wanted = Array.from(new Set(body.memberIds as string[])).filter((id) => id !== userId)
+      if (wanted.length > MAX_INITIAL_MEMBERS) {
+        return NextResponse.json({ error: `Maksimal ${MAX_INITIAL_MEMBERS} orang sekaligus.`, code: "TOO_MANY_MEMBERS" }, { status: 400 })
+      }
+      if (wanted.length > 0) {
+        const inWorkspace = await prisma.workspaceMember.findMany({
+          where: { workspaceId, userId: { in: wanted } },
+          select: { userId: true },
+        })
+        const ok = new Set(inWorkspace.map((m) => m.userId))
+        const outside = wanted.filter((id) => !ok.has(id))
+        if (outside.length > 0) {
+          return NextResponse.json(
+            { error: "Ada orang yang bukan anggota workspace ini.", code: "MEMBER_NOT_IN_WORKSPACE", userIds: outside },
+            { status: 400 },
+          )
+        }
+      }
+      initialMemberIds = wanted
+    }
+
     if (folderId) {
       const folder = await prisma.projectFolder.findUnique({
         where: { id: folderId },
@@ -314,11 +357,12 @@ export async function POST(request: NextRequest) {
         type: typeCheck.type,
         workspaceId,
         ...(folderId && { folderId }),
+        ...(initialHiddenTabs.length > 0 && { hiddenTabs: initialHiddenTabs }),
         members: {
-          create: {
-            userId,
-            role: "LEAD",
-          },
+          create: [
+            { userId, role: "LEAD" },
+            ...initialMemberIds.map((memberId) => ({ userId: memberId, role: "MEMBER" as const })),
+          ],
         },
         taskLists: {
           create: [
@@ -347,9 +391,21 @@ export async function POST(request: NextRequest) {
     await syncProjectRoomSafe(project.id, "project-created")
 
     // Live in every open sidebar, projects page and folder page of the workspace (a ping, no data).
+    // People added in the dialog are told the same way as an add from Project settings, one each.
     emitWorkspaceChanged(workspaceId, {
       kind: "projects", projectId: project.id, folderId: typeof folderId === "string" ? folderId : undefined, actorId: userId,
-    })
+    }, initialMemberIds)
+    for (const member of project.members) {
+      if (member.userId === userId) continue
+      notifyProjectInvite({
+        userId: member.userId,
+        projectId: project.id,
+        projectName: name,
+        invitedByName: session.user.name || "Someone",
+        role: member.role,
+      }).catch((err) => console.error("Project invite notification error:", err))
+      logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || member.userId, userId, request, metadata: { projectId: project.id, role: member.role } })
+    }
 
     // The NAS folder pre-create used to live here. It is gone: the Files tab it existed for was
     // removed, the Synology at 192.168.223.92 is unreachable from every machine here, and the call
