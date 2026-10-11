@@ -7,6 +7,7 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler"
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 import type { Prisma } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
+import { sectionForStatus } from "@/lib/status-sections"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { logAudit } from "@/lib/audit"
@@ -198,10 +199,14 @@ const handler = createMcpHandler(
           const acc = await checkProjectAccess(userId, tl.projectId, ["MEMBER"])
           if (!acc.allowed) return forbidden("Forbidden: gak punya akses ke project section tujuan.")
         }
+        // Sections are the status options (lib/status-sections.ts): a new status moves the task to its column.
+        const statusMove = !args.taskListId && args.status && args.status !== existing.status
+          ? await sectionForStatus(prisma, existing.taskList.projectId, existing.taskListId, args.status)
+          : null
         const updated = await prisma.task.update({
           where: { id: args.taskId },
           data: {
-            ...(args.taskListId ? { taskListId: args.taskListId } : {}),
+            ...(args.taskListId ? { taskListId: args.taskListId } : statusMove ? { taskListId: statusMove } : {}),
             ...(args.status ? { status: args.status as never } : {}),
             // completedAt is stamped by the DB trigger; on DONE→DONE it keeps the first completer.
             ...(args.status === "DONE" ? { completedById: userId } : {}),

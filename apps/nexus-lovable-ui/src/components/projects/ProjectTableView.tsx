@@ -5,6 +5,8 @@ import { useLang } from "@/lib/lang";
 import { propDef, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
 import { PropIcon, usePropLabel } from "@/components/projects/views/view-controls";
 import { GroupHeader } from "@/components/projects/views/view-layouts";
+import { StatusPicker } from "@/components/tasks/StatusPicker";
+import { usesStatusOptions } from "@/lib/status-options";
 import {
   nexusApi,
   statusLabel,
@@ -95,7 +97,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     onError: (e) => toast.error(t("Couldn't create the field"), { description: e instanceof Error ? e.message : undefined }),
   });
 
-  const available = defs.filter((d) => d.key !== "title" && !columns.includes(d.key));
+  const available = defs.filter((d) => d.key !== "title" && !d.hidden && !columns.includes(d.key));
 
   // task edit helpers (invalidate on success — the table refetches the project)
   const patchTask = async (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => {
@@ -273,6 +275,10 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "section") {
     const current = task.taskListId ?? task.taskList?.id ?? "";
+    // Status options (owner, 12 Oct 2026): the Notion picker; picking one moves the task there.
+    if (usesStatusOptions(sections)) {
+      return <StatusPicker projectId={projectId} sections={sections} value={current} onPick={(id) => patchTask(task.id, { taskListId: id, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1])} />;
+    }
     return (
       <select value={current} onChange={(e) => patchTask(task.id, { taskListId: e.target.value, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1])} className={cls}>
         {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { sectionForStatus } from "@/lib/status-sections"
 import { auth } from "@/lib/auth"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
@@ -195,14 +196,12 @@ export async function PATCH(
         requestedStatus !== undefined &&
         requestedStatus !== existing.status &&
         taskListId === undefined &&
-        existing.taskList.taskStatus &&
-        existing.taskList.taskStatus !== requestedStatus
+        existing.taskList.taskStatus
       ) {
-        statusSection = await prisma.taskList.findFirst({
-          where: { projectId: primaryProjectId, taskStatus: requestedStatus },
-          orderBy: { position: "asc" },
-          select: { id: true },
-        })
+        // Sections are the status options (owner, 12 Oct 2026): the exact status's section, else the
+        // first of its group (lib/status-sections.ts). Released apps PATCH the enum and land here too.
+        const target = await sectionForStatus(prisma, primaryProjectId, existing.taskListId, requestedStatus)
+        statusSection = target ? { id: target } : null
       }
     }
 

@@ -112,8 +112,25 @@ eq(V.visibleProps({ ...board, visibleProps: ["due", "cf:gone", "title", "cf:f1"]
 eq(V.viewName({ name: null, layout: "board", builtin: "board" }, (s) => `[${s}]`), "[Board]")
 
 // colours
-eq(V.taskColor(T[0], { colorRules: [{ id: "r", prop: "assignee", value: V.ME, color: "violet" }], colorBy: null }, defs, ctx), "violet")
+eq(V.taskColor(T[0], { colorRules: [{ id: "r", prop: "assignee", value: V.ME, color: "violet" }], colorBy: null }, defs, ctx), "purple", "old colour keys still read")
 eq(V.taskColor(T[0], { colorRules: [], colorBy: "priority" }, defs, ctx), "orange")
 eq(V.taskColor(T[2], { colorRules: [], colorBy: null }, defs, ctx), null)
 
 console.log(`project-views: ${n} checks passed`)
+
+// status options (sections that stand for a status)
+{
+  const O = await import("./status-options.ts")
+  const opts = [{ id: "d", name: "Done", position: 0, taskStatus: "DONE" }, { id: "t", name: "To do", position: 2, taskStatus: "TODO" }, { id: "p", name: "Doing", position: 1, taskStatus: "IN_PROGRESS" }, { id: "b", name: "Backlog", position: 3, taskStatus: "TODO" }]
+  assert.deepEqual(O.orderedOptions(opts).map((o) => o.id), ["t", "b", "p", "d"], "group order, then position")
+  assert.equal(O.defaultOption(opts).id, "t")
+  assert.equal(O.statusForNewOption("in_progress", "Client review"), "IN_REVIEW")
+  assert.equal(O.statusForNewOption("complete", "Batal"), "CANCELLED")
+  const c2 = { ...ctx, sections: opts }
+  const d2 = V.propDefs(c2)
+  assert.equal(d2.find((d) => d.key === "section").label, "Status")
+  assert.equal(d2.find((d) => d.key === "status").hidden, true)
+  assert.deepEqual(V.visibleProps({ ...V.resolveConfig({ layout: "table", config: {} }) }, "table", d2), ["assignee", "due", "priority", "section", "tags"], "status column = the option")
+  assert.equal(V.optionColor("section", "p", d2), "blue", "group colour when the option has none")
+  console.log("status options: ok")
+}

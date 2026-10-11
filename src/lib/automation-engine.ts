@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { sectionForStatus } from "@/lib/status-sections"
 import { createLogger } from "@/lib/logger"
 import { notifyAutomation, notifyTaskAssigned } from "@/lib/notification-service"
 import { getAutomationUserId } from "@/lib/automation-identity"
@@ -343,13 +344,12 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
     case "MARK_COMPLETE": {
       const status = action.type === "MARK_COMPLETE" ? "DONE" : action.value
       if (!status || !(TASK_STATUSES as readonly string[]).includes(status)) return { message: "Skipped: no valid status", skipped: true }
-      const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true, taskList: { select: { projectId: true, taskStatus: true } } } })
+      const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true, taskListId: true, taskList: { select: { projectId: true, taskStatus: true } } } })
       if (cur?.status === status) return { message: `Status already ${status}`, skipped: true }
       // Same rule as the task PATCH route (TaskList.taskStatus, project templates): out of a section that
       // stands for a status, the task moves to the first section of its new status, if there is one.
-      const statusSection = cur?.taskList.taskStatus && cur.taskList.taskStatus !== status
-        ? await prisma.taskList.findFirst({ where: { projectId: cur.taskList.projectId, taskStatus: status as (typeof TASK_STATUSES)[number] }, orderBy: { position: "asc" }, select: { id: true } })
-        : null
+      const statusSectionId = cur ? await sectionForStatus(prisma, cur.taskList.projectId, cur.taskListId, status) : null
+      const statusSection = statusSectionId ? { id: statusSectionId } : null
       await prisma.task.update({
         where: { id: taskId! },
         data: {

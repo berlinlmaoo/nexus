@@ -11,6 +11,7 @@ import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
+import { TaskComposer } from "@/components/tasks/TaskComposer";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
@@ -31,6 +32,9 @@ import { FilterButton, FilterChips, GroupButton, SortButton, ToolbarButton, sort
 import { AddViewButton, LAYOUT_ICON, ViewSettingsPanel } from "@/components/projects/views/view-settings";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
+import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
+import { optionColorKey, StatusOptionMenu, StatusPicker } from "@/components/tasks/StatusPicker";
+import { defaultOption, orderedOptions, statusForNewOption, statusGroupOf, STATUS_GROUPS, usesStatusOptions, type StatusGroupKey } from "@/lib/status-options";
 import {
   activeFilterCount,
   BUILTIN_KEYS,
@@ -41,7 +45,9 @@ import {
   encodeFilter,
   encodeSort,
   filterFromDrill,
+  groupCalcValue,
   groupLabelIsBuiltin,
+  optionColor,
   groupTasks,
   isBuiltinTab,
   newId,
@@ -88,6 +94,7 @@ import {
   LayoutGrid,
   Loader2,
   Lock,
+  MoreHorizontal,
   MessageSquare,
   Pencil,
   Plus,
@@ -314,7 +321,8 @@ function ProjectDetail() {
   const cfg: ViewConfig | null = saved ? { ...saved, filter: draftFilter ?? saved.filter, sort: draftSort ?? saved.sort } : null;
   const dirty = !!saved && ((!!draftFilter && !sameFilter(draftFilter, saved.filter)) || (!!draftSort && !sameSort(draftSort, saved.sort)));
   const query = search.q ?? "";
-  const setFilter = (f: ViewFilter) => { if (saved) setSearch({ f: sameFilter(f, saved.filter) ? undefined : encodeFilter(f) }); };
+  // The router JSON-encodes search values itself: hand it the object so the address carries plain JSON.
+  const setFilter = (f: ViewFilter) => { if (saved) setSearch({ f: sameFilter(f, saved.filter) ? undefined : (JSON.parse(encodeFilter(f)) as never) }); };
   const setSort = (s: SortRule[]) => { if (saved) setSearch({ s: sameSort(s, saved.sort) ? undefined : encodeSort(s) }); };
   const saveDraft = () => {
     if (!activeView || !cfg || !canEdit) return;
@@ -345,7 +353,7 @@ function ProjectDetail() {
 
   const people = useMemo(() => (data?.members ?? []).map((m) => ({ id: (m.userId || m.user?.id) ?? "", name: m.user?.name ?? m.user?.email ?? "" })).filter((p) => p.id), [data?.members]);
   const ctx: ViewCtx = useMemo(() => ({
-    sections: taskLists.map((l) => ({ id: l.id, name: l.name, position: l.position })),
+    sections: taskLists.map((l) => ({ id: l.id, name: l.name, position: l.position, taskStatus: l.taskStatus ?? null, color: l.color ?? null })),
     fields: cfDefs.data?.fields ?? [],
     people,
     meId,
@@ -409,12 +417,12 @@ function ProjectDetail() {
     onSuccess: () => { rootQc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); setViewSettingsOpen(false); navigate({ to: "/projects/$projectId", params: { projectId }, search: {} }); },
     onError: (e) => toast.error(projectSettingsErrorText((e as { payload?: { code?: unknown } })?.payload?.code) ? tr(projectSettingsErrorText((e as { payload?: { code?: unknown } }).payload?.code)!) : e instanceof Error ? e.message : tr("Couldn't hide the view")),
   });
-  const addTask = (sectionId?: string) => setComposerListId(sectionId ?? [...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))[0]?.id ?? null);
+  const addTask = (sectionId?: string) => setComposerListId(sectionId ?? defaultOption(taskLists)?.id ?? null);
 
   // ── the one toolbar row ──
   const beforeTabs: ToolbarTab[] = moduleTabs.filter((m) => m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
   const viewTabs: ToolbarTab[] = visibleViews.map((v) => ({ key: v.id, label: viewName(v, tr), icon: LAYOUT_ICON[v.layout] ?? LayoutGrid, view: v }));
-  const afterTabs: ToolbarTab[] = moduleTabs.filter((m) => !m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
+  const afterTabs: ToolbarTab[] = moduleTabs.filter((m) => !m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon, compact: true }));
   const lastViewKey = viewTabs.length && afterTabs.length ? viewTabs[viewTabs.length - 1].key : null;
   const activeKey = activeModule ?? activeView?.id ?? null;
   const toolbar = data && !isSpecial ? (
@@ -495,14 +503,14 @@ function ProjectDetail() {
         title={emptyHint ? tr("No tasks match") : noTasksAtAll ? tr("No tasks yet") : tr("Every group is hidden")}
         message={emptyHint ? tr("Nothing in this project fits the search or filters. Clear them to see every task again.") : noTasksAtAll ? tr("Tasks you add to this project show up here. Start with the first one.") : tr("Every group of this view is hidden. Show some groups again in Group.")}
         action={emptyHint
-          ? <EmptyAction onClick={() => setSearch({ q: undefined, f: cfg && saved && !sameFilter(saved.filter, { simple: [], advanced: null }) ? encodeFilter({ simple: [], advanced: null }) : undefined })}>{tr("Clear filters")}</EmptyAction>
+          ? <EmptyAction onClick={() => setSearch({ q: undefined, f: cfg && saved && !sameFilter(saved.filter, { simple: [], advanced: null }) ? ({ simple: [], advanced: null } as never) : undefined })}>{tr("Clear filters")}</EmptyAction>
           : noTasksAtAll ? <EmptyAction onClick={() => addTask()}><Plus className="h-4 w-4" />{tr("Add task")}</EmptyAction> : undefined}
       />
     </div>
   );
 
   return (
-    <div className="min-h-full bg-card">
+    <div className="min-h-dvh bg-card">
       <PageHeader
         className="bg-card/95"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
@@ -552,7 +560,7 @@ function ProjectDetail() {
                 // as an unsaved filter on that view (Reset brings the view back).
                 const target = visibleViews.find((v) => v.builtin === "board") ?? visibleViews.find((v) => v.builtin === "list") ?? visibleViews[0];
                 if (!target) return;
-                navigate({ to: "/projects/$projectId", params: { projectId }, search: { v: target.id, f: encodeFilter(filterFromDrill({ hideDone: true, ...drill })) } });
+                navigate({ to: "/projects/$projectId", params: { projectId }, search: { v: target.id, f: JSON.parse(encodeFilter(filterFromDrill({ hideDone: true, ...drill }))) as never } });
               }}
               onEditBrief={() => setSettingsOpen(true)}
               onAddTask={() => addTask()}
@@ -584,7 +592,7 @@ function ProjectDetail() {
               case "board":
                 return <BoardView project={data} tasks={shown} groupBy={groupBy ?? "section"} cfg={cfg} defs={defs} ctx={ctx} keys={keys} buildGroups={buildGroups} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} />;
               case "list":
-                return <ListView groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} />;
+                return <ListView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
               case "table":
                 return <ProjectTableView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} columns={keys} canEditColumns={canEdit} onColumnsChange={(cols) => patchConfig({ visibleProps: cols })} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
               case "gallery":
@@ -662,6 +670,24 @@ async function moveToGroup(task: NexusTask, by: string, from: string, to: string
   return nexusApi.setCustomFieldValue(fieldId, task.id, def.kind === "person" || def.kind === "multi" ? JSON.stringify(next) : next[0] ?? "");
 }
 
+/**
+ * A task made inline in a group (board column, list group): in the group's section when the view groups
+ * by status/section, else in the default status; then the group's (and sub-group's) value is written as
+ * a drop would. The server gives it its section's status.
+ */
+async function createTaskInGroup({ project, defs, groupBy, groupKey, sub, subKey, title, dueDate }: {
+  project: NexusProject; defs: PropDef[]; groupBy: string | null; groupKey: string | null; sub: string | null; subKey: string | null; title: string; dueDate: string | null;
+}): Promise<NexusTask | null> {
+  const sections = project.taskLists ?? [];
+  const bySection = groupBy === "section" && groupKey && groupKey !== EMPTY_GROUP;
+  const sectionId = bySection ? groupKey! : sub === "section" && subKey && subKey !== EMPTY_GROUP ? subKey : defaultOption(sections)?.id ?? sections[0]?.id;
+  if (!sectionId) return null;
+  const task = await nexusApi.createTask({ title, projectId: project.id, taskListId: sectionId, dueDate });
+  if (groupBy && groupBy !== "section" && groupKey && groupKey !== EMPTY_GROUP && droppable(groupBy, defs)) await moveToGroup(task, groupBy, EMPTY_GROUP, groupKey, defs, project.id);
+  if (sub && sub !== "section" && subKey && subKey !== EMPTY_GROUP && droppable(sub, defs)) await moveToGroup(task, sub, EMPTY_GROUP, subKey, defs, project.id);
+  return task;
+}
+
 type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?: boolean; keepEmpty?: boolean }) => TaskGroup[];
 
 function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate }: {
@@ -735,36 +761,60 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
 
   const lanes = buildGroups(tasks, groupBy);
   const sections = [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const statusOptions = usesStatusOptions(sections);
   const laneLabel = (g: TaskGroup) => (groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label);
   const laneW = LANE_W[cfg.cardSize];
+  // Notion's coloured board (owner, 12 Oct 2026): each column takes its status option's colour (or the
+  // group value's), a light tint behind white cards, the header as a pill with the count in its hue.
+  const laneColor = (g: TaskGroup): string => {
+    if (isSection) { const s = sections.find((x) => x.id === g.key); return s && (statusOptions || s.color) ? optionColorKey(s) : "gray"; }
+    if (g.key === EMPTY_GROUP) return "gray";
+    const kind = propDef(defs, groupBy)?.kind;
+    return kind === "select" || kind === "multi" ? optionColor(groupBy, g.key, defs) : "gray";
+  };
+  const [draft, setDraft] = useState<string | null>(null);
+  // Inline new card: into the column's section (status columns), else the default status, then the
+  // column's (and row's) value is written like a drop.
+  const createInline = async (g: TaskGroup, rowKey: string | null, p: { title: string; dueDate: string | null }) => {
+    const task = await createTaskInGroup({ project, defs, groupBy, groupKey: g.key, sub, subKey: rowKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
+    refresh();
+    return task;
+  };
 
   const renderLane = (g: TaskGroup, rowKey: string | null, laneTasks: NexusTask[], showHeader: boolean) => {
     const id = `${rowKey ?? ""}::${g.key}`;
     const isCollapsed = collapsed.has(g.key);
-    const sectionIndex = isSection ? sections.findIndex((s) => s.id === g.key) : -1;
-    // Done sinks to the bottom when the view has no sort of its own (parity with before).
-    const items = cfg.sort.length ? laneTasks : [...laneTasks].sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0));
+    const section = isSection ? sections.find((s) => s.id === g.key) : undefined;
+    const tone = COLOR_PRESETS[laneColor(g)];
+    // Manual order inside a column (owner, 12 Oct 2026): done tasks no longer sink; Done is its own column.
+    const items = laneTasks;
     const dropOk = (drag && (canDrop || g.key === drag.from) && (rowKey === null || canDropRow || rowKey === drag.fromRow)) || dragLaneId;
     if (isCollapsed) {
       return (
-        <button key={id} type="button" onClick={() => onToggleGroup(g.key)} title={laneLabel(g)} className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg bg-muted/50 py-3 text-muted-foreground transition-colors hover:bg-muted">
+        <button key={id} type="button" onClick={() => onToggleGroup(g.key)} title={laneLabel(g)} style={{ backgroundColor: tone.lane, color: tone.text }} className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg py-3 transition-[filter] hover:brightness-95">
           <ChevronRight className="h-4 w-4" />
           <span className="text-xs tabular-nums">{laneTasks.length}</span>
-          <span className="max-h-48 truncate text-sm font-medium text-foreground [writing-mode:vertical-rl]">{laneLabel(g)}</span>
+          <span className="max-h-48 truncate text-sm font-medium [writing-mode:vertical-rl]">{laneLabel(g)}</span>
         </button>
       );
     }
+    const quiet = "grid h-7 w-7 place-items-center rounded transition-colors hover:bg-black/5 dark:hover:bg-white/10";
     return (
       <section
         key={id}
         aria-label={laneLabel(g)}
-        className={cn("group/lane flex shrink-0 flex-col rounded-lg bg-muted/50 p-1.5 transition-colors", laneW, dragLaneId === g.key && "opacity-40", over === id && dropOk && "bg-accent ring-1 ring-[color:var(--accent-foreground)]/40")}
+        style={{ backgroundColor: tone.lane, ...(over === id && dropOk ? { boxShadow: `inset 0 0 0 1.5px ${tone.dot}` } : {}) }}
+        className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, dragLaneId === g.key && "opacity-40")}
         onDragOver={(e) => { if (dropOk) { e.preventDefault(); setOver(id); } }}
         onDragLeave={() => setOver((o) => (o === id ? null : o))}
         onDrop={() => {
           setOver(null);
-          if (dragLaneId && isSection && dragLaneId !== g.key && sectionIndex >= 0) reorderLane.mutate({ id: dragLaneId, position: sectionIndex });
-          else if (drag) {
+          if (dragLaneId && isSection && dragLaneId !== g.key && section) {
+            const from = sections.find((s) => s.id === dragLaneId);
+            // Columns are ordered by status group; a column moves within its group.
+            if (from && statusOptions && statusGroupOf(from.taskStatus) !== statusGroupOf(section.taskStatus)) toast(t("A column moves within its group. Change its group from its ••• menu."));
+            else reorderLane.mutate({ id: dragLaneId, position: section.position ?? 0 });
+          } else if (drag) {
             const task = tasks.find((x) => x.id === drag.id);
             if (task && (g.key !== drag.from || (rowKey !== null && rowKey !== drag.fromRow))) move.mutate({ task, to: g.key, from: drag.from, toRow: rowKey, fromRow: drag.fromRow });
           }
@@ -772,34 +822,39 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         }}
       >
         {showHeader && (
-          <div className="mb-1 flex items-center gap-0.5 px-0.5">
-            {isSection && sectionIndex >= 0 && (
-              <button
-                type="button"
-                draggable
-                onDragStart={(e) => { setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
-                onDragEnd={() => setDragLaneId(null)}
-                aria-label={t("Drag to reorder sections")}
-                title={t("Drag to reorder sections")}
-                className="grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover/lane:opacity-100"
-              >
-                <GripVertical className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <GroupHeader group={{ ...g, tasks: laneTasks }} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={false} onToggle={() => onToggleGroup(g.key)} className="min-w-0 flex-1" />
-            <div className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
-              {isSection && sectionIndex >= 0 && (
-                <>
-                  <button type="button" aria-label={t("Move section left")} disabled={sectionIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: g.key, position: sectionIndex - 1 })} className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-30"><ChevronLeft className="h-3.5 w-3.5" /></button>
-                  <button type="button" aria-label={t("Move section right")} disabled={sectionIndex === sections.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: g.key, position: sectionIndex + 1 })} className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-30"><ChevronRight className="h-3.5 w-3.5" /></button>
-                  <ListMenu projectId={project.id} list={{ id: g.key, name: g.label, taskStatus: sections[sectionIndex]?.taskStatus }} />
-                </>
+          <div className="mb-1 flex items-center gap-1 px-0.5" style={{ color: tone.text }}>
+            <button type="button" onClick={() => onToggleGroup(g.key)} aria-label={t("Collapse {name}", { name: laneLabel(g) })} className={cn(quiet, "h-6 w-5 opacity-0 focus-visible:opacity-100 group-hover/lane:opacity-100")}>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            <span
+              draggable={!!section}
+              onDragStart={(e) => { if (!section) return; setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
+              onDragEnd={() => setDragLaneId(null)}
+              title={section ? t("Drag to reorder columns") : undefined}
+              className={cn("inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-sm font-medium", section && "cursor-grab active:cursor-grabbing")}
+              style={{ backgroundColor: tone.bg, color: tone.text }}
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
+              <span className="truncate">{laneLabel(g)}</span>
+            </span>
+            <span className="text-xs tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
+            <div className="ml-auto flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
+              {section && (
+                <StatusOptionMenu projectId={project.id} option={section} sections={sections} trigger={<button type="button" aria-label={t("Column options")} className={quiet}><MoreHorizontal className="h-3.5 w-3.5" /></button>} />
               )}
-              <button type="button" aria-label={t("Add task")} onClick={() => onCreate(isSection ? g.key : undefined)} className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"><Plus className="h-3.5 w-3.5" /></button>
+              <button type="button" aria-label={t("New task")} onClick={() => setDraft(id)} className={quiet}><Plus className="h-3.5 w-3.5" /></button>
             </div>
           </div>
         )}
         <div className="flex min-h-16 flex-col gap-1.5">
+          {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
+          {draft === id ? (
+            <InlineTaskDraft variant="card" accent={tone.dot} onCreate={(p) => createInline(g, rowKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
+          ) : (
+            <button type="button" onClick={() => setDraft(id)} style={{ color: tone.text }} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-sm opacity-80 transition-[opacity,background-color] hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10">
+              <Plus className="h-3.5 w-3.5" />{t("New task")}
+            </button>
+          )}
           {items.map((task) => (
             <TaskCard
               key={`${task.id}-${g.key}`}
@@ -816,9 +871,6 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               morph={singleValued}
             />
           ))}
-          <button type="button" onClick={() => onCreate(isSection ? g.key : undefined)} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground">
-            <Plus className="h-3.5 w-3.5" />{t("New task")}
-          </button>
         </div>
       </section>
     );
@@ -843,7 +895,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         <div className="flex min-w-max items-start gap-2.5">
           {linkedLaneEls}
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
-          {isSection && <AddListColumn projectId={project.id} />}
+          {isSection && <AddListColumn projectId={project.id} statusOptions={statusOptions} />}
         </div>
         {move.isError && <p className="mt-2 text-sm text-destructive">{t("The card couldn't move. Check your access to this project and try again.")}</p>}
       </div>
@@ -881,86 +933,53 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   );
 }
 
-function AddListColumn({ projectId }: { projectId: string }) {
+function AddListColumn({ projectId, statusOptions }: { projectId: string; statusOptions: boolean }) {
   const qc = useQueryClient();
   const { t } = useLang();
   const [name, setName] = useState("");
+  const [group, setGroup] = useState<StatusGroupKey>("todo");
   const [open, setOpen] = useState(false);
+  // A new column is a new status option (owner, 12 Oct 2026): it asks which group it belongs to.
   const create = useMutation({
-    mutationFn: () => nexusApi.createSection(projectId, name.trim()),
-    onSuccess: () => { setName(""); setOpen(false); qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); },
+    mutationFn: () => nexusApi.createSection(projectId, name.trim(), statusOptions ? { taskStatus: statusForNewOption(group, name) as NexusTaskStatus } : {}),
+    onSuccess: () => { setName(""); setGroup("todo"); setOpen(false); qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); },
   });
+  const label = statusOptions ? t("Add status") : t("Add section");
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="flex h-9 w-56 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
-        <Plus className="h-4 w-4" />{t("Add section")}
+        <Plus className="h-4 w-4" />{label}
       </button>
     );
   }
   return (
-    <div className="w-64 shrink-0 rounded-lg bg-muted/50 p-1.5">
+    <div className="w-64 shrink-0 space-y-1.5 rounded-lg bg-muted/50 p-1.5">
       <input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); if (e.key === "Escape") setOpen(false); }}
-        onBlur={() => { if (!name.trim()) setOpen(false); }}
-        placeholder={t("Section name")}
+        placeholder={statusOptions ? t("Status name") : t("Section name")}
         className="h-8 w-full rounded-md border border-border bg-card px-2 text-sm outline-none transition-colors focus:border-[color:var(--accent-foreground)]"
       />
-      <div className="mt-1.5 flex items-center gap-1">
+      {statusOptions && (
+        <div className="flex gap-1" role="radiogroup" aria-label={t("Group")}>
+          {STATUS_GROUPS.map((g) => (
+            <button key={g.key} type="button" role="radio" aria-checked={group === g.key} onClick={() => setGroup(g.key)}
+              className={cn("h-7 flex-1 rounded-md border text-xs transition-colors", group === g.key ? "border-[color:var(--accent-foreground)] bg-card font-medium text-foreground" : "border-transparent text-muted-foreground hover:bg-card")}>
+              {t(g.label)}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1">
         <button type="button" onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground disabled:opacity-50">
-          {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("Add section")}
+          {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{label}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="h-7 rounded-md px-2 text-xs text-muted-foreground hover:bg-card">{t("Cancel")}</button>
       </div>
-      {create.isError && <p className="mt-1 text-xs text-destructive">{t("Couldn't add the section. Try again.")}</p>}
+      {create.isError && <p className="text-xs text-destructive">{t("Couldn't add the section. Try again.")}</p>}
     </div>
-  );
-}
-
-function ListMenu({ projectId, list }: { projectId: string; list: { id: string; name: string; taskStatus?: NexusTaskStatus | null } }) {
-  const qc = useQueryClient();
-  const { t } = useLang();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
-  const rename = useMutation({ mutationFn: (name: string) => nexusApi.updateSection(projectId, { id: list.id, name }), onSuccess: invalidate });
-  const del = useMutation({ mutationFn: () => nexusApi.deleteSection(projectId, list.id), onSuccess: invalidate, onError: (e) => toast.error(e instanceof Error ? e.message : t("Couldn't delete the section")) });
-  // The status a section stands for (12 Oct 2026; templates set it): a task moved in takes it, and a
-  // status change moves the task to the first section of that status. "None" = a plain section.
-  const setStatus = useMutation({ mutationFn: (taskStatus: NexusTaskStatus | null) => nexusApi.updateSection(projectId, { id: list.id, taskStatus }), onSuccess: invalidate });
-  return (
-    <>
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className={cn("grid h-7 w-6 place-items-center rounded hover:bg-card hover:text-foreground", list.taskStatus ? "text-[color:var(--accent-foreground)]" : "text-muted-foreground")} title={t("Section status")} aria-label={t("Section status")}>
-            <CheckCircle2 className="h-3.5 w-3.5" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-64 p-1">
-          <div className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">{t("Tasks moved into this section get this status.")}</div>
-          {([null, ...TASK_STATUSES] as (NexusTaskStatus | null)[]).map((st) => (
-            <button key={st ?? "none"} type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate(st)} className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
-              {st ? statusLabel(st) : t("None (plain section)")}
-              {(list.taskStatus ?? null) === st && <Check className="h-3.5 w-3.5" />}
-            </button>
-          ))}
-        </PopoverContent>
-      </Popover>
-      <button
-        type="button"
-        onClick={() => { const n = window.prompt(t("Rename section"), list.name); if (n && n.trim() && n !== list.name) rename.mutate(n.trim()); }}
-        className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"
-        aria-label={t("Rename section")}
-        title={t("Rename section")}
-      ><Pencil className="h-3.5 w-3.5" /></button>
-      <button
-        type="button"
-        onClick={() => { if (window.confirm(t("Delete the section \"{name}\"? Its tasks move to the first section. It can be restored from Control Room → Audit.", { name: list.name }))) del.mutate(); }}
-        className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-destructive"
-        aria-label={t("Delete section")}
-        title={t("Delete section")}
-      ><Trash2 className="h-3.5 w-3.5" /></button>
-    </>
   );
 }
 
@@ -1110,220 +1129,6 @@ function cfChoices(field: NexusCustomField): string[] {
   return [];
 }
 
-function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { project: NexusProject; selectedListId: string; initialDueDate?: string; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [taskListId, setTaskListId] = useState(selectedListId);
-  const [priority, setPriority] = useState<CreateTaskPayload["priority"]>("MEDIUM");
-  const [dueDate, setDueDate] = useState(initialDueDate ?? "");
-  const [description, setDescription] = useState("");
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [cfValues, setCfValues] = useState<Record<string, string | string[]>>({});
-
-  const cfQuery = useQuery({ queryKey: ["nexus", "project-custom-fields", project.id], queryFn: () => nexusApi.projectCustomFields(project.id), retry: false });
-  const customFields = cfQuery.data?.fields ?? [];
-  const members = project.members ?? [];
-  const setCf = (id: string, v: string | string[]) => setCfValues((prev) => ({ ...prev, [id]: v }));
-
-  // ---- Live auto-save: the task persists to the server while it's being filled in. ----
-  // First meaningful edit (a non-empty title + a short pause) creates the task; every later
-  // edit diff-saves the delta. Closing (X / klik luar / Selesai) keeps it; only "Buang" deletes it.
-  type Snap = { title: string; description: string | null; taskListId: string; priority: CreateTaskPayload["priority"]; dueDate: string | null; assigneeIds: string[]; cf: Record<string, string | string[]> };
-  const draftId = useRef<string | null>(null);
-  const cancelled = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const chain = useRef<Promise<unknown>>(Promise.resolve());
-  const lastSaved = useRef<Snap | null>(null);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [finishing, setFinishing] = useState(false);
-
-  const latest = useRef<Snap>({ title: "", description: null, taskListId: selectedListId, priority: "MEDIUM", dueDate: null, assigneeIds: [], cf: {} });
-  latest.current = { title: title.trim(), description: description || null, taskListId, priority, dueDate: dueDate || null, assigneeIds, cf: cfValues };
-  const cfStr = (v: string | string[]) => (Array.isArray(v) ? JSON.stringify(v) : v);
-  const nonEmpty = (v: string | string[]) => (Array.isArray(v) ? v.length > 0 : String(v ?? "").trim() !== "");
-
-  const doSaveOnce = async () => {
-    if (cancelled.current) return;
-    const s = latest.current;
-    if (!s.title.trim() || !s.taskListId) return;
-    setSaveState("saving");
-    try {
-      if (!draftId.current) {
-        const task = await nexusApi.createTask({ title: s.title.trim(), description: s.description, projectId: project.id, taskListId: s.taskListId, priority: s.priority, dueDate: s.dueDate, status: "TODO", assigneeIds: s.assigneeIds.length ? s.assigneeIds : undefined });
-        draftId.current = task.id;
-        for (const [fid, v] of Object.entries(s.cf)) if (nonEmpty(v)) await nexusApi.setCustomFieldValue(fid, task.id, cfStr(v));
-      } else if (lastSaved.current) {
-        const id = draftId.current;
-        const prev = lastSaved.current;
-        const patch: Partial<Pick<NexusTask, "title" | "priority" | "dueDate">> & { description?: string | null; taskListId?: string } = {};
-        if (s.title.trim() !== prev.title) patch.title = s.title.trim();
-        if (s.description !== prev.description) patch.description = s.description;
-        if (s.taskListId !== prev.taskListId) patch.taskListId = s.taskListId;
-        if (s.priority !== prev.priority) patch.priority = s.priority as NexusTask["priority"];
-        if (s.dueDate !== prev.dueDate) patch.dueDate = s.dueDate;
-        if (Object.keys(patch).length) await nexusApi.updateTask(id, patch);
-        for (const uid of s.assigneeIds.filter((x) => !prev.assigneeIds.includes(x))) await nexusApi.addAssignee(id, uid);
-        for (const uid of prev.assigneeIds.filter((x) => !s.assigneeIds.includes(x))) await nexusApi.removeAssignee(id, uid);
-        for (const [fid, v] of Object.entries(s.cf)) if (cfStr(v ?? "") !== cfStr(prev.cf[fid] ?? "")) await nexusApi.setCustomFieldValue(fid, id, cfStr(v));
-      }
-      lastSaved.current = { ...s, assigneeIds: [...s.assigneeIds], cf: { ...s.cf } };
-      if (cancelled.current) return;
-      qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
-      qc.invalidateQueries({ queryKey: ["nexus", "tasks"] });
-      setSaveState("saved");
-    } catch {
-      setSaveState("error");
-    }
-  };
-  const enqueueSave = () => { chain.current = chain.current.catch(() => {}).then(doSaveOnce); return chain.current; };
-
-  // Debounce a save after any field change, once there's a title to anchor the task.
-  useEffect(() => {
-    if (cancelled.current || !title.trim() || !taskListId) return;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => { void enqueueSave(); }, 700);
-    return () => { if (timer.current) clearTimeout(timer.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, taskListId, priority, dueDate, assigneeIds, cfValues]);
-  // Flush the latest edit when the composer unmounts — whether it was closed OR the user
-  // navigated to another page/tab mid-typing. This is what guarantees nothing is lost.
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-    if (!cancelled.current && latest.current.title.trim() && latest.current.taskListId) void enqueueSave();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const closeKeep = () => onClose(); // the unmount flush above persists the latest edit
-  const onFinish = () => {
-    if (timer.current) clearTimeout(timer.current);
-    setFinishing(true);
-    void enqueueSave().then(() => { celebrate(draftId.current ? "Task saved 🎉" : "New task created 🎉"); onClose(); }).finally(() => setFinishing(false));
-  };
-  const discard = async () => {
-    if (draftId.current && !window.confirm("Discard this draft task? Anything you've filled in will be deleted.")) return;
-    cancelled.current = true;
-    if (timer.current) clearTimeout(timer.current);
-    onClose();
-    try { await chain.current; } catch { /* ignore */ }
-    if (draftId.current) { try { await nexusApi.deleteTask(draftId.current); qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] }); qc.invalidateQueries({ queryKey: ["nexus", "tasks"] }); } catch { /* ignore */ } }
-  };
-
-  const inputCls = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
-  const labelCls = "text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={closeKeep}>
-      <Card className="w-full max-w-lg border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <CardBody className="max-h-[85vh] gap-0 overflow-y-auto p-0">
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-card px-6 py-4">
-            <h2 className="text-lg font-black tracking-tight">Add task</h2>
-            <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={closeKeep}><X className="h-4 w-4" /></Button>
-          </div>
-          <div className="space-y-4 p-6">
-            <div className="space-y-1">
-              <label className={labelCls}>Title</label>
-              <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What are you working on?" className={cn(inputCls, "text-base font-semibold")} />
-            </div>
-            <div className="space-y-1">
-              <label className={labelCls}>Description</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A bit of context (optional)" className={cn(inputCls, "min-h-20 resize-y")} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1">
-                <label className={labelCls}>Lane / Section</label>
-                <select value={taskListId} onChange={(e) => setTaskListId(e.target.value)} className={inputCls}>
-                  {(project.taskLists ?? []).map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Priority</label>
-                <select value={priority} onChange={(e) => setPriority(e.target.value as CreateTaskPayload["priority"])} className={inputCls}>
-                  {(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const).map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Deadline</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-
-            {members.length > 0 && (
-              <div className="space-y-1.5">
-                <label className={labelCls}>Assignee</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {members.map((m) => {
-                    const uid = m.userId || m.user?.id || "";
-                    const on = assigneeIds.includes(uid);
-                    return (
-                      <button key={uid} type="button" onClick={() => setAssigneeIds((prev) => (on ? prev.filter((x) => x !== uid) : [...prev, uid]))}
-                        className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
-                        {m.user?.name ?? m.user?.email ?? "—"}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {customFields.length > 0 && (
-              <div className="space-y-3 rounded-xl border border-dashed border-border p-3">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-primary">Custom fields</div>
-                {customFields.map((f) => {
-                  const type = (f.type || "").toUpperCase();
-                  const choices = cfChoices(f);
-                  const val = cfValues[f.id];
-                  return (
-                    <div key={f.id} className="space-y-1">
-                      <label className={labelCls}>{f.name}</label>
-                      {type === "NUMBER" ? (
-                        <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} className={inputCls} />
-                      ) : type === "DATE" ? (
-                        <input type="date" value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} className={inputCls} />
-                      ) : (type === "SELECT" || type === "STATUS") && choices.length ? (
-                        <select value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} className={inputCls}>
-                          <option value="">—</option>
-                          {choices.map((c) => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      ) : type === "MULTI_SELECT" && choices.length ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {choices.map((c) => {
-                            const arr = Array.isArray(val) ? val : [];
-                            const on = arr.includes(c);
-                            return <button key={c} type="button" onClick={() => setCf(f.id, on ? arr.filter((x) => x !== c) : [...arr, c])} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>{c}</button>;
-                          })}
-                        </div>
-                      ) : type === "FILE" ? (
-                        <p className="text-xs text-muted-foreground">Save the task first, then attach files in its detail panel.</p>
-                      ) : type === "URL" ? (
-                        <input type="url" value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} placeholder="https://…" className={inputCls} />
-                      ) : (
-                        <input value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} className={inputCls} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-          </div>
-          <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-card px-6 py-4">
-            <span className="flex items-center gap-1.5 text-xs font-semibold">
-              {saveState === "saving" ? <span className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</span>
-                : saveState === "saved" ? <span className="flex items-center gap-1.5 text-emerald-600"><Check className="h-3.5 w-3.5" /> Saved automatically</span>
-                : saveState === "error" ? <span className="text-rose-600">Save failed — try again</span>
-                : <span className="text-muted-foreground">Auto-save on</span>}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={discard}>{draftId.current ? <><Trash2 className="h-4 w-4" /> Discard</> : "Cancel"}</Button>
-              <Button variant="primary" isDisabled={finishing || !title.trim() || !taskListId} onClick={onFinish}>{finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Done</Button>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-    </div>
-  );
-}
-
 function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean }) {
   const { t } = useLang();
   const bulk = useTaskBulk();
@@ -1353,21 +1158,32 @@ function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTas
   );
 }
 
-function ListView({ groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen, onCreate }: {
-  groups: TaskGroup[]; groupBy: string | null; subGroupBy: string | null; buildGroups: GroupBuilder; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
-  collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreate: (listId?: string) => void;
+function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen }: {
+  project: NexusProject; groups: TaskGroup[]; groupBy: string | null; subGroupBy: string | null; buildGroups: GroupBuilder; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
+  collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
 }) {
   const { t } = useLang();
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState<string | null>(null);
   const multi = (k: string | null) => !!k && (k === "assignee" || k === "tags" || ["multi", "person"].includes(propDef(defs, k)?.kind ?? ""));
   const morph = !multi(groupBy) && !multi(subGroupBy);
   const rows = (tasks: NexusTask[]) => tasks.map((task) => <ListRow key={task.id} task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />);
-  const newRow = (sectionId?: string) => (
-    <button type="button" onClick={() => onCreate(sectionId)} className="flex h-9 w-full items-center gap-2 px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
-      <Plus className="h-4 w-4" />{t("New task")}
-    </button>
-  );
+  const create = async (gKey: string | null, subKey: string | null, p: { title: string; dueDate: string | null }) => {
+    const task = await createTaskInGroup({ project, defs, groupBy, groupKey: gKey, sub: subGroupBy, subKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
+    qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
+    qc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", project.id] });
+    return task;
+  };
+  // "+ New task" at the TOP of each group (owner, 10 Oct 2026), opening an inline row (12 Oct 2026).
+  const newRow = (id: string, gKey: string | null, subKey: string | null) => (draft === id
+    ? <InlineTaskDraft variant="row" onCreate={(p) => create(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
+    : (
+      <button type="button" onClick={() => setDraft(id)} className="flex h-9 w-full items-center gap-2 border-b border-border/70 px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+        <Plus className="h-4 w-4" />{t("New task")}
+      </button>
+    ));
   if (!groupBy) {
-    return <div className="px-4 py-3 md:px-8">{rows(groups[0]?.tasks ?? [])}{newRow()}</div>;
+    return <div className="px-4 py-3 md:px-8">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
   }
   return (
     <div className="space-y-5 px-4 py-3 md:px-8">
@@ -1379,6 +1195,7 @@ function ListView({ groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, ke
             <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5 border-b border-border pb-1" />
             {!isCollapsed && (subs ? (
               <div className="space-y-2 pl-5 pt-1.5">
+                {newRow(g.key, g.key, null)}
                 {subs.map((s) => {
                   const k = `${g.key}/${s.key}`;
                   return (
@@ -1388,10 +1205,9 @@ function ListView({ groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, ke
                     </div>
                   );
                 })}
-                {newRow(groupBy === "section" ? g.key : undefined)}
               </div>
             ) : (
-              <div>{rows(g.tasks)}{newRow(groupBy === "section" ? g.key : undefined)}</div>
+              <div>{newRow(g.key, g.key, null)}{rows(g.tasks)}</div>
             ))}
           </section>
         );

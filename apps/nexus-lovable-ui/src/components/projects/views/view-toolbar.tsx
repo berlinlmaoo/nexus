@@ -13,6 +13,8 @@ export type ToolbarTab = {
   icon: typeof Search;
   /** A saved view (draggable, renamable); absent for the project's other tabs (Overview, Chat, …). */
   view?: NexusProjectView;
+  /** Icon only unless active (the project's other tabs after the views, to leave room for the tools). */
+  compact?: boolean;
 };
 
 /**
@@ -72,6 +74,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               onDrop={(e) => { e.preventDefault(); if (v) drop(v.id); setDragId(null); setOverId(null); }}
               onDragEnd={() => { setDragId(null); setOverId(null); }}
               onClick={() => !active && onSelect(tab.key)}
+              title={tab.compact ? tab.label : undefined}
               onDoubleClick={() => v && editable && setRenaming(v.id)}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(tab.key); } }}
               className={cn(
@@ -85,7 +88,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
               {v && renaming === v.id ? (
                 <RenameInput initial={tab.label} onDone={(name) => { setRenaming(null); if (name !== null && name !== tab.label) onRename(v, name || null); }} />
               ) : (
-                <span className="max-w-48 truncate">{tab.label}</span>
+                <span className={cn("max-w-48 truncate", tab.compact && !active && "sr-only")}>{tab.label}</span>
               )}
               {v && !v.shared && <Lock className="h-3 w-3 shrink-0 opacity-60" aria-label={t("Only you see this view")} />}
               {v && active && (

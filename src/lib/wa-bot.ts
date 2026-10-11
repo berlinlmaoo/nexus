@@ -2,6 +2,7 @@
 // Inbound WA DM → mapped to a NEXUS user by phone → a fixed set of safe commands.
 // Replies (and the morning digest) go out via the same Hermes bridge used for notifications.
 import prisma from "@/lib/prisma"
+import { sectionForStatus } from "@/lib/status-sections"
 import { TaskStatus } from "@/generated/prisma"
 import { logAudit } from "@/lib/audit"
 import { postWaBridge } from "@/lib/wa-bridge"
@@ -178,7 +179,10 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     if (matches.length === 0) { await sendWaChat(input.chatId, `Gak nemu task aktif kamu yang cocok "${arg}".`); return }
     if (matches.length > 1) { await sendWaChat(input.chatId, `Ada ${matches.length} task cocok — sebut lebih spesifik:\n${matches.slice(0, 6).map((t) => `• ${t.title}`).join("\n")}`); return }
     const t = matches[0]
-    await prisma.task.update({ where: { id: t.id }, data: { status: TaskStatus.DONE, completedById: user.id } })
+    // Sections are the status options (lib/status-sections.ts): done moves it to the Done column.
+    const cur = await prisma.task.findUnique({ where: { id: t.id }, select: { taskListId: true, taskList: { select: { projectId: true } } } })
+    const moveTo = cur ? await sectionForStatus(prisma, cur.taskList.projectId, cur.taskListId, "DONE") : null
+    await prisma.task.update({ where: { id: t.id }, data: { status: TaskStatus.DONE, completedById: user.id, ...(moveTo ? { taskListId: moveTo } : {}) } })
     await sendWaChat(input.chatId, `✅ *${t.title}* ditandai DONE.`)
     return
   }

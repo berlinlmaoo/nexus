@@ -398,9 +398,10 @@ export async function POST(request: NextRequest) {
         },
         taskLists: {
           create: [
-            { name: "To Do", position: 0 },
-            { name: "In Progress", position: 1 },
-            { name: "Done", position: 2 },
+            // Sections are the status options (owner, 12 Oct 2026; lib/status-sections.ts).
+            { name: "To Do", position: 0, taskStatus: "TODO" },
+            { name: "In Progress", position: 1, taskStatus: "IN_PROGRESS" },
+            { name: "Done", position: 2, taskStatus: "DONE" },
           ],
         },
         pages: {
