@@ -293,6 +293,8 @@ export async function POST(req: NextRequest) {
       // Workspace Q&A: what the person can see that matches the question, searched BEFORE the model answers so
       // the answer stands on real records (and cites them) instead of a guess. Skipped for a file question.
       const searchLines: string[] = []
+      // The pre-search hits are offered to the model; only the ones its answer actually names become Sources.
+      let preSearch: { stepId: string | null; refs: GideonRef[] } | null = null
       if (streamClient && wantsSearch !== false && asked && !documentBase64 && !imageBase64) {
         const started = Date.now()
         try {
@@ -304,8 +306,7 @@ export async function POST(req: NextRequest) {
             if (runId) {
               const stepId = `ws${Date.now().toString(36)}`
               publishRunEvent(runId, { type: 'step', step: { id: stepId, tool: 'search_workspace', arg: asked.slice(0, 80), label: 'Searching the workspace', status: 'done' } })
-              publishRunEvent(runId, { type: 'sources', sources: refs })
-              await recordStep(runId, { tool: 'search_workspace', arg: asked.slice(0, 80), ok: true, durationMs: Date.now() - started, refs })
+              preSearch = { stepId: await recordStep(runId, { tool: 'search_workspace', arg: asked.slice(0, 80), ok: true, durationMs: Date.now() - started }), refs }
             }
           }
         } catch (error) {
@@ -403,6 +404,14 @@ export async function POST(req: NextRequest) {
         reply = (data.reply || '').trim()
       }
       if (!reply) failure = failure || 'empty reply'
+      if (reply && preSearch && runId) {
+        const said = reply.toLowerCase()
+        const used = preSearch.refs.filter((r) => r.title && r.title.length >= 3 && said.includes(r.title.toLowerCase().slice(0, 60)))
+        if (used.length) {
+          await sendEvent({ type: 'sources', sources: used })
+          if (preSearch.stepId) await prisma.gideonRunStep.update({ where: { id: preSearch.stepId }, data: { refs: used as unknown as InputJsonValue } }).catch(() => {})
+        }
+      }
       const finalText = reply || '(Gideon balas kosong — coba ulang.)'
       await sendEvent(streamClient ? { type: 'final', content: finalText } : { type: 'text', content: finalText })
 

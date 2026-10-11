@@ -62,6 +62,7 @@ const CURSOR_ACTIONS: ActionDef[] = [
 ];
 
 const PAGE_TEXT_MAX = 12000;
+const TONE_LABEL: Record<string, string> = { professional: "Professional", casual: "Casual", friendly: "Friendly", confident: "Confident", straightforward: "Straightforward" };
 
 function snapshot(editor: Editor, mode: AskAiMode): Snapshot | null {
   const { state, view } = editor;
@@ -123,7 +124,8 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
     setDoc(null);
     setItems(null);
     setError(null);
-    editor.commands.focus();
+    // After the menu has unmounted, or the focus lands on nothing and the next keystroke is lost.
+    window.setTimeout(() => editor.commands.focus(), 0);
   }, [editor]);
 
   // The editor's handle for the slash item / shortcut / toolbar.
@@ -355,7 +357,21 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
             <button type="button" onClick={submit} disabled={!prompt.trim()} aria-label={t("Send")} className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"><ArrowUp className="h-3.5 w-3.5" /></button>
           </div>
           <div className="max-h-72 overflow-y-auto p-1" role="listbox" aria-label={t("Ask AI")}>
-            {groups.map((g) => (
+            {groups.map((g) => g === "Change tone" ? (
+              <div key={g} className="px-2 pb-1 pt-2">
+                <div className="pb-1.5 text-[11px] font-semibold text-muted-foreground">{t(g)}</div>
+                <div className="flex flex-wrap gap-1">
+                  {filtered.filter((a) => a.group === g).map((a) => {
+                    const i = filtered.indexOf(a);
+                    return (
+                      <button key={a.id} type="button" role="option" aria-selected={i === index} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => void run(a, "")} className={cn("rounded-full border px-2.5 py-1 text-xs", i === index ? "border-primary/50 bg-muted" : "border-border hover:bg-muted/60")}>
+                        {t(TONE_LABEL[a.tone ?? ""] ?? a.label)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
               <div key={g}>
                 <div className="px-2 pb-1 pt-2 text-[11px] font-semibold text-muted-foreground">{t(g)}</div>
                 {filtered.filter((a) => a.group === g).map((a) => {

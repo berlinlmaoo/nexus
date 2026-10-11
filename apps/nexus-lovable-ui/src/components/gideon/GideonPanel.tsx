@@ -381,6 +381,9 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
 
   const modeDef = GIDEON_APPROVAL_MODES.find((m) => m.id === mode) ?? GIDEON_APPROVAL_MODES[1];
   const openWaiting = waiting.filter((p) => p.status === "PENDING" || p.status === "APPLYING");
+  // Changes waiting from elsewhere (an @GIDEON comment, AI Autofill) stay folded once a conversation is going.
+  const [waitingOpen, setWaitingOpen] = useState<boolean | null>(null);
+  const waitingShown = waitingOpen ?? turns.length === 0;
 
   // "@" in the composer: the word after it is a search for a page to attach.
   const onInputChange = (value: string, caret: number) => {
@@ -483,8 +486,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       <div className={cn("mx-auto w-full space-y-4", isPage && "max-w-3xl")}>
         {openWaiting.length > 0 && (
           <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400"><ShieldCheck className="h-3.5 w-3.5" /> {L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</div>
-            {openWaiting.map((p) => <ProposalCard key={p.id} proposal={p} onDecided={onDecided} />)}
+            <button type="button" onClick={() => setWaitingOpen((v) => !v)} aria-expanded={waitingShown} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold text-amber-700 dark:text-amber-400">
+              <ShieldCheck className="h-3.5 w-3.5" /><span className="flex-1">{L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</span>
+              {waitingShown ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+            {waitingShown && openWaiting.map((p) => <ProposalCard key={p.id} proposal={p} onDecided={onDecided} />)}
           </section>
         )}
         {loading && turns.length === 0 && (
@@ -561,7 +567,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
               }
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); }
             }}
-            placeholder={pageContext ? t("Ask about {name}… (@ to add a page)", { name: chipLabel(pageContext) }) : t("Ask {assistant} anything… (@ to add a page)", { assistant: name })}
+            placeholder={t("Ask anything. Type @ to add a page")}
             rows={isPage ? 3 : 2}
             className="w-full resize-none bg-transparent px-3 pt-3 text-sm outline-none placeholder:text-muted-foreground"
           />

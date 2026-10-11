@@ -3,7 +3,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { GideonMark } from "./GideonMark";
 import { GideonPanel } from "./GideonPanel";
 import { clearGideonContext, closeGideon, openGideon, useGideonLauncher } from "@/lib/gideon";
-import { useGideonLayout, useGideonName } from "@/lib/gideon-ai";
+import { getGideonPrefs, setCachedGideonPrefs, useGideonLayout, useGideonName, useGideonPrefs } from "@/lib/gideon-ai";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,9 @@ export function GideonLauncher() {
   const { t } = useLang();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const onFullPage = pathname === "/gideon" || pathname.startsWith("/gideon/");
+  const prefs = useGideonPrefs();
+  // What this person calls GIDEON, for the button's label before the panel was ever opened.
+  useEffect(() => { if (!prefs) getGideonPrefs().then(setCachedGideonPrefs).catch(() => undefined); }, [prefs]);
   const [wide, setWide] = useState(() => {
     try { return localStorage.getItem("gideon-wide") === "1"; } catch { return false; }
   });
