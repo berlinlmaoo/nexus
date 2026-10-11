@@ -1922,6 +1922,8 @@ model NotificationPreference {
   commentMention    Boolean  @default(true)
   projectInvite     Boolean  @default(true)
   statusUpdate      Boolean  @default(true)
+  /// "Send notification" steps of project automations (12 Oct 2026). Off = in-app only, no push.
+  automation        Boolean  @default(true)
 
   userId            String   @unique
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)

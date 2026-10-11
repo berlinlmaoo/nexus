@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
-import { createInAppNotification, notifyTaskAssigned } from "@/lib/notification-service"
+import { notifyAutomation, notifyTaskAssigned } from "@/lib/notification-service"
+import { getAutomationUserId } from "@/lib/automation-identity"
 import { emitAutomationsChanged, emitCommentAdded, emitTaskCreated, emitTaskDeleted, emitTaskUpdated } from "@/lib/socket-emitter"
 import { webhookUrlError } from "@/lib/webhook-dispatcher"
 import { restorableDelete } from "@/lib/deletion-snapshot"
@@ -147,19 +148,6 @@ async function taskFacts(taskId: string): Promise<(TaskFacts & { projectId: stri
   }
 }
 
-/** Who a clock- or webhook-driven run acts as: the rule's author, else a lead, else any member. */
-async function systemActor(row: AutomationRow): Promise<string | null> {
-  if (row.createdById) {
-    const u = await prisma.user.findUnique({ where: { id: row.createdById }, select: { id: true } })
-    if (u) return u.id
-  }
-  const lead = await prisma.projectMember.findFirst({ where: { projectId: row.projectId, role: "LEAD" }, select: { userId: true }, orderBy: { joinedAt: "asc" } })
-    .catch(() => null)
-  if (lead) return lead.userId
-  const any = await prisma.projectMember.findFirst({ where: { projectId: row.projectId }, select: { userId: true } })
-  return any?.userId ?? null
-}
-
 function isUniqueViolation(err: unknown): boolean {
   return !!err && typeof err === "object" && (err as { code?: string }).code === "P2002"
 }
@@ -189,7 +177,8 @@ export async function runOne(
       data: {
         automationId: row.id, projectId: row.projectId, taskId: event.taskId ?? null,
         event: opts.manual ? "manual" : event.kind, trigger: trigger?.type ?? "UNKNOWN",
-        status: "RUNNING", actorId: event.actorId, dedupKey: opts.dedupKey ?? null,
+        // Who set it off: the person, or for the clock and inbound webhooks the rule's author.
+        status: "RUNNING", actorId: event.actorId ?? row.createdById, dedupKey: opts.dedupKey ?? null,
       },
       select: { id: true },
     })
@@ -199,10 +188,13 @@ export async function runOne(
     throw err
   }
 
-  const actor = event.actorId ?? (await systemActor(row))
+  // Everything the actions write is signed by the Automation identity (lib/automation-identity.ts); the
+  // person who set it off is kept as `triggeredBy` (run log actorId, activity/audit metadata).
+  const actor = await getAutomationUserId()
+  const triggeredBy = event.actorId ?? row.createdById
   const steps: StepResult[] = []
   const project = await prisma.project.findUnique({ where: { id: row.projectId }, select: { id: true, name: true, workspaceId: true } })
-  const actorName = actor ? (await prisma.user.findUnique({ where: { id: actor }, select: { name: true } }))?.name ?? "" : ""
+  const actorName = triggeredBy ? (await prisma.user.findUnique({ where: { id: triggeredBy }, select: { name: true } }))?.name ?? "" : ""
   let taskTouched = false
   let taskGone = false
 
@@ -213,7 +205,7 @@ export async function runOne(
     }
     try {
       const res = await executeAction(action, {
-        row, event, actor, actorName, projectName: project?.name ?? "", workspaceId: project?.workspaceId ?? null,
+        row, event, actor, triggeredBy, actorName, projectName: project?.name ?? "", workspaceId: project?.workspaceId ?? null,
       })
       steps.push({ type: action.type, ok: true, skipped: res.skipped, message: res.message })
       if (res.touchedTask) taskTouched = true
@@ -239,11 +231,11 @@ export async function runOne(
     data: { lastRunAt: new Date(), lastRunStatus: status, runCount: { increment: 1 } },
   }).catch(() => {})
 
-  if (actor && event.taskId) {
+  if (event.taskId) {
     await prisma.activityLog.create({
       data: {
         action: status === "FAILED" ? "automation_failed" : "automation_executed",
-        details: `Automation "${row.name}" ${status === "FAILED" ? "failed" : "ran"}: ${steps.map((s) => s.message).join("; ")}`.slice(0, 1000),
+        details: `Automation "${row.name}" ${status === "FAILED" ? "failed" : "ran"}${actorName ? ` (triggered by ${actorName})` : ""}: ${steps.map((s) => s.message).join("; ")}`.slice(0, 1000),
         userId: actor,
         taskId: taskGone ? null : event.taskId,
         projectId: row.projectId,
@@ -268,7 +260,10 @@ async function emitTask(taskId: string) {
 type ActionCtx = {
   row: AutomationRow
   event: AutomationEvent
-  actor: string | null
+  /** The Automation identity: author of every comment, task, activity and audit row an action writes. */
+  actor: string
+  /** The person who set the run off (or the rule's author for clock/webhook runs); metadata only. */
+  triggeredBy: string | null
   actorName: string
   projectName: string
   workspaceId: string | null
@@ -359,7 +354,6 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
         where: { id: taskId! },
         data: {
           status: status as (typeof TASK_STATUSES)[number],
-          ...(status === "DONE" && actor ? { completedById: actor } : {}),
           ...(statusSection ? { taskListId: statusSection.id } : {}),
         },
       })
@@ -409,7 +403,7 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
       const takeStatus = section.taskStatus && section.taskStatus !== cur?.status ? section.taskStatus : null
       await prisma.task.update({
         where: { id: taskId! },
-        data: { taskListId: section.id, ...(takeStatus ? { status: takeStatus, ...(takeStatus === "DONE" && actor ? { completedById: actor } : {}) } : {}) },
+        data: { taskListId: section.id, ...(takeStatus ? { status: takeStatus } : {}) },
       })
       return { message: `Moved to another section${takeStatus ? ` (status ${takeStatus})` : ""}`, touchedTask: true }
     }
@@ -435,7 +429,6 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
       return setField(action, ctx)
 
     case "ADD_COMMENT": {
-      if (!actor) return { message: "Skipped: no one to post as", skipped: true }
       const content = fillTemplate(action.value ?? "", await templateVars(ctx), ctx.event.payload).trim()
       if (!content) return { message: "Skipped: empty comment", skipped: true }
       const comment = await prisma.comment.create({ data: { content: content.slice(0, 5000), taskId: taskId!, userId: actor }, include: { user: true } })
@@ -450,19 +443,19 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
       const vars = await templateVars(ctx)
       const message = fillTemplate(action.value || (vars.task ? `"${vars.task}"` : ctx.row.name), vars, ctx.event.payload).slice(0, 500)
       const title = `⚡ ${ctx.row.name}`
-      for (const userId of recipients) {
-        await createInAppNotification({
-          userId, type: "automation", title, message,
-          taskId: taskId ?? undefined, projectId,
-          link: taskId ? `/projects/${projectId}/tasks/${taskId}` : `/projects/${projectId}`,
-          push: true,
-        })
-      }
-      return { message: `Notified ${recipients.length} person(s)` }
+      // Each recipient's own settings decide (notification-service notifyAutomation): Do Not Disturb =
+      // nothing; "Automation notifications" off = the in-app row only, no push.
+      const outcome = await notifyAutomation({
+        userIds: recipients, title, message, taskId: taskId ?? undefined, projectId,
+        link: taskId ? `/projects/${projectId}/tasks/${taskId}` : `/projects/${projectId}`,
+      })
+      const parts = [`Notified ${outcome.sent} person(s)`]
+      if (outcome.dnd) parts.push(`${outcome.dnd} on Do Not Disturb`)
+      if (outcome.noPush) parts.push(`${outcome.noPush} without push (their setting)`)
+      return outcome.sent ? { message: parts.join(", ") } : { message: parts.join(", "), skipped: true }
     }
 
     case "CREATE_TASK": {
-      if (!actor) return { message: "Skipped: no one to create it as", skipped: true }
       const vars = await templateVars(ctx)
       const payloadTitle = (() => {
         const p = ctx.event.payload as Record<string, unknown> | undefined
@@ -497,7 +490,6 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
     }
 
     case "CREATE_SUBTASK": {
-      if (!actor) return { message: "Skipped: no one to create it as", skipped: true }
       const parent = await prisma.task.findUnique({ where: { id: taskId! }, select: { taskListId: true } })
       if (!parent) return { message: "Skipped: parent task not found", skipped: true }
       const title = fillTemplate(action.value || "Subtask", await templateVars(ctx), ctx.event.payload).trim().slice(0, 500) || "Subtask"
@@ -507,7 +499,6 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
     }
 
     case "DUPLICATE_TASK": {
-      if (!actor) return { message: "Skipped: no one to create it as", skipped: true }
       const src = await prisma.task.findUnique({
         where: { id: taskId! },
         include: { assignees: { select: { userId: true } }, customFieldValues: { select: { customFieldId: true, value: true } } },
@@ -535,12 +526,11 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
     case "ARCHIVE_TASK": {
       // NEXUS has no archived flag on tasks: archiving = the normal restorable delete, so the task can be
       // brought back from Control Room → Audit (90 days), exactly like a delete by hand.
-      if (!actor) return { message: "Skipped: no one to archive as", skipped: true }
       const t = await prisma.task.findUnique({ where: { id: taskId! }, select: { title: true, taskProjects: { select: { projectId: true } } } })
       if (!t) return { message: "Skipped: task not found", skipped: true }
       await restorableDelete({
         entityType: "task", entityId: taskId!, entityName: t.title, workspaceId: ctx.workspaceId,
-        userId: actor, metadata: { title: t.title, projectId, projectName: ctx.projectName, automationId: ctx.row.id, automation: ctx.row.name },
+        userId: actor, metadata: { title: t.title, projectId, projectName: ctx.projectName, automationId: ctx.row.id, automation: ctx.row.name, triggeredBy: ctx.triggeredBy },
         meta: { open: { type: "task", id: taskId!, projectId }, projectId, taskId: taskId! },
         remove: (tx) => tx.task.delete({ where: { id: taskId! } }),
       })

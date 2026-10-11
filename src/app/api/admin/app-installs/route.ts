@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { orgRoleOf } from "@/lib/org"
-import { GIDEON_EMAIL } from "@/lib/gideon-identity"
+import { SYSTEM_USER_EMAILS } from "@/lib/system-users"
 
 /**
  * Who has the app, and which build they are on.
@@ -37,7 +37,7 @@ export async function GET() {
     })
     const members = primary
       ? await prisma.workspaceMember.findMany({
-          where: { workspaceId: primary.workspaceId, user: { email: { not: GIDEON_EMAIL } } },
+          where: { workspaceId: primary.workspaceId, user: { email: { notIn: SYSTEM_USER_EMAILS } } },
           select: { role: true, joinedAt: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
         })
       : []

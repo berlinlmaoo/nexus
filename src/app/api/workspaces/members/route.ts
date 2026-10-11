@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { orgRoleOf } from '@/lib/org'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { GIDEON_EMAIL } from '@/lib/gideon-identity'
+import { SYSTEM_USER_EMAILS } from '@/lib/system-users'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
 import { canWriteGlobalAccount } from '@/lib/org'
@@ -167,10 +167,10 @@ export async function GET(req: NextRequest) {
     if (includeRegistered && canSeeRegistered) {
       const availableUsers = await prisma.user.findMany({
         where: {
-          // GIDEON exists to sign what it writes, not to be invited anywhere. Without this it shows
-          // up as an invitable person, because this is the one query that reads User directly rather
-          // than through a membership table.
-          email: { not: GIDEON_EMAIL },
+          // GIDEON and Automation exist to sign what they write, not to be invited anywhere. Without
+          // this they show up as invitable people, because this is the one query that reads User
+          // directly rather than through a membership table.
+          email: { notIn: SYSTEM_USER_EMAILS },
           NOT: {
             workspaceMembers: {
               some: { workspaceId: member.workspaceId },
