@@ -416,9 +416,42 @@ export type NexusProject = {
   type?: string;
   /** Tab keys this project hides (components/projects/project-tabs.ts). Unknown keys are ignored. */
   hiddenTabs?: string[];
+  /** The template it was built from (12 Oct 2026, GET /api/project-templates); null/absent = blank. */
+  templateId?: string | null;
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
-  taskLists?: Array<{ id: string; name: string; position?: number; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
+  /** taskStatus (12 Oct 2026): the task status the section stands for; moving a task in sets it (server). */
+  taskLists?: Array<{ id: string; name: string; position?: number; taskStatus?: NexusTaskStatus | null; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
+};
+
+export type NexusTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED";
+
+/** Text in both languages, as the template registry sends it. */
+export type NexusL = { en: string; id: string };
+export type NexusTemplateColor = "gray" | "brown" | "orange" | "yellow" | "green" | "blue" | "purple" | "pink" | "red";
+/**
+ * A project template (owner, 12 Oct 2026): data from the server registry (src/lib/project-templates.ts),
+ * drawn by components/projects/TemplateGallery. Building one is POST /api/projects { templateId }.
+ */
+export type NexusProjectTemplate = {
+  id: string;
+  category: string;
+  name: NexusL;
+  blurb: NexusL;
+  icon: string;
+  tint: NexusTemplateColor;
+  sections: Array<{ name: NexusL; status?: NexusTaskStatus; color?: NexusTemplateColor }>;
+  fields: Array<{ key: string; name: NexusL; type: string; options: Array<{ label: NexusL; color?: NexusTemplateColor }> }>;
+  builtins: Array<{ key: string; name: NexusL }>;
+  tabs: string[];
+  hiddenTabs: string[];
+  defaultTab: string;
+  /** "dueDate" or "cf:<field key>". */
+  calendarBy: string;
+  myView: { name: NexusL; tab: string } | null;
+  preview: { layout: "board" | "table" | "calendar" | "list" | "gallery"; columns?: string[] };
+  starterDocs: Array<{ title: NexusL; icon: string | null }>;
+  starterTasks: number;
 };
 
 export type NexusAttendanceToday = {
@@ -1311,15 +1344,52 @@ export type NexusAutomationRule = {
   type: string;
   field?: string;
   value?: string;
+  config?: Record<string, unknown>;
 };
+
+export type NexusAutomationConditions = { match: "all" | "any"; rules: Array<{ field: string; op: string; value?: string }> };
 
 export type NexusAutomation = {
   id: string;
   name: string;
   enabled?: boolean;
   trigger?: NexusAutomationRule | null;
+  /** The first action (what released apps read); `actions` has all of them (12 Oct 2026). */
   action?: NexusAutomationRule | null;
+  actions?: NexusAutomationRule[];
+  conditions?: NexusAutomationConditions | null;
   projectId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdById?: string | null;
+  lastRunAt?: string | null;
+  lastRunStatus?: string | null;
+  runCount?: number;
+  nextRunAt?: string | null;
+  /** Inbound URL of a "Webhook received" rule; only sent to people who can edit. */
+  webhookUrl?: string;
+};
+
+export type NexusAutomationRun = {
+  id: string;
+  createdAt: string;
+  event: string;
+  trigger: string;
+  status: string;
+  steps: Array<{ type: string; ok: boolean; skipped?: boolean; message: string }>;
+  error?: string | null;
+  durationMs?: number | null;
+  taskId?: string | null;
+  task?: { id: string; title: string } | null;
+  actor?: { id: string; name?: string | null; avatar?: string | null } | null;
+};
+
+export type NexusAutomationInput = {
+  name: string;
+  trigger: NexusAutomationRule;
+  actions: NexusAutomationRule[];
+  conditions: NexusAutomationConditions | null;
+  enabled?: boolean;
 };
 
 export type NexusFormField = {
@@ -2145,6 +2215,10 @@ export type CreateProjectPayload = {
   hiddenTabs?: string[];
   /** People of that workspace added as MEMBER next to the creator (LEAD). 11 Oct 2026. */
   memberIds?: string[];
+  /** Build from a template (12 Oct 2026, TASK only), in this language; starter=false skips starter pages. */
+  templateId?: string;
+  lang?: "en" | "id";
+  starter?: boolean;
 };
 
 export type CreateTaskPayload = {
@@ -2242,7 +2316,8 @@ export const nexusApi = {
   createStatusUpdate: (projectId: string, text: string, status?: string) => apiFetch<NexusStatusUpdate>("/api/status-updates", { method: "POST", body: JSON.stringify({ projectId, text, status }) }),
   generateStatusUpdate: (projectId: string) => apiFetch<{ content: string }>(`/api/projects/${projectId}/status-updates/generate`, { method: "POST" }),
   createSection: (projectId: string, name: string) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "POST", body: JSON.stringify({ name }) }),
-  updateSection: (projectId: string, payload: { id: string; name?: string; position?: number }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
+  projectTemplates: () => apiFetch<{ templates: NexusProjectTemplate[] }>("/api/project-templates"),
+  updateSection: (projectId: string, payload: { id: string; name?: string; position?: number; taskStatus?: NexusTaskStatus | null }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteSection: (projectId: string, id: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/sections`, { method: "DELETE", body: JSON.stringify({ id }) }),
   employmentStartDates: () =>
     apiFetch<{ members: { userId: string; name: string | null; email: string | null; avatar: string | null; employmentStartDate: string | null; eligible: boolean; eligibleFrom: string | null }[]; quota: number }>(`/api/attendance/employment-start`),
@@ -2937,9 +3012,11 @@ export const nexusApi = {
   },
 
   // --- Automations ---
-  automations: (projectId: string) => apiFetch<{ automations: NexusAutomation[] }>(`/api/automations?projectId=${encodeURIComponent(projectId)}`),
-  createAutomation: (payload: { name: string; projectId: string; trigger: NexusAutomationRule; action: NexusAutomationRule }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "POST", body: JSON.stringify(payload) }),
-  updateAutomation: (payload: { id: string; enabled?: boolean; name?: string; trigger?: NexusAutomationRule; action?: NexusAutomationRule }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "PATCH", body: JSON.stringify(payload) }),
+  automations: (projectId: string) => apiFetch<{ automations: NexusAutomation[]; canEdit?: boolean }>(`/api/automations?projectId=${encodeURIComponent(projectId)}`),
+  createAutomation: (payload: { name: string; projectId: string; trigger: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null; enabled?: boolean }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "POST", body: JSON.stringify(payload) }),
+  updateAutomation: (payload: { id: string; enabled?: boolean; name?: string; trigger?: NexusAutomationRule; action?: NexusAutomationRule; actions?: NexusAutomationRule[]; conditions?: NexusAutomationConditions | null; regenerateWebhookToken?: boolean }) => apiFetch<{ automation: NexusAutomation }>("/api/automations", { method: "PATCH", body: JSON.stringify(payload) }),
+  automationRuns: (automationId: string, before?: string) => apiFetch<{ runs: NexusAutomationRun[]; hasMore: boolean }>(`/api/automations/runs?automationId=${encodeURIComponent(automationId)}&limit=50${before ? `&before=${encodeURIComponent(before)}` : ""}`),
+  runAutomation: (id: string, taskId?: string) => apiFetch<{ run: { runId: string | null; status: string; steps: NexusAutomationRun["steps"] } | null; skipped?: boolean; reason?: string }>("/api/automations/run", { method: "POST", body: JSON.stringify({ id, taskId }) }),
   deleteAutomation: (id: string) => apiFetch<{ success?: boolean }>(`/api/automations?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   automationSuggestions: (projectId: string) => apiFetch<{ suggestions: Array<{ name: string; trigger: NexusAutomationRule; action: NexusAutomationRule }> }>(`/api/automations/suggestions?projectId=${encodeURIComponent(projectId)}`, { method: "POST" }),
 

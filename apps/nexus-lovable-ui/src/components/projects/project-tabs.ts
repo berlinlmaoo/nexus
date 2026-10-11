@@ -52,6 +52,10 @@ export function hiddenTabsOf(project?: Pick<NexusProject, "hiddenTabs"> | null):
 }
 
 /**
+ * Since 12 Oct 2026 the New project dialog is a template gallery (components/projects/TemplateGallery):
+ * Blank and every template are TASK projects; Outlet Sales and Pipeline are the typed dashboards. The
+ * "Content Planner" card became the Content Plan template; CONTENT stays a type nobody creates.
+ *
  * Project types offered when creating a project. TASK; since 9 Oct 2026 PIPELINE (the GM's pipeline board —
  * components/pipeline); since 10 Oct 2026 OUTLET_SALES (owner, for Ryan: one project per outlet —
  * components/outlet-sales), in the place the Finance Dashboard card had. Content Planner waits for

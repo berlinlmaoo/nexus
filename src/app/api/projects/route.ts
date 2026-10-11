@@ -11,6 +11,8 @@ import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { checkCreatableProjectType, DEFAULT_HIDDEN_TABS_NEW_TASK_PROJECT, normalizeHiddenTabs } from "@/lib/project-tabs"
 import { notifyProjectInvite } from "@/lib/notification-service"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
+import { findProjectTemplate, templateHiddenTabs, templateLang } from "@/lib/project-templates"
+import { createProjectFromTemplate } from "@/lib/project-template-apply"
 
 const projectListSelect = {
   id: true,
@@ -275,6 +277,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: typeCheck.error, code: typeCheck.code }, { status: 400 })
     }
 
+    // A template (owner, 12 Oct 2026; lib/project-templates.ts) builds a Task Project with its sections,
+    // fields, tabs, Table columns and starter pages. Only TASK: the other types have fixed views.
+    let template: ReturnType<typeof findProjectTemplate> = null
+    if (body.templateId !== undefined && body.templateId !== null && body.templateId !== "") {
+      template = findProjectTemplate(body.templateId)
+      if (!template) {
+        return NextResponse.json({ error: "Template tidak dikenal.", code: "UNKNOWN_TEMPLATE" }, { status: 400 })
+      }
+      if (typeCheck.type !== "TASK") {
+        return NextResponse.json({ error: "Template hanya untuk Task Project.", code: "TEMPLATE_TASK_ONLY" }, { status: 400 })
+      }
+    }
+
     const userId = session.user.id
 
     // Verify the user is a member of the target workspace
@@ -303,7 +318,9 @@ export async function POST(request: NextRequest) {
     //    Automations hidden (owner, 11 Oct 2026: off by default for new projects); sent → stored as sent.
     //  - memberIds: people of THIS workspace to add as MEMBER next to the creator (LEAD). The creator
     //    and duplicates are dropped; anyone outside the workspace refuses the whole request.
-    let initialHiddenTabs: string[] = typeCheck.type === "TASK" ? [...DEFAULT_HIDDEN_TABS_NEW_TASK_PROJECT] : []
+    let initialHiddenTabs: string[] = template
+      ? templateHiddenTabs(template)
+      : typeCheck.type === "TASK" ? [...DEFAULT_HIDDEN_TABS_NEW_TASK_PROJECT] : []
     if (body.hiddenTabs !== undefined && body.hiddenTabs !== null && typeCheck.type === "TASK") {
       const tabs = normalizeHiddenTabs(body.hiddenTabs)
       if (!tabs.ok) {
@@ -348,7 +365,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const project = await prisma.project.create({
+    const project = template
+      ? await createProjectFromTemplate({
+          template,
+          lang: templateLang(body.lang),
+          starter: body.starter !== false,
+          name,
+          description,
+          color,
+          icon,
+          workspaceId,
+          folderId: typeof folderId === "string" ? folderId : null,
+          hiddenTabs: initialHiddenTabs,
+          userId,
+          memberIds: initialMemberIds,
+        })
+      : await prisma.project.create({
       data: {
         name,
         description,
@@ -384,7 +416,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    logAudit({ action: "create", entityType: "project", entityId: project.id, entityName: name, userId, request })
+    logAudit({ action: "create", entityType: "project", entityId: project.id, entityName: name, userId, request, ...(template && { metadata: { templateId: template.id } }) })
 
     // The project's chat room, with its creator in it. Rooms used to appear only when someone happened
     // to open the chat list (lib/chat-membership.ts).

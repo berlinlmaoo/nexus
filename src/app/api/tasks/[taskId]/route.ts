@@ -8,7 +8,7 @@ import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
 import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
-import { executeAutomations } from "@/lib/automation-engine"
+import { runAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
 import { notifyTaskAssigned, notifyTaskCompleted, notifySubmissionStatus } from "@/lib/notification-service"
@@ -120,7 +120,7 @@ export async function PATCH(
     const {
       title,
       description,
-      status,
+      status: requestedStatus,
       priority,
       dueDate,
       startDate,
@@ -135,6 +135,8 @@ export async function PATCH(
       recurPattern,
       taskType,
     } = validation.data
+    // May be set below from the section the task moves into (TaskList.taskStatus, project templates).
+    let status = requestedStatus
 
     const existing = await prisma.task.findUnique({
       where: { id: taskId },
@@ -169,8 +171,43 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
     }
 
+    const primaryProjectId = existing.taskList.projectId
+    const isLinkedProjectContext = effectiveProjectId !== primaryProjectId
+
+    // Sections that stand for a status (project templates, owner 12 Oct 2026; TaskList.taskStatus). In
+    // the task's own project only, never through a linked placement, and only when the request does not
+    // say both things itself:
+    //  - moved into such a section without a status → the task takes the section's status
+    //    (Content Plan: drag to "Published" = DONE, for reports, Overview and every app);
+    //  - status changed without a move, out of such a section → it moves to the first section of that
+    //    status, so the board keeps showing where it stands. No such section → it stays where it is.
+    // Plain sections (taskStatus null, every project before templates) behave exactly as before.
+    let statusSection: { id: string } | null = null
+    if (!isLinkedProjectContext) {
+      if (requestedStatus === undefined && taskListId !== undefined && taskListId !== existing.taskListId) {
+        const target = await prisma.taskList.findFirst({
+          where: { id: taskListId, projectId: primaryProjectId },
+          select: { taskStatus: true },
+        })
+        if (target?.taskStatus && target.taskStatus !== existing.status) status = target.taskStatus
+      } else if (
+        requestedStatus !== undefined &&
+        requestedStatus !== existing.status &&
+        taskListId === undefined &&
+        existing.taskList.taskStatus &&
+        existing.taskList.taskStatus !== requestedStatus
+      ) {
+        statusSection = await prisma.taskList.findFirst({
+          where: { projectId: primaryProjectId, taskStatus: requestedStatus },
+          orderBy: { position: "asc" },
+          select: { id: true },
+        })
+      }
+    }
+
     const updateData: Record<string, unknown> = {}
     const linkedPlacementData: Record<string, unknown> = {}
+    if (statusSection) updateData.taskListId = statusSection.id
     if (title !== undefined) updateData.title = title
     if (description !== undefined) updateData.description = description
     if (status !== undefined) updateData.status = status
@@ -193,9 +230,6 @@ export async function PATCH(
     if (isRecurring !== undefined) updateData.isRecurring = isRecurring
     if (recurPattern !== undefined) updateData.recurPattern = recurPattern
     if (taskType !== undefined) updateData.taskType = taskType
-
-    const primaryProjectId = existing.taskList.projectId
-    const isLinkedProjectContext = effectiveProjectId !== primaryProjectId
 
     if (taskListId !== undefined) {
       const targetTaskList = await prisma.taskList.findFirst({
@@ -429,24 +463,34 @@ export async function PATCH(
       },
     })
 
-    // Fire automations for status changes
-    if (status !== undefined && status !== existing.status) {
-      executeAutomations(existing.taskList.projectId, "task_status_changed", {
-        taskId: taskId,
-        userId: session.user.id!,
-        projectId: effectiveProjectId,
-        oldStatus: existing.status,
-        newStatus: status,
-      }).catch(() => {})
-    }
-
-    // Fire automations for assignee changes
+    // Automations (rebuilt 12 Oct 2026): one "task_updated" event with what actually moved, fired after
+    // every write of this request (assignees included: they are rewritten further down, and the old call
+    // here raced that rewrite). The engine drops fields whose value did not change.
+    const previousAssigneeSet = new Set(existing.assignees.map((assignee) => assignee.userId))
+    const automationChanges: Record<string, { from?: unknown; to?: unknown; added?: string[]; removed?: string[] }> = {}
+    if (status !== undefined) automationChanges.status = { from: existing.status, to: status }
+    if (priority !== undefined) automationChanges.priority = { from: existing.priority, to: priority }
+    if (title !== undefined) automationChanges.title = { from: existing.title, to: title }
+    if (description !== undefined) automationChanges.description = { from: existing.description, to: description }
+    if (tags !== undefined) automationChanges.tags = { from: existing.tags, to: tags }
+    if (updateData.dueDate !== undefined) automationChanges.dueDate = { from: existing.dueDate?.toISOString() ?? null, to: (updateData.dueDate as Date | null)?.toISOString() ?? null }
+    if (updateData.startDate !== undefined) automationChanges.startDate = { from: existing.startDate?.toISOString() ?? null, to: (updateData.startDate as Date | null)?.toISOString() ?? null }
+    // updateData.taskListId also covers the move a status change makes into a status section (TaskList.taskStatus).
+    if (updateData.taskListId !== undefined) automationChanges.section = { from: existing.taskListId, to: updateData.taskListId as string }
     if (assigneeIds !== undefined) {
-      executeAutomations(existing.taskList.projectId, "task_assigned", {
-        taskId: taskId,
-        userId: session.user.id!,
-        projectId: effectiveProjectId,
-        assigneeIds,
+      const nextAssignees = new Set<string>(assigneeIds)
+      automationChanges.assignee = {
+        added: [...nextAssignees].filter((id) => !previousAssigneeSet.has(id)),
+        removed: [...previousAssigneeSet].filter((id) => !nextAssignees.has(id)),
+      }
+    }
+    const fireAutomations = () => {
+      runAutomations({
+        kind: "task_updated",
+        projectId: existing.taskList.projectId,
+        actorId: session.user.id!,
+        taskId,
+        changes: automationChanges,
       }).catch(() => {})
     }
 
@@ -527,6 +571,7 @@ export async function PATCH(
         emitTaskUpdated(projectId, JSON.parse(JSON.stringify(updatedTask)))
       }
 
+      fireAutomations()
       return NextResponse.json(updatedTask)
     }
 
@@ -538,6 +583,7 @@ export async function PATCH(
       emitTaskUpdated(projectId, JSON.parse(JSON.stringify(task)))
     }
 
+    fireAutomations()
     return NextResponse.json(task)
   } catch (error) {
     console.error("Error updating task:", error)
