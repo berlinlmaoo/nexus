@@ -89,7 +89,7 @@ export const DEFAULT_SHEET_COLUMNS: SheetColumn[] = Array.from(
   { length: DEFAULT_COLUMN_COUNT },
   (_, i) => ({ id: `c_${i}`, name: "", type: "text" as const, width: 140 }),
 )
-const DEFAULT_ROW_COUNT = 50
+export const DEFAULT_ROW_COUNT = 50
 
 /**
  * Give a project its default sheet so the tab is never empty.
@@ -114,6 +114,115 @@ const DEFAULT_ROW_COUNT = 50
  *
  * Never throws. A broken audit trail must not stop anyone from opening their spreadsheet.
  */
+/**
+ * Self-heal for the two formatting columns (11 Oct 2026, prisma/sql/2026-10-11-sheet-formatting.sql).
+ *
+ * The repo has no migration runner, so a deploy can land before the SQL is applied; every sheet
+ * query would then fail on a column Prisma expects. Adding them is additive and idempotent, so the
+ * first sheet request of each process makes sure they exist. Awaited by every sheet entry point.
+ */
+let formattingColumns: Promise<void> | null = null
+export function ensureSheetFormattingColumns(): Promise<void> {
+  formattingColumns ??= (async () => {
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ProjectSheet" ADD COLUMN IF NOT EXISTS "settings" JSONB NOT NULL DEFAULT '{}'`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SheetRow" ADD COLUMN IF NOT EXISTS "styles" JSONB`)
+    } catch (err) {
+      formattingColumns = null
+      console.error("[sheets] could not ensure formatting columns:", err)
+    }
+  })()
+  return formattingColumns
+}
+
+// ── Per-cell formatting ─────────────────────────────────────────────────────────────────────────
+
+/** Palette for text and fill colours. Named tokens, never free hex: a sheet can't drift off the app's palette. */
+export const STYLE_COLORS = ["red", "orange", "amber", "green", "teal", "blue", "violet", "pink", "slate", "black"] as const
+export type StyleColor = (typeof STYLE_COLORS)[number]
+export const STYLE_NUMBER_FORMATS = ["auto", "num", "idr", "pct", "date", "text"] as const
+
+/**
+ * One cell's formatting. Short keys because it is stored per cell:
+ *   b bold · i italic · s strikethrough · u underline · fc text colour · bg fill colour
+ *   ha horizontal align l|c|r · va vertical align t|m|b · w wrap · fs font size (px)
+ *   nf number format (auto|num|idr|pct|date|text) · dp decimals · bd borders ("tblr" sides)
+ */
+export type CellStyle = {
+  b?: 1; i?: 1; s?: 1; u?: 1
+  fc?: StyleColor; bg?: StyleColor
+  ha?: "l" | "c" | "r"; va?: "t" | "m" | "b"
+  w?: 1; fs?: number
+  nf?: (typeof STYLE_NUMBER_FORMATS)[number]; dp?: number
+  bd?: string
+}
+
+/** Validate one incoming style; null/empty means "no formatting". Unknown keys are dropped. */
+export function normalizeCellStyle(raw: unknown): CellStyle | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const out: CellStyle = {}
+  for (const k of ["b", "i", "s", "u", "w"] as const) if (o[k] === 1 || o[k] === true) out[k] = 1
+  if (STYLE_COLORS.includes(o.fc as StyleColor)) out.fc = o.fc as StyleColor
+  if (STYLE_COLORS.includes(o.bg as StyleColor)) out.bg = o.bg as StyleColor
+  if (o.ha === "l" || o.ha === "c" || o.ha === "r") out.ha = o.ha
+  if (o.va === "t" || o.va === "m" || o.va === "b") out.va = o.va
+  if (typeof o.fs === "number" && o.fs >= 8 && o.fs <= 36) out.fs = Math.round(o.fs)
+  if (STYLE_NUMBER_FORMATS.includes(o.nf as CellStyle["nf"] & string) && o.nf !== "auto") out.nf = o.nf as CellStyle["nf"]
+  if (typeof o.dp === "number" && o.dp >= 0 && o.dp <= 10) out.dp = Math.round(o.dp)
+  if (typeof o.bd === "string") {
+    const sides = [...new Set(o.bd.split(""))].filter((c) => "tblr".includes(c)).sort().join("")
+    if (sides) out.bd = sides
+  }
+  return Object.keys(out).length ? out : null
+}
+
+export function readStyles(raw: unknown): Record<string, CellStyle> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  return raw as Record<string, CellStyle>
+}
+
+// ── Sheet-level settings ────────────────────────────────────────────────────────────────────────
+
+export type SheetMerge = { r: string; c: string; rs: number; cs: number }
+export type SheetSettings = {
+  frozenRows?: number
+  frozenCols?: number
+  tabColor?: ColumnColor
+  hiddenRows?: string[]
+  hiddenCols?: string[]
+  merges?: SheetMerge[]
+}
+
+const MAX_FROZEN_ROWS = 20
+const MAX_FROZEN_COLS = 10
+
+/** Narrow stored/incoming settings; anything malformed is dropped rather than trusted. */
+export function readSheetSettings(raw: unknown): SheetSettings {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  const o = raw as Record<string, unknown>
+  const out: SheetSettings = {}
+  const int = (v: unknown, max: number) => (typeof v === "number" && v >= 0 ? Math.min(max, Math.round(v)) : undefined)
+  const fr = int(o.frozenRows, MAX_FROZEN_ROWS); if (fr) out.frozenRows = fr
+  const fc = int(o.frozenCols, MAX_FROZEN_COLS); if (fc) out.frozenCols = fc
+  if (COLUMN_COLORS.includes(o.tabColor as ColumnColor)) out.tabColor = o.tabColor as ColumnColor
+  const ids = (v: unknown, max: number) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.length < 100))].slice(0, max) : [])
+  const hr = ids(o.hiddenRows, 2000); if (hr.length) out.hiddenRows = hr
+  const hc = ids(o.hiddenCols, MAX_COLUMNS); if (hc.length) out.hiddenCols = hc
+  if (Array.isArray(o.merges)) {
+    const merges: SheetMerge[] = []
+    for (const m of o.merges.slice(0, 500)) {
+      if (!m || typeof m !== "object") continue
+      const x = m as Record<string, unknown>
+      const rs = int(x.rs, 500) ?? 1, cs = int(x.cs, MAX_COLUMNS) ?? 1
+      if (typeof x.r !== "string" || typeof x.c !== "string" || rs * cs < 2) continue
+      merges.push({ r: x.r, c: x.c, rs: Math.max(1, rs), cs: Math.max(1, cs) })
+    }
+    if (merges.length) out.merges = merges
+  }
+  return out
+}
+
 let revisionTriggerChecked = false
 export async function ensureRevisionTrigger(force = false): Promise<void> {
   if (revisionTriggerChecked && !force) return
@@ -162,6 +271,7 @@ export async function ensureRevisionTrigger(force = false): Promise<void> {
 export async function ensureProjectSheet(projectId: string, userId?: string | null): Promise<string> {
   // Deliberately not awaited inside the transaction below — it must never hold the advisory lock.
   void ensureRevisionTrigger()
+  await ensureSheetFormattingColumns()
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sheetseed|${projectId}`})::int8)`
     const existing = await tx.projectSheet.findFirst({
@@ -188,7 +298,7 @@ export async function ensureProjectSheet(projectId: string, userId?: string | nu
   })
 }
 
-type AccessOk = { allowed: true; sheet: { id: string; projectId: string; name: string; columns: SheetColumn[] } }
+type AccessOk = { allowed: true; sheet: { id: string; projectId: string; name: string; columns: SheetColumn[]; settings: SheetSettings } }
 type AccessNo = { allowed: false; status: 403 | 404; error: string }
 
 /**
@@ -203,14 +313,15 @@ export async function resolveSheetAccess(
   sheetId: string,
   roles: ProjectRole[],
 ): Promise<AccessOk | AccessNo> {
+  await ensureSheetFormattingColumns()
   const sheet = await prisma.projectSheet.findUnique({
     where: { id: sheetId },
-    select: { id: true, projectId: true, name: true, columns: true },
+    select: { id: true, projectId: true, name: true, columns: true, settings: true },
   })
   if (!sheet) return { allowed: false, status: 404, error: "Sheet-nya nggak ketemu." }
   const { allowed } = await checkProjectAccess(userId, sheet.projectId, roles)
   if (!allowed) return { allowed: false, status: 403, error: "Kamu nggak punya akses ke sheet ini." }
-  return { allowed: true, sheet: { ...sheet, columns: readColumns(sheet.columns) } }
+  return { allowed: true, sheet: { ...sheet, columns: readColumns(sheet.columns), settings: readSheetSettings(sheet.settings) } }
 }
 
 /** Columns come back from Prisma as `Json`; narrow + drop anything malformed. */
@@ -332,7 +443,13 @@ export function coerceCellValue(
     if (type === "select" || type === "task") return String(typed.v)
     return typed
   }
-  // A list or a link arriving in a plain column reads as its text — never "[object Object]".
+  // A link in a TEXT column stays a link (Sheets lets any cell hold one: Insert link).
+  if (type === "text" && isLinkCell(value)) {
+    const u = safeUrl(value.u)
+    const t = String(value.t ?? "").trim().slice(0, 500)
+    return u ? { t: t || u, u } : t || null
+  }
+  // A list or a link arriving in another plain column reads as its text — never "[object Object]".
   if (Array.isArray(value)) value = value.map(String).join(", ")
   else if (isLinkCell(value)) value = value.t || value.u
   else if (value && typeof value === "object") return JSON.stringify(value).slice(0, 5000)

@@ -4,6 +4,7 @@
 // touches them. Deleting is the exception: a range whose CORNER row/column disappears would otherwise
 // turn #REF! as a whole, where Sheets just shrinks it. This rewrites those ranges, in the same
 // transaction as the delete, so every client (and the export) sees the shrunk formula.
+import { randomUUID } from "crypto"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
 import { isFormulaCell, rewriteForDeletion } from "@/lib/sheet-formula"
@@ -59,4 +60,58 @@ export async function shrinkRangesAfterDeletion(
       return out
     },
   }
+}
+
+/**
+ * Copy a sheet — columns, settings, rows with values, formatting and heights — into `projectId`.
+ *
+ * Rows get NEW ids, so every formula's row references are rewritten to the copies (and hidden rows
+ * and merges follow too); copying the stored text as-is would leave every reference pointing at the
+ * ORIGINAL sheet's rows, i.e. #REF! everywhere. Column ids are per sheet and stay as they are.
+ */
+export async function copySheet(
+  sourceId: string,
+  target: { projectId: string; name: string; position: number; createdById: string | null },
+): Promise<{ id: string }> {
+  const source = await prisma.projectSheet.findUnique({
+    where: { id: sourceId },
+    select: { columns: true, settings: true },
+  })
+  if (!source) throw new Error("sheet not found")
+  const rows = await prisma.sheetRow.findMany({
+    where: { sheetId: sourceId },
+    orderBy: { position: "asc" },
+    select: { id: true, position: true, cells: true, styles: true, height: true },
+  })
+  const idMap = new Map(rows.map((r) => [r.id, `r${randomUUID().replace(/-/g, "").slice(0, 24)}`]))
+  const remap = (f: string) => f.replace(/\{(\$?[^!}]+)!(\$?)([^}]+)\}/g, (whole, col: string, abs: string, row: string) => {
+    const next = idMap.get(row)
+    return next ? `{${col}!${abs}${next}}` : whole
+  })
+  const settings = (source.settings && typeof source.settings === "object" ? { ...(source.settings as Record<string, unknown>) } : {}) as Record<string, unknown>
+  if (Array.isArray(settings.hiddenRows)) settings.hiddenRows = (settings.hiddenRows as string[]).map((id) => idMap.get(id) ?? id)
+  if (Array.isArray(settings.merges)) settings.merges = (settings.merges as { r: string }[]).map((m) => ({ ...m, r: idMap.get(m.r) ?? m.r }))
+
+  return prisma.$transaction(async (tx) => {
+    const copy = await tx.projectSheet.create({
+      data: {
+        projectId: target.projectId, name: target.name, position: target.position,
+        columns: (source.columns ?? []) as object, settings: settings as object, createdById: target.createdById,
+      },
+      select: { id: true },
+    })
+    if (rows.length) {
+      await tx.sheetRow.createMany({
+        data: rows.map((r) => {
+          const cells = { ...((r.cells ?? {}) as Record<string, unknown>) }
+          for (const [k, v] of Object.entries(cells)) if (isFormulaCell(v)) cells[k] = { f: remap(v.f) }
+          return {
+            id: idMap.get(r.id), sheetId: copy.id, position: r.position, cells: cells as object,
+            height: r.height, ...(r.styles ? { styles: r.styles as object } : {}),
+          }
+        }),
+      })
+    }
+    return copy
+  })
 }

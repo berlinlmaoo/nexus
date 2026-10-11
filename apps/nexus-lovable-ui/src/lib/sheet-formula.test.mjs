@@ -232,6 +232,11 @@ function sheet(grid, types) {
   eq(s.fmt("D1"), null, "Rupiah / Rupiah is a ratio")
 }
 {
+  // A total over a column of Rupiah formulas is Rupiah.
+  const s = sheet([[{ v: 1000, nf: "idr" }, "=A1*2"], [{ v: 2000, nf: "idr" }, "=A2*2"], [null, "=SUM(B1:B2)"]])
+  eq(s.fmt("B3"), "idr", "SUM over formula results keeps their format")
+}
+{
   // derive(): an edit recomputes its dependents, everything else is carried over.
   const s = sheet([[1, "=A1*2", 5, "=C1+1"]])
   eq(s.at("B1"), 2, "before")
@@ -258,6 +263,19 @@ function sheet(grid, types) {
   eq(out.x.b, { v: 3000000, d: "Rp 3.000.000", nf: "idr", formula: true }, "formula takes the Rupiah format")
   eq(out.x.c, { v: 46306, d: "11 Okt 2026", nf: "date" }, "date column as serial + text")
   eq(out.y.b.d, "12/10/2026", "date arithmetic in a text column displays day-first")
+}
+
+// ── Explicit number formats from the toolbar ────────────────────────────────────────────────────
+eq(F.formatWithStyle(1500000, "idr", 0), "Rp 1.500.000", "Rupiah, no decimals")
+eq(F.formatWithStyle(0.1234, "pct", 1), "12,3%", "percent with one decimal")
+eq(F.formatWithStyle(2.5, undefined, 3), "2,500", "decimals on an automatic number")
+eq(F.formatWithStyle(46306, "date", undefined), "11/10/2026", "a number shown as a date")
+eq(F.formatWithStyle("abc", "idr", 0), null, "text is not reformatted")
+eq(F.formatWithStyle(5, "auto", undefined), null, "automatic leaves the default")
+eq(F.decimalsShown("Rp 1.500,25"), 2, "decimals shown")
+{
+  const out = F.computeSheet([{ id: "a", type: "text" }], [{ id: "x", cells: { a: 0.256 }, styles: { a: { nf: "pct", dp: 1 } } }])
+  eq(out.x.a.d, "25,6%", "computed view honours the cell's number format")
 }
 
 console.log(`sheet-formula: ${n} checks passed`)

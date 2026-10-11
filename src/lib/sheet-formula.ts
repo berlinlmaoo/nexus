@@ -397,6 +397,30 @@ export function formatScalar(type: string, value: unknown): string {
   }
 }
 
+/**
+ * A number under a cell's EXPLICIT number format (toolbar: Rupiah, %, decimals, date, plain text).
+ * `nf` is the style's format ("auto" or undefined = keep the inferred one), `dp` its decimals.
+ * Returns null when the style doesn't change how this value reads (not a number, or no format).
+ */
+export function formatWithStyle(v: CellValue, nf: string | undefined, dp: number | undefined, inferred: NumFmt | null = null): string | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null
+  if ((!nf || nf === "auto") && dp === undefined) return null
+  const kind = !nf || nf === "auto" ? inferred : nf
+  switch (kind) {
+    case "idr": return `Rp ${numberFormat(dp ?? 2, true, dp ?? 0).format(v)}`
+    case "pct": return `${numberFormat(dp ?? 2, true, dp ?? 0).format(v * 100)}%`
+    case "date": return editDateSerial(v)
+    case "text": return String(v)
+    default: return numberFormat(dp ?? 2, true, dp ?? 0).format(v)
+  }
+}
+
+/** How many decimals a number shows right now (for the toolbar's "decimals −/+"). */
+export function decimalsShown(text: string): number {
+  const m = /,(\d+)/.exec(text.replace(/%$/, ""))
+  return m ? m[1].length : 0
+}
+
 /** A formula's computed result under its column type and inferred format. */
 export function formatResult(type: string, v: CellValue, nf: NumFmt | null): string {
   if (isError(v)) return v
@@ -1857,6 +1881,8 @@ export class SheetEngine {
         const raw = this.data.cells.get(r)?.[c]
         if (raw === undefined || raw === null) continue
         if (isTypedCell(raw)) return raw.nf
+        // A column of formulas that compute Rupiah (=C2*D2) sums as Rupiah too.
+        if (isFormulaCell(raw)) { const f = this.format(r, c); if (f) return f }
         if (++seen > 200) return null
       }
     }
@@ -1958,7 +1984,10 @@ export type ComputedCell = {
  * Every non-empty cell's computed value and display text. What GET /api/sheets/:id?computed=1
  * returns and what export writes, so phones and Excel see the same numbers as the web grid.
  */
-export function computeSheet(columns: { id: string; type: string }[], rows: { id: string; cells: Record<string, unknown> }[]): Record<string, Record<string, ComputedCell>> {
+export function computeSheet(
+  columns: { id: string; type: string }[],
+  rows: { id: string; cells: Record<string, unknown>; styles?: Record<string, { nf?: string; dp?: number }> | null }[],
+): Record<string, Record<string, ComputedCell>> {
   const data: SheetData = {
     shape: { columnIds: columns.map((c) => c.id), rowIds: rows.map((r) => r.id) },
     cells: new Map(rows.map((r) => [r.id, r.cells])),
@@ -1974,7 +2003,9 @@ export function computeSheet(columns: { id: string; type: string }[], rows: { id
       const v = engine.value(row.id, col.id)
       const formula = isFormulaCell(raw)
       const nf = formula ? engine.format(row.id, col.id) : isTypedCell(raw) ? raw.nf : null
-      const d = formula ? formatResult(col.type, v, nf) : formatScalar(col.type, raw)
+      const st = row.styles?.[col.id]
+      const styled = st ? formatWithStyle(v, st.nf, st.dp, nf ?? (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null)) : null
+      const d = styled ?? (formula ? formatResult(col.type, v, nf) : formatScalar(col.type, raw))
       const cell: ComputedCell = { v, d }
       if (nf && typeof v === "number") cell.nf = nf
       else if (!formula && typeof v === "number" && (col.type === "date" || col.type === "currency")) cell.nf = col.type === "date" ? "date" : "idr"

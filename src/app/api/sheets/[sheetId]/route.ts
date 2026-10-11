@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { normalizeColumns, readCells, resolveSheetAccess } from "@/lib/project-sheets"
+import { normalizeColumns, readCells, readSheetSettings, readStyles, resolveSheetAccess } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
 import { computeSheet } from "@/lib/sheet-formula"
 
@@ -34,17 +34,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
       prisma.sheetRow.findMany({
         where: { sheetId },
         orderBy: { position: "asc" },
-        select: { id: true, position: true, cells: true, height: true, updatedAt: true },
+        select: { id: true, position: true, cells: true, styles: true, height: true, updatedAt: true },
       }),
     ])
 
-    const outRows = rows.map((r) => ({ id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt }))
+    // `styles` (per-cell formatting) only when a row has any, so unformatted sheets stay as small as before.
+    const outRows = rows.map((r) => ({
+      id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt,
+      ...(r.styles ? { styles: readStyles(r.styles) } : {}),
+    }))
     const wantComputed = ["1", "true"].includes(req.nextUrl.searchParams.get("computed") ?? "")
     return NextResponse.json({
       id: sheet.id,
       projectId: sheet.projectId,
       name: sheet.name,
       columns: sheet.columns,
+      // Freeze, hidden rows/columns, merges, tab colour — the same for everyone looking at the sheet.
+      settings: sheet.settings,
       rows: outRows,
       ...(wantComputed ? { computed: computeSheet(sheet.columns, outRows) } : {}),
       canEdit,
@@ -66,8 +72,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
     const access = await resolveSheetAccess(session.user.id, sheetId, ["MEMBER"])
     if (!access.allowed) return NextResponse.json({ error: access.error }, { status: access.status })
 
-    const body = (await req.json().catch(() => ({}))) as { name?: unknown; columns?: unknown }
-    const data: { name?: string; columns?: object } = {}
+    const body = (await req.json().catch(() => ({}))) as { name?: unknown; columns?: unknown; settings?: unknown }
+    const data: { name?: string; columns?: object; settings?: object } = {}
 
     if (typeof body.name === "string") {
       const name = body.name.trim().slice(0, 80)
@@ -79,15 +85,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 })
       data.columns = result.columns as unknown as object
     }
+    // Settings merge per key: { frozenRows: 2 } leaves the merges alone; a key set to null clears it.
+    if (body.settings && typeof body.settings === "object" && !Array.isArray(body.settings)) {
+      const merged: Record<string, unknown> = { ...access.sheet.settings }
+      for (const [k, v] of Object.entries(body.settings as Record<string, unknown>)) {
+        if (v === null) delete merged[k]
+        else merged[k] = v
+      }
+      data.settings = readSheetSettings(merged) as object
+    }
     if (!Object.keys(data).length) return NextResponse.json({ error: "Nggak ada yang diubah." }, { status: 400 })
 
     const updated = await prisma.projectSheet.update({
       where: { id: sheetId },
       data,
-      select: { id: true, name: true, columns: true },
+      select: { id: true, name: true, columns: true, settings: true },
     })
     emitSheetStructure(sheetId, session.user.id)
-    return NextResponse.json(updated)
+    return NextResponse.json({ ...updated, settings: readSheetSettings(updated.settings) })
   } catch (error) {
     console.error("Error updating sheet:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -2483,6 +2483,10 @@ model ProjectSheet {
   /// used in SheetRow.cells — never reused after a column is deleted. Keying by id (not by column
   /// order) is what makes add/reorder/delete-column touch zero rows.
   columns     Json     @default("[]")
+  /// Sheet-level view settings shared by everyone (11 Oct 2026): { frozenRows?, frozenCols?,
+  /// tabColor?, hiddenRows?: rowId[], hiddenCols?: colId[], merges?: [{ r, c, rs, cs }] }.
+  /// See readSheetSettings in src/lib/project-sheets.ts. prisma/sql/2026-10-11-sheet-formatting.sql.
+  settings    Json     @default("{}")
   position    Int      @default(0)
   createdById String?
   createdAt   DateTime @default(now())
@@ -2508,6 +2512,10 @@ model SheetRow {
   cells       Json         @default("{}")
   /// Pixels. NULL = use the app's default, so existing rows needed no backfill.
   height      Int?
+  /// Per-cell formatting, keyed by column id like `cells` (bold, colours, alignment, wrap, number
+  /// format…; see normalizeCellStyle). Kept apart from `cells` so formatting never shows up as a
+  /// value change in cell history. NULL = no formatting.
+  styles      Json?
   updatedById String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

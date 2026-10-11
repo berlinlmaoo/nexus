@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { ensureSheetFormattingColumns } from "@/lib/project-sheets"
+import { copySheet } from "@/lib/sheet-structure"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
@@ -24,6 +26,7 @@ export async function POST(
     const me = session.user.id
     const { projectId } = await params
 
+    await ensureSheetFormattingColumns()
     if (!isBodPlus(await getUserOrgRole(me))) {
       return NextResponse.json({ error: "Cuma BoD ke atas yang boleh nyalin project." }, { status: 403 })
     }
@@ -120,31 +123,13 @@ export async function POST(
       await prisma.project.update({ where: { id: newProject.id }, data: { tableColumns: remapped } })
     }
 
-    // Spreadsheets copy 1:1 — column ids live inside each sheet's own `columns` json and are the keys
-    // in its rows' `cells`, so unlike tableColumns' "cf:<id>" there is nothing to remap. The easy
-    // mistake here is the opposite one: copying the sheet but not its ROWS, which silently hands the
-    // duplicate an empty spreadsheet.
+    // Spreadsheets: column ids live inside each sheet's own `columns` json and are the keys in its
+    // rows' `cells`, so unlike tableColumns' "cf:<id>" they need no remap. The easy mistake is copying
+    // the sheet but not its ROWS, which silently hands the duplicate an empty spreadsheet.
+    // Rows get new ids, so copySheet also rewrites every formula's row references to the copies
+    // (copying the stored text as-is left them pointing at the original project's rows: #REF!).
     for (const sheet of original.sheets) {
-      const copy = await prisma.projectSheet.create({
-        data: {
-          projectId: newProject.id,
-          name: sheet.name,
-          position: sheet.position,
-          columns: (sheet.columns ?? []) as object,
-          createdById: me,
-        },
-        select: { id: true },
-      })
-      const sheetRows = await prisma.sheetRow.findMany({
-        where: { sheetId: sheet.id },
-        orderBy: { position: "asc" },
-        select: { position: true, cells: true, height: true },
-      })
-      if (sheetRows.length) {
-        await prisma.sheetRow.createMany({
-          data: sheetRows.map((r) => ({ sheetId: copy.id, position: r.position, cells: (r.cells ?? {}) as object, height: r.height })),
-        })
-      }
+      await copySheet(sheet.id, { projectId: newProject.id, name: sheet.name, position: sheet.position, createdById: me })
     }
 
     for (const taskList of original.taskLists) {

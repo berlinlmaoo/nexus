@@ -61,6 +61,8 @@ export async function DELETE(
         // Drop the key from every row in one statement — otherwise the values linger as orphans that
         // would silently reappear if a future column ever reused the id.
         await tx.$executeRaw`UPDATE "SheetRow" SET "cells" = "cells" - ${columnId} WHERE "sheetId" = ${sheetId}`
+        // Its formatting goes with it (an empty map back to NULL).
+        await tx.$executeRaw`UPDATE "SheetRow" SET "styles" = NULLIF("styles" - ${columnId}, '{}'::jsonb) WHERE "sheetId" = ${sheetId} AND ("styles" -> ${columnId}) IS NOT NULL`
         await rewrite.apply(tx, me)
       },
     })

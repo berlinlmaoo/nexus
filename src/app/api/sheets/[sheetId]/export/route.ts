@@ -5,7 +5,7 @@ import ExcelJS from "exceljs"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { toCsv } from "@/lib/csv"
-import { isLinkCell, readCells, resolveSheetAccess, type SheetColumn } from "@/lib/project-sheets"
+import { isLinkCell, readCells, readStyles, resolveSheetAccess, type CellStyle, type SheetColumn, type StyleColor } from "@/lib/project-sheets"
 import { computeSheet, serialToIso, serialToYmd, type CellValue, type ComputedCell } from "@/lib/sheet-formula"
 
 // GET /api/sheets/[sheetId]/export?format=csv|xlsx
@@ -19,6 +19,41 @@ function colLetter(i: number): string {
   return out
 }
 const headerOf = (c: SheetColumn, i: number) => c.name?.trim() || colLetter(i)
+
+/** The grid's palette as Excel colours: [text, fill]. */
+const XLSX_COLOR: Record<StyleColor, [string, string]> = {
+  red: ["FFDC2626", "FFFEE2E2"], orange: ["FFEA580C", "FFFFEDD5"], amber: ["FFD97706", "FFFEF3C7"],
+  green: ["FF16A34A", "FFDCFCE7"], teal: ["FF0D9488", "FFCCFBF1"], blue: ["FF2563EB", "FFDBEAFE"],
+  violet: ["FF7C3AED", "FFEDE9FE"], pink: ["FFDB2777", "FFFCE7F3"], slate: ["FF475569", "FFE2E8F0"],
+  black: ["FF111827", "FF9CA3AF"],
+}
+
+/** One cell's NEXUS formatting onto an ExcelJS cell, so the .xlsx looks like the grid. */
+function applyStyle(cell: ExcelJS.Cell, st: CellStyle) {
+  if (st.b || st.i || st.s || st.u || st.fc || st.fs) {
+    cell.font = {
+      ...(cell.font ?? {}),
+      ...(st.b ? { bold: true } : {}), ...(st.i ? { italic: true } : {}), ...(st.s ? { strike: true } : {}),
+      ...(st.u ? { underline: true } : {}), ...(st.fc ? { color: { argb: XLSX_COLOR[st.fc][0] } } : {}),
+      ...(st.fs ? { size: Math.round(st.fs * 0.75) } : {}),
+    }
+  }
+  if (st.bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XLSX_COLOR[st.bg][1] } }
+  if (st.ha || st.va || st.w) {
+    cell.alignment = {
+      ...(st.ha ? { horizontal: st.ha === "l" ? "left" : st.ha === "c" ? "center" : "right" } : {}),
+      ...(st.va ? { vertical: st.va === "t" ? "top" : st.va === "m" ? "middle" : "bottom" } : {}),
+      ...(st.w ? { wrapText: true } : {}),
+    }
+  }
+  if (st.bd) {
+    const side = { style: "thin" as const, color: { argb: "FF111827" } }
+    cell.border = {
+      ...(st.bd.includes("t") ? { top: side } : {}), ...(st.bd.includes("b") ? { bottom: side } : {}),
+      ...(st.bd.includes("l") ? { left: side } : {}), ...(st.bd.includes("r") ? { right: side } : {}),
+    }
+  }
+}
 
 const safeFileName = (s: string) => s.replace(/[^\w\s.-]+/g, "_").trim().slice(0, 80) || "sheet"
 
@@ -35,7 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
     const rows = await prisma.sheetRow.findMany({
       where: { sheetId },
       orderBy: { position: "asc" },
-      select: { id: true, cells: true },
+      select: { id: true, cells: true, styles: true },
     })
     const format = (req.nextUrl.searchParams.get("format") ?? "csv").toLowerCase()
     const project = await prisma.project.findUnique({ where: { id: sheet.projectId }, select: { name: true } })
@@ -43,7 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
 
     // Trailing rows nobody ever typed in are seeded blanks, not data — exporting 40 empty lines is
     // noise in Excel. Blank rows in the MIDDLE are kept, because there they're deliberate spacing.
-    const cellRows = rows.map((r) => ({ id: r.id, cells: readCells(r.cells) as Record<string, unknown> }))
+    const cellRows = rows.map((r) => ({ id: r.id, cells: readCells(r.cells) as Record<string, unknown>, styles: readStyles(r.styles) }))
     let last = cellRows.length - 1
     while (last >= 0 && Object.keys(cellRows[last].cells).length === 0) last -= 1
     const body = cellRows.slice(0, last + 1)
@@ -73,8 +108,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
       const ws = wb.addWorksheet(safeFileName(sheet.name).slice(0, 31) || "Sheet1")
       ws.addRow(sheet.columns.map(headerOf))
       ws.getRow(1).font = { bold: true }
-      // Freeze the header, matching what the grid does on screen.
-      ws.views = [{ state: "frozen", ySplit: 1 }]
 
       body.forEach((_r, i) => {
         const row = ws.addRow(sheet.columns.map((c) => {
@@ -91,9 +124,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
         // that returns a date) go on that cell; whole-column formats are set below.
         sheet.columns.forEach((c, ci) => {
           const cell = cellAt(i, c.id)
-          if (!cell?.nf || typeof cell.v !== "number") return
-          const fmt = cell.nf === "idr" ? '"Rp" #,##0' : cell.nf === "pct" ? "0.##%" : cell.nf === "date" ? "dd/mm/yyyy" : "#,##0.##"
-          row.getCell(ci + 1).numFmt = fmt
+          const st = body[i]?.styles?.[c.id]
+          if (st) applyStyle(row.getCell(ci + 1), st)
+          if (typeof cell?.v !== "number") return
+          // The cell's own number format (toolbar) wins over the detected one.
+          const kind = st?.nf ?? cell.nf
+          const dec = st?.dp !== undefined ? (st.dp ? `.${"0".repeat(st.dp)}` : "") : null
+          const fmt = kind === "idr" ? `"Rp" #,##0${dec ?? ""}` : kind === "pct" ? `0${dec ?? ".##"}%` : kind === "date" ? "dd/mm/yyyy"
+            : kind === "num" || dec !== null ? `#,##0${dec ?? ".##"}` : null
+          if (fmt) row.getCell(ci + 1).numFmt = fmt
         })
         // Real Excel hyperlinks, so a link column opens in Excel exactly like it does in the grid.
         sheet.columns.forEach((c, ci) => {
@@ -104,12 +143,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
           cell.font = { color: { argb: "FF1155CC" }, underline: true }
         })
       })
+      const settings = sheet.settings
       sheet.columns.forEach((c, i) => {
         const col = ws.getColumn(i + 1)
         col.width = Math.min(40, Math.max(10, Math.round((c.width ?? 140) / 7)))
         if (c.type === "currency") col.numFmt = '"Rp" #,##0'
         if (c.type === "date") col.numFmt = "dd/mm/yyyy"
+        if (settings.hiddenCols?.includes(c.id)) col.hidden = true
       })
+      // Hidden rows, merged cells and frozen panes travel too (row 1 of the file is the header).
+      const rowIndex = new Map(body.map((r, i) => [r.id, i]))
+      for (const id of settings.hiddenRows ?? []) {
+        const i = rowIndex.get(id)
+        if (i !== undefined) ws.getRow(i + 2).hidden = true
+      }
+      for (const m of settings.merges ?? []) {
+        const r = rowIndex.get(m.r)
+        const c = sheet.columns.findIndex((x) => x.id === m.c)
+        if (r === undefined || c < 0) continue
+        try { ws.mergeCells(r + 2, c + 1, Math.min(body.length, r + m.rs) + 1, Math.min(sheet.columns.length, c + m.cs)) } catch { /* overlapping merge */ }
+      }
+      ws.views = [{ state: "frozen", ySplit: 1 + (settings.frozenRows ?? 0), xSplit: settings.frozenCols ?? 0 }]
 
       const buf = await wb.xlsx.writeBuffer()
       return new NextResponse(buf as ArrayBuffer, {

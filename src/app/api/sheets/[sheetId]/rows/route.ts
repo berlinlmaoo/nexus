@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
   MAX_ROWS_PER_WRITE, ROW_HEIGHT_MAX, ROW_HEIGHT_MIN,
-  coerceCellValue, readCells, resolveSheetAccess,
+  coerceCellValue, normalizeCellStyle, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
@@ -52,8 +52,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
     const columnsById = new Map(access.sheet.columns.map((c) => [c.id, c]))
 
     const body = (await req.json().catch(() => ({}))) as {
-      count?: unknown; afterRowId?: unknown; beforeRowId?: unknown; rows?: unknown; positions?: unknown
+      count?: unknown; afterRowId?: unknown; beforeRowId?: unknown; rows?: unknown; positions?: unknown; styles?: unknown
     }
+    // Optional, parallel to `rows`: the formatting to restore with them (undo of a delete).
+    const incomingStyles = Array.isArray(body.styles) ? (body.styles as unknown[]) : null
     const incoming = Array.isArray(body.rows) ? (body.rows as Record<string, unknown>[]) : null
     const positions = Array.isArray(body.positions)
       ? (body.positions as unknown[]).map(Number).filter((n) => Number.isFinite(n))
@@ -133,7 +135,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
         }
       }
       const at = positions && positions.length === count ? positions[i] : start + i * step
-      return { sheetId, position: at, cells: cells as object }
+      const styles: Record<string, unknown> = {}
+      const srcStyles = incomingStyles?.[i]
+      if (srcStyles && typeof srcStyles === "object") {
+        for (const [columnId, raw] of Object.entries(srcStyles as Record<string, unknown>)) {
+          const st = columnsById.has(columnId) ? normalizeCellStyle(raw) : null
+          if (st) styles[columnId] = st
+        }
+      }
+      return { sheetId, position: at, cells: cells as object, ...(Object.keys(styles).length ? { styles: styles as object } : {}) }
     })
 
     // Exactly the rows this request made. Reading back "every row between the lowest and highest
@@ -141,11 +151,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
     // 2 and 9 put rows 3–8 into the client cache a second time.
     const created = (await prisma.sheetRow.createManyAndReturn({
       data,
-      select: { id: true, position: true, cells: true, height: true, updatedAt: true },
+      select: { id: true, position: true, cells: true, styles: true, height: true, updatedAt: true },
     })).sort((a, b) => a.position - b.position)
     emitSheetStructure(sheetId, session.user.id)
     return NextResponse.json({
-      rows: created.map((r) => ({ id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt })),
+      rows: created.map((r) => ({
+        id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt,
+        ...(r.styles ? { styles: readStyles(r.styles) } : {}),
+      })),
     }, { status: 201 })
   } catch (error) {
     console.error("Error adding sheet rows:", error)

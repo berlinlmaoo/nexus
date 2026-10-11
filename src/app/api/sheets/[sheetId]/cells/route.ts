@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
   MAX_CELLS_PER_WRITE, MAX_ROWS_PER_WRITE,
-  coerceCellValue, readCells, resolveSheetAccess,
+  coerceCellValue, normalizeCellStyle, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
 import { emitSheetCells } from "@/lib/socket-emitter"
 
@@ -34,10 +34,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
 
     const body = (await req.json().catch(() => ({}))) as {
       edits?: { rowId?: unknown; values?: unknown }[]
+      /** Per-cell formatting: [{ rowId, values: { [columnId]: style | null } }], same shape as edits. */
+      styles?: { rowId?: unknown; values?: unknown }[]
     }
     const edits = Array.isArray(body.edits) ? body.edits : []
-    if (!edits.length) return NextResponse.json({ error: "edits kosong." }, { status: 400 })
-    if (edits.length > MAX_ROWS_PER_WRITE) {
+    const styleEdits = Array.isArray(body.styles) ? body.styles : []
+    if (!edits.length && !styleEdits.length) return NextResponse.json({ error: "edits kosong." }, { status: 400 })
+    if (edits.length > MAX_ROWS_PER_WRITE || styleEdits.length > MAX_ROWS_PER_WRITE) {
       return NextResponse.json({ error: `Maksimal ${MAX_ROWS_PER_WRITE} baris sekali kirim.` }, { status: 422 })
     }
 
@@ -60,31 +63,54 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       }
       if (Object.keys(patch).length) patches.push({ rowId, patch })
     }
+    // Formatting patches, validated the same way. A style lives in its own column (`styles`), so the
+    // cell-history trigger never records formatting as a value change.
+    const stylePatches: { rowId: string; patch: Record<string, unknown> }[] = []
+    for (const e of styleEdits) {
+      const rowId = typeof e?.rowId === "string" ? e.rowId : ""
+      const values = e?.values && typeof e.values === "object" ? (e.values as Record<string, unknown>) : null
+      if (!rowId || !values) return NextResponse.json({ error: "Ada format tanpa rowId/values." }, { status: 400 })
+      const patch: Record<string, unknown> = {}
+      for (const [columnId, raw] of Object.entries(values)) {
+        if (!columnsById.has(columnId)) return NextResponse.json({ error: `Kolom "${columnId}" nggak ada di sheet ini.` }, { status: 422 })
+        patch[columnId] = normalizeCellStyle(raw)
+        cellCount += 1
+      }
+      if (Object.keys(patch).length) stylePatches.push({ rowId, patch })
+    }
     if (cellCount > MAX_CELLS_PER_WRITE) {
       return NextResponse.json({ error: `Maksimal ${MAX_CELLS_PER_WRITE} sel sekali kirim.` }, { status: 422 })
     }
 
     // `sheetId` in the WHERE is the second lock on the door: even with a valid rowId from another
     // sheet, the update matches nothing.
-    const updated = await prisma.$transaction(
-      patches.map(({ rowId, patch }) => prisma.$executeRaw`
+    const updated = await prisma.$transaction([
+      ...patches.map(({ rowId, patch }) => prisma.$executeRaw`
         UPDATE "SheetRow"
         SET "cells" = jsonb_strip_nulls("cells" || ${JSON.stringify(patch)}::jsonb),
             "updatedById" = ${me},
             "updatedAt" = NOW()
         WHERE "id" = ${rowId} AND "sheetId" = ${sheetId}
       `),
-    )
+      // A null style drops the key; an empty map goes back to NULL.
+      ...stylePatches.map(({ rowId, patch }) => prisma.$executeRaw`
+        UPDATE "SheetRow"
+        SET "styles" = NULLIF(jsonb_strip_nulls(COALESCE("styles", '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb), '{}'::jsonb),
+            "updatedById" = ${me},
+            "updatedAt" = NOW()
+        WHERE "id" = ${rowId} AND "sheetId" = ${sheetId}
+      `),
+    ])
     const applied = updated.reduce((sum, n) => sum + n, 0)
 
     // Return the rows so the client can patch its cache instead of refetching — a refetch mid-typing
     // is what unmounts the editing cell and loses focus.
     const rows = await prisma.sheetRow.findMany({
-      where: { id: { in: patches.map((p) => p.rowId) }, sheetId },
-      select: { id: true, cells: true, updatedAt: true },
+      where: { id: { in: [...new Set([...patches, ...stylePatches].map((p) => p.rowId))] }, sheetId },
+      select: { id: true, cells: true, styles: true, updatedAt: true },
     })
 
-    const payload = rows.map((r) => ({ id: r.id, cells: readCells(r.cells), updatedAt: r.updatedAt }))
+    const payload = rows.map((r) => ({ id: r.id, cells: readCells(r.cells), styles: readStyles(r.styles), updatedAt: r.updatedAt }))
     // actorId travels with it so the sender's own browser can ignore the echo of its own write.
     emitSheetCells(sheetId, payload, me)
 
