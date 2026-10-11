@@ -118,11 +118,12 @@ export function matchRule(rules: NexusSheetRule[] | undefined, value: CellValue 
 }
 
 /** Build the evaluation context once per render, not once per cell. */
-export function buildSheetData(columns: NexusSheetColumn[], rows: NexusSheetRow[]): SheetData {
+export function buildSheetData(columns: NexusSheetColumn[], rows: NexusSheetRow[], names?: { name: string; range: string }[] | null): SheetData {
   return {
     shape: { columnIds: columns.map((c) => c.id), rowIds: rows.map((r) => r.id) },
     cells: new Map(rows.map((r) => [r.id, r.cells as Record<string, unknown>])),
     types: new Map(columns.map((c) => [c.id, c.type])),
+    ...(names?.length ? { names: new Map(names.map((n) => [n.name.toUpperCase(), n.range])) } : {}),
   };
 }
 

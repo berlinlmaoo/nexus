@@ -51,7 +51,7 @@ import { SheetDialog, SidePanel, primaryBtn } from "./sheet-shell";
 import type { MenuNode } from "./sheet-menus";
 import { dedupe, replaceText, textMatches, type SplitSep } from "@/lib/sheet-datatools";
 import { stateAt } from "@/lib/sheet-versions";
-import { SUPPORTED_FUNCTIONS, isTypedCell, serialToIso, setDisplayLocale, todaySerial } from "@/lib/sheet-formula";
+import { SUPPORTED_FUNCTIONS, formatNumberPattern, isTypedCell, serialToIso, setDisplayLocale, todaySerial } from "@/lib/sheet-formula";
 import { DropdownCell, DropdownPicker } from "./sheet-dropdown";
 import { SheetToolbar } from "./SheetToolbar";
 import { Menu, MenuItem } from "./sheet-menu-ui";
@@ -316,7 +316,7 @@ export function SheetGrid({
   // Numbers and dates read in the spreadsheet's locale (File › Settings › Locale), here and in formats.
   setDisplayLocale(settings.locale ?? "id-ID");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const data = useMemo(() => buildSheetData(columns, rows), [columns, rows, recalcTick, settings.locale]);
+  const data = useMemo(() => buildSheetData(columns, rows, settings.namedRanges), [columns, rows, recalcTick, settings.locale, settings.namedRanges]);
   const engineRef = useRef<SheetEngine | null>(null);
   const engine = useMemo(() => {
     const prev = engineRef.current;
@@ -1750,6 +1750,14 @@ export function SheetGrid({
       }
     }).catch(() => clipboardBlocked("Ctrl+V / ⌘V"));
   };
+  /** A cell holds something (value, formula, non-empty multi-select). */
+  const filledAt = (r: number, c: number) => {
+    const row = view[r]?.row;
+    const col = columns[c];
+    if (!row || !col) return false;
+    const v = row.cells[col.id];
+    return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
+  };
   /** The block around the selection that holds data (Sheets picks it for "Create a filter" on one cell). */
   const currentRegion = () => {
     if (!selInfo.single) return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
@@ -2256,13 +2264,6 @@ export function SheetGrid({
   };
   const menuBar = buildMenuBar(menuCtx);
   // ── Keyboard ────────────────────────────────────────────────────────────────────────────────
-  const filledAt = (r: number, c: number) => {
-    const row = view[r]?.row;
-    const col = columns[c];
-    if (!row || !col) return false;
-    const v = row.cells[col.id];
-    return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
-  };
   /** Ctrl/Cmd+Arrow: to the far edge of a filled block, else to the next filled cell, else the sheet edge. */
   const jump = (r: number, c: number, dr: number, dc: number) => {
     const inside = (y: number, x: number) => y >= 0 && y <= maxR && x >= 0 && x <= maxC;
@@ -2317,6 +2318,7 @@ export function SheetGrid({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (editing) return; // the input owns the keyboard while editing
+    if (note?.editing) { e.preventDefault(); return; } // keys typed before the note's box takes focus stay out of the cell
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.altKey && e.code === "KeyM") { e.preventDefault(); openCommentsAt(sel.r, sel.c); return; }
     if (selectedObject && (e.key === "Escape")) { setSelectedObject(null); return; }
@@ -2526,7 +2528,7 @@ export function SheetGrid({
     const row = view[rect.top]?.row;
     const st = row && col ? row.styles?.[col.id] : undefined;
     const nf = row && col ? engine.format(row.id, col.id) : null;
-    return (v: number) => formatWithStyle(v, st?.nf, st?.dp, nf ?? (col?.type === "currency" ? "idr" : null))
+    return (v: number) => formatWithStyle(v, st?.nf, st?.dp, nf ?? (col?.type === "currency" ? "idr" : null), st?.pt)
       ?? formatResult(col?.type === "currency" ? "currency" : "number", v, nf === "date" ? null : nf);
   }, [columns, rect.left, rect.top, view, engine]);
   const statLabel: Record<Stat, string> = {
@@ -2534,6 +2536,8 @@ export function SheetGrid({
   };
   const statValue = (s: Stat) => (s === "count" || s === "countNum" ? String(stats[s]) : statFormat(stats[s]));
   const multiCell = stats.cells > 1;
+  // Like Sheets: a selection without numbers shows its Count instead of "Sum: 0".
+  const shownStat: Stat = stats.countNum === 0 && stat !== "count" ? "count" : stat;
 
   /** Name Box text: the active cell, or the selected range. */
   const nameBox = useMemo(() => {
@@ -3073,12 +3077,12 @@ export function SheetGrid({
               label={t("Selection statistics")}
               trigger={
                 <span className="max-w-[220px] truncate text-xs tabular-nums">
-                  <span className="text-muted-foreground">{statLabel[stat]}:</span> <span className="font-medium">{statValue(stat)}</span>
+                  <span className="text-muted-foreground">{statLabel[shownStat]}:</span> <span className="font-medium">{statValue(shownStat)}</span>
                 </span>
               }
             >
               {(close) => (Object.keys(statLabel) as Stat[]).map((s) => (
-                <MenuItem key={s} active={stat === s} hint={statValue(s)} onClick={() => { setStat(s); close(); }}>{statLabel[s]}</MenuItem>
+                <MenuItem key={s} active={shownStat === s} hint={statValue(s)} onClick={() => { setStat(s); close(); }}>{statLabel[s]}</MenuItem>
               ))}
             </Menu>
             </span>
@@ -3893,7 +3897,9 @@ const Row = memo(function Row(p: RowProps) {
         if (ci === p.frozenCols - 1) shadows.push(`inset -3px 0 0 0 ${FREEZE_LINE}`);
         if (p.freezeEdge) shadows.push(`inset 0 -3px 0 0 ${FREEZE_LINE}`);
         const frozenCol = ci < p.frozenCols;
-        const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(value) ? engine.format(p.row.id, col.id) : (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null));
+        const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(value) ? engine.format(p.row.id, col.id) : (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null), st?.pt);
+        // A custom pattern's [Red]/[Blue]… section colours the value, over the cell's text colour.
+        const patColor = st?.nf === "custom" && st.pt && (typeof computed === "number" || typeof computed === "string") ? formatNumberPattern(computed, st.pt).color : undefined;
         const text = p.showFormulas && isFormulaCell(value)
           ? editFormula(value, p.data.shape) ?? ""
           : styled ?? displayCell(col.type, value, { data: p.data, rowId: p.row.id, colId: col.id });
@@ -3926,6 +3932,7 @@ const Row = memo(function Row(p: RowProps) {
               ...(frozenCol ? { position: "sticky", left: p.lefts[ci], zIndex: p.stickyTop !== null ? 24 : 15 } : {}),
               ...(p.stickyTop !== null ? { position: "sticky", top: p.stickyTop, zIndex: frozenCol ? 24 : 18 } : {}),
               ...styleInline(st),
+              ...(patColor ? { color: patColor } : {}),
               ...(shadows.length ? { boxShadow: shadows.join(", ") } : {}),
             }}
             onMouseDown={(e) => {
