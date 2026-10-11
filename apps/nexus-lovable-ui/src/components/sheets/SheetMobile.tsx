@@ -9,6 +9,9 @@ import {
 } from "./sheet-types";
 import { colLetter } from "./SheetGrid";
 import { horizontalClass, styleClasses, styleInline, verticalClass } from "./sheet-style";
+import { buildRuleIndex, checkboxValue, dropdownOptions, invalidMessage, isChecked, isDropdown, pickedValues, validateCell, type ValidationRule } from "@/lib/sheet-validation";
+import { DropdownCell, DropdownPicker } from "./sheet-dropdown";
+import { CHIP_COLORS } from "./sheet-types";
 
 const CELL_W = 108;
 const CELL_H = 34;
@@ -36,6 +39,19 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
   const data = useMemo(() => buildSheetData(sheet.columns, sheet.rows), [sheet.columns, sheet.rows]);
   const engine = engineFor(data);
   const showLabels = sheet.columns.some((c) => c.name.trim() || c.type !== "text");
+  // Data validation, same as the desktop grid: explicit rules, then dropdown columns.
+  const explicitAt = useMemo(() => buildRuleIndex((settings.validations ?? []) as ValidationRule[], data.shape), [settings.validations, data.shape]);
+  const ruleAt = (rawRow: number, colIndex: number): ValidationRule | null => {
+    const r = explicitAt(rawRow, colIndex);
+    if (r) return r;
+    const col = sheet.columns[colIndex];
+    if (!col || (col.type !== "select" && col.type !== "multiselect")) return null;
+    return {
+      id: `col:${col.id}`, ranges: [], kind: "list", values: col.options ?? [], multiple: col.type === "multiselect",
+      colors: Object.fromEntries((col.options ?? []).map((o, i) => [o, col.optionColors?.[o] ?? CHIP_COLORS[i % CHIP_COLORS.length]])),
+    };
+  };
+  const [picker, setPicker] = useState<DOMRect | null>(null);
   const headH = HEAD_H + (showLabels ? HEAD_H : 0);
 
   const [sel, setSel] = useState<{ r: number; c: number } | null>(null);
@@ -64,6 +80,7 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
 
   const active = sel ? { row: rows[sel.r]?.row, col: columns[sel.c]?.col, rowIndex: rows[sel.r]?.index ?? 0, colIndex: columns[sel.c]?.index ?? 0 } : null;
   const raw = active?.row && active.col ? active.row.cells[active.col.id] : undefined;
+  const activeRule = active?.col ? ruleAt(active.rowIndex, active.colIndex) : null;
   const initial = active?.col ? editFormula(raw, data.shape) ?? editValue(active.col.type, raw) : "";
   const [draft, setDraft] = useState(initial);
   const [dirty, setDirty] = useState(false);
@@ -123,24 +140,37 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
                       const computed = engine.value(row.id, col.id);
                       const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(v) ? engine.format(row.id, col.id) : col.type === "currency" ? "idr" : null);
                       const text = col.type === "multiselect" ? readMulti(v).join(", ")
-                        : col.type === "checkbox" ? (v ? "✓" : "")
                         : styled ?? displayCell(col.type, v, { data, rowId: row.id, colId: col.id });
                       const selected = sel?.r === r && sel?.c === ci;
+                      const rule = ruleAt(index, sheet.columns.indexOf(col));
+                      const invalid = rule ? !validateCell(rule, v, computed, { engine, shape: data.shape, at: { r: index, c: sheet.columns.indexOf(col) } }) : false;
+                      const checkbox = col.type === "checkbox" || rule?.kind === "checkbox";
+                      const on = col.type === "checkbox" ? v === true : isChecked(rule, v);
                       return (
                         <td
                           key={col.id}
                           onClick={() => setSel({ r, c: ci })}
                           style={{ ...styleInline(st), ...(selected ? { boxShadow: "inset 0 0 0 2px var(--info)" } : {}) }}
                           className={cn(
-                            "overflow-hidden border-b border-r border-border/80 px-1.5",
+                            "relative overflow-hidden border-b border-r border-border/80 px-1.5",
                             verticalClass(st), horizontalClass(st, typeof computed === "number"), styleClasses(st),
                             col.type === "checkbox" && "text-center",
                           )}
                         >
-                          <span className={cn("block", st?.w ? "whitespace-pre-wrap break-words" : "truncate",
-                            isLinkCell(v) && "text-info underline", isError(computed) && "text-destructive")}>
-                            {text}
-                          </span>
+                          {invalid && rule && <span title={invalidMessage(rule, t)} className="absolute right-0 top-0 h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent border-t-red-600" />}
+                          {checkbox ? (
+                            <span role="checkbox" aria-checked={on} className={cn("mx-auto grid h-4 w-4 place-items-center rounded border", on ? "border-primary bg-primary text-primary-foreground" : "border-control-border")}>
+                              {on && <Check className="h-3 w-3" />}
+                            </span>
+                          ) : isDropdown(rule) && rule ? (
+                            <DropdownCell picked={rule.multiple ? pickedValues(v) : v === undefined || v === null || v === "" ? [] : [String(Array.isArray(v) ? v.join(", ") : v)]}
+                              colors={rule.colors} display={rule.display ?? "chip"} canEdit={false} wrap={Boolean(st?.w)} onOpen={() => {}} />
+                          ) : (
+                            <span className={cn("block", st?.w ? "whitespace-pre-wrap break-words" : "truncate",
+                              isLinkCell(v) && "text-info underline", isError(computed) && "text-destructive")}>
+                              {text}
+                            </span>
+                          )}
                         </td>
                       );
                     })}
@@ -157,24 +187,29 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
           <span className="w-12 shrink-0 rounded-md bg-muted px-1.5 py-1.5 text-center font-mono text-xs tabular-nums text-muted-foreground">
             {active?.col ? `${colLetter(active.colIndex)}${active.rowIndex + 1}` : "—"}
           </span>
-          {active?.col?.type === "checkbox" ? (
+          {active?.col && (active.col.type === "checkbox" || activeRule?.kind === "checkbox") ? (() => {
+            const on = active.col.type === "checkbox" ? raw === true : isChecked(activeRule, raw);
+            return (
+              <button
+                disabled={!sheet.canEdit}
+                onClick={() => {
+                  if (!active.row || !active.col) return;
+                  onSetCells([{ rowId: active.row.id, values: { [active.col.id]: active.col.type === "checkbox" ? !on : checkboxValue(activeRule, !on) } }]);
+                }}
+                className="h-9 flex-1 rounded-lg border border-border px-3 text-left text-sm"
+              >
+                {on ? t("Ticked — tap to untick") : t("Not ticked — tap to tick")}
+              </button>
+            );
+          })() : isDropdown(activeRule) && activeRule ? (
             <button
               disabled={!sheet.canEdit}
-              onClick={() => commit(raw === true ? "" : "true")}
-              className="h-9 flex-1 rounded-lg border border-border px-3 text-left text-sm"
+              onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}
+              className="flex h-9 min-w-0 flex-1 items-center rounded-lg border border-border bg-background px-2 text-left text-sm"
             >
-              {raw === true ? t("Ticked — tap to untick") : t("Not ticked — tap to tick")}
+              <DropdownCell picked={activeRule.multiple ? pickedValues(raw) : raw === undefined || raw === null || raw === "" ? [] : [String(Array.isArray(raw) ? raw.join(", ") : raw)]}
+                colors={activeRule.colors} display="chip" canEdit={false} wrap={false} onOpen={() => {}} />
             </button>
-          ) : active?.col?.type === "select" ? (
-            <select
-              disabled={!sheet.canEdit}
-              value={typeof raw === "string" ? raw : ""}
-              onChange={(e) => commit(e.target.value)}
-              className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm"
-            >
-              <option value="">—</option>
-              {[...new Set([...(active.col.options ?? []), ...(typeof raw === "string" && raw ? [raw] : [])])].map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
           ) : (
             <input
               disabled={!active?.col}
@@ -201,6 +236,21 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
             </>
           )}
         </div>
+        {picker && active?.row && active.col && activeRule && (
+          <DropdownPicker
+            anchor={picker}
+            options={dropdownOptions(activeRule, engine, data.shape)}
+            colors={activeRule.colors}
+            picked={activeRule.multiple ? pickedValues(raw) : raw === undefined || raw === null || raw === "" ? [] : [String(raw)]}
+            multiple={Boolean(activeRule.multiple)}
+            onClose={() => setPicker(null)}
+            onCommit={(values) => {
+              setPicker(null);
+              const next = values.length ? values.join(", ") : null;
+              if (active.row && active.col && !sameCell(raw, next)) onSetCells([{ rowId: active.row.id, values: { [active.col.id]: next } }]);
+            }}
+          />
+        )}
         <div className="flex min-h-9 items-center gap-2 border-t border-border bg-muted/60 px-1.5">
           <div className="min-w-0 flex-1">{footer}</div>
           {saving && <span className="shrink-0 text-2xs text-muted-foreground">{t("Saving…")}</span>}

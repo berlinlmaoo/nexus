@@ -1322,6 +1322,24 @@ export class SheetEngine {
     return nf
   }
 
+  /**
+   * Evaluate a stored formula that lives in no cell (data validation's "custom formula is"), as if
+   * it were in row `rowId` (for implicit intersection). Reads made here are not recorded as deps.
+   */
+  evaluateFormula(stored: string, rowId: string | null = null): CellValue {
+    const ast = compile(stored.startsWith("=") ? stored : `=${stored}`)
+    if (isError(ast)) return ast
+    this.stackRows.push(rowId ?? "")
+    try {
+      const v = this.evalScalar(ast)
+      return typeof v === "number" && !Number.isFinite(v) ? ERR.num : v
+    } catch {
+      return ERR.value
+    } finally {
+      this.stackRows.pop()
+    }
+  }
+
   // ── internals ──────────────────────────────────────────────────────────────
 
   read(rowId: string, colId: string): CellValue {

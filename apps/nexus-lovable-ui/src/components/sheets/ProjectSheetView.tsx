@@ -723,6 +723,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             onRedo={async () => { const l = await undo.redo(); if (l) say(t("Redone: {what}", { what: l })); }}
             footerLeft={tabs}
             saving={setCells.isPending}
+            sheetName={sheet.name}
           />
         </div>
       )}

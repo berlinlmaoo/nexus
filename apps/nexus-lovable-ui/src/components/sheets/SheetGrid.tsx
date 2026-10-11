@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { t as trT, useLang } from "@/lib/lang";
 import type { NexusSheetColumnColor, NexusSheetSettings } from "@/lib/nexus-api";
 import {
-  COLUMN_COLOR_CLASS, COLUMN_TYPE_LABEL, RULE_STYLE_CLASS, buildSheetData, displayCell, editFormula, editValue,
+  CHIP_COLORS, COLUMN_COLOR_CLASS, COLUMN_TYPE_LABEL, RULE_STYLE_CLASS, buildSheetData, displayCell, editFormula, editValue,
   fillValues, inputToCell, isLinkCell, matchRule, optionColor, readMulti, sameCell, sortKey,
   type NexusSheetColumn, type NexusSheetColumnType, type NexusSheetRow, type NexusSheetRule,
 } from "./sheet-types";
@@ -24,7 +24,13 @@ import {
 } from "./sheet-clipboard";
 import { CellEditor, ColumnPopover, TaskCell, type Next } from "./sheet-cells";
 import { Floating } from "./sheet-float";
-import { SheetToolbar, Menu, MenuItem } from "./SheetToolbar";
+import {
+  buildRuleIndex, checkboxValue, dropdownOptions, invalidMessage, isChecked, isDropdown, newRuleId, pickedValues,
+  rangeRect, rangeToA1, validateCell, type ValidationRule,
+} from "@/lib/sheet-validation";
+import { DataValidationPanel, type PanelRule } from "./DataValidationPanel";
+import { DropdownCell, DropdownPicker } from "./sheet-dropdown";
+import { SheetToolbar, Menu, MenuItem, MenuLabel, MenuSep } from "./SheetToolbar";
 import {
   borderShadows, bordersFor, horizontalClass, patchStyle, styleClasses, styleInline, verticalClass,
   type BorderPreset, type CellStyle,
@@ -141,7 +147,7 @@ export function SheetGrid({
   columns, rows, settings, canEdit, canManage,
   onSetCells, onSetStyles, onSettings, onAddRows, onDeleteRows, onReorderRow, onDeleteColumn, onEditColumn, onAddColumn,
   tasks, onOpenTask, commentCounts, onOpenComments, peerCursors, onEditingChange, onCursor, onResizeRow, onInsertColumn,
-  canUndo, canRedo, onUndo, onRedo, footerLeft, saving,
+  canUndo, canRedo, onUndo, onRedo, footerLeft, saving, sheetName,
 }: {
   columns: NexusSheetColumn[];
   rows: NexusSheetRow[];
@@ -179,6 +185,8 @@ export function SheetGrid({
   /** Sheet tabs, drawn at the left of the bottom bar (the status bar sits on the right). */
   footerLeft?: ReactNode;
   saving?: boolean;
+  /** Shown before ranges in the data-validation panel ("Anggaran!B2:B20"). */
+  sheetName?: string;
 }) {
   const { lang, t } = useLang();
   const [sel, setSel] = useState<Selection>({ r: 0, c: 0, r2: 0, c2: 0 });
@@ -206,6 +214,27 @@ export function SheetGrid({
     engineRef.current = e;
     return e;
   }, [data]);
+
+  // ── Data validation ─────────────────────────────────────────────────────────────────────────
+  // Explicit rules live in settings.validations; a Dropdown / Multi-select COLUMN (the older,
+  // per-column type) reads as a dropdown rule over its whole column, so both draw and behave alike.
+  const explicitRules = useMemo(() => (settings.validations ?? []) as ValidationRule[], [settings.validations]);
+  const columnRules = useMemo(() => columns.map((col): PanelRule | null => (
+    col.type === "select" || col.type === "multiselect"
+      ? {
+        id: `col:${col.id}`, columnId: col.id, ranges: [`{${col.id}!*}:{${col.id}!*}`], kind: "list",
+        values: col.options ?? [],
+        colors: Object.fromEntries((col.options ?? []).map((o, i) => [o, col.optionColors?.[o] ?? CHIP_COLORS[i % CHIP_COLORS.length]])),
+        multiple: col.type === "multiselect", display: "chip",
+      }
+      : null
+  )), [columns]);
+  const explicitAt = useMemo(() => buildRuleIndex(explicitRules, data.shape), [explicitRules, data.shape]);
+  const ruleAt = useCallback((rawRow: number, ci: number): ValidationRule | null => explicitAt(rawRow, ci) ?? columnRules[ci] ?? null, [explicitAt, columnRules]);
+  const [dvOpen, setDvOpen] = useState(false);
+  const [dvEditId, setDvEditId] = useState<string | null>(null);
+  /** The dropdown list open on a cell. */
+  const [dropdown, setDropdown] = useState<{ rowId: string; colId: string; rect: DOMRect } | null>(null);
 
   // While a FORMULA is being edited, clicking a cell inserts its reference instead of moving the
   // selection — that's the behaviour that makes formulas usable without memorising addresses.
@@ -436,6 +465,32 @@ export function SheetGrid({
 
   // ── Writes ───────────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * The rule that REJECTS this value here ("If the data is invalid: Reject the input"), or null.
+   * Warning-only rules never block; they mark the cell instead.
+   */
+  const rejectedBy = (rowId: string, colId: string, next: unknown): ValidationRule | null => {
+    const r = data.shape.rowIds.indexOf(rowId), c = data.shape.columnIds.indexOf(colId);
+    const rule = r >= 0 && c >= 0 ? ruleAt(r, c) : null;
+    if (!rule?.strict || isFormulaCell(next)) return null;
+    return validateCell(rule, next, engine.scalar(next, colId), { engine, shape: data.shape, at: { r, c } }) ? null : rule;
+  };
+  /** Drop the values a rejecting rule refuses from a batch (paste, fill); tell how many. */
+  const keepValid = (edits: { rowId: string; values: Record<string, unknown> }[]) => {
+    let refused = 0;
+    let first: ValidationRule | null = null;
+    const out = edits.map((e) => ({
+      rowId: e.rowId,
+      values: Object.fromEntries(Object.entries(e.values).filter(([colId, v]) => {
+        const bad = v === null ? null : rejectedBy(e.rowId, colId, v);
+        if (bad) { refused += 1; first ??= bad; }
+        return !bad;
+      })),
+    })).filter((e) => Object.keys(e.values).length);
+    if (refused && first) alert(`${t("{n} cells were not changed: {why}", { n: refused, why: invalidMessage(first, t) })}`);
+    return out;
+  };
+
   /** Save what was typed — through inputToCell, the one path from text to a cell value. */
   const commit = useCallback((rowId: string, colId: string, raw: string) => {
     const col = columns.find((x) => x.id === colId);
@@ -443,8 +498,11 @@ export function SheetGrid({
     const prevRaw = rows.find((x) => x.id === rowId)?.cells[colId];
     const next = inputToCell(col, raw, data.shape, prevRaw);
     if (sameCell(prevRaw, next)) return;
+    const bad = rejectedBy(rowId, colId, next);
+    if (bad) { alert(invalidMessage(bad, t)); return; }
     onSetCells([{ rowId, values: { [colId]: next } }]);
-  }, [columns, rows, onSetCells, data.shape]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, rows, onSetCells, data.shape, ruleAt, engine, t]);
 
   /** Clear every VALUE in the current rectangle in one request (formatting stays, as in Sheets). */
   const clearSelection = useCallback(() => {
@@ -577,7 +635,8 @@ export function SheetGrid({
         fillLine(tgt.axis === "right" ? src : [...src].reverse(), out.map((c) => ({ r, c })));
       }
     }
-    if (edits.length) onSetCells(edits);
+    const allowed = keepValid(edits);
+    if (allowed.length) onSetCells(allowed);
     setSel({
       r: Math.min(rect.top, tgt.top), c: Math.min(rect.left, tgt.left),
       r2: Math.max(rect.bottom, tgt.bottom), c2: Math.max(rect.right, tgt.right),
@@ -604,8 +663,20 @@ export function SheetGrid({
       }
       cells.push(line);
     }
-    return buildClipboard(cells, { r: view[rect.top]?.rawIndex ?? rect.top, c: rect.left }, cut, columns.slice(rect.left, rect.right + 1).map((c) => c.type));
-  }, [rect, view, columns, data]);
+    // Data validation travels with a NEXUS copy (like Sheets), as rule + block-relative rectangle.
+    const rawTop = view[rect.top]?.rawIndex ?? 0, rawBottom = view[rect.bottom]?.rawIndex ?? 0;
+    const contiguous = rawBottom - rawTop === rect.bottom - rect.top;
+    const validations = contiguous ? explicitRules.flatMap((rule) => rule.ranges.flatMap((range) => {
+      const rc = rangeRect(range, data.shape);
+      if (!rc) return [];
+      const top = Math.max(rc.top, rawTop), bottom = Math.min(rc.bottom, rawBottom);
+      const left = Math.max(rc.left, rect.left), right = Math.min(rc.right, rect.right);
+      if (top > bottom || left > right) return [];
+      const { id: _id, ranges: _r, ...criteria } = rule;
+      return [{ rule: criteria, r1: top - rawTop, r2: bottom - rawTop, c1: left - rect.left, c2: right - rect.left }];
+    })) : [];
+    return buildClipboard(cells, { r: rawTop, c: rect.left }, cut, columns.slice(rect.left, rect.right + 1).map((c) => c.type), validations);
+  }, [rect, view, columns, data, explicitRules]);
 
   /** Paste a block at the selection (one value onto a range fills it; formulas shift). */
   const applyPaste = useCallback(async (block: PasteBlock) => {
@@ -649,14 +720,27 @@ export function SheetGrid({
       });
       if (Object.keys(values).length) edits.push({ rowId: target.row.id, values });
     });
-    if (edits.length) onSetCells(edits);
+    const allowed = keepValid(edits);
+    if (allowed.length) onSetCells(allowed);
+    // Rules copied with the block land on the pasted cells.
+    if (block.internal && block.validations?.length && !single) {
+      const added: ValidationRule[] = [];
+      for (const v of block.validations) {
+        const top = working[startR + v.r1], bottom = working[startR + Math.min(v.r2, cells.length - 1)];
+        const left = columns[startC + v.c1], right = columns[Math.min(maxC, startC + v.c2)];
+        if (!top || !bottom || !left || !right) continue;
+        added.push({ ...(v.rule as Omit<ValidationRule, "id" | "ranges">), id: newRuleId(), ranges: [`{${left.id}!${top.row.id}}:{${right.id}!${bottom.row.id}}`] });
+      }
+      if (added.length) onSettings({ validations: [...explicitRules, ...added] }, t("paste data validation"));
+    }
     if (block.cut) consumeCut();
     setSel({
       r: startR, c: startC,
       r2: Math.min(view.length + Math.max(0, needed) - 1, startR + cells.length - 1),
       c2: Math.min(maxC, startC + Math.max(...cells.map((l) => l.length)) - 1),
     });
-  }, [canEdit, rect, view, rows.length, columns, onAddRows, onSetCells, maxC, filtering, data.shape]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEdit, rect, view, rows.length, columns, onAddRows, onSetCells, maxC, filtering, data.shape, explicitRules, ruleAt, engine]);
 
   const openCommentsAt = (r: number, c: number) => {
     const row = view[r]?.row;
@@ -695,6 +779,125 @@ export function SheetGrid({
     }
     if (activeRow && activeCol) setEditing({ rowId: activeRow.id, colId: activeCol.id, seed: `=${fn}(` });
   };
+
+  // ── Dropdowns and checkboxes ─────────────────────────────────────────────────────────────────
+  const openDropdown = (rowId: string, colId: string) => {
+    const r = gridRef.current?.querySelector(`[data-cell="${rowId}:${colId}"]`)?.getBoundingClientRect();
+    if (r) setDropdown({ rowId, colId, rect: r });
+  };
+  const isCheckboxCell = (ri: number, ci: number) =>
+    columns[ci]?.type === "checkbox" || ruleAt(view[ri]?.rawIndex ?? -1, ci)?.kind === "checkbox";
+  /** Space (or Enter) on checkboxes: every checkbox in the selection takes the active one's opposite. */
+  const toggleCheckboxes = () => {
+    if (!canEdit) return;
+    const aRow = view[sel.r]?.row, aCol = columns[sel.c];
+    if (!aRow || !aCol) return;
+    const aRule = ruleAt(view[sel.r].rawIndex, sel.c);
+    const on = !(aCol.type === "checkbox" ? aRow.cells[aCol.id] === true : isChecked(aRule, aRow.cells[aCol.id]));
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    for (let r = rect.top; r <= rect.bottom; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      const values: Record<string, unknown> = {};
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        if (!col || !isCheckboxCell(r, c)) continue;
+        values[col.id] = col.type === "checkbox" ? on : checkboxValue(ruleAt(view[r].rawIndex, c), on);
+      }
+      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
+    }
+    if (edits.length) onSetCells(edits);
+  };
+  /**
+   * Open a cell the way its kind wants: a dropdown opens its list, a checkbox toggles (from the
+   * keyboard), everything else opens the editor — `seed` is the key that started typing.
+   */
+  const openCell = (ri: number, ci: number, seed?: string, via: "key" | "mouse" = "key") => {
+    const row = view[ri]?.row, col = columns[ci];
+    if (!row || !col || !canEdit) return;
+    if (!seed) {
+      if (isDropdown(ruleAt(view[ri].rawIndex, ci))) { openDropdown(row.id, col.id); return; }
+      if (isCheckboxCell(ri, ci)) { if (via === "key") toggleCheckboxes(); return; }
+    }
+    setEditing({ rowId: row.id, colId: col.id, ...(seed ? { seed } : {}) });
+  };
+
+  // ── Data validation entry points ─────────────────────────────────────────────────────────────
+  /** The selection as a stored range (whole columns when every row is selected). */
+  const selectionStored = (): string | null => {
+    const left = columns[rect.left], right = columns[rect.right];
+    if (!left || !right) return null;
+    if (rect.top === 0 && rect.bottom === maxR && naturalOrder && !hiddenRows.size) return `{${left.id}!*}:{${right.id}!*}`;
+    const top = view[rect.top]?.row, bottom = view[rect.bottom]?.row;
+    return top && bottom ? `{${left.id}!${top.id}}:{${right.id}!${bottom.id}}` : null;
+  };
+  const saveRules = (next: ValidationRule[], label: string) => onSettings({ validations: next.length ? next : null }, label);
+  /** Insert › Dropdown: the selection's existing values become the items (else "Option 1, 2"). */
+  const insertDropdown = () => {
+    const range = selectionStored();
+    if (!canEdit || !range) return;
+    const seen = new Set<string>();
+    for (let r = rect.top; r <= Math.min(rect.bottom, rect.top + 500); r += 1) {
+      const row = view[r]?.row;
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        const v = row && col ? row.cells[col.id] : undefined;
+        if (typeof v === "string" && v.trim() && seen.size < 50) pickedValues(v).forEach((x) => seen.add(x));
+      }
+    }
+    const rule: ValidationRule = { id: newRuleId(), ranges: [range], kind: "list", values: seen.size ? [...seen] : [t("Option 1"), t("Option 2")] };
+    saveRules([...explicitRules, rule], t("insert dropdown"));
+    setDvOpen(true);
+    setDvEditId(rule.id);
+  };
+  /** Insert › Checkbox: a checkbox rule over the selection. */
+  const insertCheckbox = () => {
+    const range = selectionStored();
+    if (!canEdit || !range) return;
+    saveRules([...explicitRules, { id: newRuleId(), ranges: [range], kind: "checkbox" }], t("insert checkbox"));
+  };
+  /** Data › Data validation: the active cell's rule if it has one, else the list. */
+  const openValidation = () => {
+    const rule = activeRow ? ruleAt(view[sel.r]?.rawIndex ?? -1, sel.c) : null;
+    setDvOpen(true);
+    setDvEditId(rule ? rule.id : null);
+  };
+  /** Colours of the formatting palette mapped onto the header palette a dropdown COLUMN stores. */
+  const toColumnColor = (c: string | undefined): NexusSheetColumnColor | undefined => {
+    if (!c) return undefined;
+    const map: Record<string, NexusSheetColumnColor> = {
+      red: "rose", pink: "rose", rose: "rose", orange: "amber", amber: "amber", green: "green", teal: "green",
+      blue: "blue", violet: "violet", slate: "slate", black: "slate",
+    };
+    return map[c];
+  };
+  const saveRuleFromPanel = (rule: PanelRule & { __new?: boolean }) => {
+    const { __new, columnId, ...clean } = rule;
+    if (columnId) {
+      onEditColumn(columnId, {
+        type: clean.multiple ? "multiselect" : "select",
+        options: clean.values ?? [],
+        optionColors: Object.fromEntries(Object.entries(clean.colors ?? {}).map(([k, v]) => [k, toColumnColor(v)]).filter(([, v]) => v)) as Record<string, NexusSheetColumnColor>,
+      });
+      return;
+    }
+    const exists = explicitRules.some((r) => r.id === clean.id);
+    saveRules(exists ? explicitRules.map((r) => (r.id === clean.id ? clean : r)) : [...explicitRules, clean], t("data validation"));
+    if (__new) setDvEditId(clean.id);
+  };
+  const removeRuleFromPanel = (rule: PanelRule) => {
+    if (rule.columnId) { onEditColumn(rule.columnId, { type: "text" }); return; }
+    saveRules(explicitRules.filter((r) => r.id !== rule.id), t("remove data validation"));
+  };
+
+  /** Help text of the active cell's rule, shown under it like Sheets' input message. */
+  const activeRule = activeRow ? ruleAt(view[sel.r]?.rawIndex ?? -1, sel.c) : null;
+  const [helpRect, setHelpRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!activeRule?.help || editing || dropdown || !activeRow || !activeCol) { setHelpRect(null); return; }
+    const r = gridRef.current?.querySelector(`[data-cell="${activeRow.id}:${activeCol.id}"]`)?.getBoundingClientRect();
+    setHelpRect(r ?? null);
+  }, [activeRule?.help, editing, dropdown, activeRow, activeCol, scroll.top]);
 
   useEffect(() => { onEditingChange(editing ? { rowId: editing.rowId, colId: editing.colId } : null); }, [editing, onEditingChange]);
   useEffect(() => { onCursor(view[sel.r]?.row.id ?? null, columns[sel.c]?.id ?? null); }, [sel.r, sel.c, view, columns, onCursor]);
@@ -820,8 +1023,9 @@ export function SheetGrid({
       out.push({ label: t("Comment"), icon: ic(MessageSquare), hint: "⌘⌥M", run: () => openCommentsAt(menu.r, menu.c) });
       if (canEdit) {
         out.push("sep");
+        out.push({ label: t("Dropdown"), icon: ic(CircleChevronDown), run: insertDropdown });
+        out.push({ label: t("Data validation"), icon: ic(ListChecks), run: openValidation });
         out.push({ label: t("Conditional formatting…"), icon: ic(Paintbrush), run: () => openColumnSettings(menu.c) });
-        out.push({ label: t("Data validation…"), icon: ic(ListChecks), run: () => openColumnSettings(menu.c) });
       }
       out.push({ label: t("Filter this column"), icon: ic(Filter), run: () => col && setFilterOpen((f) => ({ ...f, [col.id]: true })) });
       return out;
@@ -999,9 +1203,7 @@ export function SheetGrid({
           tabRun.current = null;
           return goTo(sel.r + 1, c, false);
         }
-        if (!canEdit) return;
-        if (activeRow && activeCol) setEditing({ rowId: activeRow.id, colId: activeCol.id });
-        return;
+        return openCell(sel.r, sel.c);
       }
       case "Escape": return setSel((s) => ({ ...s, r2: s.r, c2: s.c }));
       case "Delete":
@@ -1010,10 +1212,12 @@ export function SheetGrid({
       case "f": if (meta) { e.preventDefault(); setFindOpen(true); } return;
       default: break;
     }
+    // Space ticks / unticks checkboxes (every checkbox in the selection).
+    if (e.key === " " && !meta && !e.altKey && !e.shiftKey && isCheckboxCell(sel.r, sel.c)) { e.preventDefault(); toggleCheckboxes(); return; }
     // Any printable character starts editing and REPLACES the cell (F2 / double-click append instead).
     if (!meta && !e.altKey && e.key.length === 1 && canEdit && activeRow && activeCol) {
       e.preventDefault();
-      setEditing({ rowId: activeRow.id, colId: activeCol.id, seed: e.key });
+      openCell(sel.r, sel.c, e.key);
     }
   };
 
@@ -1149,7 +1353,106 @@ export function SheetGrid({
 
   return (
     <>
-    <div className="space-y-1.5">
+    <div className="flex items-stretch gap-2">
+    <div className="min-w-0 flex-1 space-y-1.5">
+      {/* Menu bar, Sheets' order. Every entry runs something the toolbar or a menu also offers. */}
+      <nav aria-label={t("Menu")} className="flex flex-wrap items-center gap-0.5 text-xs">
+        <Menu bare label={t("Edit")} trigger={<span className="px-0.5 font-medium">{t("Edit")}</span>}>
+          {(close) => (
+            <>
+              <MenuItem disabled={!canUndo} hint="⌘Z" onClick={() => { onUndo(); close(); }}>{t("Undo")}</MenuItem>
+              <MenuItem disabled={!canRedo} hint="⌘Y" onClick={() => { onRedo(); close(); }}>{t("Redo")}</MenuItem>
+              <MenuSep />
+              <MenuItem disabled={!canEdit} hint="⌘X" onClick={() => { close(); void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => clipboardBlocked("Ctrl+X / ⌘X")); }}>{t("Cut")}</MenuItem>
+              <MenuItem hint="⌘C" onClick={() => { close(); void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")); }}>{t("Copy")}</MenuItem>
+              <MenuItem disabled={!canEdit} hint="⌘V" onClick={() => { close(); pasteVia(false)(); }}>{t("Paste")}</MenuItem>
+              <MenuItem disabled={!canEdit} hint="⌘⇧V" onClick={() => { close(); pasteVia(true)(); }}>{t("Paste values only")}</MenuItem>
+              <MenuSep />
+              <MenuItem hint="⌘F" onClick={() => { setFindOpen(true); close(); }}>{t("Find and replace")}</MenuItem>
+              <MenuItem disabled={!canEdit} hint="Del" onClick={() => { clearSelection(); close(); }}>{t("Delete values")}</MenuItem>
+            </>
+          )}
+        </Menu>
+        <Menu bare label={t("View")} trigger={<span className="px-0.5 font-medium">{t("View")}</span>}>
+          {(close) => (
+            <>
+              <MenuLabel>{t("Freeze rows")}</MenuLabel>
+              {[0, 1, 2].map((n) => (
+                <MenuItem key={`r${n}`} disabled={!canEdit} active={frozenRowsSetting === n} onClick={() => { setFrozenRows(n); close(); }}>
+                  {n === 0 ? t("No rows") : n === 1 ? t("1 row") : t("{n} rows", { n })}
+                </MenuItem>
+              ))}
+              <MenuItem disabled={!canEdit || (view[sel.r]?.rawIndex ?? 0) >= 20} onClick={() => { setFrozenRows((view[sel.r]?.rawIndex ?? 0) + 1); close(); }}>
+                {t("Up to row {n}", { n: (view[sel.r]?.rawIndex ?? 0) + 1 })}
+              </MenuItem>
+              <MenuSep />
+              <MenuLabel>{t("Freeze columns")}</MenuLabel>
+              {[0, 1, 2].map((n) => (
+                <MenuItem key={`c${n}`} disabled={!canEdit} active={frozenCols === n} onClick={() => { setFrozenCols(n); close(); }}>
+                  {n === 0 ? t("No columns") : n === 1 ? t("1 column") : t("{n} columns", { n })}
+                </MenuItem>
+              ))}
+              <MenuItem disabled={!canEdit || sel.c >= 10} onClick={() => { setFrozenCols(sel.c + 1); close(); }}>{t("Up to column {c}", { c: colLetter(sel.c) })}</MenuItem>
+              <MenuSep />
+              <MenuLabel>{t("Zoom")}</MenuLabel>
+              {[75, 100, 125, 150].map((z) => (
+                <MenuItem key={z} active={Math.round(zoom * 100) === z} onClick={() => { setZoom(z / 100); close(); }}>{z}%</MenuItem>
+              ))}
+            </>
+          )}
+        </Menu>
+        <Menu bare label={t("Insert")} trigger={<span className="px-0.5 font-medium">{t("Insert")}</span>}>
+          {(close) => (
+            <>
+              <MenuItem disabled={!canEdit || !activeRow} onClick={() => { if (activeRow) void onAddRows({ count: 1, beforeRowId: activeRow.id }); close(); }}>{t("Row above")}</MenuItem>
+              <MenuItem disabled={!canEdit || !activeRow} onClick={() => { if (activeRow) void onAddRows({ count: 1, afterRowId: activeRow.id }); close(); }}>{t("Row below")}</MenuItem>
+              <MenuItem disabled={!canEdit} onClick={() => { onInsertColumn(sel.c); close(); }}>{t("Column left")}</MenuItem>
+              <MenuItem disabled={!canEdit} onClick={() => { onInsertColumn(sel.c + 1); close(); }}>{t("Column right")}</MenuItem>
+              <MenuSep />
+              <MenuItem disabled={!canEdit} onClick={() => { insertCheckbox(); close(); }}>{t("Checkbox")}</MenuItem>
+              <MenuItem disabled={!canEdit} onClick={() => { insertDropdown(); close(); }}>{t("Dropdown")}</MenuItem>
+              <MenuItem disabled={!canEdit} onClick={() => { insertFunction("SUM"); close(); }}>{t("Function")}</MenuItem>
+              <MenuSep />
+              <MenuItem disabled={!canEdit} hint="⌘K" onClick={() => { insertLink(); close(); }}>{t("Link")}</MenuItem>
+              <MenuItem hint="⌘⌥M" onClick={() => { openCommentsAt(sel.r, sel.c); close(); }}>{t("Comment")}</MenuItem>
+            </>
+          )}
+        </Menu>
+        <Menu bare label={t("Format")} trigger={<span className="px-0.5 font-medium">{t("Format")}</span>}>
+          {(close) => (
+            <>
+              <MenuLabel>{t("Number")}</MenuLabel>
+              {([["auto", t("Automatic")], ["num", t("Number")], ["pct", t("Percent")], ["idr", t("Rupiah")], ["date", t("Date")], ["text", t("Plain text")]] as const).map(([nf, l]) => (
+                <MenuItem key={nf} disabled={!canEdit} active={(activeStyle?.nf ?? "auto") === nf} onClick={() => { applyStyle({ nf: nf === "auto" ? null : nf }); close(); }}>{l}</MenuItem>
+              ))}
+              <MenuSep />
+              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.b)} hint="⌘B" onClick={() => { applyStyle({ b: activeStyle?.b ? null : 1 }); close(); }}>{t("Bold")}</MenuItem>
+              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.i)} hint="⌘I" onClick={() => { applyStyle({ i: activeStyle?.i ? null : 1 }); close(); }}>{t("Italic")}</MenuItem>
+              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.u)} hint="⌘U" onClick={() => { applyStyle({ u: activeStyle?.u ? null : 1 }); close(); }}>{t("Underline")}</MenuItem>
+              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.s)} hint="⌥⇧5" onClick={() => { applyStyle({ s: activeStyle?.s ? null : 1 }); close(); }}>{t("Strikethrough")}</MenuItem>
+              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.w)} onClick={() => { applyStyle({ w: activeStyle?.w ? null : 1 }); close(); }}>{t("Wrap text")}</MenuItem>
+              <MenuItem disabled={!canEdit || !canMerge} onClick={() => { toggleMerge(); close(); }}>{mergedHere.length ? t("Unmerge cells") : t("Merge cells")}</MenuItem>
+              <MenuSep />
+              <MenuItem disabled={!canEdit} onClick={() => { openColumnSettings(sel.c); close(); }}>{t("Conditional formatting…")}</MenuItem>
+              <MenuItem disabled={!canEdit} hint="⌘\" onClick={() => { clearFormat(); close(); }}>{t("Clear formatting")}</MenuItem>
+            </>
+          )}
+        </Menu>
+        <Menu bare label={t("Data")} trigger={<span className="px-0.5 font-medium">{t("Data")}</span>}>
+          {(close) => (
+            <>
+              <MenuItem disabled={!activeCol} onClick={() => { if (activeCol) setSort({ colId: activeCol.id, dir: "asc" }); close(); }}>{t("Sort sheet A → Z")}</MenuItem>
+              <MenuItem disabled={!activeCol} onClick={() => { if (activeCol) setSort({ colId: activeCol.id, dir: "desc" }); close(); }}>{t("Sort sheet Z → A")}</MenuItem>
+              {sort && <MenuItem onClick={() => { setSort(null); close(); }}>{t("Back to sheet order")}</MenuItem>}
+              <MenuItem disabled={!activeCol} onClick={() => { if (activeCol) setFilterOpen((f) => ({ ...f, [activeCol.id]: true })); close(); }}>{t("Filter this column")}</MenuItem>
+              <MenuSep />
+              <MenuItem onClick={() => { openValidation(); close(); }}>{t("Data validation")}</MenuItem>
+              <MenuItem disabled={!canEdit || !activeCol} onClick={() => { openColumnSettings(sel.c); close(); }}>{t("Column settings…")}</MenuItem>
+            </>
+          )}
+        </Menu>
+      </nav>
+
       <SheetToolbar
         canEdit={canEdit}
         style={activeStyle}
@@ -1477,7 +1780,16 @@ export function SheetGrid({
                       if (extend) setSel((s) => ({ r: s.r, c: 0, r2: ri, c2: maxC }));
                       else selectRows(ri, ri);
                     }}
-                    onEdit={(colId) => setEditing({ rowId: row.id, colId })}
+                    onEdit={(ci) => openCell(ri, ci, undefined, "mouse")}
+                    ruleAt={ruleAt}
+                    onOpenDropdown={(ci) => { setSel({ r: ri, c: ci, r2: ri, c2: ci }); if (canEdit) openDropdown(row.id, columns[ci].id); }}
+                    onToggleCheck={(ci) => {
+                      const col = columns[ci];
+                      if (!canEdit || !col) return;
+                      const rule = ruleAt(rawIndex, ci);
+                      const on = !(col.type === "checkbox" ? row.cells[col.id] === true : isChecked(rule, row.cells[col.id]));
+                      onSetCells([{ rowId: row.id, values: { [col.id]: col.type === "checkbox" ? on : checkboxValue(rule, on) } }]);
+                    }}
                     onCommit={(colId, raw, next) => {
                       commit(row.id, colId, raw);
                       setEditing(null);
@@ -1550,6 +1862,56 @@ export function SheetGrid({
         </div>
       </div>
     </div>
+    {dvOpen && (
+      <DataValidationPanel
+        rules={[...(columnRules.filter(Boolean) as PanelRule[]), ...explicitRules]}
+        shape={data.shape}
+        sheetName={sheetName ?? "Sheet1"}
+        selectionRange={(() => { const r = selectionStored(); return r ? rangeToA1(r, data.shape) : ""; })()}
+        editId={dvEditId}
+        canEdit={canEdit}
+        onSave={saveRuleFromPanel}
+        onRemove={removeRuleFromPanel}
+        onClose={() => { setDvOpen(false); setDvEditId(null); }}
+        onEditChange={setDvEditId}
+      />
+    )}
+    </div>
+
+    {/* The open dropdown list of a cell. */}
+    {dropdown && (() => {
+      const row = rows.find((r) => r.id === dropdown.rowId);
+      const ci = columns.findIndex((c) => c.id === dropdown.colId);
+      const rawRow = rows.findIndex((r) => r.id === dropdown.rowId);
+      const rule = row && ci >= 0 ? ruleAt(rawRow, ci) : null;
+      if (!row || !rule) return null;
+      const raw = row.cells[dropdown.colId];
+      return (
+        <DropdownPicker
+          anchor={dropdown.rect}
+          options={dropdownOptions(rule, engine, data.shape)}
+          colors={rule.colors}
+          picked={rule.multiple ? pickedValues(raw) : raw === undefined || raw === null || raw === "" ? [] : [String(Array.isArray(raw) ? raw.join(", ") : raw)]}
+          multiple={Boolean(rule.multiple)}
+          onClose={() => { setDropdown(null); gridRef.current?.focus(); }}
+          onCommit={(values) => {
+            setDropdown(null);
+            // Items are written exactly as listed (never re-read as numbers or dates).
+            const next = values.length ? values.join(", ") : null;
+            if (!sameCell(raw, next)) onSetCells([{ rowId: dropdown.rowId, values: { [dropdown.colId]: next } }]);
+            gridRef.current?.focus();
+          }}
+        />
+      );
+    })()}
+
+    {/* Help text of the selected cell's rule (Advanced options › help text). */}
+    {helpRect && activeRule?.help && createPortal(
+      <Floating anchor={{ rect: helpRect }} className="pointer-events-none max-w-64 rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-pop">
+        {activeRule.help}
+      </Floating>,
+      document.body,
+    )}
 
     {/* Right-click menus (cell, column header, row header). Only entries this grid can honour. */}
     {menu && menuEntries.length > 0 && createPortal(
@@ -1776,7 +2138,10 @@ type RowProps = {
   onDragOver: (c: number) => void;
   onStartDrag: (c: number) => void;
   onSelectRow: (extend: boolean) => void;
-  onEdit: (colId: string) => void;
+  onEdit: (colIndex: number) => void;
+  ruleAt: (rawRow: number, colIndex: number) => ValidationRule | null;
+  onOpenDropdown: (colIndex: number) => void;
+  onToggleCheck: (colIndex: number) => void;
   onCommit: (colId: string, raw: string, next: Next) => void;
   onCancel: () => void;
   onRowMenu: (at: { left: number; top: number }) => void;
@@ -1886,6 +2251,8 @@ const Row = memo(function Row(p: RowProps) {
         const st = p.row.styles?.[col.id];
         const computed = engine.value(p.row.id, col.id);
         const ruleHit = col.rules?.length ? matchRule(col.rules, computed) : null;
+        const dv = p.ruleAt(p.rawIndex, ci);
+        const invalid = dv ? !validateCell(dv, value, computed, { engine, shape: p.data.shape, at: { r: p.rawIndex, c: ci } }) : false;
         const peerHere = p.peerCursors[key];
         const numeric = typeof computed === "number" && col.type !== "checkbox" && col.type !== "select" && col.type !== "multiselect";
 
@@ -1932,7 +2299,7 @@ const Row = memo(function Row(p: RowProps) {
               p.onFillOver(ci);
               if (p.refMode) p.onExtendRef(ci); else p.onDragOver(ci);
             }}
-            onDoubleClick={() => p.canEdit && p.onEdit(col.id)}
+            onDoubleClick={() => p.canEdit && p.onEdit(ci)}
             onContextMenu={(e) => {
               e.preventDefault();
               if (!inRect) p.onSelect(ci, false);
@@ -1972,6 +2339,14 @@ const Row = memo(function Row(p: RowProps) {
                 className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-amber-500"
               />
             )}
+            {/* Invalid for its data-validation rule: Sheets' red corner, with the reason on hover. */}
+            {invalid && dv && (
+              <span
+                title={invalidMessage(dv, t)}
+                aria-label={invalidMessage(dv, t)}
+                className="absolute right-0 top-0 z-[3] h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent border-t-red-600"
+              />
+            )}
             {p.showFillHandle && inRect && lastCol === p.rect.right && !isEditing && (
               <span
                 onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); p.onFillStart(); }}
@@ -1999,22 +2374,15 @@ const Row = memo(function Row(p: RowProps) {
                 onOpen={p.onOpenTask}
                 onPick={(id) => p.onCommit(col.id, id, null)}
               />
-            ) : col.type === "select" ? (
-              <span className="flex items-center gap-1 overflow-hidden">
-                {value !== undefined && value !== null && value !== "" && (
-                  <span className={cn("max-w-full truncate rounded-full px-2 text-[11px] font-medium leading-5", optionColor(col, String(value)))}>{String(value)}</span>
-                )}
-                {p.canEdit && <ChevronDown className={cn("ml-auto h-3 w-3 shrink-0 text-muted-foreground/60", (value === undefined || value === null || value === "") && "opacity-0 group-hover/cell:opacity-100")} />}
-              </span>
-            ) : col.type === "multiselect" ? (
-              <span className="flex items-center gap-1 overflow-hidden">
-                <span className="flex min-w-0 flex-wrap items-center gap-1">
-                  {readMulti(value).map((v) => (
-                    <span key={v} className={cn("max-w-full truncate rounded-full px-2 text-[11px] font-medium leading-5", optionColor(col, v))}>{v}</span>
-                  ))}
-                </span>
-                {p.canEdit && <ChevronDown className={cn("ml-auto h-3 w-3 shrink-0 text-muted-foreground/60", !readMulti(value).length && "opacity-0 group-hover/cell:opacity-100")} />}
-              </span>
+            ) : isDropdown(dv) && dv ? (
+              <DropdownCell
+                picked={dv.multiple ? pickedValues(value) : (value === undefined || value === null || value === "" ? [] : [isFormula(value) ? String(computed ?? "") : Array.isArray(value) ? value.join(", ") : String(value)])}
+                colors={dv.colors}
+                display={dv.display ?? "chip"}
+                canEdit={p.canEdit}
+                wrap={Boolean(st?.w)}
+                onOpen={() => p.onOpenDropdown(ci)}
+              />
             ) : isLinkCell(value) ? (
               <a
                 href={value.u}
@@ -2027,16 +2395,22 @@ const Row = memo(function Row(p: RowProps) {
               >
                 {value.t || value.u}
               </a>
-            ) : col.type === "checkbox" ? (
-              <button
-                disabled={!p.canEdit}
-                onClick={() => p.onCommit(col.id, value === true ? "" : "true", null)}
-                aria-label={value ? t("Untick") : t("Tick")}
-                className={cn("mx-auto grid h-4 w-4 place-items-center rounded border", value ? "border-primary bg-primary text-primary-foreground" : "border-control-border")}
-              >
-                {value ? <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden><path d="M2.5 6.5l2.2 2.2L9.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}
-              </button>
-            ) : (
+            ) : col.type === "checkbox" || dv?.kind === "checkbox" ? ((() => {
+              const on = col.type === "checkbox" ? value === true : isChecked(dv, value);
+              return (
+                <button
+                  disabled={!p.canEdit}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => p.onToggleCheck(ci)}
+                  role="checkbox"
+                  aria-checked={on}
+                  aria-label={on ? t("Untick") : t("Tick")}
+                  className={cn("mx-auto grid h-4 w-4 place-items-center rounded border transition-colors", on ? "border-primary bg-primary text-primary-foreground" : "border-control-border bg-card hover:border-foreground/60")}
+                >
+                  {on ? <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden><path d="M2.5 6.5l2.2 2.2L9.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}
+                </button>
+              );
+            })()) : (
               <span
                 className={cn("block", st?.w ? "whitespace-pre-wrap break-words" : "truncate whitespace-pre",
                   isError(computed) && isFormula(value) ? "font-medium text-destructive" : "")}
@@ -2067,6 +2441,7 @@ const Row = memo(function Row(p: RowProps) {
   a.hiddenCols === b.hiddenCols &&
   a.unhideRows === b.unhideRows &&
   a.merges === b.merges &&
+  a.ruleAt === b.ruleAt &&
   a.canEdit === b.canEdit &&
   a.dragging === b.dragging &&
   a.dropTarget === b.dropTarget &&

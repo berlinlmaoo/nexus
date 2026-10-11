@@ -6,7 +6,9 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { toCsv } from "@/lib/csv"
 import { isLinkCell, readCells, readStyles, resolveSheetAccess, type CellStyle, type SheetColumn, type StyleColor } from "@/lib/project-sheets"
-import { computeSheet, serialToIso, serialToYmd, type CellValue, type ComputedCell } from "@/lib/sheet-formula"
+import {
+  computeSheet, parseDateText, parseLocaleNumber, serialToIso, serialToYmd, type CellValue, type ComputedCell,
+} from "@/lib/sheet-formula"
 
 // GET /api/sheets/[sheetId]/export?format=csv|xlsx
 //
@@ -164,6 +166,47 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
         try { ws.mergeCells(r + 2, c + 1, Math.min(body.length, r + m.rs) + 1, Math.min(sheet.columns.length, c + m.cs)) } catch { /* overlapping merge */ }
       }
       ws.views = [{ state: "frozen", ySplit: 1 + (settings.frozenRows ?? 0), xSplit: settings.frozenCols ?? 0 }]
+
+      // Data validation, where Excel has an equivalent: dropdown lists, number and date criteria.
+      const colIndex = new Map(sheet.columns.map((c, i) => [c.id, i]))
+      const asDate = (v: string | undefined) => { const s = v ? parseDateText(v) : null; if (s === null) return null; const { y, m, d } = serialToYmd(s); return new Date(Date.UTC(y, m - 1, d)) }
+      const asNum = (v: string | undefined) => (v ? parseLocaleNumber(v)?.n ?? null : null)
+      const OPS: Record<string, string> = { gt: "greaterThan", gte: "greaterThanOrEqual", lt: "lessThan", lte: "lessThanOrEqual", eq: "equal", neq: "notEqual", between: "between", notBetween: "notBetween" }
+      let budget = 20_000
+      for (const rule of settings.validations ?? []) {
+        let dv: ExcelJS.DataValidation | null = null
+        const error = rule.help || undefined
+        const common = { allowBlank: true, showErrorMessage: Boolean(rule.strict), errorStyle: rule.strict ? "stop" : "warning", ...(error ? { error, prompt: error, showInputMessage: true } : {}) } as const
+        if (rule.kind === "list" && rule.values?.length) {
+          const list = rule.values.map((v) => v.replace(/"/g, "'")).join(",")
+          if (list.length <= 250) dv = { type: "list", formulae: [`"${list}"`], ...common }
+        } else if (OPS[rule.kind]) {
+          const a = asNum(rule.values?.[0]), b = asNum(rule.values?.[1])
+          if (a !== null && (!rule.kind.toLowerCase().includes("between") || b !== null)) {
+            dv = { type: "decimal", operator: OPS[rule.kind] as ExcelJS.DataValidationOperator, formulae: b !== null && rule.kind.toLowerCase().includes("between") ? [a, b] : [a], ...common }
+          }
+        } else if (rule.kind === "dateBefore" || rule.kind === "dateAfter" || rule.kind === "dateIs" || rule.kind === "dateBetween") {
+          const a = asDate(rule.values?.[0]), b = asDate(rule.values?.[1])
+          const op = rule.kind === "dateBefore" ? "lessThan" : rule.kind === "dateAfter" ? "greaterThan" : rule.kind === "dateIs" ? "equal" : "between"
+          if (a && (op !== "between" || b)) dv = { type: "date", operator: op, formulae: op === "between" ? [a, b as Date] : [a], ...common }
+        }
+        if (!dv) continue
+        for (const range of rule.ranges) {
+          const m = /^\{\$?([^!}]+)!\$?([^}]+)\}:\{\$?([^!}]+)!\$?([^}]+)\}$/.exec(range)
+          if (!m) continue
+          const c1 = colIndex.get(m[1]), c2 = colIndex.get(m[3])
+          if (c1 === undefined || c2 === undefined) continue
+          const r1 = m[2] === "*" ? 0 : rowIndex.get(m[2]) ?? -1
+          const r2 = m[4] === "*" ? body.length - 1 : rowIndex.get(m[4]) ?? -1
+          if (r1 < 0 || r2 < 0) continue
+          for (let r = Math.min(r1, r2); r <= Math.max(r1, r2) && budget > 0; r += 1) {
+            for (let c = Math.min(c1, c2); c <= Math.max(c1, c2) && budget > 0; c += 1) {
+              ws.getCell(r + 2, c + 1).dataValidation = dv
+              budget -= 1
+            }
+          }
+        }
+      }
 
       const buf = await wb.xlsx.writeBuffer()
       return new NextResponse(buf as ArrayBuffer, {
