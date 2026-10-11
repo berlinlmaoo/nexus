@@ -396,7 +396,23 @@ export function triggerMatches(trigger: Rule, event: AutomationEventLike): boole
     case "TASK_UPDATED":
       return event.kind === "task_updated" && Object.keys(changes).length > 0
     case "STATUS_CHANGED": {
-      if (event.kind !== "task_updated" || !changes.status) return false
+      if (event.kind !== "task_updated") return false
+      // Status options (owner, 12 Oct 2026): sections are the statuses, so "to <option>" / "from <option>"
+      // name a section (config.toSection / config.fromSection) and a move between two columns of the same
+      // status type still is a status change (config.bySection, set by the web when the project uses them).
+      const cfg = trigger.config ?? {}
+      const toSection = typeof cfg.toSection === "string" && cfg.toSection ? cfg.toSection : null
+      const fromSection = typeof cfg.fromSection === "string" && cfg.fromSection ? cfg.fromSection : null
+      if (toSection || fromSection) {
+        if (!changes.section) return false
+        if (fromSection && changes.section.from !== fromSection) return false
+        if (toSection && changes.section.to !== toSection) return false
+        if (!fromSection && typeof cfg.from === "string" && cfg.from && changes.status && !valueMatches(cfg.from, changes.status.from)) return false
+        if (!toSection && trigger.value && !valueMatches(trigger.value, changes.status?.to)) return false
+        return true
+      }
+      if (cfg.bySection === true && changes.section && !changes.status && !trigger.value && !cfg.from) return true
+      if (!changes.status) return false
       const from = trigger.config?.from
       if (typeof from === "string" && from && !valueMatches(from, changes.status.from)) return false
       return valueMatches(trigger.value, changes.status.to)

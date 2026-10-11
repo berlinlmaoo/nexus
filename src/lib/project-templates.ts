@@ -495,6 +495,13 @@ function tiptap(blocks: TemplateBlock[], lang: TemplateLang): { content: unknown
   return { content: { type: "doc", content: nodes }, text: plain.join("\n\n") }
 }
 
+/** A select field's stored options, with the template's option colours (options.optionColors, 12 Oct 2026). */
+function templateSelectOptions(options: TemplateOption[], lang: TemplateLang) {
+  const names = options.map((op) => pick(op.label, lang))
+  const colors = Object.fromEntries(options.flatMap((op, i) => (op.color ? [[names[i], op.color]] : [])))
+  return Object.keys(colors).length ? { options: names, optionColors: colors } : { options: names }
+}
+
 /**
  * Everything a template creates, in one language, without ids. `starter` = the starter pages and tasks
  * (the create dialog's "Add starter pages" switch; on by default).
@@ -510,7 +517,7 @@ export function planTemplate(t: ProjectTemplate, lang: TemplateLang, starter = t
       // Stored the way lib/custom-fields.ts normalizeCustomFieldOptions stores them.
       options:
         f.type === "SELECT" || f.type === "MULTI_SELECT"
-          ? { options: (f.options ?? []).map((op) => pick(op.label, lang)) }
+          ? templateSelectOptions(f.options ?? [], lang)
           : f.type === "NUMBER" && f.format
             ? { format: f.format }
             : f.type === "CREATED"

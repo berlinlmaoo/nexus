@@ -50,8 +50,12 @@ interface IntakeFormField {
     id?: string
     operator: "equals" | "not_equals" | "contains" | "is_empty" | "is_not_empty"
     value: string
-    action: "set_task_list" | "assign_user"
+    // "set_field" (owner, 12 Oct 2026): sections became statuses, so a form that used to drop a request in
+    // a category section now sets the category field instead (scripts/convert-category-sections.cjs).
+    action: "set_task_list" | "assign_user" | "set_field"
     targetTaskListId?: string
+    targetCustomFieldId?: string
+    targetValue?: string
     targetUserId?: string
     targetUserIds?: string[]
   }>
@@ -417,6 +421,7 @@ export async function POST(
     const validProjectMemberIds = new Set(form.project.members.map((member) => member.userId))
     let routedTaskList = taskList
     const routedAssigneeIds = new Set<string>()
+    const routedFieldValues = new Map<string, string>()
 
     for (const field of visibleFields) {
       for (const rule of field.routingRules ?? []) {
@@ -424,6 +429,10 @@ export async function POST(
 
         if (rule.action === "set_task_list" && rule.targetTaskListId && validTaskListIds.has(rule.targetTaskListId)) {
           routedTaskList = form.project.taskLists.find((list) => list.id === rule.targetTaskListId) ?? routedTaskList
+        }
+
+        if (rule.action === "set_field" && rule.targetCustomFieldId && typeof rule.targetValue === "string" && rule.targetValue.trim()) {
+          if (form.project.customFields.some((item) => item.id === rule.targetCustomFieldId)) routedFieldValues.set(rule.targetCustomFieldId, rule.targetValue.trim())
         }
 
         if (rule.action === "assign_user") {
@@ -506,6 +515,14 @@ export async function POST(
           }
         })
         .filter((value): value is { customFieldId: string; taskId: string; value: string } => Boolean(value))
+        // A routing rule's field value wins over a mapped answer for the same field.
+        .filter((value) => !routedFieldValues.has(value.customFieldId))
+      for (const [customFieldId, value] of routedFieldValues) {
+        const customField = form.project.customFields.find((item) => item.id === customFieldId)
+        const type = normalizeCustomFieldType(customField?.type)
+        if (!type) continue
+        customFieldValues.push({ customFieldId, taskId: task.id, value: serializeCustomFieldValue(type, coerceCustomFieldValueForType(type, value, task.createdAt), task.createdAt) })
+      }
 
       if (customFieldValues.length > 0) {
         await tx.customFieldValue.createMany({

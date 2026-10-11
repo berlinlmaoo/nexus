@@ -21,7 +21,8 @@ import {
 
 export type BuilderContext = {
   projectId: string;
-  sections: Array<{ id: string; name: string }>;
+  /** taskStatus set = the section is a status option (owner, 12 Oct 2026, lib/status-sections.ts). */
+  sections: Array<{ id: string; name: string; position?: number; taskStatus?: string | null }>;
   members: Array<{ id: string; name: string; avatar?: string | null }>;
   fields: Array<{ id: string; name: string; type: string; options?: unknown }>;
   forms: Array<{ id: string; name: string }>;
@@ -72,11 +73,50 @@ function PickMenu({ trigger, options, onPick, placeholder, disabled }: { trigger
 }
 
 function Sel({ value, onChange, options, disabled, label, className }: { value: string; onChange: (v: string) => void; options: Opt[]; disabled?: boolean; label: string; className?: string }) {
+  const { t } = useLang();
+  // Options with a group render under it (the status options: To-do / In progress / Complete).
+  const blocks: Array<{ group: string; options: Opt[] }> = [];
+  for (const o of options) {
+    const g = o.group ?? "";
+    const last = blocks[blocks.length - 1];
+    if (last && last.group === g) last.options.push(o);
+    else blocks.push({ group: g, options: [o] });
+  }
   return (
     <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={cn(select, className)}>
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {blocks.map((b, i) => b.group
+        ? <optgroup key={`${b.group}-${i}`} label={t(b.group)}>{b.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>
+        : b.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>))}
     </select>
   );
+}
+
+// ── Status options (sections are the statuses, owner 12 Oct 2026) ────────────────────────────────
+// A project whose sections stand for statuses offers ITS options ("Concept & Design", "Budget Approval"…)
+// wherever a status is picked. Stored so released apps still read an enum: a trigger keeps `value` = the
+// option's status and adds config.toSection / config.fromSection; "Set status" keeps `value` and adds
+// config.sectionId; conditions and "Field changed" use the field "section" (shown as "Status").
+
+const STATUS_GROUP_OF: Record<string, string> = { TODO: "To-do", IN_PROGRESS: "In progress", IN_REVIEW: "In progress", DONE: "Complete", CANCELLED: "Complete" };
+const GROUP_ORDER = ["To-do", "In progress", "Complete"];
+
+export function usesStatusOptions(ctx: BuilderContext): boolean {
+  return ctx.sections.some((s) => !!s.taskStatus);
+}
+
+/** The project's status options, grouped and in board order. Value = section id. */
+function statusOptionList(ctx: BuilderContext): Opt[] {
+  return ctx.sections
+    .filter((s) => !!s.taskStatus)
+    .map((s) => ({ s, g: STATUS_GROUP_OF[s.taskStatus!] ?? "To-do" }))
+    .sort((a, b) => GROUP_ORDER.indexOf(a.g) - GROUP_ORDER.indexOf(b.g) || (a.s.position ?? 0) - (b.s.position ?? 0))
+    .map(({ s, g }) => ({ value: s.id, label: s.name, group: g }));
+}
+
+/** A rule saved with a bare status (before options, or from an app): kept selectable as "Any <status>". */
+function legacyStatusOpt(value: string | undefined, t: LangApi["t"]): Opt[] {
+  const s = value ? STATUSES.find((x) => x.value === value) : null;
+  return s ? [{ value: `status:${s.value}`, label: t("Any “{status}” column", { status: t(s.label) }) }] : [];
 }
 
 /** People chips: special recipients plus project members. */
@@ -111,9 +151,13 @@ function arr(v: unknown): string[] {
   return Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? listOf(v) : [];
 }
 
-function fieldOptions(ctx: BuilderContext, t: LangApi["t"], include: (key: string) => boolean): Opt[] {
+function fieldOptions(ctx: BuilderContext, t: LangApi["t"], include: (key: string) => boolean, current?: string): Opt[] {
+  const statusMode = usesStatusOptions(ctx);
   return [
-    ...BUILTIN_FIELDS.filter((f) => include(f.key)).map((f) => ({ value: f.key, label: t(f.label), group: "Task" })),
+    ...BUILTIN_FIELDS
+      .filter((f) => include(f.key))
+      .filter((f) => !(statusMode && f.key === "status" && current !== "status"))
+      .map((f) => ({ value: f.key, label: statusMode && f.key === "section" ? t("Status") : statusMode && f.key === "status" ? t("Status type") : t(f.label), group: "Task" })),
     ...ctx.fields.filter((f) => include(`cf:${f.id}`)).map((f) => ({ value: `cf:${f.id}`, label: f.name, group: "Custom fields" })),
   ];
 }
@@ -132,7 +176,9 @@ function ValueInput({ field, value, onChange, ctx, disabled, allowAny, placehold
   const any: Opt[] = allowAny ? [{ value: "", label: allowAny }] : [];
   if (kind === "status") return <Sel label={t("Status")} value={value} onChange={onChange} disabled={disabled} options={[...any, ...STATUSES.map((s) => ({ value: s.value, label: t(s.label) }))]} />;
   if (kind === "priority") return <Sel label={t("Priority")} value={value} onChange={onChange} disabled={disabled} options={[...any, ...PRIORITIES.map((s) => ({ value: s.value, label: t(s.label) }))]} />;
-  if (kind === "section") return <Sel label={t("Section")} value={value} onChange={onChange} disabled={disabled} options={[...any, ...ctx.sections.map((s) => ({ value: s.id, label: s.name }))]} />;
+  if (kind === "section") return usesStatusOptions(ctx)
+    ? <Sel label={t("Status")} value={value} onChange={onChange} disabled={disabled} options={[...any, ...statusOptionList(ctx), ...ctx.sections.filter((s) => !s.taskStatus).map((s) => ({ value: s.id, label: s.name, group: "Other sections" }))]} />
+    : <Sel label={t("Section")} value={value} onChange={onChange} disabled={disabled} options={[...any, ...ctx.sections.map((s) => ({ value: s.id, label: s.name }))]} />;
   if (kind === "person") return <Sel label={t("Person")} value={value} onChange={onChange} disabled={disabled} options={[...any, ...ctx.members.map((m) => ({ value: m.id, label: m.name }))]} />;
   if (kind === "select") {
     const cf = ctx.fields.find((f) => `cf:${f.id}` === field);
@@ -172,6 +218,32 @@ function TriggerConfig({ trigger, set, ctx, automation, disabled }: { trigger: R
   });
   switch (trigger.type) {
     case "STATUS_CHANGED":
+      if (usesStatusOptions(ctx)) {
+        const opts = statusOptionList(ctx);
+        const enumOf = (id: string) => ctx.sections.find((s) => s.id === id)?.taskStatus ?? undefined;
+        const fromVal = typeof cfg.fromSection === "string" ? cfg.fromSection : typeof cfg.from === "string" && cfg.from ? `status:${cfg.from}` : "";
+        const toVal = typeof cfg.toSection === "string" ? cfg.toSection : trigger.value ? `status:${trigger.value}` : "";
+        const pick = (v: string, side: "from" | "to") => {
+          const legacy = v.startsWith("status:") ? v.slice(7) : null;
+          const next: Record<string, unknown> = { ...cfg, bySection: true };
+          if (side === "from") {
+            next.fromSection = legacy || !v ? undefined : v;
+            next.from = legacy ?? (v ? enumOf(v) : undefined);
+            set({ ...trigger, config: next });
+          } else {
+            next.toSection = legacy || !v ? undefined : v;
+            set({ ...trigger, value: legacy ?? (v ? enumOf(v) : undefined), config: next });
+          }
+        };
+        return (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">{t("from")}</span>
+            <Sel label={t("From status")} disabled={disabled} value={fromVal} onChange={(v) => pick(v, "from")} options={[{ value: "", label: t("Any status") }, ...legacyStatusOpt(typeof cfg.fromSection === "string" ? undefined : (cfg.from as string | undefined), t), ...opts]} />
+            <span className="text-muted-foreground">{t("to")}</span>
+            <Sel label={t("To status")} disabled={disabled} value={toVal} onChange={(v) => pick(v, "to")} options={[{ value: "", label: t("Any status") }, ...legacyStatusOpt(typeof cfg.toSection === "string" ? undefined : trigger.value, t), ...opts]} />
+          </div>
+        );
+      }
       return (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">{t("from")}</span>
@@ -270,7 +342,7 @@ function ConditionRow({ rule, set, remove, ctx, disabled }: { rule: ConditionRul
   const op = ops.find((o) => o.op === rule.op) ?? ops[0];
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Sel label={t("Field")} disabled={disabled} value={rule.field} onChange={(v) => set({ field: v, op: OPS[kindOf(v, ctx)][0].op })} options={fieldOptions(ctx, t, () => true)} />
+      <Sel label={t("Field")} disabled={disabled} value={rule.field} onChange={(v) => set({ field: v, op: OPS[kindOf(v, ctx)][0].op })} options={fieldOptions(ctx, t, () => true, rule.field)} />
       <Sel label={t("Operator")} disabled={disabled} value={op.op} onChange={(v) => set({ ...rule, op: v })} options={ops.map((o) => ({ value: o.op, label: t(o.label) }))} />
       {!op.noValue && (op.op === "within_days"
         ? <input type="number" min={0} disabled={disabled} value={rule.value ?? ""} onChange={(e) => set({ ...rule, value: e.target.value })} aria-label={t("Days")} className={cn(input, "w-20")} />
@@ -300,6 +372,14 @@ function ActionConfig({ action, set, ctx, disabled }: { action: Rule; set: (r: R
   const sectionOpts = (anyLabel: string): Opt[] => [{ value: "", label: anyLabel }, ...ctx.sections.map((s) => ({ value: s.id, label: s.name }))];
   switch (action.type) {
     case "SET_STATUS":
+      if (usesStatusOptions(ctx)) {
+        const val = typeof cfg.sectionId === "string" ? cfg.sectionId : action.value ? `status:${action.value}` : "";
+        return <Sel label={t("Status")} disabled={disabled} value={val} onChange={(v) => {
+          if (v.startsWith("status:")) { const rest = { ...cfg }; delete rest.sectionId; set({ ...action, value: v.slice(7), config: rest }); return; }
+          const sec = ctx.sections.find((s) => s.id === v);
+          set({ ...action, value: sec?.taskStatus ?? undefined, config: { ...cfg, sectionId: v || undefined } });
+        }} options={[{ value: "", label: t("Pick a status…") }, ...legacyStatusOpt(typeof cfg.sectionId === "string" ? undefined : action.value, t), ...statusOptionList(ctx)]} />;
+      }
       return <Sel label={t("Status")} disabled={disabled} value={action.value ?? ""} onChange={(v) => set({ ...action, value: v })} options={[{ value: "", label: t("Pick a status…") }, ...STATUSES.map((s) => ({ value: s.value, label: t(s.label) }))]} />;
     case "SET_PRIORITY":
       return <Sel label={t("Priority")} disabled={disabled} value={action.value ?? ""} onChange={(v) => set({ ...action, value: v })} options={[{ value: "", label: t("Pick a priority…") }, ...PRIORITIES.map((s) => ({ value: s.value, label: t(s.label) }))]} />;

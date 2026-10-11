@@ -119,17 +119,29 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   // or one of the project's other tabs ("overview", "sheet", "automations", "pages", "forms", "chat");
   // `&q=` the search box; `&f=` / `&s=` the filter / sort on screen while it differs from the saved view
   // (lib/project-views.ts encodes them). A reload or a shared link keeps all of it.
-  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: string; s?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string } => ({
     settings: s.settings === 1 || s.settings === "1" ? 1 : undefined,
     view: s.view === "overview" || s.view === "calendar" || s.view === "board" || s.view === "form" ? s.view : undefined,
     date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
     event: typeof s.event === "string" && s.event.length <= 64 ? s.event : undefined,
     v: searchString(s.v, 64),
     q: searchString(s.q, 200),
-    f: s.f && typeof s.f === "object" ? JSON.stringify(s.f).slice(0, 8000) : searchString(s.f, 8000),
+    // Kept as an OBJECT: the router JSON-encodes search values itself, so a string here was encoded twice
+    // (f="{\"simple\"…}") as soon as another param changed. Old double-encoded links still open.
+    f: searchObject(s.f, 8000),
     s: searchString(s.s, 400),
   }),
 });
+
+/** The filter draft (`f`): an object, or a JSON object written as text (links from before 12 Oct 2026). */
+function searchObject(v: unknown, max: number): Record<string, unknown> | undefined {
+  let o = v;
+  for (let i = 0; i < 2 && typeof o === "string"; i++) {
+    if (o.length > max) return undefined;
+    try { o = JSON.parse(o); } catch { return undefined; }
+  }
+  return o && typeof o === "object" && !Array.isArray(o) && JSON.stringify(o).length <= max ? (o as Record<string, unknown>) : undefined;
+}
 
 /** The router JSON-parses search values ("123" → 123), so a text param can arrive as a number. */
 function searchString(v: unknown, max: number): string | undefined {
@@ -323,6 +335,7 @@ function ProjectDetail() {
 
   const saved = useMemo(() => (activeView ? resolveConfig(activeView) : null), [activeView]);
   const draftFilter = decodeFilter(search.f);
+  const fKey = search.f ? JSON.stringify(search.f) : "";
   const draftSort = decodeSort(search.s);
   const cfg: ViewConfig | null = saved ? { ...saved, filter: draftFilter ?? saved.filter, sort: draftSort ?? saved.sort } : null;
   const dirty = !!saved && ((!!draftFilter && !sameFilter(draftFilter, saved.filter)) || (!!draftSort && !sameSort(draftSort, saved.sort)));
@@ -341,7 +354,7 @@ function ProjectDetail() {
     const timer = setTimeout(saveDraft, 700);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, activeView?.id, activeView?.shared, search.f, search.s]);
+  }, [dirty, activeView?.id, activeView?.shared, fKey, search.s]);
   const patchConfig = (p: Partial<ViewConfig>) => {
     if (!activeView) return;
     if (!canEdit) { toast(tr("Only project members can change a shared view. Make a personal copy to set it up your way.")); return; }
@@ -370,7 +383,7 @@ function ProjectDetail() {
   const shown = useMemo(
     () => (cfg ? sortTasks(base.filter((task) => taskMatches(task, cfg.filter, query, defs, ctx)), cfg.sort, defs, ctx) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [base, search.f, search.s, saved, query, defs, ctx],
+    [base, fKey, search.s, saved, query, defs, ctx],
   );
   const buildGroups = (tasks: NexusTask[], by: string | null, opts: { keepHidden?: boolean; keepEmpty?: boolean } = {}): TaskGroup[] => {
     if (!by || !cfg) return [{ key: "__all__", label: "", tasks, empty: tasks.length === 0 }];

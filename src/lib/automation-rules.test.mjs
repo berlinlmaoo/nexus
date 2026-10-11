@@ -85,6 +85,26 @@ test("status change: to X, from Y, completed; unchanged values do not fire", () 
   assert.equal(R.triggerMatches({ type: "TASK_UPDATED" }, { kind: "task_updated", changes: { title: { from: "a", to: "b" } } }), true)
 })
 
+test("status options: to / from a column, moves within one status type", () => {
+  // Sampling → Mass Production: both IN_PROGRESS, so only the section moves.
+  const move = { kind: "task_updated", changes: { section: { from: "s_sampling", to: "s_mass" } } }
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", value: "IN_PROGRESS", config: { toSection: "s_mass", bySection: true } }, move), true)
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", value: "IN_PROGRESS", config: { toSection: "s_other", bySection: true } }, move), false)
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", config: { fromSection: "s_sampling", bySection: true } }, move), true)
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", config: { fromSection: "s_mass", bySection: true } }, move), false)
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", config: { bySection: true } }, move), true)
+  // the old enum rule does not see a same-status column move
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED" }, move), false)
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", value: "DONE", config: { bySection: true } }, move), false)
+  // a status change that moved the task into the option's column
+  const done = { kind: "task_updated", changes: { status: { from: "TODO", to: "DONE" }, section: { from: "s_todo", to: "s_arch" } } }
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", value: "DONE", config: { toSection: "s_arch", bySection: true } }, done), true)
+  assert.equal(R.triggerMatches({ type: "STATUS_CHANGED", value: "DONE", config: { bySection: true } }, done), true)
+  // config survives normalisation
+  assert.deepEqual(R.normalizeTrigger({ type: "STATUS_CHANGED", value: "done", config: { toSection: "s1", bySection: true } }), { type: "STATUS_CHANGED", value: "DONE", config: { toSection: "s1", bySection: true } })
+  assert.deepEqual(R.normalizeAction({ type: "SET_STATUS", value: "in_progress", config: { sectionId: "s1" } }), { type: "SET_STATUS", value: "IN_PROGRESS", config: { sectionId: "s1" } })
+})
+
 test("assignee and field changes", () => {
   const ev = { kind: "task_updated", changes: { assignee: { added: ["u2"], removed: [] } } }
   assert.equal(R.triggerMatches({ type: "ASSIGNEE_CHANGED" }, ev), true)

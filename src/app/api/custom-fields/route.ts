@@ -470,9 +470,16 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    // A client that edits the option list without knowing about option colours (released apps, older web)
+    // keeps the colours the options already had.
+    const prevColors = (existingField.options as { optionColors?: unknown } | null)?.optionColors
+    const optionsIn =
+      options !== undefined && prevColors && typeof prevColors === "object" && !(options && typeof options === "object" && !Array.isArray(options) && "optionColors" in options)
+        ? { ...(Array.isArray(options) ? { options } : (options as Record<string, unknown>)), optionColors: prevColors }
+        : options
     const normalizedOptionsJson =
       options !== undefined
-        ? (normalizeCustomFieldOptions(normalizedType, options) ?? undefined) as InputJsonValue | undefined
+        ? (normalizeCustomFieldOptions(normalizedType, optionsIn) ?? undefined) as InputJsonValue | undefined
         : undefined
 
     if (taskId) {

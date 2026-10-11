@@ -105,6 +105,13 @@ export function fieldChoices(field: Pick<NexusCustomField, "options">): string[]
   return [];
 }
 
+/** A select field's own option colours (options.optionColors, e.g. the "Kategori" made from old sections). */
+export function fieldOptionColors(field: Pick<NexusCustomField, "options">): Record<string, string> {
+  const o = field.options as { optionColors?: unknown } | null | undefined;
+  const c = o && typeof o === "object" && !Array.isArray(o) ? o.optionColors : null;
+  return c && typeof c === "object" && !Array.isArray(c) ? (c as Record<string, string>) : {};
+}
+
 function fieldKind(type: string): PropKind {
   switch (type.toUpperCase()) {
     case "SELECT":
@@ -151,7 +158,8 @@ export function propDefs(ctx: ViewCtx): PropDef[] {
   ];
   for (const f of [...ctx.fields].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))) {
     const kind = fieldKind(f.type ?? "");
-    const options = kind === "select" || kind === "multi" ? fieldChoices(f).map((v) => ({ value: v, label: v })) : kind === "person" ? ctx.people.map((p) => ({ value: p.id, label: p.name })) : undefined;
+    const colors = fieldOptionColors(f);
+    const options = kind === "select" || kind === "multi" ? fieldChoices(f).map((v) => ({ value: v, label: v, color: colors[v] ?? null })) : kind === "person" ? ctx.people.map((p) => ({ value: p.id, label: p.name })) : undefined;
     defs.push({ key: `cf:${f.id}`, label: f.name, kind, options, fieldType: (f.type ?? "").toUpperCase(), builtin: false });
   }
   return defs;

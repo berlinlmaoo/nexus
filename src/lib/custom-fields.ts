@@ -18,6 +18,10 @@ export type CustomStatusTone = "yellow" | "green" | "red" | "gray" | "blue"
 
 export interface CustomFieldOptionConfig {
   options?: string[]
+  /** Colour of each select option (owner, 12 Oct 2026, Notion-style options): option → a web palette key
+   *  ("gray", "orange", "yellow", "green", "blue", "purple", "pink", "red", "brown"). Missing = the web's
+   *  rotating colour. Additive; released apps ignore it. */
+  optionColors?: Record<string, string>
   optionTemplates?: Record<string, string>
   defaultSource?: "taskCreatedAt"
   editable?: boolean
@@ -111,8 +115,19 @@ export function normalizeCustomFieldOptions(
       }
     }
 
+    // Option colours survive a save (only for options that still exist, palette-shaped keys only).
+    const rawColors = (options as { optionColors?: unknown } | null)?.optionColors
+    const optionColors: Record<string, string> = {}
+    if (rawColors && typeof rawColors === "object" && !Array.isArray(rawColors)) {
+      for (const option of normalizedOptions) {
+        const c = (rawColors as Record<string, unknown>)[option]
+        if (typeof c === "string" && /^[a-z]{2,16}$/.test(c)) optionColors[option] = c
+      }
+    }
+    const colors = Object.keys(optionColors).length > 0 ? { optionColors } : {}
+
     if (type !== "SELECT") {
-      return { options: normalizedOptions }
+      return type === "MULTI_SELECT" ? { options: normalizedOptions, ...colors } : { options: normalizedOptions }
     }
 
     const optionTemplates = normalizedOptions.reduce<Record<string, string>>((acc, option) => {
@@ -125,6 +140,7 @@ export function normalizeCustomFieldOptions(
 
     return {
       options: normalizedOptions,
+      ...colors,
       ...(Object.keys(optionTemplates).length > 0 ? { optionTemplates } : {}),
     }
   }

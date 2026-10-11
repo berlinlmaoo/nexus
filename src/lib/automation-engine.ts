@@ -345,6 +345,16 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
   switch (action.type) {
     case "SET_STATUS":
     case "MARK_COMPLETE": {
+      // A status OPTION picked on the web (config.sectionId, owner 12 Oct 2026): move into that column; the
+      // task takes its status. Falls back to the plain status when the option was deleted since.
+      const optionId = action.type === "SET_STATUS" && typeof action.config?.sectionId === "string" ? action.config.sectionId : null
+      const option = optionId ? await prisma.taskList.findFirst({ where: { id: optionId, projectId }, select: { id: true, name: true, taskStatus: true } }) : null
+      if (option?.taskStatus) {
+        const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true, taskListId: true } })
+        if (cur?.taskListId === option.id && cur.status === option.taskStatus) return { message: `Status already ${option.name}`, skipped: true }
+        await prisma.task.update({ where: { id: taskId! }, data: { taskListId: option.id, status: option.taskStatus } })
+        return { message: `Status set to ${option.name}`, touchedTask: true }
+      }
       const status = action.type === "MARK_COMPLETE" ? "DONE" : action.value
       if (!status || !(TASK_STATUSES as readonly string[]).includes(status)) return { message: "Skipped: no valid status", skipped: true }
       const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true, taskListId: true, taskList: { select: { projectId: true, taskStatus: true } } } })

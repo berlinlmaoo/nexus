@@ -2,8 +2,10 @@ import { useRef, useState } from "react";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignLeft, Calendar, Check, CheckSquare, ChevronDown, Copy, FileText, GitBranch, GripVertical, Hash, ListChecks, Loader2, Mail, Paperclip, Plus, Trash2, Type, User, X } from "lucide-react";
-import { nexusApi, ApiError, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
+import { nexusApi, ApiError, type NexusCustomField, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/lang";
+import { fieldChoices } from "@/lib/project-views";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -56,7 +58,7 @@ function FieldPreview({ field }: { field: NexusFormField }) {
 
 /* ---------- advanced field logic (branching / routing / mapping / schedule) ---------- */
 type FCond = { fieldId: string; operator: string; value: string };
-type FRule = { id: string; operator: string; value: string; action: string; targetTaskListId?: string; targetUserId?: string };
+type FRule = { id: string; operator: string; value: string; action: string; targetTaskListId?: string; targetUserId?: string; targetCustomFieldId?: string; targetValue?: string };
 type FMapping = { target?: string; customFieldId?: string };
 export type RichField = NexusFormField & { name?: string; showIf?: FCond | null; routingRules?: FRule[]; mapping?: FMapping | null; attachmentEnabled?: boolean; autofill?: "name" | "email"; numberFormat?: "currency-idr" };
 
@@ -80,8 +82,11 @@ const MAPPING_TARGETS = [
 ];
 const ROUTING_ACTIONS = [
   { value: "set_task_list", label: "Move to section" },
+  { value: "set_field", label: "Set field" },
   { value: "assign_user", label: "Assign to member" },
 ];
+type FormCustomField = { id: string; name: string; type?: string; options?: NexusCustomField["options"] };
+const SETTABLE_FIELD_TYPES = ["SELECT", "MULTI_SELECT", "STATUS", "TEXT"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function fieldName(f: RichField) { return f.name || f.label || "Untitled"; }
@@ -151,7 +156,7 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
   others: RichField[];
   taskLists: { id: string; name: string }[];
   members: { userId: string; name: string }[];
-  customFields: { id: string; name: string }[];
+  customFields: FormCustomField[];
   onChange: (patch: Partial<RichField>) => void;
 }) {
   const showIf = field.showIf ?? null;
@@ -206,8 +211,21 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
                   <select value={r.operator} onChange={(e) => setRule({ operator: e.target.value })} className={sel}>{OPERATORS.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}</select>
                   {needsValue(r.operator) && (ownOpts.length ? <select value={r.value} onChange={(e) => setRule({ value: e.target.value })} className={sel}><option value="">—</option>{ownOpts.map((o) => <option key={o} value={o}>{o}</option>)}</select> : <input value={r.value} onChange={(e) => setRule({ value: e.target.value })} placeholder="value" className={sel} />)}
                   <span className="text-[11px] text-muted-foreground">→</span>
-                  <select value={r.action} onChange={(e) => setRule({ action: e.target.value })} className={sel}>{ROUTING_ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select>
-                  {r.action === "set_task_list" ? (
+                  <select value={r.action} onChange={(e) => setRule({ action: e.target.value })} className={sel}>{ROUTING_ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.value === "set_field" ? t(a.label) : a.label}</option>)}</select>
+                  {r.action === "set_field" ? (() => {
+                    // Sections are statuses now (12 Oct 2026); a category is a field, so routing sets it.
+                    const settable = customFields.filter((c) => SETTABLE_FIELD_TYPES.includes((c.type ?? "").toUpperCase()));
+                    const target = settable.find((c) => c.id === r.targetCustomFieldId);
+                    const choices = target ? fieldChoices(target) : [];
+                    return (
+                      <>
+                        <select aria-label={t("Field")} value={r.targetCustomFieldId ?? ""} onChange={(e) => setRule({ targetCustomFieldId: e.target.value || undefined, targetValue: undefined })} className={sel}><option value="">{t("choose field")}</option>{settable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                        {target && (choices.length
+                          ? <select aria-label={t("Value")} value={r.targetValue ?? ""} onChange={(e) => setRule({ targetValue: e.target.value || undefined })} className={sel}><option value="">{t("choose value")}</option>{choices.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                          : <input aria-label={t("Value")} value={r.targetValue ?? ""} onChange={(e) => setRule({ targetValue: e.target.value })} placeholder={t("value")} className={sel} />)}
+                      </>
+                    );
+                  })() : r.action === "set_task_list" ? (
                     <select value={r.targetTaskListId ?? ""} onChange={(e) => setRule({ targetTaskListId: e.target.value })} className={sel}><option value="">choose section</option>{taskLists.map((tl) => <option key={tl.id} value={tl.id}>{tl.name}</option>)}</select>
                   ) : (
                     <select value={r.targetUserId ?? ""} onChange={(e) => setRule({ targetUserId: e.target.value })} className={sel}><option value="">choose member</option>{members.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}</select>
@@ -309,7 +327,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
     return arr.map((m) => ({ userId: m.userId ?? m.user?.id ?? "", name: m.user?.name ?? "Member" })).filter((m) => m.userId);
   })();
   const customFieldsQ = useQuery({ queryKey: ["nexus", "custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), enabled: !!projectId, retry: false });
-  const customFields = (customFieldsQ.data?.fields ?? []).map((c) => ({ id: c.id, name: c.name }));
+  const customFields = (customFieldsQ.data?.fields ?? []).map((c) => ({ id: c.id, name: c.name, type: c.type, options: c.options }));
 
   // drag-to-reorder fields (grip handle = drag source, card = drop target)
   const dragFrom = useRef<number | null>(null);

@@ -45,11 +45,15 @@ function valueLabel(v: string | undefined, t: LangApi["t"]) {
   return s ? t(s.label) : v;
 }
 
-function triggerText(r: NexusAutomationRule | null | undefined, t: LangApi["t"]) {
+/** A status option's name (sections are the statuses, 12 Oct 2026) or the fixed status label. */
+type SectionName = (id: unknown) => string | undefined;
+
+function triggerText(r: NexusAutomationRule | null | undefined, t: LangApi["t"], sectionName?: SectionName) {
   if (!r) return "—";
   const def = TRIGGERS.find((d) => d.type === r.type);
   const base = def ? t(def.label) : LEGACY_TRIGGER_LABEL[r.type] ? t(LEGACY_TRIGGER_LABEL[r.type]) : r.type;
-  if (r.type === "STATUS_CHANGED" && r.value) return t("Status changed to {status}", { status: valueLabel(r.value, t) });
+  const toSection = sectionName?.(r.config?.toSection);
+  if (r.type === "STATUS_CHANGED" && (toSection || r.value)) return t("Status changed to {status}", { status: toSection ?? valueLabel(r.value, t) });
   if (r.type === "SCHEDULED") {
     const c = r.config ?? {};
     const f = c.frequency === "weekly" ? t("Weekly") : c.frequency === "weekdays" ? t("Weekdays") : c.frequency === "monthly" ? t("Monthly") : t("Daily");
@@ -59,9 +63,11 @@ function triggerText(r: NexusAutomationRule | null | undefined, t: LangApi["t"])
   return base;
 }
 
-function actionText(a: NexusAutomationRule, t: LangApi["t"]) {
+function actionText(a: NexusAutomationRule, t: LangApi["t"], sectionName?: SectionName) {
   const def = ACTIONS.find((d) => d.type === a.type);
   const base = def ? t(def.label) : a.type;
+  const section = a.type === "SET_STATUS" ? sectionName?.(a.config?.sectionId) : a.type === "MOVE_TO_SECTION" ? sectionName?.(a.value) : undefined;
+  if (section) return `${base}: ${section}`;
   if ((a.type === "SET_STATUS" || a.type === "SET_PRIORITY") && a.value) return `${base}: ${valueLabel(a.value, t)}`;
   if ((a.type === "ADD_TAG" || a.type === "REMOVE_TAG") && a.value) return `${base}: ${a.value}`;
   return base;
@@ -124,7 +130,7 @@ export function AutomationsView({ projectId }: { projectId: string }) {
     const lists = project.data?.taskLists ?? [];
     return {
       projectId,
-      sections: lists.map((l) => ({ id: l.id, name: l.name })),
+      sections: lists.map((l) => ({ id: l.id, name: l.name, position: l.position ?? 0, taskStatus: l.taskStatus ?? null })),
       members: arr.map((x) => x.user).filter((u): u is NonNullable<typeof u> => !!u?.id).map((u) => ({ id: u.id, name: u.name || u.email || "?", avatar: u.avatar ?? null })).sort((a, b) => a.name.localeCompare(b.name)),
       fields: (fields.data?.fields ?? []).map((f) => ({ id: f.id, name: f.name, type: f.type, options: f.options })),
       forms: (forms.data ?? []).map((f) => ({ id: f.id, name: f.name })),
@@ -132,6 +138,7 @@ export function AutomationsView({ projectId }: { projectId: string }) {
     };
   }, [projectId, members.data, project.data, fields.data, forms.data]);
 
+  const sectionName: SectionName = (id) => (typeof id === "string" ? ctx.sections.find((s) => s.id === id)?.name : undefined);
   const rows = list.data?.automations ?? [];
   const canEdit = !!list.data?.canEdit;
   const suggestions = suggest.data?.suggestions ?? [];
@@ -159,7 +166,7 @@ export function AutomationsView({ projectId }: { projectId: string }) {
           {suggestions.map((s, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
               <span className="min-w-0 flex-1 text-sm font-semibold">{s.name}</span>
-              <span className="text-xs text-muted-foreground">{triggerText(s.trigger, t)} <ArrowRight className="inline h-3 w-3" /> {actionText(s.action, t)}</span>
+              <span className="text-xs text-muted-foreground">{triggerText(s.trigger, t, sectionName)} <ArrowRight className="inline h-3 w-3" /> {actionText(s.action, t, sectionName)}</span>
               <button type="button" onClick={() => addSuggestion.mutate(s)} disabled={addSuggestion.isPending} className="rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50">{t("Add")}</button>
             </div>
           ))}
@@ -193,10 +200,10 @@ export function AutomationsView({ projectId }: { projectId: string }) {
                 <button type="button" onClick={() => setEditing({ id: a.id, tab: "rule" })} className="min-w-0 text-left">
                   <div className={cn("truncate text-sm font-semibold", !a.enabled && "text-muted-foreground")}>{a.name}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground/70">{t("When")}</span> {triggerText(a.trigger, t)}
+                    <span className="font-medium text-foreground/70">{t("When")}</span> {triggerText(a.trigger, t, sectionName)}
                     {nCond > 0 && <> · {L.tn(nCond, "{n} condition", "{n} conditions")}</>}
                     {" "}<ArrowRight className="inline h-3 w-3" />{" "}
-                    {actions.map((x) => actionText(x, t)).join(", ") || "—"}
+                    {actions.map((x) => actionText(x, t, sectionName)).join(", ") || "—"}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground md:hidden">{a.lastRunAt ? `${t(RUN_STATUS_LABEL[a.lastRunStatus ?? ""] ?? "")} · ${relative(a.lastRunAt, L)}` : t("Never ran")}</div>
                 </button>
