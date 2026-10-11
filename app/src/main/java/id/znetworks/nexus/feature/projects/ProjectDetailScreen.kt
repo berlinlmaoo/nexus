@@ -42,7 +42,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
@@ -81,7 +80,6 @@ import kotlinx.serialization.json.JsonElement
 import androidx.compose.ui.platform.LocalContext
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.attendance.LocalNotifier
-import id.znetworks.nexus.ui.components.Avatar
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.DisplayFont
@@ -125,6 +123,8 @@ data class ProjectDetailState(
     val selected: Set<String> = emptySet(),
     /** "3 tasks duplicated", shown once as a toast. */
     val notice: String? = null,
+    /** A tap on the Overview (SPRINTS-OVERVIEW §3): Board / List show only these open tasks until cleared. */
+    val drill: OverviewDrill? = null,
 ) {
     /** The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out. No Finance / P&L (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct). */
     val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
@@ -160,6 +160,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 
     fun setQuery(q: String) = _state.update { it.copy(query = q) }
 
+    fun setDrill(d: OverviewDrill?) = _state.update { it.copy(drill = d) }
     fun toggleSelect(id: String) = _state.update { it.copy(selected = TaskBulkLogic.toggle(it.selected, id)) }
     fun clearSelection() = _state.update { it.copy(selected = emptySet()) }
     fun noticeShown() = _state.update { it.copy(notice = null) }
@@ -231,7 +232,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     id.znetworks.nexus.core.realtime.LiveRefresh(vm.projectId, liveMs = 120_000, fallbackMs = 30_000, matches = { id.znetworks.nexus.core.realtime.RealtimeEvents.touchesProject(it, vm.projectId) }) { vm.load().join() }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     // A selection belongs to the view it was made in (Board / List share the same cards, so they keep it).
-    LaunchedEffect(tab) { if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) vm.clearSelection() }
+    LaunchedEffect(tab) { if (tab != ProjectTab.BOARD && tab != ProjectTab.LIST) { vm.clearSelection(); vm.setDrill(null) } }
     var newDealRequest by rememberSaveable { mutableStateOf(0) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
@@ -240,7 +241,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     var dupDateFor by remember { mutableStateOf<List<String>?>(null) }
     LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
     androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
-    val lanes = BoardLogic.filter(s.lanes, s.query)
+    val lanes = BoardLogic.filter(OverviewLogic.filter(s.lanes, s.drill), s.query)
     val total = s.lanes.sumOf { it.tasks.size }
     val shown = lanes.sumOf { it.tasks.size }
 
@@ -275,6 +276,7 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
+            s.drill?.takeIf { tab == ProjectTab.BOARD || tab == ProjectTab.LIST }?.let { d -> DrillBar(d, s.detail, s.lanes, shown) { vm.setDrill(null) } }
             s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
             Box(Modifier.weight(1f)) {
                 when {
@@ -286,7 +288,10 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                     s.detail != null -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
                         val web = { id.znetworks.nexus.ui.shell.openWeb(context, "/projects/${vm.projectId}") }
                         when (tab) {
-                            ProjectTab.OVERVIEW -> Overview(s.detail!!, s.lanes)
+                            ProjectTab.OVERVIEW -> ProjectOverview(s.detail!!, s.lanes, onOpenTask,
+                                onDrill = { d -> vm.setDrill(d); tab = if (ProjectTab.BOARD in tabs) ProjectTab.BOARD else ProjectTab.LIST },
+                                onEditBrief = onOpenSettings,
+                                onAddTask = { if (s.lanes.isNotEmpty()) { createDue = null; creating = true } else tab = ProjectTab.BOARD })
                             ProjectTab.BOARD -> Board(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
                             ProjectTab.LIST -> ListTab(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
                             ProjectTab.SHEET -> SheetTab(vm.projectId, lanes, onOpenTask)
@@ -440,43 +445,28 @@ private fun ListTab(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String
     }
 }
 
-@Composable
-private fun Overview(d: ProjectDetail, lanes: List<Lane>) {
-    val c = Nx.colors
-    val all = lanes.flatMap { it.tasks }
-    val done = all.count { it.isDone }
-    val overdue = all.count { !it.isDone && (dueDate(it.dueDate)?.isBefore(id.znetworks.nexus.core.time.OfficeTime.today()) == true) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(d.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.project_no_brief), color = c.foreground)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OverviewStat(stringResource(R.string.project_cards), "${all.size}", Modifier.weight(1f))
-            OverviewStat(stringResource(R.string.project_done), "$done", Modifier.weight(1f))
-            OverviewStat(stringResource(R.string.overview_overdue), "$overdue", Modifier.weight(1f), if (overdue > 0) c.danger else null)
-        }
-        LinearProgressIndicator(progress = { if (all.isEmpty()) 0f else done.toFloat() / all.size }, color = c.success, trackColor = c.muted,
-            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)))
-        Text(stringResource(R.string.overview_by_lane).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, letterSpacing = 1.sp)
-        lanes.forEach { l ->
-            Row { Text(l.name, color = c.foreground, modifier = Modifier.weight(1f)); Text("${l.tasks.count { it.isDone }}/${l.tasks.size}", color = c.mutedFg) }
-        }
-        Text(stringResource(R.string.overview_members, d.members.size).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg, letterSpacing = 1.sp)
-        d.members.forEach { m ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(m.user?.name, m.user?.avatar, 32.dp)
-                Spacer(Modifier.size(10.dp))
-                Text(m.user?.name ?: "?", color = c.foreground, modifier = Modifier.weight(1f))
-                m.role?.let { Pill(it.lowercase().replaceFirstChar(Char::titlecase), c.mutedFg) }
-            }
-        }
-    }
-}
 
+/** "Showing: Overdue · 4 tasks ×" over the Board / List after a tap on the Overview. */
 @Composable
-private fun OverviewStat(label: String, value: String, modifier: Modifier, tone: Color? = null) {
+private fun DrillBar(d: OverviewDrill, detail: ProjectDetail?, lanes: List<Lane>, shown: Int, onClear: () -> Unit) {
     val c = Nx.colors
-    Column(modifier.background(c.card, RoundedCornerShape(16.dp)).border(1.dp, c.border, RoundedCornerShape(16.dp)).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = tone ?: c.foreground)
-        Text(label, fontSize = 11.sp, color = c.mutedFg)
+    val who = d.assigneeId?.let { id ->
+        if (id == "NONE") stringResource(R.string.ov_filter_unassigned)
+        else detail?.members?.firstOrNull { it.uid == id }?.user?.name
+            ?: lanes.flatMap { it.tasks }.flatMap { it.assignees }.firstOrNull { (it.user?.id ?: it.userId) == id }?.user?.name ?: "—"
+    }
+    val label = listOfNotNull(
+        when (d.due) { "OVERDUE" -> stringResource(R.string.ov_filter_overdue); "NEXT7" -> stringResource(R.string.ov_filter_next7); "NONE" -> stringResource(R.string.ov_filter_nodue); else -> null },
+        who,
+        d.priority?.let { if (it == "NONE") stringResource(R.string.ov_no_priority) else priorityLabel(it) },
+        d.section?.let { id -> lanes.firstOrNull { it.id == id }?.name },
+    ).ifEmpty { listOf(stringResource(R.string.ov_filter_open)) }.joinToString(" · ")
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(c.violet.copy(alpha = 0.08f))
+        .padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.violetText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text("  ·  $shown", fontSize = 13.sp, color = c.mutedFg)
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = onClear) { Icon(Icons.Filled.Close, stringResource(R.string.ov_filter_clear), tint = c.mutedFg) }
     }
 }
 

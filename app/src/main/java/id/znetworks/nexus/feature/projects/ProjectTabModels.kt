@@ -7,6 +7,10 @@ import java.util.Locale
 
 // Project tabs beyond the board (API.md §2.4 automations, custom fields).
 
+/** GET /api/status-updates?projectId= — one post on a project's Overview. */
+@Serializable
+data class StatusUpdate(val id: String, val text: String = "", val status: String? = null, val createdAt: String? = null, val author: UserRef? = null)
+
 @Serializable
 data class Rule(val type: String? = null, val field: String? = null, val value: JsonElement? = null) {
     fun text(): String {

@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (558 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (561 JVM tests, all green).
 Version 0.1.6 (versionCode 13 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 13 PUBLISHED** (5 Oct: `nexus-prod:~/nexus-data/android/nexus-0.1.6-13.apk` + `current.json` (previous kept as `current.json.prev-12`), sha256 `a6e09f68cae704162865a633dff4293b4fcdcb0dea865f113f315c959ceea98a`, from 0885fa0, 342 tests; versionCode 13, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 13): build 12 + the org chart in English and Indonesian. Emulator smoke: 3 cold launches drawn, no crash from this install.
 **Build 12 PUBLISHED** (5 Oct 07:44 UTC: `nexus-prod:~/nexus-data/android/nexus-0.1.6-12.apk` + `current.json` (previous kept as `current.json.prev-11`), sha256 `6c660b44318a0872b44a2ba56bc9410373b5fd4da2b5f357e34e4a7957164a1b`, from e7924c4, 341 tests; versionCode 12, versionName 0.1.6, signer 5322fe4c…ad26; version-policy answers latestBuild 12): build 11 + Bagan IP & Divisi. Emulator smoke: 3 cold launches drawn, no crash from this install; the fixture and the debug preview are not in the release APK.
@@ -225,6 +225,37 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
 
+## 11 Oct, project Overview redesign (SPRINTS-OVERVIEW.md §3; web fc81517)
+
+- The Overview tab is rebuilt (ProjectOverview.kt) from the project's own top-level tasks via `OverviewLogic.compute`.
+  - It ignores the board search and leaves subtasks out.
+  - Days are WIB: open = not Done/Cancelled; overdue = due before today; next 7 = today..+6; next 14 = today..+13.
+  - Done this month comes from `completedAt`. `BoardTask.completedById` is new.
+- **Progress card:**
+  - big %, "X of Y tasks done", and how many finished in the last 7 days;
+  - a stacked status bar with a legend (count and %);
+  - five tappable counts: Open (its own row), Overdue (red), Due in 7 days, No due date, Unassigned.
+- **Deadlines card:** Overdue ("N days late") and Next 14 days (Today / Tomorrow / date). Each row shows the section,
+  a HIGH/URGENT chip and avatars, and opens the task. Lists show 5, then Show N more.
+- **Who's working on what:**
+  - avatar, a Lead badge and a load bar per person, with Open / Overdue / Done this month;
+  - members with nothing are still listed, plus an Unassigned row;
+  - shows 8, then more.
+- **Side cards:**
+  - Brief: Read more past 280 characters, Edit or Write a brief → Project settings, the member stack and "Led by".
+  - Open tasks by priority (HIGH/URGENT red).
+  - Sections, with open/done bars (only when there is more than one).
+  - Recently completed: the last 6, by name, with relative time.
+  - Status updates: post, Draft with AI (POST …/status-updates/generate), 3 latest, then Show all N.
+  - Each section has its own empty state, and a project with no tasks shows EmptyState + Add task.
+- **Layout:** one column on a phone; main 2/3 and side 1/3 from 840dp.
+- **Drill:** tapping a count, person, priority or section opens Board (List when Board is hidden) showing only open
+  tasks for that rule (`OverviewLogic.filter`). A violet bar on top says what is shown and has ×. Leaving Board/List
+  clears it.
+- Strings: ov_* EN/ID from the web's id-project-overview.ts. The old Overview, OverviewStat and overview_by_lane /
+  overview_members are gone.
+- Tests: ProjectOverviewTest. AvatarsPriorityTest now points at the Overview's team rows.
+
 ## 11 Oct, Sprints removed + Automations off in new projects (SPRINTS-OVERVIEW.md §1–2)
 
 - **Sprints is gone everywhere:**
@@ -235,7 +266,7 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 - **New Task Project:** the Automations card starts OFF.
   - `hiddenTabs` is now always sent for a Task Project, even when it is an empty list, so switching Automations back on
     isn't undone by the server's default.
-- **Not done yet:** §3, the Overview redesign, waits for the spec and endpoint to be appended.
+- §3, the Overview redesign, was done later the same day; see the section above.
 - Tests: SprintsRemovedTest; ProjectSetupMembersTest and ProjectTabsTest adjusted.
 
 ## 11 Oct, project setup UPDATE: tab picker as preview cards (PROJECT-SETUP-MEMBERS.md UPDATE; web 71a22a7)

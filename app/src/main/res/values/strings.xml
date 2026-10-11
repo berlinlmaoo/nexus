@@ -511,8 +511,6 @@
     <string name="task_add_deadline">Add a deadline</string>
     <string name="task_no_deadline">No deadline</string>
     <string name="overview_overdue">Overdue</string>
-    <string name="overview_by_lane">By lane</string>
-    <string name="overview_members">Members · %1$d</string>
     <string name="more">More options</string>
     <string name="td_title">Task</string>
     <string name="td_delete">Delete task</string>
@@ -2994,4 +2992,71 @@
     <string name="tp_chat">The project\'s group chat</string>
     <string name="tp_on">On</string>
     <string name="tp_off">Off</string>
+    <string name="ov_progress">Progress</string>
+    <string name="ov_done_of">%1$d of %2$d tasks done</string>
+    <string name="ov_done_last7_none">Nothing finished in the last 7 days</string>
+    <string name="ov_open">Open</string>
+    <string name="ov_next7">Due in 7 days</string>
+    <string name="ov_no_due">No due date</string>
+    <string name="ov_unassigned">Unassigned</string>
+    <string name="ov_empty_title">No tasks in this project yet</string>
+    <string name="ov_empty_body">Progress, deadlines and who\'s working on what show up here once the project has tasks. Add the first one, or open the Board to set up its columns.</string>
+    <string name="ov_deadlines">Deadlines</string>
+    <string name="ov_next14">Next 14 days</string>
+    <string name="ov_today">Today</string>
+    <string name="ov_tomorrow">Tomorrow</string>
+    <string name="ov_nothing_open">No open tasks, so nothing is due.</string>
+    <string name="ov_nothing_due">Nothing overdue and nothing due in the next 14 days.</string>
+    <string name="ov_nothing_14">Nothing due in the next 14 days.</string>
+    <string name="ov_show_them">Show them</string>
+    <string name="ov_show_fewer">Show fewer</string>
+    <string name="ov_team">Who\'s working on what</string>
+    <string name="ov_person">Person</string>
+    <string name="ov_done_month">Done this month</string>
+    <string name="ov_lead">Lead</string>
+    <string name="ov_team_empty">No members or assignees yet. Add people to the project, then assign tasks to see the workload here.</string>
+    <string name="ov_by_priority">Open tasks by priority</string>
+    <string name="ov_no_priority">No priority</string>
+    <string name="ov_all_closed">Every task is done or cancelled.</string>
+    <string name="ov_sections">Sections</string>
+    <string name="ov_section_counts">%1$d open · %2$d done</string>
+    <string name="ov_section_empty">Empty</string>
+    <string name="ov_brief">Brief</string>
+    <string name="ov_edit">Edit</string>
+    <string name="ov_read_more">Read more</string>
+    <string name="ov_show_less">Show less</string>
+    <string name="ov_brief_empty">No brief yet. Write what this project is for and what done looks like, so anyone who joins gets it at a glance.</string>
+    <string name="ov_write_brief">Write a brief</string>
+    <string name="ov_led_by">Led by %s</string>
+    <string name="ov_recent_done">Recently completed</string>
+    <string name="ov_recent_empty">Nothing finished yet. Tasks show up here as they\'re marked done.</string>
+    <string name="ov_by">by %s</string>
+    <string name="ov_updates">Status updates</string>
+    <string name="ov_draft_ai">Draft with AI</string>
+    <string name="ov_update_hint">How is the project going? Wins, blockers, what\'s next.</string>
+    <string name="ov_draft_failed">Couldn\'t draft an update. Try again, or write it yourself.</string>
+    <string name="ov_post_failed">Couldn\'t post the update. Check your connection and try again.</string>
+    <string name="ov_post">Post update</string>
+    <string name="ov_updates_empty">No updates yet. Post one so the team and BoD can follow along without asking.</string>
+    <string name="ov_show_all_updates">Show all %d updates</string>
+    <string name="ov_someone">Someone</string>
+    <string name="ov_on_track">On track</string>
+    <string name="ov_at_risk">At risk</string>
+    <string name="ov_off_track">Off track</string>
+    <string name="ov_filter_overdue">Overdue</string>
+    <string name="ov_filter_next7">Due in 7 days</string>
+    <string name="ov_filter_nodue">No due date</string>
+    <string name="ov_filter_unassigned">Unassigned</string>
+    <string name="ov_filter_open">Open tasks</string>
+    <string name="ov_filter_clear">Clear filter</string>
+    <plurals name="ov_done_last7"><item quantity="one">%d finished in the last 7 days</item><item quantity="other">%d finished in the last 7 days</item></plurals>
+    <plurals name="ov_show_more"><item quantity="one">Show %d more</item><item quantity="other">Show %d more</item></plurals>
+    <plurals name="ov_days_late"><item quantity="one">%d day late</item><item quantity="other">%d days late</item></plurals>
+    <plurals name="ov_no_due_hint"><item quantity="one">%d open task has no due date. Give it one so it shows up here.</item><item quantity="other">%d open tasks have no due date. Give them one so they show up here.</item></plurals>
+    <plurals name="ov_members"><item quantity="one">%d member</item><item quantity="other">%d members</item></plurals>
+    <plurals name="ov_hint_open"><item quantity="one">Show %d open task</item><item quantity="other">Show %d open tasks</item></plurals>
+    <plurals name="ov_hint_overdue"><item quantity="one">Show %d overdue task</item><item quantity="other">Show %d overdue tasks</item></plurals>
+    <plurals name="ov_hint_next7"><item quantity="one">Show %d task due in 7 days</item><item quantity="other">Show %d tasks due in 7 days</item></plurals>
+    <plurals name="ov_hint_nodue"><item quantity="one">Show %d open task without a due date</item><item quantity="other">Show %d open tasks without a due date</item></plurals>
+    <plurals name="ov_hint_unassigned"><item quantity="one">Show %d open task nobody is on</item><item quantity="other">Show %d open tasks nobody is on</item></plurals>
 </resources>

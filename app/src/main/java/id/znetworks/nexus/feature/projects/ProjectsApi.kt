@@ -187,6 +187,21 @@ class ProjectsApi(private val api: ApiClient) {
 
     // endregion
 
+    // region status updates (project Overview, SPRINTS-OVERVIEW §3)
+
+    /** Latest first. */
+    suspend fun statusUpdates(projectId: String) =
+        api.get("/api/status-updates?projectId=${URLEncoder.encode(projectId, "UTF-8")}", ListSerializer(StatusUpdate.serializer()))
+
+    suspend fun postStatusUpdate(projectId: String, text: String) =
+        post("/api/status-updates", buildJsonObject { put("projectId", projectId); put("text", text.trim()) })
+
+    /** An AI draft from the project's tasks; the person edits it before posting. */
+    suspend fun draftStatusUpdate(projectId: String): String =
+        (post("/api/projects/$projectId/status-updates/generate", JsonObject(emptyMap()))["content"] as? JsonPrimitive)?.content.orEmpty()
+
+    // endregion
+
     private suspend fun post(path: String, body: JsonElement): JsonObject =
         api.send(Request.Builder().url(api.url(path)).post(body.toString().toJsonBody()).build(), JsonObject.serializer())
 

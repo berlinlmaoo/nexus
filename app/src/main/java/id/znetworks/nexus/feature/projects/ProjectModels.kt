@@ -99,6 +99,8 @@ data class BoardTask(
     val title: String = "",
     /** When it was finished / last touched (THREADS-TASK-FOLDERS: Home leaves out work done over 30 days ago). */
     val completedAt: String? = null,
+    /** Who marked it done (project Overview's "Recently completed"). */
+    val completedById: String? = null,
     val updatedAt: String? = null,
     val status: String? = null,
     val priority: String? = null,

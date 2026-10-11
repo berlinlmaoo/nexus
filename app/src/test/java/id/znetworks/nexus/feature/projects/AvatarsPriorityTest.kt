@@ -33,7 +33,7 @@ class AvatarsPriorityTest {
         assertTrue("(-6 * i).dp" in src("ui/components/RemoteImage.kt"))
         val detail = src("feature/tasks/TaskDetailScreen.kt")
         assertTrue(Regex("""Avatar\(""").findAll(detail).count() >= 5)   // assigned, picker, subtasks, comments, created by
-        assertTrue("Avatar(m.user?.name, m.user?.avatar" in src("feature/projects/ProjectDetailScreen.kt"))
+        assertTrue("Avatar(p.name, p.avatar" in src("feature/projects/ProjectOverview.kt"))   // the Overview's team rows
         assertTrue("AvatarStack(t.assignees.map" in src("feature/projects/ProjectTabs.kt"))
     }
 }

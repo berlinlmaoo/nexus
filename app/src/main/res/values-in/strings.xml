@@ -505,8 +505,6 @@
     <string name="task_add_deadline">Tambah tenggat</string>
     <string name="task_no_deadline">Tanpa deadline</string>
     <string name="overview_overdue">Lewat tenggat</string>
-    <string name="overview_by_lane">Per lane</string>
-    <string name="overview_members">Anggota · %1$d</string>
     <string name="more">Opsi lainnya</string>
     <string name="td_title">Task</string>
     <string name="td_delete">Hapus task</string>
@@ -2943,4 +2941,71 @@
     <string name="tp_chat">Grup chat project</string>
     <string name="tp_on">Nyala</string>
     <string name="tp_off">Mati</string>
+    <string name="ov_progress">Progres</string>
+    <string name="ov_done_of">%1$d dari %2$d task selesai</string>
+    <string name="ov_done_last7_none">Belum ada yang selesai dalam 7 hari terakhir</string>
+    <string name="ov_open">Terbuka</string>
+    <string name="ov_next7">7 hari ke depan</string>
+    <string name="ov_no_due">Tanpa tenggat</string>
+    <string name="ov_unassigned">Belum di-assign</string>
+    <string name="ov_empty_title">Belum ada task di project ini</string>
+    <string name="ov_empty_body">Progres, tenggat, dan siapa mengerjakan apa muncul di sini begitu project punya task. Tambahkan task pertama, atau buka Board untuk menyiapkan kolomnya.</string>
+    <string name="ov_deadlines">Tenggat</string>
+    <string name="ov_next14">14 hari ke depan</string>
+    <string name="ov_today">Hari ini</string>
+    <string name="ov_tomorrow">Besok</string>
+    <string name="ov_nothing_open">Tidak ada task terbuka, jadi tidak ada tenggat.</string>
+    <string name="ov_nothing_due">Tidak ada yang lewat tenggat dan tidak ada tenggat dalam 14 hari ke depan.</string>
+    <string name="ov_nothing_14">Tidak ada tenggat dalam 14 hari ke depan.</string>
+    <string name="ov_show_them">Lihat task-nya</string>
+    <string name="ov_show_fewer">Tampilkan lebih sedikit</string>
+    <string name="ov_team">Siapa mengerjakan apa</string>
+    <string name="ov_person">Orang</string>
+    <string name="ov_done_month">Selesai bulan ini</string>
+    <string name="ov_lead">Lead</string>
+    <string name="ov_team_empty">Belum ada member atau assignee. Tambahkan orang ke project, lalu assign task untuk melihat beban kerjanya di sini.</string>
+    <string name="ov_by_priority">Task terbuka menurut prioritas</string>
+    <string name="ov_no_priority">Tanpa prioritas</string>
+    <string name="ov_all_closed">Semua task sudah selesai atau dibatalkan.</string>
+    <string name="ov_sections">Section</string>
+    <string name="ov_section_counts">%1$d terbuka · %2$d selesai</string>
+    <string name="ov_section_empty">Kosong</string>
+    <string name="ov_brief">Brief</string>
+    <string name="ov_edit">Ubah</string>
+    <string name="ov_read_more">Baca selengkapnya</string>
+    <string name="ov_show_less">Tampilkan lebih sedikit</string>
+    <string name="ov_brief_empty">Belum ada brief. Tulis untuk apa project ini dan seperti apa kalau sudah selesai, supaya siapa pun yang bergabung langsung paham.</string>
+    <string name="ov_write_brief">Tulis brief</string>
+    <string name="ov_led_by">Dipimpin %s</string>
+    <string name="ov_recent_done">Baru selesai</string>
+    <string name="ov_recent_empty">Belum ada yang selesai. Task muncul di sini begitu ditandai selesai.</string>
+    <string name="ov_by">oleh %s</string>
+    <string name="ov_updates">Update status</string>
+    <string name="ov_draft_ai">Buat draf dengan AI</string>
+    <string name="ov_update_hint">Bagaimana project-nya? Capaian, hambatan, langkah berikutnya.</string>
+    <string name="ov_draft_failed">Gagal membuat draf. Coba lagi, atau tulis sendiri.</string>
+    <string name="ov_post_failed">Update gagal dikirim. Cek koneksi lalu coba lagi.</string>
+    <string name="ov_post">Kirim update</string>
+    <string name="ov_updates_empty">Belum ada update. Kirim satu supaya tim dan BoD bisa mengikuti tanpa harus bertanya.</string>
+    <string name="ov_show_all_updates">Lihat semua %d update</string>
+    <string name="ov_someone">Seseorang</string>
+    <string name="ov_on_track">Sesuai rencana</string>
+    <string name="ov_at_risk">Berisiko</string>
+    <string name="ov_off_track">Melenceng</string>
+    <string name="ov_filter_overdue">Lewat tenggat</string>
+    <string name="ov_filter_next7">7 hari ke depan</string>
+    <string name="ov_filter_nodue">Tanpa tenggat</string>
+    <string name="ov_filter_unassigned">Belum di-assign</string>
+    <string name="ov_filter_open">Task terbuka</string>
+    <string name="ov_filter_clear">Hapus filter</string>
+    <plurals name="ov_done_last7"><item quantity="other">%d selesai dalam 7 hari terakhir</item></plurals>
+    <plurals name="ov_show_more"><item quantity="other">Tampilkan %d lagi</item></plurals>
+    <plurals name="ov_days_late"><item quantity="other">Telat %d hari</item></plurals>
+    <plurals name="ov_no_due_hint"><item quantity="other">%d task terbuka belum punya tenggat. Beri tenggat supaya muncul di sini.</item></plurals>
+    <plurals name="ov_members"><item quantity="other">%d member</item></plurals>
+    <plurals name="ov_hint_open"><item quantity="other">Lihat %d task yang masih terbuka</item></plurals>
+    <plurals name="ov_hint_overdue"><item quantity="other">Lihat %d task yang lewat tenggat</item></plurals>
+    <plurals name="ov_hint_next7"><item quantity="other">Lihat %d task bertenggat 7 hari ke depan</item></plurals>
+    <plurals name="ov_hint_nodue"><item quantity="other">Lihat %d task terbuka tanpa tenggat</item></plurals>
+    <plurals name="ov_hint_unassigned"><item quantity="other">Lihat %d task terbuka yang belum ada orangnya</item></plurals>
 </resources>
