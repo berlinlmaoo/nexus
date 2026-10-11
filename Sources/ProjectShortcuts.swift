@@ -6,15 +6,12 @@ struct ProjectRef: Codable, Hashable, Identifiable {
     let id: String
     var name: String
     /// Same shape as Project.icon: a path beginning with "/" for an uploaded picture, otherwise an
-    /// emoji. Optional because the first visit records the row before the board has loaded.
+    /// emoji or name that is no longer drawn (see ProjectMark). Optional because the first visit
+    /// records the row before the board has loaded.
     var icon: String?
-
-    var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
-    /// A named icon ("briefcase") draws its emoji, as on web — see projectIconEmoji.
-    var emoji: String? {
-        guard !isUploadedIcon else { return nil }
-        return projectIconEmoji(icon)
-    }
+    /// The project's colour ("#rrggbb"), for ProjectMark's square. nil on rows stored before it was
+    /// recorded, and on refs made where only the id and name are known: the mark then uses its fallback.
+    var color: String? = nil
 }
 
 /// Pinned and recently-opened projects.
@@ -79,7 +76,7 @@ final class ProjectShortcuts {
         var known = Dictionary((pinned + recent).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         if let list = try? await APIClient.shared.projects() {
             var visible: [String: ProjectRef] = [:]
-            for p in list { visible[p.id] = ProjectRef(id: p.id, name: p.name, icon: p.icon ?? known[p.id]?.icon) }
+            for p in list { visible[p.id] = ProjectRef(id: p.id, name: p.name, icon: p.icon ?? known[p.id]?.icon, color: p.color ?? known[p.id]?.color) }
             known = visible
         }
         let synced = ids.compactMap { known[$0] }
@@ -98,9 +95,9 @@ final class ProjectShortcuts {
     /// the one already stored means the row doesn't flash back to a placeholder every time.
     func visit(_ ref: ProjectRef) {
         var ref = ref
-        if ref.icon == nil {
-            ref.icon = (recent + pinned).first { $0.id == ref.id }?.icon
-        }
+        let stored = (recent + pinned).first { $0.id == ref.id }
+        if ref.icon == nil { ref.icon = stored?.icon }
+        if ref.color == nil { ref.color = stored?.color }
         recent.removeAll { $0.id == ref.id }
         recent.insert(ref, at: 0)
         if recent.count > Self.recentLimit { recent.removeLast(recent.count - Self.recentLimit) }

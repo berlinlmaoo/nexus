@@ -51,7 +51,7 @@ struct ProjectsView: View {
             moveProject: { p, folderId in await move(p, to: folderId) },
             moveFolder: { f, parentId in await moveFolder(f, to: parentId) },
             drop: { payload, folderId in drop(payload, into: folderId) },
-            openProject: { p in openBoard = ProjectRef(id: p.id, name: p.name, icon: p.icon) },
+            openProject: { p in openBoard = ProjectRef(id: p.id, name: p.name, icon: p.icon, color: p.color) },
             openFolder: { f in openFolder = FolderRoute(id: f.id) },
             newProject: { f in sheet = .newProjectIn(f) },
             newSubfolder: { f in sheet = .newSubfolder(f) },
@@ -623,7 +623,7 @@ struct ProjectFolderLink: View {
             ProjectCard(project: project, tally: tally).frame(width: 320).opacity(0.9)
         }
         .contextMenu {
-            let ref = ProjectRef(id: project.id, name: project.name, icon: project.icon)
+            let ref = ProjectRef(id: project.id, name: project.name, icon: project.icon, color: project.color)
             Button { actions.openProject(project) } label: { Label(T("Open project"), systemImage: "arrow.up.right.square") }
             Button {
                 ProjectShortcuts.shared.togglePin(ref)
@@ -975,12 +975,10 @@ struct CreateProjectSheet: View {
     @State private var kind: ProjectKind?
     @State private var name = ""
     @State private var color = "#7B2FBE"
-    @State private var icon = "🚀"
     @State private var busy = false
     @State private var err: String?
 
     private let colors = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE"]
-    private let icons = ["🚀", "📁", "⭐️", "⚡️", "🎯", "💼", "🎬", "📣"]
 
     var body: some View {
         NavigationStack {
@@ -997,16 +995,8 @@ struct CreateProjectSheet: View {
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
-                        field(T("ICON")) {
-                            HStack(spacing: 8) {
-                                ForEach(icons, id: \.self) { ic in
-                                    Text(ic).font(.system(size: 22)).frame(width: 40, height: 40)
-                                        .background(icon == ic ? NX.violet.opacity(0.15) : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(icon == ic ? NX.violet : NX.border))
-                                        .onTapGesture { icon = ic }
-                                }
-                            }
-                        }
+                        // No icon field (owner, 11 Oct 2026): every project is drawn as a square in its
+                        // colour (ProjectMark); a photo can be added later in Project settings.
                         field(T("COLOR")) {
                             HStack(spacing: 10) {
                                 ForEach(colors, id: \.self) { c in
@@ -1123,7 +1113,7 @@ struct CreateProjectSheet: View {
             if kind == .pipeline {
                 // A board made meanwhile by someone else comes back as 409 PIPELINE_EXISTS with its id:
                 // open it, not an error (owner/GM, 9 Oct 2026: one board for the whole company).
-                switch try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed, color: color, icon: icon) {
+                switch try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed, color: color) {
                 case .exists(let board):
                     dismiss()
                     onOpenExisting(board)
@@ -1136,13 +1126,13 @@ struct CreateProjectSheet: View {
                 // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
                 // Overview once the list knows it.
                 let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed, color: color,
-                                                                          icon: icon, folderId: folder?.id)
+                                                                          folderId: folder?.id)
                 await onCreated()
                 dismiss()
                 onOpenExisting(made)
                 return
             } else {
-                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed, color: color, icon: icon,
+                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed, color: color,
                                                         type: (kind ?? .task).rawValue, folderId: folder?.id)
             }
             await onCreated()
@@ -1193,14 +1183,8 @@ struct ProjectCard: View {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NX.muted)
-                    if project.isUploadedIcon {
-                        CachedImage(url: URL(string: Config.baseURL.absoluteString + (project.icon ?? ""))) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: { Text("📁").font(.system(size: 22)) }
+                    ProjectMark(icon: project.icon, color: project.color, size: 44, glyph: 24)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    } else {
-                        Text(project.emoji).font(.system(size: 22))
-                    }
                 }
                 .frame(width: 44, height: 44)
 

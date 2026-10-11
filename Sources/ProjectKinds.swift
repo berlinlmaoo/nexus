@@ -78,24 +78,3 @@ extension ProjectTab {
     /// One of these always stays visible (the server answers 400 TASK_VIEW_REQUIRED otherwise).
     static let taskViews: [ProjectTab] = [.board, .list]
 }
-
-/// A project's icon as something to draw: the emoji itself, or the emoji a NAMED icon stands for.
-///
-/// `Project.icon` holds an uploaded picture ("/api/files/…"), an emoji, or a name — "folder" is the
-/// column's default and "briefcase" is what the Finance projects were made with. Settings used to put
-/// the name straight into its two-character emoji field, which is how "briefcase" showed as "br". Same
-/// table and fallback as web's ProjectIcon.tsx, so both draw the same thing. nil for a picture or for
-/// no icon at all.
-func projectIconEmoji(_ icon: String?) -> String? {
-    guard let icon, !icon.isEmpty, !icon.hasPrefix("/"), !icon.hasPrefix("http") else { return nil }
-    // Web treats anything that does not start with ASCII as the emoji itself; so does this.
-    if isEmojiIcon(icon) || (icon.unicodeScalars.first?.value ?? 0) > 127 { return icon }
-    return namedProjectIcons[icon.lowercased()] ?? "📁"
-}
-
-private let namedProjectIcons: [String: String] = [
-    "folder": "📁", "rocket": "🚀", "star": "⭐", "zap": "⚡", "target": "🎯",
-    "briefcase": "💼", "code": "💻", "globe": "🌍", "heart": "❤️", "shield": "🛡️",
-    "layers": "📚", "box": "📦", "cpu": "🔧", "database": "🗄️", "feather": "✏️",
-    "flag": "🏁", "megaphone": "📢", "grid": "🔲",
-]

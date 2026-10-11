@@ -198,13 +198,17 @@ struct ProjectDetailView: View {
         .task { if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: nil)) } }
         // The icon only exists after the board loads, so record it again when it arrives.
         .onChange(of: detail?.icon) { _, icon in
-            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: icon)) }
+            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: icon, color: detail?.color)) }
+        }
+        // The colour draws the project's mark (ProjectMark) in the shortcut rows; record a change too.
+        .onChange(of: detail?.color) { _, color in
+            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon, color: color)) }
         }
         // A board reached from a notification has no name to record on the way in, and a nameless
         // row in the shortcut list is worse than no row at all. Catch it when the board finally
         // reports one — which for a project without an icon the line above never would.
         .onChange(of: detail?.name) { _, _ in
-            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon)) }
+            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon, color: detail?.color)) }
         }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
         .navigationDestination(isPresented: $newFormOpen) {
@@ -241,17 +245,10 @@ struct ProjectDetailView: View {
                     .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
             }
             if let d = detail {
-                let tint = Color(hex: d.color ?? "#7b68ee")
-                Group {
-                    if let ic = d.icon, ic.hasPrefix("/") || ic.hasPrefix("http") {
-                        CachedImage(url: URL(string: ic.hasPrefix("http") ? ic : Config.baseURL.absoluteString + ic)) { $0.resizable().scaledToFill() } placeholder: { tint.opacity(0.2) }
-                    } else {
-                        Text(projectIconEmoji(d.icon) ?? "📁").font(.system(size: 17))
-                    }
-                }
-                .frame(width: 30, height: 30)
-                .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                let tint = Color(hex: d.color ?? ProjectMark.fallbackColor)
+                ProjectMark(icon: d.icon, color: d.color, size: 30, glyph: 20)
+                    .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             Text(displayName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
             Spacer(minLength: 6)

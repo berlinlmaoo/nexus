@@ -698,10 +698,12 @@ struct APIClient {
     @discardableResult
     /// `type`: "TASK" or "PIPELINE" (owner, 9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON.
     /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
-    func createProject(workspaceId: String, name: String, color: String, icon: String, type: String = "TASK", folderId: String? = nil) async throws -> Bool {
+    /// No `icon` (owner, 11 Oct 2026): the server gives a new project its default and the app draws
+    /// the colour square (ProjectMark) until someone adds a photo in Project settings.
+    func createProject(workspaceId: String, name: String, color: String, type: String = "TASK", folderId: String? = nil) async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": type]
+        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "color": color, "type": type]
         if let folderId { body["folderId"] = folderId }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
@@ -779,6 +781,25 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
         return true
     }
+    /// A project's photo. The server stores the file and answers `{ url }` but does NOT write it onto
+    /// the project (unlike folder-icon): the caller PATCHes `icon` to that url, as web does.
+    /// Multipart fields "file" + "projectId"; PNG/JPG/SVG/WEBP, 5 MB cap; the project's lead only.
+    func uploadProjectIcon(projectId: String, fileName: String, mime: String, data: Data,
+                           progress: UploadProgress? = nil) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/upload/project-icon", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"projectId\"\r\n\r\n\(projectId)\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        return try await run(req, decode: UploadedProjectIcon.self, reporting: progress).url
+    }
+    struct UploadedProjectIcon: Decodable, Sendable { let url: String }
+
     /// Profile photo. The server takes a multipart field named "file" (PNG/JPG/WEBP, 5 MB cap)
     /// and answers `{ user, url }`; `user.avatar` already carries a `?t=` cache-buster, so the
     /// new picture shows up immediately instead of being served from a stale cache.

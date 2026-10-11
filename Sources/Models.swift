@@ -70,12 +70,8 @@ struct Project: Decodable, Identifiable, Sendable {
         }
     }
 
-    var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
-    /// A named icon ("briefcase") draws its emoji (💼), as on web — see projectIconEmoji.
-    var emoji: String {
-        guard !isUploadedIcon else { return "📁" }
-        return projectIconEmoji(icon) ?? "📁"
-    }
+    // No `emoji` any more (owner, 11 Oct 2026): a project is drawn with ProjectMark — its photo or a
+    // square in its colour. A stored emoji or named icon is ignored.
     /// Status chip label + tone (mirrors web statusBadge).
     var statusLabel: String {
         switch (status ?? "ACTIVE").uppercased() {

@@ -71,14 +71,14 @@ extension APIClient {
     /// New project → Outlet Sales Dashboard: an ordinary project of type OUTLET_SALES (any number of
     /// them, one per outlet; the creator is its lead). Answers the new project, so the sheet can open it
     /// ("Create project + open dashboard").
-    func outletProjectCreate(workspaceId: String, name: String, color: String, icon: String, folderId: String?) async throws -> ProjectRef {
+    func outletProjectCreate(workspaceId: String, name: String, color: String, folderId: String?) async throws -> ProjectRef {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": "OUTLET_SALES"]
+        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "color": color, "type": "OUTLET_SALES"]
         if let folderId { body["folderId"] = folderId }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let made = try await outletRun(req, as: OutletCreatedProject.self)
-        return ProjectRef(id: made.id, name: made.name ?? name, icon: icon)
+        return ProjectRef(id: made.id, name: made.name ?? name, icon: nil, color: color)
     }
 
     /// `pipelineRun`'s twin: nothing answered → `nothingAnswered`, 401 → `unauthorized`, any other

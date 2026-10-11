@@ -478,7 +478,6 @@ final class AppLanguage {
 
         // ── project settings ──────────────────────────────────────────────────
         "Project name": "Nama project",
-        "Use an emoji instead": "Pakai emoji lagi",
         "Save identity": "Simpan identitas",
         "Task duplicate mode": "Mode duplicate task",
         "Multi-select duplicate + a due-date popup for recurring tasks.":
@@ -2978,6 +2977,10 @@ final class AppLanguage {
         "The event and its report leave the calendar, the board and the month's totals. Control Room → Audit can restore it.": "Event dan laporannya hilang dari kalender, board, dan total bulan ini. Control Room → Audit bisa memulihkannya.",
         "The event wasn't deleted. Try again.": "Event tidak terhapus. Coba lagi.",
         "It goes back to its outlet with its whole report, and counts in its month's totals again.": "Kembali ke outlet-nya dengan laporan lengkap, dan dihitung lagi di total bulannya.",
+
+        // Projects: one default mark, photo optional (11 Oct)
+        "Add photo": "Tambah foto",
+        "Without a photo, the project shows a square in its colour.": "Tanpa foto, proyek tampil sebagai kotak berwarna proyeknya.",
 
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)

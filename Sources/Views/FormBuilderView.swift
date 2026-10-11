@@ -1279,7 +1279,7 @@ struct FormDuplicateView: View {
                     ForEach(targets) { p in
                         Button { Task { await duplicate(to: p) } } label: {
                             HStack(spacing: 10) {
-                                Text(p.emoji)
+                                ProjectMark(icon: p.icon, color: p.color, size: 22)
                                 Text(p.name).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                                 Spacer(minLength: 4)
                                 if busyProjectId == p.id { ProgressView().controlSize(.small) }
@@ -1363,7 +1363,7 @@ struct FormProjectPickerView: View {
                                 FormBuilderView(projectId: p.id, projectName: p.name, formId: nil)
                             } label: {
                                 HStack(spacing: 10) {
-                                    Text(p.emoji)
+                                    ProjectMark(icon: p.icon, color: p.color, size: 22)
                                     Text(p.name).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(1)
                                 }
                             }

@@ -7,7 +7,7 @@ struct SearchResults: Decodable, Sendable {
     let forms: [FormHit]?
     let members: [MemberHit]?
     struct TaskHit: Decodable, Identifiable, Sendable { let id: String; let title: String }
-    struct ProjHit: Decodable, Identifiable, Sendable { let id: String; let name: String; let color: String? }
+    struct ProjHit: Decodable, Identifiable, Sendable { let id: String; let name: String; let color: String?; let icon: String? }
     struct DocHit: Decodable, Identifiable, Sendable { let id: String; let title: String }
     struct FormHit: Decodable, Identifiable, Sendable { let id: String; let name: String }
     struct MemberHit: Decodable, Identifiable, Sendable { let id: String; let name: String?; let email: String?; let avatar: String? }
@@ -72,7 +72,9 @@ struct SearchView: View {
                         group("PROJECTS") {
                             ForEach(projects) { p in
                                 NavigationLink { ProjectDetailView(projectId: p.id, projectName: p.name) } label: {
-                                    hit(icon: "rectangle.stack.fill", tint: Color(hex: p.color ?? "#7b68ee"), title: p.name, sub: nil)
+                                    // The project's own mark (photo or colour square), not a generic glyph.
+                                    hit(icon: "rectangle.stack.fill", tint: Color(hex: p.color ?? ProjectMark.fallbackColor), title: p.name, sub: nil,
+                                        mark: AnyView(ProjectMark(icon: p.icon, color: p.color, size: 34, glyph: 22)))
                                 }.buttonStyle(.plain)
                             }
                         }
@@ -122,10 +124,13 @@ struct SearchView: View {
             VStack(spacing: 8) { content() }
         }
     }
-    private func hit(icon: String, tint: Color, title: String, sub: String?) -> some View {
+    private func hit(icon: String, tint: Color, title: String, sub: String?, mark: AnyView? = nil) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 14)).foregroundStyle(tint)
+            Group {
+                if let mark { mark } else { Image(systemName: icon).font(.system(size: 14)).foregroundStyle(tint) }
+            }
                 .frame(width: 34, height: 34).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 if let sub, !sub.isEmpty { Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }

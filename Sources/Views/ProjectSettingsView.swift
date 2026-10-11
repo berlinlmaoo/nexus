@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 /// Port of the web ProjectSettingsDrawer: identity, customize flags, custom fields,
 /// members, and danger zone. Reached from the ⚙︎ in the project header.
@@ -15,10 +17,13 @@ struct ProjectSettingsView: View {
     @State private var name = ""
     @State private var desc = ""
     @State private var color = "#7b68ee"
-    @State private var icon = "🚀"
-    /// What the icon field showed on open: the emoji the stored icon stands for. Saving sends the
-    /// stored value back untouched unless someone picked another emoji (see hydrate()).
-    @State private var shownIcon = "🚀"
+    /// The stored icon as the server has it. Only its photo is drawn (ProjectMark): emoji and named
+    /// icons are ignored since 11 Oct 2026, and there is no field to type one any more.
+    @State private var icon: String?
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var photoBusy = false
+    @State private var photoError: String?
+    @State private var photoProgress = UploadProgress()
     @State private var savingIdentity = false
     @State private var identitySaved = false
 
@@ -47,7 +52,7 @@ struct ProjectSettingsView: View {
     private var canPnl: Bool { viewerWsRole == "BOD" || viewerWsRole == "ONE_ABOVE_ALL" }
     /// Tabs follow the server's rule for every project setting: Manager and above.
     private var canManageTabs: Bool { viewerWsRole == "MANAGER" || canPnl }
-    private var iconIsImage: Bool { icon.hasPrefix("/") || icon.hasPrefix("http") }
+    private var hasPhoto: Bool { ProjectMark.isPhoto(icon) }
 
     var body: some View {
         NavigationStack {
@@ -80,21 +85,8 @@ struct ProjectSettingsView: View {
         card("Identitas") {
             field(T("Project name")) { TextField(T("Name"), text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
             field("Deskripsi") { TextField("Deskripsi singkat", text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
-            field("Ikon (emoji)") {
-                HStack {
-                    if iconIsImage {
-                        CachedImage(url: URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
-                            .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 8))
-                        Button(T("Use an emoji instead")) { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                    } else {
-                        // One emoji: typing another replaces it. The field used to keep the first two
-                        // characters of whatever it held, so a named icon ("briefcase") became "br".
-                        TextField("🚀", text: $icon).font(.system(size: 24)).frame(width: 50)
-                            .onChange(of: icon) { _, v in if v.count > 1 { icon = String(v.suffix(1)) } }
-                    }
-                    Spacer()
-                }
-            }
+            // No emoji any more (owner, 11 Oct 2026): the project's photo, or a square in its colour.
+            field(T("Photo")) { photoRow }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Warna").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                 HStack(spacing: 10) {
@@ -109,6 +101,51 @@ struct ProjectSettingsView: View {
             Button { Task { await saveIdentity() } } label: {
                 Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(savingIdentity)
+        }
+    }
+
+    /// The mark as it will be drawn (live with the colour picked below), and the photo actions.
+    /// Uploading and removing save at once, like the web drawer; "Save identity" never sends `icon`.
+    private var photoRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
+                    ProjectMark(icon: icon, color: color, size: 48, glyph: 28)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .frame(width: 48, height: 48)
+                VStack(alignment: .leading, spacing: 6) {
+                    PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+                        HStack(spacing: 6) {
+                            if photoBusy { ProgressView().controlSize(.small) }
+                            Text(hasPhoto ? T("Change photo") : T("Add photo"))
+                        }
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                    }
+                    .disabled(photoBusy)
+                    if hasPhoto {
+                        Button(T("Remove photo")) { Task { await removePhoto() } }
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            .disabled(photoBusy)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            if !hasPhoto {
+                Text(T("Without a photo, the project shows a square in its colour."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if let photoError {
+                Text(photoError).font(NXFont.text(11)).foregroundStyle(NX.danger)
+            }
+            if photoProgress.isActive {
+                UploadProgressBar(progress: photoProgress).frame(maxWidth: 180)
+            }
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task { await uploadPhoto(item) }
         }
     }
 
@@ -312,9 +349,7 @@ struct ProjectSettingsView: View {
         name = detail.name
         desc = detail.description ?? ""
         color = detail.color ?? "#7b68ee"
-        let stored = detail.icon ?? "🚀"
-        icon = (stored.hasPrefix("/") || stored.hasPrefix("http")) ? stored : (projectIconEmoji(stored) ?? "🚀")
-        shownIcon = icon
+        icon = detail.icon
         batchDup = detail.enableTaskBatchDuplicate ?? false
         pnl = detail.enablePnlDashboard ?? false
         // Same rule as the tab bar: an older server without the flag → the name rule.
@@ -334,13 +369,60 @@ struct ProjectSettingsView: View {
 
     private func saveIdentity() async {
         savingIdentity = true; identitySaved = false
+        // No `icon` here: the photo saves on its own (uploadPhoto/removePhoto), and sending the field
+        // back could only overwrite a photo uploaded meanwhile.
         let ok = (try? await APIClient.shared.updateProject(projectId, fields: [
             "name": name, "description": desc, "color": color,
-            "icon": icon == shownIcon ? (detail.icon ?? icon) : icon
         ])) != nil
         savingIdentity = false; identitySaved = ok
         if ok { await onChange() }
     }
+    /// Same handling as the profile photo: the library hands back HEIC more often than not, which the
+    /// server refuses, so it goes up as JPEG with the long edge capped (well under the 5 MB limit).
+    /// Then the url is PATCHed onto the project — the upload alone does not store it.
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        photoBusy = true
+        photoError = nil
+        defer { photoBusy = false; pickedPhoto = nil }
+        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
+            photoError = T("Couldn't read that photo.")
+            return
+        }
+        let maxEdge: CGFloat = 1024
+        let scale = min(1, maxEdge / max(image.size.width, image.size.height))
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: target).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.85) else {
+            photoError = T("Couldn't read that photo.")
+            return
+        }
+        do {
+            let url = try await APIClient.shared.uploadProjectIcon(projectId: projectId, fileName: "icon.jpg", mime: "image/jpeg",
+                                                                   data: jpeg, progress: photoProgress)
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["icon": url])
+            icon = url
+            await onChange()
+        } catch {
+            photoError = (error as? LocalizedError)?.errorDescription ?? T("Upload failed. Try again.")
+        }
+    }
+
+    /// Back to the default mark: "folder" is the column's default, which ProjectMark draws as the square.
+    private func removePhoto() async {
+        photoBusy = true
+        photoError = nil
+        defer { photoBusy = false }
+        do {
+            _ = try await APIClient.shared.updateProject(projectId, fields: ["icon": "folder"])
+            icon = "folder"
+            await onChange()
+        } catch {
+            photoError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save — try again.")
+        }
+    }
+
     private func patch(_ fields: [String: Any]) async {
         if (try? await APIClient.shared.updateProject(projectId, fields: fields)) != nil { await onChange() }
         else { show(T("Couldn't save — try again.")) }

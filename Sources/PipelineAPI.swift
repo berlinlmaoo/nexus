@@ -141,10 +141,10 @@ extension APIClient {
     /// you"), thrown below as the error the sheet shows.
     enum PipelineBoardCreate { case created, exists(ProjectRef) }
 
-    func pipelineBoardCreate(workspaceId: String, name: String, color: String, icon: String) async throws -> PipelineBoardCreate {
+    func pipelineBoardCreate(workspaceId: String, name: String, color: String) async throws -> PipelineBoardCreate {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon, "type": "PIPELINE"])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "type": "PIPELINE"])
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await perform(req)
