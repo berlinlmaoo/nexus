@@ -8,7 +8,8 @@ import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { ProjectTypeChosen, ProjectTypePicker } from "@/components/projects/ProjectTypePicker";
-import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
+import { TabPreviewCards } from "@/components/projects/TabPreviewCards";
+import { projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
 import { MemberMultiPicker } from "@/components/projects/MemberMultiPicker";
 import { useLang } from "@/lib/lang";
 import { projects as fallbackProjects } from "@/lib/mock-data";
@@ -517,29 +518,7 @@ function ProjectsPage() {
                 <div className="space-y-2">
                   <div className="text-xs font-semibold text-muted-foreground">{tr("Tabs")}</div>
                   <p className="text-xs text-muted-foreground">{tr("The tabs this project starts with. You can change them later in Project settings.")}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PROJECT_TAB_KEYS.map((key) => {
-                      const shown = !newProjectHiddenTabs.includes(key);
-                      // Board or List stays on, as in Project settings: a task project needs a way to see its tasks.
-                      const lastTaskView = shown && (TASK_VIEW_TAB_KEYS as readonly string[]).includes(key) && TASK_VIEW_TAB_KEYS.filter((k) => !newProjectHiddenTabs.includes(k)).length === 1;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          aria-pressed={shown}
-                          disabled={lastTaskView}
-                          title={lastTaskView ? tr("Board or List stays on") : undefined}
-                          onClick={() => setNewProjectHiddenTabs((cur) => (shown ? [...cur, key] : cur.filter((k) => k !== key)))}
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed",
-                            shown ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground line-through hover:bg-accent",
-                          )}
-                        >
-                          {shown && <Check className="h-3 w-3" />} {tr(PROJECT_TAB_LABELS[key])}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <TabPreviewCards hidden={newProjectHiddenTabs} onChange={setNewProjectHiddenTabs} />
                 </div>
               )}
 
