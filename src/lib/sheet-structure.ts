@@ -7,7 +7,8 @@
 import { randomUUID } from "crypto"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
-import { isFormulaCell, rewriteForDeletion } from "@/lib/sheet-formula"
+import { ERR, isFormulaCell, rewriteForDeletion } from "@/lib/sheet-formula"
+import { readSheetSettings } from "@/lib/project-sheets"
 
 type Rewritten = { id: string; cells: unknown; updatedAt: Date }
 
@@ -41,9 +42,33 @@ export async function shrinkRangesAfterDeletion(
     if (Object.keys(patch).length) patches.push({ rowId: row.id, patch })
   }
 
+  // Data-validation ranges are stored like formula ranges and shrink the same way; a range with
+  // nothing left goes, and a rule with no range left goes with it.
+  const sheet = await prisma.projectSheet.findUnique({ where: { id: sheetId }, select: { settings: true } })
+  const settings = readSheetSettings(sheet?.settings)
+  let nextValidations: typeof settings.validations | null = null
+  if (settings.validations?.length) {
+    const rewritten = settings.validations
+      .map((v) => ({
+        ...v,
+        ranges: v.ranges.map((r) => rewriteForDeletion(r, shape, deleted)).filter((r) => r !== ERR.ref),
+        ...(v.source ? { source: rewriteForDeletion(v.source, shape, deleted) } : {}),
+      }))
+      .filter((v) => v.ranges.length)
+    if (JSON.stringify(rewritten) !== JSON.stringify(settings.validations)) nextValidations = rewritten
+  }
+
   return {
     apply: async (tx, userId) => {
       const out: Rewritten[] = []
+      if (nextValidations) {
+        // Only this key is replaced, inside the delete's transaction.
+        await tx.$executeRaw`
+          UPDATE "ProjectSheet"
+          SET "settings" = COALESCE("settings", '{}'::jsonb) || jsonb_build_object('validations', ${JSON.stringify(nextValidations)}::jsonb)
+          WHERE "id" = ${sheetId}
+        `
+      }
       for (const { rowId, patch } of patches) {
         // Merge only the rewritten keys (never the whole row), so a concurrent edit to another cell
         // of the same row survives — the same rule the cells PATCH follows.
@@ -91,6 +116,15 @@ export async function copySheet(
   const settings = (source.settings && typeof source.settings === "object" ? { ...(source.settings as Record<string, unknown>) } : {}) as Record<string, unknown>
   if (Array.isArray(settings.hiddenRows)) settings.hiddenRows = (settings.hiddenRows as string[]).map((id) => idMap.get(id) ?? id)
   if (Array.isArray(settings.merges)) settings.merges = (settings.merges as { r: string }[]).map((m) => ({ ...m, r: idMap.get(m.r) ?? m.r }))
+  // Validation ranges, dropdown sources and custom formulas point at rows too.
+  if (Array.isArray(settings.validations)) {
+    settings.validations = (settings.validations as { ranges?: string[]; source?: string; formula?: string }[]).map((v) => ({
+      ...v,
+      ...(Array.isArray(v.ranges) ? { ranges: v.ranges.map(remap) } : {}),
+      ...(v.source ? { source: remap(v.source) } : {}),
+      ...(v.formula ? { formula: remap(v.formula) } : {}),
+    }))
+  }
 
   return prisma.$transaction(async (tx) => {
     const copy = await tx.projectSheet.create({

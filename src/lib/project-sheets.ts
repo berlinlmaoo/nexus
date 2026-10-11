@@ -185,6 +185,78 @@ export function readStyles(raw: unknown): Record<string, CellStyle> {
 // ── Sheet-level settings ────────────────────────────────────────────────────────────────────────
 
 export type SheetMerge = { r: string; c: string; rs: number; cs: number }
+
+/**
+ * Data validation (owner, 12 Oct 2026: "exactly like Google Sheets"). A rule applies to one or more
+ * ranges, each stored in the same id-space form as formula ranges ("{colId!rowId}:{colId!rowId}",
+ * "{colId!*}:{colId!*}" for a whole column), so inserting rows or columns never moves them and a
+ * deleted corner shrinks the range like a formula's (see sheet-structure.ts).
+ */
+export const VALIDATION_KINDS = [
+  "list", "listRange",
+  "textContains", "textNotContains", "textIs", "email", "url",
+  "dateIs", "dateBefore", "dateAfter", "dateBetween", "dateValid",
+  "gt", "gte", "lt", "lte", "eq", "neq", "between", "notBetween",
+  "checkbox", "formula",
+] as const
+export type ValidationKind = (typeof VALIDATION_KINDS)[number]
+export type SheetValidation = {
+  id: string
+  ranges: string[]
+  kind: ValidationKind
+  /** Dropdown items, or the criteria value(s) (two for "between"). */
+  values?: string[]
+  /** Dropdown item -> chip colour. */
+  colors?: Record<string, StyleColor>
+  /** Dropdown (from a range): the source range, stored form. */
+  source?: string
+  /** Custom formula, stored form (relative to the first range's top-left cell). */
+  formula?: string
+  multiple?: boolean
+  /** Reject the input instead of showing a warning. */
+  strict?: boolean
+  display?: "chip" | "arrow" | "plain"
+  help?: string
+  /** Checkbox with custom cell values. */
+  checked?: string
+  unchecked?: string
+}
+const MAX_VALIDATIONS = 200
+const STORED_RANGE = /^\{\$?[^!}]+!\$?[^}]+\}:\{\$?[^!}]+!\$?[^}]+\}$/
+
+export function readValidations(raw: unknown): SheetValidation[] {
+  if (!Array.isArray(raw)) return []
+  const out: SheetValidation[] = []
+  for (const r of raw.slice(0, MAX_VALIDATIONS)) {
+    if (!r || typeof r !== "object") continue
+    const o = r as Record<string, unknown>
+    if (!VALIDATION_KINDS.includes(o.kind as ValidationKind)) continue
+    const ranges = Array.isArray(o.ranges) ? o.ranges.filter((x): x is string => typeof x === "string" && x.length < 300 && STORED_RANGE.test(x)).slice(0, 20) : []
+    if (!ranges.length) continue
+    const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : undefined)
+    const rule: SheetValidation = {
+      id: typeof o.id === "string" && o.id ? o.id.slice(0, 40) : `v_${randomUUID().slice(0, 8)}`,
+      ranges,
+      kind: o.kind as ValidationKind,
+    }
+    if (Array.isArray(o.values)) rule.values = o.values.map((v) => String(v).slice(0, 200)).slice(0, 500)
+    if (o.colors && typeof o.colors === "object" && !Array.isArray(o.colors)) {
+      const colors: Record<string, StyleColor> = {}
+      for (const [k, v] of Object.entries(o.colors as Record<string, unknown>)) if (STYLE_COLORS.includes(v as StyleColor)) colors[k.slice(0, 200)] = v as StyleColor
+      if (Object.keys(colors).length) rule.colors = colors
+    }
+    const source = str(o.source, 300); if (source && STORED_RANGE.test(source)) rule.source = source
+    const formula = str(o.formula, 2000); if (formula) rule.formula = formula
+    if (o.multiple === true) rule.multiple = true
+    if (o.strict === true) rule.strict = true
+    if (o.display === "chip" || o.display === "arrow" || o.display === "plain") rule.display = o.display
+    const help = str(o.help, 500); if (help) rule.help = help
+    const checked = str(o.checked, 100); if (checked) rule.checked = checked
+    const unchecked = str(o.unchecked, 100); if (unchecked) rule.unchecked = unchecked
+    out.push(rule)
+  }
+  return out
+}
 export type SheetSettings = {
   frozenRows?: number
   frozenCols?: number
@@ -192,6 +264,7 @@ export type SheetSettings = {
   hiddenRows?: string[]
   hiddenCols?: string[]
   merges?: SheetMerge[]
+  validations?: SheetValidation[]
 }
 
 const MAX_FROZEN_ROWS = 20
@@ -220,6 +293,8 @@ export function readSheetSettings(raw: unknown): SheetSettings {
     }
     if (merges.length) out.merges = merges
   }
+  const validations = readValidations(o.validations)
+  if (validations.length) out.validations = validations
   return out
 }
 
