@@ -974,11 +974,8 @@ struct CreateProjectSheet: View {
     /// Step one (owner, 9 Oct 2026): what the project is for. nil = the type cards are showing.
     @State private var kind: ProjectKind?
     @State private var name = ""
-    @State private var color = "#7B2FBE"
     @State private var busy = false
     @State private var err: String?
-
-    private let colors = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE"]
 
     var body: some View {
         NavigationStack {
@@ -995,17 +992,9 @@ struct CreateProjectSheet: View {
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
-                        // No icon field (owner, 11 Oct 2026): every project is drawn as a square in its
-                        // colour (ProjectMark); a photo can be added later in Project settings.
-                        field(T("COLOR")) {
-                            HStack(spacing: 10) {
-                                ForEach(colors, id: \.self) { c in
-                                    Circle().fill(Color(hex: c)).frame(width: 30, height: 30)
-                                        .overlay(Circle().strokeBorder(color == c ? NX.foreground : .clear, lineWidth: 2))
-                                        .onTapGesture { color = c }
-                                }
-                            }
-                        }
+                        // No icon and no colour field (owner, 11 Oct 2026): every project is drawn with
+                        // the Tasks icon (ProjectMark), the server picks the default colour, and a photo
+                        // can be added later in Project settings.
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
                             // An outlet opens straight away (web: "Create project + open dashboard").
@@ -1113,7 +1102,7 @@ struct CreateProjectSheet: View {
             if kind == .pipeline {
                 // A board made meanwhile by someone else comes back as 409 PIPELINE_EXISTS with its id:
                 // open it, not an error (owner/GM, 9 Oct 2026: one board for the whole company).
-                switch try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed, color: color) {
+                switch try await APIClient.shared.pipelineBoardCreate(workspaceId: workspaceId, name: trimmed) {
                 case .exists(let board):
                     dismiss()
                     onOpenExisting(board)
@@ -1125,14 +1114,14 @@ struct CreateProjectSheet: View {
             } else if kind == .outlet {
                 // Any number of outlets, one project each (owner, 10 Oct 2026, for Ryan); it opens on its
                 // Overview once the list knows it.
-                let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed, color: color,
+                let made = try await APIClient.shared.outletProjectCreate(workspaceId: workspaceId, name: trimmed,
                                                                           folderId: folder?.id)
                 await onCreated()
                 dismiss()
                 onOpenExisting(made)
                 return
             } else {
-                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed, color: color,
+                try await APIClient.shared.createProject(workspaceId: workspaceId, name: trimmed,
                                                         type: (kind ?? .task).rawValue, folderId: folder?.id)
             }
             await onCreated()

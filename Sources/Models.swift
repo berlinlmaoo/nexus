@@ -71,7 +71,7 @@ struct Project: Decodable, Identifiable, Sendable {
     }
 
     // No `emoji` any more (owner, 11 Oct 2026): a project is drawn with ProjectMark — its photo or a
-    // square in its colour. A stored emoji or named icon is ignored.
+    // grey Tasks icon. A stored emoji or named icon is ignored.
     /// Status chip label + tone (mirrors web statusBadge).
     var statusLabel: String {
         switch (status ?? "ACTIVE").uppercased() {

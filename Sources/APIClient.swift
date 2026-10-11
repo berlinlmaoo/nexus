@@ -698,12 +698,12 @@ struct APIClient {
     @discardableResult
     /// `type`: "TASK" or "PIPELINE" (owner, 9 Oct 2026); FINANCE and CONTENT answer 400 TYPE_COMING_SOON.
     /// `folderId`: made straight inside that folder (folder → New project here); nil = no folder.
-    /// No `icon` (owner, 11 Oct 2026): the server gives a new project its default and the app draws
-    /// the colour square (ProjectMark) until someone adds a photo in Project settings.
-    func createProject(workspaceId: String, name: String, color: String, type: String = "TASK", folderId: String? = nil) async throws -> Bool {
+    /// No `icon` and no `color` (owner, 11 Oct 2026): the server gives a new project its defaults and
+    /// the app draws the Tasks icon (ProjectMark) until someone adds a photo in Project settings.
+    func createProject(workspaceId: String, name: String, type: String = "TASK", folderId: String? = nil) async throws -> Bool {
         var req = makeRequest("/api/projects", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "color": color, "type": type]
+        var body: [String: Any] = ["name": name, "workspaceId": workspaceId, "type": type]
         if let folderId { body["folderId"] = folderId }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)

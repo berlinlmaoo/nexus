@@ -16,7 +16,6 @@ struct ProjectSettingsView: View {
     // identity
     @State private var name = ""
     @State private var desc = ""
-    @State private var color = "#7b68ee"
     /// The stored icon as the server has it. Only its photo is drawn (ProjectMark): emoji and named
     /// icons are ignored since 11 Oct 2026, and there is no field to type one any more.
     @State private var icon: String?
@@ -48,7 +47,6 @@ struct ProjectSettingsView: View {
     @State private var busy = false
     @State private var toast: String?
 
-    private let swatches = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#64748b"]
     private var canPnl: Bool { viewerWsRole == "BOD" || viewerWsRole == "ONE_ABOVE_ALL" }
     /// Tabs follow the server's rule for every project setting: Manager and above.
     private var canManageTabs: Bool { viewerWsRole == "MANAGER" || canPnl }
@@ -85,33 +83,22 @@ struct ProjectSettingsView: View {
         card("Identitas") {
             field(T("Project name")) { TextField(T("Name"), text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
             field("Deskripsi") { TextField("Deskripsi singkat", text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
-            // No emoji any more (owner, 11 Oct 2026): the project's photo, or a square in its colour.
+            // No emoji and no colour any more (owner, 11 Oct 2026): the project's photo, or the Tasks icon.
             field(T("Photo")) { photoRow }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Warna").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                HStack(spacing: 10) {
-                    ForEach(swatches, id: \.self) { hex in
-                        Circle().fill(Color(hex: hex)).frame(width: 28, height: 28)
-                            .overlay(Circle().strokeBorder(.white, lineWidth: color == hex ? 3 : 0))
-                            .overlay(Circle().strokeBorder(NX.border, lineWidth: 1))
-                            .onTapGesture { color = hex }
-                    }
-                }
-            }
             Button { Task { await saveIdentity() } } label: {
                 Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(savingIdentity)
         }
     }
 
-    /// The mark as it will be drawn (live with the colour picked below), and the photo actions.
+    /// The mark as it will be drawn, and the photo actions.
     /// Uploading and removing save at once, like the web drawer; "Save identity" never sends `icon`.
     private var photoRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
-                    ProjectMark(icon: icon, color: color, size: 48, glyph: 28)
+                    ProjectMark(icon: icon, color: nil, size: 48, glyph: 28)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .frame(width: 48, height: 48)
@@ -133,7 +120,7 @@ struct ProjectSettingsView: View {
                 Spacer(minLength: 0)
             }
             if !hasPhoto {
-                Text(T("Without a photo, the project shows a square in its colour."))
+                Text(T("Without a photo, the project shows the task icon."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             if let photoError {
@@ -348,7 +335,6 @@ struct ProjectSettingsView: View {
     private func hydrate() {
         name = detail.name
         desc = detail.description ?? ""
-        color = detail.color ?? "#7b68ee"
         icon = detail.icon
         batchDup = detail.enableTaskBatchDuplicate ?? false
         pnl = detail.enablePnlDashboard ?? false
@@ -370,9 +356,10 @@ struct ProjectSettingsView: View {
     private func saveIdentity() async {
         savingIdentity = true; identitySaved = false
         // No `icon` here: the photo saves on its own (uploadPhoto/removePhoto), and sending the field
-        // back could only overwrite a photo uploaded meanwhile.
+        // back could only overwrite a photo uploaded meanwhile. No `color` either (owner, 11 Oct 2026):
+        // there is no colour option any more; the stored one stays for the views that still use it.
         let ok = (try? await APIClient.shared.updateProject(projectId, fields: [
-            "name": name, "description": desc, "color": color,
+            "name": name, "description": desc,
         ])) != nil
         savingIdentity = false; identitySaved = ok
         if ok { await onChange() }

@@ -245,9 +245,8 @@ struct ProjectDetailView: View {
                     .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
             }
             if let d = detail {
-                let tint = Color(hex: d.color ?? ProjectMark.fallbackColor)
                 ProjectMark(icon: d.icon, color: d.color, size: 30, glyph: 20)
-                    .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             Text(displayName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
