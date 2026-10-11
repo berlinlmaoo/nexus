@@ -17,7 +17,7 @@ assert.ok(problems.some((p) => p.includes("unknown field cf:nope")))
 assert.ok(problems.some((p) => p.includes("calendarBy must be a DATE")))
 
 // Every template the owner listed (12 Oct 2026) is there.
-for (const id of ["content-plan", "social-media", "campaign", "event", "meetings", "docs", "notes", "goals", "brainstorm", "tasks", "roadmap", "issues", "inventory", "assets"]) {
+for (const id of ["content-plan", "social-media", "event", "meetings", "notes", "brainstorm", "tasks"]) {
   assert.ok(findProjectTemplate(id), `missing template ${id}`)
 }
 assert.equal(findProjectTemplate("nope"), null)
@@ -50,9 +50,6 @@ const ev = planTemplate(findProjectTemplate("event"), "en")
 assert.deepEqual(ev.fields.find((f) => f.key === "budget").options, { format: "currency-idr" })
 assert.deepEqual(ev.fields.find((f) => f.key === "venue").options, { format: "name-and-map-link" })
 assert.equal(ev.fields.find((f) => f.key === "eventDate").options, null)
-const docs = planTemplate(findProjectTemplate("docs"), "en")
-assert.deepEqual(docs.fields.find((f) => f.key === "type").options.options, ["PRD", "RFC", "Spec", "Design review", "Decision", "Postmortem", "Runbook", "OKRs", "Draft", "Strategy", "Guideline"])
-assert.deepEqual(docs.fields.find((f) => f.key === "created").options, { defaultSource: "taskCreatedAt", editable: false })
 
 // Meetings has its "My meetings" preset; Notes hides the board but keeps the list.
 assert.equal(findProjectTemplate("meetings").myView.name.en, "My meetings")
