@@ -2999,4 +2999,18 @@
     <string name="setup_err_outside">Someone you picked isn\'t in this workspace any more. Check the members and try again.</string>
     <string name="setup_err_too_many">That\'s too many people at once: 200 at most.</string>
     <string name="setup_err_view">Keep Board or List on.</string>
+    <string name="tp_overview">Progress, members and what\'s due</string>
+    <string name="tp_board">Cards in columns by status</string>
+    <string name="tp_list">Tasks as a simple checklist</string>
+    <string name="tp_table">Rows and columns with every field</string>
+    <string name="tp_sheet">A spreadsheet with formulas</string>
+    <string name="tp_calendar">Tasks on a month by due date</string>
+    <string name="tp_timeline">Start-to-end bars, Gantt style</string>
+    <string name="tp_sprints">Work in timeboxed cycles</string>
+    <string name="tp_automations">When this happens, do that</string>
+    <string name="tp_pages">Docs and notes for the project</string>
+    <string name="tp_forms">Collect requests as tasks</string>
+    <string name="tp_chat">The project\'s group chat</string>
+    <string name="tp_on">On</string>
+    <string name="tp_off">Off</string>
 </resources>

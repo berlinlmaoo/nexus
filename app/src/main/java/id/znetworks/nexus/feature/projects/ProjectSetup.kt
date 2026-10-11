@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,7 +25,6 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.OutlinedButton
@@ -79,23 +76,14 @@ object ProjectSetupLogic {
             .filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), ignoreCase = true) } }
 }
 
-/** Task Project only: which tabs it starts with — all on by default, Board or List always stays on. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Task Project only: which tabs it starts with — preview cards ([TabPreviewCards]), all on by default, Board or List stays on. */
 @Composable
 fun StartingTabs(hidden: Set<String>, enabled: Boolean, onChange: (Set<String>) -> Unit) {
     val c = Nx.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(stringResource(R.string.setup_tabs), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
         Text(stringResource(R.string.setup_tabs_sub), fontSize = 11.sp, color = c.mutedFg)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            ProjectSetupLogic.TABS.forEach { t ->
-                val key = ProjectTabsLogic.key(t)!!
-                val on = key !in hidden
-                val locked = ProjectTabsLogic.locked(key, hidden)
-                FilterChip(on, { onChange(if (on) hidden + key else hidden - key) }, { Text(stringResource(t.label), fontSize = 12.sp) },
-                    enabled = enabled && !locked)
-            }
-        }
+        TabPreviewCards(hidden, enabled, onChange)
     }
 }
 

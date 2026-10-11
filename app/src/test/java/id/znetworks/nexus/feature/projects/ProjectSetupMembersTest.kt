@@ -54,4 +54,21 @@ class ProjectSetupMembersTest {
             listOf("setup_tabs", "setup_members", "setup_add_members", "setup_pick_n", "setup_done", "setup_err_outside").forEach { assertTrue("$v $it", s.contains("name=\"$it\"")) }
         }
     }
+
+    @Test fun tabPickerIsPreviewCards() {
+        assertEquals(2, TabPreviewLogic.columns(411)); assertEquals(3, TabPreviewLogic.columns(800))
+        // Every offered tab has a description, in both languages.
+        ProjectSetupLogic.TABS.forEach { t -> assertTrue(t.name, TabPreviewLogic.description(ProjectTabsLogic.key(t)!!) != null) }
+        val setup = src("feature/projects/ProjectSetup.kt")
+        assertTrue(setup.contains("TabPreviewCards(hidden, enabled, onChange)")); assertFalse(setup.contains("FilterChip("))
+        val cards = src("feature/projects/TabPreview.kt")
+        listOf("overview", "board", "list", "table", "sheet", "calendar", "timeline", "sprints", "automations", "pages", "forms", "chat").forEach {
+            assertTrue(it, cards.contains("\"$it\" ->") || cards.contains("\"$it\", "))
+        }
+        assertTrue(cards.contains("height(56.dp)") && cards.contains("alpha(if (on) 1f else 0.6f)"))
+        listOf("values", "values-in").forEach { v ->
+            val s = File("src/main/res/$v/strings.xml").readText()
+            listOf("tp_overview", "tp_board", "tp_chat", "tp_on", "tp_off").forEach { assertTrue("$v $it", s.contains("name=\"$it\"")) }
+        }
+    }
 }

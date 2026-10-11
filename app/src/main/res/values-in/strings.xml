@@ -2948,4 +2948,18 @@
     <string name="setup_err_outside">Ada orang yang dipilih sudah tidak ada di workspace ini. Cek anggotanya lalu coba lagi.</string>
     <string name="setup_err_too_many">Terlalu banyak orang sekaligus: maksimal 200.</string>
     <string name="setup_err_view">Board atau List harus tetap nyala.</string>
+    <string name="tp_overview">Progres, anggota, dan yang jatuh tempo</string>
+    <string name="tp_board">Kartu per kolom status</string>
+    <string name="tp_list">Task sebagai daftar centang</string>
+    <string name="tp_table">Baris dan kolom dengan semua field</string>
+    <string name="tp_sheet">Spreadsheet dengan rumus</string>
+    <string name="tp_calendar">Task per tanggal dalam sebulan</string>
+    <string name="tp_timeline">Bar mulai–selesai ala Gantt</string>
+    <string name="tp_sprints">Kerja per siklus waktu</string>
+    <string name="tp_automations">Kalau ini terjadi, lakukan itu</string>
+    <string name="tp_pages">Dokumen dan catatan project</string>
+    <string name="tp_forms">Kumpulkan permintaan jadi task</string>
+    <string name="tp_chat">Grup chat project</string>
+    <string name="tp_on">Nyala</string>
+    <string name="tp_off">Mati</string>
 </resources>
