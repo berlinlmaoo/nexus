@@ -711,7 +711,7 @@ private fun ShortcutRows(refs: List<ShortcutRef>, pinned: Boolean, shortcuts: Pr
                 if (i > 0) HorizontalDivider(color = c.border)
                 Row(Modifier.fillMaxWidth().clickable { onOpenProject(ref.id) }.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    id.znetworks.nexus.feature.projects.ProjectMark(ref.icon, ref.color, 32.dp)
+                    id.znetworks.nexus.feature.projects.ProjectMark(ref.icon, 32.dp)
                     Spacer(Modifier.width(10.dp))
                     Text(ref.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     IconButton(onClick = { shortcuts.togglePin(ref) }) {

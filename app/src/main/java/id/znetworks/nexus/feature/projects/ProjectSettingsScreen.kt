@@ -221,24 +221,22 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
             Section(stringResource(R.string.ps_identity)) {
                 var name by rememberSaveable(d.name) { mutableStateOf(d.name) }
                 var desc by rememberSaveable(d.description) { mutableStateOf(d.description.orEmpty()) }
-                var color by rememberSaveable(d.color) { mutableStateOf(d.color ?: PROJECT_COLORS.first()) }
                 OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.ps_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(desc, { desc = it }, label = { Text(stringResource(R.string.ps_description)) }, maxLines = 4, modifier = Modifier.fillMaxWidth())
-                // PROJECT-ICON (11 Oct): no emoji any more — the mark is the colour, a photo is the only custom icon.
-                // The photo saves on its own; the general save never sends "icon".
+                // PROJECT-ICON (11 Oct): no emoji and no colour — the mark is the task icon, a photo the only custom icon.
+                // The photo saves on its own; the general save sends neither "icon" nor "color".
                 var unreadable by remember { mutableStateOf(false) }
                 val pick = id.znetworks.nexus.feature.auth.rememberAvatarPicker { jpeg -> unreadable = jpeg == null; if (jpeg != null) vm.setPhoto(jpeg) }
                 val hasPhoto = ProjectMarkLogic.isPhoto(d.icon)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ProjectMark(d.icon, color, 48.dp)
+                    ProjectMark(d.icon, 48.dp)
                     OutlinedButton(onClick = pick, enabled = !s.busy) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
                     if (hasPhoto) TextButton(onClick = vm::removePhoto, enabled = !s.busy) { Text(stringResource(R.string.ps_photo_remove), color = c.danger) }
                 }
                 if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = c.danger)
-                ColorRow(color) { color = it }
-                val dirty = name.trim() != d.name || desc.trim() != d.description.orEmpty() || color != (d.color ?: PROJECT_COLORS.first())
+                val dirty = name.trim() != d.name || desc.trim() != d.description.orEmpty()
                 OutlinedButton(onClick = {
-                    vm.save("name" to JsonPrimitive(name.trim()), "description" to JsonPrimitive(desc.trim()), "color" to JsonPrimitive(color))
+                    vm.save("name" to JsonPrimitive(name.trim()), "description" to JsonPrimitive(desc.trim()))
                 }, enabled = dirty && name.isNotBlank() && !s.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ps_save_identity)) }
             }
             // Flags

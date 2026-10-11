@@ -225,6 +225,15 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
 
+## 11 Oct, project icon UPDATE: the task icon, no colour picker (PROJECT-ICON.md UPDATE; web 84cf62d)
+
+- `ProjectMark(icon, size)` now draws the Tasks tab's icon (Icons.Filled.Checklist), tinted mutedFg, on the muted tile;
+  it no longer draws the colour square, and it ignores the project colour. A photo still wins.
+- The colour picker is gone from Create project and Project settings: create sends no `color` and the identity save
+  sends only name + description. Stored colours stay and keep being used elsewhere (calendar chips, card glow).
+  Folders keep their colour picker.
+- ProjectMarkTest updated (545 JVM tests).
+
 ## 11 Oct, one default project icon (agents:~/handoff/chat/PROJECT-ICON.md; web 22dda1a LIVE)
 
 - `ProjectMark(icon, color, size)` (feature/projects/ProjectMark.kt): every project draws the same mark, a rounded

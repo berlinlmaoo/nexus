@@ -39,11 +39,11 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun searchTasks(q: String): List<BoardTask> =
         api.get("/api/tasks?search=${URLEncoder.encode(q, "UTF-8")}", ListSerializer(BoardTask.serializer()))
 
-    suspend fun createProject(name: String, workspaceId: String, color: String?, folderId: String?, type: ProjectType = ProjectType.TASK): String {
+    suspend fun createProject(name: String, workspaceId: String, folderId: String?, type: ProjectType = ProjectType.TASK): String {
         val body = buildJsonObject {
             put("name", name.trim()); put("workspaceId", workspaceId)
-            // No "icon": every project shares one default mark, the server stores its own default (PROJECT-ICON, 11 Oct).
-            color?.let { put("color", it) }; folderId?.let { put("folderId", it) }
+            // No "icon" or "color": every project shares one default mark, the server stores its defaults (PROJECT-ICON, 11 Oct).
+            folderId?.let { put("folderId", it) }
             // Task Project and Pipeline Dashboard exist; the others are 400 TYPE_COMING_SOON (PROJECT-TYPES-TABS).
             put("type", type.code)
         }
