@@ -138,6 +138,15 @@ class ProjectSettingsViewModel(app: Application, handle: SavedStateHandle) : And
 
     fun save(vararg fields: Pair<String, JsonElement>) = act(R.string.ps_saved) { api.updateProject(projectId, JsonObject(fields.toMap())) }
 
+    /** PROJECT-ICON: upload, then store the returned url as the icon. */
+    fun setPhoto(jpeg: ByteArray) = act(R.string.ps_saved) {
+        val url = api.uploadProjectIcon(projectId, jpeg) ?: throw ApiError.Decoding(IllegalStateException("no url"))
+        api.updateProject(projectId, JsonObject(mapOf("icon" to JsonPrimitive(url))))
+    }
+
+    /** Back to the default mark: the column's default "folder" (as the web), never an emoji. */
+    fun removePhoto() = save("icon" to JsonPrimitive(ProjectMarkLogic.REMOVED))
+
     /** One tab on or off: the WHOLE hidden set goes up; the switch moves at once and goes back on any error. */
     fun setTab(key: String, show: Boolean) {
         val now = _state.value.hiddenDraft ?: ProjectTabsLogic.hidden(_state.value.detail?.hiddenTabs)
@@ -213,15 +222,23 @@ fun ProjectSettingsScreen(onBack: () -> Unit, onDeleted: () -> Unit, onOpenProje
                 var name by rememberSaveable(d.name) { mutableStateOf(d.name) }
                 var desc by rememberSaveable(d.description) { mutableStateOf(d.description.orEmpty()) }
                 var color by rememberSaveable(d.color) { mutableStateOf(d.color ?: PROJECT_COLORS.first()) }
-                var icon by rememberSaveable(d.icon) { mutableStateOf(d.icon ?: PROJECT_ICONS.first()) }
                 OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.ps_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(desc, { desc = it }, label = { Text(stringResource(R.string.ps_description)) }, maxLines = 4, modifier = Modifier.fillMaxWidth())
-                // An uploaded image icon stays unless an emoji is picked.
-                EmojiRow(PROJECT_ICONS, icon) { icon = it }
+                // PROJECT-ICON (11 Oct): no emoji any more — the mark is the colour, a photo is the only custom icon.
+                // The photo saves on its own; the general save never sends "icon".
+                var unreadable by remember { mutableStateOf(false) }
+                val pick = id.znetworks.nexus.feature.auth.rememberAvatarPicker { jpeg -> unreadable = jpeg == null; if (jpeg != null) vm.setPhoto(jpeg) }
+                val hasPhoto = ProjectMarkLogic.isPhoto(d.icon)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProjectMark(d.icon, color, 48.dp)
+                    OutlinedButton(onClick = pick, enabled = !s.busy) { Text(stringResource(if (hasPhoto) R.string.ps_photo_change else R.string.ps_photo_add)) }
+                    if (hasPhoto) TextButton(onClick = vm::removePhoto, enabled = !s.busy) { Text(stringResource(R.string.ps_photo_remove), color = c.danger) }
+                }
+                if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = c.danger)
                 ColorRow(color) { color = it }
-                val dirty = name.trim() != d.name || desc.trim() != d.description.orEmpty() || color != (d.color ?: PROJECT_COLORS.first()) || icon != (d.icon ?: PROJECT_ICONS.first())
+                val dirty = name.trim() != d.name || desc.trim() != d.description.orEmpty() || color != (d.color ?: PROJECT_COLORS.first())
                 OutlinedButton(onClick = {
-                    vm.save("name" to JsonPrimitive(name.trim()), "description" to JsonPrimitive(desc.trim()), "color" to JsonPrimitive(color), "icon" to JsonPrimitive(icon))
+                    vm.save("name" to JsonPrimitive(name.trim()), "description" to JsonPrimitive(desc.trim()), "color" to JsonPrimitive(color))
                 }, enabled = dirty && name.isNotBlank() && !s.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ps_save_identity)) }
             }
             // Flags

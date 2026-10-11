@@ -726,6 +726,9 @@
     <string name="ps_identity">Identitas</string>
     <string name="ps_name">Nama project</string>
     <string name="ps_description">Deskripsi</string>
+    <string name="ps_photo_add">Tambah foto</string>
+    <string name="ps_photo_change">Ganti foto</string>
+    <string name="ps_photo_remove">Hapus foto</string>
     <string name="ps_save_identity">Simpan identitas</string>
     <string name="ps_customize">Kustomisasi</string>
     <string name="ps_batch_dup">Mode duplicate task</string>

@@ -181,9 +181,9 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
             ?: _state.value.folders.firstNotNullOfOrNull { it.workspaceId }
             ?: runCatching { c.attendanceApi.today().workspace?.id }.getOrNull()
 
-    fun createProject(name: String, icon: String, color: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
+    fun createProject(name: String, color: String, folderId: String?, type: ProjectType = ProjectType.TASK, onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
-        val id = try { api.createProject(name, ws, color, icon, folderId, type) } catch (e: ApiError) {
+        val id = try { api.createProject(name, ws, color, folderId, type) } catch (e: ApiError) {
             // One board for the company (PIPELINE-DASHBOARD §10.1): when it exists, open it instead of an error —
             // but only someone who may open it gets its id (§11.1, members only); anyone else reads the server's sentence.
             val h = e as? ApiError.Http
@@ -303,10 +303,9 @@ fun parseColor(hex: String?, fallback: Color): Color = runCatching {
 }.getOrDefault(fallback)
 
 val PROJECT_COLORS = listOf("#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE")
-val PROJECT_ICONS = listOf("🚀", "📁", "⭐️", "⚡️", "🎯", "💼", "🎬", "📣")
 val FOLDER_ICONS = listOf("📁", "🎬", "📣", "💼", "⭐️", "🎯", "🚀", "📦")
 
-/** An emoji, or an uploaded icon at a `/api/files/…` path. */
+/** A FOLDER's icon: an emoji, or an uploaded photo at a `/api/files/…` path. Projects use [ProjectMark]. */
 @Composable
 fun IconTile(icon: String?, fallback: String, size: Int = 44) {
     val c = Nx.colors
@@ -445,8 +444,8 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     var pipeline by remember { mutableStateOf(false to (null as String?)) }
     LaunchedEffect(creating) { if (creating) { viewer.load(); pipeline = viewer.canAccessPipeline to viewer.pipelineProjectId } }
     if (creating) CreateProjectDialog(s.folders, busy = s.busy, pipelineAccess = pipeline.first, pipelineId = pipeline.second, initialFolder = createIn,
-        onOpenBoard = { id -> creating = false; createIn = null; onOpenProject(id) }, onDismiss = { creating = false; createIn = null }) { name, icon, color, folder, type ->
-        vm.createProject(name, icon, color, folder, type) { id -> creating = false; createIn = null; onOpenProject(id) }
+        onOpenBoard = { id -> creating = false; createIn = null; onOpenProject(id) }, onDismiss = { creating = false; createIn = null }) { name, color, folder, type ->
+        vm.createProject(name, color, folder, type) { id -> creating = false; createIn = null; onOpenProject(id) }
     }
     if (folderCreate || folderEdit != null || subfolderOf != null) FolderDialog(folderEdit, parent = subfolderOf, busy = s.busy,
         onDismiss = { folderCreate = false; folderEdit = null; subfolderOf = null }) { name, icon, color, photo ->
@@ -484,7 +483,7 @@ fun ProjectCard(p: Project, tally: Tally?, talliesLoaded: Boolean, onClick: () -
         Box(Modifier.align(Alignment.TopEnd).offset(36.dp, (-36).dp).size(110.dp).background(accent.copy(alpha = 0.10f), CircleShape))
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                IconTile(p.icon, "📁")
+                ProjectMark(p.icon, p.color, 44.dp)
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -561,9 +560,8 @@ private fun TaskHitRow(t: BoardTask, onClick: () -> Unit) {
 
 @Composable
 private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pipelineAccess: Boolean = false, pipelineId: String? = null, initialFolder: String? = null, onOpenBoard: (String) -> Unit = {},
-                                onDismiss: () -> Unit, onCreate: (String, String, String, String?, ProjectType) -> Unit) {
+                                onDismiss: () -> Unit, onCreate: (String, String, String?, ProjectType) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
-    var icon by rememberSaveable { mutableStateOf(PROJECT_ICONS.first()) }
     var color by rememberSaveable { mutableStateOf("#7B2FBE") }
     var folder by rememberSaveable { mutableStateOf(initialFolder) }
     // First: what the project is for (9 Oct). Only Task Project is built; the rest say "Coming soon".
@@ -589,7 +587,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
                     TextButton(onClick = { type = null }, enabled = !busy) { Text(stringResource(R.string.pt_change)) }
                 }
                 OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.project_name)) }, modifier = Modifier.fillMaxWidth())
-                EmojiRow(PROJECT_ICONS, icon) { icon = it }
+                // No icon choice (PROJECT-ICON): the colour is the project's mark; a photo is added in Settings.
                 ColorRow(color) { color = it }
                 if (folders.isNotEmpty()) {
                     var open by remember { mutableStateOf(false) }
@@ -604,7 +602,7 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name, icon, color, folder, type ?: ProjectType.TASK) }, enabled = name.isNotBlank() && !busy) {
+            TextButton(onClick = { onCreate(name, color, folder, type ?: ProjectType.TASK) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
             }

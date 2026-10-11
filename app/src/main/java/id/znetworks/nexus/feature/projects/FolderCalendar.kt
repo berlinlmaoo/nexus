@@ -185,7 +185,7 @@ fun FolderCalendarScreen(folderId: String, onBack: () -> Unit, onOpenTask: (Stri
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(12.dp))
                         .clickable { picked = if (on) picked - p.id else picked + p.id }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (on) c.violetText else c.mutedFg)
-                        Spacer(Modifier.width(10.dp)); IconTile(p.icon, "📁", size = 22); Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(10.dp)); ProjectMark(p.icon, p.color, 22.dp); Spacer(Modifier.width(8.dp))
                         Text(p.name, fontSize = 14.sp, color = c.foreground, maxLines = 1)
                     }
                 }
@@ -292,7 +292,10 @@ private fun MonthCalendar(tasks: List<BoardTask>, colorOf: (String?) -> String, 
                     Column(Modifier.weight(1f)) {
                         Text(t.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (done) c.mutedFg else c.foreground, maxLines = 2,
                             textDecoration = if (done) TextDecoration.LineThrough else null)
-                        byId[pid]?.let { p -> Text(listOfNotNull(ProjectIcon.emoji(p.icon), p.name).joinToString(" "), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = 1) }
+                        byId[pid]?.let { p -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            ProjectMark(p.icon, p.color, 12.dp, tile = false); Spacer(Modifier.width(4.dp))
+                            Text(p.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = col, maxLines = 1)
+                        } }
                     }
                     PriorityChip(t.priority, Modifier.padding(start = 6.dp, end = 6.dp))
                     t.assignees.firstOrNull()?.user?.let { u -> Avatar(u.name, u.avatar, 24.dp) }

@@ -732,6 +732,9 @@
     <string name="ps_identity">Identity</string>
     <string name="ps_name">Project name</string>
     <string name="ps_description">Description</string>
+    <string name="ps_photo_add">Add photo</string>
+    <string name="ps_photo_change">Change photo</string>
+    <string name="ps_photo_remove">Remove photo</string>
     <string name="ps_save_identity">Save identity</string>
     <string name="ps_customize">Customize</string>
     <string name="ps_batch_dup">Task duplicate mode</string>
