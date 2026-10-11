@@ -101,6 +101,9 @@ function docExtensionFor(name?: string, type?: string): string | null {
   return DOC_EXTENSIONS.has(bare) ? bare : null
 }
 
+/** Hermes looking up its own tool catalogue: plumbing, not a step the person needs to see. */
+const HERMES_INTERNAL_TOOLS = new Set(['tool_search', 'tool_describe', 'tool_list'])
+
 // Gideon chat is now backed by the Hermes agent (gpt-5.5 + live NEXUS tools) via the host shim —
 // the same assistant the team uses on WhatsApp. We keep the exact SSE contract the frontend expects.
 export async function POST(req: NextRequest) {
@@ -327,7 +330,7 @@ export async function POST(req: NextRequest) {
               // A tool round starts: what streamed so far was the model thinking aloud, not the answer.
               if (acc && streamClient) await sendEvent({ type: 'reset' })
               acc = ''
-            } else if (ev.t === 'tool' && streamClient && ev.name && !ev.name.startsWith('nexus_')) {
+            } else if (ev.t === 'tool' && streamClient && ev.name && !ev.name.startsWith('nexus_') && !HERMES_INTERNAL_TOOLS.has(ev.name)) {
               // Non-NEXUS tools (reading an attached image) have no tools-route step of their own.
               await sendEvent({ type: 'step', step: { id: `h${ev.id || ev.name}`, tool: ev.name, label: ev.name, status: ev.phase === 'done' ? 'done' : 'running' } })
             } else if (ev.t === 'final' && typeof ev.c === 'string') {
