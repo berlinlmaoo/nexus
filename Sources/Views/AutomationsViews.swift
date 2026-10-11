@@ -500,12 +500,43 @@ struct AutomationRunLog: View {
         .liveRefresh(every: 120, on: [.nexusAutomationsChanged], projectId: projectId) { await load() }
     }
 
+    // Plain functions instead of inline ternary/optional chains: Xcode's type checker gave up on them.
+    private func runTitle(_ r: AutomationRun) -> String {
+        let event: String = AutomationVocab.eventLabel(r.event)
+        if let title = r.task?.title { return event + " · " + title }
+        if r.taskId != nil { return event + " · " + T("(task deleted)") }
+        return event
+    }
+
+    private func runSubtitle(_ r: AutomationRun) -> String {
+        let stamp: String = AutoTime.stamp(r.createdAt, seconds: true)
+        if let name = r.actor?.name { return stamp + " · " + name }
+        return stamp
+    }
+
+    private func stepIcon(_ s: AutomationRun.Step) -> String {
+        if s.ok == false { return "exclamationmark.triangle.fill" }
+        if s.skipped == true { return "circle" }
+        return "checkmark"
+    }
+
+    private func stepTint(_ s: AutomationRun.Step) -> Color {
+        if s.ok == false { return NX.danger }
+        if s.skipped == true { return NX.mutedFg }
+        return NX.success
+    }
+
+    private func stepTitle(_ s: AutomationRun.Step) -> String {
+        if let label = AutomationVocab.action(s.type)?.label { return T(label) }
+        return humanizeEnum(s.type ?? "")
+    }
+
     private func runLabel(_ r: AutomationRun) -> some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(AutomationVocab.eventLabel(r.event) + (r.task?.title.map { " · \($0)" } ?? (r.taskId != nil ? " · \(T("(task deleted)"))" : "")))
+                Text(runTitle(r))
                     .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
-                Text(AutoTime.stamp(r.createdAt, seconds: true) + (r.actor?.name.map { " · \($0)" } ?? ""))
+                Text(runSubtitle(r))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
@@ -523,11 +554,11 @@ struct AutomationRunLog: View {
         }
         ForEach(Array(list.enumerated()), id: \.offset) { _, s in
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: s.ok == false ? "exclamationmark.triangle.fill" : (s.skipped == true ? "circle" : "checkmark"))
+                Image(systemName: stepIcon(s))
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(s.ok == false ? NX.danger : (s.skipped == true ? NX.mutedFg : NX.success))
+                    .foregroundStyle(stepTint(s))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(AutomationVocab.action(s.type)?.label.map(T) ?? humanizeEnum(s.type ?? ""))
+                    Text(stepTitle(s))
                         .font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
                     Text(s.message ?? "").font(NXFont.text(12)).foregroundStyle(s.ok == false ? NX.danger : NX.mutedFg)
                         .fixedSize(horizontal: false, vertical: true)
