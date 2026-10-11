@@ -337,8 +337,9 @@ class ChatThreadViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         try {
             if (pid != null) {
                 val projects = ProjectsApi(c.api)
-                val failed = userIds.count { uid -> try { projects.addMember(pid, uid); false } catch (e: ApiError) { true } }
-                _state.update { it.copy(notice = res.getString(if (failed > 0) R.string.chat_add_partial else R.string.chat_added_project)) }
+                // One request for everyone (PROJECT-SETUP-MEMBERS B, `{ userIds }`); people already in are skipped by the server.
+                val added = try { projects.addMembers(pid, userIds) } catch (e: ApiError) { -1 }
+                _state.update { it.copy(notice = res.getString(if (added < 0) R.string.chat_add_partial else R.string.chat_added_project)) }
             } else {
                 val updated = api.addMembers(id, userIds)
                 // No toast: the thread's own log line ("You added Mey") is the confirmation now (SYSTEM-MESSAGES).

@@ -225,6 +225,15 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
 
+## 11 Oct, project setup + multi-add members (agents:~/handoff/chat/PROJECT-SETUP-MEMBERS.md), PART B only
+
+- B is already on Android since MEMBER-PICKER: Project settings › Add people is a search with checkbox rows and avatars,
+  then one "Add N" button sends `{ userIds }`. There is no team step.
+- The one gap was adding people from the project's chat room, which made one POST per person. It now sends a single
+  `{ userIds }` request.
+- **A is NOT done yet** (pick tabs + add members while creating a project). The server shape (`hiddenTabs`, `memberIds`
+  on POST /api/projects) has not landed and will be appended to the spec.
+
 ## 11 Oct, Pipeline §16: many boards (agents:~/handoff/chat/PIPELINE-DASHBOARD.md §16)
 
 - Picking Pipeline Dashboard in New project now always asks for a name and creates a NEW empty board, like the other
