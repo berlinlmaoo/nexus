@@ -225,6 +225,16 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | 2 More grid | As iOS MoreView: centred "More", sections HOME BASE (Messages, Threads*, My Submissions, Team Calendar, Room Booking) · MISSIONS (Leaderboard, Reports) · KNOWLEDGE (Z Vault*, Forms) · PULSE CHECK (Attendance) · SYSTEM (Ticket, What's new, Tuning Room, Control Room†), two columns, white 18 dp tiles with a 46 dp icon square in the iOS tint at 14%; account card (photo, name, email → Tuning Room) and a red Logout under it (*company only, †MANAGER+). New Forms screen (iOS FormsView: every project's forms, card with project, Public chip, description, count; empty state as iOS). Tuning Room (was "Account & sign-in") now holds, in iOS order: update row, profile, email, Appearance (3 buttons), Language (flag rows with a check), Offline, Members, password, passkeys, Logout, Delete account set apart with a red border, footer with the version. Knowledge Library left More as on iOS (still reached from links). Logout from both places goes through one `rememberLogout` (confirm + workday block) | 4db6233 |
 | 4 My Submissions kanban | As iOS SubmissionsView: centred title, "🔒 Read-only — status is set by the Finance team" chip, horizontal board snapping to each column (width min(320 dp, 82%)), columns New (nothing processed yet) + the server's `statusColumns` + any status the server did not list (so nothing disappears; iOS drops those), tinted like iOS (done/paid green, progress blue, rejected red, else grey, 8% fill, 30% border), count capsule, each column scrolling on its own, dashed "Empty"; card = violet doc icon, the item's own title (`taskTitle`, not the form's name), "form · project", "Submitted 20 Sep, 19:14" (WIB), chevron → detail. Empty board: iOS text + "Open forms". SubmissionBoardTest. Checked on the emulator with a debug-only preview activity (src/debug `UiPreviewActivity`, not in release): More grid, Tuning Room and the board render as the iOS screenshots | this step |
 
+## 11 Oct, project icon UPDATE 3: full-colour task icon (PROJECT-ICON.md UPDATE 3; web 1cd2149)
+
+- `ProjectMark(icon, size)` draws the default with a Canvas on a 24×24 grid scaled to the slot, with no tile behind it:
+  - an amber board (#F59E0B), a white sheet and a slate clip (#475569);
+  - two green rows (#22C55E) with white round-cap ticks, then one open row (#E2E8F0);
+  - #CBD5E1 lines beside the rows.
+- It uses the same shapes as web and iOS, kept as data in `ProjectMarkLogic.SHAPES` and `TICKS`.
+- The blue tile is gone. A photo still wins, cropped to a rounded square (28%). The colour pickers stay removed.
+- ProjectMarkTest updated (545 JVM tests).
+
 ## 11 Oct, project icon UPDATE 2: a coloured task tile (PROJECT-ICON.md UPDATE 2; web 5af4601)
 
 - `ProjectMark(icon, size)` draws the default tile, the same as web and iOS. It replaces the grey Checklist icon.
