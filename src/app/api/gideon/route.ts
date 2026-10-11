@@ -265,7 +265,8 @@ export async function POST(req: NextRequest) {
     const asked = [...(messages || [])].reverse().find((m) => m?.role === 'user')?.content?.trim() || ''
     // The conversation this turn belongs to (created here when it is new, titled by the question).
     const chat = await resolveGideonChat(userId, { chatId: typeof rawChatId === 'string' ? rawChatId : null, newChat: newChat === true, title: asked }).catch(() => null)
-    if (chat) await sendEvent({ type: 'chat', id: chat.id, title: chat.title })
+    // Only clients that asked for the new contract: released apps keep exactly run → text → done.
+    if (chat && streamClient) await sendEvent({ type: 'chat', id: chat.id, title: chat.title })
     const runId = await startRun({
       userId,
       trigger: 'CHAT',

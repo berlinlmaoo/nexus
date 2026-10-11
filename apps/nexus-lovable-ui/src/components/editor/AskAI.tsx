@@ -212,7 +212,7 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
         else if (ev.type === "final") {
           acc = ev.content;
           setResult(ev.content);
-          setDoc(ev.doc ?? markdownToDoc(ev.content));
+          setDoc(markdownToDoc(ev.content));
           if (ev.items) setItems(ev.items.map((i) => ({ ...i, on: true })));
         } else if (ev.type === "error") failed = ev.content ?? t("Something went wrong.");
       },
