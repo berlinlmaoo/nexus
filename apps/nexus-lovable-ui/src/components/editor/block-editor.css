@@ -251,3 +251,4 @@ button.nx-swatch:hover { box-shadow: 0 0 0 2px var(--ring); }
 .nx-page-col { --nx-page-pad: clamp(1.25rem, 7vw, 6rem); width: 100%; max-width: calc(720px + 2 * var(--nx-page-pad)); margin-inline: auto; padding-inline: var(--nx-page-pad); }
 .nx-page-col.is-full { max-width: none; }
 .nx-page-tail { min-height: 30vh; cursor: text; }
+body.nx-editing [data-mobile-tabbar] { visibility: hidden; }
