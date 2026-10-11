@@ -1,4 +1,5 @@
 import SwiftUI
+import GameController
 
 // MARK: - Multi-select + Duplicate on Board and List (owner, 11 Oct 2026)
 //
@@ -13,7 +14,7 @@ import SwiftUI
 //     ⌘A selects every task on screen, ⌘D duplicates, Esc leaves selection mode.
 //   • iPad with a keyboard / Mac: ⌘-click ticks or unticks a task (starting selection mode when it is
 //     off), ⇧-click ticks every task between the last one ticked and this one, in on-screen order within
-//     that lane (Board) or section (List). Both are SwiftUI's own `TapGesture().modifiers(_:)` (iOS 14+)
+//     that lane (Board) or section (List). The held keys are read from the hardware keyboard (GameController); `TapGesture().modifiers(_:)` is macOS-only
 //     as a high-priority gesture on the card's Button: with the key held it wins, without it the gesture
 //     fails at once and the Button's plain tap (open / tick) and `.draggable` behave as before.
 // Duplicate always asks for the copies' due date first (the web's popup), which is what makes it
@@ -151,17 +152,53 @@ struct TaskModifierClicks: ViewModifier {
     let taskId: String
     let selection: TaskSelection?
     let order: () -> [String]
+    @ObservedObject private var keys = ModifierKeys.shared
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let selection {
+            // While ⌘ or ⇧ is held the tap is ours (tick / extend); otherwise it falls through to the
+            // card's own tap, drag and context menu untouched. TapGesture.modifiers(_:) is macOS-only,
+            // so the held keys come from the hardware keyboard (GameController) instead.
             content.highPriorityGesture(
-                TapGesture().modifiers(.command).onEnded { selection.commandToggle(taskId) }
-                    .exclusively(before: TapGesture().modifiers(.shift).onEnded { selection.extend(to: taskId, in: order()) })
+                TapGesture().onEnded {
+                    if keys.shift { selection.extend(to: taskId, in: order()) } else { selection.commandToggle(taskId) }
+                },
+                including: (keys.command || keys.shift) ? .all : .subviews
             )
         } else {
             content
         }
+    }
+}
+
+/// Which of ⌘ / ⇧ is held on a hardware keyboard (iPad keyboard, Mac). Published on the main thread.
+final class ModifierKeys: ObservableObject {
+    static let shared = ModifierKeys()
+    @Published private(set) var command = false
+    @Published private(set) var shift = false
+
+    private init() {
+        NotificationCenter.default.addObserver(forName: .GCKeyboardDidConnect, object: nil, queue: .main) { [weak self] _ in
+            self?.attach()
+        }
+        attach()
+    }
+
+    private func attach() {
+        guard let input = GCKeyboard.coalesced?.keyboardInput else { return }
+        input.keyChangedHandler = { [weak self] _, _, _, _ in
+            DispatchQueue.main.async { self?.refresh() }
+        }
+        refresh()
+    }
+
+    private func refresh() {
+        guard let k = GCKeyboard.coalesced?.keyboardInput else { command = false; shift = false; return }
+        let cmd = (k.button(forKeyCode: .leftGUI)?.isPressed ?? false) || (k.button(forKeyCode: .rightGUI)?.isPressed ?? false)
+        let sh = (k.button(forKeyCode: .leftShift)?.isPressed ?? false) || (k.button(forKeyCode: .rightShift)?.isPressed ?? false)
+        if cmd != command { command = cmd }
+        if sh != shift { shift = sh }
     }
 }
 

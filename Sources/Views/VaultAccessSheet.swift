@@ -13,7 +13,7 @@ struct VaultAccessSheet: View {
     var onDone: (_ saved: Bool) -> Void
 
     /// "" = no lock of its own (inherit). The other two are the server's values.
-    @State private var read: String
+    @State private var readRole: String
     @State private var write: String
     @State private var busy = false
     @State private var problem: String?
@@ -21,18 +21,18 @@ struct VaultAccessSheet: View {
     init(item: VaultItem, onDone: @escaping (_ saved: Bool) -> Void) {
         self.item = item
         self.onDone = onDone
-        _read = State(initialValue: item.minReadRole ?? "")
+        _readRole = State(initialValue: item.minReadRole ?? "")
         _write = State(initialValue: item.minWriteRole ?? "")
     }
 
     private var changed: Bool {
-        read != (item.minReadRole ?? "") || (item.isFolder && write != (item.minWriteRole ?? ""))
+        readRole != (item.minReadRole ?? "") || (item.isFolder && write != (item.minWriteRole ?? ""))
     }
 
     var body: some View {
         Form {
             Section {
-                picker(item.isFolder ? T("Who can open it") : T("Who can open this file"), selection: $read)
+                picker(item.isFolder ? T("Who can open it") : T("Who can open this file"), selection: $readRole)
             } footer: {
                 Text(item.isFolder
                      ? T("A lock applies to everything inside this folder. Something inside it can be locked further, never opened wider.")
@@ -78,7 +78,7 @@ struct VaultAccessSheet: View {
         do {
             try await APIClient.shared.vaultSetAccess(
                 item.id,
-                read: read != (item.minReadRole ?? "") ? .some(read.isEmpty ? nil : read) : .none,
+                read: readRole != (item.minReadRole ?? "") ? .some(readRole.isEmpty ? nil : readRole) : .none,
                 write: item.isFolder && write != (item.minWriteRole ?? "") ? .some(write.isEmpty ? nil : write) : .none)
             onDone(true)
         } catch {
