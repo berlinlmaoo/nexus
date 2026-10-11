@@ -3024,4 +3024,38 @@
     <string name="server_switch_blocked_workday">Kamu tidak bisa keluar selama hari kerja masih terbuka. Check out dulu, lalu pindah.</string>
     <string name="server_switch_blocked_queue">Masih ada absen yang menunggu terkirim. Pindah setelah semuanya masuk.</string>
     <string name="login_server_dev">Server Dev (Tailscale) · Pakai Produksi</string>
+    <!-- Template gallery (DEV-REDESIGN §1) -->
+    <string name="tg_search">Cari template</string>
+    <string name="tg_clear_search">Hapus pencarian</string>
+    <string name="tg_all">Semua</string>
+    <string name="tg_cat_marketing">Marketing</string>
+    <string name="tg_cat_projects">Project &amp; task</string>
+    <string name="tg_cat_docs">Dokumen &amp; meeting</string>
+    <string name="tg_cat_planning">Perencanaan</string>
+    <string name="tg_cat_operations">Operasional</string>
+    <string name="tg_cat_dashboards">Dashboard</string>
+    <string name="tg_blank">Project kosong</string>
+    <string name="tg_blank_sub">Mulai kosong: To Do, In Progress, dan Done. Kamu yang pilih tab-nya.</string>
+    <string name="tg_failed">Template gagal dimuat. Kamu tetap bisa mulai kosong, atau coba lagi.</string>
+    <string name="tg_retry">Coba lagi</string>
+    <string name="tg_no_match">Tidak ada template yang cocok dengan “%1$s”.</string>
+    <string name="tg_show_all">Tampilkan semua</string>
+    <string name="tg_col_name">Nama</string>
+    <string name="tg_col_status">Status</string>
+    <string name="tg_col_assignee">Assignee</string>
+    <string name="tg_col_due">Tenggat</string>
+    <string name="tg_col_priority">Prioritas</string>
+    <string name="tg_change">Ganti template</string>
+    <string name="tg_sections">Section: %1$s</string>
+    <string name="tg_fields">Field: %1$s</string>
+    <string name="tg_starter">Tambahkan halaman awal</string>
+    <string name="tg_starter_tasks">Task awal</string>
+    <string name="tg_err_unknown">Template itu sudah tidak tersedia. Pilih yang lain.</string>
+    <!-- Section status + Calendar plot by (DEV-REDESIGN §1) -->
+    <string name="sec_status">Status section</string>
+    <string name="sec_status_title">Status untuk “%1$s”</string>
+    <string name="sec_status_hint">Task yang dipindah ke section ini mendapat status ini.</string>
+    <string name="sec_status_none">Tidak ada (section biasa)</string>
+    <string name="cal_plot_by">Tampilkan menurut</string>
+    <string name="cal_plot_due">Tenggat</string>
 </resources>

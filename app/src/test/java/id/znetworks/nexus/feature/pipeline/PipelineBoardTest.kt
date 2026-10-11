@@ -29,7 +29,8 @@ class PipelineBoardTest {
         assertTrue(viewer.contains("o[\"canAccessPipeline\"]")); assertFalse(viewer.contains("o[\"pipelineProjectId\"]"))
         val projects = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsScreen.kt").readText()
         assertFalse(projects.contains("PIPELINE_EXISTS")); assertFalse(projects.contains("onOpenBoard"))
-        assertTrue(projects.contains("it != ProjectType.PIPELINE || pipelineAccess"))
+        // The gallery offers Pipeline only to people with access (DEV-REDESIGN §1 moved the gate to TemplateLogic).
+        assertTrue(File("src/main/java/id/znetworks/nexus/feature/projects/ProjectTemplates.kt").readText().contains("it != ProjectType.PIPELINE || pipelineAccess"))
         assertTrue(projects.contains("h?.code == \"PIPELINE_COMPANY_ONLY\""))
         val shell = File("src/main/java/id/znetworks/nexus/ui/shell/SignedInShell.kt").readText()
         // §12.1: no Pipeline entry in More — the board is opened from Projects like any project.

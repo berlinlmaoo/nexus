@@ -189,7 +189,7 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun createProject(name: String, folderId: String?, type: ProjectType = ProjectType.TASK, setup: ProjectSetup = ProjectSetup(), onDone: (String) -> Unit) = act {
         val ws = workspaceId() ?: throw IllegalStateException()
-        val id = try { api.createProject(name, ws, folderId, type, setup.hiddenTabs, setup.memberIds) } catch (e: ApiError) {
+        val id = try { api.createProject(name, ws, folderId, type, setup.hiddenTabs, setup.memberIds, setup.template, setup.lang, setup.starter) } catch (e: ApiError) {
             // Many boards (PIPELINE-DASHBOARD §16, 11 Oct): a Pipeline is created like any project, never "opened
             // instead"; the only refusal left is the company-workspace rule.
             val h = e as? ApiError.Http
@@ -199,6 +199,8 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
                 h?.code == "TOO_MANY_MEMBERS" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_too_many)) }; return@act }
                 h?.code == "TASK_VIEW_REQUIRED" -> { _state.update { it.copy(message = res.getString(R.string.setup_err_view)) }; return@act }
                 h?.code == "PIPELINE_COMPANY_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.pl_company_only)) }; return@act }
+                // A template the server no longer has (a deploy between the gallery and Create).
+                h?.code == "UNKNOWN_TEMPLATE" || h?.code == "TEMPLATE_TASK_ONLY" -> { _state.update { it.copy(message = res.getString(R.string.tg_err_unknown)) }; return@act }
                 else -> throw e
             }
         }
@@ -577,27 +579,29 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
     var hidden by rememberSaveable { mutableStateOf(ProjectSetupLogic.DEFAULT_HIDDEN.toList()) }
     var members by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var picking by remember { mutableStateOf(false) }
-    // First: what the project is for (9 Oct). Only Task Project is built; the rest say "Coming soon".
-    var type by rememberSaveable { mutableStateOf<ProjectType?>(null) }
+    // First: what the project is for, from the template gallery (DEV-REDESIGN §1): blank, a template or a dashboard type.
+    var pick by remember { mutableStateOf<GalleryPick?>(null) }
+    var starter by rememberSaveable { mutableStateOf(true) }
+    val lang = templateLang()
     val c = Nx.colors
-    if (type == null) {
-        AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.pt_question)) },
-            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { ProjectType.entries.filter { it != ProjectType.PIPELINE || pipelineAccess }.forEach { t ->
-                // Pipeline too asks for a name and makes a NEW empty board (§16): there can be many.
-                TypeCard(t) { type = t }
-            } } },
-            confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
+    val chosen = pick
+    if (chosen == null) {
+        TemplateGalleryDialog(pipelineAccess, onDismiss = onDismiss) { p ->
+            pick = p
+            // A template starts from its own tabs; blank from the usual default (Automations off).
+            hidden = ((p as? GalleryPick.Template)?.template?.hiddenTabs ?: ProjectSetupLogic.DEFAULT_HIDDEN.toList())
+            starter = true
+        }
         return
     }
+    val type = (chosen as? GalleryPick.Dashboard)?.type ?: ProjectType.TASK
+    val template = (chosen as? GalleryPick.Template)?.template
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(stringResource(R.string.projects_new)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(type!!.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { type = null }, enabled = !busy) { Text(stringResource(R.string.pt_change)) }
-                }
+                TemplateChosen(chosen, enabled = !busy) { pick = null }
                 OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.project_name)) }, modifier = Modifier.fillMaxWidth())
                 // No icon or colour choice (PROJECT-ICON): every project shows the task icon; a photo is added in Settings.
                 if (folders.isNotEmpty()) {
@@ -611,11 +615,20 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, pip
                     }
                 }
                 if (type == ProjectType.TASK) StartingTabs(hidden.toSet(), enabled = !busy) { hidden = ProjectTabsLogic.KEYS.filter { k -> k in it } }
+                if (template != null && TemplateLogic.hasStarter(template)) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.border, RoundedCornerShape(12.dp))
+                    .clickable(enabled = !busy) { starter = !starter }.padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(starter, { starter = it }, enabled = !busy)
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.tg_starter), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        Text(template.starterDocs.joinToString(", ") { TemplateLogic.say(it.title, lang) }.ifEmpty { stringResource(R.string.tg_starter_tasks) },
+                            fontSize = 11.sp, color = c.mutedFg)
+                    }
+                }
                 StartingMembers(members.toSet(), roster, enabled = !busy, onEdit = { picking = true }) { uid -> members = members - uid }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name, folder, type ?: ProjectType.TASK, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId))) }, enabled = name.isNotBlank() && !busy) {
+            TextButton(onClick = { onCreate(name, folder, type, ProjectSetup(ProjectSetupLogic.hiddenToSend(hidden.toSet()), ProjectSetupLogic.membersToSend(members.toSet(), meId), template, lang, starter)) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 else Text(stringResource(if (type == ProjectType.OUTLET_SALES) R.string.pt_outlet_create else R.string.project_launch))
             }
@@ -691,28 +704,4 @@ internal fun ColorRow(selected: String, onPick: (String) -> Unit) {
     }
 }
 
-/** One project type: Task Project opens the form; the others are muted, dashed and "Coming soon". */
-@Composable
-private fun TypeCard(t: ProjectType, description: String? = null, onPick: () -> Unit) {
-    val c = Nx.colors
-    val shape = RoundedCornerShape(14.dp)
-    val frame = if (t.ready) Modifier.border(1.dp, c.border, shape)
-        else Modifier.drawBehind {
-            drawRoundRect(c.border, cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx()),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
-        }
-    Row(Modifier.fillMaxWidth().clip(shape).background(if (t.ready) c.card else c.muted.copy(alpha = 0.4f)).then(frame)
-        .clickable(enabled = t.ready, onClick = onPick).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(when (t) { ProjectType.TASK -> "✅"; ProjectType.OUTLET_SALES -> "🍸"; ProjectType.CONTENT -> "🗓️"; ProjectType.PIPELINE -> "🤝" },
-            fontSize = 22.sp, modifier = Modifier.padding(end = 12.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (t.ready) c.foreground else c.mutedFg)
-                if (!t.ready) Text(stringResource(R.string.pt_soon), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
-                    modifier = Modifier.padding(start = 6.dp).background(c.muted, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-            }
-            Text(description ?: stringResource(t.description), fontSize = 12.sp, color = c.mutedFg)
-        }
-    }
-}
 

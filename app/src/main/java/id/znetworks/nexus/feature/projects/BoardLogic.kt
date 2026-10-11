@@ -67,7 +67,8 @@ object BoardLogic {
     }
 
     /** Tasks with a due date in [month], by day of month (dated subtasks included). */
-    fun byDay(tasks: List<BoardTask>, month: java.time.YearMonth): Map<Int, List<BoardTask>> =
-        tasks.mapNotNull { t -> dueDate(t.dueDate)?.takeIf { java.time.YearMonth.from(it) == month }?.let { it.dayOfMonth to t } }
+    /** [dateOf]: the day a task sits on (its due date, or a plotted Date field, DEV-REDESIGN §1). */
+    fun byDay(tasks: List<BoardTask>, month: java.time.YearMonth, dateOf: (BoardTask) -> java.time.LocalDate? = { dueDate(it.dueDate) }): Map<Int, List<BoardTask>> =
+        tasks.mapNotNull { t -> dateOf(t)?.takeIf { java.time.YearMonth.from(it) == month }?.let { it.dayOfMonth to t } }
             .groupBy({ it.first }, { it.second })
 }

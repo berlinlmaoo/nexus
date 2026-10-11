@@ -70,7 +70,7 @@ class ProjectOverviewTest {
         val api = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectsApi.kt").readText()
         assertTrue(api.contains("/api/status-updates?projectId=") && api.contains("/status-updates/generate"))
         val screen = File("src/main/java/id/znetworks/nexus/feature/projects/ProjectDetailScreen.kt").readText()
-        assertTrue(screen.contains("ProjectTab.OVERVIEW -> ProjectOverview(") && screen.contains("OverviewLogic.filter(s.lanes, s.drill)"))
+        assertTrue(screen.contains("ProjectTab.OVERVIEW -> ProjectOverview(") && screen.contains("OverviewLogic.filter(TemplateLogic.mine(s.lanes, if (s.mine) meId else null), s.drill)"))
         assertFalse(screen.contains("private fun Overview("))
         listOf("values", "values-in").forEach { v ->
             val s = File("src/main/res/$v/strings.xml").readText()

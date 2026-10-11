@@ -3075,4 +3075,38 @@
     <string name="server_switch_blocked_workday">You can\'t sign out while your workday is open. Check out first, then switch.</string>
     <string name="server_switch_blocked_queue">Some check-ins are still waiting to be sent. Switch once they\'re in.</string>
     <string name="login_server_dev">Dev server (Tailscale) · Use Production</string>
+    <!-- Template gallery (DEV-REDESIGN §1) -->
+    <string name="tg_search">Search templates</string>
+    <string name="tg_clear_search">Clear search</string>
+    <string name="tg_all">All</string>
+    <string name="tg_cat_marketing">Marketing</string>
+    <string name="tg_cat_projects">Projects &amp; tasks</string>
+    <string name="tg_cat_docs">Docs &amp; meetings</string>
+    <string name="tg_cat_planning">Planning</string>
+    <string name="tg_cat_operations">Operations</string>
+    <string name="tg_cat_dashboards">Dashboards</string>
+    <string name="tg_blank">Blank project</string>
+    <string name="tg_blank_sub">Start empty: To Do, In Progress and Done. You pick the tabs.</string>
+    <string name="tg_failed">Templates couldn\'t load. You can still start blank, or try again.</string>
+    <string name="tg_retry">Try again</string>
+    <string name="tg_no_match">No template matches “%1$s”.</string>
+    <string name="tg_show_all">Show all</string>
+    <string name="tg_col_name">Name</string>
+    <string name="tg_col_status">Status</string>
+    <string name="tg_col_assignee">Assignee</string>
+    <string name="tg_col_due">Due date</string>
+    <string name="tg_col_priority">Priority</string>
+    <string name="tg_change">Change template</string>
+    <string name="tg_sections">Sections: %1$s</string>
+    <string name="tg_fields">Fields: %1$s</string>
+    <string name="tg_starter">Add starter pages</string>
+    <string name="tg_starter_tasks">Starter tasks</string>
+    <string name="tg_err_unknown">That template isn\'t available any more. Pick another one.</string>
+    <!-- Section status + Calendar plot by (DEV-REDESIGN §1) -->
+    <string name="sec_status">Section status</string>
+    <string name="sec_status_title">Status for “%1$s”</string>
+    <string name="sec_status_hint">Tasks moved into this section get this status.</string>
+    <string name="sec_status_none">None (plain section)</string>
+    <string name="cal_plot_by">Plot by</string>
+    <string name="cal_plot_due">Due date</string>
 </resources>

@@ -55,8 +55,14 @@ import id.znetworks.nexus.ui.theme.Nx
 
 // New project setup + multi-add members (Berlin, 11 Oct; PROJECT-SETUP-MEMBERS, server eecca18).
 
-/** What New project sends besides name/folder/type: null = key left out. */
-data class ProjectSetup(val hiddenTabs: List<String>? = null, val memberIds: List<String>? = null)
+/**
+ * What New project sends besides name/folder/type: null = key left out. [template] (DEV-REDESIGN §1) is built
+ * in [lang], with its starter pages and tasks when [starter].
+ */
+data class ProjectSetup(
+    val hiddenTabs: List<String>? = null, val memberIds: List<String>? = null,
+    val template: ProjectTemplate? = null, val lang: String = "id", val starter: Boolean = true,
+)
 
 object ProjectSetupLogic {
     /** The tabs a new Task Project can start without: the ones Project settings › Tabs offers (web-only "table" left out). */

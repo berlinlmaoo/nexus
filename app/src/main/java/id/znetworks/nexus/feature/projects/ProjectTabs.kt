@@ -195,15 +195,33 @@ fun SheetTab(projectId: String, lanes: List<Lane>, onOpen: (String) -> Unit) {
 
 // region Calendar
 
+/** What the Calendar plots (DEV-REDESIGN §1, "Plot by"): the due date ([fieldId] null) or one of the project's Date fields. */
+data class CalendarPlot(val fields: List<CustomFieldDef> = emptyList(), val fieldId: String? = null, val onChange: (String?) -> Unit = {})
+
 @Composable
-fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, onCreate: (LocalDate) -> Unit) {
+fun CalendarTab(tasks: List<BoardTask>, onOpen: (String) -> Unit, plot: CalendarPlot = CalendarPlot(), onCreate: (LocalDate) -> Unit) {
     val c = Nx.colors
     var offset by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     val month = YearMonth.from(OfficeTime.today()).plusMonths(offset.toLong())
-    val byDay = remember(tasks, month) { BoardLogic.byDay(tasks, month) }
+    val byDay = remember(tasks, month, plot.fieldId) { BoardLogic.byDay(tasks, month) { TemplateLogic.plotDate(it, plot.fieldId) } }
     val blanks = month.atDay(1).dayOfWeek.value - 1 // Monday first
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // "Plot by": offered once the project has a Date field (Content Plan opens on "Publication date").
+        if (plot.fields.isNotEmpty()) {
+            var open by remember { mutableStateOf(false) }
+            val due = stringResource(R.string.cal_plot_due)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.cal_plot_by), fontSize = 12.sp, color = c.mutedFg)
+                Box {
+                    TextButton(onClick = { open = true }) { Text(plot.fields.firstOrNull { it.id == plot.fieldId }?.name ?: due, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+                    androidx.compose.material3.DropdownMenu(open, { open = false }) {
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(due) }, onClick = { open = false; plot.onChange(null) })
+                        plot.fields.forEach { f -> androidx.compose.material3.DropdownMenuItem(text = { Text(f.name) }, onClick = { open = false; plot.onChange(f.id) }) }
+                    }
+                }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { offset--; selected = null }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null) }
             Text(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(month).replaceFirstChar(Char::titlecase),

@@ -3,6 +3,9 @@ package id.znetworks.nexus.feature.projects
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -125,6 +128,14 @@ data class ProjectDetailState(
     val notice: String? = null,
     /** A tap on the Overview (SPRINTS-OVERVIEW §3): Board / List show only these open tasks until cleared. */
     val drill: OverviewDrill? = null,
+    /** The template it was built from (DEV-REDESIGN §1): its opening tab, Calendar field and "My …" chip. */
+    val template: ProjectTemplate? = null,
+    /** The project's Date custom fields, what the Calendar can plot besides the due date (null = not loaded). */
+    val dateFields: List<CustomFieldDef>? = null,
+    /** The Calendar's field: a Date field's id, null = the due date. Kept per project on this phone. */
+    val plotBy: String? = null,
+    /** The template's "My …" chip is on: Board / List / Calendar show only the person's own tasks. */
+    val mine: Boolean = false,
 ) {
     /** The project's tabs (9 Oct, PROJECT-TYPES-TABS): its hidden ones out. No Finance / P&L (PROJECT-CUSTOMIZE-CLEANUP, 11 Oct). */
     val tabs: List<ProjectTab> get() = ProjectTabsLogic.visible(ProjectTabsLogic.hidden(detail?.hiddenTabs),
@@ -132,6 +143,7 @@ data class ProjectDetailState(
 }
 
 class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
+    private companion object { const val DUE = "dueDate" }
     val projectId: String = handle["id"] ?: ""
     private val c = (app as NexusApplication).container
     private val api = ProjectsApi(c.api)
@@ -150,6 +162,7 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
             val all = runCatching { api.projectTasks(projectId).value }.getOrDefault(emptyList())
             val lanes = BoardLogic.mergeSubtasks(d.value.taskLists.sortedBy { it.position ?: Int.MAX_VALUE }, all)
             _state.update { it.copy(detail = d.value, lanes = lanes, loading = false, error = null, locked = false, savedAt = d.savedAtMillis) }
+            if (d.value.type.isNullOrEmpty() || d.value.type == "TASK") loadTemplateBits(d.value.templateId)
             c.shortcuts.visited(id.znetworks.nexus.feature.home.ShortcutRef(d.value.id, d.value.name, d.value.icon, d.value.color))
         } catch (e: ApiError) {
             // 403: an existing project this person is not in.
@@ -157,6 +170,33 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
             _state.update { it.copy(loading = false, locked = locked, error = if (locked) null else e.describe(res)) }
         }
     }
+
+    /** Once per screen: the template (cached 5 min) and the Date fields; the Calendar's field from the saved choice or the template. */
+    private suspend fun loadTemplateBits(templateId: String?) {
+        if (_state.value.dateFields != null) return
+        val template = templateId?.let { id -> runCatching { ProjectTemplatesCache.get(api) }.getOrNull()?.firstOrNull { it.id == id } }
+        val dates = runCatching { api.customFields(projectId) }.getOrNull()?.filter { it.kind == "DATE" } ?: return
+        val saved = plotPrefs.getString(projectId, null)
+        val plot = when {
+            saved == DUE -> null
+            saved != null && dates.any { it.id == saved } -> saved
+            else -> TemplateLogic.calendarFieldId(template, dates)
+        }
+        _state.update { it.copy(template = template, dateFields = dates, plotBy = plot) }
+    }
+
+    private val plotPrefs get() = getApplication<Application>().getSharedPreferences("calendar_plot_by", android.content.Context.MODE_PRIVATE)
+
+    /** Calendar "Plot by": null = the due date. */
+    fun setPlotBy(fieldId: String?) {
+        plotPrefs.edit().putString(projectId, fieldId ?: DUE).apply()
+        _state.update { it.copy(plotBy = fieldId) }
+    }
+
+    fun setMine(on: Boolean) = _state.update { it.copy(mine = on) }
+
+    /** The status a section stands for (DEV-REDESIGN §1); null = a plain section. */
+    fun setSectionStatus(laneId: String, status: String?) = act(R.string.board_update_failed) { api.setSectionStatus(projectId, laneId, status) }
 
     fun setQuery(q: String) = _state.update { it.copy(query = q) }
 
@@ -241,7 +281,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
     var dupDateFor by remember { mutableStateOf<List<String>?>(null) }
     LaunchedEffect(s.notice) { s.notice?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.noticeShown() } }
     androidx.activity.compose.BackHandler(enabled = s.selected.isNotEmpty()) { vm.clearSelection() }
-    val lanes = BoardLogic.filter(OverviewLogic.filter(s.lanes, s.drill), s.query)
+    val meId = (context.applicationContext as NexusApplication).container.sessionStore.current?.userId
+    val lanes = BoardLogic.filter(OverviewLogic.filter(TemplateLogic.mine(s.lanes, if (s.mine) meId else null), s.drill), s.query)
     val total = s.lanes.sumOf { it.tasks.size }
     val shown = lanes.sumOf { it.tasks.size }
 
@@ -259,8 +300,26 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
             val tabs = s.tabs
             // The open tab hidden (here or on another device): Board, else List, else the first.
             LaunchedEffect(tabs) { if (s.detail != null) tab = ProjectTabsLogic.fallback(tab, tabs) }
+            // Built from a template (DEV-REDESIGN §1): open once on its tab, unless a tab was already picked.
+            var templateOpened by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(s.template, tabs) {
+                val t = s.template ?: return@LaunchedEffect
+                if (!templateOpened) { templateOpened = true; TemplateLogic.openingTab(t, tabs)?.let { tab = it } }
+            }
             ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0), edgePadding = 12.dp, containerColor = c.background) {
-                tabs.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(stringResource(t.label)) }) }
+                tabs.forEach { t -> Tab(selected = tab == t, onClick = { templateOpened = true; tab = t }, text = { Text(stringResource(t.label)) }) }
+            }
+            // The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab.
+            val myView = s.template?.myView
+            if (myView != null && meId != null && !s.locked) {
+                val lang = templateLang()
+                Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp)) {
+                    MineChip(TemplateLogic.say(myView.name, lang), s.mine) {
+                        val on = !s.mine
+                        vm.setMine(on)
+                        if (on) TemplateLogic.myViewTab(s.template!!, tabs)?.let { templateOpened = true; tab = it }
+                    }
+                }
             }
             if (tab.searches && !s.locked && s.detail != null) {
                 OutlinedTextField(
@@ -295,7 +354,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                             ProjectTab.BOARD -> Board(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
                             ProjectTab.LIST -> ListTab(lanes, s.lanes, onOpenTask, vm, s.selected) { dupDateFor = it }
                             ProjectTab.SHEET -> SheetTab(vm.projectId, lanes, onOpenTask)
-                            ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask) { d -> createDue = d; creating = true }
+                            ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask,
+                                plot = CalendarPlot(s.dateFields.orEmpty(), s.plotBy, vm::setPlotBy)) { d -> createDue = d; creating = true }
                             ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
                             ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId)
                             ProjectTab.PIPELINE -> id.znetworks.nexus.feature.pipeline.PipelineTab(newDealRequest, onOpenProject, onOpenFolder)
@@ -359,6 +419,13 @@ private fun Board(lanes: List<Lane>, allLanes: List<Lane>, onOpenTask: (String) 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(lane.name, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
                     Text("${lane.tasks.size}", fontSize = 12.sp, color = c.mutedFg)
+                    // The status this section stands for (DEV-REDESIGN §1; any project's section can have one).
+                    val st = allLanes.firstOrNull { it.id == lane.id }?.taskStatus
+                    var statusOpen by remember { mutableStateOf(false) }
+                    IconButton(onClick = { statusOpen = true }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.CheckCircle, stringResource(R.string.sec_status), tint = if (st != null) c.violetText else c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                    }
+                    if (statusOpen) SectionStatusDialog(lane.name, st, onDismiss = { statusOpen = false }) { statusOpen = false; if (it != st) vm.setSectionStatus(lane.id, it) }
                 }
                 Spacer(Modifier.height(8.dp))
                 // Add task sits under the lane header, outside the card list (the web board's "Spawn card",
@@ -517,4 +584,36 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
             dismissButton = { TextButton(onClick = { due = null; picking = false }) { Text(stringResource(R.string.task_no_deadline)) } },
         ) { DatePicker(st) }
     }
+}
+
+/** The template's "My …" chip: on = only the person's own tasks. */
+@Composable
+private fun MineChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val c = Nx.colors
+    Row(Modifier.clip(CircleShape).border(1.dp, if (on) c.violet.copy(alpha = 0.4f) else c.border, CircleShape)
+        .background(if (on) c.violet.copy(alpha = 0.1f) else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (on) { Icon(Icons.Filled.Check, null, tint = c.violetText, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (on) c.violetText else c.mutedFg)
+    }
+}
+
+/** Section status (DEV-REDESIGN §1): centred, None + the five statuses; tasks moved in take the one picked. */
+@Composable
+private fun SectionStatusDialog(section: String, current: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
+    val c = Nx.colors
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.sec_status_title, section)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.sec_status_hint), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(bottom = 8.dp))
+                (listOf<String?>(null) + TemplateLogic.SECTION_STATUSES).forEach { st ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onPick(st) }.padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(selected = current == st, onClick = { onPick(st) })
+                        Text(if (st == null) stringResource(R.string.sec_status_none) else taskStatusLabel(st), fontSize = 14.sp, color = c.foreground)
+                    }
+                }
+            }
+        },
+        confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
 }

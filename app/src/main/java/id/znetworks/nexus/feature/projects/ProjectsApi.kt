@@ -39,8 +39,17 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun searchTasks(q: String): List<BoardTask> =
         api.get("/api/tasks?search=${URLEncoder.encode(q, "UTF-8")}", ListSerializer(BoardTask.serializer()))
 
+    /** The New project gallery (DEV-REDESIGN §1): every template, both languages. */
+    suspend fun projectTemplates(): List<ProjectTemplate> =
+        api.get("/api/project-templates", ProjectTemplatesResponse.serializer()).templates
+
+    /**
+     * [template]: built from it (Task Project only) in [lang] ("en"/"id": section, field and page names
+     * become the project's own data); [starter] = its starter pages and tasks too.
+     */
     suspend fun createProject(name: String, workspaceId: String, folderId: String?, type: ProjectType = ProjectType.TASK,
-                              hiddenTabs: List<String>? = null, memberIds: List<String>? = null): String {
+                              hiddenTabs: List<String>? = null, memberIds: List<String>? = null,
+                              template: ProjectTemplate? = null, lang: String = "id", starter: Boolean = true): String {
         val body = buildJsonObject {
             put("name", name.trim()); put("workspaceId", workspaceId)
             // No "icon" or "color": every project shares one default mark, the server stores its defaults (PROJECT-ICON, 11 Oct).
@@ -50,6 +59,7 @@ class ProjectsApi(private val api: ApiClient) {
             // PROJECT-SETUP-MEMBERS (server eecca18): starting tabs (TASK only) and members; left out when empty.
             if (type == ProjectType.TASK) hiddenTabs?.let { put("hiddenTabs", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))) }
             memberIds?.let { put("memberIds", kotlinx.serialization.json.JsonArray(it.map(::JsonPrimitive))) }
+            if (template != null && type == ProjectType.TASK) { put("templateId", template.id); put("lang", lang); put("starter", starter) }
         }
         return (post("/api/projects", body)["id"] as? JsonPrimitive)?.content.orEmpty()
     }
@@ -106,6 +116,10 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun setFolderAggregate(id: String, projectIds: List<String>) =
         patch("/api/project-folders/$id", JsonObject(mapOf("aggregateProjectIds" to kotlinx.serialization.json.JsonArray(projectIds.map { JsonPrimitive(it) }))))
 
+    /** The task status a section stands for (DEV-REDESIGN §1): tasks moved in take it; null = a plain section. */
+    suspend fun setSectionStatus(projectId: String, sectionId: String, taskStatus: String?) =
+        patch("/api/projects/$projectId/sections", JsonObject(mapOf("id" to JsonPrimitive(sectionId), "taskStatus" to (taskStatus?.let { JsonPrimitive(it) } ?: JsonNull))))
+
     // region tasks
 
     suspend fun createTask(
@@ -113,7 +127,8 @@ class ProjectsApi(private val api: ApiClient) {
         assigneeIds: List<String> = emptyList(),
     ): String {
         val body = buildJsonObject {
-            put("title", title.trim()); put("projectId", projectId); put("taskListId", taskListId); put("status", "TODO")
+            put("title", title.trim()); put("projectId", projectId); put("taskListId", taskListId)
+            // No "status": the server gives the section's own (TaskList.taskStatus, DEV-REDESIGN §1), else TODO.
             if (priority != null && priority != "NONE") put("priority", priority)
             dueDate?.let { put("dueDate", it) }
             parentId?.let { put("parentId", it) }

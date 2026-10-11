@@ -125,7 +125,11 @@ data class BoardTask(
 }
 
 @Serializable
-data class Lane(val id: String, val name: String = "", val position: Int? = null, val tasks: List<BoardTask> = emptyList())
+data class Lane(
+    val id: String, val name: String = "", val position: Int? = null, val tasks: List<BoardTask> = emptyList(),
+    /** The task status this section stands for (DEV-REDESIGN §1, TaskList.taskStatus); null = a plain section. */
+    val taskStatus: String? = null,
+)
 
 /** `GET /api/projects/{id}`. */
 @Serializable
@@ -152,6 +156,8 @@ data class ProjectDetail(
     /** Tab keys this project hides: raw, read leniently by ProjectTabsLogic. */
     val hiddenTabs: kotlinx.serialization.json.JsonElement? = null,
     val financeEnabled: kotlinx.serialization.json.JsonElement? = null,
+    /** The template it was built from (DEV-REDESIGN §1); null = blank. */
+    val templateId: String? = null,
 )
 
 /** Custom field options arrive as `[..]`, `{options:[..]}` or `{choices:[..]}` (API.md §2.4). */
