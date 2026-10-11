@@ -6,7 +6,7 @@ import { pruneAutomationRuns, runTimeBasedAutomations } from "@/lib/automation-e
  * The clock of project automations (12 Oct 2026): every minute, due-date and scheduled rules
  * (automation-engine.ts runTimeBasedAutomations); every hour, the 90-day run-log trim.
  *
- * Started once per server process from src/instrumentation.ts. Off with NEXUS_AUTOMATION_TICKER=0. It
+ * Started once per server process from the root instrumentation.ts. Off with NEXUS_AUTOMATION_TICKER=0. It
  * also stands down by itself on a read-only replica (the VPS standby: pg_is_in_recovery()), so a warm
  * standby never fires rules on stale data. Each firing carries a dedup key (AutomationRun unique
  * automationId+dedupKey), so a second process or the /api/cron/automations route cannot double-fire.
