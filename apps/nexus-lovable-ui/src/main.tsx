@@ -7,6 +7,11 @@ import "./styles.css";
 
 const router = getRouter();
 
+// DEV environment marker (stripe + "[DEV]" title). Only builds made with VITE_NEXUS_ENV=dev include it.
+if (import.meta.env.VITE_NEXUS_ENV === "dev") {
+  void import("./lib/dev-marker").then((m) => m.installDevMarker());
+}
+
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
