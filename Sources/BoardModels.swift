@@ -55,6 +55,8 @@ struct ProjectDetail: Decodable, Sendable {
     }
     struct ProjectMember: Decodable, Identifiable, Sendable {
         let userId: String?
+        /// "LEAD" | "MEMBER" | … — the Overview's Lead badge and "Led by".
+        let role: String?
         let user: UserRef?
         struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
         var uid: String { userId ?? user?.id ?? "" }
@@ -92,6 +94,10 @@ struct BoardTask: Decodable, Identifiable, Sendable {
     let parentId: String?
     let taskListId: String?
     let quests: [TaskQuestRef]?
+    /// When the task was marked done and by whom (the project Overview, owner 11 Oct 2026). Sent by
+    /// GET /api/projects/:id; nil from older payloads and while the task is open.
+    let completedAt: String?
+    let completedById: String?
     /// Set during the board/list subtask-merge (not decoded — /api/tasks omits the parent object).
     var parent: BoardParent? = nil
 
@@ -112,7 +118,7 @@ struct BoardTask: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, status, priority, startDate, dueDate, assignees, subtasks, customFieldValues
-        case parentId, taskListId, quests
+        case parentId, taskListId, quests, completedAt, completedById
         case count = "_count"
     }
 
@@ -191,6 +197,16 @@ struct TaskDetail: Decodable, Sendable {
     struct ParentRef: Decodable, Sendable { let id: String; let title: String? }
 
     var isDone: Bool { (status ?? "").uppercased() == "DONE" }
+}
+
+/// GET/POST /api/status-updates — one post in a project's Status updates.
+struct ProjectStatusUpdate: Decodable, Identifiable, Sendable {
+    let id: String
+    let text: String
+    let status: String?
+    let createdAt: String?
+    let author: Author?
+    struct Author: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
 }
 
 /// POST /api/tasks returns the created task (top-level id).

@@ -936,6 +936,25 @@ struct APIClient {
         try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
     }
 
+    // MARK: - Project status updates (the Overview's last card, owner 11 Oct 2026)
+
+    /// Newest first.
+    func statusUpdates(_ projectId: String) async throws -> [ProjectStatusUpdate] {
+        try await run(makeRequest("/api/status-updates?projectId=\(enc(projectId))"), decode: [ProjectStatusUpdate].self)
+    }
+    func postStatusUpdate(projectId: String, text: String) async throws {
+        var req = makeRequest("/api/status-updates", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["projectId": projectId, "text": text])
+        _ = try await run(req, decode: ProjectStatusUpdate.self)
+    }
+    /// An AI draft written from the project's tasks; the person edits it before posting.
+    func draftStatusUpdate(projectId: String) async throws -> String {
+        struct Draft: Decodable { let content: String? }
+        let req = makeRequest("/api/projects/\(projectId)/status-updates/generate", method: "POST")
+        return try await run(req, decode: Draft.self).content ?? ""
+    }
+
     // MARK: - Automations / Finance / P&L
 
     func automations(_ projectId: String) async throws -> AutomationsResponse {

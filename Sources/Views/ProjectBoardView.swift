@@ -21,6 +21,9 @@ struct ProjectDetailView: View {
     @State private var showSettings = false
     @State private var prefillDue: Date?
     @State private var query = ""
+    /// A filter opened from a count on the Overview (owner, 11 Oct 2026): open top-level tasks only,
+    /// shown as a chip above the task tabs until it is cleared.
+    @State private var drill: OverviewDrill?
     /// Bumped by "+" on a Pipeline Dashboard: the pipeline opens its New deal sheet.
     @State private var newDealRequest = 0
     /// An Outlet Sales Dashboard's month, calendar day and report draft, shared by its four tabs. Made
@@ -50,14 +53,43 @@ struct ProjectDetailView: View {
 
     private var filteredLanes: [ProjectDetail.Lane] {
         let tokens = searchTokens
-        guard !tokens.isEmpty else { return lanes }
+        let drill = self.drill
+        guard !tokens.isEmpty || drill != nil else { return lanes }
+        let now = Date()
         return lanes.map { lane in
             ProjectDetail.Lane(
                 id: lane.id,
                 name: lane.name,
-                tasks: (lane.tasks ?? []).filter { Self.matches($0, laneName: lane.name, tokens: tokens) }
+                tasks: (lane.tasks ?? []).filter {
+                    (tokens.isEmpty || Self.matches($0, laneName: lane.name, tokens: tokens))
+                        && (drill?.matches($0, laneId: lane.id, today: now) ?? true)
+                }
             )
         }
+    }
+
+    /// Where an Overview count opens: Board, else List. nil when neither is shown.
+    private var drillTab: ProjectTab? {
+        let tabs = visibleTabs
+        return tabs.contains(.board) ? .board : (tabs.contains(.list) ? .list : nil)
+    }
+
+    private var drillBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle").font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(NX.violetText).accessibilityHidden(true)
+            Text(String(format: T("Showing: %@"), drill?.title ?? "")).font(NXFont.text(13, .semibold))
+                .foregroundStyle(NX.foreground).lineLimit(1)
+            Text("\(matchCount)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+            Spacer(minLength: 4)
+            Button { drill = nil } label: {
+                Text(T("Clear filter")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                    .padding(.horizontal, 8).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .background(NX.accentBg.opacity(0.6))
     }
 
     /// Semua kata harus cocok, urutannya bebas — "budi invoice" menemukan task milik Budi yang
@@ -156,6 +188,7 @@ struct ProjectDetailView: View {
             Divider().overlay(NX.border)
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
             if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty { searchBar }
+            if drill != nil && searchApplies && !isOutlet { drillBar }
             content
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selection.active && selectionApplies {
@@ -372,7 +405,15 @@ struct ProjectDetailView: View {
                 ErrorState(message: error, icon: "lock") { Task { await load() } }
             } else if let detail {
                 switch tab {
-                case .overview: OverviewTab(detail: detail, onOpenMember: { openProfile = $0 })
+                case .overview:
+                    OverviewTab(
+                        detail: detail,
+                        onDrill: drillTab.map { target -> (OverviewDrill) -> Void in { (d: OverviewDrill) in drill = d; tab = target } },
+                        onOpenTask: { openTaskId = $0 },
+                        onEditBrief: { showSettings = true },
+                        onAddTask: canCreate ? { () -> Void in prefillDue = nil; showCreate = true } : nil,
+                        onOpenMember: { openProfile = $0 }
+                    )
                 case .board:    boardTab(detail)
                 case .list:     ListTab(lanes: filteredLanes, onOpen: { openTaskId = $0 }, selection: selection)
                 case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { openTaskId = $0 })
