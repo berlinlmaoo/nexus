@@ -348,13 +348,22 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
     case "MARK_COMPLETE": {
       const status = action.type === "MARK_COMPLETE" ? "DONE" : action.value
       if (!status || !(TASK_STATUSES as readonly string[]).includes(status)) return { message: "Skipped: no valid status", skipped: true }
-      const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true } })
+      const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true, taskList: { select: { projectId: true, taskStatus: true } } } })
       if (cur?.status === status) return { message: `Status already ${status}`, skipped: true }
+      // Same rule as the task PATCH route (TaskList.taskStatus, project templates): out of a section that
+      // stands for a status, the task moves to the first section of its new status, if there is one.
+      const statusSection = cur?.taskList.taskStatus && cur.taskList.taskStatus !== status
+        ? await prisma.taskList.findFirst({ where: { projectId: cur.taskList.projectId, taskStatus: status as (typeof TASK_STATUSES)[number] }, orderBy: { position: "asc" }, select: { id: true } })
+        : null
       await prisma.task.update({
         where: { id: taskId! },
-        data: { status: status as (typeof TASK_STATUSES)[number], ...(status === "DONE" && actor ? { completedById: actor } : {}) },
+        data: {
+          status: status as (typeof TASK_STATUSES)[number],
+          ...(status === "DONE" && actor ? { completedById: actor } : {}),
+          ...(statusSection ? { taskListId: statusSection.id } : {}),
+        },
       })
-      return { message: `Status set to ${status}`, touchedTask: true }
+      return { message: `Status set to ${status}${statusSection ? " (moved to its section)" : ""}`, touchedTask: true }
     }
 
     case "SET_PRIORITY": {
@@ -392,10 +401,17 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
     }
 
     case "MOVE_TO_SECTION": {
-      const section = await sectionInProject(action.value, projectId)
+      const section = await prisma.taskList.findFirst({ where: { id: action.value ?? "", projectId }, select: { id: true, taskStatus: true } })
       if (!section) return { message: "Skipped: the section no longer exists in this project", skipped: true }
-      await prisma.task.update({ where: { id: taskId! }, data: { taskListId: section } })
-      return { message: "Moved to another section", touchedTask: true }
+      const cur = await prisma.task.findUnique({ where: { id: taskId! }, select: { status: true, taskListId: true } })
+      if (cur?.taskListId === section.id) return { message: "Already in that section", skipped: true }
+      // A section that stands for a status gives the task that status (same rule as the task PATCH route).
+      const takeStatus = section.taskStatus && section.taskStatus !== cur?.status ? section.taskStatus : null
+      await prisma.task.update({
+        where: { id: taskId! },
+        data: { taskListId: section.id, ...(takeStatus ? { status: takeStatus, ...(takeStatus === "DONE" && actor ? { completedById: actor } : {}) } : {}) },
+      })
+      return { message: `Moved to another section${takeStatus ? ` (status ${takeStatus})` : ""}`, touchedTask: true }
     }
 
     case "ADD_TAG":
@@ -456,6 +472,8 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
       const sectionId = (await sectionInProject(typeof action.config?.sectionId === "string" ? action.config.sectionId : undefined, projectId))
         ?? (await prisma.taskList.findFirst({ where: { projectId }, orderBy: { position: "asc" }, select: { id: true } }))?.id
       if (!sectionId) return { message: "Skipped: this project has no section", skipped: true }
+      // New tasks take the status their section stands for (TaskList.taskStatus), as in POST /api/tasks.
+      const sectionStatus = (await prisma.taskList.findUnique({ where: { id: sectionId }, select: { taskStatus: true } }))?.taskStatus ?? null
       const priority = typeof action.config?.priority === "string" && (TASK_PRIORITIES as readonly string[]).includes(action.config.priority) ? action.config.priority : undefined
       const due = typeof action.config?.due === "string" ? resolveDateValue(action.config.due) : null
       const descriptionRaw = typeof action.config?.description === "string" ? action.config.description : undefined
@@ -466,6 +484,7 @@ async function executeAction(action: Rule, ctx: ActionCtx): Promise<ActionOutcom
       const task = await prisma.task.create({
         data: {
           title, description, taskListId: sectionId, creatorId: actor, position: (max._max.position ?? -1) + 1,
+          ...(sectionStatus ? { status: sectionStatus } : {}),
           ...(priority ? { priority: priority as (typeof TASK_PRIORITIES)[number] } : {}),
           ...(due && due !== "invalid" ? { dueDate: due } : {}),
           ...(assignees.length ? { assignees: { create: assignees.map((userId) => ({ userId })) } } : {}),

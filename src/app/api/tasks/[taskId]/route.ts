@@ -475,7 +475,8 @@ export async function PATCH(
     if (tags !== undefined) automationChanges.tags = { from: existing.tags, to: tags }
     if (updateData.dueDate !== undefined) automationChanges.dueDate = { from: existing.dueDate?.toISOString() ?? null, to: (updateData.dueDate as Date | null)?.toISOString() ?? null }
     if (updateData.startDate !== undefined) automationChanges.startDate = { from: existing.startDate?.toISOString() ?? null, to: (updateData.startDate as Date | null)?.toISOString() ?? null }
-    if (taskListId !== undefined && !isLinkedProjectContext) automationChanges.section = { from: existing.taskListId, to: taskListId }
+    // updateData.taskListId also covers the move a status change makes into a status section (TaskList.taskStatus).
+    if (updateData.taskListId !== undefined) automationChanges.section = { from: existing.taskListId, to: updateData.taskListId as string }
     if (assigneeIds !== undefined) {
       const nextAssignees = new Set<string>(assigneeIds)
       automationChanges.assignee = {
