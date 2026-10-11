@@ -15,20 +15,52 @@ struct OutletCalendarView: View {
     private var wide: Bool { hSize == .regular }
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
+    /// The day panel's width beside the month on Mac/iPad.
+    private static let panelWidth: CGFloat = 400
+
     var body: some View {
         let day = store.calendarDay
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        if wide {
+            // Mac/iPad: the month on the left, the picked day's reports in a panel beside it. Each side
+            // scrolls on its own, so a long report never pushes the month out of view.
+            VStack(alignment: .leading, spacing: 20) {
                 OutletHeader(store: store, tab: $tab, newEventDate: day)
-                grid(selected: day)
-                dayDetail(day)
+                HStack(alignment: .top, spacing: 20) {
+                    ScrollView {
+                        grid(selected: day)
+                            .padding(.bottom, 24)
+                    }
+                    .scrollIndicators(.hidden)
+                    .refreshable { await store.load() }
+                    .frame(maxWidth: .infinity)
+                    ScrollView {
+                        dayDetail(day)
+                            .padding(16)
+                            .padding(.bottom, 8)
+                    }
+                    .frame(width: Self.panelWidth)
+                    .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+                    .padding(.bottom, 24)
+                }
             }
-            .padding(16)
-            .frame(maxWidth: 1000, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, OutletLayout.margin(true))
+            .padding(.top, 24)
+            .frame(maxWidth: OutletLayout.maxWidth + 2 * OutletLayout.margin(true), maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .opacity(store.switching ? 0.55 : 1)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    OutletHeader(store: store, tab: $tab, newEventDate: day)
+                    grid(selected: day)
+                    dayDetail(day)
+                }
+                .outletPage(wide: false)
+                .opacity(store.switching ? 0.55 : 1)
+            }
+            .refreshable { await store.load() }
         }
-        .refreshable { await store.load() }
     }
 
     // MARK: the month grid
@@ -37,8 +69,10 @@ struct OutletCalendarView: View {
         VStack(spacing: 4) {
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(Array(OutletFormat.weekHeader.enumerated()), id: \.offset) { _, name in
-                    Text(name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-                        .frame(maxWidth: .infinity)
+                    Text(name).font(NXFont.text(wide ? 12 : 11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .frame(maxWidth: .infinity, alignment: wide ? .leading : .center)
+                        .padding(.leading, wide ? 8 : 0)
+                        .padding(.vertical, wide ? 4 : 0)
                 }
             }
             LazyVGrid(columns: columns, spacing: 4) {
@@ -47,9 +81,9 @@ struct OutletCalendarView: View {
                 }
             }
         }
-        .padding(10)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+        .padding(wide ? 14 : 10)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: wide ? 20 : 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: wide ? 20 : 16, style: .continuous).strokeBorder(NX.border))
     }
 
     private func cell(_ d: String, selected: Bool) -> some View {
@@ -64,15 +98,15 @@ struct OutletCalendarView: View {
         } label: {
             VStack(alignment: wide ? .leading : .center, spacing: 3) {
                 Text("\(number)")
-                    .font(NXFont.text(13, isToday || selected ? .bold : .medium))
+                    .font(NXFont.text(wide ? 14 : 13, isToday || selected ? .bold : .medium))
                     .foregroundStyle(isToday ? Color.white : (inMonth ? NX.foreground : NX.mutedFg.opacity(0.6)))
-                    .frame(width: 26, height: 26)
+                    .frame(width: wide ? 28 : 26, height: wide ? 28 : 26)
                     .background(isToday ? NX.violetFill : .clear, in: Circle())
                 if wide {
                     ForEach(list.prefix(2)) { e in
                         HStack(spacing: 4) {
                             Circle().fill(e.status.tone.fg).frame(width: 6, height: 6)
-                            Text(e.name).font(NXFont.text(10, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Text(e.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -93,12 +127,13 @@ struct OutletCalendarView: View {
                 Spacer(minLength: 0)
             }
             .padding(wide ? 6 : 3)
-            .frame(maxWidth: .infinity, minHeight: wide ? 92 : 52, alignment: wide ? .topLeading : .top)
+            .frame(maxWidth: .infinity, minHeight: wide ? 104 : 52, alignment: wide ? .topLeading : .top)
             .background(selected ? NX.violet.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? NX.violet.opacity(0.6) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .accessibilityLabel("\(OutletFormat.dayLong(d, thisYear: store.thisYear)), \(list.isEmpty ? T("No events") : (list.count == 1 ? T("1 event") : String(format: T("%d events"), list.count)))")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -108,20 +143,24 @@ struct OutletCalendarView: View {
     private func dayDetail(_ day: String) -> some View {
         let list = store.events(on: day)
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 8) {
-                Text(OutletFormat.dayLong(day, thisYear: store.thisYear))
-                    .font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
-                Spacer(minLength: 4)
-                Button {
-                    store.openForm(eventId: nil, date: day)
-                    tab = .reportForm
-                } label: {
-                    Label(T("Add event on this day"), systemImage: "plus")
-                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
-                        .lineLimit(1).minimumScaleFactor(0.85)
-                        .frame(minHeight: 40)
-                }
-                .buttonStyle(.plain)
+            let title = Text(OutletFormat.dayLong(day, thisYear: store.thisYear))
+                .font(NXFont.display(wide ? 19 : 17, .bold)).foregroundStyle(NX.foreground)
+            let add = Button {
+                store.openForm(eventId: nil, date: day)
+                tab = .reportForm
+            } label: {
+                Label(T("Add event on this day"), systemImage: "plus")
+                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                    .lineLimit(1).minimumScaleFactor(0.85)
+                    .frame(minHeight: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // In the side panel the title gets the panel's full width; the action sits under it.
+            if wide {
+                VStack(alignment: .leading, spacing: 0) { title; add }
+            } else {
+                HStack(alignment: .center, spacing: 8) { title; Spacer(minLength: 4); add }
             }
             if list.isEmpty {
                 Text(T("No event on this day. Add one to fill its report after the night."))
@@ -132,7 +171,7 @@ struct OutletCalendarView: View {
                     .background(NX.muted.opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
                 ForEach(list) { e in
-                    OutletEventCard(event: e, form: store.form, thisYear: store.thisYear) {
+                    OutletEventCard(event: e, form: store.form, thisYear: store.thisYear, narrow: wide) {
                         store.openForm(eventId: e.id, date: nil)
                         tab = .reportForm
                     }
@@ -161,6 +200,30 @@ struct OutletReportFormView: View {
     private var isNew: Bool { draft.eventId == nil }
     private var current: OutletEvent? { draft.eventId.flatMap { store.event($0) } }
 
+    private var wide: Bool { hSize == .regular }
+
+    /// Sections with a long answer (what went well / what didn't); the rest are figures.
+    private var storySections: [OutletFormSection] {
+        store.form.sections.filter { $0.fields.contains { $0.type == "longtext" } }
+    }
+    private var figureSections: [OutletFormSection] {
+        store.form.sections.filter { !$0.fields.contains { $0.type == "longtext" } }
+    }
+
+    @ViewBuilder private var deleteButton: some View {
+        if !isNew {
+            Button(role: .destructive) { confirmDelete = true } label: {
+                Label(T("Delete event"), systemImage: "trash")
+                    .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.4)))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+    }
+
     private var alert: OutletFormAlert? {
         if store.pendingForm != nil { return .discard }
         if confirmDelete { return .delete }
@@ -178,21 +241,26 @@ struct OutletReportFormView: View {
                     Text(T("This event no longer exists. It may have been deleted; Control Room → Audit can restore it."))
                         .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                 }
-                ForEach(store.form.sections) { section($0) }
-                if !isNew {
-                    Button(role: .destructive) { confirmDelete = true } label: {
-                        Label(T("Delete event"), systemImage: "trash")
-                            .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.4)))
+                if wide && !storySections.isEmpty {
+                    // Mac/iPad: the figures (name, date, sales, pax, RSVP, hosting) on the left, what
+                    // went well and what didn't on the right — the whole report in one view.
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(figureSections) { section($0) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .top)
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(storySections) { section($0) }
+                            deleteButton
+                        }
+                        .frame(maxWidth: .infinity, alignment: .top)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
+                } else {
+                    ForEach(store.form.sections) { section($0) }
+                    deleteButton
                 }
             }
-            .padding(16)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .outletPage(wide: wide, maxWidth: wide ? 1120 : 760)
         }
         .scrollDismissesKeyboard(.interactively)
         .keyboardDoneBar()
@@ -247,9 +315,9 @@ struct OutletReportFormView: View {
     private var head: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(T("Event report")).font(NXFont.display(19, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Event report")).font(NXFont.display(wide ? 24 : 19, .bold)).foregroundStyle(NX.foreground)
                 Text(T("Fill it after every night. It goes straight into Overview, Calendar and Board."))
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                    .font(NXFont.text(wide ? 14 : 12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             Button { store.copyFormLink(eventId: draft.eventId) } label: {
@@ -305,6 +373,7 @@ struct OutletReportFormView: View {
             .accessibilityLabel(T("Which event?"))
             .accessibilityValue(label)
         }
+        .frame(maxWidth: wide ? 540 : .infinity, alignment: .leading)
     }
 
     @ViewBuilder private func check(_ on: Bool, _ text: String) -> some View {
@@ -426,24 +495,46 @@ struct OutletReportFormView: View {
 
     // MARK: save
 
-    private var saveBar: some View {
-        VStack(spacing: 6) {
-            if let fieldError {
-                Text(fieldError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+    private var saveButton: some View {
+        Button { Task { await save() } } label: {
+            HStack(spacing: 8) {
+                if saving { ProgressView().tint(.white) }
+                Text(isNew ? T("Add event") : T("Save report"))
             }
-            Button { Task { await save() } } label: {
-                HStack(spacing: 8) {
-                    if saving { ProgressView().tint(.white) }
-                    Text(isNew ? T("Add event") : T("Save report"))
-                }
-            }
-            .buttonStyle(NexusPrimaryButton())
-            .disabled(saving || (!isNew && !draft.dirty))
+            .frame(minWidth: wide ? 180 : nil)
         }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 10)
-        .frame(maxWidth: 760)
-        .frame(maxWidth: .infinity)
-        .background(.bar)
+        .buttonStyle(NexusPrimaryButton(fullWidth: !wide))
+        // ⌘↩ saves (⌘S is the sidebar's).
+        .keyboardShortcut(.return, modifiers: .command)
+        .disabled(saving || (!isNew && !draft.dirty))
+    }
+
+    @ViewBuilder private var saveBar: some View {
+        if wide {
+            // Mac/iPad: the save button at the trailing edge of the form's width, the problem beside it.
+            HStack(spacing: 14) {
+                if let fieldError {
+                    Text(fieldError).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                }
+                Spacer(minLength: 8)
+                saveButton
+            }
+            .padding(.horizontal, OutletLayout.margin(true)).padding(.vertical, 12)
+            .frame(maxWidth: 1120 + 2 * OutletLayout.margin(true))
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+        } else {
+            VStack(spacing: 6) {
+                if let fieldError {
+                    Text(fieldError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                }
+                saveButton
+            }
+            .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 10)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+        }
     }
 
     private func save() async {

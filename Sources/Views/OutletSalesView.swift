@@ -408,6 +408,24 @@ struct OutletSalesTab: View {
 
 // MARK: - Shared pieces
 
+/// Page width and margins of the outlet tabs. On Mac and iPad (regular width) a page uses the window up
+/// to a readable cap with comfortable margins, instead of a phone column centred in empty space.
+enum OutletLayout {
+    static let maxWidth: CGFloat = 1240
+    static func margin(_ wide: Bool) -> CGFloat { wide ? 32 : 16 }
+}
+
+extension View {
+    /// The outlet page frame: margins, top/bottom air, the width cap, centred in the window.
+    func outletPage(wide: Bool, maxWidth: CGFloat = OutletLayout.maxWidth) -> some View {
+        self
+            .padding(.horizontal, OutletLayout.margin(wide))
+            .padding(.vertical, wide ? 24 : 16)
+            .frame(maxWidth: maxWidth + 2 * OutletLayout.margin(wide), alignment: .leading)
+            .frame(maxWidth: .infinity)
+    }
+}
+
 /// ‹ Oktober 2026 › with "This month" when another month is shown, "Copy form link" and "Add event".
 /// The row above Overview, Calendar and Board.
 struct OutletHeader: View {
@@ -419,16 +437,24 @@ struct OutletHeader: View {
     @Environment(\.horizontalSizeClass) private var hSize
 
     var body: some View {
-        HStack(spacing: 6) {
-            OutletMonthSwitcher(store: store)
+        let wide = hSize == .regular
+        HStack(spacing: wide ? 10 : 6) {
+            OutletMonthSwitcher(store: store, large: wide)
             Spacer(minLength: 4)
             Button { store.copyFormLink() } label: {
-                Image(systemName: "link").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.foreground)
-                    .frame(width: 40, height: 40)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                HStack(spacing: 6) {
+                    Image(systemName: "link").font(.system(size: 14, weight: .semibold))
+                    if wide { Text(T("Copy form link")).font(NXFont.text(14, .semibold)) }
+                }
+                .foregroundStyle(NX.foreground)
+                .padding(.horizontal, wide ? 14 : 0)
+                .frame(minWidth: 40, minHeight: 40)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
+            .hoverEffect(.highlight)
             .accessibilityLabel(T("Copy form link"))
             Button {
                 store.openForm(eventId: nil, date: newEventDate)
@@ -442,8 +468,10 @@ struct OutletHeader: View {
                 .padding(.horizontal, hSize == .regular ? 14 : 0)
                 .frame(minWidth: 40, minHeight: 40)
                 .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
+            .hoverEffect(.highlight)
             .accessibilityLabel(T("Add event"))
         }
     }
@@ -451,15 +479,17 @@ struct OutletHeader: View {
 
 struct OutletMonthSwitcher: View {
     @Bindable var store: OutletSalesStore
+    /// Mac/iPad: the month is the page's title, so it reads as one.
+    var large = false
 
     var body: some View {
         let current = String(store.today.prefix(7))
         HStack(spacing: 2) {
             arrow("chevron.left", T("Previous month"), by: -1)
             Text(OutletFormat.monthLabel(store.month))
-                .font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                .font(NXFont.display(large ? 22 : 16, .bold)).foregroundStyle(NX.foreground)
                 .lineLimit(1).minimumScaleFactor(0.75)
-                .frame(minWidth: 112)
+                .frame(minWidth: large ? 150 : 112)
                 .monospacedDigit()
             arrow("chevron.right", T("Next month"), by: 1)
             if store.month != current {
@@ -478,6 +508,7 @@ struct OutletMonthSwitcher: View {
                 .frame(width: 36, height: 40).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .accessibilityLabel(label)
     }
 }
@@ -499,6 +530,7 @@ struct OutletStatusPill: View {
 /// A bar for "how much of the target": capped at full, green once the target is reached.
 struct OutletMeter: View {
     let pct: Int64?
+    var height: CGFloat = 8
     var body: some View {
         let value = Double(min(100, max(0, pct ?? 0))) / 100
         GeometryReader { geo in
@@ -507,7 +539,7 @@ struct OutletMeter: View {
                 Capsule().fill((pct ?? 0) >= 100 ? NX.success : NX.violet).frame(width: geo.size.width * value)
             }
         }
-        .frame(height: 8)
+        .frame(height: height)
         .accessibilityElement()
         .accessibilityValue(pct.map { "\($0)%" } ?? "—")
     }
@@ -542,17 +574,18 @@ struct OutletOverviewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: wide ? 20 : 14) {
                 OutletHeader(store: store, tab: $tab)
-                cards
-                targetLine
+                VStack(alignment: .leading, spacing: 10) {
+                    cards
+                    targetLine
+                }
                 strip
                 waitingBox
                 eventsList
+                    .padding(.top, wide ? 8 : 4)
             }
-            .padding(16)
-            .frame(maxWidth: 920, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .outletPage(wide: wide)
             .opacity(store.switching ? 0.55 : 1)
         }
         .refreshable { await store.load() }
@@ -575,37 +608,51 @@ struct OutletOverviewView: View {
                              target: s.paxTarget.map { OutletFormat.count($0) },
                              pct: s.paxTarget == nil ? nil : s.paxPct)
         if wide {
-            HStack(alignment: .top, spacing: 12) { sales; pax }
+            HStack(alignment: .top, spacing: 16) { sales; pax }
+                .fixedSize(horizontal: false, vertical: true)   // both cards as tall as the taller one
         } else {
             VStack(spacing: 12) { sales; pax }
         }
     }
 
+    /// One target card: the month's figure as the hero, the share of the target beside it, a real bar
+    /// under it and the target itself in words. Equal halves on Mac/iPad, stacked on iPhone.
     private func metricCard(title: String, hint: String?, actual: String, target: String?, pct: Int64?) -> some View {
-        OutletCard {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-                if let hint, !hint.isEmpty {
-                    Text(hint).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
-                }
-            }
+        let reached = (pct ?? 0) >= 100
+        return VStack(alignment: .leading, spacing: wide ? 14 : 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                (Text(actual).foregroundColor(NX.foreground)
-                 + Text(" / \(target ?? "—")").foregroundColor(NX.mutedFg))
-                    .font(NXFont.display(22, .bold))
-                    .monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                Spacer(minLength: 0)
+                Text(title).font(NXFont.text(wide ? 15 : 13, .semibold)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
                 if let pct {
-                    NexusChip(text: "\(pct)%", tone: pct >= 100 ? .success : .accent)
+                    Text("\(pct)%")
+                        .font(NXFont.display(wide ? 22 : 17, .bold))
+                        .foregroundStyle(reached ? ChipTone.success.fg : NX.violetText)
+                        .monospacedDigit()
                 }
             }
-            if target != nil {
-                OutletMeter(pct: pct)
+            Text(actual)
+                .font(NXFont.display(wide ? 44 : 32, .bold)).foregroundStyle(NX.foreground)
+                .monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.5)
+            if let target {
+                OutletMeter(pct: pct, height: wide ? 10 : 8)
+                Text(String(format: T("of %@ target"), target))
+                    .font(NXFont.text(wide ? 14 : 13, .medium)).foregroundStyle(NX.mutedFg)
+                    .monospacedDigit()
             } else {
-                Text(T("No target for this month")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(T("No target for this month")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
+            if let hint, !hint.isEmpty {
+                Text(hint).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(wide ? 24 : 16)
+        .frame(maxWidth: .infinity, maxHeight: wide ? CGFloat.infinity : nil, alignment: .topLeading)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: who set the target, and the editor for those who may
@@ -673,26 +720,38 @@ struct OutletOverviewView: View {
 
     // MARK: Events · Reported · Waiting report · RSVP · Hosting
 
-    private var strip: some View {
+    /// The five counts as one evenly sized row on Mac/iPad; on iPhone three over two, never squeezed.
+    @ViewBuilder private var strip: some View {
         let s = store.summary
-        return LazyVGrid(columns: [GridItem(.adaptive(minimum: wide ? 130 : 100), spacing: 8)], spacing: 8) {
-            tile(T("Events"), OutletFormat.count(s.eventCount))
-            tile(T("Reported"), OutletFormat.count(s.reportedCount))
-            tile(T("Waiting report"), OutletFormat.count(s.waitingCount), warn: s.waitingCount > 0)
-            tile(T("RSVP"), OutletFormat.count(s.rsvpTotal))
-            tile(T("Hosting"), OutletFormat.count(s.hostingTotal))
+        let events = tile(T("Events"), OutletFormat.count(s.eventCount))
+        let reported = tile(T("Reported"), OutletFormat.count(s.reportedCount))
+        let waiting = tile(T("Waiting report"), OutletFormat.count(s.waitingCount), warn: s.waitingCount > 0)
+        let rsvp = tile(T("RSVP"), OutletFormat.count(s.rsvpTotal))
+        let hosting = tile(T("Hosting"), OutletFormat.count(s.hostingTotal))
+        if wide {
+            HStack(spacing: 12) { events; reported; waiting; rsvp; hosting }
+        } else {
+            VStack(spacing: 8) {
+                HStack(spacing: 8) { events; reported; waiting }
+                HStack(spacing: 8) { rsvp; hosting }
+            }
         }
     }
 
     private func tile(_ label: String, _ value: String, warn: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(NXFont.display(18, .bold)).foregroundStyle(warn ? ChipTone.warning.fg : NX.foreground).monospacedDigit()
-            Text(label).font(NXFont.text(11, .medium)).foregroundStyle(NX.mutedFg).lineLimit(1).minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: wide ? 6 : 4) {
+            Text(value)
+                .font(NXFont.display(wide ? 28 : 22, .bold))
+                .foregroundStyle(warn ? ChipTone.warning.fg : NX.foreground)
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(label)
+                .font(NXFont.text(wide ? 13 : 12, .medium)).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, wide ? 18 : 12).padding(.vertical, wide ? 16 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(warn ? NX.warning.opacity(0.45) : NX.border))
         .accessibilityElement(children: .combine)
     }
 
@@ -736,8 +795,16 @@ struct OutletOverviewView: View {
     // MARK: the month's nights
 
     @ViewBuilder private var eventsList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(String(format: T("Events in %@"), monthName))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(String(format: T("Events in %@"), monthName))
+                    .font(NXFont.display(wide ? 18 : 16, .bold)).foregroundStyle(NX.foreground)
+                Spacer(minLength: 8)
+                if !store.events.isEmpty {
+                    Text(store.events.count == 1 ? T("1 event") : String(format: T("%d events"), store.events.count))
+                        .font(NXFont.text(13, .medium)).foregroundStyle(NX.mutedFg)
+                }
+            }
             if store.events.isEmpty {
                 EmptyState(icon: "calendar.badge.plus", title: T("No events this month yet"),
                            subtitle: T("Add the nights you have planned. After each one, the team fills its report and the totals above update."),
@@ -748,39 +815,97 @@ struct OutletOverviewView: View {
                     .frame(maxWidth: .infinity)
             } else {
                 VStack(spacing: 0) {
+                    if wide { tableHeader; Divider().overlay(NX.border) }
                     ForEach(Array(store.events.enumerated()), id: \.element.id) { i, e in
-                        if i > 0 { Divider().overlay(NX.border) }
-                        row(e)
+                        if i > 0 { Divider().overlay(NX.border).padding(.horizontal, wide ? 20 : 14) }
+                        if wide { tableRow(e) } else { row(e) }
                     }
                 }
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
             }
         }
     }
 
+    // Mac/iPad: a real table. Date · Event · Status · Sales · Pax, the figures right-aligned.
+    private static let dateCol: CGFloat = 150
+    private static let statusCol: CGFloat = 150
+    private static let salesCol: CGFloat = 220
+    private static let paxCol: CGFloat = 150
+
+    private var tableHeader: some View {
+        HStack(spacing: 16) {
+            Text(T("Date")).frame(width: Self.dateCol, alignment: .leading)
+            Text(T("Event")).frame(maxWidth: .infinity, alignment: .leading)
+            Text(T("Status")).frame(width: Self.statusCol, alignment: .leading)
+            Text(T("Sales")).frame(width: Self.salesCol, alignment: .trailing)
+            Text(T("Pax")).frame(width: Self.paxCol, alignment: .trailing)
+        }
+        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+        .padding(.horizontal, 20).padding(.vertical, 11)
+        .background(NX.muted.opacity(0.5))
+        .accessibilityHidden(true)
+    }
+
+    private func tableRow(_ e: OutletEvent) -> some View {
+        Button { store.sheetEventId = e.id } label: {
+            HStack(spacing: 16) {
+                Text(OutletFormat.dayShort(e.date))
+                    .font(NXFont.text(14, .medium)).foregroundStyle(NX.mutedFg)
+                    .frame(width: Self.dateCol, alignment: .leading)
+                Text(e.name)
+                    .font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                OutletStatusPill(status: e.status)
+                    .frame(width: Self.statusCol, alignment: .leading)
+                figure(OutletFormat.rupiah(e.sales), pct: e.salesTarget == nil ? nil : e.salesPct)
+                    .frame(width: Self.salesCol, alignment: .trailing)
+                figure(OutletFormat.count(e.pax), pct: e.paxTarget == nil ? nil : e.paxPct)
+                    .frame(width: Self.paxCol, alignment: .trailing)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// A figure with its share of the night's own target under it, when it has one.
+    private func figure(_ value: String, pct: Int64?) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(value).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            if let pct {
+                Text(String(format: T("%@ of target"), "\(pct)%"))
+                    .font(NXFont.text(12, .medium))
+                    .foregroundStyle(pct >= 100 ? ChipTone.success.fg : NX.mutedFg)
+            }
+        }
+        .monospacedDigit()
+    }
+
+    /// iPhone: date over a name and status, the figures on a line under it.
     private func row(_ e: OutletEvent) -> some View {
         Button { store.sheetEventId = e.id } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Text(OutletFormat.dayShort(e.date))
-                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                    .frame(width: wide ? 96 : 78, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(e.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Spacer(minLength: 4)
-                        OutletStatusPill(status: e.status)
-                    }
-                    HStack(spacing: 8) {
-                        Text(OutletFormat.vsTarget(e.sales, e.salesTarget, e.salesPct, money: true))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                        Text("·")
-                        Text(String(format: T("%@ pax"), OutletFormat.count(e.pax))).lineLimit(1)
-                    }
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(OutletFormat.dayShort(e.date))
+                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    Spacer(minLength: 4)
+                    OutletStatusPill(status: e.status)
                 }
+                Text(e.name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                HStack(spacing: 8) {
+                    Text(OutletFormat.vsTarget(e.sales, e.salesTarget, e.salesPct, money: true))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text("·")
+                    Text(String(format: T("%@ pax"), OutletFormat.count(e.pax))).lineLimit(1)
+                }
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).monospacedDigit()
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 14).padding(.vertical, 13)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -829,7 +954,7 @@ struct OutletBoardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: wide ? 20 : 14) {
                 OutletHeader(store: store, tab: $tab)
                 if store.events.isEmpty && store.waitingEarlier.isEmpty {
                     EmptyState(icon: "rectangle.split.3x1", title: T("No events this month yet"),
@@ -840,7 +965,8 @@ struct OutletBoardView: View {
                         .padding(.vertical, 40)
                         .frame(maxWidth: .infinity)
                 } else if wide {
-                    HStack(alignment: .top, spacing: 12) {
+                    // Three equal columns across the page; each as tall as its own cards.
+                    HStack(alignment: .top, spacing: 16) {
                         ForEach(OutletStatus.allCases) { column($0) }
                     }
                 } else {
@@ -849,9 +975,7 @@ struct OutletBoardView: View {
                     }
                 }
             }
-            .padding(16)
-            .frame(maxWidth: 1100, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .outletPage(wide: wide)
             .opacity(store.switching ? 0.55 : 1)
         }
         .refreshable { await store.load() }
@@ -867,13 +991,15 @@ struct OutletBoardView: View {
 
     private func column(_ status: OutletStatus) -> some View {
         let list = items(status)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: wide ? 10 : 8) {
+            HStack(spacing: 8) {
                 Circle().fill(status.tone.fg).frame(width: 8, height: 8)
-                Text(status.label).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
-                Text("\(list.count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                Text(status.label).font(NXFont.text(wide ? 15 : 13, .bold)).foregroundStyle(NX.foreground)
                 Spacer(minLength: 0)
+                Text("\(list.count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                    .padding(.horizontal, 8).padding(.vertical, 2).background(NX.card, in: Capsule())
             }
+            .padding(.horizontal, 2).padding(.bottom, 2)
             .accessibilityElement(children: .combine)
             if list.isEmpty {
                 Text(emptyText(status)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
@@ -883,35 +1009,44 @@ struct OutletBoardView: View {
                 ForEach(list) { card($0) }
             }
         }
-        .padding(12)
+        .padding(wide ? 14 : 12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(NX.muted.opacity(0.45), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(NX.muted.opacity(0.45), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private func card(_ e: OutletEvent) -> some View {
         Button { store.sheetEventId = e.id } label: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(OutletFormat.dayShort(e.date, thisYear: String(store.month.prefix(4))))
-                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     Spacer(minLength: 4)
                     if e.status == .waiting, let missing = e.missingLabel { NexusChip(text: missing, tone: .warning) }
                 }
-                Text(e.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
-                Group {
-                    Text("\(T("Sales")): \(OutletFormat.vsTarget(e.sales, e.salesTarget, e.salesPct, money: true))")
-                    Text("\(T("Pax")): \(OutletFormat.vsTarget(e.pax, e.paxTarget, e.paxPct, money: false))")
+                Text(e.name).font(NXFont.text(wide ? 16 : 15, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                VStack(alignment: .leading, spacing: 3) {
+                    figureLine(T("Sales"), OutletFormat.vsTarget(e.sales, e.salesTarget, e.salesPct, money: true))
+                    figureLine(T("Pax"), OutletFormat.vsTarget(e.pax, e.paxTarget, e.paxPct, money: false))
                 }
-                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.top, 2)
             }
-            .padding(12)
+            .padding(wide ? 14 : 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
-            .contentShape(Rectangle())
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
+        .hoverEffect(.lift)
+    }
+
+    /// "Sales    Rp2.000.000 / Rp4.000.000 (50%)": the label muted, the figure in the text colour.
+    private func figureLine(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).foregroundStyle(NX.mutedFg).frame(minWidth: 34, alignment: .leading)
+            Text(value).foregroundStyle(NX.foreground).lineLimit(1).minimumScaleFactor(0.75)
+        }
+        .font(NXFont.text(13)).monospacedDigit()
     }
 }
 
@@ -924,10 +1059,12 @@ struct OutletEventCard: View {
     let event: OutletEvent
     let form: OutletForm
     let thisYear: String
+    /// Drawn in a side panel (the calendar's day beside the month on Mac/iPad): phone-width labels.
+    var narrow = false
     var onEdit: (() -> Void)? = nil
 
     @Environment(\.horizontalSizeClass) private var hSize
-    private var labelWidth: CGFloat { hSize == .regular ? 200 : 128 }
+    private var labelWidth: CGFloat { hSize == .regular && !narrow ? 200 : 132 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

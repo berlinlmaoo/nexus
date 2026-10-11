@@ -3059,6 +3059,11 @@ final class AppLanguage {
         "Showing: %@": "Ditampilkan: %@",
         "Clear filter": "Hapus filter",
 
+        // Outlet Sales: regular-width layout (11 Oct)
+        "of %@ target": "dari target %@",
+        "%@ of target": "%@ dari target",
+        "Event": "Event",
+
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",
