@@ -306,6 +306,7 @@ export function ConditionalFormatPanel({ rules, shape, sheetName, selectionRange
   // The saved list as this panel last knew it: the prop, or what it just handed to onSave (the prop
   // catches up a moment later), so the preview of the next rule never drops the one just saved.
   const savedRef = useRef(rules);
+  const rulesKey = useMemo(() => JSON.stringify(rules), [rules]);
   useEffect(() => { savedRef.current = rules; }, [rules]);
   const save = (next: CondRule[]) => { savedRef.current = next; onSave(next); };
 
@@ -320,8 +321,10 @@ export function ConditionalFormatPanel({ rules, shape, sheetName, selectionRange
   useEffect(() => {
     if (!draft) return;
     onPreview(placeIn(savedRef.current, fromDraft(draft, shape, false).rule, draft.id));
+    // Keyed on the rules' CONTENT: callers pass `settings.condFormats ?? []`, a new array per render,
+    // and depending on its identity re-ran this effect on every render the preview itself caused.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, rules]);
+  }, [draft, rulesKey]);
 
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const setStyle = (patch: Partial<CondStyle>) => setDraft((d) => {

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
       // Freeze, hidden rows/columns, merges, tab colour — the same for everyone looking at the sheet.
       settings: sheet.settings,
       rows: outRows,
-      ...(wantComputed ? { computed: computeSheet(sheet.columns, outRows) } : {}),
+      ...(wantComputed ? { computed: computeSheet(sheet.columns, outRows, { names: sheet.settings.namedRanges }) } : {}),
       canEdit,
       canManage,
     })

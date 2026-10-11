@@ -104,7 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
 
     // The SAME computation GET ?computed=1 serves, over the WHOLE sheet with its real row ids — the
     // old export evaluated with positions as row ids, so every formula with a reference was #REF!.
-    const computed = computeSheet(sheet.columns, cellRows)
+    const computed = computeSheet(sheet.columns, cellRows, { names: sheet.settings.namedRanges })
     const cellAt = (rowIndex: number, colId: string): ComputedCell | undefined => computed[body[rowIndex]?.id]?.[colId]
     const linkAt = (rowIndex: number, colId: string): string => {
       const raw = body[rowIndex]?.cells[colId]

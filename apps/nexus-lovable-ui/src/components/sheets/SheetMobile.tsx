@@ -36,7 +36,7 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
   const hiddenCols = useMemo(() => new Set(settings.hiddenCols ?? []), [settings.hiddenCols]);
   const columns = useMemo(() => sheet.columns.map((c, i) => ({ col: c, index: i })).filter(({ col }) => !hiddenCols.has(col.id)), [sheet.columns, hiddenCols]);
   const rows = useMemo(() => sheet.rows.map((r, i) => ({ row: r, index: i })).filter(({ row }) => !hiddenRows.has(row.id)), [sheet.rows, hiddenRows]);
-  const data = useMemo(() => buildSheetData(sheet.columns, sheet.rows), [sheet.columns, sheet.rows]);
+  const data = useMemo(() => buildSheetData(sheet.columns, sheet.rows, sheet.settings?.namedRanges), [sheet.columns, sheet.rows, sheet.settings?.namedRanges]);
   const engine = engineFor(data);
   const showLabels = sheet.columns.some((c) => c.name.trim() || c.type !== "text");
   // Data validation, same as the desktop grid: explicit rules, then dropdown columns.
@@ -138,7 +138,7 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
                       const v = row.cells[col.id];
                       const st = row.styles?.[col.id];
                       const computed = engine.value(row.id, col.id);
-                      const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(v) ? engine.format(row.id, col.id) : col.type === "currency" ? "idr" : null);
+                      const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(v) ? engine.format(row.id, col.id) : col.type === "currency" ? "idr" : null, st?.pt);
                       const text = col.type === "multiselect" ? readMulti(v).join(", ")
                         : styled ?? displayCell(col.type, v, { data, rowId: row.id, colId: col.id });
                       const selected = sel?.r === r && sel?.c === ci;
