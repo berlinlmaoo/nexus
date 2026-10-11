@@ -32,6 +32,7 @@
  */
 
 import type { PrismaClient } from "@/generated/prisma/client"
+import { findProjectTemplate, pick } from "@/lib/project-templates"
 
 export const VIEW_LAYOUTS = ["board", "list", "table", "calendar", "timeline", "gallery"] as const
 export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
@@ -172,7 +173,7 @@ export function isViewLayout(v: unknown): v is ViewLayout {
  * What the five built-in views start with: what the old tabs showed. The Table view takes the project's
  * shared column list (Project.tableColumns, the old per-project Table setting) as its visible properties.
  */
-export function builtinViewSeed(key: BuiltinViewKey, tableColumns: unknown): { layout: ViewLayout; config: Record<string, unknown> } {
+export function builtinViewSeed(key: BuiltinViewKey | "board" | "list" | "table", tableColumns: unknown): { layout: ViewLayout; config: Record<string, unknown> } {
   switch (key) {
     case "board":
       return { layout: "board", config: { groupBy: "section", showSubtasks: true } }
@@ -186,6 +187,8 @@ export function builtinViewSeed(key: BuiltinViewKey, tableColumns: unknown): { l
     }
     case "calendar":
       return { layout: "calendar", config: { dateProp: "due" } }
+    default:
+      return { layout: "board", config: {} }
     case "timeline":
       return { layout: "timeline", config: { groupBy: "section", startProp: "start", endProp: "due" } }
   }
@@ -193,17 +196,68 @@ export function builtinViewSeed(key: BuiltinViewKey, tableColumns: unknown): { l
 
 type Db = Pick<PrismaClient, "projectView">
 
-/** Creates the project's missing built-in views. Safe to run concurrently (partial unique index). */
-export async function ensureBuiltinViews(db: Db, projectId: string, tableColumns: unknown, existingBuiltins: Set<string>) {
+/** What seeding needs to know about a project. */
+export type SeedProject = {
+  id: string
+  tableColumns: unknown
+  templateId: string | null
+  customFields: Array<{ id: string; name: string; type: string }>
+  sectionNames: string[]
+}
+
+/** Is this one of the five migrated tabs (fixed layout, hidden through hiddenTabs, not deletable)? */
+export function isBuiltinTab(builtin: string | null | undefined): builtin is BuiltinViewKey {
+  return !!builtin && (BUILTIN_VIEW_KEYS as readonly string[]).includes(builtin)
+}
+
+/**
+ * A project made from a template (lib/project-templates.ts) starts with its views set up the way the
+ * template says: the Calendar plots the template's date field, and a template "My …" preset (Notion's
+ * "My meetings") becomes a real shared view filtered on assignee = whoever looks ("__me__"). The field is
+ * found by name in either language, since the project was built in one of them.
+ */
+function templateSeeds(project: SeedProject): { calendarDateProp?: string; mine?: { name: string; layout: ViewLayout; config: Record<string, unknown> } } {
+  const tpl = findProjectTemplate(project.templateId)
+  if (!tpl) return {}
+  const out: ReturnType<typeof templateSeeds> = {}
+  if (tpl.calendarBy && tpl.calendarBy !== "dueDate") {
+    const f = tpl.fields.find((x) => `cf:${x.key}` === tpl.calendarBy)
+    const def = f && project.customFields.find((d) => d.type === "DATE" && (d.name === f.name.en || d.name === f.name.id))
+    if (def) out.calendarDateProp = `cf:${def.id}`
+  }
+  if (tpl.myView) {
+    const usesId = tpl.sections.some((s) => s.name.id !== s.name.en && project.sectionNames.includes(s.name.id))
+      || tpl.fields.some((f) => f.name.id !== f.name.en && project.customFields.some((d) => d.name === f.name.id))
+    const usesEn = tpl.sections.some((s) => s.name.id !== s.name.en && project.sectionNames.includes(s.name.en))
+    const lang = usesId || !usesEn ? "id" : "en"
+    const base = builtinViewSeed(tpl.myView.tab, project.tableColumns)
+    out.mine = {
+      name: pick(tpl.myView.name, lang),
+      layout: base.layout,
+      config: { ...base.config, filter: { simple: [{ id: "mine", prop: "assignee", op: "any_of", value: ["__me__"] }], advanced: null } },
+    }
+  }
+  return out
+}
+
+/**
+ * Creates the project's missing built-in views. Safe to run concurrently (partial unique index on
+ * projectId + builtin). The template's extra "My …" view (builtin "mine") is only made together with the
+ * very first set, so deleting it later is final.
+ */
+export async function ensureBuiltinViews(db: Db, project: SeedProject, existingBuiltins: Set<string>) {
   const missing = BUILTIN_VIEW_KEYS.filter((k) => !existingBuiltins.has(k))
   if (missing.length === 0) return false
-  await db.projectView.createMany({
-    data: missing.map((key) => {
-      const seed = builtinViewSeed(key, tableColumns)
-      return { projectId, builtin: key, layout: seed.layout, position: BUILTIN_VIEW_KEYS.indexOf(key), config: seed.config as object, name: null, ownerId: null }
-    }),
-    skipDuplicates: true,
+  const extras = templateSeeds(project)
+  const data: Array<{ projectId: string; builtin: string; layout: string; position: number; config: object; name: string | null; ownerId: null }> = missing.map((key) => {
+    const seed = builtinViewSeed(key, project.tableColumns)
+    const config = key === "calendar" && extras.calendarDateProp ? { ...seed.config, dateProp: extras.calendarDateProp } : seed.config
+    return { projectId: project.id, builtin: key, layout: seed.layout, position: BUILTIN_VIEW_KEYS.indexOf(key), config, name: null, ownerId: null }
   })
+  if (existingBuiltins.size === 0 && extras.mine) {
+    data.push({ projectId: project.id, builtin: "mine", layout: extras.mine.layout, position: BUILTIN_VIEW_KEYS.length, config: extras.mine.config, name: extras.mine.name, ownerId: null })
+  }
+  await db.projectView.createMany({ data, skipDuplicates: true })
   return true
 }
 

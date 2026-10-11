@@ -30,7 +30,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const access = await viewAccess(session.user.id, projectId)
     if (!access.read) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { type: true, tableColumns: true } })
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { type: true, tableColumns: true, templateId: true, customFields: { select: { id: true, name: true, type: true } }, taskLists: { select: { name: true } } },
+    })
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
     const where = { projectId, OR: [{ ownerId: null }, { ownerId: session.user.id }] }
@@ -38,7 +41,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     // Pipeline and Outlet Sales projects have their own screens; only task projects get the built-ins.
     if (project.type !== "PIPELINE" && project.type !== "OUTLET_SALES") {
       const have = new Set(rows.filter((r) => r.builtin && r.ownerId === null).map((r) => r.builtin as string))
-      if (await ensureBuiltinViews(prisma, projectId, project.tableColumns, have)) {
+      const seed = { id: projectId, tableColumns: project.tableColumns, templateId: project.templateId, customFields: project.customFields.map((f) => ({ ...f, type: String(f.type) })), sectionNames: project.taskLists.map((l) => l.name) }
+      if (await ensureBuiltinViews(prisma, seed, have)) {
         rows = await prisma.projectView.findMany({ where, orderBy: [{ position: "asc" }, { createdAt: "asc" }] })
       }
     }

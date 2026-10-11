@@ -9,7 +9,7 @@ import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
-import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask } from "@/lib/nexus-api";
+import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
@@ -40,6 +40,7 @@ import {
   filterFromDrill,
   groupLabelIsBuiltin,
   groupTasks,
+  isBuiltinTab,
   newId,
   propDef,
   propDefs,
@@ -279,14 +280,23 @@ function ProjectDetail() {
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 300_000 });
   const meId = me.data?.user?.id ?? null;
   const cfDefs = useQuery({ queryKey: ["nexus", "project-custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), staleTime: 60_000, retry: false, enabled: !!data && !isSpecial });
+  // Built from a template (owner, 12 Oct 2026): which tab it opens on. Its Calendar date field and its
+  // "My …" preset became real views when the views were first made (server: lib/project-views.ts).
+  const templates = useQuery({ queryKey: ["nexus", "project-templates"], queryFn: () => nexusApi.projectTemplates(), staleTime: 5 * 60_000, retry: 1, enabled: !!data?.templateId });
+  const template = data?.templateId ? templates.data?.templates.find((tp) => tp.id === data.templateId) ?? null : null;
   const viewsList = useMemo(() => (pv.query.isError ? fallbackViews() : pv.views), [pv.query.isError, pv.views]);
-  const visibleViews = viewsList.filter((v) => !(v.builtin && hiddenTabs.has(v.builtin)));
+  const visibleViews = viewsList.filter((v) => !(isBuiltinTab(v) && hiddenTabs.has(v.builtin!)));
   const moduleTabs = MODULE_TABS.filter((m) => !hiddenTabs.has(m.id));
   let activeModule: ModuleKey | null = null;
   let activeView: NexusProjectView | null = null;
   if (search.v === "automations") activeModule = "automations";
   else if (search.v && moduleTabs.some((m) => m.id === search.v)) activeModule = search.v as ModuleKey;
   else activeView = visibleViews.find((v) => v.id === search.v) ?? visibleViews.find((v) => v.builtin === search.v) ?? null;
+  // A project built from a template opens on the template's tab (lib/project-templates.ts defaultTab).
+  if (!activeModule && !activeView && !search.v && template?.defaultTab) {
+    if (moduleTabs.some((m) => m.id === template.defaultTab)) activeModule = template.defaultTab as ModuleKey;
+    else activeView = visibleViews.find((v) => v.builtin === template.defaultTab) ?? null;
+  }
   if (!activeModule && !activeView) activeView = visibleViews[0] ?? null;
   const canEditView = (v: NexusProjectView) => !v.id.startsWith("fallback:") && (v.shared ? pv.canEditShared : true);
   const canEdit = activeView ? canEditView(activeView) : false;
@@ -382,7 +392,7 @@ function ProjectDetail() {
   const copyViewLink = (v: NexusProjectView) => {
     const url = new URL(window.location.href);
     url.search = "";
-    url.searchParams.set("v", v.builtin && !v.id.startsWith("fallback:") ? v.id : v.id.replace("fallback:", ""));
+    url.searchParams.set("v", v.id.replace("fallback:", ""));
     void navigator.clipboard?.writeText(url.toString()).then(() => toast.success(tr("Link copied")), () => toast.error(tr("Couldn't copy the link")));
   };
   const deleteView = (v: NexusProjectView) => {
@@ -419,7 +429,7 @@ function ProjectDetail() {
           onDuplicate={duplicateView}
           onCopyLink={copyViewLink}
           onDelete={deleteView}
-          onHide={(v) => v.builtin && hideBuiltin.mutate(v.builtin)}
+          onHide={(v) => isBuiltinTab(v) && hideBuiltin.mutate(v.builtin!)}
           divideAfter={lastViewKey}
           addView={<AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} />}
         />
@@ -599,7 +609,7 @@ function ProjectDetail() {
           onShare={(shared) => pv.update.mutate({ id: activeView.id, shared })}
           onDuplicate={() => duplicateView(activeView)}
           onDelete={() => deleteView(activeView)}
-          onHide={() => activeView.builtin && hideBuiltin.mutate(activeView.builtin)}
+          onHide={() => isBuiltinTab(activeView) && hideBuiltin.mutate(activeView.builtin!)}
           onCopyLink={() => copyViewLink(activeView)}
           onClose={() => setViewSettingsOpen(false)}
         />
@@ -777,7 +787,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
                 <>
                   <button type="button" aria-label={t("Move section left")} disabled={sectionIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: g.key, position: sectionIndex - 1 })} className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-30"><ChevronLeft className="h-3.5 w-3.5" /></button>
                   <button type="button" aria-label={t("Move section right")} disabled={sectionIndex === sections.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: g.key, position: sectionIndex + 1 })} className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-30"><ChevronRight className="h-3.5 w-3.5" /></button>
-                  <ListMenu projectId={project.id} list={{ id: g.key, name: g.label }} />
+                  <ListMenu projectId={project.id} list={{ id: g.key, name: g.label, taskStatus: sections[sectionIndex]?.taskStatus }} />
                 </>
               )}
               <button type="button" aria-label={t("Add task")} onClick={() => onCreate(isSection ? g.key : undefined)} className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"><Plus className="h-3.5 w-3.5" /></button>
@@ -904,14 +914,33 @@ function AddListColumn({ projectId }: { projectId: string }) {
   );
 }
 
-function ListMenu({ projectId, list }: { projectId: string; list: { id: string; name: string } }) {
+function ListMenu({ projectId, list }: { projectId: string; list: { id: string; name: string; taskStatus?: NexusTaskStatus | null } }) {
   const qc = useQueryClient();
   const { t } = useLang();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
   const rename = useMutation({ mutationFn: (name: string) => nexusApi.updateSection(projectId, { id: list.id, name }), onSuccess: invalidate });
   const del = useMutation({ mutationFn: () => nexusApi.deleteSection(projectId, list.id), onSuccess: invalidate, onError: (e) => toast.error(e instanceof Error ? e.message : t("Couldn't delete the section")) });
+  // The status a section stands for (12 Oct 2026; templates set it): a task moved in takes it, and a
+  // status change moves the task to the first section of that status. "None" = a plain section.
+  const setStatus = useMutation({ mutationFn: (taskStatus: NexusTaskStatus | null) => nexusApi.updateSection(projectId, { id: list.id, taskStatus }), onSuccess: invalidate });
   return (
     <>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className={cn("grid h-7 w-6 place-items-center rounded hover:bg-card hover:text-foreground", list.taskStatus ? "text-[color:var(--accent-foreground)]" : "text-muted-foreground")} title={t("Section status")} aria-label={t("Section status")}>
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-1">
+          <div className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">{t("Tasks moved into this section get this status.")}</div>
+          {([null, ...TASK_STATUSES] as (NexusTaskStatus | null)[]).map((st) => (
+            <button key={st ?? "none"} type="button" disabled={setStatus.isPending} onClick={() => setStatus.mutate(st)} className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
+              {st ? statusLabel(st) : t("None (plain section)")}
+              {(list.taskStatus ?? null) === st && <Check className="h-3.5 w-3.5" />}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
       <button
         type="button"
         onClick={() => { const n = window.prompt(t("Rename section"), list.name); if (n && n.trim() && n !== list.name) rename.mutate(n.trim()); }}

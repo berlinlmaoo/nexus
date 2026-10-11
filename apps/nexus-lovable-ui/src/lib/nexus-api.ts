@@ -1528,7 +1528,8 @@ export type NexusProjectView = {
   id: string;
   name: string | null;
   layout: "board" | "list" | "table" | "calendar" | "timeline" | "gallery";
-  builtin: "board" | "list" | "table" | "calendar" | "timeline" | null;
+  /** The five migrated tabs, or "mine" (a template's "My …" view, an ordinary view otherwise). */
+  builtin: string | null;
   position: number;
   shared: boolean;
   ownerId: string | null;

@@ -18,6 +18,11 @@ export type ViewLayout = NexusProjectView["layout"];
 export const VIEW_LAYOUTS: ViewLayout[] = ["board", "list", "table", "calendar", "timeline", "gallery"];
 export const BUILTIN_KEYS = ["board", "list", "table", "calendar", "timeline"] as const;
 
+/** One of the five migrated tabs: fixed layout, always shared, hidden (not deleted) via hiddenTabs. */
+export function isBuiltinTab(v: Pick<NexusProjectView, "builtin">): boolean {
+  return !!v.builtin && (BUILTIN_KEYS as readonly string[]).includes(v.builtin);
+}
+
 /** English names; the UI translates them with t(). */
 export const LAYOUT_LABEL: Record<ViewLayout, string> = {
   board: "Board",
@@ -661,7 +666,7 @@ export function visibleProps(cfg: ViewConfig, layout: ViewLayout, defs: PropDef[
 
 export function viewName(view: Pick<NexusProjectView, "name" | "layout" | "builtin">, t: (s: string) => string): string {
   if (view.name) return view.name;
-  return t(LAYOUT_LABEL[view.builtin ?? view.layout] ?? "View");
+  return t(LAYOUT_LABEL[(isBuiltinTab(view) ? view.builtin : view.layout) as ViewLayout] ?? "View");
 }
 
 // ─── URL (filter draft) ──────────────────────────────────────────────────────────────────────────────

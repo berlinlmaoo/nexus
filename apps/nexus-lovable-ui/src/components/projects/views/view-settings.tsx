@@ -31,6 +31,7 @@ import {
   COLOR_PRESETS,
   dateProps,
   groupableProps,
+  isBuiltinTab,
   LAYOUT_LABEL,
   ME,
   newId,
@@ -262,6 +263,7 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
     if (n !== view.name) onRename(n);
   };
   const layout = view.layout;
+  const builtin = isBuiltinTab(view);
   const dates = dateProps(defs);
   return (
     <aside
@@ -289,8 +291,8 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
             </div>
           </Section>
           <Section title={t("Layout")}>
-            <LayoutGridPicker value={layout} onPick={onLayout} disabled={!!view.builtin} />
-            {view.builtin && <p className="mt-2 text-xs text-muted-foreground">{t("Built-in views keep their layout. Add a new view for another layout.")}</p>}
+            <LayoutGridPicker value={layout} onPick={onLayout} disabled={builtin} />
+            {builtin && <p className="mt-2 text-xs text-muted-foreground">{t("Built-in views keep their layout. Add a new view for another layout.")}</p>}
           </Section>
           {layout === "calendar" && (
             <Section title={t("Calendar")}>
@@ -358,10 +360,10 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
         </fieldset>
         <Section title={t("Who sees this view")}>
           <div className="space-y-1" role="radiogroup" aria-label={t("Who sees this view")}>
-            <button type="button" role="radio" aria-checked={view.shared} disabled={!canShare || !!view.builtin || view.shared} onClick={() => onShare(true)} className={menuItemCls}>
+            <button type="button" role="radio" aria-checked={view.shared} disabled={!canShare || builtin || view.shared} onClick={() => onShare(true)} className={menuItemCls}>
               <Users className="h-3.5 w-3.5 text-muted-foreground" /><span className="flex-1">{t("Everyone in this project")}</span>{view.shared && <Check className="h-3.5 w-3.5" />}
             </button>
-            <button type="button" role="radio" aria-checked={!view.shared} disabled={!canShare || !!view.builtin || !view.shared} onClick={() => onShare(false)} className={menuItemCls}>
+            <button type="button" role="radio" aria-checked={!view.shared} disabled={!canShare || builtin || !view.shared} onClick={() => onShare(false)} className={menuItemCls}>
               <Lock className="h-3.5 w-3.5 text-muted-foreground" /><span className="flex-1">{t("Only me")}</span>{!view.shared && <Check className="h-3.5 w-3.5" />}
             </button>
           </div>
@@ -369,7 +371,7 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
         <Section title={t("More")}>
           <button type="button" onClick={onCopyLink} className={menuItemCls}><Link2 className="h-3.5 w-3.5 text-muted-foreground" />{t("Copy link to view")}</button>
           <button type="button" onClick={onDuplicate} className={menuItemCls}><Copy className="h-3.5 w-3.5 text-muted-foreground" />{t("Duplicate view")}</button>
-          {view.builtin ? (
+          {builtin ? (
             <button type="button" disabled={!canEdit} onClick={onHide} className={menuItemCls}><EyeOff className="h-3.5 w-3.5 text-muted-foreground" />{t("Hide this view")}</button>
           ) : (
             <button type="button" disabled={!canEdit} onClick={onDelete} className={cn(menuItemCls, "text-destructive hover:bg-destructive/10")}><Trash2 className="h-3.5 w-3.5" />{t("Delete view")}</button>
@@ -386,6 +388,7 @@ export function ViewTabMenu({ view, canEdit, onRename, onSettings, onDuplicate, 
 }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
+  const builtin = isBuiltinTab(view);
   const run = (fn: () => void) => () => { setOpen(false); fn(); };
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -398,7 +401,7 @@ export function ViewTabMenu({ view, canEdit, onRename, onSettings, onDuplicate, 
         <button type="button" onClick={run(onDuplicate)} className={menuItemCls}><Copy className="h-3.5 w-3.5 text-muted-foreground" />{t("Duplicate view")}</button>
         <button type="button" onClick={run(onCopyLink)} className={menuItemCls}><Link2 className="h-3.5 w-3.5 text-muted-foreground" />{t("Copy link to view")}</button>
         <div className="my-1 border-t border-border" />
-        {view.builtin ? (
+        {builtin ? (
           <button type="button" disabled={!canEdit} onClick={run(onHide)} className={menuItemCls}><EyeOff className="h-3.5 w-3.5 text-muted-foreground" />{t("Hide this view")}</button>
         ) : (
           <button type="button" disabled={!canEdit} onClick={run(onDelete)} className={cn(menuItemCls, "text-destructive hover:bg-destructive/10")}><Trash2 className="h-3.5 w-3.5" />{t("Delete view")}</button>

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { cleanViewName, isViewLayout, sanitizeViewConfig, serializeView, ViewConfigError } from "@/lib/project-views"
+import { cleanViewName, isBuiltinTab, isViewLayout, sanitizeViewConfig, serializeView, ViewConfigError } from "@/lib/project-views"
 import { notifyViewsChanged, viewAccess } from "@/lib/project-views-access"
 
 type Params = { params: Promise<{ projectId: string; viewId: string }> }
@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if ("name" in body) data.name = cleanViewName(body.name)
     if (body.layout !== undefined && body.layout !== view.layout) {
       if (!isViewLayout(body.layout)) return NextResponse.json({ error: "Unknown layout", code: "INVALID_VIEW" }, { status: 400 })
-      if (view.builtin) return NextResponse.json({ error: "A built-in view keeps its layout. Add a new view instead.", code: "BUILTIN_VIEW" }, { status: 400 })
+      if (isBuiltinTab(view.builtin)) return NextResponse.json({ error: "A built-in view keeps its layout. Add a new view instead.", code: "BUILTIN_VIEW" }, { status: 400 })
       data.layout = body.layout
     }
     try {
@@ -65,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (!access.editShared) {
         return NextResponse.json({ error: "Only project members can share a view with everyone.", code: "SHARED_VIEW_FORBIDDEN" }, { status: 403 })
       }
-      if (view.builtin) return NextResponse.json({ error: "Built-in views are always shared.", code: "BUILTIN_VIEW" }, { status: 400 })
+      if (isBuiltinTab(view.builtin)) return NextResponse.json({ error: "Built-in views are always shared.", code: "BUILTIN_VIEW" }, { status: 400 })
       data.ownerId = body.shared ? null : userId
     }
     const updated = Object.keys(data).length ? await prisma.projectView.update({ where: { id: viewId }, data }) : view
@@ -90,7 +90,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (found.status === 404) return NextResponse.json({ error: "View not found" }, { status: 404 })
     const { view, canEdit } = found
     if (!canEdit) return NextResponse.json({ error: "Only project members can delete a view everyone shares.", code: "SHARED_VIEW_FORBIDDEN" }, { status: 403 })
-    if (view.builtin) {
+    if (isBuiltinTab(view.builtin)) {
       return NextResponse.json({ error: "Built-in views can't be deleted. Hide it from Project settings → Tabs instead.", code: "BUILTIN_VIEW" }, { status: 400 })
     }
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
