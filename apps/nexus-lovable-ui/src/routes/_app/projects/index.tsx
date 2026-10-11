@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
-import { ProjectTypeChosen, ProjectTypePicker } from "@/components/projects/ProjectTypePicker";
+import { TemplateChosen, TemplateGallery, type GalleryPick } from "@/components/projects/TemplateGallery";
 import { TabPreviewCards } from "@/components/projects/TabPreviewCards";
 import { NEW_PROJECT_HIDDEN_TABS, projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
 import { MemberMultiPicker } from "@/components/projects/MemberMultiPicker";
@@ -118,7 +118,12 @@ function ProjectsPage() {
   // Automations starts unticked (owner, 11 Oct 2026: off by default for new projects).
   const [newProjectHiddenTabs, setNewProjectHiddenTabs] = useState<string[]>(NEW_PROJECT_HIDDEN_TABS);
   const [newProjectMemberIds, setNewProjectMemberIds] = useState<string[]>([]);
-  const { t: tr } = useLang();
+  // What step one picked (owner, 12 Oct 2026: a template gallery): blank, a dashboard type or a template.
+  // A template is a Task Project built from the server registry; its tabs prefill the tab cards.
+  const [newProjectPick, setNewProjectPick] = useState<GalleryPick | null>(null);
+  const [newProjectStarter, setNewProjectStarter] = useState(true);
+  const newProjectTemplate = newProjectPick?.kind === "template" ? newProjectPick.template : null;
+  const { t: tr, lang } = useLang();
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1 });
   const projects: NexusProject[] = projectsQuery.data?.length
@@ -226,6 +231,8 @@ function ProjectsPage() {
         // absent (owner, 11 Oct 2026), so someone who switches Automations back on gets it.
         ...((newProjectType ?? "TASK") === "TASK" ? { hiddenTabs: newProjectHiddenTabs } : {}),
         ...(newProjectMemberIds.length > 0 ? { memberIds: newProjectMemberIds } : {}),
+        // Built in the creator's language: section, field and page names are the project's own data.
+        ...(newProjectTemplate ? { templateId: newProjectTemplate.id, lang, starter: newProjectStarter } : {}),
       }),
     onSuccess: async (project) => {
       invalidateProjectData(queryClient);
@@ -256,10 +263,22 @@ function ProjectsPage() {
   const openCreate = (folderId: string | null = null) => {
     if (!newProjectWorkspaceId && workspaceOptions[0]) setNewProjectWorkspaceId(workspaceOptions[0].id);
     setNewProjectType(null);
+    setNewProjectPick(null);
+    setNewProjectStarter(true);
     setNewProjectFolderId(folderId);
     setNewProjectHiddenTabs(NEW_PROJECT_HIDDEN_TABS);
     setNewProjectMemberIds([]);
     setIsCreateOpen(true);
+  };
+  const pickNewProject = (pick: GalleryPick) => {
+    setNewProjectPick(pick);
+    setNewProjectType(pick.kind === "type" ? pick.type : "TASK");
+    setNewProjectHiddenTabs(pick.kind === "template" ? pick.template.hiddenTabs : NEW_PROJECT_HIDDEN_TABS);
+    setNewProjectStarter(true);
+  };
+  const backToGallery = () => {
+    setNewProjectType(null);
+    setNewProjectPick(null);
   };
   const search = Route.useSearch();
   useEffect(() => {
@@ -435,7 +454,7 @@ function ProjectsPage() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop">
+          <div className={cn("max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-[32px] border border-border bg-card p-5 shadow-pop", newProjectType === null ? "max-w-4xl" : "max-w-lg")}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
@@ -458,14 +477,14 @@ function ProjectsPage() {
             {newProjectType === null ? (
               <div className="mt-5 space-y-3">
                 <p className="text-sm font-semibold">{tr("What is this project for?")}</p>
-                <ProjectTypePicker
-                  onPick={(type) => setNewProjectType(type)}
-                  pipeline={pipelineInfo ? { allowed: pipelineInfo.canAccessPipeline === true, exists: !!pipelineInfo.pipelineProjectId } : undefined}
+                <TemplateGallery
+                  onPick={pickNewProject}
+                  pipeline={pipelineInfo ? { allowed: pipelineInfo.canAccessPipeline === true } : undefined}
                 />
               </div>
             ) : (
             <div className="mt-5 space-y-3">
-              <ProjectTypeChosen type={newProjectType} onChange={() => setNewProjectType(null)} />
+              <TemplateChosen pick={newProjectPick ?? (newProjectType === "TASK" ? { kind: "blank" } : { kind: "type", type: newProjectType as "OUTLET_SALES" | "PIPELINE" })} onChange={backToGallery} />
               {newProjectFolderId && folderList.some((f) => f.id === newProjectFolderId) && (
                 <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs">
                   <FolderGlyph folder={folderList.find((f) => f.id === newProjectFolderId)!} size={14} className="text-muted-foreground" />
@@ -523,6 +542,18 @@ function ProjectsPage() {
                   <p className="text-xs text-muted-foreground">{tr("The tabs this project starts with. You can change them later in Project settings.")}</p>
                   <TabPreviewCards hidden={newProjectHiddenTabs} onChange={setNewProjectHiddenTabs} />
                 </div>
+              )}
+
+              {newProjectTemplate && (newProjectTemplate.starterDocs.length > 0 || newProjectTemplate.starterTasks > 0) && (
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5">
+                  <input type="checkbox" checked={newProjectStarter} onChange={(e) => setNewProjectStarter(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
+                  <span className="min-w-0 text-xs">
+                    <span className="block font-semibold text-foreground">{tr("Add starter pages")}</span>
+                    <span className="block text-muted-foreground">
+                      {newProjectTemplate.starterDocs.map((d) => (lang === "en" ? d.title.en : d.title.id)).join(", ")}
+                    </span>
+                  </span>
+                </label>
               )}
 
               {(newProjectWorkspaceId || workspaceOptions[0]?.id) && (

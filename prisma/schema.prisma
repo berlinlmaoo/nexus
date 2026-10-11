@@ -494,6 +494,11 @@ model Project {
   // src/lib/project-tabs.ts. Hiding never deletes anything. Stored as the HIDDEN set so a tab added
   // later shows on every existing project by default. Board or List always stays visible.
   hiddenTabs String[] @default([])
+  // The template it was built from (owner, 12 Oct 2026), an id in src/lib/project-templates.ts such as
+  // "content-plan"; null for a blank project or one made before templates. Only the web reads it (which
+  // tab opens first, what the Calendar plots, the "My ..." preset); everything the template created is
+  // ordinary sections, custom fields and pages that every app already shows.
+  templateId String?
   // RETIRED 11 Oct 2026: the "Bukti Pencairan before Done" gate and "calendar mode" (hide status) are
   // gone, with nothing in their place. Kept for released apps; both always read false.
   requireAttachmentForDone Boolean @default(false)
@@ -634,6 +639,11 @@ model TaskList {
   id        String   @id @default(cuid())
   name      String
   position  Int      @default(0)
+  // The task status this section stands for (owner, 12 Oct 2026, project templates): moving a task into
+  // it sets that status, and changing a task's status moves it to the first section with the new one
+  // (api/tasks PATCH and POST). Null = a plain section, as every section before templates. Named
+  // taskStatus, not status, so no released app mistakes it for a field it already decodes.
+  taskStatus TaskStatus?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

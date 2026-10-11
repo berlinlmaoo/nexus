@@ -416,9 +416,42 @@ export type NexusProject = {
   type?: string;
   /** Tab keys this project hides (components/projects/project-tabs.ts). Unknown keys are ignored. */
   hiddenTabs?: string[];
+  /** The template it was built from (12 Oct 2026, GET /api/project-templates); null/absent = blank. */
+  templateId?: string | null;
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
-  taskLists?: Array<{ id: string; name: string; position?: number; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
+  /** taskStatus (12 Oct 2026): the task status the section stands for; moving a task in sets it (server). */
+  taskLists?: Array<{ id: string; name: string; position?: number; taskStatus?: NexusTaskStatus | null; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
+};
+
+export type NexusTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED";
+
+/** Text in both languages, as the template registry sends it. */
+export type NexusL = { en: string; id: string };
+export type NexusTemplateColor = "gray" | "brown" | "orange" | "yellow" | "green" | "blue" | "purple" | "pink" | "red";
+/**
+ * A project template (owner, 12 Oct 2026): data from the server registry (src/lib/project-templates.ts),
+ * drawn by components/projects/TemplateGallery. Building one is POST /api/projects { templateId }.
+ */
+export type NexusProjectTemplate = {
+  id: string;
+  category: string;
+  name: NexusL;
+  blurb: NexusL;
+  icon: string;
+  tint: NexusTemplateColor;
+  sections: Array<{ name: NexusL; status?: NexusTaskStatus; color?: NexusTemplateColor }>;
+  fields: Array<{ key: string; name: NexusL; type: string; options: Array<{ label: NexusL; color?: NexusTemplateColor }> }>;
+  builtins: Array<{ key: string; name: NexusL }>;
+  tabs: string[];
+  hiddenTabs: string[];
+  defaultTab: string;
+  /** "dueDate" or "cf:<field key>". */
+  calendarBy: string;
+  myView: { name: NexusL; tab: string } | null;
+  preview: { layout: "board" | "table" | "calendar" | "list" | "gallery"; columns?: string[] };
+  starterDocs: Array<{ title: NexusL; icon: string | null }>;
+  starterTasks: number;
 };
 
 export type NexusAttendanceToday = {
@@ -2126,6 +2159,10 @@ export type CreateProjectPayload = {
   hiddenTabs?: string[];
   /** People of that workspace added as MEMBER next to the creator (LEAD). 11 Oct 2026. */
   memberIds?: string[];
+  /** Build from a template (12 Oct 2026, TASK only), in this language; starter=false skips starter pages. */
+  templateId?: string;
+  lang?: "en" | "id";
+  starter?: boolean;
 };
 
 export type CreateTaskPayload = {
@@ -2223,7 +2260,8 @@ export const nexusApi = {
   createStatusUpdate: (projectId: string, text: string, status?: string) => apiFetch<NexusStatusUpdate>("/api/status-updates", { method: "POST", body: JSON.stringify({ projectId, text, status }) }),
   generateStatusUpdate: (projectId: string) => apiFetch<{ content: string }>(`/api/projects/${projectId}/status-updates/generate`, { method: "POST" }),
   createSection: (projectId: string, name: string) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "POST", body: JSON.stringify({ name }) }),
-  updateSection: (projectId: string, payload: { id: string; name?: string; position?: number }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
+  projectTemplates: () => apiFetch<{ templates: NexusProjectTemplate[] }>("/api/project-templates"),
+  updateSection: (projectId: string, payload: { id: string; name?: string; position?: number; taskStatus?: NexusTaskStatus | null }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteSection: (projectId: string, id: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/sections`, { method: "DELETE", body: JSON.stringify({ id }) }),
   employmentStartDates: () =>
     apiFetch<{ members: { userId: string; name: string | null; email: string | null; avatar: string | null; employmentStartDate: string | null; eligible: boolean; eligibleFrom: string | null }[]; quota: number }>(`/api/attendance/employment-start`),

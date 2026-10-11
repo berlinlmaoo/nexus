@@ -6,6 +6,8 @@ import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
+const SECTION_TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -90,10 +92,15 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { id, name, position } = body
+    const { id, name, position, taskStatus } = body
 
     if (!id) {
       return NextResponse.json({ error: "Section id is required" }, { status: 400 })
+    }
+    // The task status this section stands for (project templates, 12 Oct 2026): one of the five, or null
+    // for a plain section. Applies to tasks moved in from now on; tasks already here keep theirs.
+    if (taskStatus !== undefined && taskStatus !== null && !SECTION_TASK_STATUSES.includes(taskStatus)) {
+      return NextResponse.json({ error: "taskStatus tidak dikenal.", code: "INVALID_TASK_STATUS" }, { status: 400 })
     }
 
     const existing = await prisma.taskList.findUnique({ where: { id } })
@@ -132,6 +139,7 @@ export async function PATCH(
       data: {
         ...(name !== undefined && { name: name.trim() }),
         ...(position !== undefined && { position }),
+        ...(taskStatus !== undefined && { taskStatus }),
       },
     })
 

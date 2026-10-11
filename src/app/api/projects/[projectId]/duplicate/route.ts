@@ -78,6 +78,8 @@ export async function POST(
         // Type and tabs (9 Oct 2026) — the copy looks like the original.
         type: original.type,
         hiddenTabs: original.hiddenTabs,
+        // The template it came from (12 Oct 2026): the copy opens and plots like the original.
+        templateId: original.templateId,
       },
     })
 
@@ -134,7 +136,7 @@ export async function POST(
 
     for (const taskList of original.taskLists) {
       const newTaskList = await prisma.taskList.create({
-        data: { name: taskList.name, position: taskList.position, projectId: newProject.id },
+        data: { name: taskList.name, position: taskList.position, taskStatus: taskList.taskStatus, projectId: newProject.id },
       })
 
       for (const task of taskList.tasks) {

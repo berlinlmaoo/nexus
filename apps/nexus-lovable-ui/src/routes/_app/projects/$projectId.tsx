@@ -8,7 +8,7 @@ import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { celebrate } from "@/components/Celebration";
-import { blockText, fmtDate, fmtDue, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusTask } from "@/lib/nexus-api";
+import { blockText, fmtDate, fmtDue, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusTaskStatus, type NexusDoc, type NexusProject, type NexusTask } from "@/lib/nexus-api";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
@@ -130,11 +130,25 @@ function ProjectDetail() {
     setSettingsOpen(true);
     navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
   }, [search.settings, data, projectId, navigate]);
-  const { t: tr, tn } = useLang();
+  const { t: tr, tn, lang } = useLang();
   // Which tabs this project shows (owner, 9 Oct 2026): a project hides the ones it doesn't need
   // (Project settings → Tabs). Hiding only hides — nothing in the tab is touched. The Finance and P&L
   // tabs were retired on 11 Oct 2026.
   const hiddenTabs = hiddenTabsOf(data);
+  // Built from a template (owner, 12 Oct 2026; server registry lib/project-templates.ts): which tab it
+  // opens on, what its Calendar plots and its "My …" preset come from the template's data.
+  const templates = useQuery({ queryKey: ["nexus", "project-templates"], queryFn: () => nexusApi.projectTemplates(), staleTime: 5 * 60_000, retry: 1, enabled: !!data?.templateId });
+  const template = data?.templateId ? templates.data?.templates.find((tp) => tp.id === data.templateId) ?? null : null;
+  const templateCf = useQuery({ queryKey: ["nexus", "project-custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), staleTime: 60_000, retry: false, enabled: !!template && template.calendarBy !== "dueDate" });
+  // The template's calendar field is found by its name in either language (the project was built in
+  // one of them); renamed or deleted → the due date, and the Calendar's own picker still offers it.
+  const calendarDefault = useMemo(() => {
+    if (!template || template.calendarBy === "dueDate") return "dueDate";
+    const f = template.fields.find((x) => `cf:${x.key}` === template.calendarBy);
+    const def = f && templateCf.data?.fields.find((d) => d.type === "DATE" && (d.name === f.name.en || d.name === f.name.id));
+    return def?.id ?? "dueDate";
+  }, [template, templateCf.data]);
+  const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000, enabled: !!template?.myView }).data?.user;
   // A Pipeline Dashboard project (owner, 9 Oct 2026) is its pipeline, plus its chat. Its task tabs are not offered: the three default sections exist only so that apps
   // which do not know the type yet open it as an empty task project instead of failing.
   const isPipeline = data?.type === "PIPELINE";
@@ -148,6 +162,15 @@ function ProjectDetail() {
     return !hiddenTabs.has(tab.id);
   });
   const visibleKey = visibleTabs.map((tab) => tab.id).join(",");
+  // Open on the template's tab once per project, unless a tab was already clicked.
+  const openedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!data || !template || openedFor.current === data.id) return;
+    openedFor.current = data.id;
+    const want = template.defaultTab as ViewId;
+    if (visibleTabs.some((tab) => tab.id === want)) setView(want);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id, template?.id]);
   // The open tab was just hidden (here, or live from another device): land on Board, else List.
   useEffect(() => {
     if (!data || visibleTabs.some((tab) => tab.id === view)) return;
@@ -228,7 +251,7 @@ function ProjectDetail() {
         tabs={
           <div className="flex items-center gap-0.5 -mb-px overflow-x-auto">
             {visibleTabs.map((t) => (
-              <button key={t.id} onClick={() => setView(t.id)}
+              <button key={t.id} onClick={() => { if (data) openedFor.current = data.id; setView(t.id); }}
                 className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 border-b-2 transition whitespace-nowrap ${view === t.id ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 <t.icon className="h-3.5 w-3.5" /> {tr(t.label)}
               </button>
@@ -245,7 +268,28 @@ function ProjectDetail() {
         <div className="flex-1 min-w-32 max-w-xs"><ProgressBar value={progress} /></div>
         <div className="text-xs font-semibold tabular-nums">{progress}%</div>
         <div className="text-xs text-muted-foreground hidden sm:block tabular-nums">· {tr("{done} of {total} tasks done", { done: completedTasks, total: totalTasks })}</div>
-        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">{activeFilterCount > 0 && <Chip size="sm" color="accent" variant="soft">{tn(activeFilterCount, "1 filter", "{n} filters")}</Chip>}</div>
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+          {/* The template's "My …" preset (Notion's "My meetings"): assignee = me, on its tab. Saved views
+              will replace this when that stream lands; until then it is a one-click filter. */}
+          {template?.myView && me?.id && (() => {
+            const on = filters.assigneeId === me.id;
+            const tab = template.myView.tab as ViewId;
+            return (
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => {
+                  setFilters({ ...filters, assigneeId: on ? "ALL" : me.id });
+                  if (!on && visibleTabs.some((x) => x.id === tab)) setView(tab);
+                }}
+                className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-semibold transition-colors", on ? "border-primary/40 bg-primary/10 text-primary" : "border-border hover:bg-accent hover:text-foreground")}
+              >
+                {on && <Check className="h-3 w-3" />}{lang === "en" ? template.myView.name.en : template.myView.name.id}
+              </button>
+            );
+          })()}
+          {activeFilterCount > 0 && <Chip size="sm" color="accent" variant="soft">{tn(activeFilterCount, "1 filter", "{n} filters")}</Chip>}
+        </div>
       </div>
       )}
 
@@ -301,7 +345,7 @@ function ProjectDetail() {
               }}
             />
           )}
-          {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
+          {view === "calendar" && <CalendarView key={calendarDefault} projectId={data.id} defaultDateField={calendarDefault} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
           {view === "automations" && <AutomationsView projectId={data.id} />}
           {view === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
@@ -572,7 +616,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
                 <div className="flex shrink-0 items-center">
                   <Button isIconOnly size="sm" variant="ghost" aria-label="Move section left" className="rounded-full" isDisabled={laneIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex - 1 })}><ChevronLeft className="h-4 w-4" /></Button>
                   <Button isIconOnly size="sm" variant="ghost" aria-label="Move section right" className="rounded-full" isDisabled={laneIndex === lanes.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex + 1 })}><ChevronRight className="h-4 w-4" /></Button>
-                  <ListMenu projectId={project.id} list={{ id: list.id, name: list.name }} />
+                  <ListMenu projectId={project.id} list={{ id: list.id, name: list.name, taskStatus: list.taskStatus }} />
                   <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={() => onCreate(list.id)}><Plus className="h-4 w-4" /></Button>
                 </div>
               </div>
@@ -622,13 +666,39 @@ function AddListColumn({ projectId }: { projectId: string }) {
   );
 }
 
-function ListMenu({ projectId, list }: { projectId: string; list: { id: string; name: string } }) {
+function ListMenu({ projectId, list }: { projectId: string; list: { id: string; name: string; taskStatus?: NexusTaskStatus | null } }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
   const rename = useMutation({ mutationFn: (name: string) => nexusApi.updateSection(projectId, { id: list.id, name }), onSuccess: invalidate });
   const del = useMutation({ mutationFn: () => nexusApi.deleteSection(projectId, list.id), onSuccess: invalidate });
+  // The status a section stands for (12 Oct 2026; templates set it): a task moved in takes it, and a
+  // status change moves the task to the first section of that status. "None" = a plain section.
+  const setStatus = useMutation({ mutationFn: (taskStatus: NexusTaskStatus | null) => nexusApi.updateSection(projectId, { id: list.id, taskStatus }), onSuccess: invalidate });
   return (
     <div className="flex items-center gap-0.5">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button className={cn("rounded-lg p-1 transition-colors hover:bg-accent hover:text-foreground", list.taskStatus ? "text-primary" : "text-muted-foreground")} title={t("Section status")} aria-label={t("Section status")}>
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-2">
+          <div className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">{t("Tasks moved into this section get this status.")}</div>
+          {([null, ...TASK_STATUSES] as (NexusTaskStatus | null)[]).map((st) => (
+            <button
+              key={st ?? "none"}
+              type="button"
+              disabled={setStatus.isPending}
+              onClick={() => setStatus.mutate(st)}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent"
+            >
+              {st ? statusLabel(st) : t("None (plain section)")}
+              {(list.taskStatus ?? null) === st && <Check className="h-3.5 w-3.5 text-primary" />}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
       <button
         onClick={() => { const n = window.prompt("Rename list", list.name); if (n && n.trim() && n !== list.name) rename.mutate(n.trim()); }}
         className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -1207,8 +1277,33 @@ function calRuleValues(task: NexusTask, rule: CalColorRule): string[] {
   }
 }
 
-function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projectId: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void }) {
+function CalendarView({ projectId, defaultDateField = "dueDate", tasks, onOpen, onCreate, onSetDue }: { projectId: string; defaultDateField?: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void }) {
   const bulk = useTaskBulk();
+  const { t: tr } = useLang();
+  const qc = useQueryClient();
+  // What the calendar plots (12 Oct 2026, project templates): the due date, or a Date custom field —
+  // Content Plan plots "Publication date". The template sets the default; a choice here is kept per
+  // browser like the colour rules. Saved views will own this once they land.
+  const plotKey = `nexus:calendar-by:${projectId}`;
+  const [plotBy, setPlotByState] = useState<string>(() => {
+    if (typeof window === "undefined") return defaultDateField;
+    try { return window.localStorage.getItem(plotKey) || defaultDateField; } catch { return defaultDateField; }
+  });
+  const setPlotBy = (v: string) => { setPlotByState(v); try { window.localStorage.setItem(plotKey, v); } catch { /* ignore */ } };
+  const cfDate = (task: NexusTask): Date | null => {
+    const raw = (task.customFieldValues ?? []).find((c) => c.customFieldId === plotBy)?.value;
+    if (!raw) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : parseDate(raw);
+  };
+  const dateOf = (task: NexusTask): Date | null => (plotBy === "dueDate" ? parseDate(task.dueDate) : cfDate(task));
+  const setCfDate = useMutation({
+    mutationFn: ({ taskId, value }: { taskId: string; value: string }) => nexusApi.setCustomFieldValue(plotBy, taskId, value),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
+      qc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", projectId] });
+    },
+  });
   const isMobile = useIsMobile();
   const [colorPanelOpen, setColorPanelOpen] = useState(false);
   const [colorRules, setColorRules] = useState<CalColorRule[]>(() => {
@@ -1252,15 +1347,22 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
   // its own due date that matters — so the CALENDAR additionally pulls the project's dated subtasks (the
   // project payload is parentId-only). Board/List stay subtask-free.
   const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false });
-  const datedSubtasks = useMemo(() => (allProjTasks.data ?? []).filter((t) => t.parentId && parseDate(t.dueDate)), [allProjTasks.data]);
+  const datedSubtasks = useMemo(() => (allProjTasks.data ?? []).filter((t) => t.parentId && dateOf(t)), [allProjTasks.data, plotBy]);
 
-  const dated = [...tasks.filter((task) => parseDate(task.dueDate)), ...datedSubtasks];
-  const undated = tasks.filter((task) => !parseDate(task.dueDate));
+  const dated = [...tasks.filter((task) => dateOf(task)), ...datedSubtasks];
+  const undated = tasks.filter((task) => !dateOf(task));
+  const dateFields = (cfDefs.data?.fields ?? []).filter((f) => f.type === "DATE");
+  // A plotted field that no longer exists falls back to the due date.
+  useEffect(() => {
+    if (plotBy !== "dueDate" && cfDefs.data && !dateFields.some((f) => f.id === plotBy)) setPlotByState("dueDate");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfDefs.data, plotBy]);
+  const plotName = plotBy === "dueDate" ? tr("Due date") : dateFields.find((f) => f.id === plotBy)?.name ?? tr("Date");
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [viewMonth, setViewMonth] = useState(() => {
-    const base = dated[0] ? parseDate(dated[0].dueDate)! : new Date();
+    const base = dated[0] ? dateOf(dated[0])! : new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
   const shiftMonth = (delta: number) => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
@@ -1275,7 +1377,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
   // Mobile agenda — tasks in the viewed month, grouped by day (Time Map / team-calendar style).
   const byDay = new Map<string, { date: Date; items: NexusTask[] }>();
   for (const task of dated) {
-    const d = parseDate(task.dueDate)!;
+    const d = dateOf(task)!;
     if (!sameMonth(d, viewMonth)) continue;
     const k = dayKey(d);
     if (!byDay.has(k)) byDay.set(k, { date: d, items: [] });
@@ -1288,6 +1390,15 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div><h2 className="text-xl font-black tracking-tight">Time Map</h2><p className="text-sm text-muted-foreground">Live due-date calendar from project cards.</p></div>
         <div className="flex items-center gap-2">
+          {dateFields.length > 0 && (
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              {tr("Plot by")}
+              <select value={plotBy} onChange={(e) => setPlotBy(e.target.value)} className="rounded-xl border border-border bg-background px-2 py-1.5 text-sm font-bold text-foreground">
+                <option value="dueDate">{tr("Due date")}</option>
+                {dateFields.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </label>
+          )}
           <button onClick={() => setColorPanelOpen((v) => !v)} className={cn("inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-bold transition", colorPanelOpen || colorRules.length > 0 ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")}><Palette className="h-4 w-4" />Colors{colorRules.length > 0 && <span className="rounded-full bg-primary/20 px-1.5 text-[10px] font-black">{colorRules.length}</span>}</button>
           <div className="flex items-center gap-1 text-sm font-bold">
             <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
@@ -1395,7 +1506,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
               const key = dayKey(day);
               const inMonth = sameMonth(day, viewMonth);
               // Only attach events to in-month days — keeps each task's morph id unique per month.
-              const dayTasks = inMonth ? dated.filter((task) => dayKey(parseDate(task.dueDate)!) === key) : [];
+              const dayTasks = inMonth ? dated.filter((task) => dayKey(dateOf(task)!) === key) : [];
               const isToday = key === todayKey;
               return (
                 <div
@@ -1407,13 +1518,15 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                     if (dragTaskId && inMonth) {
                       // Dropping a dated task back on its own day is a no-op, not a write.
                       const src = dated.find((t) => t.id === dragTaskId);
-                      const prev = src?.dueDate ? parseDate(src.dueDate) : null;
+                      const prev = src ? dateOf(src) : null;
                       const srcKey = prev ? dayKey(prev) : null;
                       if (srcKey !== key) {
                         // Moving a task keeps its CLOCK TIME — these calendars hold timed events
                         // ("10:00 PM"), and sending a bare date would silently reset them to midnight.
                         // Undated tasks have no time to keep, so they still land on the plain date.
-                        onSetDue(dragTaskId, prev
+                        // A Date custom field holds a plain day.
+                        if (plotBy !== "dueDate") setCfDate.mutate({ taskId: dragTaskId, value: ymd(day) });
+                        else onSetDue(dragTaskId, prev
                           ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), prev.getHours(), prev.getMinutes(), 0, 0).toISOString()
                           : ymd(day));
                       }
@@ -1481,7 +1594,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
       )}
       {undated.length > 0 && (
         <div className="mt-3 rounded-2xl border border-dashed border-border bg-muted/20 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">No due date · {undated.length}</div>
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{plotBy === "dueDate" ? "No due date" : tr("No {field}", { field: plotName })} · {undated.length}</div>
           <div className="flex flex-wrap gap-1.5">
             {undated.map((task) => (
               <button

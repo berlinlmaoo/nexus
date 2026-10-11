@@ -477,7 +477,8 @@ export async function POST(
         data: {
           title,
           description: taskDescription || null,
-          ...(status ? { status: status as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED" } : {}),
+          // No mapped status: the section's own (TaskList.taskStatus, project templates), if it has one.
+          ...(status ? { status: status as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED" } : routedTaskList.taskStatus ? { status: routedTaskList.taskStatus } : {}),
           ...(priority ? { priority: priority as "URGENT" | "HIGH" | "MEDIUM" | "LOW" | "NONE" } : {}),
           ...(dueDate ? { dueDate } : {}),
           taskListId: routedTaskList.id,

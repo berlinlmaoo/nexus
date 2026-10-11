@@ -120,7 +120,7 @@ export async function PATCH(
     const {
       title,
       description,
-      status,
+      status: requestedStatus,
       priority,
       dueDate,
       startDate,
@@ -135,6 +135,8 @@ export async function PATCH(
       recurPattern,
       taskType,
     } = validation.data
+    // May be set below from the section the task moves into (TaskList.taskStatus, project templates).
+    let status = requestedStatus
 
     const existing = await prisma.task.findUnique({
       where: { id: taskId },
@@ -169,8 +171,43 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
     }
 
+    const primaryProjectId = existing.taskList.projectId
+    const isLinkedProjectContext = effectiveProjectId !== primaryProjectId
+
+    // Sections that stand for a status (project templates, owner 12 Oct 2026; TaskList.taskStatus). In
+    // the task's own project only, never through a linked placement, and only when the request does not
+    // say both things itself:
+    //  - moved into such a section without a status → the task takes the section's status
+    //    (Content Plan: drag to "Published" = DONE, for reports, Overview and every app);
+    //  - status changed without a move, out of such a section → it moves to the first section of that
+    //    status, so the board keeps showing where it stands. No such section → it stays where it is.
+    // Plain sections (taskStatus null, every project before templates) behave exactly as before.
+    let statusSection: { id: string } | null = null
+    if (!isLinkedProjectContext) {
+      if (requestedStatus === undefined && taskListId !== undefined && taskListId !== existing.taskListId) {
+        const target = await prisma.taskList.findFirst({
+          where: { id: taskListId, projectId: primaryProjectId },
+          select: { taskStatus: true },
+        })
+        if (target?.taskStatus && target.taskStatus !== existing.status) status = target.taskStatus
+      } else if (
+        requestedStatus !== undefined &&
+        requestedStatus !== existing.status &&
+        taskListId === undefined &&
+        existing.taskList.taskStatus &&
+        existing.taskList.taskStatus !== requestedStatus
+      ) {
+        statusSection = await prisma.taskList.findFirst({
+          where: { projectId: primaryProjectId, taskStatus: requestedStatus },
+          orderBy: { position: "asc" },
+          select: { id: true },
+        })
+      }
+    }
+
     const updateData: Record<string, unknown> = {}
     const linkedPlacementData: Record<string, unknown> = {}
+    if (statusSection) updateData.taskListId = statusSection.id
     if (title !== undefined) updateData.title = title
     if (description !== undefined) updateData.description = description
     if (status !== undefined) updateData.status = status
@@ -193,9 +230,6 @@ export async function PATCH(
     if (isRecurring !== undefined) updateData.isRecurring = isRecurring
     if (recurPattern !== undefined) updateData.recurPattern = recurPattern
     if (taskType !== undefined) updateData.taskType = taskType
-
-    const primaryProjectId = existing.taskList.projectId
-    const isLinkedProjectContext = effectiveProjectId !== primaryProjectId
 
     if (taskListId !== undefined) {
       const targetTaskList = await prisma.taskList.findFirst({

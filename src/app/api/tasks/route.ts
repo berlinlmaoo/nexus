@@ -269,7 +269,9 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         description,
-        status: status || undefined,
+        // A section that stands for a status (project templates, TaskList.taskStatus) gives a new task
+        // that status unless the request names one: "+ Add" in "Published" makes a published item.
+        status: status || taskList.taskStatus || undefined,
         priority: priority || undefined,
         taskListId,
         creatorId: userId,
