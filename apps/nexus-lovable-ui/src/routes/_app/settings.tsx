@@ -616,7 +616,6 @@ function AutomationSection() {
   const rules = [
     { id: "r1", name: "Auto-assign bugs to QA", trigger: "form.bug_report submitted", action: "Create task in Atlas → assign Marcus" },
     { id: "r2", name: "Move stale tasks", trigger: "Task idle > 7 days", action: "Add 'stale' tag, notify owner" },
-    { id: "r3", name: "Sprint complete cleanup", trigger: "Sprint ends", action: "Move incomplete → next sprint" },
   ];
   return (
     <div className="space-y-3">

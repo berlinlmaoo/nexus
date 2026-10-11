@@ -6,7 +6,9 @@ import type { NexusProject } from "@/lib/nexus-api";
  *
  * A project stores the tabs it HIDES. Hiding only hides: nothing in the tab is deleted, its API keeps
  * working, and switching it back on brings everything back. The Finance and P&L tabs were retired on
- * 11 Oct 2026 (financeEnabled / enablePnlDashboard always read false).
+ * 11 Oct 2026 (financeEnabled / enablePnlDashboard always read false). Sprints was removed from the web
+ * on 11 Oct 2026 (owner); the server still accepts "sprints" in hiddenTabs for released apps, and a stored
+ * "sprints" just rides along when Project settings saves the set.
  */
 export const PROJECT_TAB_KEYS = [
   "overview",
@@ -16,7 +18,6 @@ export const PROJECT_TAB_KEYS = [
   "sheet",
   "calendar",
   "timeline",
-  "sprints",
   "automations",
   "pages",
   "forms",
@@ -33,12 +34,15 @@ export const PROJECT_TAB_LABELS: Record<ProjectTabKey, string> = {
   sheet: "Spreadsheet",
   calendar: "Calendar",
   timeline: "Timeline",
-  sprints: "Sprints",
   automations: "Automations",
   pages: "Pages",
   forms: "Forms",
   chat: "Chat",
 };
+
+/** The tabs New project starts with unticked (owner, 11 Oct 2026: Automations off by default). Same as
+ * the server's default when a client sends no hiddenTabs. */
+export const NEW_PROJECT_HIDDEN_TABS: string[] = ["automations"];
 
 /** At least one of these stays visible (the server answers 400 TASK_VIEW_REQUIRED otherwise). */
 export const TASK_VIEW_TAB_KEYS: readonly ProjectTabKey[] = ["board", "list"];

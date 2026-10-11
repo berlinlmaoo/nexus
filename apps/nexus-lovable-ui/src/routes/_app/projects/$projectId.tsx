@@ -8,7 +8,7 @@ import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { ProgressBar } from "@/components/StatusPill";
 import { celebrate } from "@/components/Celebration";
-import { blockText, fmtDate, fmtDue, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusSprint, type NexusTask } from "@/lib/nexus-api";
+import { blockText, fmtDate, fmtDue, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusTask } from "@/lib/nexus-api";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
@@ -21,6 +21,7 @@ import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { PipelineView } from "@/components/pipeline/PipelineView";
 import { OutletSalesView, type OutletView } from "@/components/outlet-sales/OutletSalesView";
 import { hiddenTabsOf } from "@/components/projects/project-tabs";
+import { ProjectOverview, type OverviewDrill } from "@/components/projects/ProjectOverview";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { priorityTone } from "@/lib/calendar/tone";
@@ -54,14 +55,12 @@ import {
   Palette,
   Pencil,
   Paperclip,
-  Play,
   Plus,
   Search,
   Trash2,
   Settings2,
   Sparkles,
   Tag,
-  Target,
   X,
   Zap,
   Sheet as SheetIcon,
@@ -80,10 +79,12 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   }),
 });
 
-type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "chat";
+type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "automations" | "pages" | "forms" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
-type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
-const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
+// due: by due day (11 Oct 2026, for the Overview's counts) — OVERDUE = before today, NEXT7 = today + 6 days, NONE = no due date.
+type DueFilter = "ALL" | "OVERDUE" | "NEXT7" | "NONE";
+type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; due: DueFilter; cfSelections: Record<string, string[]> };
+const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", due: "ALL", cfSelections: {} };
 
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"] as const;
@@ -104,7 +105,6 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "sheet", label: "Spreadsheet", icon: SheetIcon },
   { id: "calendar", label: "Calendar", icon: CalIcon },
   { id: "timeline", label: "Timeline", icon: GanttChart },
-  { id: "sprints", label: "Sprints", icon: Target },
   { id: "automations", label: "Automations", icon: Zap },
   { id: "pages", label: "Pages", icon: FileText },
   { id: "forms", label: "Forms", icon: FormInput },
@@ -130,7 +130,7 @@ function ProjectDetail() {
     setSettingsOpen(true);
     navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
   }, [search.settings, data, projectId, navigate]);
-  const { t: tr } = useLang();
+  const { t: tr, tn } = useLang();
   // Which tabs this project shows (owner, 9 Oct 2026): a project hides the ones it doesn't need
   // (Project settings → Tabs). Hiding only hides — nothing in the tab is touched. The Finance and P&L
   // tabs were retired on 11 Oct 2026.
@@ -205,7 +205,7 @@ function ProjectDetail() {
     });
     return filterTaskLists(merged, filters);
   }, [taskLists, allProjTasks.data, filters]);
-  const activeFilterCount = [filters.query.trim(), filters.section !== "ALL", filters.priority !== "ALL", filters.hideDone, filters.assigneeId !== "ALL"].filter(Boolean).length + Object.values(filters.cfSelections).filter((v) => v.length > 0).length;
+  const activeFilterCount = [filters.query.trim(), filters.section !== "ALL", filters.priority !== "ALL", filters.hideDone, filters.assigneeId !== "ALL", filters.due !== "ALL"].filter(Boolean).length + Object.values(filters.cfSelections).filter((v) => v.length > 0).length;
   const totalTasks = allTasks.length || data?._count?.tasks || 0;
   const completedTasks = allTasks.filter((task) => isDone(task.status)).length;
   const progress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : Number(data?.progress ?? 0);
@@ -214,7 +214,7 @@ function ProjectDetail() {
     <div>
       <PageHeader
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
-        title={data?.name || "Mission Board"}
+        title={data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : project.isError ? tr("Couldn't open this project. You may not be a member.") : undefined)}
         actions={
           <>
@@ -237,18 +237,20 @@ function ProjectDetail() {
         }
       />
 
-      {!isSpecial && (
+      {/* The Overview shows progress itself, in full. */}
+      {!isSpecial && view !== "overview" && (
       <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-muted/30">
-        <Chip size="sm" variant="soft" color={project.isError ? "danger" : "success"}>{project.isError ? "Locked" : "Live board"}</Chip>
-        <div className="text-xs text-muted-foreground">Mission energy</div>
+        {/* Plain words (owner, 11 Oct 2026): this strip said "Live board · Mission energy · 97/97 cards visible · 4 lanes". */}
+        <div className="text-xs font-medium text-muted-foreground">{tr("Progress")}</div>
         <div className="flex-1 min-w-32 max-w-xs"><ProgressBar value={progress} /></div>
-        <div className="text-xs font-bold">{progress}%</div>
-        <div className="text-xs text-muted-foreground hidden sm:block">· {filteredTasks.length}/{totalTasks} cards visible · {taskLists.length} lanes</div>
-        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">{activeFilterCount > 0 && <Chip size="sm" color="accent" variant="soft">{activeFilterCount} filters</Chip>}</div>
+        <div className="text-xs font-semibold tabular-nums">{progress}%</div>
+        <div className="text-xs text-muted-foreground hidden sm:block tabular-nums">· {tr("{done} of {total} tasks done", { done: completedTasks, total: totalTasks })}</div>
+        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">{activeFilterCount > 0 && <Chip size="sm" color="accent" variant="soft">{tn(activeFilterCount, "1 filter", "{n} filters")}</Chip>}</div>
       </div>
       )}
 
-      {!project.isLoading && !project.isError && data && !isSpecial && (
+      {/* The Overview counts the whole project, so the filters are not offered there. */}
+      {!project.isLoading && !project.isError && data && !isSpecial && view !== "overview" && (
         <BoardFilterBar filters={filters} onChange={setFilters} total={totalTasks} visible={filteredTasks.length} tasks={allTasks} sections={taskLists} projectId={data.id} />
       )}
 
@@ -273,7 +275,20 @@ function ProjectDetail() {
       {!project.isLoading && !project.isError && data && !isSpecial && (
         // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
         <TaskBulkProvider projectId={data.id}>
-          {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}
+          {view === "overview" && (
+            <ProjectOverview
+              project={data}
+              tasks={allTasks}
+              onOpenTask={setOpenTask}
+              onDrill={(drill: OverviewDrill) => {
+                // A count on the Overview opens the tasks behind it: open ones only, on the Board (else the List).
+                setFilters({ ...EMPTY_FILTERS, hideDone: true, due: drill.due ?? "ALL", assigneeId: drill.assigneeId ?? "ALL", priority: drill.priority ?? "ALL", section: drill.section ?? "ALL" });
+                setView(visibleTabs.some((tab) => tab.id === "board") ? "board" : "list");
+              }}
+              onEditBrief={() => setSettingsOpen(true)}
+              onAddTask={() => setComposerListId(taskLists[0]?.id ?? null)}
+            />
+          )}
           {view === "board" && <BoardView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} onCreate={setComposerListId} />}
           {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
           {view === "table" && <ProjectTableView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
@@ -288,7 +303,6 @@ function ProjectDetail() {
           )}
           {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
-          {view === "sprints" && <SprintsView project={data} tasks={filteredTasks} onOpenTask={setOpenTask} />}
           {view === "automations" && <AutomationsView projectId={data.id} />}
           {view === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
           {view === "forms" && <ProjectFormsView projectId={data.id} />}
@@ -306,6 +320,7 @@ function ProjectDetail() {
 }
 
 function BoardFilterBar({ filters, onChange, total, visible, tasks, sections, projectId }: { filters: BoardFilters; onChange: (filters: BoardFilters) => void; total: number; visible: number; tasks: NexusTask[]; sections: NonNullable<NexusProject["taskLists"]>; projectId: string }) {
+  const { t } = useLang();
   const sectionOpts = useMemo(() => sections.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [sections]);
   const reset = () => onChange(EMPTY_FILTERS);
   // Options derived from ALL tasks (not the filtered set) so they stay stable while you filter — same
@@ -371,24 +386,31 @@ function BoardFilterBar({ filters, onChange, total, visible, tasks, sections, pr
           <input
             value={filters.query}
             onChange={(e) => onChange({ ...filters, query: e.target.value })}
-            placeholder="Search mission cards, tags, assignees..."
+            placeholder={t("Search tasks, tags, people…")}
             className="w-full rounded-2xl border border-border bg-muted/30 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-background"
           />
         </div>
         {/* Section = the board's own columns (TaskLists) for THIS project — not a fixed global enum. */}
         <select value={filters.section} onChange={(e) => onChange({ ...filters, section: e.target.value })} className={selectCls} title="Filter by section (board column)">
-          <option value="ALL">All sections</option>
+          <option value="ALL">{t("All sections")}</option>
           {sectionOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <select value={filters.priority} onChange={(e) => onChange({ ...filters, priority: e.target.value })} className={selectCls}>
-          <option value="ALL">All priority</option>
+          <option value="ALL">{t("Any priority")}</option>
           {TASK_PRIORITIES.map((priority) => <option key={priority} value={priority}>{statusLabel(priority)}</option>)}
         </select>
         {/* Assignee */}
         <select value={filters.assigneeId} onChange={(e) => onChange({ ...filters, assigneeId: e.target.value })} className={selectCls} title="Filter by assignee">
-          <option value="ALL">All assignees</option>
-          {assignees.hasUnassigned && <option value="NONE">Unassigned</option>}
+          <option value="ALL">{t("All assignees")}</option>
+          <option value="NONE">{t("Unassigned")}</option>
           {assignees.people.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {/* Due day — what the Overview's Overdue / Due in 7 days / No due date counts open. */}
+        <select value={filters.due} onChange={(e) => onChange({ ...filters, due: e.target.value as DueFilter })} className={cn(selectCls, filters.due !== "ALL" && "border-primary text-primary")} aria-label={t("Filter by due date")}>
+          <option value="ALL">{t("Any due date")}</option>
+          <option value="OVERDUE">{t("Overdue")}</option>
+          <option value="NEXT7">{t("Due in 7 days")}</option>
+          <option value="NONE">{t("No due date")}</option>
         </select>
         {/* Custom fields → one panel, multi-select values per field */}
         {panelFields.length > 0 && (
@@ -430,10 +452,10 @@ function BoardFilterBar({ filters, onChange, total, visible, tasks, sections, pr
           onClick={() => onChange({ ...filters, hideDone: !filters.hideDone })}
           className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold transition ${filters.hideDone ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"}`}
         >
-          <Filter className="h-3.5 w-3.5" /> Hide slayed
+          <Filter className="h-3.5 w-3.5" /> {t("Hide done")}
         </button>
-        <Button size="sm" variant="ghost" onClick={reset}>Reset</Button>
-        <div className="ml-auto text-xs font-bold text-muted-foreground">{visible}/{total} cards visible</div>
+        <Button size="sm" variant="ghost" onClick={reset}>{t("Reset")}</Button>
+        <div className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">{t("{visible} of {total} tasks shown", { visible, total })}</div>
       </div>
     </div>
   );
@@ -1064,77 +1086,6 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
         </CardBody>
       </Card>
     </div>
-  );
-}
-
-function OverviewView({ project, tasks, progress }: { project: NexusProject; tasks: NexusTask[]; progress: number }) {
-  const byStatus = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"].map((status) => ({ status, count: tasks.filter((task) => (task.status || "").toUpperCase() === status).length }));
-  const rollups = useQuery({ queryKey: ["nexus", "project", project.id, "rollups"], queryFn: () => nexusApi.projectRollups(project.id), retry: false });
-  const r = rollups.data;
-  const metrics = [
-    { label: "Total tasks", value: r?.totalTasks ?? tasks.length },
-    { label: "Completed", value: r?.completedTasks ?? tasks.filter((t) => isDone(t.status)).length },
-    { label: "Completion", value: `${r?.completionRate ?? progress}%` },
-    { label: "Avg days", value: r?.avgCompletionDays ?? "—" },
-  ];
-  return (
-    <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
-      <div className="lg:col-span-8 space-y-4 md:space-y-6">
-        <Card className="border border-border shadow-soft"><CardBody className="gap-4 p-6"><div className="text-sm font-black uppercase tracking-wider text-primary">Mission brief</div><p className="text-sm leading-relaxed text-muted-foreground">{project.description || "No brief yet."}</p><ProgressBar value={progress} /></CardBody></Card>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {metrics.map((m) => (
-            <div key={m.label} className="rounded-2xl border border-border bg-card p-4 shadow-soft">
-              <div className="font-display text-2xl font-bold tracking-tight">{m.value}</div>
-              <div className="mt-1 text-xs font-medium text-muted-foreground">{m.label}</div>
-            </div>
-          ))}
-        </div>
-        <StatusUpdatesPanel projectId={project.id} />
-      </div>
-      <Card className="lg:col-span-4 border border-border shadow-soft"><CardBody className="gap-3 p-6"><div className="text-sm font-black uppercase tracking-wider text-primary">Status loot</div>{byStatus.map((item) => <div key={item.status} className="flex items-center justify-between text-sm"><span>{statusLabel(item.status)}</span><span className="font-black">{item.count}</span></div>)}</CardBody></Card>
-    </div>
-  );
-}
-
-function StatusUpdatesPanel({ projectId }: { projectId: string }) {
-  const qc = useQueryClient();
-  const [text, setText] = useState("");
-  const updates = useQuery({ queryKey: ["nexus", "project", projectId, "status-updates"], queryFn: () => nexusApi.statusUpdates(projectId), retry: false });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", projectId, "status-updates"] });
-  const create = useMutation({ mutationFn: () => nexusApi.createStatusUpdate(projectId, text.trim()), onSuccess: () => { setText(""); invalidate(); } });
-  const generate = useMutation({ mutationFn: () => nexusApi.generateStatusUpdate(projectId), onSuccess: (res) => setText(res.content || "") });
-  const rows = updates.data ?? [];
-  return (
-    <Card className="border border-border shadow-soft">
-      <CardBody className="gap-3 p-6">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-black uppercase tracking-wider text-primary">Status updates</div>
-          <button onClick={() => generate.mutate()} disabled={generate.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
-            {generate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-primary" />} AI draft
-          </button>
-        </div>
-        <div className="flex items-start gap-2">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Post a status update… (or let AI draft it)" className="flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary" />
-          <button disabled={!text.trim() || create.isPending} onClick={() => create.mutate()} className="mt-0.5 inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50">
-            {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post"}
-          </button>
-        </div>
-        <div className="space-y-2">
-          {updates.isLoading && <p className="text-xs text-muted-foreground">Loading updates…</p>}
-          {!updates.isLoading && rows.length === 0 && <p className="text-xs text-muted-foreground">No status updates yet.</p>}
-          {rows.map((u) => (
-            <div key={u.id} className="rounded-xl bg-muted/50 p-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground/80">{u.author?.name ?? "Someone"}</span>
-                {u.status && <Chip size="sm" variant="soft" color="accent">{statusLabel(u.status)}</Chip>}
-                <span className="ml-auto">{fmtDate(u.createdAt)}</span>
-              </div>
-              <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{u.text}</p>
-            </div>
-          ))}
-        </div>
-      </CardBody>
-    </Card>
   );
 }
 
@@ -1898,184 +1849,6 @@ function DocDrawer({ doc, projectId, onClose }: { doc: NexusDoc; projectId: stri
 }
 
 
-function SprintsView({ project, tasks, onOpenTask }: { project: NexusProject; tasks: NexusTask[]; onOpenTask: (task: NexusTask) => void }) {
-  const { t } = useLang();
-  const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [startDate, setStartDate] = useState(toDateInput(new Date().toISOString()));
-  const [endDate, setEndDate] = useState(toDateInput(new Date(Date.now() + 13 * 24 * 60 * 60 * 1000).toISOString()));
-  const [expandedSprintId, setExpandedSprintId] = useState<string | null>(null);
-  const [addingToSprintId, setAddingToSprintId] = useState<string | null>(null);
-  const [completing, setCompleting] = useState<{ sprintId: string; incomplete: NexusTask[] } | null>(null);
-  const sprintsQuery = useQuery({ queryKey: ["nexus", "sprints", project.id], queryFn: () => nexusApi.sprints(project.id), retry: false });
-  const sprints = sprintsQuery.data?.sprints ?? [];
-  const sprintTaskIds = new Set(sprints.flatMap((sprint) => (sprint.tasks ?? []).map((item) => item.task.id)));
-  const availableTasks = tasks.filter((task) => !sprintTaskIds.has(task.id));
-
-  const invalidateSprints = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["nexus", "sprints", project.id] });
-    await queryClient.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
-  };
-
-  const createSprint = useMutation({
-    mutationFn: () => nexusApi.createSprint({ name: name.trim(), projectId: project.id, startDate, endDate }),
-    onSuccess: async (result) => {
-      setName("");
-      setExpandedSprintId(result.sprint.id);
-      await invalidateSprints();
-    },
-  });
-
-  const updateSprint = useMutation({
-    mutationFn: (payload: { id: string; status?: string; addTaskId?: string; removeTaskId?: string; moveIncompleteTo?: string }) => nexusApi.updateSprint(payload),
-    onSuccess: async (result, variables) => {
-      setAddingToSprintId(null);
-      // Completing a sprint with unfinished cards: backend asks where to move them.
-      if (result?.requiresAction && result.incompleteTasks?.length) {
-        setCompleting({ sprintId: variables.id, incomplete: result.incompleteTasks as NexusTask[] });
-        return;
-      }
-      setCompleting(null);
-      await invalidateSprints();
-    },
-  });
-
-  const activeSprint = sprints.find((sprint) => sprint.status === "ACTIVE");
-  const plannedSprints = sprints.filter((sprint) => sprint.status === "PLANNING").length;
-  const completedSprints = sprints.filter((sprint) => sprint.status === "COMPLETED").length;
-  const createError = createSprint.error instanceof Error ? createSprint.error.message : "Failed to create sprint.";
-  const updateError = updateSprint.error instanceof Error ? updateSprint.error.message : "Failed to update sprint.";
-
-  return (
-    <div className="p-4 md:p-8 space-y-5">
-      <section className="rounded-[28px] border border-border bg-card p-5 shadow-soft overflow-hidden relative">
-        <div className="absolute -right-12 -top-14 h-36 w-36 rounded-full bg-primary/10" />
-        <div className="relative grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary"><Target className="h-3.5 w-3.5" /> Sprint Arena</div>
-            <h2 className="mt-3 text-2xl font-black tracking-tight">Run the mission in cycles.</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("Group tasks into a time-boxed cycle, start it, then close it when the work ships.")}</p>
-            <div className="mt-4 grid grid-cols-3 gap-2 max-w-xl">
-              <SprintMetric label="Active" value={activeSprint ? "1" : "0"} />
-              <SprintMetric label="Planning" value={String(plannedSprints)} />
-              <SprintMetric label="Shipped" value={String(completedSprints)} />
-            </div>
-          </div>
-          <div className="rounded-[24px] border border-border bg-background/80 p-4">
-            <div className="text-sm font-black">Create sprint</div>
-            <div className="mt-3 space-y-3">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sprint name, e.g. Launch Week 01" className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-sm" />
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] font-bold text-muted-foreground">Start<input value={startDate} onChange={(e) => setStartDate(e.target.value)} type="date" className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-                <label className="text-[11px] font-bold text-muted-foreground">End<input value={endDate} onChange={(e) => setEndDate(e.target.value)} type="date" className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-              </div>
-              {createSprint.isError && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{createError}</p>}
-              <button disabled={!name.trim() || !startDate || !endDate || createSprint.isPending} onClick={() => createSprint.mutate()} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50">
-                {createSprint.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create sprint
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {sprintsQuery.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">Loading sprint cycles...</CardBody></Card>}
-      {sprintsQuery.isError && <Empty title="Sprint arena locked" message="You need a login/session or project access to fetch /api/sprints." />}
-      {updateSprint.isError && <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{updateError}</p>}
-      {!sprintsQuery.isLoading && !sprintsQuery.isError && sprints.length === 0 && <Empty title="No sprint cycles yet" message="Create a sprint to group this mission into a focused execution window." />}
-
-      {!sprintsQuery.isLoading && !sprintsQuery.isError && sprints.length > 0 && (
-        <div className="space-y-3">
-          {sprints.map((sprint) => {
-            const sprintTasks = (sprint.tasks ?? []).map((item) => item.task);
-            const doneCount = sprintTasks.filter((task) => isDone(task.status)).length;
-            const progress = sprintTasks.length ? Math.round((doneCount / sprintTasks.length) * 100) : 0;
-            const nextStatus = sprint.status === "PLANNING" ? "ACTIVE" : sprint.status === "ACTIVE" ? "COMPLETED" : null;
-            const expanded = expandedSprintId === sprint.id;
-            return (
-              <Card key={sprint.id} className="border border-border shadow-soft">
-                <CardBody className="p-0">
-                  <button onClick={() => setExpandedSprintId(expanded ? null : sprint.id)} className="grid w-full gap-3 p-4 text-left hover:bg-accent/30 md:grid-cols-[1.2fr_0.7fr_0.7fr_auto] md:items-center">
-                    <div>
-                      <div className="flex items-center gap-2"><span className="font-black">{sprint.name}</span><SprintStatusChip status={sprint.status} /></div>
-                      <div className="mt-1 text-xs text-muted-foreground">{fmtDate(sprint.startDate)} → {fmtDate(sprint.endDate)}</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">{doneCount}/{sprintTasks.length} cards slayed</div>
-                    <div><ProgressBar value={progress} /><div className="mt-1 text-[11px] text-muted-foreground">{progress}% sprint energy</div></div>
-                    <ChevronRight className={`h-4 w-4 text-muted-foreground transition ${expanded ? "rotate-90" : ""}`} />
-                  </button>
-
-                  {expanded && (
-                    <div className="border-t border-border p-4 space-y-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {nextStatus && <button disabled={updateSprint.isPending} onClick={() => updateSprint.mutate({ id: sprint.id, status: nextStatus })} className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-bold hover:bg-accent disabled:opacity-50">{nextStatus === "ACTIVE" ? <Play className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{nextStatus === "ACTIVE" ? "Start sprint" : "Complete sprint"}</button>}
-                        <button disabled={!availableTasks.length || updateSprint.isPending} onClick={() => setAddingToSprintId(addingToSprintId === sprint.id ? null : sprint.id)} className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-bold hover:bg-accent disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> Add card</button>
-                        <span className="text-xs text-muted-foreground">{availableTasks.length} board cards available</span>
-                      </div>
-
-                      {addingToSprintId === sprint.id && (
-                        <select defaultValue="" onChange={(e) => e.target.value && updateSprint.mutate({ id: sprint.id, addTaskId: e.target.value })} className="w-full rounded-2xl border border-border bg-background px-3 py-2 text-sm">
-                          <option value="">Pick a board card...</option>
-                          {availableTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-                        </select>
-                      )}
-
-                      {sprintTasks.length ? (
-                        <div className="grid gap-2">
-                          {sprintTasks.map((task) => {
-                            const fullTask = tasks.find((candidate) => candidate.id === task.id) ?? task as NexusTask;
-                            return (
-                              <div key={task.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-background px-3 py-2 hover:border-primary/40">
-                                <button onClick={() => onOpenTask(fullTask)} className="min-w-0 flex-1 truncate text-left text-sm font-semibold">{task.title}</button>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <Chip size="sm" variant="soft">{statusLabel(task.status)}</Chip>
-                                  <PriorityChip priority={task.priority} />
-                                  <button title="Remove from sprint" disabled={updateSprint.isPending} onClick={() => updateSprint.mutate({ id: sprint.id, removeTaskId: task.id })} className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><X className="h-3.5 w-3.5" /></button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : <div className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No cards in this sprint yet — add one from the board backlog.</div>}
-                    </div>
-                  )}
-                </CardBody>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {completing && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={() => setCompleting(null)}>
-          <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-display text-lg font-bold tracking-tight">{completing.incomplete.length} card{completing.incomplete.length === 1 ? "" : "s"} not done</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Move the unfinished cards to another sprint, or drop them to the backlog as you close this sprint.</p>
-            <div className="mt-4 space-y-2">
-              {sprints.filter((s) => s.id !== completing.sprintId && s.status !== "COMPLETED").map((s) => (
-                <button key={s.id} disabled={updateSprint.isPending} onClick={() => updateSprint.mutate({ id: completing.sprintId, status: "COMPLETED", moveIncompleteTo: s.id })} className="flex w-full items-center justify-between rounded-xl border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-accent active:scale-[0.98] disabled:opacity-50">
-                  <span>Move to “{s.name}”</span><SprintStatusChip status={s.status} />
-                </button>
-              ))}
-              <button disabled={updateSprint.isPending} onClick={() => updateSprint.mutate({ id: completing.sprintId, status: "COMPLETED", moveIncompleteTo: "backlog" })} className="w-full rounded-xl border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">Move to backlog & complete</button>
-              <button onClick={() => setCompleting(null)} className="w-full rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SprintMetric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-border bg-background/80 p-3"><div className="text-xl font-black">{value}</div><div className="text-[11px] text-muted-foreground">{label}</div></div>;
-}
-
-function SprintStatusChip({ status }: { status?: string | null }) {
-  const s = (status || "PLANNING").toUpperCase();
-  const color = s === "ACTIVE" ? "success" : s === "COMPLETED" ? "default" : "warning";
-  return <Chip size="sm" variant="soft" color={color}>{statusLabel(s)}</Chip>;
-}
-
 function ProjectChat({ projectId }: { projectId: string }) {
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false });
@@ -2124,6 +1897,15 @@ function taskMatchesFilters(task: NexusTask, filters: BoardFilters) {
   const priority = (task.priority || "NONE").toUpperCase();
   if (filters.hideDone && isDone(status)) return false;
   if (filters.priority !== "ALL" && priority !== filters.priority) return false;
+  if (filters.due !== "ALL") {
+    const due = parseDate(task.dueDate);
+    if (filters.due === "NONE") { if (due) return false; }
+    else {
+      if (!due) return false;
+      const days = Math.round((startOfDay(due).getTime() - startOfDay(new Date()).getTime()) / DAY_MS);
+      if (filters.due === "OVERDUE" ? days >= 0 : days < 0 || days > 6) return false;
+    }
+  }
   if (filters.assigneeId !== "ALL") {
     const ids = (task.assignees ?? []).map((a) => a.user?.id).filter(Boolean) as string[];
     if (filters.assigneeId === "NONE" ? ids.length > 0 : !ids.includes(filters.assigneeId)) return false;

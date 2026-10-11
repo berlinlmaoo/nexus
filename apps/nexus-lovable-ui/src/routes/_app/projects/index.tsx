@@ -9,7 +9,7 @@ import { ProgressBar } from "@/components/StatusPill";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { ProjectTypeChosen, ProjectTypePicker } from "@/components/projects/ProjectTypePicker";
 import { TabPreviewCards } from "@/components/projects/TabPreviewCards";
-import { projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
+import { NEW_PROJECT_HIDDEN_TABS, projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
 import { MemberMultiPicker } from "@/components/projects/MemberMultiPicker";
 import { useLang } from "@/lib/lang";
 import { projects as fallbackProjects } from "@/lib/mock-data";
@@ -115,7 +115,8 @@ function ProjectsPage() {
   const [newProjectFolderId, setNewProjectFolderId] = useState<string | null>(null);
   // Set up in the same dialog (owner, 11 Oct 2026): the tabs a Task Project starts without (same keys
   // and Board-or-List rule as Project settings → Tabs) and the people added next to the creator.
-  const [newProjectHiddenTabs, setNewProjectHiddenTabs] = useState<string[]>([]);
+  // Automations starts unticked (owner, 11 Oct 2026: off by default for new projects).
+  const [newProjectHiddenTabs, setNewProjectHiddenTabs] = useState<string[]>(NEW_PROJECT_HIDDEN_TABS);
   const [newProjectMemberIds, setNewProjectMemberIds] = useState<string[]>([]);
   const { t: tr } = useLang();
 
@@ -221,7 +222,9 @@ function ProjectsPage() {
         workspaceId: newProjectWorkspaceId || workspaceOptions[0]?.id || "",
         type: newProjectType ?? "TASK",
         ...(newProjectFolderId ? { folderId: newProjectFolderId } : {}),
-        ...((newProjectType ?? "TASK") === "TASK" && newProjectHiddenTabs.length > 0 ? { hiddenTabs: newProjectHiddenTabs } : {}),
+        // Always sent for a Task Project, [] included: the server hides Automations only when the key is
+        // absent (owner, 11 Oct 2026), so someone who switches Automations back on gets it.
+        ...((newProjectType ?? "TASK") === "TASK" ? { hiddenTabs: newProjectHiddenTabs } : {}),
         ...(newProjectMemberIds.length > 0 ? { memberIds: newProjectMemberIds } : {}),
       }),
     onSuccess: async (project) => {
@@ -229,7 +232,7 @@ function ProjectsPage() {
       setIsCreateOpen(false);
       setNewProjectName("");
       setNewProjectDescription("");
-      setNewProjectHiddenTabs([]);
+      setNewProjectHiddenTabs(NEW_PROJECT_HIDDEN_TABS);
       setNewProjectMemberIds([]);
       navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
     },
@@ -254,7 +257,7 @@ function ProjectsPage() {
     if (!newProjectWorkspaceId && workspaceOptions[0]) setNewProjectWorkspaceId(workspaceOptions[0].id);
     setNewProjectType(null);
     setNewProjectFolderId(folderId);
-    setNewProjectHiddenTabs([]);
+    setNewProjectHiddenTabs(NEW_PROJECT_HIDDEN_TABS);
     setNewProjectMemberIds([]);
     setIsCreateOpen(true);
   };

@@ -8,7 +8,6 @@ export const ID_PROJECTS: Record<string, string> = {
   "Overview": "Ringkasan",
   "List": "Daftar",
   "Table": "Tabel",
-  "Sprints": "Sprint",
   "Automations": "Otomasi",
   "Pages": "Halaman",
   "Forms": "Formulir",

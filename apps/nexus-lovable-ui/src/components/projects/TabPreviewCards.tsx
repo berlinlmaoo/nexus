@@ -15,7 +15,6 @@ const DESC: Record<ProjectTabKey, string> = {
   sheet: "A spreadsheet with formulas",
   calendar: "Tasks on a month by due date",
   timeline: "Start-to-end bars, Gantt style",
-  sprints: "Work in timeboxed cycles",
   automations: "When this happens, do that",
   pages: "Docs and notes for the project",
   forms: "Collect requests as tasks",
@@ -78,17 +77,6 @@ function Thumb({ tab }: { tab: ProjectTabKey }): ReactNode {
       return (
         <div className="flex h-full flex-col justify-center gap-1.5">
           {[[0, 45], [20, 40], [45, 35], [60, 30]].map(([l, w], i) => <span key={i} className={cn("block h-2 rounded-full", i === 1 ? Hit : "bg-foreground/20")} style={{ marginLeft: `${l}%`, width: `${w}%` }} />)}
-        </div>
-      );
-    case "sprints":
-      return (
-        <div className="flex h-full flex-col justify-center gap-1.5">
-          {[100, 60, 0].map((p, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <span className="w-5 shrink-0 text-[7px] font-bold leading-none text-muted-foreground">S{i + 1}</span>
-              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10"><span className={cn("block h-full rounded-full", i === 1 ? Hit : "bg-foreground/30")} style={{ width: `${p}%` }} /></span>
-            </div>
-          ))}
         </div>
       );
     case "automations":

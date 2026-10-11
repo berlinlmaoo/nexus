@@ -1000,6 +1000,9 @@ export type NexusTask = {
   startDate?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** When the task last became DONE and by whom (set by a DB trigger; null = unknown or not done). */
+  completedAt?: string | null;
+  completedById?: string | null;
   tags?: string[] | null;
   taskListId?: string | null;
   parentId?: string | null;

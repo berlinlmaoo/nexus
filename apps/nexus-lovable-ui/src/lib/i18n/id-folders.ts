@@ -57,7 +57,6 @@ export const ID_FOLDERS: Record<string, string> = {
   "A spreadsheet with formulas": "Spreadsheet dengan rumus",
   "Tasks on a month by due date": "Task per tanggal dalam sebulan",
   "Start-to-end bars, Gantt style": "Bar mulai–selesai ala Gantt",
-  "Work in timeboxed cycles": "Kerja per siklus waktu",
   "When this happens, do that": "Kalau ini terjadi, lakukan itu",
   "Docs and notes for the project": "Dokumen dan catatan project",
   "Collect requests as tasks": "Kumpulkan permintaan jadi task",
