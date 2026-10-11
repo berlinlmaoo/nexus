@@ -2,8 +2,8 @@ import SwiftUI
 
 // MARK: - Outlet Sales Dashboard project view (owner, 10 Oct 2026, for Ryan)
 //
-// A project of type OUTLET_SALES shows Overview · Calendar · Board · Report form · Chat (plus Finance /
-// P&L when switched on), as the web's OutletSalesView. The four outlet tabs are ProjectDetailView's own
+// A project of type OUTLET_SALES shows Overview · Calendar · Board · Report form · Chat, as the web's
+// OutletSalesView. The four outlet tabs are ProjectDetailView's own
 // tabs and share one store, so the month chosen on one is the month on all of them, and a report
 // saved on the form shows on the calendar it lands on.
 //

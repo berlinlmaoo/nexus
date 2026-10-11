@@ -12,8 +12,7 @@ import Foundation
 // "ada bbrp project yg ga butuh spreadsheets/automation/list" — a project hides the tabs it does not
 // need. The server stores the HIDDEN keys (Project.hiddenTabs), the same keys web uses
 // (src/lib/project-tabs.ts on the server), so a tab added later shows everywhere by default. Hiding
-// only hides: nothing in the tab is deleted. Finance and P&L are not hideable tabs — each is an
-// opt-in flag of its own (financeEnabled, enablePnlDashboard), switched by BoD and above.
+// only hides: nothing in the tab is deleted. The Finance and P&L tabs were removed (owner, 11 Oct 2026).
 
 enum ProjectKind: String, CaseIterable, Identifiable {
     // Outlet Sales Dashboard took Finance Dashboard's card (owner, 10 Oct 2026, for Ryan), in the web's
@@ -57,13 +56,12 @@ enum ProjectKind: String, CaseIterable, Identifiable {
 }
 
 extension ProjectTab {
-    /// The key the server and web use for this tab in Project.hiddenTabs. nil for Finance and P&L,
-    /// which are switched by their own flags rather than hidden, and for Pipeline, which a Pipeline
+    /// The key the server and web use for this tab in Project.hiddenTabs. nil for Pipeline, which a Pipeline
     /// Dashboard always shows and no other project has (owner, 9 Oct 2026), and for Report form, which
     /// only an Outlet Sales Dashboard has (10 Oct 2026).
     var key: String? {
         switch self {
-        case .finance, .pnl, .pipeline, .reportForm: return nil
+        case .pipeline, .reportForm: return nil
         case .sheet: return "sheet"
         default: return rawValue.lowercased()
         }

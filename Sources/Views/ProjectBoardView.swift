@@ -20,7 +20,6 @@ struct ProjectDetailView: View {
     @State private var newFormOpen = false
     @State private var showSettings = false
     @State private var prefillDue: Date?
-    @State private var isBod = false
     @State private var query = ""
     /// Bumped by "+" on a Pipeline Dashboard: the pipeline opens its New deal sheet.
     @State private var newDealRequest = 0
@@ -29,6 +28,8 @@ struct ProjectDetailView: View {
     @State private var outletStore: OutletSalesStore?
     /// An outlet opens on Overview once (later reloads leave the tab alone).
     @State private var outletLanded = false
+    /// Multi-select for Duplicate on Board and List (always on since 11 Oct 2026, TaskBatchDuplicate.swift).
+    @State private var selection = TaskSelection()
     @Environment(\.dismiss) private var dismiss
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
@@ -73,8 +74,8 @@ struct ProjectDetailView: View {
         return tokens.allSatisfy { joined.contains($0) }
     }
 
-    /// Tab yang menggambar task, jadi tab yang pantas punya kotak pencarian. Pages, Forms, Chat,
-    /// Finance dan P&L punya isinya sendiri dan kotak yang tidak menyaring apa pun di sana hanya
+    /// Tab yang menggambar task, jadi tab yang pantas punya kotak pencarian. Pages, Forms dan Chat
+    /// punya isinya sendiri dan kotak yang tidak menyaring apa pun di sana hanya
     /// menjanjikan sesuatu yang tidak terjadi.
     private var searchApplies: Bool {
         switch tab {
@@ -83,6 +84,15 @@ struct ProjectDetailView: View {
         case .board, .list, .sheet, .calendar, .timeline: return true
         default: return false
         }
+    }
+
+    /// The task tabs with multi-select + Duplicate. Not an outlet's Board, which shows its events.
+    private var selectionApplies: Bool { !isOutlet && !isPipeline && (tab == .board || tab == .list) }
+
+    /// The selected tasks in board order (lanes, then position), skipping any that vanished meanwhile.
+    private func tasksFor(_ ids: [String]) -> [BoardTask] {
+        let wanted = Set(ids)
+        return lanes.flatMap { $0.tasks ?? [] }.filter { wanted.contains($0.id) }
     }
 
     private var matchCount: Int { filteredLanes.reduce(0) { $0 + ($1.tasks?.count ?? 0) } }
@@ -98,29 +108,17 @@ struct ProjectDetailView: View {
     // Same rules as the web's tab bar (owner, 9 Oct 2026):
     //   • a project hides the tabs it doesn't need — Project settings → Tabs, stored as
     //     Project.hiddenTabs with the same keys as web (ProjectTab.key). Hiding only hides.
-    //   • Finance is opt-in per project like P&L (Project.financeEnabled, switched by BoD). It used
-    //     to follow the project's NAME containing "finance", which is how a project nobody had
-    //     switched it on for got a Finance tab.
-    //   • P&L needs its flag AND a BoD-tier viewer.
-
-    /// Against a server that does not send the flag yet, the old name rule still applies.
-    private var financeEnabled: Bool {
-        guard let detail else { return false }
-        if let flag = detail.financeEnabled { return flag }
-        return detail.name.range(of: "finance", options: .caseInsensitive) != nil
-    }
-    /// P&L needs the per-project flag AND a BoD-tier viewer.
-    private var pnlEnabled: Bool { (detail?.enablePnlDashboard ?? false) && isBod }
+    //   • Finance and P&L are gone (owner, 11 Oct 2026): no tab, whatever the old flags say.
     private var hiddenTabKeys: Set<String> { Set(detail?.hiddenTabs ?? []) }
 
     /// A Pipeline Dashboard (owner, 9 Oct 2026): its deals are the project, so it shows Pipeline (first,
-    /// and where it opens), Chat, and Finance / P&L when switched on — none of the task tabs, as on the
+    /// and where it opens) and Chat — none of the task tabs, as on the
     /// web. Its three default task sections stay on the server only so an app that does not know the
     /// type still opens it as an empty task project.
     private var isPipeline: Bool { detail?.type == "PIPELINE" }
 
     /// An Outlet Sales Dashboard (owner, 10 Oct 2026, for Ryan): Overview · Calendar · Board · Report form
-    /// · Chat, plus Finance / P&L when switched on — the web's order, none of the task tabs. Its Overview,
+    /// · Chat — the web's order, none of the task tabs. Its Overview,
     /// Calendar and Board are the outlet's own (OutletSalesView.swift), not the task ones of the same name.
     private var isOutlet: Bool { detail?.type == "OUTLET_SALES" }
 
@@ -128,14 +126,10 @@ struct ProjectDetailView: View {
         if isOutlet {
             var tabs = ProjectTab.outletTabs
             if !hiddenTabKeys.contains(ProjectTab.chat.key ?? "") { tabs.append(.chat) }
-            if financeEnabled { tabs.append(.finance) }
-            if pnlEnabled { tabs.append(.pnl) }
             return tabs
         }
         return ProjectTab.allCases.filter {
             switch $0 {
-            case .finance:  return financeEnabled
-            case .pnl:      return pnlEnabled
             case .pipeline: return isPipeline
             case .reportForm: return false
             case .chat:     return !hiddenTabKeys.contains($0.key ?? "")
@@ -163,6 +157,18 @@ struct ProjectDetailView: View {
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
             if searchApplies && !isOutlet && !loading && error == nil && !lanes.isEmpty { searchBar }
             content
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if selection.active && selectionApplies {
+                        TaskSelectionBar(selection: selection, visibleIds: filteredLanes.flatMap { ($0.tasks ?? []).map(\.id) })
+                    }
+                }
+                // On `content` rather than the root, which already carries two sheets.
+                .sheet(item: $selection.pendingDuplicate) { request in
+                    TaskDuplicateSheet(tasks: tasksFor(request.taskIds)) { _ in
+                        selection.clear()
+                        await reloadQuietly()
+                    }
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(projectBackground)
@@ -182,6 +188,10 @@ struct ProjectDetailView: View {
         // else List, else whatever is left.
         .onChange(of: visibleTabs) { _, tabs in
             if !tabs.contains(tab) { tab = fallbackTab }
+        }
+        // Selection lives on Board and List only; any other tab leaves selection mode.
+        .onChange(of: tab) { _, _ in
+            if !selectionApplies { selection.clear() }
         }
         // Live (owner, 8 Oct 2026): a task created, moved, edited or deleted on another device — or
         // the project itself renamed or changed — shows on the board, list, sheet, calendar and
@@ -356,13 +366,6 @@ struct ProjectDetailView: View {
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
         case .sprints: SprintsTab(projectId: projectId, onOpen: { openTaskId = $0 })
         case .automations: AutomationsTab(projectId: projectId)
-        // Belt-and-braces: `tab` could still hold a value that just became hidden after a reload.
-        case .finance:
-            if financeEnabled { FinanceTab(projectId: projectId) }
-            else { TabEmpty(icon: "banknote", text: T("Finance isn't available for this project yet.")) }
-        case .pnl:
-            if pnlEnabled { PnlTab(projectId: projectId) }
-            else { TabEmpty(icon: "dollarsign.circle", text: T("P&L isn't enabled / BoD access required.")) }
         default:
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -372,7 +375,7 @@ struct ProjectDetailView: View {
                 switch tab {
                 case .overview: OverviewTab(detail: detail, onOpenMember: { openProfile = $0 })
                 case .board:    boardTab(detail)
-                case .list:     ListTab(lanes: filteredLanes, onOpen: { openTaskId = $0 })
+                case .list:     ListTab(lanes: filteredLanes, onOpen: { openTaskId = $0 }, selection: selection)
                 case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { openTaskId = $0 })
                 case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
                 case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { openTaskId = $0 })
@@ -429,7 +432,7 @@ struct ProjectDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(lanes) { lane in
-                        LaneColumn(lane: lane, allLanes: lanes, onOpen: { openTaskId = $0 },
+                        LaneColumn(lane: lane, allLanes: lanes, selection: selection, onOpen: { openTaskId = $0 },
                                    onAddTask: { title in await addTask(laneId: lane.id, title: title) },
                                    onMove: { tid, lid in await moveTask(tid, to: lid) })
                     }
@@ -458,10 +461,6 @@ struct ProjectDetailView: View {
             // subtasks into their lane (under the parent) for the board + list. Calendar/Timeline use detail.
             let all = (try? await APIClient.shared.projectTasks(projectId)) ?? []
             lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
-            // P&L visibility depends on the viewer's org role, not just the project flag.
-            if let role = (try? await APIClient.shared.workspaceInfo())?.role {
-                isBod = role == "BOD" || role == "ONE_ABOVE_ALL"
-            }
             // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
             if !visibleTabs.contains(tab) { tab = fallbackTab }
             cachedFrom = nil
@@ -557,6 +556,7 @@ struct ProjectDetailView: View {
 struct LaneColumn: View {
     let lane: ProjectDetail.Lane
     let allLanes: [ProjectDetail.Lane]
+    let selection: TaskSelection
     let onOpen: (String) -> Void
     let onAddTask: (String) async -> Void
     let onMove: (String, String) async -> Void
@@ -630,8 +630,22 @@ struct LaneColumn: View {
             ScrollView(.vertical, showsIndicators: false) {
               LazyVStack(alignment: .leading, spacing: 10) {
             ForEach(orderedTasks) { task in
-                Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
-                    .hoverEffect(.lift)
+                // In selection mode a tap ticks the card instead of opening it.
+                Button {
+                    if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
+                } label: {
+                    BoardCard(task: task)
+                        .overlay {
+                            if selection.active && selection.contains(task.id) {
+                                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
+                            }
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if selection.active { TaskSelectionMark(selected: selection.contains(task.id)).offset(x: 6, y: -6) }
+                        }
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.lift)
                     // The task id is the whole payload. Dragging the card itself would mean making
                     // Task Transferable and shipping a copy of the model between columns, when all
                     // the drop needs to know is which task moved — the board already holds the rest.
@@ -639,6 +653,7 @@ struct LaneColumn: View {
                         BoardCard(task: task).frame(width: 260).opacity(0.9)
                     }
                     .contextMenu {
+                        TaskSelectionMenuItems(taskId: task.id, selection: selection)
                         let others = allLanes.filter { $0.id != lane.id }
                         if !others.isEmpty {
                             Menu("Pindah ke") {

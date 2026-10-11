@@ -7,7 +7,7 @@ enum ProjectTab: String, CaseIterable, Identifiable {
     case pipeline = "Pipeline"
     case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
     case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
-    case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", chat = "Chat"
+    case pages = "Pages", forms = "Forms", chat = "Chat"
     // Only an Outlet Sales Dashboard shows it (owner, 10 Oct 2026, for Ryan): the night's report form.
     case reportForm = "Report form"
     var id: String { rawValue }
@@ -24,8 +24,6 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .automations: return "bolt.fill"
         case .pages:    return "doc.text.fill"
         case .forms:    return "list.clipboard.fill"
-        case .finance:  return "banknote.fill"
-        case .pnl:      return "dollarsign.circle.fill"
         case .chat:     return "bubble.left.and.bubble.right.fill"
         case .reportForm: return "list.clipboard"
         }
@@ -98,9 +96,26 @@ struct PriorityPill: View {
 struct ProjectTaskRow: View {
     let task: BoardTask
     let onOpen: (String) -> Void
+    /// The List tab passes its project's selection (multi-select + Duplicate); other callers do not.
+    var selection: TaskSelection? = nil
+
+    private var selecting: Bool { selection?.active ?? false }
+    private var selected: Bool { selection?.contains(task.id) ?? false }
+
     var body: some View {
-        Button { onOpen(task.id) } label: {
+        if let selection {
+            row.contextMenu { TaskSelectionMenuItems(taskId: task.id, selection: selection) }
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
+        Button {
+            if selecting, let selection { selection.toggle(task.id) } else { onOpen(task.id) }
+        } label: {
             HStack(spacing: 10) {
+                if selecting { TaskSelectionMark(selected: selected) }
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 VStack(alignment: .leading, spacing: 3) {
@@ -133,7 +148,7 @@ struct ProjectTaskRow: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(selecting && selected ? NX.violet : NX.border, lineWidth: selecting && selected ? 2 : 1))
         }
         .buttonStyle(.plain)
     }
@@ -236,6 +251,7 @@ struct OverviewTab: View {
 struct ListTab: View {
     let lanes: [ProjectDetail.Lane]   // subtasks already merged in (nested under their parent)
     let onOpen: (String) -> Void
+    var selection: TaskSelection? = nil
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
@@ -252,11 +268,11 @@ struct ListTab: View {
                         } else {
                             ForEach(lane.tasks ?? []) { t in
                                 if t.isSubtask {
-                                    ProjectTaskRow(task: t, onOpen: onOpen)
+                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection)
                                         .padding(.leading, 16)                       // nest under parent
                                         .overlay(alignment: .leading) { Rectangle().fill(Color(hex: "#7c3aed").opacity(0.35)).frame(width: 2).padding(.vertical, 6) }
                                 } else {
-                                    ProjectTaskRow(task: t, onOpen: onOpen)
+                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection)
                                 }
                             }
                         }

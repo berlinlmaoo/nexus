@@ -479,11 +479,6 @@ final class AppLanguage {
         // ── project settings ──────────────────────────────────────────────────
         "Project name": "Nama project",
         "Save identity": "Simpan identitas",
-        "Task duplicate mode": "Mode duplicate task",
-        "Multi-select duplicate + a due-date popup for recurring tasks.":
-            "Multi-select duplicate + popup due date buat task berulang.",
-        "Standalone finance view: daily spend, incoming-cash pipeline.":
-            "View keuangan standalone: pengeluaran harian, pipeline uang masuk.",
         "Auto-assign the selected members to new tasks in this project.":
             "Otomatis assign member kepilih ke task baru di project ini.",
         "Pick at least one member first.": "Pilih minimal satu member dulu.",
@@ -565,8 +560,6 @@ final class AppLanguage {
         "Couldn't create the sprint.": "Gagal bikin sprint.",
         "No automations yet. Set up rules from the web app (desktop).":
             "Belum ada automation. Atur rule otomatis lewat web (desktop).",
-        "Finance isn't available for this project yet.": "Finance belum tersedia buat project ini.",
-        "P&L isn't enabled / BoD access required.": "P&L belum diaktifin / akses BoD diperlukan.",
 
         // ── attendance admin / offices / requests ─────────────────────────────
         "Shift, day-off and public-holiday settings can only be managed by BoD / One Above All.":
@@ -2267,7 +2260,6 @@ final class AppLanguage {
         "Choose the tabs this project shows. Turning a tab off only hides it: nothing in it is deleted, and turning it back on brings everything back.": "Pilih tab yang tampil di project ini. Mematikan tab cuma menyembunyikannya: isinya tidak dihapus, dan begitu dinyalakan lagi semuanya kembali.",
         "Board or List stays on": "Board atau Daftar tetap nyala",
         "Only managers and above can change the tabs.": "Hanya manager ke atas yang bisa mengubah tab.",
-        "Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&L. Turning it off only hides the tab — the numbers stay.": "OPEX dan revenue bulanan project ini, per tahun. Mati sampai BoD menyalakannya, sama seperti P&L. Mematikannya cuma menyembunyikan tab — angkanya tetap ada.",
         "What is this project for?": "Project ini untuk apa?",
         "Coming soon": "Segera hadir",
         "Change type": "Ganti tipe",
@@ -2981,6 +2973,18 @@ final class AppLanguage {
         // Projects: one default mark, photo optional (11 Oct)
         "Add photo": "Tambah foto",
         "Without a photo, the project shows the default task icon.": "Tanpa foto, proyek tampil dengan ikon task bawaan.",
+
+        // Tasks: multi-select + Duplicate, always on (11 Oct)
+        "Deselect": "Batal pilih",
+        "Duplicate": "Duplikat",
+        "Pick tasks to duplicate": "Pilih task untuk diduplikat",
+        "Duplicate 1 task": "Duplikat 1 task",
+        "Duplicate %d tasks": "Duplikat %d task",
+        "and %d more": "dan %d lagi",
+        "Pick the due date for the copies. Everything else — subtasks, assignees, fields — is copied as it is.": "Pilih tenggat untuk salinannya. Sisanya — subtask, PIC, field — disalin apa adanya.",
+        "New due date": "Tenggat baru",
+        "Duplicating…": "Menduplikat…",
+        "%d of %d tasks weren't duplicated. Try again.": "%d dari %d task gagal diduplikat. Coba lagi.",
 
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)

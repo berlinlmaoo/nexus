@@ -27,9 +27,6 @@ struct ProjectSettingsView: View {
     @State private var identitySaved = false
 
     // flags
-    @State private var batchDup = false
-    @State private var pnl = false
-    @State private var finance = false
     @State private var hiddenTabs: [String] = []
     @State private var savingTabs = false
     @State private var autoAssign = false
@@ -47,9 +44,8 @@ struct ProjectSettingsView: View {
     @State private var busy = false
     @State private var toast: String?
 
-    private var canPnl: Bool { viewerWsRole == "BOD" || viewerWsRole == "ONE_ABOVE_ALL" }
     /// Tabs follow the server's rule for every project setting: Manager and above.
-    private var canManageTabs: Bool { viewerWsRole == "MANAGER" || canPnl }
+    private var canManageTabs: Bool { ["MANAGER", "BOD", "ONE_ABOVE_ALL"].contains(viewerWsRole ?? "") }
     private var hasPhoto: Bool { ProjectMark.isPhoto(icon) }
 
     var body: some View {
@@ -133,23 +129,10 @@ struct ProjectSettingsView: View {
 
     // MARK: customize flags
 
+    /// Only Auto assign is left (owner, 11 Oct 2026). Task duplicate mode is always on, and P&L,
+    /// Finance, "proof before Done" and calendar mode are gone; the server ignores writes of those keys.
     private var customizeCard: some View {
         card("Customize") {
-            flagToggle(T("Task duplicate mode"), T("Multi-select duplicate + a due-date popup for recurring tasks."), $batchDup) {
-                await patch(["enableTaskBatchDuplicate": batchDup])
-            }
-            if canPnl {
-                Divider().overlay(NX.border)
-                flagToggle("P&L Dashboard", T("Standalone finance view: daily spend, incoming-cash pipeline."), $pnl) {
-                    await patch(["enablePnlDashboard": pnl])
-                }
-                // Finance is opt-in exactly like P&L (owner, 9 Oct 2026), BoD and above.
-                Divider().overlay(NX.border)
-                flagToggle("Finance", T("Monthly OPEX and revenue for this project, by year. Off until BoD turns it on, like P&L. Turning it off only hides the tab — the numbers stay."), $finance) {
-                    await saveFinance()
-                }
-            }
-            Divider().overlay(NX.border)
             flagToggle("Auto assign", T("Auto-assign the selected members to new tasks in this project."), $autoAssign) {
                 if autoAssign && autoIds.isEmpty { autoAssign = false; show(T("Pick at least one member first.")); return }
                 await patch(["autoAssignEnabled": autoAssign, "autoAssignAssigneeIds": Array(autoIds)])
@@ -331,10 +314,6 @@ struct ProjectSettingsView: View {
         name = detail.name
         desc = detail.description ?? ""
         icon = detail.icon
-        batchDup = detail.enableTaskBatchDuplicate ?? false
-        pnl = detail.enablePnlDashboard ?? false
-        // Same rule as the tab bar: an older server without the flag → the name rule.
-        finance = detail.financeEnabled ?? (detail.name.range(of: "finance", options: .caseInsensitive) != nil)
         hiddenTabs = detail.hiddenTabs ?? []
         autoAssign = detail.autoAssignEnabled ?? false
         autoIds = Set(detail.autoAssignAssigneeIds ?? [])
@@ -408,11 +387,6 @@ struct ProjectSettingsView: View {
     private func patch(_ fields: [String: Any]) async {
         if (try? await APIClient.shared.updateProject(projectId, fields: fields)) != nil { await onChange() }
         else { show(T("Couldn't save — try again.")) }
-    }
-    private func saveFinance() async {
-        let wanted = finance
-        if (try? await APIClient.shared.updateProject(projectId, fields: ["financeEnabled": wanted])) != nil { await onChange() }
-        else { finance = !wanted; show(T("Couldn't save — try again.")) }
     }
     /// The whole hidden set goes up each time; keys this build does not know are kept as they are.
     private func setTab(_ key: String, shown: Bool) async {

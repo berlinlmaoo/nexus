@@ -11,9 +11,9 @@ struct ProjectDetail: Decodable, Sendable {
     let workspaceId: String?
     let taskLists: [Lane]?
     let members: [ProjectMember]?
-    // project settings flags
-    let enableTaskBatchDuplicate: Bool?
-    let enablePnlDashboard: Bool?
+    // project settings flags. The server still sends enableTaskBatchDuplicate, enablePnlDashboard,
+    // financeEnabled, requireAttachmentForDone and disableTaskStatus, but they are fixed since 11 Oct
+    // 2026 (duplicate always on, the rest off), so they are deliberately not read.
     let autoAssignEnabled: Bool?
     let autoAssignAssigneeIds: [String]?
     // Project type and tabs (owner, 9 Oct 2026) — see ProjectKinds.swift. Additive: a server from
@@ -23,16 +23,14 @@ struct ProjectDetail: Decodable, Sendable {
     let type: String?
     /// Tab keys this project hides (ProjectTab.key). A key this build does not know is ignored.
     let hiddenTabs: [String]?
-    /// The Finance tab is opt-in, like P&L. nil = an older server, where the old name rule applies.
-    let financeEnabled: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id, name, color, icon, description, workspaceId, taskLists, members
-        case enableTaskBatchDuplicate, enablePnlDashboard, autoAssignEnabled, autoAssignAssigneeIds
-        case type, hiddenTabs, financeEnabled
+        case autoAssignEnabled, autoAssignAssigneeIds
+        case type, hiddenTabs
     }
 
-    /// Written out only so the three fields above can be read leniently. Every other field decodes
+    /// Written out only so type and hiddenTabs can be read leniently. Every other field decodes
     /// exactly as the synthesized version did.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -44,13 +42,10 @@ struct ProjectDetail: Decodable, Sendable {
         workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId)
         taskLists = try c.decodeIfPresent([Lane].self, forKey: .taskLists)
         members = try c.decodeIfPresent([ProjectMember].self, forKey: .members)
-        enableTaskBatchDuplicate = try c.decodeIfPresent(Bool.self, forKey: .enableTaskBatchDuplicate)
-        enablePnlDashboard = try c.decodeIfPresent(Bool.self, forKey: .enablePnlDashboard)
         autoAssignEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoAssignEnabled)
         autoAssignAssigneeIds = try c.decodeIfPresent([String].self, forKey: .autoAssignAssigneeIds)
         type = try? c.decodeIfPresent(String.self, forKey: .type)
         hiddenTabs = try? c.decodeIfPresent([String].self, forKey: .hiddenTabs)
-        financeEnabled = try? c.decodeIfPresent(Bool.self, forKey: .financeEnabled)
     }
 
     struct Lane: Decodable, Identifiable, Sendable {

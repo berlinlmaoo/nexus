@@ -965,12 +965,6 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
-    func financeDashboard(projectId: String, year: Int) async throws -> FinanceDashboard {
-        try await run(makeRequest("/api/finance/dashboard?projectId=\(enc(projectId))&year=\(year)"), decode: FinanceDashboard.self)
-    }
-    func pnlDashboard(projectId: String, year: Int) async throws -> PnlDashboard {
-        try await run(makeRequest("/api/pnl/dashboard?projectId=\(enc(projectId))&year=\(year)"), decode: PnlDashboard.self)
-    }
 
     func search(_ q: String) async throws -> SearchResults {
         try await run(makeRequest("/api/search?q=\(enc(q))"), decode: SearchResults.self)
@@ -2147,6 +2141,19 @@ struct APIClient {
     @discardableResult
     func setTaskStatus(taskId: String, status: String) async throws -> Bool {
         try await updateTask(taskId, ["status": status])
+    }
+
+    /// POST /api/tasks/{id}/duplicate — a copy in the same section ("<title> (Copy)"), with its subtasks,
+    /// assignees and custom fields. `dueDate` (yyyy-MM-dd) replaces the copy's due date.
+    @discardableResult
+    func duplicateTask(_ taskId: String, dueDate: String?) async throws -> Bool {
+        var req = makeRequest("/api/tasks/\(taskId)/duplicate", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = [:]
+        if let dueDate { body["dueDate"] = dueDate }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)   // answers {task, copiedTo}; only success matters
+        return true
     }
 
     /// POST /api/tasks — create a task (or a subtask when parentId is set).

@@ -1,0 +1,245 @@
+import SwiftUI
+
+// MARK: - Multi-select + Duplicate on Board and List (owner, 11 Oct 2026)
+//
+// "Task duplicate mode" used to be a per-project switch. It is now always on in every project, and the
+// server reports enableTaskBatchDuplicate = true whatever the column says, so nothing here reads it.
+//
+// How it is reached, using only standard SwiftUI (no custom gestures — the board has broken twice
+// from experiments):
+//   • iPhone: long-press a card or row → the context menu → Select. The board is now in selection
+//     mode: a tap ticks a task instead of opening it, and a bar at the bottom shows Duplicate.
+//   • iPad with a pointer / Mac: right-click → Select or Duplicate. In selection mode a click ticks;
+//     ⌘A selects every task on screen, ⌘D duplicates, Esc leaves selection mode.
+// Duplicate always asks for the copies' due date first (the web's popup), which is what makes it
+// useful for recurring work: same tasks, next week's date.
+
+/// Which tasks are ticked, shared by the Board and List tabs of one project.
+@Observable
+final class TaskSelection {
+    /// True while a tap ticks a task instead of opening it.
+    private(set) var active = false
+    private(set) var ids: Set<String> = []
+    /// Set to open the due-date popup; the project screen presents it.
+    var pendingDuplicate: TaskDuplicateRequest?
+
+    func contains(_ id: String) -> Bool { ids.contains(id) }
+
+    /// Selection mode, starting with this task ticked.
+    func begin(with id: String) {
+        active = true
+        ids.insert(id)
+    }
+
+    func toggle(_ id: String) {
+        if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+    }
+
+    func selectAll(_ all: [String]) {
+        active = true
+        ids = Set(all)
+    }
+
+    func clear() {
+        active = false
+        ids = []
+    }
+
+    /// Duplicate from a context menu: the whole selection when this task is part of it, else the task.
+    func requestDuplicate(from id: String) {
+        if active && ids.contains(id) && ids.count > 1 {
+            pendingDuplicate = TaskDuplicateRequest(taskIds: Array(ids))
+        } else {
+            pendingDuplicate = TaskDuplicateRequest(taskIds: [id])
+        }
+    }
+
+    func requestDuplicateSelection() {
+        guard !ids.isEmpty else { return }
+        pendingDuplicate = TaskDuplicateRequest(taskIds: Array(ids))
+    }
+}
+
+struct TaskDuplicateRequest: Identifiable {
+    let id = UUID()
+    let taskIds: [String]
+}
+
+/// The context-menu items every task card and row gets. Long-press on iPhone, right-click on iPad/Mac.
+struct TaskSelectionMenuItems: View {
+    let taskId: String
+    let selection: TaskSelection
+
+    var body: some View {
+        if selection.active {
+            Button {
+                selection.toggle(taskId)
+            } label: {
+                Label(selection.contains(taskId) ? T("Deselect") : T("Select"),
+                      systemImage: selection.contains(taskId) ? "circle" : "checkmark.circle")
+            }
+        } else {
+            Button { selection.begin(with: taskId) } label: {
+                Label(T("Select"), systemImage: "checkmark.circle")
+            }
+        }
+        Button { selection.requestDuplicate(from: taskId) } label: {
+            Label(T("Duplicate"), systemImage: "plus.square.on.square")
+        }
+    }
+}
+
+/// The tick drawn on a card or row while selection mode is on.
+struct TaskSelectionMark: View {
+    let selected: Bool
+    var body: some View {
+        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(selected ? NX.violetText : NX.mutedFg.opacity(0.6))
+            .background(Circle().fill(NX.card).padding(2))
+            .accessibilityLabel(selected ? T("Deselect") : T("Select"))
+    }
+}
+
+/// The bar at the bottom of the Board and List while selection mode is on.
+struct TaskSelectionBar: View {
+    let selection: TaskSelection
+    /// Every task the tab is showing right now (after the search filter), for Select all.
+    let visibleIds: [String]
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(T("Cancel")) { selection.clear() }
+                .font(NXFont.text(14, .semibold)).foregroundStyle(NX.mutedFg)
+                .keyboardShortcut(.cancelAction)
+            Spacer(minLength: 4)
+            VStack(spacing: 2) {
+                Text(selection.ids.isEmpty ? T("Pick tasks to duplicate") : String(format: T("%d selected"), selection.ids.count))
+                    .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    .lineLimit(1)
+                Button(T("Select all")) { selection.selectAll(visibleIds) }
+                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                    .keyboardShortcut("a", modifiers: .command)
+                    .disabled(visibleIds.isEmpty)
+            }
+            Spacer(minLength: 4)
+            Button { selection.requestDuplicateSelection() } label: {
+                Label(T("Duplicate"), systemImage: "plus.square.on.square")
+                    .font(NXFont.text(14, .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(selection.ids.isEmpty ? NX.mutedFg.opacity(0.5) : NX.violet, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("d", modifiers: .command)
+            .disabled(selection.ids.isEmpty)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(NX.card)
+        .overlay(alignment: .top) { Divider().overlay(NX.border) }
+    }
+}
+
+/// The due-date popup: one date for every copy, as on the web. POST /api/tasks/{id}/duplicate per task;
+/// the server copies subtasks, assignees and custom fields, and names each copy "<title> (Copy)".
+struct TaskDuplicateSheet: View {
+    let tasks: [BoardTask]
+    /// Called with how many copies were made, once at least one was.
+    let onDuplicated: (Int) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var due: Date
+    @State private var working = false
+    @State private var problem: String?
+    /// Tasks already copied, so trying again after a partial failure never copies them twice.
+    @State private var copied: Set<String> = []
+
+    init(tasks: [BoardTask], onDuplicated: @escaping (Int) async -> Void) {
+        self.tasks = tasks
+        self.onDuplicated = onDuplicated
+        // Starts on the first task's own due date, so moving a week ahead is a few taps.
+        _due = State(initialValue: tasks.lazy.compactMap { ProjDate.parse($0.dueDate) }.first ?? Date())
+    }
+
+    private var title: String {
+        tasks.count == 1 ? T("Duplicate 1 task") : String(format: T("Duplicate %d tasks"), tasks.count)
+    }
+
+    private var names: String {
+        let shown = tasks.prefix(3).map(\.title).joined(separator: ", ")
+        return tasks.count > 3 ? shown + ", " + String(format: T("and %d more"), tasks.count - 3) : shown
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(T("Pick the due date for the copies. Everything else — subtasks, assignees, fields — is copied as it is."))
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                    DatePicker(T("New due date"), selection: $due, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .tint(NX.violetText)
+                    Text(names)
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    if let problem {
+                        Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                    }
+                    Button { Task { await run() } } label: {
+                        HStack(spacing: 6) {
+                            if working { ProgressView().tint(.white) }
+                            Text(working ? T("Duplicating…") : T("Duplicate"))
+                        }
+                        .font(NXFont.text(15, .bold))
+                    }
+                    .buttonStyle(NexusPrimaryButton())
+                    .disabled(working || tasks.isEmpty)
+                }
+                .padding(16)
+            }
+            .background(NX.background.ignoresSafeArea())
+            .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(T("Cancel")) { dismiss() }.disabled(working)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .interactiveDismissDisabled(working)
+    }
+
+    /// Same day format as the task detail's due date (yyyy-MM-dd, Jakarta).
+    private var dueDay: String {
+        let f = DateFormatter()
+        f.calendar = ProjDate.cal
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: due)
+    }
+
+    private func run() async {
+        working = true
+        problem = nil
+        let day = dueDay
+        var made = 0
+        // One at a time: the server places each copy at the end of its section, and parallel posts
+        // would race for the same position.
+        for t in tasks where !copied.contains(t.id) {
+            if (try? await APIClient.shared.duplicateTask(t.id, dueDate: day)) != nil {
+                copied.insert(t.id)
+                made += 1
+            }
+        }
+        working = false
+        if made > 0 { await onDuplicated(made) }
+        let left = tasks.count - copied.count
+        if left == 0 {
+            dismiss()
+        } else {
+            problem = String(format: T("%d of %d tasks weren't duplicated. Try again."), left, tasks.count)
+        }
+    }
+}
