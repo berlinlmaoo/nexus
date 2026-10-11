@@ -1,0 +1,35 @@
+/**
+ * English → Indonesian for the spreadsheet's pivot tables (Create pivot table dialog, Pivot table
+ * editor, labels the pivot computes). Shared words ("Rows", "Columns", "Values", "Filters", "Range",
+ * "Grand Total", "Select all", "Clear", "(Blanks)", "Data range", "Move up/down", …) live elsewhere.
+ */
+export const ID_SHEETS_PIVOT: Record<string, string> = {
+  "Pivot table editor": "Editor tabel pivot",
+  "Create pivot table": "Buat tabel pivot",
+  "e.g. Sheet1!A1:D100": "misalnya, Sheet1!A1:D100",
+  "Insert to": "Sisipkan ke",
+  "New sheet": "Sheet baru",
+  "Enter a data range": "Masukkan rentang data",
+  "Suggested": "Disarankan",
+  "Clear all": "Hapus semua",
+  "Add field": "Tambahkan",
+  "No fields in this range": "Tidak ada kolom di rentang ini",
+  "Order": "Urutan",
+  "Ascending": "Menaik",
+  "Descending": "Menurun",
+  "Show totals": "Tampilkan total",
+  "Summarise by": "Ringkas menurut",
+  "Show as": "Tampilkan sebagai",
+  "% of row": "% dari baris",
+  "% of column": "% dari kolom",
+  "% of grand total": "% dari total keseluruhan",
+  "Showing all items": "Menampilkan semua item",
+  "Showing {n} of {total} items": "Menampilkan {n} dari {total} item",
+  "{fn} of {field}": "{fn} dari {field}",
+  "{value} Total": "Total {value}",
+  "SUM of {value} for each {row}": "Jumlah {value} untuk setiap {row}",
+  "SUM of {value} for each {row} by {col}": "Jumlah {value} untuk setiap {row} oleh {col}",
+  "AVERAGE of {value} for each {row}": "Rata-rata {value} untuk setiap {row}",
+  "COUNTA of {value} for each {row}": "Hitungan {value} untuk setiap {row}",
+  "The pivot table has too many columns. Only the first 50 are shown.": "Tabel pivot punya terlalu banyak kolom. Hanya 50 kolom pertama yang ditampilkan.",
+};
