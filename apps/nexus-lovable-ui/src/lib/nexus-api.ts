@@ -1449,6 +1449,25 @@ export type NexusCustomField = {
   libraryId?: string | null;
 };
 
+/**
+ * A saved view of a project's tasks (owner, 12 Oct 2026). Server: src/lib/project-views.ts; the config
+ * is evaluated by lib/project-views.ts here. `builtin` = one of the five tabs every project had before
+ * ("board" | "list" | "table" | "calendar" | "timeline"), shown or hidden by Project.hiddenTabs.
+ */
+export type NexusProjectView = {
+  id: string;
+  name: string | null;
+  layout: "board" | "list" | "table" | "calendar" | "timeline" | "gallery";
+  builtin: "board" | "list" | "table" | "calendar" | "timeline" | null;
+  position: number;
+  shared: boolean;
+  ownerId: string | null;
+  createdById: string | null;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type NexusDependency = {
   id: string;
   type?: string | null;
@@ -2664,6 +2683,15 @@ export const nexusApi = {
 
   // --- Custom fields ---
   taskCustomFields: (projectId: string, taskId: string) => apiFetch<{ fields: NexusCustomField[] }>(`/api/custom-fields?projectId=${encodeURIComponent(projectId)}&taskId=${encodeURIComponent(taskId)}`),
+  // --- Saved views (owner, 12 Oct 2026) ---
+  projectViews: (projectId: string) => apiFetch<{ views: NexusProjectView[]; canEditShared: boolean }>(`/api/projects/${projectId}/views`),
+  createProjectView: (projectId: string, payload: { name?: string | null; layout: NexusProjectView["layout"]; shared?: boolean; config?: Record<string, unknown> }) =>
+    apiFetch<{ view: NexusProjectView }>(`/api/projects/${projectId}/views`, { method: "POST", body: JSON.stringify(payload) }),
+  updateProjectView: (projectId: string, viewId: string, payload: { name?: string | null; layout?: NexusProjectView["layout"]; shared?: boolean; config?: Record<string, unknown>; patch?: Record<string, unknown> }) =>
+    apiFetch<{ view: NexusProjectView }>(`/api/projects/${projectId}/views/${viewId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteProjectView: (projectId: string, viewId: string) => apiFetch<{ ok: boolean }>(`/api/projects/${projectId}/views/${viewId}`, { method: "DELETE" }),
+  reorderProjectViews: (projectId: string, order: string[]) => apiFetch<{ views: NexusProjectView[] }>(`/api/projects/${projectId}/views`, { method: "PATCH", body: JSON.stringify({ order }) }),
+  projectTaskCovers: (projectId: string) => apiFetch<{ covers: Record<string, { url: string; attachmentId: string }> }>(`/api/projects/${projectId}/task-covers`),
   projectCustomFields: (projectId: string) => apiFetch<{ fields: NexusCustomField[] }>(`/api/custom-fields?projectId=${encodeURIComponent(projectId)}`),
   setCustomFieldValue: (id: string, taskId: string, value: unknown) => apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, taskId, value }) }),
   uploadCustomFieldFile: (projectId: string, file: File) => {

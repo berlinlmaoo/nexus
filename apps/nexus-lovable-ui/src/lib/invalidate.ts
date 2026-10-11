@@ -25,9 +25,9 @@ export function invalidateProjectData(qc: QueryClient) {
 /** Key segments of every query that lists projects or folders, in either namespace (see above). */
 const PROJECT_TREE_SEGMENTS = new Set(["projects", "project-folders", "project-pins", "folder-pins", "ws-projects"]);
 
-/** The project a key is the header/detail or member list of: ["nexus","project",id], ["nexus","project-members",id], ["project-members",id]. */
+/** The project a key is the header/detail, member list or saved views of: ["nexus","project",id], ["nexus","project-members",id], ["nexus","project-views",id], ["project-members",id]. */
 function projectIdOfKey(key: readonly unknown[]): unknown {
-  if (key.length === 3 && key[0] === "nexus" && (key[1] === "project" || key[1] === "project-members")) return key[2];
+  if (key.length === 3 && key[0] === "nexus" && (key[1] === "project" || key[1] === "project-members" || key[1] === "project-views")) return key[2];
   if (key.length === 2 && key[0] === "project-members") return key[1];
   return undefined;
 }

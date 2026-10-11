@@ -50,6 +50,7 @@ export const RESTORABLE: Record<string, Spec> = {
   room_booking: { table: "RoomBooking", label: "room booking" },
   announcement: { table: "Announcement", label: "announcement" },
   saved_search: { table: "SavedSearch", label: "saved search" },
+  project_view: { table: "ProjectView", label: "view" },
   pnl_expense: { table: "PnlExpense", label: "expense" },
   pnl_income: { table: "PnlIncome", label: "income" },
   pnl_payment: { table: "PnlIncomePayment", label: "payment" },

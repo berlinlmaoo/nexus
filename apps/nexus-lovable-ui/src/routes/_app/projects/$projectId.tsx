@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
-import { ProgressBar } from "@/components/StatusPill";
 import { celebrate } from "@/components/Celebration";
-import { blockText, fmtDate, fmtDue, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusTask } from "@/lib/nexus-api";
+import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask } from "@/lib/nexus-api";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
@@ -20,12 +21,49 @@ import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { PipelineView } from "@/components/pipeline/PipelineView";
 import { OutletSalesView, type OutletView } from "@/components/outlet-sales/OutletSalesView";
-import { hiddenTabsOf } from "@/components/projects/project-tabs";
+import { hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { ProjectOverview, type OverviewDrill } from "@/components/projects/ProjectOverview";
+import { useProjectViews } from "@/components/projects/views/use-project-views";
+import { FilterButton, FilterChips, GroupButton, SortButton, ToolbarButton, sortSummary, usePropLabel } from "@/components/projects/views/view-controls";
+import { AddViewButton, LAYOUT_ICON, ViewSettingsPanel } from "@/components/projects/views/view-settings";
+import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
+import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
+import {
+  activeFilterCount,
+  BUILTIN_KEYS,
+  COLOR_PRESETS,
+  decodeFilter,
+  decodeSort,
+  EMPTY_GROUP,
+  encodeFilter,
+  encodeSort,
+  filterFromDrill,
+  groupLabelIsBuiltin,
+  groupTasks,
+  newId,
+  propDef,
+  propDefs,
+  resolveConfig,
+  sameFilter,
+  sameSort,
+  sortTasks,
+  taskColor,
+  taskMatches,
+  taskValues,
+  viewName,
+  visibleProps,
+  type PropDef,
+  type SortRule,
+  type TaskGroup,
+  type ViewConfig,
+  type ViewCtx,
+  type ViewFilter,
+  type ViewLayout,
+} from "@/lib/project-views";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
-import { priorityTone } from "@/lib/calendar/tone";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { priorityTone } from "@/lib/calendar/tone";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Activity,
@@ -37,30 +75,22 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
-  Clock,
-  Copy,
-  Link2,
+  CornerDownRight,
   FileText,
   Filter,
   FormInput,
   GanttChart,
   GripVertical,
-  CornerDownRight,
   LayoutGrid,
-  List,
-  Table2,
-  ListChecks,
   Loader2,
+  Lock,
   MessageSquare,
-  Palette,
   Pencil,
-  Paperclip,
   Plus,
   Search,
-  Trash2,
   Settings2,
-  Sparkles,
-  Tag,
+  SlidersHorizontal,
+  Trash2,
   X,
   Zap,
   Sheet as SheetIcon,
@@ -71,26 +101,35 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   // `?settings=1` opens Project settings (the project tree's "Project settings" menu item, 10 Oct 2026).
   // An Outlet Sales Dashboard (10 Oct 2026): `?view=overview|calendar|board|form`, `&date=YYYY-MM-DD`,
   // `&event=<id>` — the shared form link opens the report form, on one event when it names one.
-  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string } => ({
+  // Saved views (owner, 12 Oct 2026): `?v=` the open tab — a view id, a built-in view's key ("board", …)
+  // or one of the project's other tabs ("overview", "sheet", "automations", "pages", "forms", "chat");
+  // `&q=` the search box; `&f=` / `&s=` the filter / sort on screen while it differs from the saved view
+  // (lib/project-views.ts encodes them). A reload or a shared link keeps all of it.
+  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: string; s?: string } => ({
     settings: s.settings === 1 || s.settings === "1" ? 1 : undefined,
     view: s.view === "overview" || s.view === "calendar" || s.view === "board" || s.view === "form" ? s.view : undefined,
     date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
     event: typeof s.event === "string" && s.event.length <= 64 ? s.event : undefined,
+    v: searchString(s.v, 64),
+    q: searchString(s.q, 200),
+    f: s.f && typeof s.f === "object" ? JSON.stringify(s.f).slice(0, 8000) : searchString(s.f, 8000),
+    s: searchString(s.s, 400),
   }),
 });
 
-type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "automations" | "pages" | "forms" | "chat";
-// cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
-// due: by due day (11 Oct 2026, for the Overview's counts) — OVERDUE = before today, NEXT7 = today + 6 days, NONE = no due date.
-type DueFilter = "ALL" | "OVERDUE" | "NEXT7" | "NONE";
-type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; due: DueFilter; cfSelections: Record<string, string[]> };
-const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", due: "ALL", cfSelections: {} };
+/** The router JSON-parses search values ("123" → 123), so a text param can arrive as a number. */
+function searchString(v: unknown, max: number): string | undefined {
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return typeof v === "string" && v.length > 0 && v.length <= max ? v : undefined;
+}
 
+type ViewId = "pipeline" | "os-overview" | "os-calendar" | "os-board" | "os-form" | "chat";
+type ModuleKey = "overview" | "sheet" | "automations" | "pages" | "forms" | "chat";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"] as const;
-const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const;
 
-const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
+// Pipeline and Outlet Sales projects keep their own fixed tabs.
+const SPECIAL_TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   // A Pipeline Dashboard project's main view (owner, 9 Oct 2026); task projects never show it.
   { id: "pipeline", label: "Pipeline", icon: Filter },
   // An Outlet Sales Dashboard project's views (owner, 10 Oct 2026, for Ryan); one OutletSalesView behind them.
@@ -98,63 +137,101 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "os-calendar", label: "Calendar", icon: CalIcon },
   { id: "os-board", label: "Board", icon: LayoutGrid },
   { id: "os-form", label: "Report form", icon: ClipboardList },
-  { id: "overview", label: "Overview", icon: Activity },
-  { id: "board", label: "Board", icon: LayoutGrid },
-  { id: "list", label: "List", icon: List },
-  { id: "table", label: "Table", icon: Table2 },
+  { id: "chat", label: "Chat", icon: MessageSquare },
+];
+
+// A task project's tabs that are not views of its tasks (owner, 12 Oct 2026). Overview sits before the
+// views, the rest after them. Automations is a toolbar button rather than a tab.
+const MODULE_TABS: { id: ModuleKey; label: string; icon: typeof LayoutGrid; before?: boolean }[] = [
+  { id: "overview", label: "Overview", icon: Activity, before: true },
   { id: "sheet", label: "Spreadsheet", icon: SheetIcon },
-  { id: "calendar", label: "Calendar", icon: CalIcon },
-  { id: "timeline", label: "Timeline", icon: GanttChart },
-  { id: "automations", label: "Automations", icon: Zap },
   { id: "pages", label: "Pages", icon: FileText },
   { id: "forms", label: "Forms", icon: FormInput },
   { id: "chat", label: "Chat", icon: MessageSquare },
 ];
 
+/** The five built-in views as a client-side stand-in, read-only, while the views API is unreachable. */
+function fallbackViews(): NexusProjectView[] {
+  const now = new Date().toISOString();
+  return BUILTIN_KEYS.map((key, i) => ({ id: `fallback:${key}`, name: null, layout: key, builtin: key, position: i, shared: true, ownerId: null, createdById: null, config: {}, createdAt: now, updatedAt: now }));
+}
+
+/** Collapsed groups are per person and per view (this browser), like Notion. */
+function useCollapsedGroups(viewId: string | null) {
+  const storageKey = viewId ? `nexus:view-collapsed:${viewId}` : null;
+  const read = (): string[] => {
+    if (!storageKey || typeof window === "undefined") return [];
+    try { const v = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : []; } catch { return []; }
+  };
+  const [state, setState] = useState<{ key: string | null; list: string[] }>(() => ({ key: storageKey, list: read() }));
+  const list = state.key === storageKey ? state.list : read();
+  const set = useMemo(() => new Set(list), [list]);
+  const toggle = (k: string) => {
+    const next = set.has(k) ? list.filter((x) => x !== k) : [...list, k];
+    setState({ key: storageKey, list: next });
+    if (storageKey) try { window.localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  return { collapsed: set, toggle };
+}
+
+// The Calendar's colour rules used to live in this browser's localStorage (frozen frontend feature).
+// They move into the Calendar view the first time someone who may edit it opens it.
+const LEGACY_CAL_COLORS: Record<string, string> = { "#dbeafe": "sky", "#dcfce7": "emerald", "#fef3c7": "amber", "#ffe4e6": "rose", "#ede9fe": "violet", "#e2e8f0": "gray" };
+function legacyCalendarRules(projectId: string) {
+  try {
+    const raw = window.localStorage.getItem(`nexus:calendar-color-rules:${projectId}`);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    return list
+      .map((r: { source?: string; customFieldId?: string; value?: string; color?: string }) => {
+        const prop = r.source === "task_list" ? "section" : r.source === "custom_field" ? (r.customFieldId ? `cf:${r.customFieldId}` : "") : r.source ?? "";
+        const color = LEGACY_CAL_COLORS[r.color ?? ""];
+        return prop && r.value && color ? { id: newId(), prop, value: r.value, color } : null;
+      })
+      .filter(Boolean) as Array<{ id: string; prop: string; value: string; color: string }>;
+  } catch {
+    return [];
+  }
+}
+
 function ProjectDetail() {
   const { projectId } = useParams({ from: "/_app/projects/$projectId" });
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [view, setView] = useState<ViewId>("board");
+  const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
+  const [specialView, setSpecialView] = useState<ViewId>("pipeline");
   const [openTask, setOpenTask] = useState<NexusTask | null>(null);
   const [composerListId, setComposerListId] = useState<string | null>(null);
   const [composerDueDate, setComposerDueDate] = useState<string>("");
   const [pageComposerOpen, setPageComposerOpen] = useState(false);
   const [openDoc, setOpenDoc] = useState<NexusDoc | null>(null);
-  const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
+  const [chipsHidden, setChipsHidden] = useState(false);
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
   const data = project.data;
   const search = Route.useSearch();
+  const { t: tr } = useLang();
+  const setSearch = (patch: Partial<typeof search>, replace = true) =>
+    navigate({ to: "/projects/$projectId", params: { projectId }, search: ((prev: Record<string, unknown>) => ({ ...prev, ...patch })) as never, replace });
   useEffect(() => {
     if (search.settings !== 1 || !data) return;
     setSettingsOpen(true);
-    navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
-  }, [search.settings, data, projectId, navigate]);
-  const { t: tr, tn } = useLang();
+    setSearch({ settings: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.settings, data]);
   // Which tabs this project shows (owner, 9 Oct 2026): a project hides the ones it doesn't need
-  // (Project settings → Tabs). Hiding only hides — nothing in the tab is touched. The Finance and P&L
-  // tabs were retired on 11 Oct 2026.
+  // (Project settings → Tabs). Hiding only hides — nothing in the tab is touched. Since 12 Oct 2026 the
+  // Board / List / Table / Calendar / Timeline keys hide the matching built-in VIEW (same keys, so the
+  // released apps and the web agree).
   const hiddenTabs = hiddenTabsOf(data);
-  // A Pipeline Dashboard project (owner, 9 Oct 2026) is its pipeline, plus its chat. Its task tabs are not offered: the three default sections exist only so that apps
-  // which do not know the type yet open it as an empty task project instead of failing.
   const isPipeline = data?.type === "PIPELINE";
-  // An Outlet Sales Dashboard (owner, 10 Oct 2026) likewise: its four views and chat.
   const isOutlet = data?.type === "OUTLET_SALES";
   const isSpecial = isPipeline || isOutlet;
-  const visibleTabs = TABS.filter((tab) => {
-    if (tab.id === "pipeline") return isPipeline;
-    if (tab.id.startsWith("os-")) return isOutlet;
-    if (isSpecial && tab.id !== "chat") return false;
-    return !hiddenTabs.has(tab.id);
-  });
-  const visibleKey = visibleTabs.map((tab) => tab.id).join(",");
-  // The open tab was just hidden (here, or live from another device): land on Board, else List.
+  const specialTabs = SPECIAL_TABS.filter((tab) => (tab.id === "pipeline" ? isPipeline : tab.id.startsWith("os-") ? isOutlet : true));
   useEffect(() => {
-    if (!data || visibleTabs.some((tab) => tab.id === view)) return;
-    const next = visibleTabs.find((tab) => tab.id === "board" || tab.id === "list") ?? visibleTabs[0];
-    if (next) setView(next.id);
+    if (!data || !isSpecial) return;
+    if (!specialTabs.some((tab) => tab.id === specialView)) setSpecialView(specialTabs[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.id, visibleKey, view]);
+  }, [data?.id, isSpecial]);
   // A link into an Outlet Sales Dashboard (?view=…&date=…&event=…): open that view once the project is
   // known, hand the day / event to the view (remounted by `nonce`), then drop the query from the address.
   const [outletLink, setOutletLink] = useState<{ date?: string; eventId?: string; nonce: number }>({ nonce: 0 });
@@ -162,57 +239,259 @@ function ProjectDetail() {
     if (!data || (!search.view && !search.date && !search.event)) return;
     if (data.type === "OUTLET_SALES") {
       setOutletLink((cur) => ({ date: search.date, eventId: search.event, nonce: cur.nonce + 1 }));
-      setView(`os-${search.view ?? (search.event ? "form" : "calendar")}` as ViewId);
+      setSpecialView(`os-${search.view ?? (search.event ? "form" : "calendar")}` as ViewId);
     }
-    navigate({ to: "/projects/$projectId", params: { projectId }, search: {}, replace: true });
-  }, [search.view, search.date, search.event, data, projectId, navigate]);
+    setSearch({ view: undefined, date: undefined, event: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.view, search.date, search.event, data]);
   const rootQc = useQueryClient();
-  // Set a task's due date by dragging it onto a calendar day.
-  const setTaskDue = useMutation({
-    mutationFn: ({ taskId, dueDate }: { taskId: string; dueDate: string }) => nexusApi.updateTask(taskId, { dueDate }),
-    onSuccess: () => rootQc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }),
-  });
   const taskLists = data?.taskLists ?? [];
-  const allTasks = taskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } })));
-  const filteredTaskLists = filterTaskLists(taskLists, filters);
-  const filteredTasks = filteredTaskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } })));
+  const allTasks = useMemo(() => taskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } }))), [taskLists, data?.id]);
   // Board + List show subtasks as their own cards/rows (placed in their section, right under their parent).
   // The project payload is parentId-only, so pull the project's full task set and merge subtasks into each
-  // lane. Same query key as CalendarView → React Query dedupes to one fetch. Timeline stays subtask-free.
-  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false, enabled: !!data });
-  const listsWithSubtasks = useMemo(() => {
+  // lane. Same query key as before → React Query dedupes to one fetch.
+  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false, enabled: !!data && !isSpecial });
+  const withSubtasks = useMemo(() => {
     const subs = (allProjTasks.data ?? []).filter((t) => t.parentId && t.taskListId);
-    if (subs.length === 0) return filterTaskLists(taskLists, filters);
+    if (subs.length === 0) return allTasks;
     const parentTitle = new Map<string, string>();
     for (const t of allProjTasks.data ?? []) parentTitle.set(t.id, t.title); // all tasks → resolves any depth
     const subsByList = new Map<string, NexusTask[]>();
     for (const s of subs) {
-      const withParent = { ...s, parent: s.parentId ? { id: s.parentId, title: parentTitle.get(s.parentId) ?? "" } : s.parent };
+      const list = taskLists.find((l) => l.id === s.taskListId);
+      const withParent = { ...s, parent: s.parentId ? { id: s.parentId, title: parentTitle.get(s.parentId) ?? "" } : s.parent, taskList: s.taskList ?? { id: s.taskListId!, name: list?.name, projectId: data?.id } };
       const arr = subsByList.get(s.taskListId!) ?? []; arr.push(withParent); subsByList.set(s.taskListId!, arr);
     }
-    const merged = taskLists.map((list) => {
-      const ls = subsByList.get(list.id);
-      if (!ls?.length) return list;
-      const parents = list.tasks ?? [];
+    const out: NexusTask[] = [];
+    for (const list of taskLists) {
+      const parents = (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } }));
+      const here = subsByList.get(list.id) ?? [];
       const pidSet = new Set(parents.map((t) => t.id));
-      const byParent = new Map<string, NexusTask[]>();
-      const orphans: NexusTask[] = []; // parent lives in another section (or none) → drop at the lane's end
-      for (const s of ls) { if (s.parentId && pidSet.has(s.parentId)) { const a = byParent.get(s.parentId) ?? []; a.push(s); byParent.set(s.parentId, a); } else orphans.push(s); }
-      const out: NexusTask[] = [];
-      for (const p of parents) { out.push(p); for (const s of byParent.get(p.id) ?? []) out.push(s); }
-      out.push(...orphans);
-      return { ...list, tasks: out };
-    });
-    return filterTaskLists(merged, filters);
-  }, [taskLists, allProjTasks.data, filters]);
-  const activeFilterCount = [filters.query.trim(), filters.section !== "ALL", filters.priority !== "ALL", filters.hideDone, filters.assigneeId !== "ALL", filters.due !== "ALL"].filter(Boolean).length + Object.values(filters.cfSelections).filter((v) => v.length > 0).length;
-  const totalTasks = allTasks.length || data?._count?.tasks || 0;
-  const completedTasks = allTasks.filter((task) => isDone(task.status)).length;
-  const progress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : Number(data?.progress ?? 0);
+      for (const p of parents) { out.push(p); for (const s of here) if (s.parentId === p.id) out.push(s); }
+      // Parent in another section (or none): at the section's end.
+      for (const s of here) if (!s.parentId || !pidSet.has(s.parentId)) out.push(s);
+    }
+    return out;
+  }, [allTasks, allProjTasks.data, taskLists, data?.id]);
+
+  // ── saved views (owner, 12 Oct 2026) ──
+  const pv = useProjectViews(projectId, !!data && !isSpecial);
+  const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 300_000 });
+  const meId = me.data?.user?.id ?? null;
+  const cfDefs = useQuery({ queryKey: ["nexus", "project-custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), staleTime: 60_000, retry: false, enabled: !!data && !isSpecial });
+  const viewsList = useMemo(() => (pv.query.isError ? fallbackViews() : pv.views), [pv.query.isError, pv.views]);
+  const visibleViews = viewsList.filter((v) => !(v.builtin && hiddenTabs.has(v.builtin)));
+  const moduleTabs = MODULE_TABS.filter((m) => !hiddenTabs.has(m.id));
+  let activeModule: ModuleKey | null = null;
+  let activeView: NexusProjectView | null = null;
+  if (search.v === "automations") activeModule = "automations";
+  else if (search.v && moduleTabs.some((m) => m.id === search.v)) activeModule = search.v as ModuleKey;
+  else activeView = visibleViews.find((v) => v.id === search.v) ?? visibleViews.find((v) => v.builtin === search.v) ?? null;
+  if (!activeModule && !activeView) activeView = visibleViews[0] ?? null;
+  const canEditView = (v: NexusProjectView) => !v.id.startsWith("fallback:") && (v.shared ? pv.canEditShared : true);
+  const canEdit = activeView ? canEditView(activeView) : false;
+  const select = (key: string) => {
+    setViewSettingsOpen(false);
+    navigate({ to: "/projects/$projectId", params: { projectId }, search: { v: key } });
+  };
+
+  const saved = useMemo(() => (activeView ? resolveConfig(activeView) : null), [activeView]);
+  const draftFilter = decodeFilter(search.f);
+  const draftSort = decodeSort(search.s);
+  const cfg: ViewConfig | null = saved ? { ...saved, filter: draftFilter ?? saved.filter, sort: draftSort ?? saved.sort } : null;
+  const dirty = !!saved && ((!!draftFilter && !sameFilter(draftFilter, saved.filter)) || (!!draftSort && !sameSort(draftSort, saved.sort)));
+  const query = search.q ?? "";
+  const setFilter = (f: ViewFilter) => { if (saved) setSearch({ f: sameFilter(f, saved.filter) ? undefined : encodeFilter(f) }); };
+  const setSort = (s: SortRule[]) => { if (saved) setSearch({ s: sameSort(s, saved.sort) ? undefined : encodeSort(s) }); };
+  const saveDraft = () => {
+    if (!activeView || !cfg || !canEdit) return;
+    pv.update.mutate({ id: activeView.id, patch: { filter: cfg.filter, sort: cfg.sort } });
+    setSearch({ f: undefined, s: undefined });
+  };
+  // A personal view saves its filter and sort by itself, a moment after the last change.
+  useEffect(() => {
+    if (!dirty || !activeView || activeView.shared || !canEdit) return;
+    const timer = setTimeout(saveDraft, 700);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, activeView?.id, activeView?.shared, search.f, search.s]);
+  const patchConfig = (p: Partial<ViewConfig>) => {
+    if (!activeView) return;
+    if (!canEdit) { toast(tr("Only project members can change a shared view. Make a personal copy to set it up your way.")); return; }
+    pv.update.mutate({ id: activeView.id, patch: p as Record<string, unknown> });
+  };
+  // Old calendar colour rules (this browser's localStorage) move into the Calendar view once.
+  useEffect(() => {
+    if (!activeView || activeView.builtin !== "calendar" || !canEdit || (activeView.config as { colorRules?: unknown }).colorRules) return;
+    const rules = legacyCalendarRules(projectId);
+    if (!rules.length) return;
+    pv.update.mutate({ id: activeView.id, patch: { colorRules: rules } });
+    try { window.localStorage.removeItem(`nexus:calendar-color-rules:${projectId}`); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView?.id, canEdit]);
+
+  const people = useMemo(() => (data?.members ?? []).map((m) => ({ id: (m.userId || m.user?.id) ?? "", name: m.user?.name ?? m.user?.email ?? "" })).filter((p) => p.id), [data?.members]);
+  const ctx: ViewCtx = useMemo(() => ({
+    sections: taskLists.map((l) => ({ id: l.id, name: l.name, position: l.position })),
+    fields: cfDefs.data?.fields ?? [],
+    people,
+    meId,
+  }), [taskLists, cfDefs.data, people, meId]);
+  const defs = useMemo(() => propDefs(ctx), [ctx]);
+  const layout = activeView?.layout ?? "board";
+  const base = cfg && (cfg.showSubtasks || layout === "calendar") ? withSubtasks : allTasks;
+  const shown = useMemo(
+    () => (cfg ? sortTasks(base.filter((task) => taskMatches(task, cfg.filter, query, defs, ctx)), cfg.sort, defs, ctx) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [base, search.f, search.s, saved, query, defs, ctx],
+  );
+  const buildGroups = (tasks: NexusTask[], by: string | null, opts: { keepHidden?: boolean; keepEmpty?: boolean } = {}): TaskGroup[] => {
+    if (!by || !cfg) return [{ key: "__all__", label: "", tasks, empty: tasks.length === 0 }];
+    let gs = groupTasks(tasks, by, defs, ctx);
+    if (!opts.keepHidden) gs = gs.filter((g) => !cfg.hiddenGroups.includes(g.key));
+    if (cfg.hideEmptyGroups && !opts.keepEmpty) gs = gs.filter((g) => g.tasks.length > 0);
+    return gs;
+  };
+  const { collapsed, toggle: toggleGroup } = useCollapsedGroups(activeView?.id ?? null);
+  const keys = cfg ? visibleProps(cfg, layout, defs) : [];
+  const filterCount = cfg ? activeFilterCount(cfg.filter, defs) : 0;
+  const hasRules = !!cfg && (cfg.filter.simple.length > 0 || !!cfg.filter.advanced);
+  const showChips = !!cfg && ((hasRules && !chipsHidden) || dirty);
+  const label = usePropLabel();
+
+  const setTaskDate = useMutation({
+    mutationFn: async ({ task, iso, prop }: { task: NexusTask; iso: string; prop: string }) => {
+      if (prop === "due") return nexusApi.updateTask(task.id, { dueDate: iso });
+      if (prop === "start") return nexusApi.updateTask(task.id, { startDate: iso } as Parameters<typeof nexusApi.updateTask>[1]);
+      if (prop.startsWith("cf:")) return nexusApi.setCustomFieldValue(prop.slice(3), task.id, iso.slice(0, 10));
+      throw new Error(tr("This date can't be changed by dragging."));
+    },
+    onSuccess: () => {
+      rootQc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
+      rootQc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", projectId] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : tr("Couldn't move the task")),
+  });
+
+  const createView = (p: { layout: ViewLayout; name: string; shared: boolean; config?: Record<string, unknown> }) =>
+    pv.create.mutate({ layout: p.layout, name: p.name || null, shared: p.shared, config: p.config }, { onSuccess: ({ view }) => select(view.id) });
+  const duplicateView = (v: NexusProjectView) => {
+    const vcfg = v.id === activeView?.id && cfg ? { ...v.config, filter: cfg.filter, sort: cfg.sort } : v.config;
+    createView({ layout: v.layout, name: tr("{name} (copy)", { name: viewName(v, tr) }), shared: v.shared && pv.canEditShared, config: vcfg });
+  };
+  const copyViewLink = (v: NexusProjectView) => {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("v", v.builtin && !v.id.startsWith("fallback:") ? v.id : v.id.replace("fallback:", ""));
+    void navigator.clipboard?.writeText(url.toString()).then(() => toast.success(tr("Link copied")), () => toast.error(tr("Couldn't copy the link")));
+  };
+  const deleteView = (v: NexusProjectView) => {
+    if (!window.confirm(tr("Delete the view \"{name}\"? The tasks stay; only this way of looking at them goes. It can be restored from Control Room → Audit.", { name: viewName(v, tr) }))) return;
+    setViewSettingsOpen(false);
+    pv.remove.mutate(v.id);
+    if (activeView?.id === v.id) navigate({ to: "/projects/$projectId", params: { projectId }, search: {} });
+  };
+  const hideBuiltin = useMutation({
+    mutationFn: (key: string) => nexusApi.updateProject(projectId, { hiddenTabs: [...hiddenTabs, key] }),
+    onSuccess: () => { rootQc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); setViewSettingsOpen(false); navigate({ to: "/projects/$projectId", params: { projectId }, search: {} }); },
+    onError: (e) => toast.error(projectSettingsErrorText((e as { payload?: { code?: unknown } })?.payload?.code) ? tr(projectSettingsErrorText((e as { payload?: { code?: unknown } }).payload?.code)!) : e instanceof Error ? e.message : tr("Couldn't hide the view")),
+  });
+  const addTask = (sectionId?: string) => setComposerListId(sectionId ?? [...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))[0]?.id ?? null);
+
+  // ── the one toolbar row ──
+  const beforeTabs: ToolbarTab[] = moduleTabs.filter((m) => m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
+  const viewTabs: ToolbarTab[] = visibleViews.map((v) => ({ key: v.id, label: viewName(v, tr), icon: LAYOUT_ICON[v.layout] ?? LayoutGrid, view: v }));
+  const afterTabs: ToolbarTab[] = moduleTabs.filter((m) => !m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
+  const lastViewKey = viewTabs.length && afterTabs.length ? viewTabs[viewTabs.length - 1].key : null;
+  const activeKey = activeModule ?? activeView?.id ?? null;
+  const toolbar = data && !isSpecial ? (
+    <div className="pb-px">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
+        <div className="flex min-w-0 basis-full sm:basis-0 sm:flex-1">
+        <ViewTabsBar
+          tabs={[...beforeTabs, ...viewTabs, ...afterTabs]}
+          activeKey={activeKey}
+          onSelect={select}
+          canEditView={canEditView}
+          onReorder={(order) => pv.reorder.mutate(order)}
+          onRename={(v, name) => pv.update.mutate({ id: v.id, name })}
+          onSettings={() => setViewSettingsOpen(true)}
+          onDuplicate={duplicateView}
+          onCopyLink={copyViewLink}
+          onDelete={deleteView}
+          onHide={(v) => v.builtin && hideBuiltin.mutate(v.builtin)}
+          divideAfter={lastViewKey}
+          addView={<AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} />}
+        />
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          {cfg && activeView && !activeModule && (
+            <>
+              <FilterButton filter={cfg.filter} defs={defs} onChange={setFilter} chipsOpen={showChips} onToggleChips={() => setChipsHidden((h) => !h)} />
+              <SortButton sort={cfg.sort} defs={defs} onChange={setSort} />
+              {layout !== "calendar" && <GroupButton cfg={cfg} layout={layout} defs={defs} ctx={ctx} onPatch={patchConfig} readOnly={!canEdit} />}
+            </>
+          )}
+          <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} />
+          {cfg && activeView && !activeModule && (
+            <>
+              <ToolbarSearch value={query} onChange={(q) => setSearch({ q: q || undefined })} />
+              <ToolbarButton icon={SlidersHorizontal} label={tr("View settings")} iconOnly active={viewSettingsOpen} onClick={() => setViewSettingsOpen((o) => !o)} />
+            </>
+          )}
+          <span className="ml-1.5 hidden sm:inline-flex">
+            <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
+          </span>
+          <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-1 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground sm:hidden"><Plus className="h-4 w-4" /></button>
+        </div>
+      </div>
+      {showChips && cfg && (
+        <div className="-mx-4 md:-mx-8">
+          <FilterChips
+            filter={cfg.filter}
+            defs={defs}
+            onChange={setFilter}
+            dirty={dirty && !!activeView?.shared}
+            canSave={canEdit}
+            saving={pv.update.isPending}
+            onSave={saveDraft}
+            onReset={() => setSearch({ f: undefined, s: undefined })}
+            sortLabel={dirty ? sortSummary(cfg.sort, defs, label) : null}
+          />
+        </div>
+      )}
+    </div>
+  ) : data && isSpecial ? (
+    <div className="flex items-center gap-0.5 -mb-px overflow-x-auto py-1.5">
+      {specialTabs.map((tab) => (
+        <button key={tab.id} type="button" onClick={() => setSpecialView(tab.id)}
+          className={cn("inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors", specialView === tab.id ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
+          <tab.icon className="h-3.5 w-3.5" /> {tr(tab.label)}
+        </button>
+      ))}
+    </div>
+  ) : undefined;
+
+  const emptyHint = query || filterCount > 0;
+  const noTasksAtAll = allTasks.length === 0;
+  const emptyState = (
+    <div className="px-4 py-10 md:px-8">
+      <EmptyState
+        icon={emptyHint ? Search : ClipboardList}
+        tone="muted"
+        title={emptyHint ? tr("No tasks match") : noTasksAtAll ? tr("No tasks yet") : tr("Every group is hidden")}
+        message={emptyHint ? tr("Nothing in this project fits the search or filters. Clear them to see every task again.") : noTasksAtAll ? tr("Tasks you add to this project show up here. Start with the first one.") : tr("Every group of this view is hidden. Show some groups again in Group.")}
+        action={emptyHint
+          ? <EmptyAction onClick={() => setSearch({ q: undefined, f: cfg && saved && !sameFilter(saved.filter, { simple: [], advanced: null }) ? encodeFilter({ simple: [], advanced: null }) : undefined })}>{tr("Clear filters")}</EmptyAction>
+          : noTasksAtAll ? <EmptyAction onClick={() => addTask()}><Plus className="h-4 w-4" />{tr("Add task")}</EmptyAction> : undefined}
+      />
+    </div>
+  );
 
   return (
-    <div>
+    <div className="min-h-full bg-card">
       <PageHeader
+        className="bg-card/95"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : project.isError ? tr("Couldn't open this project. You may not be a member.") : undefined)}
@@ -220,54 +499,27 @@ function ProjectDetail() {
           <>
             {data && <ProjectMembersAvatars project={data} />}
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
-              <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />Tune</Button>
+              <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />{tr("Project settings")}</Button>
             </motion.div>
-            {!isSpecial && <Button size="sm" variant="primary" onClick={() => setComposerListId(taskLists[0]?.id ?? null)}><Plus className="h-3.5 w-3.5" />Add task</Button>}
           </>
         }
-        tabs={
-          <div className="flex items-center gap-0.5 -mb-px overflow-x-auto">
-            {visibleTabs.map((t) => (
-              <button key={t.id} onClick={() => setView(t.id)}
-                className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 border-b-2 transition whitespace-nowrap ${view === t.id ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                <t.icon className="h-3.5 w-3.5" /> {tr(t.label)}
-              </button>
-            ))}
-          </div>
-        }
+        tabs={toolbar}
       />
 
-      {/* The Overview shows progress itself, in full. */}
-      {!isSpecial && view !== "overview" && (
-      <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-muted/30">
-        {/* Plain words (owner, 11 Oct 2026): this strip said "Live board · Mission energy · 97/97 cards visible · 4 lanes". */}
-        <div className="text-xs font-medium text-muted-foreground">{tr("Progress")}</div>
-        <div className="flex-1 min-w-32 max-w-xs"><ProgressBar value={progress} /></div>
-        <div className="text-xs font-semibold tabular-nums">{progress}%</div>
-        <div className="text-xs text-muted-foreground hidden sm:block tabular-nums">· {tr("{done} of {total} tasks done", { done: completedTasks, total: totalTasks })}</div>
-        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">{activeFilterCount > 0 && <Chip size="sm" color="accent" variant="soft">{tn(activeFilterCount, "1 filter", "{n} filters")}</Chip>}</div>
-      </div>
-      )}
-
-      {/* The Overview counts the whole project, so the filters are not offered there. */}
-      {!project.isLoading && !project.isError && data && !isSpecial && view !== "overview" && (
-        <BoardFilterBar filters={filters} onChange={setFilters} total={totalTasks} visible={filteredTasks.length} tasks={allTasks} sections={taskLists} projectId={data.id} />
-      )}
-
-      {project.isLoading && <div className="p-8"><Card><CardBody className="text-sm text-muted-foreground">Loading mission lanes...</CardBody></Card></div>}
-      {project.isError && <div className="p-8"><Empty title="Board locked" message="You need a login/session or project access to open this live board." /></div>}
+      {project.isLoading && <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}
+      {project.isError && <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its project lead to add you.")} /></div>}
       {!project.isLoading && !project.isError && data && isPipeline && (
-        view === "chat" ? <ProjectChat projectId={data.id} />
+        specialView === "chat" ? <ProjectChat projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />
       )}
       {!project.isLoading && !project.isError && data && isOutlet && (
-        view === "chat" ? <ProjectChat projectId={data.id} />
+        specialView === "chat" ? <ProjectChat projectId={data.id} />
           : (
             <OutletSalesView
               key={outletLink.nonce}
               projectId={data.id}
-              view={view.startsWith("os-") ? (view.slice(3) as OutletView) : "overview"}
-              onView={(v) => setView(`os-${v}` as ViewId)}
+              view={specialView.startsWith("os-") ? (specialView.slice(3) as OutletView) : "overview"}
+              onView={(v) => setSpecialView(`os-${v}` as ViewId)}
               initial={outletLink.nonce ? { date: outletLink.date, eventId: outletLink.eventId } : undefined}
             />
           )
@@ -275,24 +527,23 @@ function ProjectDetail() {
       {!project.isLoading && !project.isError && data && !isSpecial && (
         // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
         <TaskBulkProvider projectId={data.id}>
-          {view === "overview" && (
+          {activeModule === "overview" && (
             <ProjectOverview
               project={data}
               tasks={allTasks}
               onOpenTask={setOpenTask}
               onDrill={(drill: OverviewDrill) => {
-                // A count on the Overview opens the tasks behind it: open ones only, on the Board (else the List).
-                setFilters({ ...EMPTY_FILTERS, hideDone: true, due: drill.due ?? "ALL", assigneeId: drill.assigneeId ?? "ALL", priority: drill.priority ?? "ALL", section: drill.section ?? "ALL" });
-                setView(visibleTabs.some((tab) => tab.id === "board") ? "board" : "list");
+                // A count on the Overview opens the tasks behind it: open ones only, on the Board (else the List),
+                // as an unsaved filter on that view (Reset brings the view back).
+                const target = visibleViews.find((v) => v.builtin === "board") ?? visibleViews.find((v) => v.builtin === "list") ?? visibleViews[0];
+                if (!target) return;
+                navigate({ to: "/projects/$projectId", params: { projectId }, search: { v: target.id, f: encodeFilter(filterFromDrill({ hideDone: true, ...drill })) } });
               }}
               onEditBrief={() => setSettingsOpen(true)}
-              onAddTask={() => setComposerListId(taskLists[0]?.id ?? null)}
+              onAddTask={() => addTask()}
             />
           )}
-          {view === "board" && <BoardView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} onCreate={setComposerListId} />}
-          {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
-          {view === "table" && <ProjectTableView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
-          {view === "sheet" && (
+          {activeModule === "sheet" && (
             <ProjectSheetView
               projectId={data.id}
               onOpenTask={(taskId) => {
@@ -301,16 +552,59 @@ function ProjectDetail() {
               }}
             />
           )}
-          {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
-          {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
-          {view === "automations" && <AutomationsView projectId={data.id} />}
-          {view === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
-          {view === "forms" && <ProjectFormsView projectId={data.id} />}
-          {view === "chat" && <ProjectChat projectId={data.id} />}
+          {activeModule === "automations" && <AutomationsView projectId={data.id} />}
+          {activeModule === "pages" && <PagesView project={data} onCreate={() => setPageComposerOpen(true)} onOpen={setOpenDoc} />}
+          {activeModule === "forms" && <ProjectFormsView projectId={data.id} />}
+          {activeModule === "chat" && <ProjectChat projectId={data.id} />}
+          {!activeModule && !activeView && (pv.query.isLoading
+            ? <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
+            : <div className="px-4 py-10 md:px-8"><EmptyState icon={LayoutGrid} tone="muted" title={tr("No views to show")} message={tr("Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.")} /></div>)}
+          {!activeModule && activeView && cfg && (() => {
+            const groupBy = layout === "board" ? cfg.groupBy ?? "section" : layout === "calendar" ? null : cfg.groupBy;
+            const groups = buildGroups(shown, groupBy);
+            // An empty Board still shows its lanes (to add the first task into one), unless a filter emptied it.
+            if (shown.length === 0 && layout !== "calendar" && (emptyHint || (noTasksAtAll && layout !== "board"))) return emptyState;
+            if (layout !== "calendar" && shown.length > 0 && groups.length === 0) return emptyState;
+            switch (layout) {
+              case "board":
+                return <BoardView project={data} tasks={shown} groupBy={groupBy ?? "section"} cfg={cfg} defs={defs} ctx={ctx} keys={keys} buildGroups={buildGroups} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} />;
+              case "list":
+                return <ListView groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} ctx={ctx} keys={keys} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={addTask} />;
+              case "table":
+                return <ProjectTableView project={data} groups={groups} groupBy={groupBy} subGroupBy={cfg.subGroupBy} buildGroups={buildGroups} cfg={cfg} defs={defs} columns={keys} canEditColumns={canEdit} onColumnsChange={(cols) => patchConfig({ visibleProps: cols })} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
+              case "gallery":
+                return <GalleryView projectId={data.id} groups={groups} groupBy={groupBy} cfg={cfg} keys={keys} defs={defs} ctx={ctx} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} onCreate={() => addTask()} />;
+              case "calendar":
+                return <CalendarView tasks={shown} cfg={cfg} defs={defs} ctx={ctx} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); addTask(); }} onSetDate={(task, iso) => setTaskDate.mutate({ task, iso, prop: cfg.dateProp })} canDrag={["due", "start"].includes(cfg.dateProp) || cfg.dateProp.startsWith("cf:")} />;
+              case "timeline":
+                return <TimelineView groups={groups} groupBy={groupBy} cfg={cfg} defs={defs} ctx={ctx} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
+            }
+          })()}
         </TaskBulkProvider>
       )}
 
-      {openTask && <TaskDetailPanel taskId={openTask.id} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline"].includes(view) ? `${view}-taskcard-${openTask.id}` : undefined} />}
+      {viewSettingsOpen && activeView && cfg && !activeModule && (
+        <ViewSettingsPanel
+          view={activeView}
+          cfg={cfg}
+          defs={defs}
+          ctx={ctx}
+          canEdit={canEdit}
+          canShare={pv.canEditShared}
+          sort={cfg.sort}
+          onSort={setSort}
+          onPatch={patchConfig}
+          onRename={(name) => pv.update.mutate({ id: activeView.id, name })}
+          onLayout={(l) => pv.update.mutate({ id: activeView.id, layout: l })}
+          onShare={(shared) => pv.update.mutate({ id: activeView.id, shared })}
+          onDuplicate={() => duplicateView(activeView)}
+          onDelete={() => deleteView(activeView)}
+          onHide={() => activeView.builtin && hideBuiltin.mutate(activeView.builtin)}
+          onCopyLink={() => copyViewLink(activeView)}
+          onClose={() => setViewSettingsOpen(false)}
+        />
+      )}
+      {openTask && <TaskDetailPanel taskId={openTask.id} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTask.id}` : undefined} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
       {pageComposerOpen && data && <PageComposer project={data} onClose={() => setPageComposerOpen(false)} />}
@@ -319,164 +613,72 @@ function ProjectDetail() {
   );
 }
 
-function BoardFilterBar({ filters, onChange, total, visible, tasks, sections, projectId }: { filters: BoardFilters; onChange: (filters: BoardFilters) => void; total: number; visible: number; tasks: NexusTask[]; sections: NonNullable<NexusProject["taskLists"]>; projectId: string }) {
-  const { t } = useLang();
-  const sectionOpts = useMemo(() => sections.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [sections]);
-  const reset = () => onChange(EMPTY_FILTERS);
-  // Options derived from ALL tasks (not the filtered set) so they stay stable while you filter — same
-  // approach as the calendar colour-rules.
-  const assignees = useMemo(() => {
-    const m = new Map<string, string>();
-    let hasUnassigned = false;
-    for (const t of tasks) {
-      const as = t.assignees ?? [];
-      if (as.length === 0) hasUnassigned = true;
-      for (const a of as) if (a.user?.id) m.set(a.user.id, a.user.name ?? a.user.email ?? a.user.id);
-    }
-    return { people: [...m].map(([value, label]) => ({ value, label })), hasUnassigned };
-  }, [tasks]);
-  // One filter panel per project: each custom field (from the project's DEFINITIONS) with its FULL defined
-  // option set (in definition order) as multi-select checkboxes — plus any on-task values that fall outside
-  // the defined options (e.g. free-text / date fields, or legacy values). Falls back to task-derived fields
-  // only while the definitions are still loading.
-  const cfDefs = useQuery({ queryKey: ["nexus", "project-custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), staleTime: 60_000, retry: false });
-  const panelFields = useMemo(() => {
-    const taskVals = new Map<string, { name: string; values: Set<string> }>();
-    for (const t of tasks) for (const c of t.customFieldValues ?? []) {
-      const v = c.value == null ? "" : String(c.value);
-      if (!v) continue;
-      const e = taskVals.get(c.customFieldId) ?? { name: c.customField?.name ?? c.customFieldId, values: new Set<string>() };
-      e.values.add(v);
-      taskVals.set(c.customFieldId, e);
-    }
-    const defs = cfDefs.data?.fields;
-    if (defs) {
-      return defs
-        .slice()
-        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-        .map((f) => {
-          const choices = cfChoices(f); // full defined option list, in definition order
-          const seen = new Set(choices);
-          const extra = [...(taskVals.get(f.id)?.values ?? [])].filter((v) => !seen.has(v)).sort((a, b) => a.localeCompare(b));
-          return { id: f.id, name: f.name, values: [...choices, ...extra] };
-        })
-        .filter((f) => f.values.length > 0);
-    }
-    return [...taskVals].map(([id, e]) => ({ id, name: e.name, values: [...e.values].sort((a, b) => a.localeCompare(b)) }));
-  }, [cfDefs.data, tasks]);
-  const cfActiveFields = Object.values(filters.cfSelections).filter((v) => v.length > 0).length;
-  const toggleCfValue = (fieldId: string, value: string) => {
-    const cur = filters.cfSelections[fieldId] ?? [];
-    const next = cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value];
-    const sel = { ...filters.cfSelections };
-    if (next.length) sel[fieldId] = next; else delete sel[fieldId];
-    onChange({ ...filters, cfSelections: sel });
-  };
-  const clearCfField = (fieldId: string) => {
-    const sel = { ...filters.cfSelections };
-    delete sel[fieldId];
-    onChange({ ...filters, cfSelections: sel });
-  };
-  const selectCls = "rounded-2xl border border-border bg-background px-3 py-2 text-sm";
-  return (
-    <div className="border-b border-border bg-background/85 px-4 py-3 backdrop-blur md:px-8">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={filters.query}
-            onChange={(e) => onChange({ ...filters, query: e.target.value })}
-            placeholder={t("Search tasks, tags, people…")}
-            className="w-full rounded-2xl border border-border bg-muted/30 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-background"
-          />
-        </div>
-        {/* Section = the board's own columns (TaskLists) for THIS project — not a fixed global enum. */}
-        <select value={filters.section} onChange={(e) => onChange({ ...filters, section: e.target.value })} className={selectCls} title="Filter by section (board column)">
-          <option value="ALL">{t("All sections")}</option>
-          {sectionOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select value={filters.priority} onChange={(e) => onChange({ ...filters, priority: e.target.value })} className={selectCls}>
-          <option value="ALL">{t("Any priority")}</option>
-          {TASK_PRIORITIES.map((priority) => <option key={priority} value={priority}>{statusLabel(priority)}</option>)}
-        </select>
-        {/* Assignee */}
-        <select value={filters.assigneeId} onChange={(e) => onChange({ ...filters, assigneeId: e.target.value })} className={selectCls} title="Filter by assignee">
-          <option value="ALL">{t("All assignees")}</option>
-          <option value="NONE">{t("Unassigned")}</option>
-          {assignees.people.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        {/* Due day — what the Overview's Overdue / Due in 7 days / No due date counts open. */}
-        <select value={filters.due} onChange={(e) => onChange({ ...filters, due: e.target.value as DueFilter })} className={cn(selectCls, filters.due !== "ALL" && "border-primary text-primary")} aria-label={t("Filter by due date")}>
-          <option value="ALL">{t("Any due date")}</option>
-          <option value="OVERDUE">{t("Overdue")}</option>
-          <option value="NEXT7">{t("Due in 7 days")}</option>
-          <option value="NONE">{t("No due date")}</option>
-        </select>
-        {/* Custom fields → one panel, multi-select values per field */}
-        {panelFields.length > 0 && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className={cn(selectCls, "inline-flex items-center gap-2 font-semibold", cfActiveFields > 0 && "border-primary text-primary")} title="Filter by custom fields">
-                <Filter className="h-3.5 w-3.5" /> Filter
-                {cfActiveFields > 0 && <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">{cfActiveFields}</span>}
-                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="max-h-[60vh] w-72 space-y-3 overflow-y-auto p-3">
-              {panelFields.map((f) => {
-                const sel = filters.cfSelections[f.id] ?? [];
-                return (
-                  <div key={f.id}>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{f.name}</span>
-                      {sel.length > 0 && <button onClick={() => clearCfField(f.id)} className="text-[10px] font-semibold text-primary hover:underline">clear</button>}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      {f.values.map((v) => {
-                        const checked = sel.includes(v);
-                        return (
-                          <button key={v} onClick={() => toggleCfValue(f.id, v)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent">
-                            <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", checked ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{checked && <Check className="h-3 w-3" />}</span>
-                            <span className="truncate">{v}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </PopoverContent>
-          </Popover>
-        )}
-        <button
-          onClick={() => onChange({ ...filters, hideDone: !filters.hideDone })}
-          className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold transition ${filters.hideDone ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"}`}
-        >
-          <Filter className="h-3.5 w-3.5" /> {t("Hide done")}
-        </button>
-        <Button size="sm" variant="ghost" onClick={reset}>{t("Reset")}</Button>
-        <div className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">{t("{visible} of {total} tasks shown", { visible, total })}</div>
-      </div>
-    </div>
-  );
+const LANE_W: Record<ViewConfig["cardSize"], string> = { small: "w-64", medium: "w-72", large: "w-96" };
+
+/** Which group properties a card can be dragged between (the drop writes the new value). */
+function droppable(by: string, defs: PropDef[]): boolean {
+  if (by === "section" || by === "status" || by === "priority" || by === "assignee" || by === "tags") return true;
+  const d = propDef(defs, by);
+  return !!d && !d.builtin && (d.kind === "select" || d.kind === "multi" || d.kind === "person");
 }
 
+/** Move a task from one group to another of property `by`: the write that makes it belong there. */
+async function moveToGroup(task: NexusTask, by: string, from: string, to: string, defs: PropDef[], projectId: string) {
+  if (from === to) return;
+  const none = to === EMPTY_GROUP;
+  if (by === "section") return nexusApi.updateTask(task.id, { taskListId: to, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1]);
+  if (by === "status") return nexusApi.updateTask(task.id, { status: to });
+  if (by === "priority") return nexusApi.updateTask(task.id, { priority: to });
+  if (by === "assignee") {
+    if (from !== EMPTY_GROUP) await nexusApi.removeAssignee(task.id, from);
+    if (!none) await nexusApi.addAssignee(task.id, to);
+    return;
+  }
+  if (by === "tags") {
+    const tags = (task.tags ?? []).filter((x) => x !== from);
+    return nexusApi.updateTask(task.id, { tags: none ? tags : Array.from(new Set([...tags, to])) });
+  }
+  const def = propDef(defs, by);
+  if (!def || !by.startsWith("cf:")) return;
+  const fieldId = by.slice(3);
+  if (def.kind === "select") return nexusApi.setCustomFieldValue(fieldId, task.id, none ? "" : to);
+  const list = taskValues(task, by).filter((x) => x !== from);
+  const next = none ? list : Array.from(new Set([...list, to]));
+  return nexusApi.setCustomFieldValue(fieldId, task.id, def.kind === "person" || def.kind === "multi" ? JSON.stringify(next) : next[0] ?? "");
+}
 
-function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusProject; taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void; onCreate: (listId: string) => void }) {
+type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?: boolean; keepEmpty?: boolean }) => TaskGroup[];
+
+function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate }: {
+  project: NexusProject; tasks: NexusTask[]; groupBy: string; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
+  buildGroups: GroupBuilder; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreate: (listId?: string) => void;
+}) {
   const qc = useQueryClient();
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [draggingLaneId, setDraggingLaneId] = useState<string | null>(null);
-  const moveTask = useMutation({
-    mutationFn: ({ taskId, listId, position }: { taskId: string; listId: string; position: number }) => nexusApi.updateTask(taskId, { taskListId: listId, position, projectContextId: project.id }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
-      qc.invalidateQueries({ queryKey: ["nexus", "tasks"] });
-      celebrate("Card moved. Board energy updated ⚡");
+  const { t } = useLang();
+  const [drag, setDrag] = useState<{ id: string; from: string; fromRow: string | null } | null>(null);
+  const [dragLaneId, setDragLaneId] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const isSection = groupBy === "section";
+  const sub = cfg.subGroupBy && cfg.subGroupBy !== groupBy ? cfg.subGroupBy : null;
+  const canDrop = droppable(groupBy, defs);
+  const multiValued = (key: string | null) => !!key && (key === "assignee" || key === "tags" || ["multi", "person"].includes(propDef(defs, key)?.kind ?? ""));
+  const singleValued = !multiValued(groupBy) && !multiValued(sub);
+  const canDropRow = !!sub && droppable(sub, defs);
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
+    qc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", project.id] });
+    qc.invalidateQueries({ queryKey: ["nexus", "tasks"] });
+  };
+  const move = useMutation({
+    mutationFn: async ({ task, to, toRow, from, fromRow }: { task: NexusTask; to: string; toRow: string | null; from: string; fromRow: string | null }) => {
+      await moveToGroup(task, groupBy, from, to, defs, project.id);
+      if (sub && toRow !== null && fromRow !== null) await moveToGroup(task, sub, fromRow, toRow, defs, project.id);
     },
+    onSuccess: refresh,
+    onError: (e) => toast.error(t("Couldn't move the card"), { description: e instanceof Error ? e.message : undefined }),
   });
 
-  // Reorder sections (lanes) left/right — via the ←/→ buttons or by dragging the lane's number badge.
-  // Optimistically reshuffle the cached lanes so the move is instant, then reconcile with the server.
+  // Reorder sections (lanes) left/right — the ←/→ buttons or dragging the lane's handle. Optimistic.
   const reorderLane = useMutation({
     mutationFn: ({ id, position }: { id: string; position: number }) => nexusApi.updateSection(project.id, { id, position }),
     onMutate: async ({ id, position }) => {
@@ -493,317 +695,316 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
       });
       return { prev };
     },
-    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["nexus", "project", project.id], ctx.prev); },
+    onError: (_e, _v, ctx2) => { if (ctx2?.prev) qc.setQueryData(["nexus", "project", project.id], ctx2.prev); },
     onSettled: () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] }),
   });
 
-  if (taskLists.length === 0) return <div className="p-8"><Empty title="No lanes yet" message="This project doesn't have any task list/lane that NEXUS can read yet." /></div>;
-
-  // Tasks linked into this project from elsewhere → grouped into read-only lanes by their source project.
-  const linkedBySource = new Map<string, { name: string; tasks: NexusTask[] }>();
-  for (const list of taskLists) {
-    for (const tp of list.taskProjects ?? []) {
-      const t = tp.task;
-      if (!t?.id) continue;
-      const srcId = t.taskList?.projectId ?? "linked";
-      if (srcId === project.id) continue;
-      const g = linkedBySource.get(srcId) ?? { name: t.taskList?.project?.name ?? "Another project", tasks: [] };
-      if (!g.tasks.some((x) => x.id === t.id)) g.tasks.push(t);
-      linkedBySource.set(srcId, g);
+  // Tasks linked into this project from elsewhere → read-only lanes by source project (section grouping only).
+  const linkedLanes = useMemo(() => {
+    if (!isSection || sub) return [];
+    const bySource = new Map<string, { name: string; tasks: NexusTask[] }>();
+    for (const list of project.taskLists ?? []) {
+      for (const tp of list.taskProjects ?? []) {
+        const tk = tp.task;
+        if (!tk?.id) continue;
+        const srcId = tk.taskList?.projectId ?? "linked";
+        if (srcId === project.id) continue;
+        if (!taskMatches(tk, cfg.filter, "", defs, ctx)) continue;
+        const g = bySource.get(srcId) ?? { name: tk.taskList?.project?.name ?? t("Another project"), tasks: [] };
+        if (!g.tasks.some((x) => x.id === tk.id)) g.tasks.push(tk);
+        bySource.set(srcId, g);
+      }
     }
+    return [...bySource.entries()].map(([id, g]) => ({ id, name: g.name, tasks: g.tasks.sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0)) }));
+  }, [isSection, sub, project, cfg.filter, defs, ctx, t]);
+
+  const lanes = buildGroups(tasks, groupBy);
+  const sections = [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const laneLabel = (g: TaskGroup) => (groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label);
+  const laneW = LANE_W[cfg.cardSize];
+
+  const renderLane = (g: TaskGroup, rowKey: string | null, laneTasks: NexusTask[], showHeader: boolean) => {
+    const id = `${rowKey ?? ""}::${g.key}`;
+    const isCollapsed = collapsed.has(g.key);
+    const sectionIndex = isSection ? sections.findIndex((s) => s.id === g.key) : -1;
+    // Done sinks to the bottom when the view has no sort of its own (parity with before).
+    const items = cfg.sort.length ? laneTasks : [...laneTasks].sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0));
+    const dropOk = (drag && (canDrop || g.key === drag.from) && (rowKey === null || canDropRow || rowKey === drag.fromRow)) || dragLaneId;
+    if (isCollapsed) {
+      return (
+        <button key={id} type="button" onClick={() => onToggleGroup(g.key)} title={laneLabel(g)} className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg bg-muted/50 py-3 text-muted-foreground transition-colors hover:bg-muted">
+          <ChevronRight className="h-4 w-4" />
+          <span className="text-xs tabular-nums">{laneTasks.length}</span>
+          <span className="max-h-48 truncate text-sm font-medium text-foreground [writing-mode:vertical-rl]">{laneLabel(g)}</span>
+        </button>
+      );
+    }
+    return (
+      <section
+        key={id}
+        aria-label={laneLabel(g)}
+        className={cn("group/lane flex shrink-0 flex-col rounded-lg bg-muted/50 p-1.5 transition-colors", laneW, dragLaneId === g.key && "opacity-40", over === id && dropOk && "bg-accent ring-1 ring-[color:var(--accent-foreground)]/40")}
+        onDragOver={(e) => { if (dropOk) { e.preventDefault(); setOver(id); } }}
+        onDragLeave={() => setOver((o) => (o === id ? null : o))}
+        onDrop={() => {
+          setOver(null);
+          if (dragLaneId && isSection && dragLaneId !== g.key && sectionIndex >= 0) reorderLane.mutate({ id: dragLaneId, position: sectionIndex });
+          else if (drag) {
+            const task = tasks.find((x) => x.id === drag.id);
+            if (task && (g.key !== drag.from || (rowKey !== null && rowKey !== drag.fromRow))) move.mutate({ task, to: g.key, from: drag.from, toRow: rowKey, fromRow: drag.fromRow });
+          }
+          setDrag(null); setDragLaneId(null);
+        }}
+      >
+        {showHeader && (
+          <div className="mb-1 flex items-center gap-0.5 px-0.5">
+            {isSection && sectionIndex >= 0 && (
+              <button
+                type="button"
+                draggable
+                onDragStart={(e) => { setDragLaneId(g.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", g.key); }}
+                onDragEnd={() => setDragLaneId(null)}
+                aria-label={t("Drag to reorder sections")}
+                title={t("Drag to reorder sections")}
+                className="grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover/lane:opacity-100"
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <GroupHeader group={{ ...g, tasks: laneTasks }} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={false} onToggle={() => onToggleGroup(g.key)} className="min-w-0 flex-1" />
+            <div className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
+              {isSection && sectionIndex >= 0 && (
+                <>
+                  <button type="button" aria-label={t("Move section left")} disabled={sectionIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: g.key, position: sectionIndex - 1 })} className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-30"><ChevronLeft className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={t("Move section right")} disabled={sectionIndex === sections.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: g.key, position: sectionIndex + 1 })} className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground disabled:opacity-30"><ChevronRight className="h-3.5 w-3.5" /></button>
+                  <ListMenu projectId={project.id} list={{ id: g.key, name: g.label }} />
+                </>
+              )}
+              <button type="button" aria-label={t("Add task")} onClick={() => onCreate(isSection ? g.key : undefined)} className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"><Plus className="h-3.5 w-3.5" /></button>
+            </div>
+          </div>
+        )}
+        <div className="flex min-h-16 flex-col gap-1.5">
+          {items.map((task) => (
+            <TaskCard
+              key={`${task.id}-${g.key}`}
+              task={task}
+              currentProjectId={project.id}
+              keys={keys}
+              cfg={cfg}
+              defs={defs}
+              ctx={ctx}
+              onOpen={() => onOpen(task)}
+              onDrag={() => setDrag({ id: task.id, from: g.key, fromRow: rowKey })}
+              onDragEnd={() => { setDrag(null); setOver(null); }}
+              moving={move.isPending && drag?.id === task.id}
+              morph={singleValued}
+            />
+          ))}
+          <button type="button" onClick={() => onCreate(isSection ? g.key : undefined)} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground">
+            <Plus className="h-3.5 w-3.5" />{t("New task")}
+          </button>
+        </div>
+      </section>
+    );
+  };
+
+  const linkedLaneEls = linkedLanes.map((lane) => (
+    <section key={`linked-${lane.id}`} className={cn("flex shrink-0 flex-col rounded-lg border border-dashed border-border p-1.5", laneW)}>
+      <div className="mb-1 flex items-center gap-1.5 px-1.5 py-1">
+        <span className="truncate text-sm font-semibold">{lane.name}</span>
+        <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">{t("Linked")}</span>
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{lane.tasks.length}</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {lane.tasks.map((task) => <TaskCard key={task.id} task={task} currentProjectId={project.id} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={() => onOpen(task)} onDrag={() => {}} onDragEnd={() => {}} moving={false} />)}
+      </div>
+    </section>
+  ));
+
+  if (!sub) {
+    return (
+      <div className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+        <div className="flex min-w-max items-start gap-2.5">
+          {linkedLaneEls}
+          {lanes.map((g) => renderLane(g, null, g.tasks, true))}
+          {isSection && <AddListColumn projectId={project.id} />}
+        </div>
+        {move.isError && <p className="mt-2 text-sm text-destructive">{t("The card couldn't move. Check your access to this project and try again.")}</p>}
+      </div>
+    );
   }
-  const linkedLanes = Array.from(linkedBySource.entries()).map(([id, g]) => ({
-    id,
-    name: g.name,
-    tasks: g.tasks.sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0)),
-  }));
 
-  // Render (and reorder) lanes by their stored position — deterministic order, reflects reorders instantly.
-  const lanes = [...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-
+  // Sub-groups: one row (swimlane) per sub-group value, the same lanes in each row.
+  const rows = buildGroups(tasks, sub, { keepHidden: true });
   return (
-    <div className="p-4 md:p-6 overflow-x-auto bg-[radial-gradient(circle_at_top_left,rgba(78,179,1,0.08),transparent_32%),radial-gradient(circle_at_top_right,rgba(123,77,255,0.10),transparent_28%)]">
-      <div className="flex gap-4 min-w-max pb-4">
-        {/* Linked lanes (tasks linked from other projects), grouped by source project, on the left — parity with core NEXUS. */}
-        {linkedLanes.map((lane) => (
-          <section key={`linked-${lane.id}`} className="w-80 shrink-0 rounded-[28px] border border-dashed border-violet-300/70 bg-violet-50/50 p-3 shadow-soft">
-            <div className="mb-3 flex items-center justify-between gap-2 px-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <h3 className="truncate text-sm font-black tracking-tight">{lane.name}</h3>
-                <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-700">Linked</span>
-              </div>
-              <p className="shrink-0 text-[11px] text-muted-foreground">{lane.tasks.length}</p>
+    <div className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+      <div className="min-w-max space-y-3">
+        <div className="flex gap-2.5 pl-0.5">
+          {lanes.map((g) => (
+            <div key={g.key} className={cn("shrink-0 px-1.5", collapsed.has(g.key) ? "w-10" : laneW)}>
+              <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={collapsed.has(g.key)} onToggle={() => onToggleGroup(g.key)} />
             </div>
-            <div className="space-y-3 min-h-32">
-              {lane.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => {}} moving={false} />
-              ))}
-            </div>
-          </section>
-        ))}
-        {lanes.map((list, laneIndex) => {
-          // Own tasks only; done sinks to bottom (parity with core NEXUS). Linked tasks live in their own lanes above.
-          const items = [...(list.tasks ?? [])].sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0));
+          ))}
+        </div>
+        {rows.map((row) => {
+          const rowCollapsed = collapsed.has(`row:${row.key}`);
+          const cells = new Map(groupTasks(row.tasks, groupBy, defs, ctx).map((x) => [x.key, x.tasks]));
           return (
-            <section
-              key={list.id}
-              className={cn("w-80 shrink-0 rounded-[28px] border border-border bg-muted/40 p-3 shadow-soft backdrop-blur transition", draggingLaneId === list.id && "opacity-40 ring-2 ring-primary/50")}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                if (draggingLaneId && draggingLaneId !== list.id) reorderLane.mutate({ id: draggingLaneId, position: laneIndex });
-                else if (draggingId) moveTask.mutate({ taskId: draggingId, listId: list.id, position: items.length + 1 });
-                setDraggingId(null); setDraggingLaneId(null);
-              }}
-            >
-              <div className="mb-3 flex items-center gap-1.5 px-1">
-                <button
-                  draggable
-                  onDragStart={(e) => { setDraggingLaneId(list.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", list.id); }}
-                  onDragEnd={() => setDraggingLaneId(null)}
-                  title="Drag to reorder sections"
-                  className="grid h-8 w-8 shrink-0 cursor-grab place-items-center rounded-2xl bg-primary/10 text-sm font-black text-primary transition hover:bg-primary/20 active:cursor-grabbing"
-                >
-                  {laneIndex + 1}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-black tracking-tight">{list.name}</h3>
-                  <p className="text-[11px] text-muted-foreground">{items.length} cards in play</p>
+            <div key={row.key} className="border-t border-border pt-2">
+              <GroupHeader group={row} groupBy={sub} defs={defs} cfg={cfg} collapsed={rowCollapsed} onToggle={() => onToggleGroup(`row:${row.key}`)} sticky className="mb-1.5 w-fit" />
+              {!rowCollapsed && (
+                <div className="flex items-start gap-2.5">
+                  {lanes.map((g) => renderLane(g, row.key, cells.get(g.key) ?? [], false))}
                 </div>
-                <div className="flex shrink-0 items-center">
-                  <Button isIconOnly size="sm" variant="ghost" aria-label="Move section left" className="rounded-full" isDisabled={laneIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex - 1 })}><ChevronLeft className="h-4 w-4" /></Button>
-                  <Button isIconOnly size="sm" variant="ghost" aria-label="Move section right" className="rounded-full" isDisabled={laneIndex === lanes.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex + 1 })}><ChevronRight className="h-4 w-4" /></Button>
-                  <ListMenu projectId={project.id} list={{ id: list.id, name: list.name }} />
-                  <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={() => onCreate(list.id)}><Plus className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div className="space-y-3 min-h-32">
-                <button onClick={() => onCreate(list.id)} className="w-full rounded-2xl border border-dashed border-border bg-muted/50 py-3 text-xs font-bold text-muted-foreground transition hover:border-primary/40 hover:text-primary">+ Spawn card</button>
-                {items.map((task) => (
-                  <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => setDraggingId(task.id)} moving={moveTask.isPending && draggingId === task.id} />
-                ))}
-              </div>
-            </section>
+              )}
+            </div>
           );
         })}
-        <AddListColumn projectId={project.id} />
       </div>
-      {moveTask.isError && <p className="mt-2 text-sm font-semibold text-red-600">Move failed. Check permission/session or target lane.</p>}
     </div>
   );
 }
 
 function AddListColumn({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const [name, setName] = useState("");
+  const [open, setOpen] = useState(false);
   const create = useMutation({
     mutationFn: () => nexusApi.createSection(projectId, name.trim()),
-    onSuccess: () => { setName(""); qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); },
+    onSuccess: () => { setName(""); setOpen(false); qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); },
   });
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex h-9 w-56 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+        <Plus className="h-4 w-4" />{t("Add section")}
+      </button>
+    );
+  }
   return (
-    <div className="w-72 shrink-0">
-      <div className="rounded-[28px] border border-dashed border-border bg-card/50 p-3">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }}
-          placeholder="New list name…"
-          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
-        />
-        <button
-          onClick={() => name.trim() && create.mutate()}
-          disabled={!name.trim() || create.isPending}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
-        >
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add list
+    <div className="w-64 shrink-0 rounded-lg bg-muted/50 p-1.5">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); if (e.key === "Escape") setOpen(false); }}
+        onBlur={() => { if (!name.trim()) setOpen(false); }}
+        placeholder={t("Section name")}
+        className="h-8 w-full rounded-md border border-border bg-card px-2 text-sm outline-none transition-colors focus:border-[color:var(--accent-foreground)]"
+      />
+      <div className="mt-1.5 flex items-center gap-1">
+        <button type="button" onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground disabled:opacity-50">
+          {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("Add section")}
         </button>
-        {create.isError && <p className="mt-1 text-xs font-semibold text-destructive">Couldn't create list.</p>}
+        <button type="button" onClick={() => setOpen(false)} className="h-7 rounded-md px-2 text-xs text-muted-foreground hover:bg-card">{t("Cancel")}</button>
       </div>
+      {create.isError && <p className="mt-1 text-xs text-destructive">{t("Couldn't add the section. Try again.")}</p>}
     </div>
   );
 }
 
 function ListMenu({ projectId, list }: { projectId: string; list: { id: string; name: string } }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
   const rename = useMutation({ mutationFn: (name: string) => nexusApi.updateSection(projectId, { id: list.id, name }), onSuccess: invalidate });
-  const del = useMutation({ mutationFn: () => nexusApi.deleteSection(projectId, list.id), onSuccess: invalidate });
+  const del = useMutation({ mutationFn: () => nexusApi.deleteSection(projectId, list.id), onSuccess: invalidate, onError: (e) => toast.error(e instanceof Error ? e.message : t("Couldn't delete the section")) });
   return (
-    <div className="flex items-center gap-0.5">
+    <>
       <button
-        onClick={() => { const n = window.prompt("Rename list", list.name); if (n && n.trim() && n !== list.name) rename.mutate(n.trim()); }}
-        className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        title="Rename list"
+        type="button"
+        onClick={() => { const n = window.prompt(t("Rename section"), list.name); if (n && n.trim() && n !== list.name) rename.mutate(n.trim()); }}
+        className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"
+        aria-label={t("Rename section")}
+        title={t("Rename section")}
       ><Pencil className="h-3.5 w-3.5" /></button>
       <button
-        onClick={() => { if (window.confirm(`Delete list "${list.name}"? Move or clear out its tasks first.`)) del.mutate(); }}
-        className="rounded-lg p-1 text-muted-foreground transition-colors hover:text-destructive"
-        title="Delete list"
+        type="button"
+        onClick={() => { if (window.confirm(t("Delete the section \"{name}\"? Its tasks move to the first section. It can be restored from Control Room → Audit.", { name: list.name }))) del.mutate(); }}
+        className="grid h-7 w-6 place-items-center rounded text-muted-foreground hover:bg-card hover:text-destructive"
+        aria-label={t("Delete section")}
+        title={t("Delete section")}
       ><Trash2 className="h-3.5 w-3.5" /></button>
-    </div>
+    </>
   );
 }
 
-const CF_TONE: Record<string, string> = {
-  neutral: "bg-muted text-muted-foreground",
-  green: "bg-emerald-100 text-emerald-700",
-  amber: "bg-amber-100 text-amber-700",
-  red: "bg-rose-100 text-rose-700",
-  blue: "bg-sky-100 text-sky-700",
-};
-function cfStatusTone(v: string): keyof typeof CF_TONE {
-  const s = v.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-  if (["done", "complete", "completed", "selesai"].includes(s)) return "green";
-  if (["on progress", "in progress", "progress", "ongoing", "sedang berjalan"].includes(s)) return "amber";
-  if (["blocked", "stuck", "terhambat"].includes(s)) return "red";
-  if (["not started", "todo", "to do"].includes(s)) return "neutral";
-  return "blue";
-}
-/** Format a task's custom-field value into a board chip (label + tone). Mirrors core-NEXUS. */
-function customFieldChip(cfv: NonNullable<NexusTask["customFieldValues"]>[number]): { id: string; label: string; tone: keyof typeof CF_TONE } | null {
-  const type = (cfv.customField?.type ?? "").toUpperCase();
-  const raw = (cfv.value ?? "").trim();
-  if (!raw) return null;
-  const opts = cfv.customField?.options;
-  const format = opts && typeof opts === "object" && !Array.isArray(opts) ? (opts as { format?: string }).format : undefined;
-  if (type === "NUMBER") {
-    const digits = raw.replace(/\D+/g, "");
-    if (!digits) return null;
-    const label = format === "currency-idr"
-      ? new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(digits))
-      : raw;
-    return { id: cfv.customFieldId, label, tone: "neutral" };
-  }
-  if (type === "STATUS") return { id: cfv.customFieldId, label: raw, tone: cfStatusTone(raw) };
-  if (type === "MULTI_SELECT") {
-    try { const a = JSON.parse(raw); const s = Array.isArray(a) ? a.join(", ") : raw; return s ? { id: cfv.customFieldId, label: s, tone: "neutral" } : null; }
-    catch { return { id: cfv.customFieldId, label: raw, tone: "neutral" }; }
-  }
-  if (type === "PLACE") {
-    try { const p = JSON.parse(raw) as { label?: string }; return p?.label ? { id: cfv.customFieldId, label: p.label, tone: "neutral" } : null; }
-    catch { return { id: cfv.customFieldId, label: raw, tone: "neutral" }; }
-  }
-  if (type === "DATE" || type === "CREATED") { const d = new Date(raw); return { id: cfv.customFieldId, label: Number.isNaN(d.getTime()) ? raw : fmtDate(raw), tone: "neutral" }; }
-  if (type === "URL") { let label = raw; try { label = new URL(raw).hostname.replace(/^www\./, "") || raw; } catch { /* keep raw */ } return { id: cfv.customFieldId, label, tone: "neutral" }; }
-  if (type === "FILE") { try { const a = JSON.parse(raw); const n = Array.isArray(a) ? a.length : 0; return n > 0 ? { id: cfv.customFieldId, label: `📎 ${n} file${n === 1 ? "" : "s"}`, tone: "neutral" } : null; } catch { return null; } }
-  return { id: cfv.customFieldId, label: raw, tone: "neutral" };
-}
-
-/** Reusable custom-field chip row for a task (board/list/calendar). Compact + de-duped so the chips
- *  don't pile up or repeat the due date already shown in the card footer. */
-
-/** "☑ 2/5" progress chip — only when the task has subtasks (they're hidden from the board itself). */
-function SubtaskChip({ task, className }: { task: NexusTask; className?: string }) {
-  const subs = task.subtasks ?? [];
-  if (subs.length === 0) return null;
-  const done = subs.filter((s) => s.status === "DONE").length;
-  return (
-    <span className={cn(
-      "inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
-      done === subs.length ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
-      className
-    )}>
-      <ListChecks className="h-3 w-3" /> {done}/{subs.length}
-    </span>
-  );
-}
-
-/** "🏆 +X" chip — when the task is part of one or more task-bundle quests. XP = sum across quests. */
+/** "+X XP" — when the task is part of one or more task-bundle quests. XP = sum across quests. */
 function QuestChip({ task, className }: { task: NexusTask; className?: string }) {
   const quests = task.quests ?? [];
   if (quests.length === 0) return null;
   const xp = quests.reduce((s, q) => s + (q.xpReward ?? 0), 0);
   return (
     <span
-      title={`Quest: ${quests.map((q) => q.title).join(", ")} — finish it for +${xp} XP`}
-      className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary", className)}
+      title={`Quest: ${quests.map((q) => q.title).join(", ")} — +${xp} XP`}
+      className={cn("inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-[color:var(--accent-foreground)] bg-accent", className)}
     >
       +{xp} XP
     </span>
   );
 }
 
-function TaskCfChips({ task, max = 2, className }: { task: NexusTask; max?: number; className?: string }) {
-  const dueKey = task.dueDate ? fmtDate(task.dueDate) : null;
-  const chips = ((task.customFieldValues ?? []).map(customFieldChip).filter(Boolean) as Array<{ id: string; label: string; tone: keyof typeof CF_TONE }>)
-    .filter((c) => c.label !== dueKey); // a date custom-field equal to the due date is redundant on the card
-  if (chips.length === 0) return null;
-  return (
-    <div className={cn("flex flex-wrap items-center gap-1", className)}>
-      {chips.slice(0, max).map((c) => (
-        <span key={c.id} className={cn("max-w-[130px] truncate rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-tight", CF_TONE[c.tone])}>{c.label}</span>
-      ))}
-      {chips.length > max && <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">+{chips.length - max}</span>}
-    </div>
-  );
-}
+const CARD_PAD: Record<ViewConfig["cardSize"], string> = { small: "gap-1 px-2 py-1.5", medium: "gap-1.5 px-2.5 py-2", large: "gap-2 px-3 py-2.5" };
 
-function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: NexusTask; currentProjectId?: string; onOpen: () => void; onDrag: () => void; moving: boolean }) {
+function TaskCard({ task, currentProjectId, keys, cfg, defs, ctx, onOpen, onDrag, onDragEnd, moving, morph = true }: {
+  task: NexusTask; currentProjectId?: string; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx;
+  onOpen: () => void; onDrag: () => void; onDragEnd: () => void; moving: boolean;
+  /** False when the same task shows twice (grouped by people or tags): one shared-layout id per task. */
+  morph?: boolean;
+}) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const bulk = useTaskBulk();
   const cardProps = bulk.bindCard(task, onOpen);
   const selected = bulk.isSelected(task.id);
-  const assignee = task.assignees?.[0]?.user;
-  const tags = task.tags ?? [];
-  const isDone = (task.status ?? "").toUpperCase() === "DONE";
-  const linkedFrom = task.taskList?.projectId && currentProjectId && task.taskList.projectId !== currentProjectId ? (task.taskList.project?.name ?? "another project") : null;
+  const done = isDone(task.status);
+  const linkedFrom = task.taskList?.projectId && currentProjectId && task.taskList.projectId !== currentProjectId ? (task.taskList.project?.name ?? t("another project")) : null;
   const toggleDone = useMutation({
-    mutationFn: () => nexusApi.updateTask(task.id, { status: isDone ? "TODO" : "DONE" }),
+    mutationFn: () => nexusApi.updateTask(task.id, { status: done ? "TODO" : "DONE" }),
     onSuccess: () => {
       qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).some((k) => k.includes("project") || k.includes("task") || k.includes("dashboard")) });
-      if (!isDone) celebrate(`Slayed: ${task.title.length > 24 ? task.title.slice(0, 22) + "…" : task.title} ⚔️`);
+      if (!done) celebrate(t("Done: {title}", { title: task.title.length > 28 ? task.title.slice(0, 26) + "…" : task.title }));
     },
   });
+  const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <motion.div layoutId={`board-taskcard-${task.id}`} data-morph-id={`board-taskcard-${task.id}`} data-bulk-task={cardProps["data-bulk-task"]} style={{ borderRadius: 24 }} onContextMenu={cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", isDone && "opacity-60", selected && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
-    <Card
-      draggable={!linkedFrom}
-      onDragStart={onDrag}
-      onClick={cardProps.onClick}
-      className="w-full border border-border/70 bg-card/95 text-left hover:border-primary/40"
-    >
-      <CardBody className="gap-3 p-4">
-        <div className="flex items-start gap-2">
-          <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
+    <motion.div layoutId={morph ? `board-taskcard-${task.id}` : undefined} data-morph-id={morph ? `board-taskcard-${task.id}` : undefined} data-bulk-task={cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", done && "opacity-60", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
+      <div
+        role="button"
+        tabIndex={0}
+        draggable={!linkedFrom}
+        onDragStart={onDrag}
+        onDragEnd={onDragEnd}
+        onClick={cardProps.onClick}
+        onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
+        style={tint}
+        className={cn("flex w-full cursor-pointer flex-col rounded-lg border border-border bg-card text-left shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition-[box-shadow,border-color] hover:border-foreground/15 hover:shadow-[0_2px_8px_rgba(15,15,15,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", CARD_PAD[cfg.cardSize])}
+      >
+        {linkedFrom && <span className="truncate text-[11px] text-muted-foreground">{t("From {name}", { name: linkedFrom })}</span>}
+        {task.parentId && (
+          <span className="inline-flex max-w-full items-center gap-1 text-[11px] text-muted-foreground" title={task.parent?.title ? t("Subtask of {title}", { title: task.parent.title }) : t("Subtask")}>
+            <CornerDownRight className="h-3 w-3 shrink-0" />
+            <span className="truncate">{task.parent?.title || t("Subtask")}</span>
+          </span>
+        )}
+        <div className="flex items-start gap-1.5">
           <button
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); toggleDone.mutate(); }}
             disabled={toggleDone.isPending}
-            className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
-            aria-label={isDone ? "Mark as not done" : "Mark as done"}
-            title={isDone ? "Mark as not done" : "Mark as done"}
+            className="mt-px shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
+            aria-label={done ? t("Mark as not done") : t("Mark as done")}
+            title={done ? t("Mark as not done") : t("Mark as done")}
           >
-            {toggleDone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isDone ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 opacity-70" />}
+            {toggleDone.isPending || moving ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 opacity-60" />}
           </button>
-          <div className="min-w-0 flex-1">
-            {linkedFrom && <span className="mb-1 block truncate text-[11px] font-semibold text-muted-foreground">From {linkedFrom}</span>}
-            {task.parentId && (
-              <span className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700" title={task.parent?.title ? `Subtask of: ${task.parent.title}` : "Subtask"}>
-                <CornerDownRight className="h-3 w-3 shrink-0" />
-                <span className="truncate">{task.parent?.title ? `Subtask · ${task.parent.title}` : "Subtask"}</span>
-              </span>
-            )}
-            <h4 className={cn("text-sm font-bold leading-snug tracking-tight", isDone && "text-muted-foreground/70 line-through")}>{task.title}</h4>
-          </div>
-          {moving ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <PriorityChip priority={task.priority} />}
+          <span className={cn("min-w-0 flex-1 text-sm font-medium leading-snug", cfg.cardSize === "small" && "text-[13px]", done && "text-muted-foreground line-through")}>{task.title}</span>
+          <QuestChip task={task} />
         </div>
-        {tags.length > 0 && <div className="flex flex-wrap gap-1">{tags.slice(0, 3).map((tag) => <Chip key={tag} size="sm" variant="soft" className="h-5 text-[10px]">#{tag}</Chip>)}</div>}
-        <TaskCfChips task={task} max={Infinity} />
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{fmtDue(task.dueDate)}</span>
-            <SubtaskChip task={task} />
-            <QuestChip task={task} />
-          </span>
-          <span className="inline-flex items-center gap-2">
-            {typeof task._count?.comments === "number" && <span className="inline-flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{task._count.comments}</span>}
-            {assignee?.id
-              ? <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={24} className="shrink-0" />
-              : <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-[10px] font-black text-primary" title="Unassigned">?</span>}
-          </span>
-        </div>
-      </CardBody>
-    </Card>
+        <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="pl-[22px]" />
+      </div>
     </motion.div>
   );
 }
@@ -1089,78 +1290,76 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
   );
 }
 
-function ListRow({ task, onOpen }: { task: NexusTask; onOpen: (task: NexusTask) => void }) {
+function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean }) {
+  const { t } = useLang();
   const bulk = useTaskBulk();
   const cardProps = bulk.bindCard(task, () => onOpen(task));
   const selected = bulk.isSelected(task.id);
   const done = isDone(task.status);
-  const assignee = task.assignees?.[0]?.user;
-  const p = (task.priority || "").toUpperCase();
-  const dot = p === "URGENT" ? "bg-destructive" : p === "HIGH" ? "bg-warning" : p === "MEDIUM" ? "bg-info" : "bg-muted-foreground/40";
+  const tint = cardTint(task, cfg, defs, ctx);
   return (
     <motion.button
-      layoutId={`list-taskcard-${task.id}`}
-      data-morph-id={`list-taskcard-${task.id}`}
-      style={{ borderRadius: 12 }}
-      whileHover={{ y: -2 }}
+      type="button"
+      layoutId={morph ? `list-taskcard-${task.id}` : undefined}
+      data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
+      style={{ borderRadius: 6, ...tint }}
       {...cardProps}
-      className={cn("group flex w-full items-center gap-3 rounded-xl bg-card px-3 py-2.5 text-left shadow-soft transition-shadow hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", selected && "ring-2 ring-primary")}
+      className={cn("group flex min-h-9 w-full items-center gap-2.5 border-b border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted">
-        {done ? <CheckCircle2 className="h-4 w-4 text-success" /> : <span className={cn("h-2.5 w-2.5 rounded-full", dot)} />}
+      {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label={t("Subtask")} />}
+        <span className={cn("truncate text-sm", done && "text-muted-foreground line-through")}>{task.title}</span>
+        {task.parentId && task.parent?.title && <span className="hidden truncate text-xs text-muted-foreground md:inline">· {task.parent.title}</span>}
+        <QuestChip task={task} />
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-label="Subtask" />}
-          <span className={cn("truncate text-sm font-medium group-hover:text-primary", done && "text-muted-foreground line-through")}>{task.title}</span>
-          <SubtaskChip task={task} />
-          <QuestChip task={task} />
-        </div>
-        <div className="truncate text-xs text-muted-foreground">
-          {task.parentId && <span className="font-semibold text-violet-600">Subtask{task.parent?.title ? ` · ${task.parent.title}` : ""}</span>}
-          {task.parentId && " — "}
-          {task.dueDate ? `due ${fmtDue(task.dueDate)}` : "No due date"}
-        </div>
-        <TaskCfChips task={task} max={3} className="mt-1 hidden sm:flex" />
-      </div>
-      <span className="hidden md:block"><PriorityChip priority={task.priority} /></span>
-      <Chip size="sm" variant="soft" className="hidden sm:flex">{statusLabel(task.status)}</Chip>
-      {assignee && <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={28} className="hidden shrink-0 ring-1 ring-border sm:inline-flex" />}
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
+      <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="hidden shrink-0 flex-nowrap justify-end sm:flex [&>*]:shrink-0" />
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground" />
     </motion.button>
   );
 }
 
-function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggle = (id: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const total = taskLists.reduce((n, l) => n + (l.tasks?.length ?? 0), 0);
-  if (total === 0) return <div className="p-4 md:p-8"><Empty title="No tasks here" message="No tasks in this filter yet — make one with Add task." /></div>;
+function ListView({ groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen, onCreate }: {
+  groups: TaskGroup[]; groupBy: string | null; subGroupBy: string | null; buildGroups: GroupBuilder; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
+  collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void; onCreate: (listId?: string) => void;
+}) {
+  const { t } = useLang();
+  const multi = (k: string | null) => !!k && (k === "assignee" || k === "tags" || ["multi", "person"].includes(propDef(defs, k)?.kind ?? ""));
+  const morph = !multi(groupBy) && !multi(subGroupBy);
+  const rows = (tasks: NexusTask[]) => tasks.map((task) => <ListRow key={task.id} task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />);
+  const newRow = (sectionId?: string) => (
+    <button type="button" onClick={() => onCreate(sectionId)} className="flex h-9 w-full items-center gap-2 px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
+      <Plus className="h-4 w-4" />{t("New task")}
+    </button>
+  );
+  if (!groupBy) {
+    return <div className="px-4 py-3 md:px-8">{rows(groups[0]?.tasks ?? [])}{newRow()}</div>;
+  }
   return (
-    <div className="space-y-5 p-4 md:p-8">
-      {taskLists.map((list) => {
-        const tasks = list.tasks ?? [];
-        if (tasks.length === 0) return null; // hide empty sections (after filters)
-        const isCollapsed = collapsed.has(list.id);
-        const doneCount = tasks.filter((t) => isDone(t.status)).length;
+    <div className="space-y-5 px-4 py-3 md:px-8">
+      {groups.map((g) => {
+        const isCollapsed = collapsed.has(g.key);
+        const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
         return (
-          <div key={list.id}>
-            {/* section header / divider */}
-            <button onClick={() => toggle(list.id)} className="mb-2 flex w-full items-center gap-2 border-b border-border pb-1.5 text-left transition-colors hover:text-primary">
-              <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", !isCollapsed && "rotate-90")} />
-              <span className="font-display text-sm font-semibold tracking-tight">{list.name}</span>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">{`${doneCount}/${tasks.length}`}</span>
-            </button>
-            {!isCollapsed && (
-              <div className="space-y-1.5 rounded-2xl bg-muted/40 p-2">
-                {tasks.map((task) => (
-                  <div key={task.id} className={task.parentId ? "ml-4 border-l-2 border-violet-200 pl-2" : undefined}>
-                    <ListRow task={task} onOpen={onOpen} />
-                  </div>
-                ))}
+          <section key={g.key} aria-label={g.label}>
+            <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5 border-b border-border pb-1" />
+            {!isCollapsed && (subs ? (
+              <div className="space-y-2 pl-5 pt-1.5">
+                {subs.map((s) => {
+                  const k = `${g.key}/${s.key}`;
+                  return (
+                    <div key={k}>
+                      <GroupHeader group={s} groupBy={subGroupBy} defs={defs} cfg={cfg} collapsed={collapsed.has(k)} onToggle={() => onToggleGroup(k)} />
+                      {!collapsed.has(k) && rows(s.tasks)}
+                    </div>
+                  );
+                })}
+                {newRow(groupBy === "section" ? g.key : undefined)}
               </div>
-            )}
-          </div>
+            ) : (
+              <div>{rows(g.tasks)}{newRow(groupBy === "section" ? g.key : undefined)}</div>
+            ))}
+          </section>
         );
       })}
     </div>
@@ -1168,103 +1367,40 @@ function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["
 }
 
 const CAL_CHIP: Record<string, string> = {
-  URGENT: "bg-rose-100 text-rose-700",
-  HIGH: "bg-red-100 text-red-700",
-  MEDIUM: "bg-sky-100 text-sky-700",
-  LOW: "bg-emerald-100 text-emerald-700",
-  NONE: "bg-muted text-muted-foreground",
+  URGENT: "bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300",
+  HIGH: "bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300",
+  MEDIUM: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
+  LOW: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  NONE: "bg-muted text-foreground",
 };
 const CAL_STRIPE: Record<string, string> = {
   URGENT: "bg-rose-500",
-  HIGH: "bg-red-500",
+  HIGH: "bg-orange-500",
   MEDIUM: "bg-sky-500",
   LOW: "bg-emerald-500",
   NONE: "bg-muted-foreground/40",
 };
 
-// ── Calendar color rules (frozen frontend feature, localStorage per project) ──
-const CAL_PRESETS = [
-  { name: "Sky", bg: "#dbeafe", border: "#60a5fa", text: "#1e3a8a" },
-  { name: "Emerald", bg: "#dcfce7", border: "#34d399", text: "#14532d" },
-  { name: "Amber", bg: "#fef3c7", border: "#f59e0b", text: "#78350f" },
-  { name: "Rose", bg: "#ffe4e6", border: "#fb7185", text: "#881337" },
-  { name: "Violet", bg: "#ede9fe", border: "#8b5cf6", text: "#4c1d95" },
-  { name: "Slate", bg: "#e2e8f0", border: "#94a3b8", text: "#0f172a" },
-] as const;
-type CalColorSource = "status" | "priority" | "assignee" | "task_list" | "custom_field";
-type CalColorRule = { id: string; source: CalColorSource; customFieldId?: string; value: string; color: string };
-const CAL_SOURCE_LABEL: Record<CalColorSource, string> = { status: "Status", priority: "Priority", assignee: "Assignee", task_list: "List", custom_field: "Custom field" };
-function calColorKey(projectId: string) { return `nexus:calendar-color-rules:${projectId}`; }
-function calRuleId() { return Math.random().toString(36).slice(2, 10); }
-function calRuleValues(task: NexusTask, rule: CalColorRule): string[] {
-  switch (rule.source) {
-    case "status": return [(task.status ?? "").toUpperCase()];
-    case "priority": return [(task.priority ?? "NONE").toUpperCase()];
-    case "assignee": return (task.assignees ?? []).map((a) => a.user?.id ?? "").filter(Boolean);
-    case "task_list": return [task.taskListId ?? task.taskList?.id ?? ""];
-    case "custom_field": return (task.customFieldValues ?? []).filter((c) => c.customFieldId === rule.customFieldId).map((c) => c.value ?? "").filter(Boolean);
-    default: return [];
-  }
-}
-
-function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projectId: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void }) {
+function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canDrag }: {
+  tasks: NexusTask[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx;
+  onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDate: (task: NexusTask, iso: string) => void; canDrag: boolean;
+}) {
+  const { t, locale } = useLang();
   const bulk = useTaskBulk();
   const isMobile = useIsMobile();
-  const [colorPanelOpen, setColorPanelOpen] = useState(false);
-  const [colorRules, setColorRules] = useState<CalColorRule[]>(() => {
-    if (typeof window === "undefined") return [];
-    try { const raw = window.localStorage.getItem(calColorKey(projectId)); const p = raw ? JSON.parse(raw) : []; return Array.isArray(p) ? p.filter((r) => r?.id && r?.source && r?.color) : []; } catch { return []; }
-  });
-  const persistRules = (rules: CalColorRule[]) => { setColorRules(rules); try { window.localStorage.setItem(calColorKey(projectId), JSON.stringify(rules)); } catch { /* ignore */ } };
-
-  // Option pools derived from current tasks.
-  const assigneeOpts = useMemo(() => { const m = new Map<string, string>(); for (const t of tasks) for (const a of t.assignees ?? []) if (a.user?.id) m.set(a.user.id, a.user.name ?? a.user.email ?? a.user.id); return [...m].map(([value, label]) => ({ value, label })); }, [tasks]);
-  const listOpts = useMemo(() => { const m = new Map<string, string>(); for (const t of tasks) { const id = t.taskListId ?? t.taskList?.id; if (id) m.set(id, t.taskList?.name ?? id); } return [...m].map(([value, label]) => ({ value, label })); }, [tasks]);
-  // Field list from the project's DEFINITIONS (matches what's configured), task-derived only as a load-time fallback.
-  const cfDefs = useQuery({ queryKey: ["nexus", "project-custom-fields", projectId], queryFn: () => nexusApi.projectCustomFields(projectId), staleTime: 60_000, retry: false });
-  const cfFields = useMemo(() => {
-    const defs = cfDefs.data?.fields;
-    if (defs) return defs.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((f) => ({ value: f.id, label: f.name }));
-    const m = new Map<string, string>(); for (const t of tasks) for (const c of t.customFieldValues ?? []) m.set(c.customFieldId, c.customField?.name ?? c.customFieldId); return [...m].map(([value, label]) => ({ value, label }));
-  }, [cfDefs.data, tasks]);
-  const cfValuesFor = (fieldId?: string) => { const s = new Set<string>(); if (!fieldId) return []; for (const t of tasks) for (const c of t.customFieldValues ?? []) if (c.customFieldId === fieldId && c.value) s.add(c.value); return [...s].map((value) => ({ value, label: value })); };
-  const ruleValueOpts = (rule: CalColorRule): { value: string; label: string }[] => {
-    switch (rule.source) {
-      case "status": return TASK_STATUSES.map((v) => ({ value: v, label: statusLabel(v) }));
-      case "priority": return TASK_PRIORITIES.map((v) => ({ value: v, label: statusLabel(v) }));
-      case "assignee": return assigneeOpts;
-      case "task_list": return listOpts;
-      case "custom_field": return cfValuesFor(rule.customFieldId);
-      default: return [];
-    }
-  };
-  const styleForTask = (task: NexusTask): { backgroundColor: string; borderColor: string; color: string } | null => {
-    const rule = colorRules.find((r) => r.value && calRuleValues(task, r).includes(r.value));
-    if (!rule) return null;
-    const p = CAL_PRESETS.find((x) => x.bg === rule.color);
-    return p ? { backgroundColor: p.bg, borderColor: p.border, color: p.text } : null;
-  };
-  const addRule = () => persistRules([...colorRules, { id: calRuleId(), source: "status", value: "IN_PROGRESS", color: CAL_PRESETS[0].bg }]);
-  const updateRule = (id: string, patch: Partial<CalColorRule>) => persistRules(colorRules.map((r) => r.id === id ? { ...r, ...patch, ...(patch.source ? { customFieldId: undefined, value: "" } : {}), ...(patch.customFieldId ? { value: "" } : {}) } : r));
-  const removeRule = (id: string) => persistRules(colorRules.filter((r) => r.id !== id));
-
-  // Subtasks are hidden from Board/List (Asana-style, nested in the parent panel) but a subtask can have
-  // its own due date that matters — so the CALENDAR additionally pulls the project's dated subtasks (the
-  // project payload is parentId-only). Board/List stay subtask-free.
-  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false });
-  const datedSubtasks = useMemo(() => (allProjTasks.data ?? []).filter((t) => t.parentId && parseDate(t.dueDate)), [allProjTasks.data]);
-
-  const dated = [...tasks.filter((task) => parseDate(task.dueDate)), ...datedSubtasks];
-  const undated = tasks.filter((task) => !parseDate(task.dueDate));
+  // The view's date property (owner, 12 Oct 2026): due date by default, or the start date / a date field.
+  const dateOf = (task: NexusTask) => parseDate(taskValues(task, cfg.dateProp)[0]);
+  const dated = tasks.filter((task) => dateOf(task));
+  const undated = tasks.filter((task) => !dateOf(task));
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const [viewMonth, setViewMonth] = useState(() => {
-    const base = dated[0] ? parseDate(dated[0].dueDate)! : new Date();
-    return new Date(base.getFullYear(), base.getMonth(), 1);
-  });
+  const [viewMonth, setViewMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const shiftMonth = (delta: number) => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
   const sameMonth = (a: Date, b: Date) => a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+  const keys = visibleProps(cfg, "calendar", defs);
+  const chipStyle = (task: NexusTask) => cardTint(task, cfg, defs, ctx);
+  const weekdays = useMemo(() => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(new Date(2026, 9, 12 + i))), [locale]);
 
   // 6-week grid starting on the Monday on/before the 1st
   const gridStart = new Date(viewMonth);
@@ -1272,109 +1408,57 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
   const days = Array.from({ length: 42 }, (_, i) => { const d = new Date(gridStart); d.setDate(gridStart.getDate() + i); return d; });
   const todayKey = dayKey(new Date());
 
-  // Mobile agenda — tasks in the viewed month, grouped by day (Time Map / team-calendar style).
+  // Mobile agenda — tasks in the viewed month, grouped by day.
   const byDay = new Map<string, { date: Date; items: NexusTask[] }>();
   for (const task of dated) {
-    const d = parseDate(task.dueDate)!;
+    const d = dateOf(task)!;
     if (!sameMonth(d, viewMonth)) continue;
     const k = dayKey(d);
     if (!byDay.has(k)) byDay.set(k, { date: d, items: [] });
     byDay.get(k)!.items.push(task);
   }
   const agenda = Array.from(byDay.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+  const dropOn = (day: Date) => {
+    if (!dragTaskId) return;
+    const src = tasks.find((x) => x.id === dragTaskId);
+    if (!src) return;
+    const prev = dateOf(src);
+    if (prev && dayKey(prev) === dayKey(day)) return; // same day = no write
+    // Moving a task keeps its CLOCK TIME — these calendars hold timed events ("10:00 PM"), and sending a
+    // bare date would silently reset them to midnight. Undated tasks land on the plain date.
+    onSetDate(src, prev ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), prev.getHours(), prev.getMinutes(), 0, 0).toISOString() : ymd(day));
+  };
 
   return (
-    <div className="p-4 md:p-8 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><h2 className="text-xl font-black tracking-tight">Time Map</h2><p className="text-sm text-muted-foreground">Live due-date calendar from project cards.</p></div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setColorPanelOpen((v) => !v)} className={cn("inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-bold transition", colorPanelOpen || colorRules.length > 0 ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")}><Palette className="h-4 w-4" />Colors{colorRules.length > 0 && <span className="rounded-full bg-primary/20 px-1.5 text-[10px] font-black">{colorRules.length}</span>}</button>
-          <div className="flex items-center gap-1 text-sm font-bold">
-            <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
-            <span className="min-w-[128px] text-center">{viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
-            <button onClick={() => shiftMonth(1)} aria-label="Next month" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronRight className="h-4 w-4" /></button>
-          </div>
-        </div>
+    <div className="space-y-3 px-4 py-3 md:px-8">
+      <div className="flex items-center gap-1">
+        <h2 className="mr-auto text-base font-semibold capitalize">{new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(viewMonth)}</h2>
+        <button type="button" onClick={() => { const n = new Date(); setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1)); }} className="h-8 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">{t("Today")}</button>
+        <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
+        <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
       </div>
-
-      {colorPanelOpen && (
-        <Card className="border border-border shadow-soft">
-          <CardBody className="space-y-3 p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-black">Color rules</div>
-              <Button size="sm" variant="outline" onClick={addRule}><Plus className="h-3.5 w-3.5" />Add rule</Button>
-            </div>
-            {colorRules.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No rules yet. Color tasks on the calendar by status, priority, assignee, list, or custom field.</p>
-            ) : (
-              <div className="space-y-2">
-                {colorRules.map((rule) => {
-                  const valueOpts = ruleValueOpts(rule);
-                  return (
-                    <div key={rule.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/30 p-2">
-                      <select value={rule.source} onChange={(e) => updateRule(rule.id, { source: e.target.value as CalColorSource })} className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold">
-                        {(Object.keys(CAL_SOURCE_LABEL) as CalColorSource[]).map((s) => <option key={s} value={s}>{CAL_SOURCE_LABEL[s]}</option>)}
-                      </select>
-                      {rule.source === "custom_field" && (
-                        <select value={rule.customFieldId ?? ""} onChange={(e) => updateRule(rule.id, { customFieldId: e.target.value })} className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold">
-                          <option value="">Pick a field…</option>
-                          {cfFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                        </select>
-                      )}
-                      <span className="text-xs font-bold text-muted-foreground">=</span>
-                      <select value={rule.value} onChange={(e) => updateRule(rule.id, { value: e.target.value })} className="min-w-[120px] flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold">
-                        <option value="">Pick a value…</option>
-                        {valueOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                      <div className="flex items-center gap-1">
-                        {CAL_PRESETS.map((p) => (
-                          <button key={p.name} onClick={() => updateRule(rule.id, { color: p.bg })} title={p.name} className={cn("h-6 w-6 rounded-full border-2 transition", rule.color === p.bg ? "scale-110" : "border-transparent hover:scale-105")} style={{ backgroundColor: p.bg, borderColor: rule.color === p.bg ? p.border : undefined }} />
-                        ))}
-                      </div>
-                      <button onClick={() => removeRule(rule.id)} aria-label="Remove rule" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      )}
 
       {isMobile ? (
         <div className="space-y-5">
           {agenda.map(({ date, items }) => {
             const isToday = dayKey(date) === todayKey;
             return (
-              <div key={dayKey(date)} className="flex gap-4">
-                <div className="w-12 shrink-0 text-center">
-                  <div className={cn("flex flex-col items-center justify-center rounded-2xl py-2", isToday ? "bg-primary text-primary-foreground shadow-soft" : "bg-muted text-foreground")}>
-                    <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{date.toLocaleDateString("en-US", { weekday: "short" })}</span>
-                    <span className="font-display text-xl font-bold leading-none">{date.getDate()}</span>
-                  </div>
+              <div key={dayKey(date)} className="flex gap-3">
+                <div className={cn("flex w-11 shrink-0 flex-col items-center rounded-lg py-1.5", isToday ? "bg-primary text-primary-foreground" : "bg-muted text-foreground")}>
+                  <span className="text-[10px] font-medium uppercase opacity-80">{new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date)}</span>
+                  <span className="text-lg font-semibold leading-none">{date.getDate()}</span>
                 </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex items-baseline gap-2 pt-1">
-                    <span className="text-sm font-bold">{date.toLocaleDateString("en-US", { weekday: "long" })}</span>
-                    {isToday && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">Today</span>}
-                    <span className="text-xs text-muted-foreground">· {items.length}</span>
-                  </div>
+                <div className="min-w-0 flex-1 space-y-1.5">
                   {items.map((task) => {
                     const done = isDone(task.status);
-                    const assignee = task.assignees?.[0]?.user;
-                    const cs = styleForTask(task);
+                    const cs = chipStyle(task);
                     return (
-                      <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={cs && !done ? { borderRadius: 16, backgroundColor: cs.backgroundColor, borderColor: cs.borderColor } : { borderRadius: 16 }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("group flex w-full items-stretch gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-soft", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-primary")}>
-                        <span className={cn("w-1 shrink-0 rounded-full", done && "bg-success", !done && !cs && (CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE))} style={cs && !done ? { backgroundColor: cs.borderColor } : undefined} />
+                      <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={{ borderRadius: 8, ...(cs && !done ? cs : {}) }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("flex w-full items-stretch gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}>
+                        <span className={cn("w-1 shrink-0 rounded-full", done ? "bg-emerald-500" : CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE)} />
                         <div className="min-w-0 flex-1">
-                          <div className={cn("truncate text-sm font-semibold group-hover:text-primary", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                            <span>{statusLabel(task.status)}</span>
-                            {assignee?.name && <span className="inline-flex items-center gap-1"><Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={16} className="ring-0" />{assignee.name}</span>}
-                          </div>
-                          <TaskCfChips task={task} max={3} className="mt-1.5" />
+                          <div className={cn("truncate text-sm font-medium", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
+                          <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="mt-1" />
                         </div>
-                        <PriorityChip priority={task.priority} />
                       </motion.button>
                     );
                   })}
@@ -1382,69 +1466,48 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
               </div>
             );
           })}
-          {agenda.length === 0 && dated.length > 0 && <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground shadow-soft">No tasks due in {viewMonth.toLocaleDateString("en-US", { month: "long" })}.</p>}
+          {agenda.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">{t("Nothing on the calendar this month.")}</p>}
         </div>
       ) : (
-      <Card className="overflow-hidden border border-border shadow-soft">
-        <CardBody className="p-0">
-          <div className="grid grid-cols-7 bg-muted/40 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <div key={i} className="px-1 py-2 text-center">{d}</div>)}
+        <div className="overflow-hidden rounded-lg border border-border">
+          <div className="grid grid-cols-7 border-b border-border text-xs text-muted-foreground">
+            {weekdays.map((d, i) => <div key={i} className="px-2 py-1.5 text-right">{d}</div>)}
           </div>
           <div className="grid grid-cols-7">
-            {days.map((day) => {
+            {days.map((day, idx) => {
               const key = dayKey(day);
               const inMonth = sameMonth(day, viewMonth);
               // Only attach events to in-month days — keeps each task's morph id unique per month.
-              const dayTasks = inMonth ? dated.filter((task) => dayKey(parseDate(task.dueDate)!) === key) : [];
+              const dayTasks = inMonth ? dated.filter((task) => dayKey(dateOf(task)!) === key) : [];
               const isToday = key === todayKey;
               return (
                 <div
                   key={key}
-                  onDragOver={(e) => { if (dragTaskId && inMonth) { e.preventDefault(); setDropKey(key); } }}
+                  onDragOver={(e) => { if (dragTaskId && inMonth && canDrag) { e.preventDefault(); setDropKey(key); } }}
                   onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (dragTaskId && inMonth) {
-                      // Dropping a dated task back on its own day is a no-op, not a write.
-                      const src = dated.find((t) => t.id === dragTaskId);
-                      const prev = src?.dueDate ? parseDate(src.dueDate) : null;
-                      const srcKey = prev ? dayKey(prev) : null;
-                      if (srcKey !== key) {
-                        // Moving a task keeps its CLOCK TIME — these calendars hold timed events
-                        // ("10:00 PM"), and sending a bare date would silently reset them to midnight.
-                        // Undated tasks have no time to keep, so they still land on the plain date.
-                        onSetDue(dragTaskId, prev
-                          ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), prev.getHours(), prev.getMinutes(), 0, 0).toISOString()
-                          : ymd(day));
-                      }
-                    }
-                    setDragTaskId(null); setDropKey(null);
-                  }}
-                  className={cn("group/cal relative min-h-20 border-r border-t border-border p-1 last:border-r-0 sm:min-h-28 sm:p-1.5", !inMonth && "bg-muted/20", dropKey === key && "bg-primary/10 ring-2 ring-inset ring-primary")}
+                  onDrop={(e) => { e.preventDefault(); if (inMonth) dropOn(day); setDragTaskId(null); setDropKey(null); }}
+                  className={cn("group/cal relative min-h-28 border-border p-1", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", dropKey === key && "bg-accent")}
                 >
                   <div className="mb-1 flex items-center justify-between">
-                    <div className={cn("grid h-6 w-6 place-items-center rounded-full text-[11px] font-black", isToday ? "bg-primary text-primary-foreground" : inMonth ? "text-foreground" : "text-muted-foreground/40")}>{day.getDate()}</div>
-                    {/* always visible on touch screens (no hover there); hover-reveal on desktop */}
-                    {inMonth && <button type="button" onClick={() => onCreate(ymd(day))} title="Add a task on this date" className="grid h-6 w-6 place-items-center rounded-lg bg-muted/60 text-muted-foreground transition hover:bg-accent hover:text-primary focus-visible:opacity-100 sm:h-5 sm:w-5 sm:bg-transparent sm:opacity-0 sm:group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5 sm:h-3 sm:w-3" /></button>}
+                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
+                    <span className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums", isToday ? "bg-rose-500 font-semibold text-white" : inMonth ? "text-foreground" : "text-muted-foreground/50")}>{day.getDate()}</span>
                   </div>
                   <div className="space-y-0.5">
                     {dayTasks.slice(0, 3).map((task) => {
                       const done = isDone(task.status);
-                      const cs = styleForTask(task);
+                      const cs = chipStyle(task);
                       return (
-                        // Draggable so a dated task can be moved to another day — the day cells are
-                        // already drop targets (the undated tray uses the same dragTaskId handshake).
                         <motion.button
                           key={task.id}
                           layoutId={`calendar-taskcard-${task.id}`}
                           data-morph-id={`calendar-taskcard-${task.id}`}
-                          style={cs && !done ? { borderRadius: 6, backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : { borderRadius: 6 }}
+                          style={{ borderRadius: 4, ...(cs && !done ? cs : {}) }}
                           {...bulk.bindCard(task, () => onOpen(task))}
-                          draggable
+                          draggable={canDrag}
                           onDragStart={() => setDragTaskId(task.id)}
                           onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
-                          title={task.parentId ? `↳ ${task.title} (subtask) — drag to move to another date` : `${task.title} — drag to move to another date`}
-                          className={cn("block w-full cursor-grab truncate px-1.5 py-0.5 text-left text-[10px] font-bold leading-tight active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-primary")}
+                          title={task.title}
+                          className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[11px] font-medium leading-tight", canDrag && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
                         >
                           {task.parentId ? `↳ ${task.title}` : task.title}
                         </motion.button>
@@ -1453,16 +1516,16 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                     {dayTasks.length > 3 && (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button type="button" className="w-full px-1 text-left text-[10px] font-bold text-muted-foreground transition hover:text-primary">+{dayTasks.length - 3} more</button>
+                          <button type="button" className="w-full px-1 text-left text-[11px] text-muted-foreground transition hover:text-foreground">{t("{n} more", { n: dayTasks.length - 3 })}</button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-60 p-2">
-                          <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day.getDate()} {viewMonth.toLocaleDateString("en-US", { month: "short" })} · {dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}</div>
+                          <div className="mb-1.5 px-1 text-xs text-muted-foreground">{new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" }).format(day)}</div>
                           <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                             {dayTasks.map((task) => {
                               const done = isDone(task.status);
-                              const cs = styleForTask(task);
+                              const cs = chipStyle(task);
                               return (
-                                <button key={task.id} type="button" onClick={() => onOpen(task)} style={cs && !done ? { backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : undefined} className={cn("truncate rounded px-1.5 py-1 text-left text-[11px] font-medium transition hover:brightness-95", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE))}>
+                                <button key={task.id} type="button" onClick={() => onOpen(task)} style={cs && !done ? cs : undefined} className={cn("truncate rounded px-1.5 py-1 text-left text-xs font-medium transition hover:brightness-95", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE))}>
                                   {task.parentId ? `↳ ${task.title}` : task.title}
                                 </button>
                               );
@@ -1476,31 +1539,28 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
               );
             })}
           </div>
-        </CardBody>
-      </Card>
+        </div>
       )}
       {undated.length > 0 && (
-        <div className="mt-3 rounded-2xl border border-dashed border-border bg-muted/20 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">No due date · {undated.length}</div>
+        <div className="rounded-lg border border-dashed border-border p-3">
+          <div className="mb-2 text-xs text-muted-foreground">{t("No date · {n}", { n: undated.length })}{canDrag && !isMobile ? ` — ${t("drag one onto a day to give it a date")}` : ""}</div>
           <div className="flex flex-wrap gap-1.5">
             {undated.map((task) => (
               <button
                 key={task.id}
-                draggable
+                type="button"
+                draggable={canDrag}
                 onDragStart={() => setDragTaskId(task.id)}
                 onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
                 onClick={() => onOpen(task)}
-                title="Drag onto a date to set a due date, or click to open"
-                className={cn("max-w-[200px] cursor-grab truncate rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-semibold transition hover:border-primary/40 active:cursor-grabbing", CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? "")}
+                className={cn("max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs transition hover:border-foreground/20", canDrag && "cursor-grab active:cursor-grabbing")}
               >
                 {task.title}
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[10px] text-muted-foreground">Drag onto a date in the calendar to set a due date, or click to open.</p>
         </div>
       )}
-      {dated.length === 0 && undated.length === 0 && <Empty title="No tasks yet" message="Click + on a date to create a new task, or add one from the board." />}
     </div>
   );
 }
@@ -1540,9 +1600,9 @@ function tlInitials(name?: string | null) {
   if (!name) return "?";
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
-function taskWindow(task: NexusTask): { start: Date; end: Date } {
-  let start = parseDate(task.startDate);
-  let end = parseDate(task.dueDate);
+function taskWindow(task: NexusTask, startProp = "start", endProp = "due"): { start: Date; end: Date } {
+  let start = parseDate(taskValues(task, startProp)[0]);
+  let end = parseDate(taskValues(task, endProp)[0]);
   if (start && !end) end = new Date(start.getTime() + DAY_MS * 3);
   if (!start && end) start = new Date(end.getTime() - DAY_MS * 3);
   if (!start || !end) { const t = startOfDay(new Date()); start = t; end = new Date(t.getTime() + DAY_MS * 3); }
@@ -1561,19 +1621,21 @@ function TlMenuItem({ icon: Icon, label, onClick, danger, shortcut }: { icon: ty
   );
 }
 
-function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId: string; taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void }) {
+function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, onToggleGroup, onOpen }: {
+  groups: TaskGroup[]; groupBy: string | null; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; collapsed: Set<string>; onToggleGroup: (k: string) => void; onOpen: (task: NexusTask) => void;
+}) {
   const bulk = useTaskBulk();
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  const groups = taskLists.map((list) => {
-    const tasks = (list.tasks ?? []).map((t) => ({ task: t, win: taskWindow(t) }));
-    tasks.sort((a, b) => a.win.start.getTime() - b.win.start.getTime());
-    return { list, tasks };
+  const { t, tn, locale } = useLang();
+  const groups = taskGroups.map((g) => {
+    const tasks = g.tasks.map((task) => ({ task, win: taskWindow(task, cfg.startProp, cfg.endProp) }));
+    // The view's own sort wins; without one, bars run by start date.
+    if (!cfg.sort.length) tasks.sort((a, b) => a.win.start.getTime() - b.win.start.getTime());
+    return { list: { id: g.key, name: groupLabelIsBuiltin(groupBy, g.key, defs) ? t(g.label) : g.label }, tasks };
   });
   const allWins = groups.flatMap((g) => g.tasks.map((t) => t.win));
 
   if (allWins.length === 0) {
-    return <div className="p-4 md:p-8"><Empty title="No timeline yet" message="Add tasks (start/due date optional) so they show up on the Gantt." /></div>;
+    return <div className="px-4 py-10 md:px-8"><EmptyState icon={GanttChart} tone="muted" title={t("Nothing on the timeline")} message={t("Tasks show here as bars from their start date to their due date.")} /></div>;
   }
 
   let min = allWins.reduce((a, w) => (w.start < a ? w.start : a), allWins[0].start);
@@ -1588,31 +1650,26 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
   const days = Array.from({ length: dayCount }, (_, i) => new Date(min.getTime() + i * DAY_MS));
   const months: { label: string; days: number }[] = [];
   for (const d of days) {
-    const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    const label = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(d);
     const last = months[months.length - 1];
     if (last && last.label === label) last.days++;
     else months.push({ label, days: 1 });
   }
 
-  const toggle = (id: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggle = onToggleGroup;
+  const single = !groupBy;
+  void ctx;
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-black tracking-tight">Gantt Timeline</h2>
-          <p className="text-sm text-muted-foreground">Start → due windows per section. Right-click a bar for actions.</p>
-        </div>
-      </div>
-
-      <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+    <div className="px-4 py-3 md:px-8">
+      <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
         <div style={{ width: GANTT_LEFT_W + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
             <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: GANTT_LEFT_W }}>
-              <div className="flex flex-1 items-end px-4 pb-2 pt-6 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Title</div>
-              <div className="flex w-[90px] items-end px-2 pb-2 pt-6 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Duration</div>
-              <div className="flex w-[150px] items-end border-l border-border px-3 pb-2 pt-6 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Status</div>
+              <div className="flex flex-1 items-end px-4 pb-2 pt-6 text-xs text-muted-foreground">{t("Name")}</div>
+              <div className="flex w-[90px] items-end px-2 pb-2 pt-6 text-xs text-muted-foreground">{t("Duration")}</div>
+              <div className="flex w-[150px] items-end border-l border-border px-3 pb-2 pt-6 text-xs text-muted-foreground">{t("Progress")}</div>
             </div>
             <div className="relative" style={{ width: timelineW }}>
               <div className="flex h-8 border-b border-border/50">
@@ -1626,7 +1683,7 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
                   const weekend = d.getDay() === 0 || d.getDay() === 6;
                   return (
                     <div key={i} className={cn("flex flex-col items-center justify-center gap-0.5 border-l border-border/40 text-[10px] leading-none", weekend && "bg-muted/30")} style={{ width: GANTT_DAY_W }}>
-                      <span className={cn("font-semibold", isToday ? "text-primary" : "text-muted-foreground/70")}>{WD[d.getDay()]}</span>
+                      <span className={cn("font-semibold", isToday ? "text-primary" : "text-muted-foreground/70")}>{new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(d)}</span>
                       <span className={cn(isToday ? "grid h-4 w-4 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground" : "font-bold text-foreground/80")}>{d.getDate()}</span>
                     </div>
                   );
@@ -1650,13 +1707,13 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
               return (
                 <div key={g.list.id}>
                   {/* GROUP ROW */}
-                  <div className="flex border-b border-border bg-muted/40">
+                  {!single && <div className="flex border-b border-border bg-muted/40">
                     <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted/40" style={{ width: GANTT_LEFT_W }}>
                       <button onClick={() => toggle(g.list.id)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
                         <span className="truncate font-bold tracking-tight">{g.list.name}</span>
                       </button>
-                      <div className="w-[90px] px-2 text-xs font-semibold text-muted-foreground">{gDur ? `${gDur} days` : "—"}</div>
+                      <div className="w-[90px] px-2 text-xs text-muted-foreground">{gDur ? tn(gDur, "{n} day", "{n} days") : "—"}</div>
                       <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-blue-500" style={{ width: `${gPct}%` }} /></div>
                         <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{gPct}%</span>
@@ -1665,7 +1722,7 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
                     <div className="relative" style={{ width: timelineW }}>
                       {gStart && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
                     </div>
-                  </div>
+                  </div>}
                   {/* TASK ROWS */}
                   {!isCollapsed && g.tasks.map(({ task, win }) => {
                     const pct = tlProgress(task.status);
@@ -1673,7 +1730,8 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
                     const left = xOf(win.start);
                     const width = Math.max(GANTT_DAY_W * 0.8, daysBetween(win.start, win.end) * GANTT_DAY_W + GANTT_DAY_W);
                     const isDone = (task.status ?? "").toUpperCase() === "DONE";
-                    const barColor = GANTT_BAR[(task.priority ?? "NONE").toUpperCase()] ?? GANTT_BAR.NONE;
+                    const tint = taskColor(task, cfg, defs, ctx);
+                    const barColor = tint ? "" : GANTT_BAR[(task.priority ?? "NONE").toUpperCase()] ?? GANTT_BAR.NONE;
                     const people = (task.assignees ?? []).map((a) => a.user).filter(Boolean).slice(0, 3);
                     const cp = bulk.bindCard(task, () => onOpen(task));
                     const selected = bulk.isSelected(task.id);
@@ -1684,7 +1742,7 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
                             {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                             <span className={cn("truncate text-sm font-medium", isDone && "text-muted-foreground line-through")}>{task.title}</span>
                           </button>
-                          <div className="w-[90px] px-2 text-xs text-muted-foreground">{dur} days</div>
+                          <div className="w-[90px] px-2 text-xs text-muted-foreground">{tn(dur, "{n} day", "{n} days")}</div>
                           <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(pct))} style={{ width: `${pct}%` }} /></div>
                             <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{pct}%</span>
@@ -1698,7 +1756,7 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
                             {...cp}
                             title={`${task.title} · ${fmtDate(win.start.toISOString())} → ${fmtDate(win.end.toISOString())}`}
                             className={cn("group absolute top-1.5 flex h-8 items-center gap-1.5 overflow-hidden px-1.5 text-left shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", barColor)}
-                            style={{ left, width, borderRadius: 14 }}
+                            style={{ left, width, borderRadius: 8, ...(tint ? { backgroundColor: COLOR_PRESETS[tint].dot } : {}) }}
                           >
                             {people.length > 0 && (
                               <div className="flex shrink-0 -space-x-1.5">
@@ -1880,47 +1938,6 @@ function PriorityChip({ priority }: { priority?: string | null }) {
 
 
 
-
-function filterTaskLists(taskLists: NonNullable<NexusProject["taskLists"]>, filters: BoardFilters) {
-  return taskLists.map((list) => ({
-    ...list,
-    // Section filter = the board column itself (TaskList), so it's matched here where we know the list.
-    tasks: filters.section !== "ALL" && list.id !== filters.section
-      ? []
-      : (list.tasks ?? []).filter((task) => taskMatchesFilters(task, filters)),
-  }));
-}
-
-function taskMatchesFilters(task: NexusTask, filters: BoardFilters) {
-  const q = filters.query.trim().toLowerCase();
-  const status = (task.status || "TODO").toUpperCase();
-  const priority = (task.priority || "NONE").toUpperCase();
-  if (filters.hideDone && isDone(status)) return false;
-  if (filters.priority !== "ALL" && priority !== filters.priority) return false;
-  if (filters.due !== "ALL") {
-    const due = parseDate(task.dueDate);
-    if (filters.due === "NONE") { if (due) return false; }
-    else {
-      if (!due) return false;
-      const days = Math.round((startOfDay(due).getTime() - startOfDay(new Date()).getTime()) / DAY_MS);
-      if (filters.due === "OVERDUE" ? days >= 0 : days < 0 || days > 6) return false;
-    }
-  }
-  if (filters.assigneeId !== "ALL") {
-    const ids = (task.assignees ?? []).map((a) => a.user?.id).filter(Boolean) as string[];
-    if (filters.assigneeId === "NONE" ? ids.length > 0 : !ids.includes(filters.assigneeId)) return false;
-  }
-  // Custom-field filters: a task must match at least one selected value in EVERY field that has selections.
-  for (const [fieldId, selected] of Object.entries(filters.cfSelections)) {
-    if (!selected.length) continue;
-    const vals = (task.customFieldValues ?? []).filter((c) => c.customFieldId === fieldId).map((c) => String(c.value ?? "")).filter(Boolean);
-    if (!selected.some((v) => vals.includes(v))) return false;
-  }
-  if (!q) return true;
-  const assignees = (task.assignees ?? []).map((a) => a.user?.name || a.user?.email || "").join(" ");
-  const haystack = [task.title, blockText(task.description), task.taskList?.name, priority, status, ...(task.tags ?? []), assignees].filter(Boolean).join(" ").toLowerCase();
-  return haystack.includes(q);
-}
 
 function plainTextToTipTap(value: string) {
   const paragraphs = value.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);

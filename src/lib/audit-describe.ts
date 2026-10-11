@@ -701,6 +701,7 @@ const NOUNS: Record<string, string> = {
   sheet_rows: "sheet rows",
   proof_annotation: "annotation",
   saved_search: "saved search",
+  project_view: "project view",
   room_booking: "room booking",
   workflow_bundle: "workflow bundle",
   form_submission: "form submission",

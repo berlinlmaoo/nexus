@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+import { useLang } from "@/lib/lang";
+import { propDef, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
+import { PropIcon, usePropLabel } from "@/components/projects/views/view-controls";
+import { GroupHeader } from "@/components/projects/views/view-layouts";
 import {
   nexusApi,
   statusLabel,
@@ -18,18 +22,8 @@ import { Avatar } from "@/components/Avatar";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
 
-// Built-in columns (Name is always the implicit first column, not configurable away).
-const BUILTIN: { key: string; label: string }[] = [
-  { key: "assignee", label: "Assigned To" },
-  { key: "dueDate", label: "Due Date" },
-  { key: "priority", label: "Priority" },
-  { key: "status", label: "Status" },
-  { key: "tags", label: "Tags" },
-];
-const DEFAULT_COLUMNS = ["assignee", "dueDate", "priority", "status", "tags"];
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
-
 
 // Parse a raw serialized custom-field value into the shape CustomFieldInput expects.
 function parseCfValue(type: string, raw: string): unknown {
@@ -40,14 +34,37 @@ function parseCfValue(type: string, raw: string): unknown {
   return raw;
 }
 
-export function ProjectTableView({ project, taskLists, onOpen }: {
+type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?: boolean; keepEmpty?: boolean }) => TaskGroup[];
+
+/**
+ * A Table view (Notion-style). Since saved views (owner, 12 Oct 2026) the columns are the VIEW's visible
+ * properties, in its order (Name is always first), and rows come grouped as the view groups them. The
+ * old per-project column list (Project.tableColumns) seeded the built-in Table view and is no longer
+ * written.
+ */
+export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, columns, canEditColumns, onColumnsChange, collapsed, onToggleGroup, onOpen }: {
   project: NexusProject;
-  taskLists: NonNullable<NexusProject["taskLists"]>;
+  groups: TaskGroup[];
+  groupBy: string | null;
+  subGroupBy: string | null;
+  buildGroups: GroupBuilder;
+  cfg: ViewConfig;
+  defs: PropDef[];
+  columns: string[];
+  canEditColumns: boolean;
+  onColumnsChange: (cols: string[]) => void;
+  collapsed: Set<string>;
+  onToggleGroup: (key: string) => void;
   onOpen: (task: NexusTask) => void;
 }) {
   const projectId = project.id;
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
+  const { t } = useLang();
+  const propLabel = usePropLabel();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
+    qc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", projectId] });
+  };
 
   const membersQ = useQuery({ queryKey: ["nexus", "project-members", projectId], queryFn: () => nexusApi.projectMembers(projectId), staleTime: 60_000, retry: false });
   const members = useMemo(() => {
@@ -60,19 +77,10 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
   const cfDefs = useMemo(() => cfDefsQ.data?.fields ?? [], [cfDefsQ.data]);
   const cfById = useMemo(() => new Map(cfDefs.map((f) => [f.id, f])), [cfDefs]);
 
-  // Resolve the active columns; drop any cf:<id> whose field was deleted.
-  const columns = useMemo(() => {
-    const raw = project.tableColumns && project.tableColumns.length ? project.tableColumns : DEFAULT_COLUMNS;
-    return raw.filter((c) => (c.startsWith("cf:") ? cfById.has(c.slice(3)) : BUILTIN.some((b) => b.key === c)));
-  }, [project.tableColumns, cfById]);
-
-  const colLabel = (key: string) => (key.startsWith("cf:") ? cfById.get(key.slice(3))?.name ?? "Field" : BUILTIN.find((b) => b.key === key)?.label ?? key);
-
-  const saveColumns = useMutation({
-    mutationFn: (next: string[]) => nexusApi.updateProject(projectId, { tableColumns: next }),
-    onSuccess: invalidate,
-    onError: () => toast.error("Couldn't save columns", { description: "You need LEAD access to change the table layout." }),
-  });
+  const setColumns = (next: string[]) => {
+    if (!canEditColumns) { toast(t("Only project members can change a shared view. Make a personal copy to set it up your way.")); return; }
+    onColumnsChange(next);
+  };
 
   const [addOpen, setAddOpen] = useState(false);
   const [addingField, setAddingField] = useState(false);
@@ -82,89 +90,96 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
       setAddingField(false);
       qc.invalidateQueries({ queryKey: ["nexus", "project-custom-fields", projectId] });
       const id = res?.field?.id;
-      if (id) saveColumns.mutate([...columns, `cf:${id}`]);
+      if (id) setColumns([...columns, `cf:${id}`]);
     },
-    onError: (e) => toast.error("Couldn't create field", { description: e instanceof Error ? e.message : "You need LEAD access." }),
+    onError: (e) => toast.error(t("Couldn't create the field"), { description: e instanceof Error ? e.message : undefined }),
   });
 
-  const available = [
-    ...BUILTIN.filter((b) => !columns.includes(b.key)),
-    ...cfDefs.filter((f) => !columns.includes(`cf:${f.id}`)).map((f) => ({ key: `cf:${f.id}`, label: f.name })),
-  ];
+  const available = defs.filter((d) => d.key !== "title" && !columns.includes(d.key));
 
   // task edit helpers (invalidate on success — the table refetches the project)
   const patchTask = async (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => {
-    try { await nexusApi.updateTask(taskId, payload); invalidate(); } catch (e) { toast.error("Update failed", { description: e instanceof Error ? e.message : "Check your access / session." }); }
+    try { await nexusApi.updateTask(taskId, payload); invalidate(); } catch (e) { toast.error(t("Couldn't save the change"), { description: e instanceof Error ? e.message : undefined }); }
   };
   const toggleAssignee = async (taskId: string, userId: string, has: boolean) => {
-    try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error("Update failed"); }
+    try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
   };
   const setCf = async (fieldId: string, taskId: string, value: unknown) => {
-    try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); } catch { toast.error("Update failed"); }
+    try { await nexusApi.setCustomFieldValue(fieldId, taskId, value); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
   };
 
   // Multi-select (owner, 11 Oct 2026): ⌘/Ctrl+click or Shift+click a row, right-click for Duplicate.
   const bulk = useTaskBulk();
+  const sections = useMemo(() => [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [project.taskLists]);
 
-  const gridTemplate = `minmax(220px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
+  const gridTemplate = `minmax(240px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
+  const row = (task: NexusTask) => (
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+      <NameCell key={task.title} task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
+      {columns.map((key) => (
+        <div key={key} className="min-w-0 border-l border-border px-1.5 py-1">
+          <Cell colKey={key} task={task} members={members} cfById={cfById} sections={sections} projectId={projectId} patchTask={patchTask} toggleAssignee={toggleAssignee} setCf={setCf} />
+        </div>
+      ))}
+      <div className="grid place-items-center border-l border-border">
+        <button type="button" onClick={() => onOpen(task)} title={t("Open")} aria-label={t("Open")} className="text-muted-foreground hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
+      </div>
+    </div>
+  );
+  const groupRow = (g: TaskGroup, by: string | null, key: string, depth: number) => (
+    <div className={cn("sticky left-0 flex items-center border-b border-border bg-card px-1.5 py-1", depth > 0 && "pl-6")}>
+      <GroupHeader group={g} groupBy={by} defs={defs} cfg={cfg} collapsed={collapsed.has(key)} onToggle={() => onToggleGroup(key)} />
+    </div>
+  );
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+    <div className="px-4 py-3 md:px-8">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <div className="min-w-max">
           {/* Header row */}
-          <div className="grid items-stretch border-b border-border bg-muted/40 text-[11px] font-bold uppercase tracking-wider text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
-            <div className="flex items-center px-3 py-2">Name</div>
-            {columns.map((key) => (
-              <div key={key} className="group flex items-center justify-between gap-1 border-l border-border px-3 py-2">
-                <span className="truncate">{colLabel(key)}</span>
-                <button onClick={() => saveColumns.mutate(columns.filter((c) => c !== key))} title="Remove column" className="opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"><X className="h-3 w-3" /></button>
-              </div>
-            ))}
+          <div className="sticky top-0 z-[1] grid items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
+            <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
+            {columns.map((key) => {
+              const def = propDef(defs, key);
+              return (
+                <div key={key} className="group flex items-center justify-between gap-1 border-l border-border px-3 py-2">
+                  <span className="flex min-w-0 items-center gap-1.5"><PropIcon def={def} /><span className="truncate">{propLabel(def)}</span></span>
+                  {canEditColumns && <button type="button" onClick={() => setColumns(columns.filter((c) => c !== key))} title={t("Hide column")} aria-label={t("Hide column")} className="opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"><X className="h-3 w-3" /></button>}
+                </div>
+              );
+            })}
             <div className="border-l border-border">
               <Popover open={addOpen} onOpenChange={setAddOpen}>
                 <PopoverTrigger asChild>
-                  <button title="Add column" className="grid h-full w-full place-items-center text-muted-foreground hover:bg-accent hover:text-foreground"><Plus className="h-3.5 w-3.5" /></button>
+                  <button type="button" title={t("Add column")} aria-label={t("Add column")} disabled={!canEditColumns} className="grid h-full w-full place-items-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"><Plus className="h-3.5 w-3.5" /></button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-56 p-1">
                   <div className="max-h-64 overflow-y-auto">
-                    {available.length === 0 && <p className="px-2 py-3 text-center text-xs normal-case text-muted-foreground">All fields are already columns.</p>}
+                    {available.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t("Every property is already a column.")}</p>}
                     {available.map((a) => (
-                      <button key={a.key} onClick={() => { saveColumns.mutate([...columns, a.key]); setAddOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold normal-case text-foreground hover:bg-accent">
-                        <Plus className="h-3 w-3 text-muted-foreground" /> {a.label}
+                      <button key={a.key} type="button" onClick={() => { setColumns([...columns, a.key]); setAddOpen(false); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
+                        <PropIcon def={a} /> {propLabel(a)}
                       </button>
                     ))}
                   </div>
-                  <button onClick={() => { setAddOpen(false); setAddingField(true); }} className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-border px-2 py-2 text-left text-xs font-bold normal-case text-primary hover:bg-accent"><Plus className="h-3.5 w-3.5" /> New custom field</button>
+                  <button type="button" onClick={() => { setAddOpen(false); setAddingField(true); }} className="mt-1 flex w-full items-center gap-2 rounded-md border-t border-border px-2 py-2 text-left text-sm font-medium text-[color:var(--accent-foreground)] hover:bg-muted"><Plus className="h-3.5 w-3.5" /> {t("New custom field")}</button>
                 </PopoverContent>
               </Popover>
             </div>
           </div>
 
-          {/* Sections + rows */}
-          {taskLists.map((list) => {
-            const tasks = list.tasks ?? [];
+          {groups.map((g) => {
+            if (!groupBy) return <div key={g.key}>{g.tasks.map(row)}</div>;
+            const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
             return (
-              <div key={list.id}>
-                <div className="border-b border-border bg-muted/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  {list.name} <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 tabular-nums">{tasks.length}</span>
-                </div>
-                {tasks.map((task) => (
-                  <div key={task.id} {...bulk.bindRow(task)} className={cn("grid items-stretch border-b border-border text-sm last:border-b-0 hover:bg-accent/30", bulk.isSelected(task.id) && "bg-primary/10 ring-1 ring-inset ring-primary")} style={{ gridTemplateColumns: gridTemplate }}>
-                    <NameCell task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
-                    {columns.map((key) => (
-                      <div key={key} className="min-w-0 border-l border-border px-2 py-1.5">
-                        <Cell colKey={key} task={task} members={members} cfById={cfById} projectId={projectId} patchTask={patchTask} toggleAssignee={toggleAssignee} setCf={setCf} />
-                      </div>
-                    ))}
-                    <div className="grid place-items-center border-l border-border">
-                      <button onClick={() => onOpen(task)} title="Open" className="text-muted-foreground hover:text-primary"><ChevronRight className="h-4 w-4" /></button>
-                    </div>
-                  </div>
-                ))}
-                {tasks.length === 0 && (
-                  <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground" style={{ gridColumn: `1 / -1` }}>No tasks.</div>
-                )}
+              <div key={g.key}>
+                {groupRow(g, groupBy, g.key, 0)}
+                {!collapsed.has(g.key) && (subs
+                  ? subs.map((s) => {
+                    const k = `${g.key}/${s.key}`;
+                    return <div key={k}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && s.tasks.map(row)}</div>;
+                  })
+                  : g.tasks.length ? g.tasks.map(row) : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
               </div>
             );
           })}
@@ -205,11 +220,12 @@ function NameCell({ task, onRename, onOpen }: { task: NexusTask; onRename: (titl
   );
 }
 
-function Cell({ colKey, task, members, cfById, projectId, patchTask, toggleAssignee, setCf }: {
+function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, toggleAssignee, setCf }: {
   colKey: string;
   task: NexusTask;
   members: NexusUser[];
   cfById: Map<string, NexusCustomField>;
+  sections: NonNullable<NexusProject["taskLists"]>;
   projectId: string;
   patchTask: (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => void;
   toggleAssignee: (taskId: string, userId: string, has: boolean) => void;
@@ -247,13 +263,42 @@ function Cell({ colKey, task, members, cfById, projectId, patchTask, toggleAssig
       </select>
     );
   }
-  if (colKey === "dueDate") {
-    const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  if (colKey === "dueDate" || colKey === "due") {
+    const d = task.dueDate ? localYmd(task.dueDate) : "";
     return <input type="date" value={d} onChange={(e) => patchTask(task.id, { dueDate: e.target.value || null })} className={cls} />;
   }
+  if (colKey === "start") {
+    const d = task.startDate ? localYmd(task.startDate) : "";
+    return <input type="date" value={d} onChange={(e) => patchTask(task.id, { startDate: e.target.value || null } as Parameters<typeof nexusApi.updateTask>[1])} className={cls} />;
+  }
+  if (colKey === "section") {
+    const current = task.taskListId ?? task.taskList?.id ?? "";
+    return (
+      <select value={current} onChange={(e) => patchTask(task.id, { taskListId: e.target.value, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1])} className={cls}>
+        {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+      </select>
+    );
+  }
+  if (colKey === "created" || colKey === "updated") {
+    const v = colKey === "created" ? task.createdAt : task.updatedAt;
+    return <span className="block truncate px-1.5 py-1 text-sm text-muted-foreground">{v ? new Date(v).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>;
+  }
+  if (colKey === "subtasks") {
+    const subs = task.subtasks ?? [];
+    return <span className="block px-1.5 py-1 text-sm tabular-nums text-muted-foreground">{subs.length ? `${subs.filter((x) => x.status === "DONE").length}/${subs.length}` : "—"}</span>;
+  }
+  if (colKey === "comments") return <span className="block px-1.5 py-1 text-sm tabular-nums text-muted-foreground">{task._count?.comments ?? 0}</span>;
   if (colKey === "assignee") return <AssigneeCell task={task} members={members} onToggle={(uid, has) => toggleAssignee(task.id, uid, has)} />;
   if (colKey === "tags") return <TagsCell task={task} onSave={(tags) => patchTask(task.id, { tags })} />;
   return null;
+}
+
+/** A stored date as the LOCAL day (a WIB midnight is the previous day in UTC). */
+function localYmd(v: string): string {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 // Options list for a select/multi-select custom field (mirrors customFieldChoices in TaskDetailPanel).

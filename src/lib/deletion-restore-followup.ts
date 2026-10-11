@@ -9,7 +9,7 @@ const log = createLogger("deletion-restore")
 /** Inside a task: the task's own screens and boards refetch. */
 const TASK_TYPES = new Set(["comment", "attachment", "proof_annotation", "form_submission"])
 /** Inside a project, drawn from the project's detail: its header/board refetches. */
-const PROJECT_TYPES = new Set(["task_list", "project_page", "custom_field", "form", "automation", "project_sheet", "doc"])
+const PROJECT_TYPES = new Set(["task_list", "project_page", "custom_field", "form", "automation", "project_sheet", "doc", "project_view"])
 /** Inside a sheet: open grids refetch their structure. */
 const SHEET_TYPES = new Set(["project_sheet", "sheet_rows", "project_sheet_column", "sheet_comment"])
 

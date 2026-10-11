@@ -336,7 +336,7 @@ function DetailLink({ link, children }: { link: NexusAuditLink; children: ReactN
 const RESTORABLE_TYPES = new Set([
   "project", "task", "comment", "attachment", "proof_annotation", "doc", "project_page", "project_sheet", "sheet_comment",
   "custom_field", "form", "automation", "webhook", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
-  "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
+  "announcement", "saved_search", "project_view", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
   "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
   "vault_file", "vault_folder", "vault_file_version", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
   "attendance_record", "project_sheet_column", "post", "quest", "calendar_event", "dayoff_bonus", "chat_group",
@@ -350,7 +350,7 @@ const RESTORE_BUTTON: Record<string, string> = {
   sheet_comment: "Restore comment", custom_field: "Restore custom field", form: "Restore form", automation: "Restore automation",
   webhook: "Restore webhook", workflow_bundle: "Restore workflow bundle", goal: "Restore goal", portfolio: "Restore portfolio",
   calendar: "Restore calendar", room_booking: "Restore booking", announcement: "Restore announcement",
-  saved_search: "Restore saved search", pnl_expense: "Restore expense", pnl_income: "Restore income", pnl_payment: "Restore payment",
+  saved_search: "Restore saved search", project_view: "Restore view", pnl_expense: "Restore expense", pnl_income: "Restore income", pnl_payment: "Restore payment",
   pnl_category: "Restore category", pnl_stage: "Restore stage", pnl_recurring: "Restore recurring expense",
   pnl_expense_attachment: "Restore receipt", pnl_budget: "Restore budget", holiday: "Restore holiday",
   attendance_request: "Restore day off", attendance_office: "Restore office", org_unit_member: "Restore placement",

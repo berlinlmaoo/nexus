@@ -109,6 +109,7 @@ model User {
   conversationMembers  ConversationMember[]
   messages             Message[]
   projectPins          ProjectPin[]
+  projectViews         ProjectView[]     @relation("ProjectViewOwner")
   folderPins           FolderPin[]
   periodRewards        PeriodReward[]
   apiTokens            ApiToken[]
@@ -533,6 +534,7 @@ model Project {
   taskProjects       TaskProject[]
   conversation       Conversation?
   pins               ProjectPin[]
+  views              ProjectView[]
   pnlCategories      PnlCategory[]
   pnlExpenses        PnlExpense[]
   pnlIncomeStages    PnlIncomeStage[]
@@ -549,6 +551,35 @@ model Project {
   outletSalesTargets OutletSalesTarget[]
 
   @@index([folderId, position])
+}
+
+/// A saved view of a project's tasks (owner, 12 Oct 2026, Notion-style): a named tab with its own layout
+/// (board | list | table | calendar | timeline | gallery) and its own filters, sort, grouping, visible
+/// properties and card options in `config` (shape: src/lib/project-views.ts, the web's
+/// lib/project-views.ts reads the same JSON). `ownerId` null = shared with the whole project; set = a
+/// personal view only that person sees. `builtin` marks the five tabs every project had before views
+/// ("board" | "list" | "table" | "calendar" | "timeline"): they are created on first read, at most one of
+/// each per project (partial unique index in prisma/sql/2026-10-12-views-project-view.sql), and are shown
+/// or hidden by Project.hiddenTabs exactly as before, so released iOS / Android apps keep working.
+model ProjectView {
+  id          String   @id @default(cuid())
+  name        String?
+  layout      String
+  builtin     String?
+  position    Int      @default(0)
+  config      Json     @default("{}")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   User?   @relation("ProjectViewOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, position])
+  @@index([ownerId])
 }
 
 /// Per-user pinned project (sidebar quick-access). One row = one user pinning one project.

@@ -132,10 +132,12 @@ export async function POST(
       await copySheet(sheet.id, { projectId: newProject.id, name: sheet.name, position: sheet.position, createdById: me })
     }
 
+    const sectionIdMap = new Map<string, string>()
     for (const taskList of original.taskLists) {
       const newTaskList = await prisma.taskList.create({
         data: { name: taskList.name, position: taskList.position, projectId: newProject.id },
       })
+      sectionIdMap.set(taskList.id, newTaskList.id)
 
       for (const task of taskList.tasks) {
         const newTask = await prisma.task.create({
@@ -172,6 +174,22 @@ export async function POST(
           .filter((v): v is { customFieldId: string; taskId: string; value: string } => Boolean(v.customFieldId))
         if (values.length) await prisma.customFieldValue.createMany({ data: values, skipDuplicates: true })
       }
+    }
+
+    // Saved views (owner, 12 Oct 2026): the SHARED ones come along (personal views stay with their owner's
+    // copy of the original). Their config names custom fields ("cf:<id>") and sections by id, so every old
+    // id is swapped for the copy's; a rule naming something that did not come across just stops matching.
+    const sharedViews = await prisma.projectView.findMany({ where: { projectId, ownerId: null }, orderBy: { position: "asc" } })
+    if (sharedViews.length) {
+      const swap = (json: unknown) => {
+        let text = JSON.stringify(json ?? {})
+        for (const [from, to] of [...fieldIdMap, ...sectionIdMap]) text = text.split(from).join(to)
+        return JSON.parse(text) as object
+      }
+      await prisma.projectView.createMany({
+        data: sharedViews.map((v) => ({ projectId: newProject.id, name: v.name, layout: v.layout, builtin: v.builtin, position: v.position, config: swap(v.config), ownerId: null, createdById: me })),
+        skipDuplicates: true,
+      })
     }
 
     logAudit({
