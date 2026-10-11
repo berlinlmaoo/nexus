@@ -161,7 +161,10 @@ ensure_base() {
 if [ "$BAGIAN" = "all" ] || [ "$BAGIAN" = "backend" ]; then
   ensure_base
   say "build image $IMG (Dockerfile.prod)"
-  nice -n 10 docker build -f Dockerfile.prod -t nexus-dev-app:candidate . || { red "build failed — dev unchanged"; exit 1; }
+  # One retry: next/font fetches Google Fonts at build time and that fetch flakes now and then.
+  nice -n 10 docker build -f Dockerfile.prod -t nexus-dev-app:candidate . \
+    || { echo "   build failed once — retrying"; nice -n 10 docker build -f Dockerfile.prod -t nexus-dev-app:candidate .; } \
+    || { red "build failed — dev unchanged"; exit 1; }
   build_env || exit 1
   docker image inspect "$IMG" >/dev/null 2>&1 && docker tag "$IMG" nexus-dev-app:prev
   docker tag nexus-dev-app:candidate "$IMG"
