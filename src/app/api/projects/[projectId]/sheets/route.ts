@@ -31,10 +31,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
       select: { id: true, name: true, position: true, settings: true, _count: { select: { rows: true } } },
     })
     return NextResponse.json({
-      sheets: sheets.map((s) => ({
-        id: s.id, name: s.name, position: s.position, rowCount: s._count.rows,
-        tabColor: readSheetSettings(s.settings).tabColor ?? null,
-      })),
+      sheets: sheets.map((s) => {
+        const st = readSheetSettings(s.settings)
+        return {
+          id: s.id, name: s.name, position: s.position, rowCount: s._count.rows,
+          tabColor: st.tabColor ?? null,
+          // View › Hidden sheets: the web hides the tab; older clients simply keep showing it.
+          ...(st.hidden ? { hidden: true } : {}),
+          ...(st.pivot ? { pivot: true } : {}),
+        }
+      }),
     })
   } catch (error) {
     console.error("Error listing project sheets:", error)

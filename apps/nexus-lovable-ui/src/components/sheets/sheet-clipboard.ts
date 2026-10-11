@@ -19,7 +19,7 @@ import { parseTsv, toTsv } from "./sheet-types";
 export const NEXUS_MIME = "application/x-nexus-sheet+json";
 
 /** One copied cell. `formula` is the A1 text as shown (Indonesian separators), when it is one. */
-export type ClipCell = { text: string; raw?: unknown; formula?: string };
+export type ClipCell = { text: string; raw?: unknown; formula?: string; style?: Record<string, unknown> | null };
 export type ClipPayload = {
   v: 1;
   /** Top-left of the copied block in the UNDERLYING order (A1 positions), for reference shifting. */
@@ -30,11 +30,18 @@ export type ClipPayload = {
   cells: ClipCell[][];
   /** Data-validation rules covering parts of the block, as block-relative rectangles. */
   validations?: ClipValidation[];
+  /** Paste special › Column widths only. */
+  widths?: number[];
+  /** Conditional-format rules covering parts of the block (Paste special › Conditional formatting only). */
+  condFormats?: ClipValidation[];
 };
 export type ClipValidation = { rule: Record<string, unknown>; r1: number; r2: number; c1: number; c2: number };
 /** A block ready to paste. `formulaR1C1` comes from foreign clipboards that carry one. */
-export type PasteCell = { text: string; raw?: unknown; formula?: string; formulaR1C1?: string };
-export type PasteBlock = { cells: PasteCell[][]; origin?: { r: number; c: number }; cut?: boolean; types?: string[]; internal: boolean; validations?: ClipValidation[] };
+export type PasteCell = { text: string; raw?: unknown; formula?: string; formulaR1C1?: string; style?: Record<string, unknown> | null };
+export type PasteBlock = {
+  cells: PasteCell[][]; origin?: { r: number; c: number }; cut?: boolean; types?: string[]; internal: boolean;
+  validations?: ClipValidation[]; widths?: number[]; condFormats?: ClipValidation[];
+};
 
 /**
  * The last thing this tab copied. The async Clipboard API (used by the right-click menu) can't carry
@@ -45,7 +52,10 @@ let lastCopy: { text: string; payload: ClipPayload } | null = null;
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function buildClipboard(cells: ClipCell[][], origin: { r: number; c: number }, cut: boolean, types: string[], validations: ClipValidation[] = []) {
+export function buildClipboard(
+  cells: ClipCell[][], origin: { r: number; c: number }, cut: boolean, types: string[], validations: ClipValidation[] = [],
+  extra: { widths?: number[]; condFormats?: ClipValidation[] } = {},
+) {
   const text = toTsv(cells.map((row) => row.map((c) => c.text)));
   const html =
     `<meta charset="utf-8"><table data-nexus-sheet="1" style="border-collapse:collapse"><tbody>` +
@@ -53,7 +63,10 @@ export function buildClipboard(cells: ClipCell[][], origin: { r: number; c: numb
       `<td style="border:1px solid #ccc;padding:2px 3px;vertical-align:bottom">${escapeHtml(c.text).replace(/\n/g, "<br>")}</td>`,
     ).join("")}</tr>`).join("") +
     `</tbody></table>`;
-  const payload: ClipPayload = { v: 1, origin, cut, types, cells, ...(validations.length ? { validations } : {}) };
+  const payload: ClipPayload = {
+    v: 1, origin, cut, types, cells, ...(validations.length ? { validations } : {}),
+    ...(extra.widths ? { widths: extra.widths } : {}), ...(extra.condFormats?.length ? { condFormats: extra.condFormats } : {}),
+  };
   lastCopy = { text, payload };
   return { text, html, json: JSON.stringify(payload) };
 }
@@ -85,7 +98,7 @@ function fromPayload(json: string): PasteBlock | null {
   try {
     const p = JSON.parse(json) as ClipPayload;
     if (p?.v !== 1 || !Array.isArray(p.cells)) return null;
-    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true, validations: p.validations };
+    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true, validations: p.validations, widths: p.widths, condFormats: p.condFormats };
   } catch {
     return null;
   }
@@ -147,7 +160,7 @@ export function readClipboard(data: { getData: (type: string) => string }): Past
   const text = safeGet(data, "text/plain");
   if (text && lastCopy && text === lastCopy.text) {
     const p = lastCopy.payload;
-    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true, validations: p.validations };
+    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true, validations: p.validations, widths: p.widths, condFormats: p.condFormats };
   }
   const html = safeGet(data, "text/html");
   if (html && !/data-nexus-sheet/.test(html)) {

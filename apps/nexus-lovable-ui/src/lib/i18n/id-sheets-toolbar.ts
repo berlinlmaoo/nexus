@@ -1,0 +1,40 @@
+/**
+ * English → Indonesian for the spreadsheet toolbar, colour picker and borders panel (Google Sheets
+ * parity, 12 Oct 2026). Labels follow Sheets' own Indonesian UI. Keys must be unique across all
+ * id-*.ts files (i18n.test.mjs); shared words ("Reset", "Theme", "More"…) live in other tables.
+ */
+export const ID_SHEETS_TOOLBAR: Record<string, string> = {
+  "Print (Ctrl+P)": "Cetak (Ctrl+P)",
+  "Paint format": "Terapkan format",
+  "Paint format (on until you press Esc)": "Terapkan format (aktif sampai kamu tekan Esc)",
+  "Default (Sans Serif)": "Default (Sans Serif)",
+  "Decrease font size (Ctrl+Shift+,)": "Perkecil ukuran font (Ctrl+Shift+,)",
+  "Increase font size (Ctrl+Shift+.)": "Perbesar ukuran font (Ctrl+Shift+.)",
+  "Select merge type": "Pilih jenis penggabungan",
+  "Left (Ctrl+Shift+L)": "Kiri (Ctrl+Shift+L)",
+  "Centre (Ctrl+Shift+E)": "Tengah (Ctrl+Shift+E)",
+  "Right (Ctrl+Shift+R)": "Kanan (Ctrl+Shift+R)",
+  "Text wrapping": "Pengemasan teks",
+  "Text rotation": "Rotasi teks",
+  "Tilt up": "Miring ke atas",
+  "Tilt down": "Miring ke bawah",
+  "Stack vertically": "Tumpuk secara vertikal",
+  "Rotate up": "Putar ke atas",
+  "Rotate down": "Putar ke bawah",
+  "Filter views": "Tampilan filter",
+  "Create new filter view": "Buat tampilan filter",
+  "Colour palette": "Palet warna",
+  "Edit theme colours": "Edit warna tema",
+  "Custom colour": "Warna kustom",
+  "Pick a colour from the screen": "Ambil warna dari layar",
+  "Hex": "Hex",
+  "Border colour": "Warna batas",
+  "Border style": "Gaya batas",
+  "Horizontal borders": "Garis batas horizontal",
+  "Vertical borders": "Garis batas vertikal",
+  "Thin": "Tipis",
+  "Thick": "Tebal",
+  "Dotted": "Titik-titik",
+  "Dashed": "Putus-putus",
+  "Double": "Ganda",
+};

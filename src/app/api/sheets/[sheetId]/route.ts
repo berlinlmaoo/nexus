@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { normalizeColumns, readCells, readSheetSettings, readStyles, resolveSheetAccess } from "@/lib/project-sheets"
+import { normalizeColumns, protectionChangeBlock, readCells, readSheetSettings, readStyles, resolveSheetAccess } from "@/lib/project-sheets"
 import { emitSheetStructure } from "@/lib/socket-emitter"
 import { computeSheet } from "@/lib/sheet-formula"
 
@@ -92,7 +92,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
         if (v === null) delete merged[k]
         else merged[k] = v
       }
-      data.settings = readSheetSettings(merged) as object
+      const next = readSheetSettings(merged)
+      // New protections are stamped with their creator; nobody can forge `by` for someone else.
+      for (const p of next.protections ?? []) {
+        const old = (access.sheet.settings.protections ?? []).find((x) => x.id === p.id)
+        p.by = old?.by ?? session.user.id
+      }
+      const blocked = await protectionChangeBlock(session.user.id, access.sheet, next)
+      if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
+      data.settings = next as object
     }
     if (!Object.keys(data).length) return NextResponse.json({ error: "Nggak ada yang diubah." }, { status: 400 })
 

@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  ArrowDownAZ, ArrowUpAZ, BetweenHorizontalStart, BetweenVerticalStart, ChevronDown, ClipboardPaste, Copy,
+  ArrowDownAZ, ArrowUpAZ, ListFilter, Minus, Table2, BetweenHorizontalStart, BetweenVerticalStart, ChevronDown, ClipboardPaste, Copy,
   Eraser, EyeOff, Filter, Link2 as LinkIcon, ListChecks, MessageSquare, MoveHorizontal, MoveVertical, Paintbrush, Plus,
   RemoveFormatting, Replace, RotateCcw, Scissors, Search, Settings2, Snowflake, Trash2, X,
   CalendarDays, CircleChevronDown, ClipboardList, Hash, SquareCheck, Tags, Type,
@@ -26,15 +26,72 @@ import { CellEditor, ColumnPopover, TaskCell, type Next } from "./sheet-cells";
 import { Floating } from "./sheet-float";
 import {
   buildRuleIndex, checkboxValue, dropdownOptions, invalidMessage, isChecked, isDropdown, newRuleId, pickedValues,
-  rangeRect, rangeToA1, validateCell, type ValidationRule,
+  rangeFromA1, rangeRect, rangeToA1, validateCell, type ValidationRule,
 } from "@/lib/sheet-validation";
 import { DataValidationPanel, type PanelRule } from "./DataValidationPanel";
+import { useQuery } from "@tanstack/react-query";
+import { nexusApi } from "@/lib/nexus-api";
+import { ConditionalFormatPanel } from "./ConditionalFormatPanel";
+import { AlternatingColorsPanel } from "./AlternatingColorsPanel";
+import { FilterMenu } from "./FilterMenu";
+import { FindReplaceDialog, RemoveDuplicatesDialog, SortRangeDialog, SplitSeparatorChip, type FindOpts } from "./DataDialogs";
+import { NamedRangesPanel, ProtectedRangesPanel, ProtectionWarningDialog } from "./SheetRangesPanel";
+import { ColumnStatsPanel } from "./SheetStatsPanel";
+import { ThemePanel } from "./SheetThemePanel";
+import { SheetSettingsDialog, ShortcutsDialog } from "./SheetSettingsPanel";
+import { VersionHistoryPanel } from "./SheetVersionPanel";
+import { SlicerChip, SlicerPanel } from "./SheetSlicerPanel";
+import { DatePicker, NotePopover } from "./sheet-popovers";
+import { ChartEditor } from "./ChartEditor";
+import { ChartObject } from "./SheetChart";
+import { ColorPicker } from "./ColorPicker";
+import { CurrencyFormatDialog, CustomNumberFormatDialog, DateTimeFormatDialog } from "./FormatDialogs";
+import { PivotCreateDialog } from "./PivotEditor";
+import { SheetDialog, SidePanel, primaryBtn } from "./sheet-shell";
+import type { MenuNode } from "./sheet-menus";
+import { dedupe, replaceText, textMatches, type SplitSep } from "@/lib/sheet-datatools";
+import { stateAt } from "@/lib/sheet-versions";
+import { SUPPORTED_FUNCTIONS, isTypedCell, serialToIso, setDisplayLocale, todaySerial } from "@/lib/sheet-formula";
 import { DropdownCell, DropdownPicker } from "./sheet-dropdown";
-import { SheetToolbar, Menu, MenuItem, MenuLabel, MenuSep } from "./SheetToolbar";
+import { SheetToolbar } from "./SheetToolbar";
+import { Menu, MenuItem } from "./sheet-menu-ui";
+import { MenuBar, MenuPopup, MenuSearch } from "./sheet-menus";
+import { buildContextMenu, buildMenuBar, type MenuAction, type MenuCtx } from "./sheet-menu-model";
+import { newId, type ChartSpec, type CondRule, type FilterView, type Slicer, type TableColumnType } from "@/lib/sheet-model";
+import { defaultChart } from "@/lib/sheet-chart";
+import { numberFormatItems } from "@/lib/sheet-numfmt";
+import { detectSeparator, splitText as splitTextLib, trimCell } from "@/lib/sheet-datatools";
+import type { SheetTab } from "./SheetTabs";
+
+/** What the grid asks of the page around it (sheets, files, bulk server operations). */
+export type SheetHost = {
+  sheetId: string;
+  sheets: SheetTab[];
+  meId: string | null;
+  members: { id: string; name: string }[];
+  importFile: () => void;
+  download: (format: "xlsx" | "csv" | "tsv" | "html") => void;
+  renameSheet: () => void;
+  insertSheet: () => void;
+  setSheetHidden: (id: string, hidden: boolean) => void;
+  /** Bulk reorder of rows (Sort sheet); `before` is the order to restore on undo. */
+  reorderRows: (order: string[], before: string[], label: string) => Promise<void>;
+  reorderColumns: (ids: string[]) => void;
+  deleteColumns: (ids: string[]) => void;
+  /** Insert › Pivot table › New sheet: a "Pivot Table N" sheet fed by this range (stored form). */
+  createPivot: (range: string) => void;
+  /** File › Settings apply to every sheet of the spreadsheet (project). */
+  saveSpreadsheetSettings: (patch: { locale?: unknown; timeZone?: unknown; recalc?: unknown; iterative?: unknown }) => void;
+};
 import {
-  borderShadows, bordersFor, horizontalClass, patchStyle, styleClasses, styleInline, verticalClass,
-  type BorderPreset, type CellStyle,
+  applyBorderPreset, borderOverlay, clearNeighbourEdge, fontPx, horizontalClass, patchStyle, rotatedBox, rotationStyle, styleClasses, styleInline,
+  verticalClass, wrapMode, type BorderPreset10, type CellStyle,
 } from "./sheet-style";
+import type { BorderLine, NumberFormatKind } from "@/lib/sheet-model";
+import { STANDARD_THEME, toHex } from "@/lib/sheet-palette";
+import { applyFilter, colorsInColumn, critActive, distinctValues, sortedRowIds } from "@/lib/sheet-filter";
+import { buildCondFormatter } from "@/lib/sheet-cf";
+import type { Banding, SheetFilter, SheetTheme, TableSpec } from "@/lib/sheet-model";
 
 // Mirrors ROW_HEIGHT_MIN / ROW_HEIGHT_MAX in src/lib/project-sheets.ts — the server clamps to the
 // same bounds, so a hand-crafted request can't produce a row the grid won't render sanely.
@@ -136,6 +193,32 @@ type StyleEdit = { rowId: string; values: Record<string, CellStyle | null> };
 type MenuEntry = { label: string; icon?: ReactNode; run: () => void; hint?: string; danger?: boolean; disabled?: boolean } | "sep";
 type Stat = "sum" | "avg" | "count" | "countNum" | "min" | "max";
 
+type Prefs = { fx: boolean; formulas: boolean; protectedShown: boolean; commentsHidden: boolean; manual: boolean };
+function readPrefs(): Prefs {
+  const base: Prefs = { fx: true, formulas: false, protectedShown: false, commentsHidden: false, manual: false };
+  try { return { ...base, ...(JSON.parse(localStorage.getItem("nexus-sheet-prefs") ?? "{}") as Partial<Prefs>) }; } catch { return base; }
+}
+type PanelState =
+  | { kind: "dv" } | { kind: "cf"; id?: string } | { kind: "alt" } | { kind: "named"; fromSelection?: boolean } | { kind: "protect"; fromSelection?: boolean; sheet?: boolean }
+  | { kind: "chart"; id: string } | { kind: "pivot" } | { kind: "slicer"; id: string } | { kind: "stats"; col: number } | { kind: "theme" }
+  | { kind: "versions" } | { kind: "comments" } | null;
+type DialogState = { kind: "settings" | "find" | "sort" | "dedupe" | "functions" | "shortcuts" | "pivot" | "customNumber" | "customDate" | "customCurrency" | "resizeRows" | "resizeCols" } | null;
+/** Tables (Format › Convert to table): dark-green header, light banding — like Sheets' default table. */
+const TABLE_HEADER = "#1e6b45";
+const TABLE_BAND = "#eef7f1";
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+/** Insert › Function categories (Sheets' Σ menu), over what the engine actually runs. */
+const FUNCTION_CATALOG: { category: string; names: string[] }[] = [
+  { category: "Math", names: ["SUM", "SUMIF", "SUMIFS", "SUMPRODUCT", "PRODUCT", "ROUND", "ROUNDUP", "ROUNDDOWN", "MROUND", "CEILING", "FLOOR", "INT", "TRUNC", "ABS", "MOD", "SQRT", "POWER"] },
+  { category: "Statistical", names: ["AVERAGE", "AVERAGEIF", "AVERAGEIFS", "MEDIAN", "MIN", "MAX", "MINIFS", "MAXIFS", "COUNT", "COUNTA", "COUNTBLANK", "COUNTIF", "COUNTIFS", "LARGE", "SMALL", "RANK", "STDEV", "PERCENTILE"] },
+  { category: "Logical", names: ["IF", "IFS", "IFERROR", "IFNA", "AND", "OR", "NOT", "SWITCH", "CHOOSE"] },
+  { category: "Info", names: ["ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR"] },
+  { category: "Lookup", names: ["VLOOKUP", "HLOOKUP", "XLOOKUP", "INDEX", "MATCH"] },
+  { category: "Text", names: ["CONCAT", "TEXTJOIN", "TEXT", "VALUE", "LEN", "UPPER", "LOWER", "PROPER", "TRIM", "LEFT", "RIGHT", "MID", "FIND", "SEARCH", "SUBSTITUTE", "REPT"] },
+  { category: "Date", names: ["TODAY", "NOW", "DATE", "DATEVALUE", "YEAR", "MONTH", "DAY", "WEEKDAY", "WEEKNUM", "EOMONTH", "EDATE", "DATEDIF", "DAYS", "NETWORKDAYS", "WORKDAY", "YEARFRAC"] },
+  { category: "Financial", names: ["PMT", "FV", "PV", "NPV", "IRR"] },
+];
+
 function readZoom(): number {
   try { const z = Number(localStorage.getItem("nexus-sheet-zoom")); return z >= 0.5 && z <= 2 ? z : 1; } catch { return 1; }
 }
@@ -144,11 +227,14 @@ function readStat(): Stat {
 }
 
 export function SheetGrid({
-  columns, rows, settings, canEdit, canManage,
+  columns, rows: rowsProp, settings, canEdit: canEditProp, canManage,
   onSetCells, onSetStyles, onSettings, onAddRows, onDeleteRows, onReorderRow, onDeleteColumn, onEditColumn, onAddColumn,
   tasks, onOpenTask, commentCounts, onOpenComments, peerCursors, onEditingChange, onCursor, onResizeRow, onInsertColumn,
-  canUndo, canRedo, onUndo, onRedo, footerLeft, saving, sheetName,
+  canUndo, canRedo, onUndo, onRedo, footerLeft, saving, sheetName, host, command, aside, onReopenAside,
 }: {
+  /** A sidebar from the page (the pivot table editor), shown when no other sidebar is open. */
+  aside?: ReactNode;
+  onReopenAside?: () => void;
   columns: NexusSheetColumn[];
   rows: NexusSheetRow[];
   settings: NexusSheetSettings;
@@ -176,8 +262,11 @@ export function SheetGrid({
   onEditingChange: (cell: { rowId: string; colId: string } | null) => void;
   onCursor: (rowId: string | null, columnId: string | null) => void;
   onResizeRow: (rowId: string, height: number | null) => void;
-  /** Insert a fresh column AT this index (existing ones shift right). */
-  onInsertColumn: (index: number) => void;
+  /** Insert `count` fresh columns AT this index (existing ones shift right). */
+  onInsertColumn: (index: number, count?: number) => void;
+  host?: SheetHost;
+  /** One-shot instructions from the page (sheet tab menu). */
+  command?: { kind: "protectSheet" | "comments"; n: number } | null;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -189,6 +278,12 @@ export function SheetGrid({
   sheetName?: string;
 }) {
   const { lang, t } = useLang();
+  // File › Version history: while an old version is open the grid shows it, read-only.
+  const [versionAt, setVersionAt] = useState<string | null>(null);
+  const [showChanges, setShowChanges] = useState(true);
+  const [versionPreview, setVersionPreview] = useState<{ rows: NexusSheetRow[]; changed: Set<string> } | null>(null);
+  const rows = versionPreview?.rows ?? rowsProp;
+  const canEdit = canEditProp && !versionPreview;
   const [sel, setSel] = useState<Selection>({ r: 0, c: 0, r2: 0, c2: 0 });
   /** Right-click menus, anchored at the pointer: a cell, a column header, a row header. */
   const [menu, setMenu] = useState<{ kind: "cell" | "col" | "row"; r: number; c: number; left: number; top: number } | null>(null);
@@ -207,12 +302,30 @@ export function SheetGrid({
 
   // Formulas are evaluated, never stored — so the context is rebuilt whenever the data is. The engine
   // carries over every cached result an edit didn't touch (dependency graph).
-  const data = useMemo(() => buildSheetData(columns, rows), [columns, rows]);
+  /** Per-viewer view preferences (View › Show, Tools › Calculation). */
+  const [prefs, setPrefsState] = useState(readPrefs);
+  const setPrefs = (fn: (p: Prefs) => Prefs) => setPrefsState((p) => { const n = fn(p); try { localStorage.setItem("nexus-sheet-prefs", JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  /** Bumped by F9 (manual calculation) and by File › Settings › Recalculation every minute/hour. */
+  const [recalcTick, setRecalcTick] = useState(0);
+  useEffect(() => {
+    const every = settings.recalc === "minute" ? 60_000 : settings.recalc === "hour" ? 3_600_000 : 0;
+    if (!every) return;
+    const id = setInterval(() => setRecalcTick((n) => n + 1), every);
+    return () => clearInterval(id);
+  }, [settings.recalc]);
+  // Numbers and dates read in the spreadsheet's locale (File › Settings › Locale), here and in formats.
+  setDisplayLocale(settings.locale ?? "id-ID");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const data = useMemo(() => buildSheetData(columns, rows), [columns, rows, recalcTick, settings.locale]);
   const engineRef = useRef<SheetEngine | null>(null);
   const engine = useMemo(() => {
-    const e = engineFor(data, engineRef.current);
+    const prev = engineRef.current;
+    const e = engineFor(data, prev);
+    // Tools › Calculation control › Manual: formulas keep their last results until F9.
+    if (prefs.manual && prev && prev !== e) for (const [k, v] of prev.values) if (!e.values.has(k)) e.values.set(k, v);
     engineRef.current = e;
     return e;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   // ── Data validation ─────────────────────────────────────────────────────────────────────────
@@ -253,9 +366,44 @@ export function SheetGrid({
   const [stat, setStatState] = useState<Stat>(readStat);
   const setStat = (s: Stat) => { setStatState(s); try { localStorage.setItem("nexus-sheet-stat", s); } catch { /* ignore */ } };
 
+  // ── Sheets-parity UI state ───────────────────────────────────────────────────────────────────
+  /** The right-hand sidebar (one at a time, like Sheets). */
+  const [panel, setPanel] = useState<PanelState>(null);
+  /** A modal dialog. */
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [menuSearch, setMenuSearch] = useState(false);
+  const [full, setFull] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [toast, setToastState] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setToast = (msg: string) => { setToastState(msg); if (toastTimer.current) clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToastState(null), 3500); };
+  /** The filter view open for THIS viewer (Sheets: a view is personal until saved for everyone). */
+  const [activeView, setActiveView] = useState<string | null>(null);
+  const [selectedObject, setSelectedObject] = useState<string | null>(null);
+  const [note, setNote] = useState<{ rowId: string; colId: string; rect: DOMRect; editing: boolean } | null>(null);
+  const [splitChip, setSplitChip] = useState<{ rect: DOMRect; sep: unknown } | null>(null);
+  /** Paint format: the copied style; sticky after a double-click. */
+  const [paint, setPaint] = useState<{ style: CellStyle | null; sticky: boolean } | null>(null);
+  useEffect(() => {
+    if (!command) return;
+    if (command.kind === "protectSheet") setPanel({ kind: "protect", sheet: true });
+    if (command.kind === "comments") setPanel({ kind: "comments" });
+  }, [command]);
+
   // ── Sheet settings ───────────────────────────────────────────────────────────────────────────
   const hiddenRows = useMemo(() => new Set(settings.hiddenRows ?? []), [settings.hiddenRows]);
-  const hiddenCols = useMemo(() => new Set(settings.hiddenCols ?? []), [settings.hiddenCols]);
+  // Hidden columns, plus those inside collapsed column groups (View › Group).
+  const hiddenCols = useMemo(() => {
+    const out = new Set(settings.hiddenCols ?? []);
+    for (const g of settings.colGroups ?? []) {
+      if (!g.collapsed) continue;
+      const a = columns.findIndex((c) => c.id === g.from), b = columns.findIndex((c) => c.id === g.to);
+      if (a < 0 || b < 0) continue;
+      for (let i = Math.min(a, b); i <= Math.max(a, b); i += 1) out.add(columns[i].id);
+    }
+    return out;
+  }, [settings.hiddenCols, settings.colGroups, columns]);
   const frozenCols = Math.min(settings.frozenCols ?? 0, columns.length);
   const frozenRowsSetting = settings.frozenRows ?? 0;
   const colHidden = useCallback((c: number) => hiddenCols.has(columns[c]?.id ?? ""), [hiddenCols, columns]);
@@ -266,8 +414,65 @@ export function SheetGrid({
    * N rows and stay put on top — sorting and filtering leave them alone, as Sheets does with a
    * frozen header row.
    */
+  // ── Sheet-level decorations: conditional formats, alternating colours, tables, filters ───────
+  /** Live previews from the open sidebars (not saved until Done). */
+  const [cfPreview, setCfPreview] = useState<CondRule[] | null>(null);
+  const [bandPreview, setBandPreview] = useState<{ id: string | null; b: Banding | null } | null>(null);
+  const [themePreview, setThemePreview] = useState<SheetTheme | null>(null);
+  const condRules = cfPreview ?? settings.condFormats ?? [];
+  const condAt = useMemo(() => buildCondFormatter(condRules, data.shape, engine), [condRules, data.shape, engine]);
+  const bandings = useMemo(() => {
+    let list = settings.bandings ?? [];
+    if (bandPreview) list = bandPreview.b ? [...list.filter((b) => b.id !== bandPreview.id), bandPreview.b] : list.filter((b) => b.id !== bandPreview.id);
+    return list.map((b) => ({ b, rc: rangeRect(b.range, data.shape) })).filter((x): x is { b: Banding; rc: NonNullable<ReturnType<typeof rangeRect>> } => Boolean(x.rc));
+  }, [settings.bandings, bandPreview, data.shape]);
+  const tables = useMemo(() => (settings.tables ?? []).map((tb) => ({ tb, rc: rangeRect(tb.range, data.shape) })).filter((x) => x.rc) as { tb: TableSpec; rc: NonNullable<ReturnType<typeof rangeRect>> }[], [settings.tables, data.shape]);
+  /** The filter in force for THIS viewer: an open filter view, else the sheet's shared filter. */
+  const activeFilter: SheetFilter | null = useMemo(
+    () => (activeView ? (settings.filterViews ?? []).find((v) => v.id === activeView) ?? null : settings.filter ?? null),
+    [activeView, settings.filterViews, settings.filter],
+  );
+  const display = useCallback((rowId: string, colId: string) => {
+    const col = columns.find((c) => c.id === colId);
+    return col ? displayCell(col.type, data.cells.get(rowId)?.[colId], { data, rowId, colId }) : "";
+  }, [columns, data]);
+  const styleOfCell = useCallback((rowId: string, colId: string) => {
+    const r = data.shape.rowIds.indexOf(rowId), c = data.shape.columnIds.indexOf(colId);
+    const own = rows[r]?.styles?.[colId];
+    const cf = r >= 0 && c >= 0 ? condAt(r, c) : null;
+    const bg = cf?.bg ?? (own?.bg ? toHex(own.bg) ?? undefined : undefined);
+    const fc = cf?.fc ?? (own?.fc ? toHex(own.fc) ?? undefined : undefined);
+    return bg || fc ? { bg, fc } : undefined;
+  }, [data.shape, rows, condAt]);
+  const filterResult = useMemo(() => {
+    const slicers = settings.slicers ?? [];
+    const hidden = new Set<string>();
+    let main: ReturnType<typeof applyFilter> | null = null;
+    if (activeFilter) {
+      main = applyFilter(activeFilter, { shape: data.shape, engine, display, styleOf: styleOfCell, slicers: slicers.filter((x) => x.range === activeFilter.range).map((x) => ({ colId: x.colId, crit: x.crit })) });
+      main.hidden.forEach((id) => hidden.add(id));
+    }
+    for (const sl of slicers) {
+      if (activeFilter && sl.range === activeFilter.range) continue;
+      if (!sl.crit) continue;
+      applyFilter({ range: sl.range }, { shape: data.shape, engine, display, styleOf: styleOfCell, slicers: [{ colId: sl.colId, crit: sl.crit }] }).hidden.forEach((id) => hidden.add(id));
+    }
+    return { hidden, main };
+  }, [activeFilter, settings.slicers, data.shape, engine, display, styleOfCell]);
+  /** Rows inside collapsed groups (View › Group). */
+  const groupHidden = useMemo(() => {
+    const out = new Set<string>();
+    for (const g of settings.rowGroups ?? []) {
+      if (!g.collapsed) continue;
+      const a = data.shape.rowIds.indexOf(g.from), b = data.shape.rowIds.indexOf(g.to);
+      if (a < 0 || b < 0) continue;
+      for (let i = Math.min(a, b); i <= Math.max(a, b); i += 1) out.add(data.shape.rowIds[i]);
+    }
+    return out;
+  }, [settings.rowGroups, data.shape]);
+
   const { view, frozenRows } = useMemo(() => {
-    const all = rows.map((row, rawIndex) => ({ row, rawIndex })).filter(({ row }) => !hiddenRows.has(row.id));
+    const all = rows.map((row, rawIndex) => ({ row, rawIndex })).filter(({ row }) => !hiddenRows.has(row.id) && !groupHidden.has(row.id) && !filterResult.hidden.has(row.id));
     const fixedRaw = Math.min(frozenRowsSetting, rows.length);
     const fixed = all.filter((x) => x.rawIndex < fixedRaw);
     let list = all.filter((x) => x.rawIndex >= fixedRaw);
@@ -294,16 +499,97 @@ export function SheetGrid({
       });
       list = keyed.map((x) => x.item);
     }
+    // The filter's sort (Sort A → Z from the filter menu) orders the rows of its range, in view only.
+    const fsort = activeFilter?.sort;
+    const frc = filterResult.main?.rect;
+    if (fsort && frc) {
+      const inside = list.filter((x) => x.rawIndex > frc.top && x.rawIndex <= frc.bottom);
+      const order = sortedRowIds(inside.map((x) => x.row.id), fsort, (r, c) => engine.value(r, c));
+      const byId = new Map(inside.map((x) => [x.row.id, x]));
+      let k = 0;
+      list = list.map((x) => (x.rawIndex > frc.top && x.rawIndex <= frc.bottom ? byId.get(order[k++])! : x));
+    }
     return { view: [...fixed, ...list], frozenRows: fixed.length };
-  }, [rows, columns, sort, filters, data, engine, hiddenRows, frozenRowsSetting]);
+  }, [rows, columns, sort, filters, data, engine, hiddenRows, frozenRowsSetting, groupHidden, filterResult, activeFilter]);
+
+  const protRects = useMemo(() => (prefs.protectedShown ? (settings.protections ?? []).flatMap((pr) => (pr.sheet
+    ? [{ top: 0, bottom: rows.length - 1, left: 0, right: columns.length - 1 }]
+    : pr.range ? [rangeRect(pr.range, data.shape)].filter(Boolean) as NonNullable<ReturnType<typeof rangeRect>>[] : [])) : []), [prefs.protectedShown, settings.protections, rows.length, columns.length, data.shape]);
+  const filterCrit = activeFilter?.criteria;
+  const decorAt = useCallback((rawRow: number, ci: number): Decor | null => {
+    let out: Decor | null = null;
+    const put = (d: Decor) => { out = { ...(out ?? {}), ...d, base: { ...(out?.base ?? {}), ...(d.base ?? {}) } }; };
+    for (const { b, rc } of bandings) {
+      if (rawRow < rc.top || rawRow > rc.bottom || ci < rc.left || ci > rc.right) continue;
+      const first = b.header ? rc.top + 1 : rc.top;
+      const bg = b.header && rawRow === rc.top ? b.header : b.footer && rawRow === rc.bottom ? b.footer : (rawRow - first) % 2 === 0 ? b.c1 : b.c2;
+      put({ base: { bg } });
+    }
+    for (const { tb, rc } of tables) {
+      if (rawRow < rc.top || rawRow > rc.bottom || ci < rc.left || ci > rc.right) continue;
+      if (rawRow === rc.top) put({ base: { bg: tb.header ?? TABLE_HEADER, fc: "#ffffff", b: 1 }, head: "table" });
+      else if (tb.banded !== false) put({ base: { bg: (rawRow - rc.top) % 2 === 0 ? TABLE_BAND : "#ffffff" } });
+    }
+    const frc = filterResult.main?.rect;
+    if (frc && rawRow >= frc.top && rawRow <= frc.bottom && ci >= frc.left && ci <= frc.right) {
+      const edge = `${rawRow === frc.top ? "t" : ""}${rawRow === frc.bottom ? "b" : ""}${ci === frc.left ? "l" : ""}${ci === frc.right ? "r" : ""}`;
+      if (rawRow === frc.top) put({ head: "filter", filtered: critActive(filterCrit?.[columns[ci]?.id ?? ""]), base: { b: 1 }, edge });
+      else if (edge) put({ edge });
+    }
+    const cf = condAt(rawRow, ci);
+    if (cf) put({ cf: cf as Partial<CellStyle> });
+    if (versionPreview?.changed.size && versionPreview.changed.has(`${rows[rawRow]?.id}:${columns[ci]?.id}`)) put({ cf: { ...(cf ?? {}), bg: "#fde9b8" } as Partial<CellStyle> });
+    if (protRects.some((r) => rawRow >= r.top && rawRow <= r.bottom && ci >= r.left && ci <= r.right)) put({ stripes: true });
+    return out;
+  }, [bandings, tables, filterResult, filterCrit, condAt, protRects, columns, versionPreview, rows]);
+
+  /** Rows grow to fit wrapped, rotated or large text unless someone set a height by hand (Sheets' auto height). */
+  const autoHeights = useMemo(() => {
+    const out = new Map<string, number>();
+    const ctx = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+    if (!ctx) return out;
+    const family = typeof getComputedStyle !== "undefined" ? getComputedStyle(document.body).fontFamily : "sans-serif";
+    for (const row of rows) {
+      if (row.height != null || !row.styles) continue;
+      let h = 0;
+      for (const [colId, st] of Object.entries(row.styles)) {
+        if (!st) continue;
+        const px = fontPx(st) ?? 13;
+        const big = px > 14;
+        const w = wrapMode(st) === "w";
+        if (!big && !w && !st.rt) continue;
+        const ci = columns.findIndex((c) => c.id === colId);
+        if (ci < 0) continue;
+        const col = columns[ci];
+        const text = displayCell(col.type, row.cells[colId], { data, rowId: row.id, colId });
+        if (!text) { if (big) h = Math.max(h, Math.round(px * 1.3 + 8)); continue; }
+        if (st.rt) { h = Math.max(h, Math.round(rotatedBox(text, st, px).h + 8)); continue; }
+        ctx.font = `${st.b ? "bold " : ""}${px}px ${family}`;
+        const avail = Math.max(10, (col.width ?? COL_W_DEFAULT) - 12);
+        let lines = 0;
+        for (const para of text.split("\n")) {
+          let line = 0;
+          for (const word of para.split(/(\s+)/)) {
+            const ww = ctx.measureText(word).width;
+            if (line + ww > avail && line > 0) { lines += 1; line = /^\s+$/.test(word) ? 0 : ww; } else line += ww;
+          }
+          lines += 1;
+        }
+        h = Math.max(h, Math.round((w ? lines : 1) * px * 1.3 + 8));
+      }
+      if (h > ROW_H_DEFAULT) out.set(row.id, Math.min(ROW_H_MAX, h));
+    }
+    return out;
+  }, [rows, columns, data]);
+  const heightOf = useCallback((row: NexusSheetRow) => row.height ?? autoHeights.get(row.id) ?? ROW_H_DEFAULT, [autoHeights]);
 
   /** Running pixel offset of every row, so the window and the spacers agree to the pixel. */
   const offsets = useMemo(() => {
     const out = new Array<number>(view.length + 1);
     out[0] = 0;
-    for (let i = 0; i < view.length; i += 1) out[i + 1] = out[i] + (view[i].row.height ?? ROW_H_DEFAULT);
+    for (let i = 0; i < view.length; i += 1) out[i + 1] = out[i] + heightOf(view[i].row);
     return out;
-  }, [view]);
+  }, [view, heightOf]);
   const totalHeight = offsets[view.length] ?? 0;
 
   /** Column geometry: widths (hidden = 0) and the left edge of each, for frozen (sticky) columns. */
@@ -548,9 +834,43 @@ export function SheetGrid({
 
   const applyStyle = (patch: Partial<Record<keyof CellStyle, unknown>>) =>
     styleSelection((st) => patchStyle(st, patch), t("format cells"));
-  const applyBorders = (preset: BorderPreset) =>
-    styleSelection((st, r, c) => patchStyle(st, { bd: bordersFor(preset, r, c, rect, st?.bd) || null }), t("borders"));
-  const clearFormat = () => styleSelection(() => null, t("clear formatting"));
+  /** Clear formatting keeps the note (Sheets: a note is content, not format). */
+  const clearFormat = () => styleSelection((st) => (st?.nt ? { nt: st.nt } : null), t("clear formatting"));
+  /** Borders panel: the preset with the sticky line style and colour (shared edges stored once). */
+  const applyBorders10 = (preset: BorderPreset10, line: BorderLine, color: string | null) => {
+    if (!canEdit) return;
+    const edits: StyleEdit[] = [];
+    for (let r = rect.top; r <= rect.bottom; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      const values: Record<string, CellStyle | null> = {};
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        if (!col) continue;
+        values[col.id] = patchStyle(row.styles?.[col.id], applyBorderPreset(preset, r, c, rect, row.styles?.[col.id], line, color));
+      }
+      edits.push({ rowId: row.id, values });
+    }
+    if (preset === "clear" || preset === "all" || preset === "outer" || preset === "top" || preset === "left") {
+      const above = view[rect.top - 1]?.row;
+      if (above) {
+        const values: Record<string, CellStyle | null> = {};
+        for (let c = rect.left; c <= rect.right; c += 1) { const col = columns[c]; const p = col ? clearNeighbourEdge(above.styles?.[col.id], "b") : null; if (col && p && (preset === "clear" || preset === "all" || preset === "outer" || preset === "top")) values[col.id] = patchStyle(above.styles?.[col.id], p); }
+        if (Object.keys(values).length) edits.push({ rowId: above.id, values });
+      }
+      const leftCol = columns[rect.left - 1];
+      if (leftCol && (preset === "clear" || preset === "all" || preset === "outer" || preset === "left")) {
+        for (let r = rect.top; r <= rect.bottom; r += 1) {
+          const row = view[r]?.row;
+          const p = row ? clearNeighbourEdge(row.styles?.[leftCol.id], "r") : null;
+          if (!row || !p) continue;
+          const e = edits.find((x) => x.rowId === row.id);
+          if (e) e.values[leftCol.id] = patchStyle(row.styles?.[leftCol.id], p);
+        }
+      }
+    }
+    onSetStyles(edits, t("borders"));
+  };
   const changeDecimals = (delta: 1 | -1) => {
     const shown = activeRow && activeCol ? displayCell(activeCol.type, activeRaw, { data, rowId: activeRow.id, colId: activeCol.id }) : "";
     const current = activeStyle?.dp ?? decimalsShown(shown);
@@ -657,7 +977,7 @@ export function SheetGrid({
         const text = col.type === "checkbox"
           ? (raw === true ? "TRUE" : raw === false ? "FALSE" : "")
           : displayCell(col.type, raw, { data, rowId: row.id, colId: col.id });
-        const cell: ClipCell = { text, raw: raw ?? null };
+        const cell: ClipCell = { text, raw: raw ?? null, style: row.styles?.[col.id] ?? null };
         if (isFormulaCell(raw)) cell.formula = toDisplay(raw.f, data.shape);
         line.push(cell);
       }
@@ -675,11 +995,22 @@ export function SheetGrid({
       const { id: _id, ranges: _r, ...criteria } = rule;
       return [{ rule: criteria, r1: top - rawTop, r2: bottom - rawTop, c1: left - rect.left, c2: right - rect.left }];
     })) : [];
-    return buildClipboard(cells, { r: rawTop, c: rect.left }, cut, columns.slice(rect.left, rect.right + 1).map((c) => c.type), validations);
-  }, [rect, view, columns, data, explicitRules]);
+    const condFormats = contiguous ? (settings.condFormats ?? []).flatMap((rule) => rule.ranges.flatMap((range) => {
+      const rc = rangeRect(range, data.shape);
+      if (!rc) return [];
+      const top = Math.max(rc.top, rawTop), bottom = Math.min(rc.bottom, rawBottom);
+      const left = Math.max(rc.left, rect.left), right = Math.min(rc.right, rect.right);
+      if (top > bottom || left > right) return [];
+      const { id: _id, ranges: _r, ...criteria } = rule;
+      return [{ rule: criteria as Record<string, unknown>, r1: top - rawTop, r2: bottom - rawTop, c1: left - rect.left, c2: right - rect.left }];
+    })) : [];
+    return buildClipboard(cells, { r: rawTop, c: rect.left }, cut, columns.slice(rect.left, rect.right + 1).map((c) => c.type), validations, {
+      widths: columns.slice(rect.left, rect.right + 1).map((c) => c.width ?? COL_W_DEFAULT), condFormats,
+    });
+  }, [rect, view, columns, data, explicitRules, settings.condFormats]);
 
   /** Paste a block at the selection (one value onto a range fills it; formulas shift). */
-  const applyPaste = useCallback(async (block: PasteBlock) => {
+  const applyPaste = useCallback(async (block: PasteBlock, opts: { stylesToo?: boolean } = {}) => {
     if (!canEdit || !block.cells.length) return;
     let cells = block.cells;
     const selRows = rect.bottom - rect.top + 1, selCols = rect.right - rect.left + 1;
@@ -699,10 +1030,18 @@ export function SheetGrid({
       ? { columnIds: data.shape.columnIds, rowIds: [...data.shape.rowIds, ...working.slice(view.length).map((w) => w.row.id)] }
       : data.shape;
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    // A NEXUS→NEXUS paste brings the formatting along, like Sheets (Paste special › Values only doesn't).
+    const styleEdits: StyleEdit[] = [];
+    const withStyles = block.internal && opts.stylesToo !== false && cells.some((l) => l.some((c) => c.style !== undefined));
     cells.forEach((line, i) => {
       const target = working[startR + i];
       if (!target) return;
       const values: Record<string, unknown> = {};
+      if (withStyles) {
+        const sv: Record<string, CellStyle | null> = {};
+        line.forEach((cell, j) => { const col = columns[startC + j]; if (col && cell.style !== undefined) sv[col.id] = (cell.style ?? null) as CellStyle | null; });
+        if (Object.keys(sv).length) styleEdits.push({ rowId: target.row.id, values: sv });
+      }
       line.forEach((cell, j) => {
         const col = columns[startC + j];
         if (!col) return;
@@ -722,6 +1061,7 @@ export function SheetGrid({
     });
     const allowed = keepValid(edits);
     if (allowed.length) onSetCells(allowed);
+    if (styleEdits.length) onSetStyles(styleEdits, t("paste format"));
     // Rules copied with the block land on the pasted cells.
     if (block.internal && block.validations?.length && !single) {
       const added: ValidationRule[] = [];
@@ -815,6 +1155,7 @@ export function SheetGrid({
   const openCell = (ri: number, ci: number, seed?: string, via: "key" | "mouse" = "key") => {
     const row = view[ri]?.row, col = columns[ci];
     if (!row || !col || !canEdit) return;
+    if (!protectOk.current && protectedHere(view[ri].rawIndex, ci)) { guardProtected(() => { protectOk.current = true; openCell(ri, ci, seed, via); protectOk.current = false; }); return; }
     if (!seed) {
       if (isDropdown(ruleAt(view[ri].rawIndex, ci))) { openDropdown(row.id, col.id); return; }
       if (isCheckboxCell(ri, ci)) { if (via === "key") toggleCheckboxes(); return; }
@@ -984,117 +1325,936 @@ export function SheetGrid({
     setColPopover({ colId: col.id, anchor: el?.getBoundingClientRect() ?? null });
   };
 
-  const menuEntries = useMemo((): MenuEntry[] => {
-    if (!menu) return [];
-    const ic = (I: typeof Copy) => <I className="h-3.5 w-3.5" />;
-    const row = view[menu.r]?.row;
-    const col = columns[menu.c];
-    const nRows = rect.bottom - rect.top + 1;
-    const nCols = rect.right - rect.left + 1;
-    const out: MenuEntry[] = [];
-    const insertDelete = (kind: "row" | "col") => {
-      if (!canEdit) return;
-      if (kind === "row" && row) {
-        out.push({ label: t("Insert 1 row above"), icon: ic(BetweenHorizontalStart), run: () => void onAddRows({ count: 1, beforeRowId: row.id }) });
-        out.push({ label: t("Insert 1 row below"), icon: ic(BetweenHorizontalStart), run: () => void onAddRows({ count: 1, afterRowId: row.id }) });
+  // ── Sheets-parity state: sidebars, dialogs, view preferences ────────────────────────────────
+  const columnsRange = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  const rowsRange = columnsRange;
+  /** Which number-format kind to apply for a Format › Number item. */
+  const applyNumberFormat = (key: string) => {
+    if (key === "auto") applyStyle({ nf: null, dp: null, pt: null });
+    else applyStyle({ nf: key, dp: null, pt: null });
+  };
+  const numberMenuItems = useMemo(
+    () => numberFormatItems(settings.locale ?? "id-ID").map((x) => ({ key: x.key, label: x.label, example: x.example })),
+    [settings.locale],
+  );
+  /** Merge as Sheets does: all, one block per column (vertical) or per row (horizontal), or unmerge. */
+  const mergeAs = (kind: "all" | "vertical" | "horizontal" | "unmerge") => {
+    if (!canEdit || !naturalOrder) return;
+    if (kind === "unmerge" || (kind === "all" && mergedHere.length)) { toggleMerge(); return; }
+    const current = (settings.merges ?? []).filter((m) => !mergedHere.some((x) => `${view[x.top].row.id}:${columns[x.left].id}` === `${m.r}:${m.c}`));
+    const top = view[rect.top], bottom = view[rect.bottom];
+    if (!top || !bottom) return;
+    const rs = bottom.rawIndex - top.rawIndex + 1, cs = rect.right - rect.left + 1;
+    const added = kind === "all"
+      ? [{ r: top.row.id, c: columns[rect.left].id, rs, cs }]
+      : kind === "vertical"
+        ? columnsRange(rect.left, rect.right).map((c) => ({ r: top.row.id, c: columns[c].id, rs, cs: 1 }))
+        : rowsRange(rect.top, rect.bottom).map((r) => ({ r: view[r].row.id, c: columns[rect.left].id, rs: 1, cs }));
+    onSettings({ merges: [...current, ...added.filter((m) => m.rs * m.cs > 1)] }, t("merge cells"));
+  };
+  /** The table (Format › Convert to table) covering a cell, if any. */
+  const tableAt = useCallback((rawRow: number, ci: number) => {
+    for (const tb of settings.tables ?? []) {
+      const rc = rangeRect(tb.range, data.shape);
+      if (rc && rawRow >= rc.top && rawRow <= rc.bottom && ci >= rc.left && ci <= rc.right) return { table: tb, rc };
+    }
+    return null;
+  }, [settings.tables, data.shape]);
+  const convertToTable = () => {
+    if (!canEdit) return;
+    const rc = currentRegion();
+    const range = storedOf(rc);
+    if (!range) return;
+    const names = new Set((settings.tables ?? []).map((x) => x.name.toUpperCase()));
+    let k = 1; while (names.has(`TABLE${k}`)) k += 1;
+    const types: Record<string, TableColumnType> = {};
+    for (let c = rc.left; c <= rc.right; c += 1) {
+      const col = columns[c];
+      const sample = rowsRange(rc.top + 1, rc.bottom).map((r) => engine.value(view[r].row.id, col.id)).filter((v) => v !== null && v !== "");
+      types[col.id] = sample.length && sample.every((v) => typeof v === "number") ? (engine.format(view[rc.top + 1].row.id, col.id) === "date" ? "date" : "number") : sample.every((v) => typeof v === "boolean") && sample.length ? "checkbox" : "text";
+    }
+    onSettings({ tables: [...(settings.tables ?? []), { id: newId("tb"), name: `Table${k}`, range, types }] }, t("convert to table"));
+    setSel({ r: rc.top, c: rc.left, r2: rc.bottom, c2: rc.right });
+  };
+  const regionColumns = () => {
+    const rc = settings.filter ? rangeRect(settings.filter.range, data.shape) : currentRegion();
+    if (!rc) return [];
+    const headRow = settings.filter ? rows[rc.top] : view[rc.top]?.row;
+    return columnsRange(rc.left, rc.right).filter((c) => columns[c]).map((c) => {
+      const col = columns[c];
+      const head = headRow ? displayCell(col.type, headRow.cells[col.id], { data, rowId: headRow.id, colId: col.id }) : "";
+      return { colId: col.id, label: head || `${t("Column")} ${colLetter(c)}` };
+    });
+  };
+  /** Data › Create a filter / Remove filter (shared by everyone, like Sheets). */
+  const toggleFilter = () => {
+    if (!canEdit) return;
+    if (settings.filter) { onSettings({ filter: null }, t("remove filter")); return; }
+    const range = storedOf(currentRegion());
+    if (range) onSettings({ filter: { range } }, t("create filter"));
+  };
+  /** Filter views: personal views of the data (the open one is per viewer, the list is shared). */
+  const createFilterView = (groupBy: string | null, fromFilter = false) => {
+    const base = fromFilter && settings.filter ? settings.filter : { range: storedOf(currentRegion()) ?? "" };
+    if (!base.range) return;
+    const n = (settings.filterViews ?? []).length + 1;
+    const view0: FilterView = { ...base, id: newId("fv"), name: t("Filter {n}", { n }), ...(groupBy ? { sort: { colId: groupBy, dir: "asc" as const } } : {}) };
+    if (canEdit) onSettings({ filterViews: [...(settings.filterViews ?? []), view0] }, t("create filter view"));
+    setActiveView(view0.id);
+  };
+  const filterViewAction = (what: string) => {
+    const list = settings.filterViews ?? [];
+    const cur = list.find((v) => v.id === activeView);
+    if (what === "deleteAll") { onSettings({ filterViews: null }, t("delete filter views")); setActiveView(null); return; }
+    if (!cur) return;
+    if (what === "rename") { const name = window.prompt(t("Rename view"), cur.name); if (name?.trim()) onSettings({ filterViews: list.map((v) => (v.id === cur.id ? { ...v, name: name.trim() } : v)) }, t("rename view")); return; }
+    if (what === "duplicate") { const copy = { ...cur, id: newId("fv"), name: t("Copy of {name}", { name: cur.name }) }; onSettings({ filterViews: [...list, copy] }, t("duplicate view")); setActiveView(copy.id); return; }
+    if (what === "delete") { onSettings({ filterViews: list.filter((v) => v.id !== cur.id).length ? list.filter((v) => v.id !== cur.id) : null }, t("delete view")); setActiveView(null); return; }
+    if (what === "update") { const range = storedOf(rect); if (range) onSettings({ filterViews: list.map((v) => (v.id === cur.id ? { ...v, range } : v)) }, t("update view")); return; }
+    if (what === "link" || what === "save") {
+      const url = `${window.location.origin}${window.location.pathname}${window.location.search}#gid=${host?.sheetId ?? ""}&fvid=${cur.id}`;
+      void navigator.clipboard?.writeText(url).then(() => setToast(t("Link copied to clipboard.")));
+    }
+  };
+  const addSlicer = () => {
+    const rc = settings.filter ? rangeRect(settings.filter.range, data.shape) : currentRegion();
+    const range = rc ? (settings.filter?.range ?? storedOf(rc)) : null;
+    const anchorRow = view[Math.max(0, rect.top)]?.row, anchorCol = columns[Math.min(maxC, (rc?.right ?? rect.right) + 1)] ?? columns[rect.left];
+    if (!range || !anchorRow || !anchorCol || !rc) return;
+    const sl: Slicer = { id: newId("sl"), range, colId: columns[rc.left].id, at: { r: anchorRow.id, c: anchorCol.id, dx: 8, dy: 4 } };
+    onSettings({ slicers: [...(settings.slicers ?? []), sl] }, t("add slicer"));
+    setPanel({ kind: "slicer", id: sl.id });
+  };
+  /** Data clean-up › Trim whitespace: acts at once, then says how many cells changed. */
+  const trimWhitespace = () => {
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    let n = 0;
+    for (let r = rect.top; r <= rect.bottom; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      const values: Record<string, unknown> = {};
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        const v = col ? row.cells[col.id] : undefined;
+        if (typeof v === "string") { const x = trimCell(v); if (x !== v) { values[col.id] = x || null; n += 1; } }
       }
-      if (kind === "col") {
-        out.push({ label: t("Insert 1 column left"), icon: ic(BetweenVerticalStart), run: () => onInsertColumn(menu.c) });
-        out.push({ label: t("Insert 1 column right"), icon: ic(BetweenVerticalStart), run: () => onInsertColumn(menu.c + 1) });
-      }
+      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
+    }
+    if (edits.length) onSetCells(edits);
+    setToast(n ? t("Trimmed whitespace from {n} cells.", { n }) : t("No whitespace to trim."));
+  };
+  /** Split text to columns: splits at once (auto-detected separator); the floating chooser re-splits. */
+  const splitText = (sep: Parameters<typeof splitTextLib>[1]) => {
+    if (!canEdit) return;
+    const c = rect.left;
+    const col = columns[c];
+    if (!col) return;
+    const texts = rowsRange(rect.top, rect.bottom).map((r) => { const v = view[r]?.row.cells[col.id]; return typeof v === "string" ? v : ""; });
+    const resolved = sep === "auto" ? detectSeparator(texts) ?? "," : sep;
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    let widest = 1;
+    texts.forEach((text, i) => {
+      if (!text) return;
+      const parts = splitTextLib(text, resolved);
+      widest = Math.max(widest, parts.length);
+      const values: Record<string, unknown> = {};
+      parts.forEach((p, j) => { const target = columns[c + j]; if (target) values[target.id] = inputToCell(target, p, data.shape); });
+      edits.push({ rowId: view[rect.top + i].row.id, values });
+    });
+    if (c + widest - 1 > maxC) setToast(t("Some parts didn't fit: add columns to the right and split again."));
+    if (edits.length) onSetCells(edits);
+    const box = gridRef.current?.querySelector(`[data-cell="${view[rect.bottom]?.row.id}:${col.id}"]`)?.getBoundingClientRect();
+    if (box) setSplitChip({ rect: box, sep });
+  };
+  /** Insert › Chart: a chart of the selection (or its data region), placed to the right, editor open. */
+  const insertChart = () => {
+    if (!canEdit) return;
+    const rc = selInfo.single ? currentRegion() : { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+    const range = storedOf(rc);
+    if (!range) return;
+    const picked = defaultChart({ top: view[rc.top].rawIndex, bottom: view[rc.bottom].rawIndex, left: rc.left, right: rc.right }, data, engine);
+    const at = { r: view[rc.top].row.id, c: (columns[Math.min(maxC, rc.right + 1)] ?? columns[rc.right]).id, dx: 16, dy: 0 };
+    const chart: ChartSpec = { id: newId("ch"), ranges: [range], at, w: 600, h: 371, ...picked };
+    onSettings({ charts: [...(settings.charts ?? []), chart] }, t("insert chart"));
+    setSelectedObject(chart.id);
+    setPanel({ kind: "chart", id: chart.id });
+  };
+  /** Insert › Note (Shift+F2): the yellow sticky on the active cell. */
+  const openNote = (editing: boolean) => {
+    if (!activeRow || !activeCol) return;
+    const box = gridRef.current?.querySelector(`[data-cell="${activeRow.id}:${activeCol.id}"]`)?.getBoundingClientRect();
+    if (box) setNote({ rowId: activeRow.id, colId: activeCol.id, rect: box, editing });
+  };
+  // ── Menus: one dispatcher for the menu bar, right-click menus and "Search the menus" ─────────
+  const selInfo = useMemo(() => {
+    const r1 = (view[rect.top]?.rawIndex ?? rect.top) + 1, r2 = (view[rect.bottom]?.rawIndex ?? rect.bottom) + 1;
+    return {
+      r1, r2, c1: colLetter(rect.left), c2: colLetter(rect.right), colIndex: rect.right,
+      nRows: rect.bottom - rect.top + 1, nCols: rect.right - rect.left + 1,
+      single: rect.top === rect.bottom && rect.left === rect.right,
+      wholeRows: rect.left === 0 && rect.right === maxC && maxC > 0,
+      wholeCols: rect.top === 0 && rect.bottom === maxR && maxR > 0,
+      activeRow: (view[sel.r]?.rawIndex ?? sel.r) + 1, activeCol: colLetter(sel.c),
     };
-    if (menu.kind === "cell") {
-      if (canEdit) out.push({ label: t("Cut"), icon: ic(Scissors), hint: "⌘X", run: () => { void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => clipboardBlocked("Ctrl+X / ⌘X")); } });
-      out.push({ label: t("Copy"), icon: ic(Copy), hint: "⌘C", run: () => void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")) });
-      if (canEdit) {
-        out.push({ label: t("Paste"), icon: ic(ClipboardPaste), hint: "⌘V", run: pasteVia(false) });
-        out.push({ label: t("Paste values only"), icon: ic(ClipboardPaste), run: pasteVia(true) });
-        out.push("sep");
-        insertDelete("row");
-        insertDelete("col");
-        out.push("sep");
-        out.push({ label: nRows > 1 ? t("Delete rows {a} – {b}", { a: (view[rect.top]?.rawIndex ?? 0) + 1, b: (view[rect.bottom]?.rawIndex ?? 0) + 1 }) : t("Delete row"), icon: ic(Trash2), danger: true, run: () => onDeleteRows(view.slice(rect.top, rect.bottom + 1).map((v) => v.row.id)) });
-        if (canManage && col) out.push({ label: t("Delete column"), icon: ic(Trash2), danger: true, run: () => onDeleteColumn(col.id) });
-        out.push({ label: nRows * nCols > 1 ? t("Clear values") : t("Clear value"), icon: ic(Eraser), hint: "Del", run: clearSelection });
-        out.push({ label: t("Clear formatting"), icon: ic(RemoveFormatting), hint: "⌘\\", run: clearFormat });
-        out.push("sep");
-        out.push({ label: col && isLinkCell(row?.cells[col.id]) ? t("Edit link") : t("Insert link"), icon: ic(LinkIcon), hint: "⌘K", run: insertLink });
+  }, [rect, view, sel.r, sel.c, maxC, maxR]);
+
+  /** Write a block of values AND formats in one go (sorts, moves, shifts): one undo entry each. */
+  const writeBlock = (cellEdits: { rowId: string; values: Record<string, unknown> }[], styleEdits: StyleEdit[], label: string) => {
+    const cells = cellEdits.filter((e) => Object.keys(e.values).length);
+    const styles = styleEdits.filter((e) => Object.keys(e.values).length);
+    if (cells.length) onSetCells(cells);
+    if (styles.length) onSetStyles(styles, label);
+  };
+  /** Move rows of a block around: `order[i]` is the view row whose content lands on view row top+i. */
+  const permuteBlock = (top: number, order: number[], left: number, right: number, label: string) => {
+    const cellEdits: { rowId: string; values: Record<string, unknown> }[] = [];
+    const styleEdits: StyleEdit[] = [];
+    order.forEach((src, i) => {
+      const dst = top + i;
+      if (src === dst) return;
+      const from = view[src]?.row, to = view[dst]?.row;
+      if (!from || !to) return;
+      const values: Record<string, unknown> = {}, styles: Record<string, CellStyle | null> = {};
+      for (let c = left; c <= right; c += 1) {
+        const col = columns[c];
+        if (!col) continue;
+        const raw = from.cells[col.id];
+        values[col.id] = isFormulaCell(raw)
+          ? moveFormula(raw.f, { r: view[src].rawIndex, c }, { r: view[dst].rawIndex, c })
+          : raw ?? null;
+        styles[col.id] = from.styles?.[col.id] ?? null;
+        if (JSON.stringify(to.styles?.[col.id] ?? null) === JSON.stringify(styles[col.id])) delete styles[col.id];
+        if (sameCell(to.cells[col.id], values[col.id])) delete values[col.id];
       }
-      out.push({ label: t("Comment"), icon: ic(MessageSquare), hint: "⌘⌥M", run: () => openCommentsAt(menu.r, menu.c) });
-      if (canEdit) {
-        out.push("sep");
-        out.push({ label: t("Dropdown"), icon: ic(CircleChevronDown), run: insertDropdown });
-        out.push({ label: t("Data validation"), icon: ic(ListChecks), run: openValidation });
-        out.push({ label: t("Conditional formatting…"), icon: ic(Paintbrush), run: () => openColumnSettings(menu.c) });
+      cellEdits.push({ rowId: to.id, values });
+      styleEdits.push({ rowId: to.id, values: styles });
+    });
+    writeBlock(cellEdits, styleEdits, label);
+  };
+  /** Sort the rows of the selection (range sort): by one or more columns, optionally skipping a header row. */
+  const sortRange = (keys: { col: number; dir: "asc" | "desc" }[], header = false, within: { top: number; bottom: number; left: number; right: number } = rect) => {
+    if (!canEdit) return;
+    const top = within.top + (header ? 1 : 0);
+    if (top > within.bottom) return;
+    const idx = Array.from({ length: within.bottom - top + 1 }, (_, i) => top + i);
+    const keyed = idx.map((r) => ({ r, k: keys.map((k) => sortKey(engine.value(view[r].row.id, columns[k.col]?.id ?? ""))) }));
+    keyed.sort((a, b) => {
+      for (let i = 0; i < keys.length; i += 1) {
+        const x = a.k[i], y = b.k[i], dir = keys[i].dir === "asc" ? 1 : -1;
+        if (!x || !y) { if (!x && !y) continue; return !x ? 1 : -1; }
+        if ("n" in x && "n" in y) { if (x.n !== y.n) return (x.n - y.n) * dir; continue; }
+        if ("n" in x) return -dir;
+        if ("n" in y) return dir;
+        const c = x.s.localeCompare(y.s, "id", { sensitivity: "base" });
+        if (c) return c * dir;
       }
-      out.push({ label: t("Filter this column"), icon: ic(Filter), run: () => col && setFilterOpen((f) => ({ ...f, [col.id]: true })) });
-      return out;
+      return a.r - b.r;
+    });
+    permuteBlock(top, keyed.map((x) => x.r), within.left, within.right, t("sort range"));
+  };
+  /** Data › Sort sheet: rows below the frozen ones change places for real (saved, like Sheets). */
+  const sortSheet = (dir: "asc" | "desc") => {
+    const col = columns[sel.c];
+    if (!canEdit || !col || !host) return;
+    const body = rows.filter((_r, i) => i >= frozenRowsSetting);
+    const keyed = body.map((r, i) => ({ id: r.id, i, k: sortKey(engine.value(r.id, col.id)) }));
+    const d = dir === "asc" ? 1 : -1;
+    keyed.sort((a, b) => {
+      if (!a.k || !b.k) return !a.k && !b.k ? a.i - b.i : !a.k ? 1 : -1;
+      if ("n" in a.k && "n" in b.k) return (a.k.n - b.k.n) * d || a.i - b.i;
+      if ("n" in a.k) return -d;
+      if ("n" in b.k) return d;
+      return a.k.s.localeCompare(b.k.s, "id", { sensitivity: "base" }) * d || a.i - b.i;
+    });
+    void host.reorderRows(keyed.map((x) => x.id), body.map((r) => r.id), t("sort sheet"));
+  };
+  /** Insert › Cells (shift down/right) and Edit › Delete › Cells (shift up/left) move values within the block's rows or columns. */
+  const shiftCells = async (dir: "down" | "up" | "right" | "left") => {
+    if (!canEdit) return;
+    const nR = rect.bottom - rect.top + 1, nC = rect.right - rect.left + 1;
+    const cellEdits: { rowId: string; values: Record<string, unknown> }[] = [];
+    const styleEdits: StyleEdit[] = [];
+    const put = (rowId: string, colId: string, raw: unknown, st: CellStyle | null | undefined) => {
+      let ce = cellEdits.find((e) => e.rowId === rowId); if (!ce) { ce = { rowId, values: {} }; cellEdits.push(ce); }
+      let se = styleEdits.find((e) => e.rowId === rowId); if (!se) { se = { rowId, values: {} }; styleEdits.push(se); }
+      ce.values[colId] = raw ?? null;
+      se.values[colId] = st ?? null;
+    };
+    if (dir === "down" || dir === "up") {
+      let last = view.length - 1;
+      while (last > rect.top && columns.slice(rect.left, rect.right + 1).every((c) => view[last]?.row.cells[c.id] === undefined)) last -= 1;
+      let list = view;
+      if (dir === "down" && last + nR > view.length - 1) {
+        const created = await onAddRows({ count: last + nR - (view.length - 1) });
+        list = [...view, ...created.map((row, i) => ({ row, rawIndex: rows.length + i }))];
+      }
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        if (!col) continue;
+        if (dir === "down") {
+          for (let r = last + nR; r >= rect.top; r -= 1) {
+            const src = r - nR >= rect.top ? list[r - nR]?.row : null;
+            const dst = list[r]?.row;
+            if (dst) put(dst.id, col.id, src ? src.cells[col.id] : null, src ? src.styles?.[col.id] : null);
+          }
+        } else {
+          for (let r = rect.top; r <= last; r += 1) {
+            const src = list[r + nR]?.row;
+            const dst = list[r]?.row;
+            if (dst) put(dst.id, col.id, src ? src.cells[col.id] : null, src ? src.styles?.[col.id] : null);
+          }
+        }
+      }
+    } else {
+      for (let r = rect.top; r <= rect.bottom; r += 1) {
+        const row = view[r]?.row;
+        if (!row) continue;
+        if (dir === "right") {
+          const spill = columns.slice(columns.length - nC).some((c) => row.cells[c.id] !== undefined);
+          if (spill) { alert(t("There's data in the last columns. Add columns first, then insert cells.")); return; }
+          for (let c = columns.length - 1; c >= rect.left; c -= 1) {
+            const src = c - nC >= rect.left ? columns[c - nC] : null;
+            put(row.id, columns[c].id, src ? row.cells[src.id] : null, src ? row.styles?.[src.id] : null);
+          }
+        } else {
+          for (let c = rect.left; c < columns.length; c += 1) {
+            const src = columns[c + nC];
+            put(row.id, columns[c].id, src ? row.cells[src.id] : null, src ? row.styles?.[src.id] : null);
+          }
+        }
+      }
     }
-    if (menu.kind === "col" && col) {
-      const span = nCols > 1 && menu.c >= rect.left && menu.c <= rect.right ? [rect.left, rect.right] : [menu.c, menu.c];
-      const label = span[0] === span[1] ? colLetter(span[0]) : `${colLetter(span[0])}–${colLetter(span[1])}`;
-      out.push({ label: t("Copy"), icon: ic(Copy), hint: "⌘C", run: () => void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")) });
-      if (canEdit) {
-        out.push({ label: t("Paste"), icon: ic(ClipboardPaste), hint: "⌘V", run: pasteVia(false) });
-        out.push("sep");
-        insertDelete("col");
-        if (canManage) out.push({ label: t("Delete column {c}", { c: colLetter(menu.c) }), icon: ic(Trash2), danger: true, run: () => onDeleteColumn(col.id) });
-        out.push({ label: t("Clear column"), icon: ic(Eraser), run: clearSelection });
-        out.push({ label: t("Hide column {c}", { c: label }), icon: ic(EyeOff), run: () => hideColumns(span[0], span[1]) });
-        out.push({
-          label: t("Resize column"), icon: ic(MoveHorizontal), run: () => {
-            const w = window.prompt(t("Column width in pixels:"), String(col.width ?? COL_W_DEFAULT));
-            const n = Number(w);
-            if (w !== null && Number.isFinite(n) && n >= 20) onEditColumn(col.id, { width: Math.round(Math.min(600, n)) });
-          },
-        });
-        out.push({ label: t("Fit to data"), icon: ic(MoveHorizontal), run: () => autofit(menu.c) });
-        out.push(frozenCols === menu.c + 1
-          ? { label: t("Unfreeze columns"), icon: ic(Snowflake), run: () => setFrozenCols(0) }
-          : { label: t("Freeze up to column {c}", { c: colLetter(menu.c) }), icon: ic(Snowflake), disabled: menu.c >= 10, run: () => setFrozenCols(menu.c + 1) });
-      }
-      out.push("sep");
-      out.push({ label: t("Sort sheet A → Z"), icon: ic(ArrowDownAZ), run: () => setSort({ colId: col.id, dir: "asc" }) });
-      out.push({ label: t("Sort sheet Z → A"), icon: ic(ArrowUpAZ), run: () => setSort({ colId: col.id, dir: "desc" }) });
-      if (sort) out.push({ label: t("Back to sheet order"), icon: ic(RotateCcw), run: () => setSort(null) });
-      out.push({ label: t("Filter this column"), icon: ic(Filter), run: () => setFilterOpen((f) => ({ ...f, [col.id]: true })) });
-      if (filters[col.id]) out.push({ label: t("Remove filter"), icon: ic(X), run: () => { setFilters((f) => ({ ...f, [col.id]: "" })); setFilterOpen((f) => ({ ...f, [col.id]: false })); } });
-      if (canEdit) {
-        out.push("sep");
-        out.push({ label: t("Column settings…"), icon: ic(Settings2), hint: t(COLUMN_TYPE_LABEL[col.type]), run: () => openColumnSettings(menu.c) });
-      }
-      return out;
+    for (const e of cellEdits) for (const [k, v] of Object.entries(e.values)) {
+      const before = rows.find((r) => r.id === e.rowId)?.cells[k];
+      if (sameCell(before, v)) delete e.values[k];
     }
-    if (menu.kind === "row" && row) {
-      const span = nRows > 1 && menu.r >= rect.top && menu.r <= rect.bottom ? [rect.top, rect.bottom] : [menu.r, menu.r];
-      const rawN = (view[menu.r]?.rawIndex ?? 0) + 1;
-      out.push({ label: t("Copy"), icon: ic(Copy), hint: "⌘C", run: () => void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")) });
-      if (canEdit) {
-        out.push({ label: t("Paste"), icon: ic(ClipboardPaste), hint: "⌘V", run: pasteVia(false) });
-        out.push("sep");
-        insertDelete("row");
-        out.push({ label: span[0] === span[1] ? t("Delete row {n}", { n: rawN }) : t("Delete {n} rows", { n: span[1] - span[0] + 1 }), icon: ic(Trash2), danger: true, run: () => onDeleteRows(view.slice(span[0], span[1] + 1).map((v) => v.row.id)) });
-        out.push({ label: t("Clear row"), icon: ic(Eraser), run: clearSelection });
-        out.push({ label: span[0] === span[1] ? t("Hide row {n}", { n: rawN }) : t("Hide {n} rows", { n: span[1] - span[0] + 1 }), icon: ic(EyeOff), run: () => hideRows(span[0], span[1]) });
-        out.push({
-          label: t("Resize row"), icon: ic(MoveVertical), run: () => {
-            const h = window.prompt(t("Row height in pixels:"), String(row.height ?? ROW_H_DEFAULT));
-            const n = Number(h);
-            if (h !== null && Number.isFinite(n)) onResizeRow(row.id, Math.round(Math.max(ROW_H_MIN, Math.min(ROW_H_MAX, n))));
-          },
-        });
-        if (row.height != null) out.push({ label: t("Default height"), icon: ic(RotateCcw), run: () => onResizeRow(row.id, null) });
-        const rawIdx = view[menu.r]?.rawIndex ?? 0;
-        out.push(frozenRowsSetting === rawIdx + 1
-          ? { label: t("Unfreeze rows"), icon: ic(Snowflake), run: () => setFrozenRows(0) }
-          : { label: t("Freeze up to row {n}", { n: rawIdx + 1 }), icon: ic(Snowflake), disabled: rawIdx >= 20, run: () => setFrozenRows(rawIdx + 1) });
+    for (const e of styleEdits) for (const [k, v] of Object.entries(e.values)) {
+      const before = rows.find((r) => r.id === e.rowId)?.styles?.[k];
+      if (JSON.stringify(before ?? null) === JSON.stringify(v ?? null)) delete e.values[k];
+    }
+    writeBlock(cellEdits, styleEdits, t("shift cells"));
+  };
+  /** Edit › Move: rows/columns of the selection one step up/down/left/right. */
+  const moveRowsBy = (d: -1 | 1) => {
+    const top = view[rect.top]?.row, bottom = view[rect.bottom]?.row;
+    if (!top || !bottom) return;
+    if (d === -1) {
+      const above = view[rect.top - 1]?.row;
+      if (!above) return;
+      onReorderRow(above.id, bottom.id);
+      setSel((s) => ({ ...s, r: s.r - 1, r2: s.r2 - 1 }));
+    } else {
+      const below = view[rect.bottom + 1]?.row;
+      if (!below) return;
+      onReorderRow(below.id, view[rect.top - 1]?.row.id ?? null);
+      setSel((s) => ({ ...s, r: s.r + 1, r2: s.r2 + 1 }));
+    }
+  };
+  const moveColsBy = (d: -1 | 1) => {
+    if (!host) return;
+    const ids = columns.map((c) => c.id);
+    const block = ids.slice(rect.left, rect.right + 1);
+    const rest = [...ids.slice(0, rect.left), ...ids.slice(rect.right + 1)];
+    const at = Math.max(0, Math.min(rest.length, rect.left + d));
+    if (at === rect.left) return;
+    host.reorderColumns([...rest.slice(0, at), ...block, ...rest.slice(at)]);
+    setSel((s) => ({ ...s, c: s.c + d, c2: s.c2 + d }));
+  };
+  /** Freeze rows — refused when the line would cut through a merged block (Sheets' "There was a problem"). */
+  const freezeRowsSafe = (n: number) => {
+    if (n > 0) {
+      const cut = (settings.merges ?? []).some((m) => {
+        const r0 = rows.findIndex((r) => r.id === m.r);
+        return r0 >= 0 && r0 < n && r0 + m.rs > n;
+      });
+      if (cut) { setProblem(t("Sorry, you can't freeze rows that contain only part of a merged cell.")); return; }
+    }
+    setFrozenRows(n);
+  };
+  const freezeColsSafe = (n: number) => {
+    if (n > 0) {
+      const cut = (settings.merges ?? []).some((m) => {
+        const c0 = columns.findIndex((c) => c.id === m.c);
+        return c0 >= 0 && c0 < n && c0 + m.cs > n;
+      });
+      if (cut) { setProblem(t("Sorry, you can't freeze columns that contain only part of a merged cell.")); return; }
+    }
+    setFrozenCols(n);
+  };
+  /** View › Group: rows (or columns) of the selection become a collapsible group. */
+  const groupSel = (axis: "row" | "col", on: boolean) => {
+    const key = axis === "row" ? "rowGroups" : "colGroups";
+    const from = axis === "row" ? view[rect.top]?.row.id : columns[rect.left]?.id;
+    const to = axis === "row" ? view[rect.bottom]?.row.id : columns[rect.right]?.id;
+    if (!from || !to) return;
+    const list = (settings[key] ?? []) as { id: string; from: string; to: string; collapsed?: true }[];
+    if (on) onSettings({ [key]: [...list, { id: newId("gr"), from, to }] }, t("group"));
+    else {
+      const next = list.filter((g) => !(g.from === from && g.to === to));
+      const fallback = next.length === list.length ? list.slice(0, -1) : next;
+      onSettings({ [key]: fallback.length ? fallback : null }, t("ungroup"));
+    }
+  };
+  /** Paste special. */
+  const pasteSpecial = (kind: string) => {
+    readClipboardAsync().then((block) => {
+      if (!block) return;
+      if (kind === "values") { void applyPaste({ cells: block.cells.map((r) => r.map((c) => ({ text: c.text }))), internal: false }); return; }
+      if (kind === "transpose") {
+        const h = block.cells.length, w = Math.max(...block.cells.map((r) => r.length));
+        const cells = Array.from({ length: w }, (_, j) => Array.from({ length: h }, (_, i) => ({ ...(block.cells[i]?.[j] ?? { text: "" }), formula: undefined })));
+        void applyPaste({ ...block, cells, origin: undefined });
+        return;
       }
-      return out;
+      if (kind === "formula") { void applyPaste({ ...block, cells: block.cells.map((r) => r.map((c) => (c.formula ? c : { ...c, style: undefined }))) }, { stylesToo: false }); return; }
+      if (kind === "widths") {
+        if (!block.widths) return;
+        block.widths.forEach((w, j) => { const col = columns[rect.left + j]; if (col && w) onEditColumn(col.id, { width: w }); });
+        return;
+      }
+      if (kind === "format" || kind === "noBorders") {
+        if (!block.internal) return;
+        const edits: StyleEdit[] = [];
+        block.cells.forEach((line, i) => {
+          const row = view[rect.top + i]?.row;
+          if (!row) return;
+          const values: Record<string, CellStyle | null> = {};
+          line.forEach((cell, j) => {
+            const col = columns[rect.left + j];
+            if (!col) return;
+            let st = (cell.style ?? null) as CellStyle | null;
+            if (kind === "noBorders" && st) st = patchStyle(st, { bd: null, bx: null });
+            values[col.id] = st;
+          });
+          edits.push({ rowId: row.id, values });
+        });
+        if (kind === "noBorders") void applyPaste(block, { stylesToo: false });
+        onSetStyles(edits, t("paste format"));
+        return;
+      }
+      if (kind === "cf" && block.condFormats?.length) {
+        const added = block.condFormats.flatMap((v) => {
+          const top = view[rect.top + v.r1], bottom = view[rect.top + v.r2], left = columns[rect.left + v.c1], right = columns[rect.left + v.c2];
+          return top && bottom && left && right ? [{ ...(v.rule as Omit<CondRule, "id" | "ranges">), id: newId("cf"), ranges: [`{${left.id}!${top.row.id}}:{${right.id}!${bottom.row.id}}`] } as CondRule] : [];
+        });
+        if (added.length) onSettings({ condFormats: [...(settings.condFormats ?? []), ...added] }, t("paste conditional formatting"));
+        return;
+      }
+      if (kind === "dv" && block.validations?.length) {
+        const added: ValidationRule[] = [];
+        for (const v of block.validations) {
+          const top = view[rect.top + v.r1], bottom = view[rect.top + v.r2], left = columns[rect.left + v.c1], right = columns[rect.left + v.c2];
+          if (top && bottom && left && right) added.push({ ...(v.rule as Omit<ValidationRule, "id" | "ranges">), id: newRuleId(), ranges: [`{${left.id}!${top.row.id}}:{${right.id}!${bottom.row.id}}`] });
+        }
+        if (added.length) onSettings({ validations: [...explicitRules, ...added] }, t("paste data validation"));
+      }
+    }).catch(() => clipboardBlocked("Ctrl+V / ⌘V"));
+  };
+  /** The block around the selection that holds data (Sheets picks it for "Create a filter" on one cell). */
+  const currentRegion = () => {
+    if (!selInfo.single) return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+    let { top, bottom, left, right } = rect;
+    const filled = (r: number, c: number) => filledAt(r, c);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      if (top > 0 && columnsRange(left, right).some((c) => filled(top - 1, c))) { top -= 1; grew = true; }
+      if (bottom < maxR && columnsRange(left, right).some((c) => filled(bottom + 1, c))) { bottom += 1; grew = true; }
+      if (left > 0 && rowsRange(top, bottom).some((r) => filled(r, left - 1))) { left -= 1; grew = true; }
+      if (right < maxC && rowsRange(top, bottom).some((r) => filled(r, right + 1))) { right += 1; grew = true; }
+    }
+    return { top, bottom, left, right };
+  };
+  const storedOf = (rc: { top: number; bottom: number; left: number; right: number }) => {
+    const a = view[rc.top]?.row, b = view[rc.bottom]?.row, l = columns[rc.left], r = columns[rc.right];
+    return a && b && l && r ? `{${l.id}!${a.id}}:{${r.id}!${b.id}}` : null;
+  };
+  const print = () => {
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(sheetName ?? "Sheet")}</title><style>body{font:11px system-ui,sans-serif;margin:12mm}table{border-collapse:collapse}td{border:1px solid #ccc;padding:2px 5px;vertical-align:bottom;white-space:pre}</style></head><body><table>`
+      + view.filter(({ row }) => columns.some((c) => row.cells[c.id] !== undefined)).map(({ row }) => `<tr>${columns.filter((_c, i) => !colHidden(i)).map((c) => `<td>${escapeHtml(displayCell(c.type, row.cells[c.id], { data, rowId: row.id, colId: c.id }))}</td>`).join("")}</tr>`).join("")
+      + `</table></body></html>`;
+    const frame = document.createElement("iframe");
+    frame.style.position = "fixed"; frame.style.width = "0"; frame.style.height = "0"; frame.style.border = "0";
+    document.body.appendChild(frame);
+    frame.contentDocument?.open(); frame.contentDocument?.write(html); frame.contentDocument?.close();
+    setTimeout(() => { frame.contentWindow?.focus(); frame.contentWindow?.print(); setTimeout(() => frame.remove(), 1000); }, 50);
+  };
+
+  const act = (a: MenuAction, arg?: unknown) => {
+    const firstRow = view[rect.top]?.row, lastRow = view[rect.bottom]?.row;
+    switch (a) {
+      case "import": host?.importFile(); return;
+      case "download": if (arg === "pdf") print(); else host?.download(arg as "xlsx" | "csv" | "tsv" | "html"); return;
+      case "renameSheet": host?.renameSheet(); return;
+      case "nameVersion": {
+        const name = window.prompt(t("Name this version"), "");
+        if (name?.trim()) onSettings({ versions: [...(settings.versions ?? []), { id: newId("vr"), name: name.trim(), at: new Date().toISOString() }] }, t("name version"));
+        return;
+      }
+      case "versionHistory": setPanel({ kind: "versions" }); return;
+      case "settings": setDialog({ kind: "settings" }); return;
+      case "print": print(); return;
+      case "undo": onUndo(); return;
+      case "redo": onRedo(); return;
+      case "cut": void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => clipboardBlocked("Ctrl+X / ⌘X")); return;
+      case "copy": void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")); return;
+      case "paste": pasteVia(false)(); return;
+      case "pasteSpecial": pasteSpecial(String(arg)); return;
+      case "moveRows": moveRowsBy(arg as -1 | 1); return;
+      case "moveCols": moveColsBy(arg as -1 | 1); return;
+      case "deleteValues": clearSelection(); return;
+      case "deleteRows": onDeleteRows(view.slice(rect.top, rect.bottom + 1).map((v) => v.row.id)); return;
+      case "deleteCols": {
+        const ids = columns.slice(rect.left, rect.right + 1).map((c) => c.id);
+        if (ids.length === 1) onDeleteColumn(ids[0]); else host?.deleteColumns(ids);
+        return;
+      }
+      case "deleteCellsUp": void shiftCells("up"); return;
+      case "deleteCellsLeft": void shiftCells("left"); return;
+      case "insertCellsDown": void shiftCells("down"); return;
+      case "insertCellsRight": void shiftCells("right"); return;
+      case "deleteNotes": styleSelection((st) => patchStyle(st, { nt: null }), t("delete notes")); return;
+      case "findReplace": setDialog({ kind: "find" }); return;
+      case "toggleFormulaBar": setPrefs((p) => ({ ...p, fx: !p.fx })); return;
+      case "toggleGridlines": onSettings({ noGrid: settings.noGrid ? null : true }, t("gridlines")); return;
+      case "toggleFormulas": setPrefs((p) => ({ ...p, formulas: !p.formulas })); return;
+      case "toggleProtected": setPrefs((p) => ({ ...p, protectedShown: !p.protectedShown })); return;
+      case "toggleComments": setPrefs((p) => ({ ...p, commentsHidden: !p.commentsHidden })); return;
+      case "showAllComments": setPanel({ kind: "comments" }); return;
+      case "freezeRows": freezeRowsSafe(Number(arg)); return;
+      case "freezeCols": freezeColsSafe(Number(arg)); return;
+      case "groupRows": groupSel("row", true); return;
+      case "ungroupRows": groupSel("row", false); return;
+      case "groupCols": groupSel("col", true); return;
+      case "ungroupCols": groupSel("col", false); return;
+      case "unhideSheet": host?.setSheetHidden(String(arg), false); return;
+      case "zoom": setZoom(Number(arg)); return;
+      case "fullScreen": setFull((f) => !f); return;
+      case "insertRowsAbove": if (firstRow) void onAddRows({ count: rect.bottom - rect.top + 1, beforeRowId: firstRow.id }); return;
+      case "insertRowsBelow": if (lastRow) void onAddRows({ count: rect.bottom - rect.top + 1, afterRowId: lastRow.id }); return;
+      case "insertColsLeft": onInsertColumn(rect.left, rect.right - rect.left + 1); return;
+      case "insertColsRight": onInsertColumn(rect.right + 1, rect.right - rect.left + 1); return;
+      case "insertSheet": host?.insertSheet(); return;
+      case "insertChart": insertChart(); return;
+      case "insertPivot": setDialog({ kind: "pivot" }); return;
+      case "insertFunction": insertFunction(String(arg)); return;
+      case "insertLink": insertLink(); return;
+      case "insertCheckbox": insertCheckbox(); return;
+      case "insertDropdown": insertDropdown(); return;
+      case "insertComment": openCommentsAt(sel.r, sel.c); return;
+      case "insertNote": openNote(true); return;
+      case "theme": setPanel({ kind: "theme" }); return;
+      case "numberFormat": applyNumberFormat(String(arg)); return;
+      case "customFormat": setDialog({ kind: String(arg) as "customNumber" | "customDate" | "customCurrency" }); return;
+      case "style": applyStyle(arg as Partial<Record<keyof CellStyle, unknown>>); return;
+      case "fontSize": applyStyle({ fp: Number(arg) === 10 ? null : Number(arg), fs: null }); return;
+      case "merge": mergeAs(arg as "all" | "vertical" | "horizontal" | "unmerge"); return;
+      case "convertTable": convertToTable(); return;
+      case "condFormat": setPanel({ kind: "cf" }); return;
+      case "alternating": setPanel({ kind: "alt" }); return;
+      case "clearFormat": clearFormat(); return;
+      case "sortSheet": sortSheet(arg as "asc" | "desc"); return;
+      case "sortRange": sortRange([{ col: rect.left, dir: arg as "asc" | "desc" }]); return;
+      case "sortAdvanced": setDialog({ kind: "sort" }); return;
+      case "toggleFilter": toggleFilter(); return;
+      case "filterViewGroupBy": createFilterView(String(arg)); return;
+      case "filterViewCreate": createFilterView(null); return;
+      case "filterViewSaveAs": createFilterView(null, true); return;
+      case "filterViewOpen": setActiveView((arg as string | null) ?? null); return;
+      case "filterViewAction": filterViewAction(String(arg)); return;
+      case "slicer": addSlicer(); return;
+      case "protect": setPanel({ kind: "protect" }); return;
+      case "protectRange": setPanel({ kind: "protect", fromSelection: true }); return;
+      case "namedRanges": setPanel({ kind: "named" }); return;
+      case "defineNamed": setPanel({ kind: "named", fromSelection: true }); return;
+      case "randomize": {
+        const idx = Array.from({ length: rect.bottom - rect.top + 1 }, (_, i) => rect.top + i);
+        for (let i = idx.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+        permuteBlock(rect.top, idx, rect.left, rect.right, t("randomise range"));
+        return;
+      }
+      case "columnStats": setPanel({ kind: "stats", col: sel.c }); return;
+      case "validation": openValidation(); return;
+      case "removeDuplicates": setDialog({ kind: "dedupe" }); return;
+      case "trimWhitespace": trimWhitespace(); return;
+      case "splitText": splitText("auto"); return;
+      case "calcMode": setPrefs((p) => ({ ...p, manual: Boolean(arg) })); return;
+      case "searchMenus": setMenuSearch(true); return;
+      case "functionList": setDialog({ kind: "functions" }); return;
+      case "shortcuts": setDialog({ kind: "shortcuts" }); return;
+      case "hideRows": hideRows(rect.top, rect.bottom); return;
+      case "hideCols": hideColumns(rect.left, rect.right); return;
+      case "clearRows": case "clearCols": clearSelection(); return;
+      case "resizeRows": case "resizeCols": setDialog({ kind: a === "resizeRows" ? "resizeRows" : "resizeCols" }); return;
+      case "fitToData": for (let c = rect.left; c <= rect.right; c += 1) autofit(c); return;
+      case "cellLink": {
+        const url = `${window.location.origin}${window.location.pathname}${window.location.search}#gid=${host?.sheetId ?? ""}&range=${nameBox}`;
+        void navigator.clipboard?.writeText(url).then(() => setToast(t("Link copied to clipboard.")));
+        return;
+      }
+      case "autocomplete": return;
+    }
+  };
+  // ── Popovers, sidebars and floating objects ───────────────────────────────────────────────────
+  const [noteHover, setNoteHover] = useState<{ rowId: string; colId: string; rect: DOMRect } | null>(null);
+  const onNoteHover = useCallback((rowId: string, colId: string, r: DOMRect | null) => setNoteHover(r ? { rowId, colId, rect: r } : null), []);
+  const [headerMenu, setHeaderMenu] = useState<{ ci: number; rect: DOMRect } | null>(null);
+  const onHeaderMenu = useCallback((ci: number, r: DOMRect) => setHeaderMenu({ ci, rect: r }), []);
+  const [tableMenu, setTableMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [slicerMenu, setSlicerMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [datePick, setDatePick] = useState<{ rowId: string; colId: string; rect: DOMRect; value: number | null } | null>(null);
+  const [protectWarn, setProtectWarn] = useState<null | (() => void)>(null);
+  const protectMuteUntil = useRef(0);
+  const theme = themePreview ?? settings.theme;
+  const themeStandard = theme?.accents?.length ? ["#000000", "#ffffff", ...theme.accents].slice(0, 8) : STANDARD_THEME;
+  const selectionA1 = (() => { const r = selectionStored(); return r ? rangeToA1(r, data.shape) : ""; })();
+
+  /** Row-group gutter: a bracket beside grouped rows, [–] under the group, [+] where a collapsed one sits. */
+  const rowGutter = useMemo(() => {
+    const out = new Map<string, ReactNode>();
+    const groups = settings.rowGroups ?? [];
+    if (!groups.length) return out;
+    const idx = new Map(rows.map((r, i) => [r.id, i]));
+    const toggle = (id: string) => onSettings({ rowGroups: groups.map((g) => (g.id === id ? { ...g, collapsed: g.collapsed ? undefined : true as const } : g)) }, t("group"));
+    for (const g of groups) {
+      const a = idx.get(g.from), b = idx.get(g.to);
+      if (a === undefined || b === undefined) continue;
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      if (g.collapsed) {
+        const after = rows[hi + 1] ?? rows[lo - 1];
+        if (after) out.set(after.id, (
+          <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle(g.id); }} aria-label={t("Expand group")} title={t("Expand group")}
+            className="absolute left-0.5 top-1/2 z-10 grid h-3 w-3 -translate-y-1/2 place-items-center rounded-[2px] border border-muted-foreground/60 bg-card text-muted-foreground"><Plus className="h-2 w-2" /></button>
+        ));
+        continue;
+      }
+      for (let i = lo; i <= hi; i += 1) {
+        const last = i === hi;
+        out.set(rows[i].id, (
+          <>
+            <span aria-hidden className={cn("absolute left-[7px] w-px bg-muted-foreground/50", i === lo ? "top-1/2" : "top-0", last ? "bottom-1/2" : "bottom-0")} />
+            {last && (
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle(g.id); }} aria-label={t("Collapse group")} title={t("Collapse group")}
+                className="absolute left-0.5 top-1/2 z-10 grid h-3 w-3 -translate-y-1/2 place-items-center rounded-[2px] border border-muted-foreground/60 bg-card text-muted-foreground"><Minus className="h-2 w-2" /></button>
+            )}
+          </>
+        ));
+      }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu, view, columns, rect, canEdit, canManage, clipSelection, clearSelection, applyPaste, t, sort, filters, frozenCols, frozenRowsSetting, settings]);
+  }, [settings.rowGroups, rows]);
+  /** The [–]/[+] of a column group sits in the header of its last column (or the one after a collapsed group). */
+  const colGroupMark = (ci: number): ReactNode => {
+    for (const g of settings.colGroups ?? []) {
+      const a = columns.findIndex((c) => c.id === g.from), b = columns.findIndex((c) => c.id === g.to);
+      if (a < 0 || b < 0) continue;
+      const hi = Math.max(a, b);
+      const here = g.collapsed ? ci === Math.min(columns.length - 1, hi + 1) : ci === hi;
+      if (!here) continue;
+      const toggle = () => onSettings({ colGroups: (settings.colGroups ?? []).map((x) => (x.id === g.id ? { ...x, collapsed: x.collapsed ? undefined : true as const } : x)) }, t("group"));
+      return (
+        <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle(); }} aria-label={g.collapsed ? t("Expand group") : t("Collapse group")}
+          className="absolute left-0.5 top-0.5 z-10 grid h-3 w-3 place-items-center rounded-[2px] border border-muted-foreground/60 bg-card text-muted-foreground">
+          {g.collapsed ? <Plus className="h-2 w-2" /> : <Minus className="h-2 w-2" />}
+        </button>
+      );
+    }
+    return null;
+  };
 
+  /** Where a floating object (chart, slicer) sits, in unzoomed px inside the scroll area. */
+  const viewIndexOf = useMemo(() => new Map(view.map((v, i) => [v.row.id, i])), [view]);
+  const anchorXY = (at: { r: string; c: string; dx?: number; dy?: number }) => {
+    const ci = columns.findIndex((c) => c.id === at.c);
+    const vi = viewIndexOf.get(at.r);
+    if (ci < 0 || vi === undefined) return null;
+    return { x: (lefts[ci] ?? 0) + (at.dx ?? 0), y: headH + (offsets[vi] ?? 0) + (at.dy ?? 0) };
+  };
+  const anchorFromXY = (x: number, y: number) => {
+    let ci = 0;
+    while (ci < columns.length - 1 && (lefts[ci + 1] ?? Infinity) <= x) ci += 1;
+    let vi = 0;
+    while (vi < view.length - 1 && headH + offsets[vi + 1] <= y) vi += 1;
+    return { r: view[vi]?.row.id ?? view[0]?.row.id ?? "", c: columns[ci].id, dx: Math.round(x - (lefts[ci] ?? 0)), dy: Math.round(y - headH - (offsets[vi] ?? 0)) };
+  };
+  const saveChart = (next: ChartSpec, label = t("edit chart")) =>
+    onSettings({ charts: (settings.charts ?? []).map((c) => (c.id === next.id ? next : c)) }, label);
+  /** Chart editor edits arrive per keystroke: shown at once, saved after a pause (one undo entry). */
+  const chartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [chartDraft, setChartDraft] = useState<ChartSpec | null>(null);
+  const editChart = (next: ChartSpec) => {
+    setChartDraft(next);
+    if (chartTimer.current) clearTimeout(chartTimer.current);
+    chartTimer.current = setTimeout(() => { saveChart(next); setChartDraft(null); }, 600);
+  };
+  const chartsShown = (settings.charts ?? []).map((c) => (chartDraft && chartDraft.id === c.id ? chartDraft : c));
+
+  /** Filter menu (funnel on a header): criteria saved on the open view, or the shared filter. */
+  const saveFilter = (next: SheetFilter) => {
+    if (activeView) onSettings({ filterViews: (settings.filterViews ?? []).map((v) => (v.id === activeView ? { ...v, ...next } : v)) }, t("filter"));
+    else onSettings({ filter: next }, t("filter"));
+  };
+  const filterBodyIds = () => {
+    const rc = filterResult.main?.rect;
+    return rc ? rows.slice(rc.top + 1, rc.bottom + 1).map((r) => r.id) : [];
+  };
+
+  /** Spreadsheet-wide settings (File › Settings) apply to every sheet of the project. */
+  const valuesOfColumn = useCallback((ci: number) => {
+    const col = columns[ci];
+    return col ? rows.map((r) => ({ value: engine.value(r.id, col.id), text: displayCell(col.type, r.cells[col.id], { data, rowId: r.id, colId: col.id }) })) : [];
+  }, [columns, rows, engine, data]);
+
+  /**
+   * Protected ranges: "Show a warning" ranges ask first (Sheets' "Heads up!"); restricted ones the
+   * user isn't an editor of are refused here and by the server.
+   */
+  const protectOk = useRef(false);
+  const protectedHere = (rawRow: number, ci: number): "warn" | "deny" | null => {
+    let out: "warn" | "deny" | null = null;
+    for (const pr of settings.protections ?? []) {
+      const inside = pr.sheet
+        ? !(pr.except ?? []).some((x) => { const rc = rangeRect(x, data.shape); return rc && rawRow >= rc.top && rawRow <= rc.bottom && ci >= rc.left && ci <= rc.right; })
+        : (() => { const rc = pr.range ? rangeRect(pr.range, data.shape) : null; return Boolean(rc && rawRow >= rc.top && rawRow <= rc.bottom && ci >= rc.left && ci <= rc.right); })();
+      if (!inside) continue;
+      if (pr.mode === "restrict") {
+        const me = host?.meId ?? "";
+        if (pr.by === me || pr.editors?.includes(me) || canManage) continue;
+        return "deny";
+      }
+      out = "warn";
+    }
+    return out;
+  };
+  const guardProtected = (go: () => void) => {
+    const hit = protectedHere(view[sel.r]?.rawIndex ?? 0, sel.c);
+    if (hit === "deny") { setProblem(t("This cell is protected. Ask its owner if you need to change it.")); return; }
+    if (!hit || Date.now() < protectMuteUntil.current) { go(); return; }
+    setProtectWarn(() => go);
+  };
+  // ── Find and replace (dialog) ─────────────────────────────────────────────────────────────────
+  const findCells = (o: FindOpts) => {
+    const hits: { r: number; c: number }[] = [];
+    if (!o.find) return hits;
+    const inRange = (r: number, c: number) => o.scope !== "range" || (r >= rect.top && r <= rect.bottom && c >= rect.left && c <= rect.right);
+    view.forEach(({ row }, r) => columns.forEach((col, c) => {
+      if (!inRange(r, c)) return;
+      const raw = row.cells[col.id];
+      if (raw === undefined || raw === null) return;
+      const text = isFormula(raw)
+        ? (o.formulas ? editFormula(raw, data.shape) ?? "" : displayCell(col.type, raw, { data, rowId: row.id, colId: col.id }))
+        : isLinkCell(raw) && o.links ? `${raw.t} ${raw.u}` : editValue(col.type, raw);
+      if (textMatches(text, o)) hits.push({ r, c });
+    }));
+    return hits;
+  };
+  const findNext = (o: FindOpts): number => {
+    const hits = findCells(o);
+    if (!hits.length) return 0;
+    const at = hits.findIndex((h) => h.r > sel.r || (h.r === sel.r && h.c > sel.c));
+    const next = hits[at < 0 ? 0 : at];
+    setSel({ r: next.r, c: next.c, r2: next.r, c2: next.c });
+    return hits.length;
+  };
+  const replaceIn = (o: FindOpts, only?: { r: number; c: number }) => {
+    if (!canEdit) return 0;
+    const hits = only ? [only] : findCells(o);
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    let count = 0;
+    for (const h of hits) {
+      const row = view[h.r]?.row, col = columns[h.c];
+      if (!row || !col) continue;
+      const raw = row.cells[col.id];
+      if (isFormula(raw)) {
+        if (!o.formulas) continue;
+        const text = editFormula(raw, data.shape) ?? "";
+        const res = replaceText(text, o);
+        if (!res.count) continue;
+        count += res.count;
+        edits.push({ rowId: row.id, values: { [col.id]: res.text.startsWith("=") ? { f: toStored(res.text, data.shape) } : inputToCell(col, res.text, data.shape, raw) } });
+        continue;
+      }
+      const text = editValue(col.type, raw);
+      const res = replaceText(text, o);
+      if (!res.count) continue;
+      count += res.count;
+      const next = isLinkCell(raw) ? (res.text.trim() ? { t: res.text, u: raw.u } : null) : inputToCell(col, res.text, data.shape, raw);
+      const e = edits.find((x) => x.rowId === row.id);
+      if (e) e.values[col.id] = next; else edits.push({ rowId: row.id, values: { [col.id]: next } });
+    }
+    if (edits.length) onSetCells(edits);
+    return count;
+  };
+  const replaceOne = (o: FindOpts): number => {
+    const hits = findCells(o);
+    const here = hits.find((h) => h.r === sel.r && h.c === sel.c);
+    if (!here) return findNext(o) ? 0 : 0;
+    const n = replaceIn(o, here);
+    findNext(o);
+    return n;
+  };
+  const replaceEvery = (o: FindOpts): number => replaceIn(o);
+
+  /** Data clean-up › Remove duplicates: unique rows move up inside the selection, the rest is cleared. */
+  const removeDuplicates = (header: boolean, cols: number[]) => {
+    const top = rect.top;
+    const lines = rowsRange(top, rect.bottom).map((r) => columnsRange(rect.left, rect.right).map((c) => display(view[r].row.id, columns[c].id)));
+    const { keep, removed } = dedupe(lines, cols.map((c) => c - rect.left), { header });
+    const order = [...keep.map((i) => top + i)];
+    const cleared = rowsRange(top, rect.bottom).length - order.length;
+    permuteBlock(top, order, rect.left, rect.right, t("remove duplicates"));
+    if (cleared) {
+      const tail = view.slice(top + order.length, rect.bottom + 1);
+      onSetCells(tail.map((v) => ({ rowId: v.row.id, values: Object.fromEntries(columnsRange(rect.left, rect.right).map((c) => [columns[c].id, null])) })));
+    }
+    setToast(t("{n} duplicate rows found and removed. {m} unique rows remain.", { n: removed, m: keep.length - (header ? 1 : 0) }));
+  };
+
+  // ── Version history ─────────────────────────────────────────────────────────────────────────
+  const historyQ = useQuery({
+    queryKey: ["nexus", "sheet-history", host?.sheetId],
+    queryFn: () => nexusApi.sheetHistory(host!.sheetId, { limit: 2000 }),
+    enabled: panel?.kind === "versions" && Boolean(host?.sheetId),
+    staleTime: 0,
+  });
+  const laterQ = useQuery({
+    queryKey: ["nexus", "sheet-history-after", host?.sheetId, versionAt],
+    queryFn: () => nexusApi.sheetHistory(host!.sheetId, { after: versionAt! }),
+    enabled: Boolean(versionAt && host?.sheetId),
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (!versionAt || !laterQ.data) { setVersionPreview(null); return; }
+    const st = stateAt(rowsProp, laterQ.data.revisions, versionAt);
+    setVersionPreview({ rows: st.rows, changed: showChanges ? st.changed : new Set() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionAt, laterQ.data, showChanges]);
+  const restoreVersion = async (at: string) => {
+    if (!canEditProp || !host) return;
+    const res = await nexusApi.sheetHistory(host.sheetId, { after: at });
+    const st = stateAt(rowsProp, res.revisions, at);
+    const byId = new Map(st.rows.map((r) => [r.id, r]));
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    for (const key of st.changed) {
+      const [rowId, colId] = key.split(":");
+      const then = byId.get(rowId);
+      if (!then || !columns.some((c) => c.id === colId)) continue;
+      const e = edits.find((x) => x.rowId === rowId) ?? (() => { const x = { rowId, values: {} as Record<string, unknown> }; edits.push(x); return x; })();
+      e.values[colId] = (then.cells as Record<string, unknown>)[colId] ?? null;
+    }
+    setVersionAt(null);
+    if (edits.length) onSetCells(edits);
+    setToast(t("Version restored."));
+  };
+
+  // ── Paint format: the copied format lands on the next selection ─────────────────────────────
+  const paintRect = useRef<string>("");
+  useEffect(() => {
+    if (!paint) { paintRect.current = ""; return; }
+    const key = `${rect.top}:${rect.bottom}:${rect.left}:${rect.right}`;
+    if (!paintRect.current) { paintRect.current = key; return; }
+    if (key === paintRect.current) return;
+    const up = () => {
+      window.removeEventListener("mouseup", up);
+      styleSelection(() => (paint.style ? { ...paint.style } : null), t("paint format"));
+      if (!paint.sticky) setPaint(null); else paintRect.current = key;
+    };
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rect, paint]);
+
+  /** Date cells open the date picker under the editor (Enter, F2, double-click). */
+  useEffect(() => {
+    if (!editing) return;
+    const col = columns.find((c) => c.id === editing.colId);
+    const row = rows.find((r) => r.id === editing.rowId);
+    if (!col || !row || editing.seed) return;
+    const raw = row.cells[col.id];
+    const isDate = col.type === "date" || (isTypedCell(raw) && raw.nf === "date") || engine.format(row.id, col.id) === "date" || row.styles?.[col.id]?.nf === "date";
+    if (!isDate) return;
+    const box = gridRef.current?.querySelector(`[data-cell="${row.id}:${col.id}"]`)?.getBoundingClientRect();
+    const v = engine.value(row.id, col.id);
+    if (box) setDatePick({ rowId: row.id, colId: col.id, rect: box, value: typeof v === "number" ? v : null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+  useEffect(() => { if (datePick && (!editing || editing.rowId !== datePick.rowId || editing.colId !== datePick.colId)) { const id = setTimeout(() => setDatePick(null), 300); return () => clearTimeout(id); } }, [editing, datePick]);
+  const nameBoxRef = useRef<HTMLInputElement>(null);
+  const pasteValuesNext = useRef(false);
+  /** Ctrl+; / Ctrl+Shift+; / Ctrl+Alt+Shift+; — today's date, the time, or both, into the selection. */
+  const stampNow = (kind: "date" | "time" | "dt") => {
+    if (!canEdit) return;
+    const now = new Date();
+    const day = todaySerial(now);
+    const frac = (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86_400;
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    const styles: StyleEdit[] = [];
+    for (let r = rect.top; r <= rect.bottom; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      const values: Record<string, unknown> = {}, sv: Record<string, CellStyle | null> = {};
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const col = columns[c];
+        if (!col) continue;
+        if (kind === "date") values[col.id] = col.type === "date" ? serialToIso(day) : { v: day, nf: "date" };
+        else { values[col.id] = kind === "time" ? frac : day + frac; sv[col.id] = patchStyle(row.styles?.[col.id], { nf: kind }); }
+      }
+      edits.push({ rowId: row.id, values });
+      if (Object.keys(sv).length) styles.push({ rowId: row.id, values: sv });
+    }
+    onSetCells(edits);
+    if (styles.length) onSetStyles(styles, t("format cells"));
+  };
+  /** Ctrl+D / Ctrl+R: the first row (column) of the selection fills the rest; one cell copies from above (left). */
+  const fillDirection = (dir: "down" | "right") => {
+    const one = dir === "down" ? rect.top === rect.bottom : rect.left === rect.right;
+    const srcR = dir === "down" ? (one ? rect.top - 1 : rect.top) : null;
+    const srcC = dir === "right" ? (one ? rect.left - 1 : rect.left) : null;
+    if ((srcR !== null && srcR < 0) || (srcC !== null && srcC < 0)) return;
+    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
+    for (let r = rect.top; r <= rect.bottom; r += 1) {
+      const row = view[r]?.row;
+      if (!row) continue;
+      const values: Record<string, unknown> = {};
+      for (let c = rect.left; c <= rect.right; c += 1) {
+        const fr = srcR ?? r, fc = srcC ?? c;
+        if (fr === r && fc === c) continue;
+        const from = view[fr]?.row, col = columns[c], fcol = columns[fc];
+        if (!from || !col || !fcol) continue;
+        const raw = from.cells[fcol.id];
+        values[col.id] = isFormulaCell(raw) ? moveFormula(raw.f, { r: view[fr].rawIndex, c: fc }, { r: view[r].rawIndex, c }) : raw ?? null;
+      }
+      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
+    }
+    const allowed = keepValid(edits);
+    if (allowed.length) onSetCells(allowed);
+  };
+  const menuCtx: MenuCtx = {
+    canEdit, canManage, canUndo, canRedo, sel: selInfo,
+    frozenRows: frozenRowsSetting, frozenCols, zoom,
+    showFormulaBar: prefs.fx, showGrid: !settings.noGrid, showFormulas: prefs.formulas, showProtected: prefs.protectedShown,
+    commentsHidden: prefs.commentsHidden, fullScreen: full,
+    hiddenSheets: (host?.sheets ?? []).filter((s) => s.hidden).map((s) => ({ id: s.id, name: s.name })),
+    merged: mergedHere.length > 0, canMerge,
+    hasFilter: Boolean(settings.filter), views: (settings.filterViews ?? []).map((v) => ({ id: v.id, name: v.name })), activeViewId: activeView,
+    regionColumns: regionColumns(),
+    numberItems: numberMenuItems,
+    activeNumberFormat: activeStyle?.nf ?? "auto",
+    style: {
+      b: Boolean(activeStyle?.b), i: Boolean(activeStyle?.i), u: Boolean(activeStyle?.u), s: Boolean(activeStyle?.s),
+      ha: activeStyle?.ha, va: activeStyle?.va, wrap: activeStyle?.wr ?? (activeStyle?.w ? "w" : "o"), rt: activeStyle?.rt,
+      fontPt: activeStyle?.fp ?? (activeStyle?.fs ? Math.round(activeStyle.fs * 0.75) : 10),
+    },
+    hasNotes: Boolean(activeStyle?.nt),
+    inTable: Boolean(tableAt(view[sel.r]?.rawIndex ?? -1, sel.c)),
+    isLink: Boolean(activeCol && isLinkCell(activeRaw)),
+    calcManual: prefs.manual,
+    autocomplete: true,
+    functions: FUNCTION_CATALOG,
+    act,
+  };
+  const menuBar = buildMenuBar(menuCtx);
   // ── Keyboard ────────────────────────────────────────────────────────────────────────────────
   const filledAt = (r: number, c: number) => {
     const row = view[r]?.row;
@@ -1159,6 +2319,71 @@ export function SheetGrid({
     if (editing) return; // the input owns the keyboard while editing
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.altKey && e.code === "KeyM") { e.preventDefault(); openCommentsAt(sel.r, sel.c); return; }
+    if (selectedObject && (e.key === "Escape")) { setSelectedObject(null); return; }
+    // Sheets' keyboard shortcuts (Help › Keyboard shortcuts lists these).
+    const code = e.code;
+    const go = (fn: () => void) => { e.preventDefault(); e.stopPropagation(); fn(); };
+    if (e.altKey && e.shiftKey && !meta) {
+      const menuKey: Record<string, string> = { KeyF: "file", KeyE: "edit", KeyV: "view", KeyI: "insert", KeyO: "format", KeyD: "data", KeyT: "tools", KeyH: "help" };
+      if (menuKey[code]) return go(() => setMenuOpen(menuKey[code]));
+      const border: Record<string, BorderPreset10> = { Digit1: "top", Digit2: "right", Digit3: "bottom", Digit4: "left", Digit6: "clear", Digit7: "outer" };
+      if (border[code] && canEdit) return go(() => applyBorders10(border[code], "thin", null));
+      if (code === "ArrowRight") return go(() => act(selInfo.wholeCols && !selInfo.wholeRows ? "groupCols" : "groupRows"));
+      if (code === "ArrowLeft") return go(() => act(selInfo.wholeCols && !selInfo.wholeRows ? "ungroupCols" : "ungroupRows"));
+      // Quick sum (Sheets: Alt+Shift+Q): open the statistics chip's menu.
+      if (code === "KeyQ") {
+        const chip = document.querySelector<HTMLButtonElement>("[data-quick-sum] button");
+        if (chip) return go(() => chip.click());
+      }
+    }
+    if (e.altKey && !meta && !e.shiftKey && (e.key === "/" || code === "Slash")) return go(() => setMenuSearch(true));
+    if (e.altKey && !meta && code === "F1") return go(() => act("insertChart"));
+    if (e.shiftKey && !meta && !e.altKey && code === "F2") return go(() => openNote(true));
+    if (e.shiftKey && !meta && code === "F11") return go(() => act("insertSheet"));
+    if (code === "F9" && prefs.manual) return go(() => setRecalcTick((n) => n + 1));
+    if (meta) {
+      if (e.altKey && e.shiftKey && code === "KeyH") return go(() => act("versionHistory"));
+      if (e.altKey && code === "KeyT") return go(() => act("convertTable"));
+      if (e.altKey && code === "KeyR") return go(() => { const box = gridRef.current?.querySelector(`[data-cell="${activeRow?.id}:${activeCol?.id}"]`)?.getBoundingClientRect(); if (box) setHeaderMenu({ ci: sel.c, rect: box }); });
+      if (e.altKey && code === "KeyV") return go(() => pasteSpecial("format"));
+      if (e.altKey && (code === "Equal" || code === "NumpadAdd")) return go(() => act(selInfo.wholeCols && !selInfo.wholeRows ? "insertColsLeft" : "insertRowsAbove"));
+      if (e.altKey && (code === "Minus" || code === "NumpadSubtract")) return go(() => act(selInfo.wholeCols && !selInfo.wholeRows ? "deleteCols" : "deleteRows"));
+      if (e.altKey && e.shiftKey && code === "Semicolon") return go(() => stampNow("dt"));
+      if (e.shiftKey && code === "Semicolon") return go(() => stampNow("time"));
+      if (!e.shiftKey && code === "Semicolon") return go(() => stampNow("date"));
+      if (code === "Slash") return go(() => act("shortcuts"));
+      if (code === "KeyH") return go(() => act("findReplace"));
+      if (code === "KeyJ") return go(() => nameBoxRef.current?.focus());
+      if (code === "KeyP") return go(() => print());
+      if (code === "Backquote") return go(() => act("toggleFormulas"));
+      if (code === "F1") return go(() => act("fullScreen"));
+      if (e.shiftKey && code === "KeyU") return go(() => act("toggleFormulaBar"));
+      if (code === "Backspace") return go(() => setSel((x) => ({ ...x })));
+      if (canEdit) {
+        if (code === "KeyD" && !e.shiftKey) return go(() => fillDirection("down"));
+        if (code === "KeyR" && !e.shiftKey) return go(() => fillDirection("right"));
+        if (e.shiftKey && code === "KeyL") return go(() => applyStyle({ ha: "l" }));
+        if (e.shiftKey && code === "KeyE") return go(() => applyStyle({ ha: "c" }));
+        if (e.shiftKey && code === "KeyR") return go(() => applyStyle({ ha: "r" }));
+        if (e.shiftKey && code === "Digit1") return go(() => applyNumberFormat("num"));
+        if (e.shiftKey && code === "Digit2") return go(() => applyNumberFormat("time"));
+        if (e.shiftKey && code === "Digit3") return go(() => applyNumberFormat("date"));
+        if (e.shiftKey && code === "Digit4") return go(() => applyNumberFormat(settings.locale === "en-US" ? "cur" : "idr"));
+        if (e.shiftKey && code === "Digit5") return go(() => applyNumberFormat("pct"));
+        if (e.shiftKey && code === "Digit6") return go(() => applyNumberFormat("sci"));
+        if (e.shiftKey && code === "Digit7") return go(() => applyBorders10("outer", "thin", null));
+        if (e.shiftKey && code === "Minus") return go(() => applyBorders10("clear", "thin", null));
+        if (!e.shiftKey && code === "Digit2") return go(() => applyStyle({ b: activeStyle?.b ? null : 1 }));
+        if (!e.shiftKey && code === "Digit3") return go(() => applyStyle({ i: activeStyle?.i ? null : 1 }));
+        if (!e.shiftKey && code === "Digit4") return go(() => applyStyle({ u: activeStyle?.u ? null : 1 }));
+        if (!e.shiftKey && code === "Digit5") return go(() => applyStyle({ s: activeStyle?.s ? null : 1 }));
+        if (!e.shiftKey && code === "Digit9") return go(() => act("hideRows"));
+        if (!e.shiftKey && code === "Digit0") return go(() => act("hideCols"));
+        if (e.shiftKey && code === "Digit9") return go(() => unhideRows(view.slice(rect.top, rect.bottom + 2).flatMap((v) => hiddenRowsBefore.get(v.row.id) ?? [])));
+        if (e.shiftKey && code === "Digit0") return go(() => unhideCols(columnsRange(rect.left, Math.min(maxC, rect.right + 1)).flatMap((c) => hiddenBefore(c))));
+        if (e.shiftKey && code === "KeyV") { pasteValuesNext.current = true; return; }
+      }
+    }
     // Formatting shortcuts (Sheets' own).
     if (meta && !e.altKey && canEdit) {
       const k = e.key.toLowerCase();
@@ -1355,109 +2580,19 @@ export function SheetGrid({
     <>
     <div className="flex items-stretch gap-2">
     <div className="min-w-0 flex-1 space-y-1.5">
-      {/* Menu bar, Sheets' order. Every entry runs something the toolbar or a menu also offers. */}
-      <nav aria-label={t("Menu")} className="flex flex-wrap items-center gap-0.5 text-xs">
-        <Menu bare label={t("Edit")} trigger={<span className="px-0.5 font-medium">{t("Edit")}</span>}>
-          {(close) => (
-            <>
-              <MenuItem disabled={!canUndo} hint="⌘Z" onClick={() => { onUndo(); close(); }}>{t("Undo")}</MenuItem>
-              <MenuItem disabled={!canRedo} hint="⌘Y" onClick={() => { onRedo(); close(); }}>{t("Redo")}</MenuItem>
-              <MenuSep />
-              <MenuItem disabled={!canEdit} hint="⌘X" onClick={() => { close(); void writeClipboardAsync(clipSelection(true)).then(clearSelection).catch(() => clipboardBlocked("Ctrl+X / ⌘X")); }}>{t("Cut")}</MenuItem>
-              <MenuItem hint="⌘C" onClick={() => { close(); void writeClipboardAsync(clipSelection(false)).catch(() => clipboardBlocked("Ctrl+C / ⌘C")); }}>{t("Copy")}</MenuItem>
-              <MenuItem disabled={!canEdit} hint="⌘V" onClick={() => { close(); pasteVia(false)(); }}>{t("Paste")}</MenuItem>
-              <MenuItem disabled={!canEdit} hint="⌘⇧V" onClick={() => { close(); pasteVia(true)(); }}>{t("Paste values only")}</MenuItem>
-              <MenuSep />
-              <MenuItem hint="⌘F" onClick={() => { setFindOpen(true); close(); }}>{t("Find and replace")}</MenuItem>
-              <MenuItem disabled={!canEdit} hint="Del" onClick={() => { clearSelection(); close(); }}>{t("Delete values")}</MenuItem>
-            </>
-          )}
-        </Menu>
-        <Menu bare label={t("View")} trigger={<span className="px-0.5 font-medium">{t("View")}</span>}>
-          {(close) => (
-            <>
-              <MenuLabel>{t("Freeze rows")}</MenuLabel>
-              {[0, 1, 2].map((n) => (
-                <MenuItem key={`r${n}`} disabled={!canEdit} active={frozenRowsSetting === n} onClick={() => { setFrozenRows(n); close(); }}>
-                  {n === 0 ? t("No rows") : n === 1 ? t("1 row") : t("{n} rows", { n })}
-                </MenuItem>
-              ))}
-              <MenuItem disabled={!canEdit || (view[sel.r]?.rawIndex ?? 0) >= 20} onClick={() => { setFrozenRows((view[sel.r]?.rawIndex ?? 0) + 1); close(); }}>
-                {t("Up to row {n}", { n: (view[sel.r]?.rawIndex ?? 0) + 1 })}
-              </MenuItem>
-              <MenuSep />
-              <MenuLabel>{t("Freeze columns")}</MenuLabel>
-              {[0, 1, 2].map((n) => (
-                <MenuItem key={`c${n}`} disabled={!canEdit} active={frozenCols === n} onClick={() => { setFrozenCols(n); close(); }}>
-                  {n === 0 ? t("No columns") : n === 1 ? t("1 column") : t("{n} columns", { n })}
-                </MenuItem>
-              ))}
-              <MenuItem disabled={!canEdit || sel.c >= 10} onClick={() => { setFrozenCols(sel.c + 1); close(); }}>{t("Up to column {c}", { c: colLetter(sel.c) })}</MenuItem>
-              <MenuSep />
-              <MenuLabel>{t("Zoom")}</MenuLabel>
-              {[75, 100, 125, 150].map((z) => (
-                <MenuItem key={z} active={Math.round(zoom * 100) === z} onClick={() => { setZoom(z / 100); close(); }}>{z}%</MenuItem>
-              ))}
-            </>
-          )}
-        </Menu>
-        <Menu bare label={t("Insert")} trigger={<span className="px-0.5 font-medium">{t("Insert")}</span>}>
-          {(close) => (
-            <>
-              <MenuItem disabled={!canEdit || !activeRow} onClick={() => { if (activeRow) void onAddRows({ count: 1, beforeRowId: activeRow.id }); close(); }}>{t("Row above")}</MenuItem>
-              <MenuItem disabled={!canEdit || !activeRow} onClick={() => { if (activeRow) void onAddRows({ count: 1, afterRowId: activeRow.id }); close(); }}>{t("Row below")}</MenuItem>
-              <MenuItem disabled={!canEdit} onClick={() => { onInsertColumn(sel.c); close(); }}>{t("Column left")}</MenuItem>
-              <MenuItem disabled={!canEdit} onClick={() => { onInsertColumn(sel.c + 1); close(); }}>{t("Column right")}</MenuItem>
-              <MenuSep />
-              <MenuItem disabled={!canEdit} onClick={() => { insertCheckbox(); close(); }}>{t("Checkbox")}</MenuItem>
-              <MenuItem disabled={!canEdit} onClick={() => { insertDropdown(); close(); }}>{t("Dropdown")}</MenuItem>
-              <MenuItem disabled={!canEdit} onClick={() => { insertFunction("SUM"); close(); }}>{t("Function")}</MenuItem>
-              <MenuSep />
-              <MenuItem disabled={!canEdit} hint="⌘K" onClick={() => { insertLink(); close(); }}>{t("Link")}</MenuItem>
-              <MenuItem hint="⌘⌥M" onClick={() => { openCommentsAt(sel.r, sel.c); close(); }}>{t("Comment")}</MenuItem>
-            </>
-          )}
-        </Menu>
-        <Menu bare label={t("Format")} trigger={<span className="px-0.5 font-medium">{t("Format")}</span>}>
-          {(close) => (
-            <>
-              <MenuLabel>{t("Number")}</MenuLabel>
-              {([["auto", t("Automatic")], ["num", t("Number")], ["pct", t("Percent")], ["idr", t("Rupiah")], ["date", t("Date")], ["text", t("Plain text")]] as const).map(([nf, l]) => (
-                <MenuItem key={nf} disabled={!canEdit} active={(activeStyle?.nf ?? "auto") === nf} onClick={() => { applyStyle({ nf: nf === "auto" ? null : nf }); close(); }}>{l}</MenuItem>
-              ))}
-              <MenuSep />
-              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.b)} hint="⌘B" onClick={() => { applyStyle({ b: activeStyle?.b ? null : 1 }); close(); }}>{t("Bold")}</MenuItem>
-              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.i)} hint="⌘I" onClick={() => { applyStyle({ i: activeStyle?.i ? null : 1 }); close(); }}>{t("Italic")}</MenuItem>
-              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.u)} hint="⌘U" onClick={() => { applyStyle({ u: activeStyle?.u ? null : 1 }); close(); }}>{t("Underline")}</MenuItem>
-              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.s)} hint="⌥⇧5" onClick={() => { applyStyle({ s: activeStyle?.s ? null : 1 }); close(); }}>{t("Strikethrough")}</MenuItem>
-              <MenuItem disabled={!canEdit} active={Boolean(activeStyle?.w)} onClick={() => { applyStyle({ w: activeStyle?.w ? null : 1 }); close(); }}>{t("Wrap text")}</MenuItem>
-              <MenuItem disabled={!canEdit || !canMerge} onClick={() => { toggleMerge(); close(); }}>{mergedHere.length ? t("Unmerge cells") : t("Merge cells")}</MenuItem>
-              <MenuSep />
-              <MenuItem disabled={!canEdit} onClick={() => { openColumnSettings(sel.c); close(); }}>{t("Conditional formatting…")}</MenuItem>
-              <MenuItem disabled={!canEdit} hint="⌘\" onClick={() => { clearFormat(); close(); }}>{t("Clear formatting")}</MenuItem>
-            </>
-          )}
-        </Menu>
-        <Menu bare label={t("Data")} trigger={<span className="px-0.5 font-medium">{t("Data")}</span>}>
-          {(close) => (
-            <>
-              <MenuItem disabled={!activeCol} onClick={() => { if (activeCol) setSort({ colId: activeCol.id, dir: "asc" }); close(); }}>{t("Sort sheet A → Z")}</MenuItem>
-              <MenuItem disabled={!activeCol} onClick={() => { if (activeCol) setSort({ colId: activeCol.id, dir: "desc" }); close(); }}>{t("Sort sheet Z → A")}</MenuItem>
-              {sort && <MenuItem onClick={() => { setSort(null); close(); }}>{t("Back to sheet order")}</MenuItem>}
-              <MenuItem disabled={!activeCol} onClick={() => { if (activeCol) setFilterOpen((f) => ({ ...f, [activeCol.id]: true })); close(); }}>{t("Filter this column")}</MenuItem>
-              <MenuSep />
-              <MenuItem onClick={() => { openValidation(); close(); }}>{t("Data validation")}</MenuItem>
-              <MenuItem disabled={!canEdit || !activeCol} onClick={() => { openColumnSettings(sel.c); close(); }}>{t("Column settings…")}</MenuItem>
-            </>
-          )}
-        </Menu>
-      </nav>
-
+      {!full || true ? (
+        <div className="flex items-center gap-1">
+          <MenuBar menus={menuBar} openId={menuOpen} onOpen={setMenuOpen} />
+        </div>
+      ) : null}
       <SheetToolbar
         canEdit={canEdit}
+        editing={Boolean(editing)}
         style={activeStyle}
         onStyle={applyStyle}
-        onBorders={applyBorders}
+        numberItems={numberMenuItems.map((x) => (x.key === "sep" ? "sep" : { nf: x.key as NumberFormatKind, label: x.label, example: x.example }))}
+        onCustomFormat={(k) => setDialog({ kind: k })}
+        onBorders={applyBorders10}
         onClearFormat={clearFormat}
         onDecimals={changeDecimals}
         zoom={zoom}
@@ -1466,20 +2601,29 @@ export function SheetGrid({
         canRedo={canRedo}
         onUndo={onUndo}
         onRedo={onRedo}
+        onPrint={print}
+        paint={paint ? (paint.sticky ? "sticky" : "once") : "off"}
+        onPaint={(sticky) => setPaint((p) => (p && !sticky ? null : { style: activeStyle ?? null, sticky }))}
         merged={mergedHere.length > 0}
         canMerge={canMerge}
-        onMerge={toggleMerge}
+        onMerge={mergeAs}
         onLink={insertLink}
         onComment={() => openCommentsAt(sel.r, sel.c)}
-        filterOn={Boolean(activeCol && (filters[activeCol.id] || filterOpen[activeCol.id]))}
-        onFilter={() => {
-          if (!activeCol) return;
-          const on = Boolean(filters[activeCol.id] || filterOpen[activeCol.id]);
-          setFilterOpen((f) => ({ ...f, [activeCol.id]: !on }));
-          if (on) setFilters((f) => ({ ...f, [activeCol.id]: "" }));
-        }}
+        onChart={insertChart}
+        filterOn={Boolean(settings.filter)}
+        onFilter={toggleFilter}
+        filterViews={(settings.filterViews ?? []).map((v) => ({ id: v.id, name: v.name }))}
+        activeViewId={activeView}
+        groupByColumns={regionColumns()}
+        onFilterView={(a) => (a.kind === "create" ? createFilterView(null) : a.kind === "groupBy" ? createFilterView(a.colId) : setActiveView(a.id))}
         onFunction={insertFunction}
-        onFind={() => setFindOpen((o) => !o)}
+        functionCatalog={FUNCTION_CATALOG}
+        onSearchMenus={() => setMenuSearch(true)}
+        themeColors={themeStandard}
+        onEditTheme={() => setPanel({ kind: "theme" })}
+        onOpenCF={() => setPanel({ kind: "cf" })}
+        onOpenAlternating={() => setPanel({ kind: "alt" })}
+        currency={settings.locale === "en-US" ? { nf: "cur", symbol: "$", dp: 2 } : undefined}
       />
 
       {findOpen && (
@@ -1526,6 +2670,7 @@ export function SheetGrid({
       {/* Name Box + formula bar. The Name Box shows the selection and jumps when you type an address. */}
       <div className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card">
         <input
+          ref={nameBoxRef}
           key={nameBox}
           defaultValue={nameBox}
           aria-label={t("Name box")}
@@ -1597,6 +2742,8 @@ export function SheetGrid({
             const block = readClipboard(e.clipboardData);
             if (!block) return;
             e.preventDefault();
+            // Ctrl+Shift+V: paste values only (no formats, no formulas).
+            if (pasteValuesNext.current) { pasteValuesNext.current = false; void applyPaste({ cells: block.cells.map((r) => r.map((c) => ({ text: c.text }))), internal: false }); return; }
             void applyPaste(block);
           }}
           onScroll={syncScroll}
@@ -1671,6 +2818,7 @@ export function SheetGrid({
                       }}
                       onResize={(width) => onEditColumn(col.id, { width })}
                       onAutofit={() => autofit(ci)}
+                      groupMark={colGroupMark(ci)}
                     />
                   );
                 })}
@@ -1768,6 +2916,14 @@ export function SheetGrid({
                     commentCounts={commentCounts}
                     peerCursors={peerCursors}
                     onResizeRow={(height) => onResizeRow(row.id, height)}
+                    height={heightOf(row)}
+                    decorAt={decorAt}
+                    noGrid={Boolean(settings.noGrid)}
+                    showFormulas={prefs.formulas}
+                    commentsHidden={prefs.commentsHidden}
+                    onNoteHover={onNoteHover}
+                    onHeaderMenu={onHeaderMenu}
+                    gutter={rowGutter.get(row.id) ?? null}
                     showFillHandle={canEdit && ri === rect.bottom}
                     fillRect={fillPreviewRect}
                     onFillStart={() => { filling.current = true; setFillTo({ r: ri, c: rect.right }); }}
@@ -1827,6 +2983,72 @@ export function SheetGrid({
             </tbody>
           </table>
 
+          {/* Floating objects over the cells: charts, slicers and table name tabs (anchored to cells by id). */}
+          <div aria-hidden={false} className="pointer-events-none absolute left-0 top-0" style={{ zoom } as CSSProperties}>
+            {chartsShown.map((ch) => {
+              const p = anchorXY(ch.at);
+              if (!p) return null;
+              return (
+                <div key={ch.id} className="pointer-events-auto">
+                  <ChartObject
+                    spec={ch}
+                    data={data}
+                    engine={engine}
+                    theme={theme?.accents}
+                    left={p.x}
+                    top={p.y}
+                    zoom={zoom}
+                    selected={selectedObject === ch.id}
+                    canEdit={canEdit}
+                    onSelect={() => setSelectedObject(ch.id)}
+                    onMove={(d) => saveChart({ ...ch, at: anchorFromXY(p.x + d.dx, p.y + d.dy) }, t("move chart"))}
+                    onResize={(w, h, mv) => saveChart({ ...ch, w: Math.round(w), h: Math.round(h), ...(mv ? { at: anchorFromXY(p.x + mv.dx, p.y + mv.dy) } : {}) }, t("resize chart"))}
+                    onEdit={() => { setSelectedObject(ch.id); setPanel({ kind: "chart", id: ch.id }); }}
+                    onDelete={() => { onSettings({ charts: (settings.charts ?? []).filter((x) => x.id !== ch.id).length ? (settings.charts ?? []).filter((x) => x.id !== ch.id) : null }, t("delete chart")); setSelectedObject(null); if (panel?.kind === "chart") setPanel(null); }}
+                    onCopy={() => onSettings({ charts: [...(settings.charts ?? []), { ...ch, id: newId("ch"), at: { ...ch.at, dx: (ch.at.dx ?? 0) + 24, dy: (ch.at.dy ?? 0) + 24 } }] }, t("copy chart"))}
+                  />
+                </div>
+              );
+            })}
+            {(settings.slicers ?? []).map((sl) => {
+              const p = anchorXY(sl.at);
+              if (!p) return null;
+              const rc = rangeRect(sl.range, data.shape);
+              const label = rc ? display(rows[rc.top]?.id ?? "", sl.colId) : "";
+              const ids = rc ? rows.slice(rc.top + 1, rc.bottom + 1).map((r) => r.id) : [];
+              const total = sl.crit?.hidden ? distinctValues(ids, sl.colId, display).length : undefined;
+              return (
+                <div key={sl.id} className="pointer-events-auto absolute" style={{ left: p.x, top: p.y }}>
+                  <SlicerChip
+                    slicer={sl}
+                    label={label}
+                    active={critActive(sl.crit)}
+                    selected={selectedObject === sl.id}
+                    onOpen={(r) => setSlicerMenu({ id: sl.id, rect: r })}
+                    onSelect={() => { setSelectedObject(sl.id); setPanel({ kind: "slicer", id: sl.id }); }}
+                    shown={total !== undefined ? total - (sl.crit?.hidden?.length ?? 0) : undefined}
+                    total={total}
+                  />
+                </div>
+              );
+            })}
+            {tables.map(({ tb, rc }) => {
+              const vi = view.findIndex((v) => v.rawIndex === rc.top);
+              if (vi < 0 || vi < frozenRows && false) return null;
+              return (
+                <button
+                  key={tb.id}
+                  onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTableMenu({ id: tb.id, x: r.left, y: r.bottom + 2 }); }}
+                  className="pointer-events-auto absolute flex h-5 items-center gap-1 rounded-t-md px-2 text-[11px] font-semibold text-white shadow-soft"
+                  style={{ left: lefts[rc.left] ?? 0, top: headH + (offsets[vi] ?? 0) - 20, background: tb.header ?? TABLE_HEADER }}
+                  title={t("Table menu")}
+                >
+                  <Table2 className="h-3 w-3" /> {tb.name} <ChevronDown className="h-3 w-3" />
+                </button>
+              );
+            })}
+          </div>
+
           {canEdit && (
             <div className="sticky left-0 flex items-center gap-2 px-2 py-3" style={{ zoom } as CSSProperties}>
               <button onClick={() => void onAddRows({ count: 1 })}
@@ -1846,6 +3068,7 @@ export function SheetGrid({
           <div className="min-w-0 flex-1">{footerLeft}</div>
           {saving && <span className="shrink-0 text-2xs text-muted-foreground">{t("Saving…")}</span>}
           {multiCell && stats.count > 0 && (
+            <span data-quick-sum className="contents">
             <Menu
               label={t("Selection statistics")}
               trigger={
@@ -1858,10 +3081,148 @@ export function SheetGrid({
                 <MenuItem key={s} active={stat === s} hint={statValue(s)} onClick={() => { setStat(s); close(); }}>{statLabel[s]}</MenuItem>
               ))}
             </Menu>
+            </span>
           )}
         </div>
       </div>
     </div>
+    {panel?.kind === "cf" && (
+      <ConditionalFormatPanel
+        rules={settings.condFormats ?? []}
+        shape={data.shape}
+        sheetName={sheetName ?? "Sheet1"}
+        selectionRange={selectionA1}
+        editId={panel.id ?? null}
+        canEdit={canEdit}
+        onPreview={(r) => setCfPreview(r)}
+        onSave={(r) => { setCfPreview(null); onSettings({ condFormats: r.length ? r : null }, t("conditional formatting")); }}
+        onClose={() => { setCfPreview(null); setPanel(null); }}
+      />
+    )}
+    {panel?.kind === "alt" && (() => {
+      const here = (settings.bandings ?? []).find((b) => { const rc = rangeRect(b.range, data.shape); return rc && rc.top <= (view[rect.top]?.rawIndex ?? 0) && rc.bottom >= (view[rect.top]?.rawIndex ?? 0) && rc.left <= rect.left && rc.right >= rect.left; }) ?? null;
+      return (
+        <AlternatingColorsPanel
+          banding={here}
+          selectionRange={selectionA1 || nameBox}
+          shape={data.shape}
+          onPreview={(b) => setBandPreview({ id: here?.id ?? b?.id ?? null, b })}
+          onSave={(b) => { setBandPreview(null); onSettings({ bandings: [...(settings.bandings ?? []).filter((x) => x.id !== b.id && x.id !== here?.id), b] }, t("alternating colours")); }}
+          onRemove={() => { setBandPreview(null); if (here) onSettings({ bandings: (settings.bandings ?? []).filter((x) => x.id !== here.id).length ? (settings.bandings ?? []).filter((x) => x.id !== here.id) : null }, t("remove alternating colours")); setPanel(null); }}
+          onClose={() => { setBandPreview(null); setPanel(null); }}
+        />
+      );
+    })()}
+    {panel?.kind === "named" && (
+      <NamedRangesPanel
+        ranges={settings.namedRanges ?? []}
+        shape={data.shape}
+        sheetName={sheetName ?? "Sheet1"}
+        selectionRange={selectionA1}
+        canEdit={canEdit}
+        onSave={(next) => onSettings({ namedRanges: next.length ? next : null }, t("named ranges"))}
+        onClose={() => setPanel(null)}
+        onJump={(nr) => { const rc = rangeRect(nr.range, data.shape); if (rc) { const a = view.findIndex((v) => v.rawIndex === rc.top), b = view.findIndex((v) => v.rawIndex === rc.bottom); if (a >= 0 && b >= 0) setSel({ r: a, c: rc.left, r2: b, c2: rc.right }); } }}
+      />
+    )}
+    {panel?.kind === "protect" && (
+      <ProtectedRangesPanel
+        protections={settings.protections ?? []}
+        shape={data.shape}
+        sheetName={sheetName ?? "Sheet1"}
+        selectionRange={selectionA1}
+        members={host?.members ?? []}
+        meId={host?.meId ?? ""}
+        canManage={canManage}
+        onSave={(next) => onSettings({ protections: next.length ? next : null }, t("protected ranges"))}
+        onClose={() => setPanel(null)}
+      />
+    )}
+    {panel?.kind === "chart" && (() => {
+      const spec = chartsShown.find((c) => c.id === panel.id);
+      return spec ? (
+        <ChartEditor
+          spec={spec}
+          shape={data.shape}
+          sheetName={sheetName ?? "Sheet1"}
+          columnLabel={(ci) => colLetter(ci)}
+          data={data}
+          engine={engine}
+          theme={theme?.accents}
+          onChange={editChart}
+          onClose={() => setPanel(null)}
+        />
+      ) : null;
+    })()}
+    {panel?.kind === "slicer" && (() => {
+      const sl = (settings.slicers ?? []).find((x) => x.id === panel.id);
+      if (!sl) return null;
+      const rc = rangeRect(sl.range, data.shape);
+      const head = rc ? rows[rc.top] : null;
+      return (
+        <SlicerPanel
+          slicer={sl}
+          columns={rc ? columnsRange(rc.left, rc.right).map((c) => ({ colId: columns[c].id, label: (head ? display(head.id, columns[c].id) : "") || `${t("Column")} ${colLetter(c)}` })) : []}
+          sheetName={sheetName ?? "Sheet1"}
+          rangeA1={rangeToA1(sl.range, data.shape)}
+          onChange={(next) => onSettings({ slicers: (settings.slicers ?? []).map((x) => (x.id === next.id ? next : x)) }, t("slicer"))}
+          onRangeChange={(a1) => { const r = rangeFromA1(a1, data.shape); if (!r) return false; onSettings({ slicers: (settings.slicers ?? []).map((x) => (x.id === sl.id ? { ...x, range: r } : x)) }, t("slicer")); return true; }}
+          onClose={() => setPanel(null)}
+        />
+      );
+    })()}
+    {panel?.kind === "stats" && (
+      <ColumnStatsPanel
+        columns={columns.map((c, i) => ({ index: i, label: c.name || `${t("Column")} ${colLetter(i)}` }))}
+        colIndex={panel.col}
+        onColIndex={(i) => setPanel({ kind: "stats", col: i })}
+        valuesOf={valuesOfColumn}
+        onClose={() => setPanel(null)}
+      />
+    )}
+    {panel?.kind === "theme" && (
+      <ThemePanel
+        theme={settings.theme}
+        onPreview={setThemePreview}
+        onSave={(th) => { setThemePreview(null); onSettings({ theme: th }, t("theme")); }}
+        onClose={() => { setThemePreview(null); setPanel(null); }}
+      />
+    )}
+    {panel?.kind === "versions" && (
+      <VersionHistoryPanel
+        revisions={historyQ.data?.revisions ?? []}
+        loading={historyQ.isLoading}
+        named={settings.versions ?? []}
+        selectedAt={versionAt}
+        showChanges={showChanges}
+        onShowChanges={setShowChanges}
+        onSelect={setVersionAt}
+        onRestore={restoreVersion}
+        onName={(at, name) => onSettings({ versions: [...(settings.versions ?? []).filter((v) => v.at !== at), { id: newId("ver"), name, at }] }, t("name version"))}
+        onClose={() => { setVersionAt(null); setPanel(null); }}
+      />
+    )}
+    {panel?.kind === "comments" && (
+      <SidePanel title={t("Comments")} onClose={() => setPanel(null)}>
+        <div className="space-y-1 p-2">
+          {Object.keys(commentCounts).length === 0 && <p className="px-2 py-6 text-center text-xs text-muted-foreground">{t("No open comments on this sheet.")}</p>}
+          {Object.entries(commentCounts).map(([k, n]) => {
+            const [rowId, colId] = k.split(":");
+            const ri = view.findIndex((v) => v.row.id === rowId), ci = columns.findIndex((c) => c.id === colId);
+            if (ri < 0 || ci < 0) return null;
+            return (
+              <button key={k} onClick={() => { setSel({ r: ri, c: ci, r2: ri, c2: ci }); setTimeout(() => openCommentsAt(ri, ci), 50); }}
+                className="flex w-full items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-left text-xs hover:bg-muted">
+                <span className="font-mono text-[11px] text-muted-foreground">{colLetter(ci)}{view[ri].rawIndex + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{display(rowId, colId) || "—"}</span>
+                <span className="text-muted-foreground">{t("{n} comments", { n })}</span>
+              </button>
+            );
+          })}
+        </div>
+      </SidePanel>
+    )}
+    {!panel && !dvOpen && aside}
     {dvOpen && (
       <DataValidationPanel
         rules={[...(columnRules.filter(Boolean) as PanelRule[]), ...explicitRules]}
@@ -1913,29 +3274,253 @@ export function SheetGrid({
       document.body,
     )}
 
-    {/* Right-click menus (cell, column header, row header). Only entries this grid can honour. */}
-    {menu && menuEntries.length > 0 && createPortal(
-      <>
-        <div className="fixed inset-0 z-[60]" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
-        <Floating
-          anchor={{ x: menu.left, y: menu.top }}
-          role="menu"
-          className="w-60 rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
-        >
-          {menuEntries.map((item, i) =>
-            item === "sep" ? (
-              <div key={`sep${i}`} className="my-1 border-t border-border" />
-            ) : (
-              <MenuItem key={`${item.label}${i}`} icon={item.icon} hint={item.hint} danger={item.danger} disabled={item.disabled}
-                onClick={() => { setMenu(null); item.run(); }}>
-                {item.label}
-              </MenuItem>
-            ),
-          )}
-        </Floating>
-      </>,
+    {menu && (
+      <MenuPopup
+        nodes={buildContextMenu(menu.kind, menuCtx)}
+        anchor={{ x: menu.left, y: menu.top }}
+        onClose={() => setMenu(null)}
+        width={290}
+      />
+    )}
+    {menuSearch && <MenuSearch menus={menuBar} onClose={() => setMenuSearch(false)} />}
+    {dialog?.kind === "settings" && (
+      <SheetSettingsDialog
+        settings={{ locale: settings.locale, timeZone: settings.timeZone, recalc: settings.recalc, iterative: settings.iterative }}
+        onSave={(patch) => { host?.saveSpreadsheetSettings ? host.saveSpreadsheetSettings(patch) : onSettings(patch, t("settings")); setDialog(null); }}
+        onClose={() => setDialog(null)}
+      />
+    )}
+    {dialog?.kind === "shortcuts" && <ShortcutsDialog onClose={() => setDialog(null)} />}
+    {dialog?.kind === "functions" && (
+      <SheetDialog title={t("Function list")} onClose={() => setDialog(null)} width={560}>
+        <div className="divide-y divide-border">
+          {SUPPORTED_FUNCTIONS.map((f) => (
+            <div key={f.name} className="flex gap-3 py-1.5 text-xs">
+              <span className="w-36 shrink-0 font-mono font-semibold">{f.name}<span className="font-normal text-muted-foreground">{f.args}</span></span>
+              <span className="text-muted-foreground">{lang === "id" ? f.desc : f.descEn}</span>
+            </div>
+          ))}
+        </div>
+      </SheetDialog>
+    )}
+    {dialog?.kind === "find" && (
+      <FindReplaceDialog
+        canEdit={canEdit}
+        hasSelection={!selInfo.single}
+        onFind={(o) => findNext(o)}
+        onReplace={(o) => replaceOne(o)}
+        onReplaceAll={(o) => replaceEvery(o)}
+        onClose={() => setDialog(null)}
+      />
+    )}
+    {dialog?.kind === "sort" && (
+      <SortRangeDialog
+        columns={columnsRange(rect.left, rect.right).map((c) => ({ index: c, letter: colLetter(c), header: display(view[rect.top]?.row.id ?? "", columns[c].id) }))}
+        defaultHeader={false}
+        onSort={(o) => sortRange(o.keys, o.header)}
+        onClose={() => setDialog(null)}
+      />
+    )}
+    {dialog?.kind === "dedupe" && (
+      <RemoveDuplicatesDialog
+        rowCount={rect.bottom - rect.top + 1}
+        columns={columnsRange(rect.left, rect.right).map((c) => ({ index: c, letter: colLetter(c), header: display(view[rect.top]?.row.id ?? "", columns[c].id) }))}
+        onApply={(o) => removeDuplicates(o.header, o.cols)}
+        onClose={() => setDialog(null)}
+      />
+    )}
+    {dialog?.kind === "customNumber" && (
+      <CustomNumberFormatDialog initial={activeStyle?.nf === "custom" ? activeStyle.pt : undefined} sample={typeof engine.value(activeRow?.id ?? "", activeCol?.id ?? "") === "number" ? engine.value(activeRow?.id ?? "", activeCol?.id ?? "") as number : 1234.56}
+        locale={settings.locale ?? "id-ID"} onApply={(pt) => { applyStyle({ nf: "custom", pt, dp: null }); setDialog(null); }} onClose={() => setDialog(null)} />
+    )}
+    {dialog?.kind === "customDate" && (
+      <DateTimeFormatDialog initial={activeStyle?.nf === "custom" ? activeStyle.pt : undefined} sample={typeof engine.value(activeRow?.id ?? "", activeCol?.id ?? "") === "number" ? engine.value(activeRow?.id ?? "", activeCol?.id ?? "") as number : 11175.559}
+        locale={settings.locale ?? "id-ID"} onApply={(pt) => { applyStyle({ nf: "custom", pt, dp: null }); setDialog(null); }} onClose={() => setDialog(null)} />
+    )}
+    {dialog?.kind === "customCurrency" && (
+      <CurrencyFormatDialog locale={settings.locale ?? "id-ID"} onApply={(pt) => { applyStyle({ nf: "custom", pt, dp: null }); setDialog(null); }} onClose={() => setDialog(null)} />
+    )}
+    {dialog?.kind === "pivot" && (
+      <PivotCreateDialog
+        defaultRange={`${sheetName ?? "Sheet1"}!${rangeToA1(storedOf(selInfo.single ? currentRegion() : rect) ?? "", data.shape)}`}
+        onCreate={(o) => { setDialog(null); const r = rangeFromA1(o.range, data.shape); if (r) host?.createPivot(r); else alert(t("That range isn't valid.")); }}
+        onClose={() => setDialog(null)}
+      />
+    )}
+    {(dialog?.kind === "resizeRows" || dialog?.kind === "resizeCols") && (
+      <ResizeDialog
+        kind={dialog.kind === "resizeRows" ? "rows" : "cols"}
+        label={dialog.kind === "resizeRows" ? `${selInfo.r1}${selInfo.r2 !== selInfo.r1 ? ` - ${selInfo.r2}` : ""}` : `${selInfo.c1}${selInfo.c2 !== selInfo.c1 ? ` - ${selInfo.c2}` : ""}`}
+        initial={dialog.kind === "resizeRows" ? heightOf(view[rect.top]?.row ?? rows[0]) : columns[rect.left]?.width ?? COL_W_DEFAULT}
+        onApply={(v) => {
+          setDialog(null);
+          if (dialog.kind === "resizeRows") for (let r = rect.top; r <= rect.bottom; r += 1) { const row = view[r]?.row; if (row) onResizeRow(row.id, v === "fit" ? null : Math.round(Math.max(ROW_H_MIN, Math.min(ROW_H_MAX, v)))); }
+          else for (let c = rect.left; c <= rect.right; c += 1) { if (v === "fit") autofit(c); else onEditColumn(columns[c].id, { width: Math.round(Math.max(20, Math.min(600, v))) }); }
+        }}
+        onClose={() => setDialog(null)}
+      />
+    )}
+    {problem && (
+      <SheetDialog title={t("There was a problem")} onClose={() => setProblem(null)} footer={<button className={primaryBtn} onClick={() => setProblem(null)}>{t("OK")}</button>}>
+        <p className="text-sm">{problem}</p>
+      </SheetDialog>
+    )}
+    {protectWarn && (
+      <ProtectionWarningDialog
+        onOk={(mute) => { if (mute) protectMuteUntil.current = Date.now() + 5 * 60_000; const go = protectWarn; setProtectWarn(null); go(); }}
+        onCancel={() => setProtectWarn(null)}
+      />
+    )}
+    {toast && createPortal(
+      <div role="status" className="fixed bottom-6 left-1/2 z-[80] -translate-x-1/2 rounded-lg bg-foreground px-4 py-2 text-xs font-medium text-background shadow-pop">{toast}</div>,
       document.body,
     )}
+    {noteHover && !note && (() => {
+      const st = rows.find((r) => r.id === noteHover.rowId)?.styles?.[noteHover.colId];
+      return st?.nt ? <NotePopover anchor={noteHover.rect} value={st.nt} editing={false} canEdit={false} onSave={() => undefined} onClose={() => setNoteHover(null)} /> : null;
+    })()}
+    {note && (
+      <NotePopover
+        anchor={note.rect}
+        value={rows.find((r) => r.id === note.rowId)?.styles?.[note.colId]?.nt ?? ""}
+        editing={note.editing}
+        canEdit={canEdit}
+        onSave={(text) => {
+          const row = rows.find((r) => r.id === note.rowId);
+          if (row) onSetStyles([{ rowId: row.id, values: { [note.colId]: patchStyle(row.styles?.[note.colId], { nt: text.trim() ? text : null }) } }], t("note"));
+        }}
+        onClose={() => { setNote(null); gridRef.current?.focus(); }}
+      />
+    )}
+    {splitChip && (
+      <SplitSeparatorChip anchor={splitChip.rect} value={splitChip.sep as SplitSep} onChange={(sep) => { onUndo(); setTimeout(() => splitText(sep), 150); }} onClose={() => setSplitChip(null)} />
+    )}
+    {datePick && (
+      <DatePicker
+        anchor={datePick.rect}
+        value={datePick.value}
+        locale={settings.locale ?? "id-ID"}
+        onPick={(serial) => {
+          const col = columns.find((c) => c.id === datePick.colId);
+          const row = rows.find((r) => r.id === datePick.rowId);
+          if (col && row) {
+            const next = col.type === "date" ? serialToIso(serial) : { v: serial, nf: "date" as const };
+            if (!sameCell(row.cells[col.id], next)) onSetCells([{ rowId: row.id, values: { [col.id]: next } }]);
+          }
+          setDatePick(null);
+          setEditing(null);
+          gridRef.current?.focus();
+        }}
+        onClose={() => setDatePick(null)}
+      />
+    )}
+    {headerMenu && (() => {
+      const col = columns[headerMenu.ci];
+      if (!col) return null;
+      const rawTop = view.find((v) => v.rawIndex >= 0) ? undefined : undefined;
+      void rawTop;
+      const inTable = tables.find(({ rc }) => headerMenu.ci >= rc.left && headerMenu.ci <= rc.right && rows[rc.top] && view.some((v) => v.rawIndex === rc.top));
+      const frc = filterResult.main?.rect;
+      if (frc && activeFilter && headerMenu.ci >= frc.left && headerMenu.ci <= frc.right && !(inTable && !frc)) {
+        const ids = filterBodyIds();
+        const crit = activeFilter.criteria?.[col.id];
+        const colors = colorsInColumn(ids, col.id, styleOfCell);
+        return (
+          <FilterMenu
+            anchor={headerMenu.rect}
+            columnLabel={display(rows[frc.top]?.id ?? "", col.id) || `${t("Column")} ${colLetter(headerMenu.ci)}`}
+            values={distinctValues(ids, col.id, display)}
+            crit={crit}
+            fills={colors.fills}
+            texts={colors.texts}
+            onSort={(dir) => { const a = view.findIndex((v) => v.rawIndex === frc.top + 1), b = view.findIndex((v) => v.rawIndex === frc.bottom); if (a >= 0 && b >= 0) sortRange([{ col: headerMenu.ci, dir }], false, { top: a, bottom: b, left: frc.left, right: frc.right }); setHeaderMenu(null); }}
+            onApply={(c) => {
+              const criteria = { ...(activeFilter.criteria ?? {}) };
+              if (c) {
+                const cc = c.cond?.kind === "formula" && c.cond.formula ? { ...c, cond: { ...c.cond, formula: toStored(c.cond.formula, data.shape) } } : c;
+                criteria[col.id] = cc;
+              } else delete criteria[col.id];
+              saveFilter({ range: activeFilter.range, ...(Object.keys(criteria).length ? { criteria } : {}), ...(activeFilter.sort ? { sort: activeFilter.sort } : {}) });
+              setHeaderMenu(null);
+            }}
+            onClose={() => setHeaderMenu(null)}
+          />
+        );
+      }
+      if (inTable) {
+        const tb = inTable.tb, rc = inTable.rc;
+        const types: [TableColumnType, string][] = [["text", "Text"], ["number", "Number"], ["pct", "Percent"], ["currency", "Currency"], ["date", "Date"], ["time", "Time"], ["dt", "Date time"], ["dur", "Duration"], ["checkbox", "Checkbox"], ["dropdown", "Dropdown"], ["none", "None"]];
+        const setType = (ty: TableColumnType) => {
+          onSettings({ tables: (settings.tables ?? []).map((x) => (x.id === tb.id ? { ...x, types: { ...(x.types ?? {}), [col.id]: ty } } : x)) }, t("column type"));
+          const body = rows.slice(rc.top + 1, rc.bottom + 1);
+          const nf = ty === "number" ? "num" : ty === "pct" ? "pct" : ty === "currency" ? "idr" : ty === "date" ? "date" : ty === "time" ? "time" : ty === "dt" ? "dt" : ty === "dur" ? "dur" : null;
+          if (nf || ty === "text") onSetStyles(body.map((r) => ({ rowId: r.id, values: { [col.id]: patchStyle(r.styles?.[col.id], { nf: nf ?? "text", pt: null }) } })), t("column type"));
+          if (ty === "checkbox" || ty === "dropdown") {
+            const range = `{${col.id}!${body[0]?.id}}:{${col.id}!${body[body.length - 1]?.id}}`;
+            if (body.length) {
+              const seen = new Set<string>();
+              if (ty === "dropdown") body.forEach((r) => { const v = r.cells[col.id]; if (typeof v === "string" && v.trim()) seen.add(v.trim()); });
+              saveRules([...explicitRules, { id: newRuleId(), ranges: [range], kind: ty === "checkbox" ? "checkbox" : "list", ...(ty === "dropdown" ? { values: seen.size ? [...seen].slice(0, 50) : [t("Option 1"), t("Option 2")] } : {}) }], t("column type"));
+            }
+          }
+        };
+        const items: MenuNode[] = [
+          { id: "tc-az", label: "Sort table A to Z", run: () => { const a = view.findIndex((v) => v.rawIndex === rc.top + 1), b = view.findIndex((v) => v.rawIndex === rc.bottom); if (a >= 0 && b >= 0) sortRange([{ col: headerMenu.ci, dir: "asc" }], false, { top: a, bottom: b, left: rc.left, right: rc.right }); } },
+          { id: "tc-za", label: "Sort table Z to A", run: () => { const a = view.findIndex((v) => v.rawIndex === rc.top + 1), b = view.findIndex((v) => v.rawIndex === rc.bottom); if (a >= 0 && b >= 0) sortRange([{ col: headerMenu.ci, dir: "desc" }], false, { top: a, bottom: b, left: rc.left, right: rc.right }); } },
+          { sep: true },
+          { id: "tc-type", label: "Edit column type", children: types.map(([ty, l]) => ({ id: `tct-${ty}`, label: l, checked: (tb.types?.[col.id] ?? "text") === ty, run: () => setType(ty) })) },
+          { sep: true },
+          { id: "tc-ins-l", label: "Insert 1 column left", run: () => onInsertColumn(headerMenu.ci, 1) },
+          { id: "tc-ins-r", label: "Insert 1 column right", run: () => onInsertColumn(headerMenu.ci + 1, 1) },
+          { id: "tc-del", label: "Delete column", disabled: !canManage, run: () => onDeleteColumn(col.id) },
+        ];
+        return <MenuPopup nodes={items} anchor={{ x: headerMenu.rect.right - 16, y: headerMenu.rect.bottom }} onClose={() => setHeaderMenu(null)} />;
+      }
+      return null;
+    })()}
+    {tableMenu && (() => {
+      const tb = (settings.tables ?? []).find((x) => x.id === tableMenu.id);
+      if (!tb) return null;
+      const update = (patch: Partial<TableSpec>, label: string) => onSettings({ tables: (settings.tables ?? []).map((x) => (x.id === tb.id ? { ...x, ...patch } : x)) }, label);
+      const drop = () => onSettings({ tables: (settings.tables ?? []).filter((x) => x.id !== tb.id).length ? (settings.tables ?? []).filter((x) => x.id !== tb.id) : null }, t("revert table"));
+      const items: MenuNode[] = [
+        { id: "tb-rename", label: "Rename table", disabled: !canEdit, run: () => { const name = window.prompt(t("Table name"), tb.name); if (name?.trim()) update({ name: name.trim() }, t("rename table")); } },
+        { sep: true },
+        { id: "tb-range", label: "Adjust table range", disabled: !canEdit, run: () => { const r = storedOf(rect); if (r) update({ range: r }, t("adjust table range")); } },
+        { id: "tb-header", label: "Table header colour", disabled: !canEdit, panel: (close) => <ColorPicker value={tb.header ?? TABLE_HEADER} onPick={(c) => { update({ header: c ?? undefined }, t("table header colour")); close(); }} /> },
+        { id: "tb-format", label: "Table formatting", disabled: !canEdit, children: [
+          { id: "tb-band", label: "Alternating colours", checked: tb.banded !== false, run: () => update({ banded: tb.banded === false ? undefined : false }, t("table formatting")) },
+        ] },
+        { sep: true },
+        { id: "tb-revert", label: "Revert to unformatted data", disabled: !canEdit, run: drop },
+        { id: "tb-delete", label: "Delete table", danger: true, disabled: !canEdit, run: () => {
+          const rc = rangeRect(tb.range, data.shape);
+          drop();
+          if (rc) onSetCells(rows.slice(rc.top, rc.bottom + 1).map((r) => ({ rowId: r.id, values: Object.fromEntries(columnsRange(rc.left, rc.right).map((c) => [columns[c].id, null])) })));
+        } },
+      ];
+      return <MenuPopup nodes={items} anchor={{ x: tableMenu.x, y: tableMenu.y }} onClose={() => setTableMenu(null)} />;
+    })()}
+    {slicerMenu && (() => {
+      const sl = (settings.slicers ?? []).find((x) => x.id === slicerMenu.id);
+      if (!sl) return null;
+      const rc = rangeRect(sl.range, data.shape);
+      const ids = rc ? rows.slice(rc.top + 1, rc.bottom + 1).map((r) => r.id) : [];
+      const colors = colorsInColumn(ids, sl.colId, styleOfCell);
+      return (
+        <FilterMenu
+          anchor={slicerMenu.rect}
+          columnLabel={rc ? display(rows[rc.top]?.id ?? "", sl.colId) : ""}
+          values={distinctValues(ids, sl.colId, display)}
+          crit={sl.crit}
+          fills={colors.fills}
+          texts={colors.texts}
+          onSort={() => setSlicerMenu(null)}
+          onApply={(c) => { onSettings({ slicers: (settings.slicers ?? []).map((x) => (x.id === sl.id ? { ...x, crit: c } : x)) }, t("slicer")); setSlicerMenu(null); }}
+          onClose={() => setSlicerMenu(null)}
+        />
+      );
+    })()}
 
     {colPopover && (() => {
       const col = columns.find((c) => c.id === colPopover.colId);
@@ -1953,7 +3538,8 @@ export function SheetGrid({
 }
 
 /** A lettered column header: click selects the column, the right edge resizes (double-click fits). */
-function ColumnHeader({ index, col, hidden, active, whole, canEdit, showMarks, sortDir, filtered, hiddenBefore, onUnhide, style, onSelect, onMenu, onResize, onAutofit }: {
+function ColumnHeader({ index, col, hidden, active, whole, canEdit, showMarks, sortDir, filtered, hiddenBefore, onUnhide, style, onSelect, onMenu, onResize, onAutofit, groupMark }: {
+  groupMark?: ReactNode;
   index: number; col: NexusSheetColumn; hidden: boolean; active: boolean; whole: boolean; canEdit: boolean;
   /** Sort/filter marks go here when there is no name row to carry them. */
   showMarks: boolean;
@@ -1989,7 +3575,7 @@ function ColumnHeader({ index, col, hidden, active, whole, canEdit, showMarks, s
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
   };
-  if (hidden) return <th data-col-index={index} style={style} className="sticky top-0 z-30 overflow-hidden border-b border-border bg-muted p-0" />;
+  if (hidden) return <th data-col-index={index} style={style} className="sticky top-0 z-30 overflow-hidden border-b border-border bg-muted p-0">{groupMark}</th>;
   return (
     <th
       ref={ref}
@@ -2003,6 +3589,7 @@ function ColumnHeader({ index, col, hidden, active, whole, canEdit, showMarks, s
         whole ? "bg-info text-info-foreground" : active ? `${HEAD_SEL_BG} text-foreground` : "bg-muted text-muted-foreground",
       )}
     >
+      {groupMark}
       <span className="flex items-center justify-center gap-1 px-1">
         {colLetter(index)}
         {showMarks && sortDir && (sortDir === "desc" ? <ArrowUpAZ className="h-3 w-3" /> : <ArrowDownAZ className="h-3 w-3" />)}
@@ -2102,6 +3689,21 @@ function TypeIcon({ type }: { type: NexusSheetColumnType }) {
   }
 }
 
+/** How a cell is decorated by sheet-level features (computed once per render by the grid). */
+type Decor = {
+  /** Alternating colours / table body (under the cell's own format). */
+  base?: Partial<CellStyle>;
+  /** Conditional formatting (over it). */
+  cf?: Partial<CellStyle>;
+  /** Header cell of a filter or a table: shows the ▾ / funnel button. */
+  head?: "filter" | "table";
+  filtered?: boolean;
+  /** Green outline sides of the filter range. */
+  edge?: string;
+  /** View › Show › Protected ranges. */
+  stripes?: boolean;
+};
+
 type RowProps = {
   row: NexusSheetRow; rowIndex: number; rawIndex: number; columns: NexusSheetColumn[];
   /** Identity changes when any width changes (cells don't read it; it re-renders sticky offsets). */
@@ -2155,6 +3757,18 @@ type RowProps = {
   onCellMenu: (colIndex: number, at: { left: number; top: number }) => void;
   /** null resets to the default height. */
   onResizeRow: (height: number | null) => void;
+  /** Resolved height (explicit, or grown to fit wrapped/rotated text). */
+  height: number;
+  /** Alternating colours / table / conditional formatting / filter decorations of a cell. */
+  decorAt: (rawRow: number, colIndex: number) => Decor | null;
+  noGrid: boolean;
+  showFormulas: boolean;
+  commentsHidden: boolean;
+  onNoteHover: (rowId: string, colId: string, rect: DOMRect | null) => void;
+  /** The ▾ on a filter / table header cell. */
+  onHeaderMenu: (colIndex: number, rect: DOMRect) => void;
+  /** Row-group gutter content for this row (brackets and [–]/[+]). */
+  gutter: ReactNode;
 };
 
 /** memo'd so arrow-key navigation re-renders 2 rows instead of the whole sheet. */
@@ -2191,7 +3805,7 @@ const Row = memo(function Row(p: RowProps) {
     <tr
       ref={trRef}
       // ALWAYS explicit: the window's offsets are computed from these numbers.
-      style={{ height: p.row.height ?? ROW_H_DEFAULT }}
+      style={{ height: p.height }}
       className={cn("group/row", p.dragging && "opacity-40")}
     >
       <td
@@ -2215,6 +3829,7 @@ const Row = memo(function Row(p: RowProps) {
           p.canEdit && "cursor-default",
         )}
       >
+        {p.gutter}
         <span>{p.rawIndex + 1}</span>
         {p.unhideRows && (
           <button
@@ -2248,7 +3863,10 @@ const Row = memo(function Row(p: RowProps) {
         );
         const isEditing = Boolean(editingHere && p.editing!.colId === col.id);
         const value = p.row.cells[col.id];
-        const st = p.row.styles?.[col.id];
+        const own = p.row.styles?.[col.id];
+        const dec = p.decorAt(p.rawIndex, ci);
+        // Alternating colours and tables sit UNDER the cell's own format; conditional formatting on top.
+        const st: CellStyle | undefined = dec ? { ...(dec.base ?? {}), ...(own ?? {}), ...(dec.cf ?? {}) } as CellStyle : own;
         const computed = engine.value(p.row.id, col.id);
         const ruleHit = col.rules?.length ? matchRule(col.rules, computed) : null;
         const dv = p.ruleAt(p.rawIndex, ci);
@@ -2257,7 +3875,14 @@ const Row = memo(function Row(p: RowProps) {
         const numeric = typeof computed === "number" && col.type !== "checkbox" && col.type !== "select" && col.type !== "multiselect";
 
         // Shadows: drawn borders, the selection's outer edge, the active cell, the freeze line.
-        const shadows = borderShadows(st);
+        const shadows: string[] = [];
+        if (dec?.edge) {
+          const g = "var(--success)";
+          if (dec.edge.includes("t")) shadows.push(`inset 0 2px 0 0 ${g}`);
+          if (dec.edge.includes("b")) shadows.push(`inset 0 -2px 0 0 ${g}`);
+          if (dec.edge.includes("l")) shadows.push(`inset 2px 0 0 0 ${g}`);
+          if (dec.edge.includes("r")) shadows.push(`inset -2px 0 0 0 ${g}`);
+        }
         if (inRect) {
           if (p.rowIndex === p.rect.top) shadows.push(`inset 0 2px 0 0 ${SEL}`);
           if (p.rowIndex === p.rect.bottom || (span && p.rowIndex + span.rowSpan - 1 >= p.rect.bottom)) shadows.push(`inset 0 -2px 0 0 ${SEL}`);
@@ -2269,8 +3894,26 @@ const Row = memo(function Row(p: RowProps) {
         if (p.freezeEdge) shadows.push(`inset 0 -3px 0 0 ${FREEZE_LINE}`);
         const frozenCol = ci < p.frozenCols;
         const styled = formatWithStyle(computed, st?.nf, st?.dp, isFormulaCell(value) ? engine.format(p.row.id, col.id) : (col.type === "currency" ? "idr" : col.type === "date" ? "date" : null));
-        const text = styled ?? displayCell(col.type, value, { data: p.data, rowId: p.row.id, colId: col.id });
+        const text = p.showFormulas && isFormulaCell(value)
+          ? editFormula(value, p.data.shape) ?? ""
+          : styled ?? displayCell(col.type, value, { data: p.data, rowId: p.row.id, colId: col.id });
         const fill = st?.bg || ruleHit;
+        const wrap = wrapMode(st);
+        // Overflow: left-aligned text spills over empty neighbours to the right (stops at the first
+        // non-empty one, like Sheets). Numbers never spill.
+        let spill = 0;
+        if (wrap === "o" && !numeric && text && !span && (st?.ha ?? "l") === "l" && !isEditing && !st?.rt) {
+          for (let k = ci + 1; k < p.columns.length; k += 1) {
+            const nc = p.columns[k];
+            const key2 = `${p.row.id}:${nc.id}`;
+            const v2 = p.row.cells[nc.id];
+            if (p.hiddenCols.has(nc.id)) continue;
+            if ((v2 !== undefined && v2 !== null && v2 !== "") || p.merges.covered.has(key2) || p.merges.anchors.has(key2) || p.ruleAt(p.rawIndex, k)) break;
+            spill += p.widthsKey[k] ?? 0;
+            if (spill > 2000) break;
+          }
+        }
+        const borders = borderOverlay(st);
         return (
           <td
             key={col.id}
@@ -2306,7 +3949,9 @@ const Row = memo(function Row(p: RowProps) {
               p.onCellMenu(ci, { left: e.clientX, top: e.clientY });
             }}
             className={cn(
-              "group/cell relative overflow-hidden border-b border-r border-border/80 px-1.5 py-0.5",
+              "group/cell relative px-1.5 py-0.5",
+              spill ? "overflow-visible" : "overflow-hidden",
+              p.noGrid ? "border-b border-r border-transparent" : "border-b border-r border-border/80",
               verticalClass(st), horizontalClass(st, numeric),
               numeric && "tabular-nums",
               col.type === "checkbox" && !st?.ha ? "text-center" : "",
@@ -2320,6 +3965,26 @@ const Row = memo(function Row(p: RowProps) {
               p.findHits.some((h) => h.r === p.rowIndex && h.c === ci) ? "bg-amber-100 dark:bg-amber-900/40" : "",
             )}
           >
+            {borders && <span aria-hidden style={borders} />}
+            {dec?.stripes && <span aria-hidden className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(135deg,transparent_0_6px,color-mix(in_oklab,var(--muted-foreground)_18%,transparent)_6px_8px)]" />}
+            {(dec?.head === "filter" || dec?.head === "table") && p.canEdit !== undefined && (
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); p.onHeaderMenu(ci, (e.currentTarget.closest("td") as HTMLElement).getBoundingClientRect()); }}
+                aria-label={dec.head === "filter" ? t("Filter menu") : t("Column menu")}
+                className={cn("absolute right-0.5 top-1/2 z-[4] grid h-4 w-4 -translate-y-1/2 place-items-center rounded-sm",
+                  dec.head === "table" ? "text-white/90 hover:bg-white/20" : dec.filtered ? "bg-success text-white" : "text-success hover:bg-success/15")}
+              >
+                {dec.head === "table" ? <ChevronDown className="h-3 w-3" /> : <ListFilter className="h-3 w-3" />}
+              </button>
+            )}
+            {st?.nt && (
+              <span
+                onMouseEnter={(e) => p.onNoteHover(p.row.id, col.id, (e.currentTarget.closest("td") as HTMLElement).getBoundingClientRect())}
+                onMouseLeave={() => p.onNoteHover(p.row.id, col.id, null)}
+                className="absolute right-0 top-0 z-[3] h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-foreground"
+              />
+            )}
             {/* Selection tint as an overlay, so it sits over fills and pinned cells stay opaque. */}
             {inRect && p.activeC !== ci && <span aria-hidden className="pointer-events-none absolute inset-0 bg-info/10" />}
             {peerHere && (
@@ -2333,7 +3998,7 @@ const Row = memo(function Row(p: RowProps) {
                 </span>
               </>
             )}
-            {(p.commentCounts[key] ?? 0) > 0 && (
+            {!p.commentsHidden && (p.commentCounts[key] ?? 0) > 0 && (
               <span
                 title={t("{n} comments — right-click to open", { n: p.commentCounts[key] })}
                 className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-amber-500"
@@ -2412,8 +4077,10 @@ const Row = memo(function Row(p: RowProps) {
               );
             })()) : (
               <span
-                className={cn("block", st?.w ? "whitespace-pre-wrap break-words" : "truncate whitespace-pre",
+                className={cn("block",
+                  st?.rt ? "whitespace-pre" : wrap === "w" ? "whitespace-pre-wrap break-words" : wrap === "c" ? "overflow-hidden whitespace-pre" : spill ? "relative z-[2] overflow-hidden whitespace-pre" : "truncate whitespace-pre",
                   isError(computed) && isFormula(value) ? "font-medium text-destructive" : "")}
+                style={{ ...rotationStyle(st), ...(spill ? { width: (p.widthsKey[ci] ?? 0) + spill - 12 } : {}) }}
                 title={isFormula(value) && isError(computed) ? `${computed} — ${errorHint(computed, p.lang)}` : undefined}
               >
                 {text}
@@ -2435,6 +4102,12 @@ const Row = memo(function Row(p: RowProps) {
   a.rawIndex === b.rawIndex &&
   a.widthsKey === b.widthsKey &&
   a.lefts === b.lefts &&
+  a.height === b.height &&
+  a.decorAt === b.decorAt &&
+  a.noGrid === b.noGrid &&
+  a.showFormulas === b.showFormulas &&
+  a.commentsHidden === b.commentsHidden &&
+  a.gutter === b.gutter &&
   a.frozenCols === b.frozenCols &&
   a.stickyTop === b.stickyTop &&
   a.freezeEdge === b.freezeEdge &&
@@ -2460,3 +4133,31 @@ const Row = memo(function Row(p: RowProps) {
   (a.editing?.rowId === a.row.id) === (b.editing?.rowId === b.row.id) &&
   (a.editing?.rowId !== a.row.id || a.editing?.colId === b.editing?.colId),
 );
+
+/** Format › Resize rows / columns: a number in pixels, or "Fit to data". */
+function ResizeDialog({ kind, label, initial, onApply, onClose }: {
+  kind: "rows" | "cols"; label: string; initial: number;
+  onApply: (v: number | "fit") => void; onClose: () => void;
+}) {
+  const { t } = useLang();
+  const [mode, setMode] = useState<"px" | "fit">("px");
+  const [v, setV] = useState(String(initial));
+  return (
+    <SheetDialog
+      title={kind === "rows" ? t("Resize rows {r}", { r: label }) : t("Resize columns {r}", { r: label })}
+      onClose={onClose}
+      width={380}
+      footer={<><button className="rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-muted" onClick={onClose}>{t("Cancel")}</button><button className={primaryBtn} onClick={() => onApply(mode === "fit" ? "fit" : Number(v) || initial)}>{t("OK")}</button></>}
+    >
+      <label className="flex items-center gap-2 py-1 text-sm">
+        <input type="radio" checked={mode === "px"} onChange={() => setMode("px")} className="accent-primary" />
+        {kind === "rows" ? t("Specify row height") : t("Enter new column width in pixels")}
+        <input value={v} onChange={(e) => { setV(e.target.value.replace(/[^0-9]/g, "")); setMode("px"); }} inputMode="numeric" className="ml-auto h-8 w-20 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-ring" />
+      </label>
+      <label className="flex items-center gap-2 py-1 text-sm">
+        <input type="radio" checked={mode === "fit"} onChange={() => setMode("fit")} className="accent-primary" />
+        {t("Fit to data")}
+      </label>
+    </SheetDialog>
+  );
+}

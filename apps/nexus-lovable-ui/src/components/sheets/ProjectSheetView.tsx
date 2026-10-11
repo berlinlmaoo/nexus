@@ -15,6 +15,12 @@ import { SheetMobile } from "./SheetMobile";
 import { SheetTabs } from "./SheetTabs";
 import { useSheetUndo } from "./use-sheet-undo";
 import { useLang } from "@/lib/lang";
+import { PivotEditor } from "./PivotEditor";
+import { computePivot, distinctFieldValues, pivotFields, pivotSuggestions } from "@/lib/sheet-pivot";
+import { buildSheetData, displayCell } from "./sheet-types";
+import { engineFor } from "@/lib/sheet-formula";
+import { rangeFromA1, rangeRect, rangeToA1 } from "@/lib/sheet-validation";
+import type { PivotSpec } from "@/lib/sheet-model";
 
 type SettingsPatch = { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null };
 
@@ -27,7 +33,6 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   const { t } = useLang();
   const isMobile = useIsMobile();
   const [editingCell, setEditingCell] = useState(false);
-  const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
   const refreshList = () => qc.invalidateQueries({ queryKey: ["nexus", "project-sheets", projectId] });
   const fileRef = useRef<HTMLInputElement>(null);
   const importFile = useMutation({
@@ -82,6 +87,18 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     staleTime: 60_000,
   });
   const sheets = list.data?.sheets ?? [];
+  /** A one-shot instruction for the grid from outside it (tab menu › Protect sheet / View comments). */
+  const [gridCommand, setGridCommand] = useState<{ kind: "protectSheet" | "comments"; n: number } | null>(null);
+  const membersQ = useQuery({
+    queryKey: ["nexus", "project-members-lite", projectId],
+    queryFn: () => nexusApi.projectMembers(projectId),
+    staleTime: 300_000,
+  });
+  const members = useMemo(() => {
+    const raw = membersQ.data;
+    const arr = Array.isArray(raw) ? raw : raw?.members ?? [];
+    return arr.map((m) => ({ id: m.userId ?? m.user?.id ?? "", name: m.user?.name ?? m.user?.email ?? "" })).filter((m) => m.id);
+  }, [membersQ.data]);
   const [activeId, setActiveId] = useState<string | null>(null);
   // Fall back to the first sheet whenever the chosen one disappears (deleted elsewhere).
   const sheetId = activeId && sheets.some((s) => s.id === activeId) ? activeId : sheets[0]?.id ?? null;
@@ -386,16 +403,16 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
    * new column's id only exists once the server has answered, so the undo entry is registered after
    * the save rather than before it.
    */
-  const addColumnAt = (index: number, label: string) => {
+  const addColumnAt = (index: number, label: string, count = 1) => {
     const before = sheetRef.current?.columns ?? [];
     const next = [...before];
-    next.splice(Math.max(0, Math.min(index, next.length)), 0, { name: "", type: "text" } as NexusSheetColumn);
+    next.splice(Math.max(0, Math.min(index, next.length)), 0, ...Array.from({ length: Math.max(1, count) }, () => ({ name: "", type: "text" } as NexusSheetColumn)));
     void saveColumns.mutateAsync(next).then((res) => {
-      const created = res.columns.find((c) => !before.some((b) => b.id === c.id));
-      if (!created) return;
+      const created = res.columns.filter((c) => !before.some((b) => b.id === c.id));
+      if (!created.length) return;
       undo.push({
         label,
-        undo: () => delColumn.mutateAsync(created.id).then(() => {}),
+        undo: async () => { for (const c of created) await delColumn.mutateAsync(c.id); },
         // The entry in `next` still carries no id, so redoing mints a fresh one. That's fine —
         // nothing references the old id any more, its cells went with it.
         redo: () => saveColumns.mutateAsync(next).then(() => {}),
@@ -543,7 +560,49 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       refreshList();
     } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't duplicate the sheet.")); }
   };
-  const colorSheet = async (id: string, color: NexusSheetColumnColor | null) => {
+  const hideSheet = async (id: string, hidden: boolean) => {
+    await sendSettings({ hidden: hidden ? true : null }, id);
+    refreshList();
+    if (hidden && id === sheetId) setActiveId(sheets.find((s) => s.id !== id && !s.hidden)?.id ?? null);
+  };
+  /** Data › Sort sheet: rows trade places for real, with the old order kept for undo. */
+  const reorderRows = async (order: string[], before: string[], label: string) => {
+    const id = sheetRef.current?.id;
+    if (!id) return;
+    const apply = async (o: string[]) => {
+      // On screen at once: the listed rows take the positions they already hold, in the new order.
+      qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => {
+        if (!old) return old;
+        const listed = new Set(o);
+        const slots = old.rows.filter((r) => listed.has(r.id)).map((r) => r.position).sort((a, b) => a - b);
+        const pos = new Map(o.map((rid, i) => [rid, slots[i]]));
+        return { ...old, rows: old.rows.map((r) => (pos.has(r.id) ? { ...r, position: pos.get(r.id)! } : r)).sort((a, b) => a.position - b.position) };
+      });
+      try { await nexusApi.reorderSheetRows(id, o); } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't save.")); qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] }); }
+    };
+    await apply(order);
+    undo.push({ label, undo: () => apply(before), redo: () => apply(order) });
+  };
+  /** Insert › Pivot table › New sheet: "Pivot Table N", fed by `range` of the source sheet. */
+  const createPivot = async (sourceId: string, range: string) => {
+    try {
+      const used = new Set(sheets.map((s) => s.name));
+      let n = 1; while (used.has(`Pivot Table ${n}`)) n += 1;
+      const created = await nexusApi.createSheet(projectId, `Pivot Table ${n}`);
+      await nexusApi.updateSheet(created.id, { settings: { pivot: { source: sourceId, range, rows: [], cols: [], values: [], filters: [] } } });
+      setActiveId(created.id);
+      refreshList();
+    } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't create the sheet.")); }
+  };
+  /** File › Settings: locale, time zone and calculation are the spreadsheet's (every tab of the project). */
+  const saveSpreadsheetSettings = async (patch: SettingsPatch) => {
+    const before = (sheetRef.current?.settings ?? {}) as Record<string, unknown>;
+    const undoPatch = Object.fromEntries(Object.keys(patch).map((k) => [k, before[k] ?? null])) as SettingsPatch;
+    const apply = async (p: SettingsPatch) => { for (const s of sheets) await sendSettings(p, s.id); };
+    await apply(patch);
+    undo.push({ label: t("settings"), undo: () => apply(undoPatch), redo: () => apply(patch) });
+  };
+  const colorSheet = async (id: string, color: string | null) => {
     await sendSettings({ tabColor: color }, id);
     refreshList();
   };
@@ -556,6 +615,87 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     try { await nexusApi.reorderSheets(projectId, order); refreshList(); }
     catch (e) { alert(e instanceof Error ? e.message : t("Couldn't move the sheet.")); }
   };
+
+  // --- Pivot sheets ("Pivot Table N") ------------------------------------------------------------
+  // The pivot is computed from its source sheet in the browser and WRITTEN into the pivot sheet's
+  // cells, so the phones (GET ?computed=1) and exports show it too. Re-written whenever the source or
+  // the pivot's definition changes; the cells are derived data, so they skip the undo stack.
+  const pivot = sheet?.settings?.pivot ?? null;
+  const pivotSrcQ = useQuery({
+    queryKey: ["nexus", "sheet", pivot?.source],
+    queryFn: () => nexusApi.sheet(pivot!.source),
+    enabled: Boolean(pivot?.source),
+    staleTime: 20_000,
+  });
+  const pivotSrc = useMemo(() => {
+    const src = pivotSrcQ.data;
+    if (!src) return null;
+    const data = buildSheetData(src.columns, src.rows);
+    const engine = engineFor(data);
+    const headRow = (() => { const rc = pivot ? rangeRect(pivot.range, data.shape) : null; return rc ? src.rows[rc.top] : null; })();
+    const headerOf = (colId: string) => {
+      const col = src.columns.find((c) => c.id === colId);
+      const text = col && headRow ? displayCell(col.type, headRow.cells[colId], { data, rowId: headRow.id, colId }) : "";
+      return text || col?.name || colId;
+    };
+    return { sheet: src, data, engine, headerOf };
+  }, [pivotSrcQ.data, pivot]);
+  const pivotResult = useMemo(() => (pivot && pivotSrc ? computePivot(pivot, pivotSrc) : null), [pivot, pivotSrc]);
+  const pivotWriting = useRef(false);
+  useEffect(() => {
+    const cur = sheetRef.current;
+    if (!pivotResult || !cur || !cur.canEdit || pivotWriting.current) return;
+    // Labels the pivot makes ("Grand Total", "SUM of Jumlah", "Apel Total") in the interface language.
+    const tr = (v: unknown) => {
+      if (typeof v !== "string") return v;
+      if (v === "Grand Total") return t("Grand Total");
+      const m = /^([A-Z]+) of (.+)$/.exec(v);
+      if (m) return t("{fn} of {name}", { fn: m[1], name: m[2] });
+      const tot = /^(.+) Total$/.exec(v);
+      if (tot) return t("{name} Total", { name: tot[1] });
+      return v;
+    };
+    const grid = pivotResult.grid.map((r) => r.map((v) => tr(v) as typeof v));
+    const width = Math.max(1, ...grid.map((r) => r.length));
+    const textOf = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+    // Already up to date? Compare what is stored with what the pivot produces.
+    const same = grid.length <= cur.rows.length && width <= cur.columns.length
+      && cur.rows.every((row, i) => cur.columns.every((col, j) => textOf((grid[i] ?? [])[j] ?? null) === textOf(row.cells[col.id] ?? null)));
+    if (same) return;
+    pivotWriting.current = true;
+    (async () => {
+      try {
+        let cols = cur.columns, rowsNow = cur.rows;
+        if (width > cols.length) {
+          const next = [...cols, ...Array.from({ length: width - cols.length }, () => ({ name: "", type: "text" } as NexusSheetColumn))];
+          cols = (await nexusApi.updateSheet(cur.id, { columns: next })).columns;
+        }
+        if (grid.length > rowsNow.length) rowsNow = [...rowsNow, ...(await nexusApi.addSheetRows(cur.id, { count: grid.length - rowsNow.length })).rows];
+        const edits = rowsNow.map((row, i) => ({
+          rowId: row.id,
+          values: Object.fromEntries(cols.map((col, j) => [col.id, (grid[i] ?? [])[j] ?? null])),
+        })).filter((e) => Object.entries(e.values).some(([k, v]) => textOf(v) !== textOf(rowsNow.find((r) => r.id === e.rowId)?.cells[k] ?? null)));
+        if (edits.length) await nexusApi.setSheetCells(cur.id, edits);
+        // Percent cells read as percent; everything else as numbers with grouping.
+        const styleEdits = rowsNow.slice(0, grid.length).map((row, i) => ({
+          rowId: row.id,
+          values: Object.fromEntries(cols.slice(0, width).map((col, j) => {
+            const f = pivotResult.formats[i]?.[j];
+            return [col.id, i === 0 || (grid[i]?.[0] ?? "") === t("Grand Total") ? { b: 1 as const, ...(f === "pct" ? { nf: "pct" as const } : {}) } : f === "pct" ? { nf: "pct" as const } : null];
+          })),
+        }));
+        await nexusApi.setSheetStyles(cur.id, styleEdits);
+        qc.invalidateQueries({ queryKey: ["nexus", "sheet", cur.id] });
+      } catch (e) {
+        console.error("[sheets] pivot refresh failed", e);
+      } finally {
+        pivotWriting.current = false;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pivotResult]);
+  const [pivotEditorOpen, setPivotEditorOpen] = useState(true);
+  const savePivot = (next: PivotSpec) => { void sendSettings({ pivot: next }); };
 
   if (list.isLoading || sheetQ.isLoading) {
     return <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
@@ -571,7 +711,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       canEdit={sheet.canEdit}
       canManage={sheet.canManage}
       onSelect={(id) => setActiveId(id)}
-      onAdd={() => addSheet.mutate(`Sheet ${sheets.length + 1}`)}
+      onAdd={() => addSheet.mutate(`Sheet${sheets.length + 1}`)}
       onRename={(id, name) => void renameSheet(id, name)}
       onDuplicate={(id) => void duplicateSheet(id)}
       onDelete={(id) => {
@@ -580,6 +720,9 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       }}
       onColor={(id, c) => void colorSheet(id, c)}
       onMove={(id, dir) => void moveSheet(id, dir)}
+      onHide={(id, hidden) => void hideSheet(id, hidden)}
+      onProtect={(id) => { setActiveId(id); setGridCommand({ kind: "protectSheet", n: Date.now() }); }}
+      onComments={(id) => { setActiveId(id); setGridCommand({ kind: "comments", n: Date.now() }); }}
     />
   );
 
@@ -606,6 +749,9 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         )}
         {connected && otherPeers.length > 0 && <span className="text-2xs font-medium text-success">{t("live")}</span>}
         {!sheet.canEdit && <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">{t("view only")}</span>}
+        {sheet.canEdit && !isMobile && (
+          <span className="text-2xs text-muted-foreground" aria-live="polite">{setCells.isPending || saving > 0 ? t("Saving…") : t("All changes saved")}</span>
+        )}
         <div className="ml-auto flex items-center gap-1">
           {sheet.canEdit && (
             <>
@@ -620,34 +766,9 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
                   importFile.mutate({ file, mode: replace ? "replace" : "append" });
                 }}
               />
-              <button
-                disabled={importFile.isPending}
-                onClick={() => fileRef.current?.click()}
-                title={t("Import from CSV or Excel (.xlsx)")}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
-              >
-                {importFile.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                {t("Import")}
-              </button>
+              {importFile.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             </>
           )}
-          {(["xlsx", "csv"] as const).map((f) => (
-            <button
-              key={f}
-              disabled={exporting !== null}
-              title={t("Download as {f}", { f: f.toUpperCase() })}
-              onClick={async () => {
-                setExporting(f);
-                try { await nexusApi.exportSheet(sheet.id, f, `${sheet.name}.${f}`); }
-                catch (e) { alert(e instanceof Error ? e.message : t("Export failed.")); }
-                finally { setExporting(null); }
-              }}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
-            >
-              {exporting === f ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              {f.toUpperCase()}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -716,12 +837,47 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             onAddColumn={() => addColumnAt(sheet.columns.length, t("add column"))}
             // Splicing works because the server keeps array ORDER and only mints an id for the entry
             // that has none — existing columns keep theirs, so not one cell has to be rewritten.
-            onInsertColumn={(index) => addColumnAt(index, t("insert column"))}
+            onInsertColumn={(index, count) => addColumnAt(index, t("insert column"), count ?? 1)}
+            command={gridCommand}
+            host={{
+              sheetId: sheet.id,
+              sheets,
+              meId,
+              members,
+              importFile: () => fileRef.current?.click(),
+              download: (f) => { void nexusApi.exportSheet(sheet.id, f, `${sheet.name}.${f}`).catch((e) => alert(e instanceof Error ? e.message : t("Export failed."))); },
+              renameSheet: () => { const name = window.prompt(t("Rename"), sheet.name); if (name?.trim()) void renameSheet(sheet.id, name.trim()); },
+              insertSheet: () => addSheet.mutate(`Sheet${sheets.length + 1}`),
+              setSheetHidden: (id, hidden) => void hideSheet(id, hidden),
+              reorderRows,
+              reorderColumns: (ids) => editColumns(ids.map((cid) => sheet.columns.find((c) => c.id === cid)!).filter(Boolean), t("move columns")),
+              createPivot: (range) => void createPivot(sheet.id, range),
+              saveSpreadsheetSettings: (patch) => void saveSpreadsheetSettings(patch as SettingsPatch),
+              deleteColumns: (ids) => {
+                if (!window.confirm(t("Delete {n} columns?\n\nEverything in them goes too, but Ctrl+Z brings each back.", { n: ids.length }))) return;
+                ids.forEach((id) => removeColumn(id));
+              },
+            }}
             canUndo={undo.canUndo}
             canRedo={undo.canRedo}
             onUndo={async () => { const l = await undo.undo(); if (l) say(t("Undone: {what}", { what: l })); }}
             onRedo={async () => { const l = await undo.redo(); if (l) say(t("Redone: {what}", { what: l })); }}
             footerLeft={tabs}
+            aside={pivot && pivotSrc && pivotEditorOpen ? (
+              <PivotEditor
+                spec={pivot}
+                sourceSheetName={pivotSrc.sheet.name}
+                rangeA1={rangeToA1(pivot.range, pivotSrc.data.shape)}
+                fields={pivotFields(pivotSrc, pivot.range)}
+                valuesFor={(colId) => distinctFieldValues(pivotSrc, pivot.range, colId)}
+                suggestions={pivotSuggestions(pivotSrc, pivot.range)}
+                canEdit={sheet.canEdit}
+                onChange={savePivot}
+                onRangeChange={(a1) => { const r = rangeFromA1(a1, pivotSrc.data.shape); if (!r) return false; savePivot({ ...pivot, range: r }); return true; }}
+                onClose={() => setPivotEditorOpen(false)}
+              />
+            ) : null}
+            onReopenAside={pivot ? () => setPivotEditorOpen(true) : undefined}
             saving={setCells.isPending}
             sheetName={sheet.name}
           />

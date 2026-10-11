@@ -10,7 +10,7 @@ import {
   computeSheet, parseDateText, parseLocaleNumber, serialToIso, serialToYmd, type CellValue, type ComputedCell,
 } from "@/lib/sheet-formula"
 
-// GET /api/sheets/[sheetId]/export?format=csv|xlsx
+// GET /api/sheets/[sheetId]/export?format=csv|xlsx|tsv|html
 //
 // The column LETTER is only a display convention (columns are stored by id), so the export writes
 // the column NAME as the header, falling back to the letter for columns nobody has named yet.
@@ -30,31 +30,48 @@ const XLSX_COLOR: Record<StyleColor, [string, string]> = {
   black: ["FF111827", "FF9CA3AF"],
 }
 
+/** A palette name (legacy) or "#rrggbb" as an Excel ARGB; `which` picks the legacy text or fill tint. */
+function argb(c: string | undefined, which: 0 | 1): string | undefined {
+  if (!c) return undefined
+  if (/^#[0-9a-f]{6}$/i.test(c)) return `FF${c.slice(1).toUpperCase()}`
+  return XLSX_COLOR[c as StyleColor]?.[which]
+}
+const XLSX_LINE: Record<string, ExcelJS.BorderStyle> = { thin: "thin", medium: "medium", thick: "thick", dotted: "dotted", dashed: "dashed", double: "double" }
+
 /** One cell's NEXUS formatting onto an ExcelJS cell, so the .xlsx looks like the grid. */
 function applyStyle(cell: ExcelJS.Cell, st: CellStyle) {
-  if (st.b || st.i || st.s || st.u || st.fc || st.fs) {
+  const fc = argb(st.fc, 0)
+  const size = st.fp ?? (st.fs ? Math.round(st.fs * 0.75) : undefined)
+  if (st.b || st.i || st.s || st.u || fc || size || st.ff) {
     cell.font = {
       ...(cell.font ?? {}),
       ...(st.b ? { bold: true } : {}), ...(st.i ? { italic: true } : {}), ...(st.s ? { strike: true } : {}),
-      ...(st.u ? { underline: true } : {}), ...(st.fc ? { color: { argb: XLSX_COLOR[st.fc][0] } } : {}),
-      ...(st.fs ? { size: Math.round(st.fs * 0.75) } : {}),
+      ...(st.u ? { underline: true } : {}), ...(fc ? { color: { argb: fc } } : {}),
+      ...(size ? { size } : {}), ...(st.ff && st.ff !== "Default" ? { name: st.ff } : {}),
     }
   }
-  if (st.bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XLSX_COLOR[st.bg][1] } }
-  if (st.ha || st.va || st.w) {
+  const bg = argb(st.bg, 1)
+  if (bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } }
+  const wrap = st.wr ? st.wr === "w" : Boolean(st.w)
+  if (st.ha || st.va || wrap || st.rt !== undefined) {
     cell.alignment = {
       ...(st.ha ? { horizontal: st.ha === "l" ? "left" : st.ha === "c" ? "center" : "right" } : {}),
       ...(st.va ? { vertical: st.va === "t" ? "top" : st.va === "m" ? "middle" : "bottom" } : {}),
-      ...(st.w ? { wrapText: true } : {}),
+      ...(wrap ? { wrapText: true } : {}),
+      ...(st.rt === "v" ? { textRotation: "vertical" as const } : typeof st.rt === "number" ? { textRotation: st.rt } : {}),
     }
   }
-  if (st.bd) {
-    const side = { style: "thin" as const, color: { argb: "FF111827" } }
-    cell.border = {
-      ...(st.bd.includes("t") ? { top: side } : {}), ...(st.bd.includes("b") ? { bottom: side } : {}),
-      ...(st.bd.includes("l") ? { left: side } : {}), ...(st.bd.includes("r") ? { right: side } : {}),
+  if (st.bx || st.bd) {
+    const edge = (side: "t" | "b" | "l" | "r") => {
+      const e = st.bx?.[side]
+      if (e) return { style: XLSX_LINE[e.s] ?? "thin", color: { argb: argb(e.c, 0) ?? "FF111827" } }
+      return st.bd?.includes(side) ? { style: "thin" as const, color: { argb: "FF111827" } } : undefined
     }
+    const t = edge("t"), b = edge("b"), l = edge("l"), r = edge("r")
+    cell.border = { ...(t ? { top: t } : {}), ...(b ? { bottom: b } : {}), ...(l ? { left: l } : {}), ...(r ? { right: r } : {}) }
   }
+  if (st.nf === "custom" && st.pt) cell.numFmt = st.pt
+  if (st.nt) cell.note = st.nt
 }
 
 const safeFileName = (s: string) => s.replace(/[^\w\s.-]+/g, "_").trim().slice(0, 80) || "sheet"
@@ -226,6 +243,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ shee
       csvHeader.push(headerOf(c, i))
       if (c.type === "link") csvHeader.push(`${headerOf(c, i)} (URL)`)
     })
+    // File › Download › Tab-separated values (.tsv) / Web page (.html): the same rows, as text.
+    if (format === "tsv" || format === "html") {
+      const lines = [csvHeader, ...body.map((_r, i) => {
+        const line: string[] = []
+        sheet.columns.forEach((c) => {
+          const cell = cellAt(i, c.id)
+          line.push(format === "html" ? cell?.d ?? "" : String(csvValue(cell) ?? ""))
+          if (c.type === "link") line.push(linkAt(i, c.id))
+        })
+        return line
+      })]
+      if (format === "tsv") {
+        const esc = (v: string) => (/[\t\n\r"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+        return new NextResponse(lines.map((l) => l.map(esc).join("\t")).join("\r\n"), {
+          headers: { "Content-Type": "text/tab-separated-values; charset=utf-8", "Content-Disposition": `attachment; filename="${base}.tsv"` },
+        })
+      }
+      const h = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${h(sheet.name)}</title>`
+        + `<style>body{font:13px system-ui,sans-serif;margin:16px}table{border-collapse:collapse}td,th{border:1px solid #d0d0d0;padding:3px 6px;vertical-align:bottom;white-space:pre}th{background:#f3f3f3;text-align:left}</style></head><body>`
+        + `<table><thead><tr>${lines[0].map((v) => `<th>${h(v)}</th>`).join("")}</tr></thead><tbody>`
+        + lines.slice(1).map((l) => `<tr>${l.map((v) => `<td>${h(v)}</td>`).join("")}</tr>`).join("")
+        + `</tbody></table></body></html>`
+      return new NextResponse(html, {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Content-Disposition": `attachment; filename="${base}.html"` },
+      })
+    }
     const csv = toCsv([
       csvHeader,
       ...body.map((_r, i) => {

@@ -208,18 +208,30 @@ export type NexusSheetCellValue = string | number | boolean;
 export type NexusSheetStyleColor = "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink" | "slate" | "black";
 export type NexusSheetCellStyle = {
   b?: 1; i?: 1; s?: 1; u?: 1;
-  fc?: NexusSheetStyleColor; bg?: NexusSheetStyleColor;
+  /** A palette name (legacy) or a hex colour ("#ffe599"). */
+  fc?: NexusSheetStyleColor | string; bg?: NexusSheetStyleColor | string;
   ha?: "l" | "c" | "r"; va?: "t" | "m" | "b";
-  w?: 1; fs?: number;
-  nf?: "auto" | "num" | "idr" | "pct" | "date" | "text"; dp?: number;
+  /** Legacy wrap flag; `wr` wins when present. */
+  w?: 1;
+  /** Font size in px (legacy); `fp` (points, like Sheets' toolbar) wins when present. */
+  fs?: number; fp?: number;
+  /** Font family name ("Default" when absent). */
+  ff?: string;
+  nf?: import("./sheet-model").NumberFormatKind; dp?: number;
+  /** Pattern for nf "custom" (number, date/time or currency pattern, Sheets syntax). */
+  pt?: string;
+  /** Border sides drawn thin in the text colour (legacy); `bx` carries style + colour per side. */
   bd?: string;
+  bx?: import("./sheet-model").BorderSpec;
+  /** Rotation: degrees, or "v" for stacked. */
+  rt?: import("./sheet-model").Rotation;
+  wr?: import("./sheet-model").WrapMode;
+  /** The cell's note (Insert › Note): plain text, no author. */
+  nt?: string;
 };
-/** Sheet-level view settings shared by everyone. */
-export type NexusSheetSettings = {
-  frozenRows?: number; frozenCols?: number;
-  tabColor?: NexusSheetColumnColor;
-  hiddenRows?: string[]; hiddenCols?: string[];
-  merges?: { r: string; c: string; rs: number; cs: number }[];
+/** Sheet-level view settings shared by everyone (see lib/sheet-model.ts). */
+export type NexusSheetSettings = Omit<import("./sheet-model").SheetSettingsModel, "tabColor"> & {
+  tabColor?: NexusSheetColumnColor | string;
   /** Data-validation rules (dropdowns, checkboxes, text/date/number checks) over id-space ranges. */
   validations?: import("./sheet-validation").ValidationRule[];
 };
@@ -2931,7 +2943,7 @@ export const nexusApi = {
 
   // --- Project spreadsheet ---
   projectSheets: (projectId: string) =>
-    apiFetch<{ sheets: { id: string; name: string; position: number; rowCount: number; tabColor?: NexusSheetColumnColor | null }[] }>(
+    apiFetch<{ sheets: { id: string; name: string; position: number; rowCount: number; tabColor?: NexusSheetColumnColor | string | null; hidden?: boolean }[] }>(
       `/api/projects/${projectId}/sheets`),
   /** Full copy of a sheet (values, formulas re-pointed, formatting), placed as the last tab. */
   duplicateSheet: (projectId: string, sheetId: string) =>
@@ -3031,6 +3043,14 @@ export const nexusApi = {
     }
     return post(payload);
   },
+  /** Bulk reorder: the listed rows swap into the positions they already hold, in this order. */
+  reorderSheetRows: (sheetId: string, order: string[]) =>
+    apiFetch<{ ok: true; reordered: number }>(`/api/sheets/${sheetId}/rows`, { method: "PATCH", body: JSON.stringify({ order }) }),
+  /** Version history: every change after `after` (ISO), or the latest `limit` changes. */
+  sheetHistory: (sheetId: string, opts: { after?: string; limit?: number }) =>
+    apiFetch<{ revisions: NexusSheetRevision[] }>(
+      `/api/sheets/${sheetId}/revisions?${opts.after ? `after=${encodeURIComponent(opts.after)}` : `limit=${opts.limit ?? 2000}`}`,
+    ),
   reorderSheetRow: (sheetId: string, rowId: string, afterRowId: string | null) =>
     apiFetch<{ ok: true; position: number }>(`/api/sheets/${sheetId}/rows`, { method: "PATCH", body: JSON.stringify({ rowId, afterRowId }) }),
   importSheet: (sheetId: string, file: File, mode: "append" | "replace") => {
@@ -3057,7 +3077,7 @@ export const nexusApi = {
     apiFetch<{ ok: true; resized: number }>(`/api/sheets/${sheetId}/rows`, {
       method: "PATCH", body: JSON.stringify({ heights }),
     }),
-  exportSheet: (sheetId: string, format: "csv" | "xlsx", fallbackName: string) =>
+  exportSheet: (sheetId: string, format: "csv" | "xlsx" | "tsv" | "html", fallbackName: string) =>
     downloadFile(`/api/sheets/${sheetId}/export?format=${format}`, fallbackName),
   deleteSheetRows: (sheetId: string, rowIds: string[]) =>
     apiFetch<{ deleted: number }>(`/api/sheets/${sheetId}/rows`, { method: "DELETE", body: JSON.stringify({ rowIds }) }),
