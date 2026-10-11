@@ -408,7 +408,9 @@ export function CellEditor({ col, initial, seeded, onCommit, onCancel, onDraftCh
     onCommit(ref.current?.value ?? "", next);
   };
 
-  if (col.type === "multiselect" || col.type === "select") {
+  // A dropdown COLUMN opened with Enter/double-click shows its list; typing into it (seeded) edits
+  // the text like any other cell.
+  if ((col.type === "multiselect" || col.type === "select") && !seeded) {
     return (
       <ChoiceEditor
         col={col}

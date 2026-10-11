@@ -220,6 +220,8 @@ export type NexusSheetSettings = {
   tabColor?: NexusSheetColumnColor;
   hiddenRows?: string[]; hiddenCols?: string[];
   merges?: { r: string; c: string; rs: number; cs: number }[];
+  /** Data-validation rules (dropdowns, checkboxes, text/date/number checks) over id-space ranges. */
+  validations?: import("./sheet-validation").ValidationRule[];
 };
 export type NexusSheetRow = {
   id: string; position: number; cells: Record<string, NexusSheetCellValue>;

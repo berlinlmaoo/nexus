@@ -175,9 +175,11 @@ function Btn({ label, onClick, disabled, active, children }: { label: string; on
 }
 
 /** A toolbar button that opens a small menu (portaled: the toolbar sits above overflow containers). */
-export function Menu({ label, trigger, disabled, children }: {
+export function Menu({ label, trigger, disabled, children, bare }: {
   label: string; trigger: ReactNode; disabled?: boolean;
   children: (close: () => void) => ReactNode;
+  /** Menu-bar style: a word, no caret. */
+  bare?: boolean;
 }) {
   const [at, setAt] = useState<DOMRect | null>(null);
   const ref = useRef<HTMLButtonElement>(null);
@@ -209,7 +211,7 @@ export function Menu({ label, trigger, disabled, children }: {
         )}
       >
         {trigger}
-        <ChevronDown className="h-3 w-3 opacity-60" />
+        {!bare && <ChevronDown className="h-3 w-3 opacity-60" />}
       </button>
       {at && createPortal(
         <>
@@ -226,6 +228,14 @@ export function Menu({ label, trigger, disabled, children }: {
       )}
     </>
   );
+}
+
+/** A small heading inside a menu (Sheets groups long menus this way). */
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return <div className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
+}
+export function MenuSep() {
+  return <div className="my-1 border-t border-border" />;
 }
 
 export function MenuItem({ children, onClick, active, hint, icon, danger, disabled }: {

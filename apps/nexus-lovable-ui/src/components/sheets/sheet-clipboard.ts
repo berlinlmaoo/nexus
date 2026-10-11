@@ -28,10 +28,13 @@ export type ClipPayload = {
   /** Column types of the source block, so a paste into a different column type re-reads the text. */
   types: string[];
   cells: ClipCell[][];
+  /** Data-validation rules covering parts of the block, as block-relative rectangles. */
+  validations?: ClipValidation[];
 };
+export type ClipValidation = { rule: Record<string, unknown>; r1: number; r2: number; c1: number; c2: number };
 /** A block ready to paste. `formulaR1C1` comes from foreign clipboards that carry one. */
 export type PasteCell = { text: string; raw?: unknown; formula?: string; formulaR1C1?: string };
-export type PasteBlock = { cells: PasteCell[][]; origin?: { r: number; c: number }; cut?: boolean; types?: string[]; internal: boolean };
+export type PasteBlock = { cells: PasteCell[][]; origin?: { r: number; c: number }; cut?: boolean; types?: string[]; internal: boolean; validations?: ClipValidation[] };
 
 /**
  * The last thing this tab copied. The async Clipboard API (used by the right-click menu) can't carry
@@ -42,7 +45,7 @@ let lastCopy: { text: string; payload: ClipPayload } | null = null;
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function buildClipboard(cells: ClipCell[][], origin: { r: number; c: number }, cut: boolean, types: string[]) {
+export function buildClipboard(cells: ClipCell[][], origin: { r: number; c: number }, cut: boolean, types: string[], validations: ClipValidation[] = []) {
   const text = toTsv(cells.map((row) => row.map((c) => c.text)));
   const html =
     `<meta charset="utf-8"><table data-nexus-sheet="1" style="border-collapse:collapse"><tbody>` +
@@ -50,7 +53,7 @@ export function buildClipboard(cells: ClipCell[][], origin: { r: number; c: numb
       `<td style="border:1px solid #ccc;padding:2px 3px;vertical-align:bottom">${escapeHtml(c.text).replace(/\n/g, "<br>")}</td>`,
     ).join("")}</tr>`).join("") +
     `</tbody></table>`;
-  const payload: ClipPayload = { v: 1, origin, cut, types, cells };
+  const payload: ClipPayload = { v: 1, origin, cut, types, cells, ...(validations.length ? { validations } : {}) };
   lastCopy = { text, payload };
   return { text, html, json: JSON.stringify(payload) };
 }
@@ -82,7 +85,7 @@ function fromPayload(json: string): PasteBlock | null {
   try {
     const p = JSON.parse(json) as ClipPayload;
     if (p?.v !== 1 || !Array.isArray(p.cells)) return null;
-    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true };
+    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true, validations: p.validations };
   } catch {
     return null;
   }
@@ -144,7 +147,7 @@ export function readClipboard(data: { getData: (type: string) => string }): Past
   const text = safeGet(data, "text/plain");
   if (text && lastCopy && text === lastCopy.text) {
     const p = lastCopy.payload;
-    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true };
+    return { cells: p.cells, origin: p.origin, cut: p.cut, types: p.types, internal: true, validations: p.validations };
   }
   const html = safeGet(data, "text/html");
   if (html && !/data-nexus-sheet/.test(html)) {
