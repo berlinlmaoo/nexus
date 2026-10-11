@@ -287,12 +287,13 @@ export function blockLines(node: BlockNode): string[] {
       const line = (r: string[]) => "| " + Array.from({ length: width }, (_, i) => r[i] ?? "").join(" | ") + " |"
       return [line(rows[0]), "| " + Array.from({ length: width }, () => "---").join(" | ") + " |", ...rows.slice(1).map(line)]
     }
+    // Media blocks still waiting for their upload / link have no text at all.
     case "image":
-      return [`![${String(a.alt ?? "")}](${String(a.src ?? "")})`]
+      return a.src ? [`![${String(a.alt ?? "")}](${String(a.src)})`] : []
     case "fileBlock":
-      return [`📎 ${String(a.name ?? "file")} (${String(a.url ?? "")})`]
+      return a.url ? [`📎 ${String(a.name ?? "file")} (${String(a.url)})`] : []
     case "bookmark":
-      return [a.title ? `🔗 ${String(a.title)} (${String(a.url ?? "")})` : `🔗 ${String(a.url ?? "")}`]
+      return !a.url ? [] : [a.title ? `🔗 ${String(a.title)} (${String(a.url)})` : `🔗 ${String(a.url)}`]
     default:
       // Unknown block: its text, never nothing.
       if (node.content?.some((c) => c.type === "text")) return inlineText(node.content).split("\n")
