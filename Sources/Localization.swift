@@ -2992,6 +2992,19 @@ final class AppLanguage {
         "Add 1 person": "Tambah 1 orang",
         "Add %d people": "Tambah %d orang",
 
+        // Projects: tab cards in New project (11 Oct)
+        "Progress, members and what's due": "Progres, anggota, dan yang jatuh tempo",
+        "Cards in columns by status": "Kartu per kolom status",
+        "Tasks as a simple checklist": "Task sebagai daftar centang",
+        "A spreadsheet with formulas": "Spreadsheet dengan rumus",
+        "Tasks on a month by due date": "Task per tanggal dalam sebulan",
+        "Start-to-end bars, Gantt style": "Bar mulai–selesai ala Gantt",
+        "Work in timeboxed cycles": "Kerja per siklus waktu",
+        "When this happens, do that": "Kalau ini terjadi, lakukan itu",
+        "Docs and notes for the project": "Dokumen dan catatan project",
+        "Collect requests as tasks": "Kumpulkan permintaan jadi task",
+        "The project's group chat": "Grup chat project",
+
         // Calendar: Impeccable audit fixes (6 Oct)
         // Calendar: Impeccable round 2 (7 Oct)
         "Focus on %@": "Fokus ke %@",
