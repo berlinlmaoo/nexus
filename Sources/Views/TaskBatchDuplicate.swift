@@ -11,6 +11,11 @@ import SwiftUI
 //     mode: a tap ticks a task instead of opening it, and a bar at the bottom shows Duplicate.
 //   • iPad with a pointer / Mac: right-click → Select or Duplicate. In selection mode a click ticks;
 //     ⌘A selects every task on screen, ⌘D duplicates, Esc leaves selection mode.
+//   • iPad with a keyboard / Mac: ⌘-click ticks or unticks a task (starting selection mode when it is
+//     off), ⇧-click ticks every task between the last one ticked and this one, in on-screen order within
+//     that lane (Board) or section (List). Both are SwiftUI's own `TapGesture().modifiers(_:)` (iOS 14+)
+//     as a high-priority gesture on the card's Button: with the key held it wins, without it the gesture
+//     fails at once and the Button's plain tap (open / tick) and `.draggable` behave as before.
 // Duplicate always asks for the copies' due date first (the web's popup), which is what makes it
 // useful for recurring work: same tasks, next week's date.
 
@@ -20,6 +25,8 @@ final class TaskSelection {
     /// True while a tap ticks a task instead of opening it.
     private(set) var active = false
     private(set) var ids: Set<String> = []
+    /// The last task ticked by hand: where a ⇧-click range starts.
+    private(set) var anchor: String?
     /// Set to open the due-date popup; the project screen presents it.
     var pendingDuplicate: TaskDuplicateRequest?
 
@@ -29,10 +36,30 @@ final class TaskSelection {
     func begin(with id: String) {
         active = true
         ids.insert(id)
+        anchor = id
     }
 
     func toggle(_ id: String) {
         if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+        anchor = id
+    }
+
+    /// ⌘-click: tick or untick, starting selection mode when it is off.
+    func commandToggle(_ id: String) {
+        if active { toggle(id) } else { begin(with: id) }
+    }
+
+    /// ⇧-click: tick every task from the anchor to this one in `order` (the lane or section on screen).
+    /// With no anchor in that order, it ticks just this task and makes it the anchor.
+    func extend(to id: String, in order: [String]) {
+        active = true
+        guard let a = anchor, let from = order.firstIndex(of: a), let to = order.firstIndex(of: id) else {
+            ids.insert(id)
+            anchor = id
+            return
+        }
+        for i in min(from, to)...max(from, to) { ids.insert(order[i]) }
+        // The anchor stays put, as in Finder: a second ⇧-click grows the same range.
     }
 
     func selectAll(_ all: [String]) {
@@ -43,6 +70,7 @@ final class TaskSelection {
     func clear() {
         active = false
         ids = []
+        anchor = nil
     }
 
     /// Duplicate from a context menu: the whole selection when this task is part of it, else the task.
@@ -89,15 +117,51 @@ struct TaskSelectionMenuItems: View {
     }
 }
 
-/// The tick drawn on a card or row while selection mode is on.
+/// The tick drawn on a card or row while selection mode is on. It sits INSIDE the card, at the leading
+/// edge of the title row (never in an overlay on the corner: the lane's scroll view clips anything
+/// that sticks out). Ticked = a filled accent circle with a white check; not ticked = an outline.
 struct TaskSelectionMark: View {
     let selected: Bool
     var body: some View {
-        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 20, weight: .semibold))
-            .foregroundStyle(selected ? NX.violetText : NX.mutedFg.opacity(0.6))
-            .background(Circle().fill(NX.card).padding(2))
-            .accessibilityLabel(selected ? T("Deselect") : T("Select"))
+        Group {
+            if selected {
+                Image(systemName: "checkmark.circle.fill")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(Color.white, NX.violetFill)
+            } else {
+                Image(systemName: "circle")
+                    .foregroundStyle(NX.mutedFg.opacity(0.7))
+            }
+        }
+        .font(.system(size: 20, weight: .medium))
+        .frame(width: 22, height: 22)
+        .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// ⌘-click and ⇧-click on a task card or row (iPad with a keyboard, Mac). `order` is read only on a
+    /// ⇧-click: the ids of the lane or section this task is in, top to bottom as drawn.
+    func taskModifierClicks(_ taskId: String, selection: TaskSelection?, order: @escaping () -> [String]) -> some View {
+        modifier(TaskModifierClicks(taskId: taskId, selection: selection, order: order))
+    }
+}
+
+struct TaskModifierClicks: ViewModifier {
+    let taskId: String
+    let selection: TaskSelection?
+    let order: () -> [String]
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let selection {
+            content.highPriorityGesture(
+                TapGesture().modifiers(.command).onEnded { selection.commandToggle(taskId) }
+                    .exclusively(before: TapGesture().modifiers(.shift).onEnded { selection.extend(to: taskId, in: order()) })
+            )
+        } else {
+            content
+        }
     }
 }
 

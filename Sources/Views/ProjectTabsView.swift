@@ -98,6 +98,8 @@ struct ProjectTaskRow: View {
     let onOpen: (String) -> Void
     /// The List tab passes its project's selection (multi-select + Duplicate); other callers do not.
     var selection: TaskSelection? = nil
+    /// The ids of this row's section, top to bottom, for a ⇧-click range (List tab only).
+    var order: () -> [String] = { [] }
 
     private var selecting: Bool { selection?.active ?? false }
     private var selected: Bool { selection?.contains(task.id) ?? false }
@@ -151,6 +153,9 @@ struct ProjectTaskRow: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(selecting && selected ? NX.violet : NX.border, lineWidth: selecting && selected ? 2 : 1))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selecting && selected ? .isSelected : [])
+        // ⌘-click ticks, ⇧-click ticks the range in this section (iPad keyboard, Mac).
+        .taskModifierClicks(task.id, selection: selection, order: order)
     }
 }
 
@@ -187,13 +192,14 @@ struct ListTab: View {
                         if (lane.tasks ?? []).isEmpty {
                             Text(T("Empty")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7)).padding(.vertical, 4)
                         } else {
+                            let order = { (lane.tasks ?? []).map(\.id) }
                             ForEach(lane.tasks ?? []) { t in
                                 if t.isSubtask {
-                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection)
+                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
                                         .padding(.leading, 16)                       // nest under parent
                                         .overlay(alignment: .leading) { Rectangle().fill(Color(hex: "#7c3aed").opacity(0.35)).frame(width: 2).padding(.vertical, 6) }
                                 } else {
-                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection)
+                                    ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
                                 }
                             }
                         }

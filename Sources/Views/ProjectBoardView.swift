@@ -674,17 +674,19 @@ struct LaneColumn: View {
                 Button {
                     if selection.active { selection.toggle(task.id) } else { onOpen(task.id) }
                 } label: {
-                    BoardCard(task: task)
+                    // The tick is drawn inside the card (leading, before the status circle), so the
+                    // lane's scroll view never clips it.
+                    BoardCard(task: task, selectMark: selection.active ? selection.contains(task.id) : nil)
                         .overlay {
                             if selection.active && selection.contains(task.id) {
                                 RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.violet, lineWidth: 2)
                             }
                         }
-                        .overlay(alignment: .topTrailing) {
-                            if selection.active { TaskSelectionMark(selected: selection.contains(task.id)).offset(x: 6, y: -6) }
-                        }
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(selection.active && selection.contains(task.id) ? .isSelected : [])
+                // ⌘-click ticks, ⇧-click ticks the range in this lane's on-screen order (iPad keyboard, Mac).
+                .taskModifierClicks(task.id, selection: selection) { orderedTasks.map(\.id) }
                 .hoverEffect(.lift)
                     // The task id is the whole payload. Dragging the card itself would mean making
                     // Task Transferable and shipping a copy of the model between columns, when all
@@ -774,11 +776,14 @@ struct SubtaskBadge: View {
 
 struct BoardCard: View {
     let task: BoardTask
+    /// nil = not in selection mode; else whether this card is ticked (multi-select, TaskBatchDuplicate.swift).
+    var selectMark: Bool? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
             HStack(alignment: .top, spacing: 8) {
+                if let selectMark { TaskSelectionMark(selected: selectMark) }
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 Text(task.title).font(NXFont.text(14, .bold))
