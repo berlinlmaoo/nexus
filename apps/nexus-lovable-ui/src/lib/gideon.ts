@@ -44,7 +44,7 @@ export type GideonAttachment = {
 };
 
 // ── What a run shows beside the text (mirrors src/lib/gideon-runs.ts on the server) ─────────────────
-export type GideonRef = { kind: "task" | "project" | "doc"; id: string; title: string; projectId?: string | null; url: string };
+export type GideonRef = { kind: "task" | "project" | "doc" | "comment" | "form" | "message"; id: string; title: string; projectId?: string | null; url: string; excerpt?: string | null };
 export type GideonCard = {
   kind: "task" | "doc" | "comment";
   action: "created" | "updated" | "commented";
@@ -80,6 +80,7 @@ export type GideonEvent =
   | { type: "text"; content: string }
   | { type: "tool_result"; content?: unknown; name?: string }
   | { type: "run"; id: string }
+  | { type: "chat"; id: string; title?: string | null }
   | { type: "delta"; content: string }
   | { type: "reset" }
   | { type: "final"; content: string }
@@ -100,7 +101,9 @@ export type GideonApprovalMode = (typeof GIDEON_APPROVAL_MODES)[number]["id"];
 export const GIDEON_DEFAULT_APPROVAL: GideonApprovalMode = "review";
 
 /** Where GIDEON was opened from. The server checks access and ignores what the person cannot see. */
-export type GideonContext = { projectId: string; projectName: string; taskId?: string; taskTitle?: string };
+export type GideonContext = { projectId: string; projectName: string; taskId?: string; taskTitle?: string; docId?: string; docTitle?: string };
+/** A page @-mentioned in the composer (or the page GIDEON was opened from): sent as context.refs. */
+export type GideonContextRef = { kind: "project" | "task" | "doc"; id: string; title: string };
 
 /**
  * A document attachment — PDF, Office, or plain text. Separate from an image, and both may ride in
@@ -173,7 +176,7 @@ export function gideonAttachmentLink(a: GideonAttachment): { href: string; downl
 export async function streamGideon(
   messages: GideonMessage[],
   onEvent: (event: GideonEvent) => void,
-  opts: { model?: string; signal?: AbortSignal; image?: string | null; file?: GideonFile | null; approvalMode?: GideonApprovalMode; context?: GideonContext | null } = {},
+  opts: { model?: string; signal?: AbortSignal; image?: string | null; file?: GideonFile | null; approvalMode?: GideonApprovalMode; context?: GideonContext | null; refs?: GideonContextRef[]; chatId?: string | null; newChat?: boolean } = {},
 ): Promise<void> {
   const res = await fetch("/api/gideon", {
     method: "POST",
@@ -184,7 +187,15 @@ export async function streamGideon(
       model: opts.model ?? GIDEON_DEFAULT_TIER,
       stream: true,
       approvalMode: opts.approvalMode ?? GIDEON_DEFAULT_APPROVAL,
-      ...(opts.context ? { context: { projectId: opts.context.projectId, ...(opts.context.taskId ? { taskId: opts.context.taskId } : {}) } } : {}),
+      ...(opts.context || opts.refs?.length
+        ? { context: {
+            ...(opts.context?.projectId ? { projectId: opts.context.projectId } : {}),
+            ...(opts.context?.taskId ? { taskId: opts.context.taskId } : {}),
+            ...(opts.context?.docId ? { docId: opts.context.docId } : {}),
+            ...(opts.refs?.length ? { refs: opts.refs.map((r) => ({ kind: r.kind, id: r.id })) } : {}),
+          } }
+        : {}),
+      ...(opts.chatId ? { chatId: opts.chatId } : opts.newChat ? { newChat: true } : {}),
       ...(opts.image ? { image: opts.image } : {}),
       ...(opts.file ? { file: opts.file } : {}),
     }),
@@ -240,11 +251,12 @@ export async function streamGideon(
 
 // Chat history is stored server-side per user (GET/DELETE /api/gideon/history), so a conversation
 // survives closing the panel, a refresh, and switching devices.
-export async function loadGideonHistory(): Promise<GideonTurn[]> {
+export async function loadGideonHistory(chatId?: string | null, onChat?: (chat: { id: string; title: string | null } | null) => void): Promise<GideonTurn[]> {
   try {
-    const res = await fetch("/api/gideon/history", { credentials: "include", headers: { Accept: "application/json" } });
+    const res = await fetch(`/api/gideon/history${chatId ? `?chatId=${encodeURIComponent(chatId)}` : ""}`, { credentials: "include", headers: { Accept: "application/json" } });
     if (!res.ok) return [];
-    const data = (await res.json()) as { messages?: GideonTurn[] };
+    const data = (await res.json()) as { messages?: GideonTurn[]; chat?: { id: string; title: string | null } | null };
+    onChat?.(data.chat ?? null);
     if (!Array.isArray(data.messages)) return [];
     // The route promises an array here on every message and sanitises each entry before sending it,
     // so this is not re-validation — it is the one thing the renderer would crash on if a build of
@@ -352,7 +364,8 @@ export const gideonRunDetail = (id: string) =>
 
 // ── Opening the panel from anywhere (project header "Ask GIDEON") ──────────────────────────────────────
 
-type LauncherState = { open: boolean; context: GideonContext | null; nonce: number };
+/** `chatId`: open that conversation; `newChat`: start a fresh one (⌘/Ctrl+O); neither: the latest one. */
+type LauncherState = { open: boolean; context: GideonContext | null; nonce: number; chatId?: string | null; newChat?: boolean };
 let launcher: LauncherState = { open: false, context: null, nonce: 0 };
 const launcherListeners = new Set<() => void>();
 function setLauncher(next: LauncherState) {
@@ -360,8 +373,8 @@ function setLauncher(next: LauncherState) {
   launcherListeners.forEach((f) => f());
 }
 /** Open GIDEON, optionally about a project/task (the context chip). */
-export function openGideon(context?: GideonContext | null) {
-  setLauncher({ open: true, context: context ?? null, nonce: launcher.nonce + 1 });
+export function openGideon(context?: GideonContext | null, opts: { chatId?: string | null; newChat?: boolean } = {}) {
+  setLauncher({ open: true, context: context ?? null, nonce: launcher.nonce + 1, chatId: opts.chatId ?? null, newChat: opts.newChat ?? false });
 }
 export function closeGideon() {
   setLauncher({ ...launcher, open: false });

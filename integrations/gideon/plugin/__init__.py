@@ -16,6 +16,9 @@ _ACTION_BY_TOOL = {
     "nexus_get_task": "get_task",
     "nexus_search_docs": "search_docs",
     "nexus_get_doc": "get_doc",
+    # Workspace Q&A (12 Oct 2026): one search over projects, tasks, docs, comments, forms and chat,
+    # with the asker's visibility only.
+    "nexus_search_workspace": "search_workspace",
     "nexus_create_document": "create_document",
     "nexus_get_attendance_day": "get_attendance_day",
     # Two remedies, both PROPOSAL-only. Neither has a counterpart that applies one: a BoD decides both

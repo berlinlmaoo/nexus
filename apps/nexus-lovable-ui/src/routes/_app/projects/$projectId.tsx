@@ -19,6 +19,8 @@ import { AutomationsView } from "@/components/automations/AutomationsView";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { GideonProjectCard } from "@/components/gideon/GideonProjectCard";
 import { openGideon } from "@/lib/gideon";
+import { pushGideonPage } from "@/lib/gideon-ai";
+import { AutofillPanel } from "@/components/gideon/AutofillPanel";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
 import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
@@ -104,6 +106,7 @@ import {
   Trash2,
   X,
   Zap,
+  Sparkles,
   Sheet as SheetIcon,
 } from "lucide-react";
 
@@ -209,6 +212,7 @@ function ProjectDetail() {
   const { projectId } = useParams({ from: "/_app/projects/$projectId" });
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [autofillOpen, setAutofillOpen] = useState(false);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [specialView, setSpecialView] = useState<ViewId>("pipeline");
   const [openTask, setOpenTask] = useState<NexusTask | null>(null);
@@ -219,6 +223,8 @@ function ProjectDetail() {
   const [chipsHidden, setChipsHidden] = useState(false);
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
   const data = project.data;
+  // GIDEON opened here carries this project as context (Notion AI's page chip).
+  useEffect(() => (data ? pushGideonPage({ kind: "project", id: data.id, title: data.name, projectId: data.id, projectName: data.name }) : undefined), [data?.id, data?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const search = Route.useSearch();
   const { t: tr } = useLang();
   const setSearch = (patch: Partial<typeof search>, replace = true) =>
@@ -454,6 +460,7 @@ function ProjectDetail() {
             </>
           )}
           <ToolbarButton icon={Zap} label={tr("Automations")} active={activeModule === "automations"} onClick={() => select("automations")} />
+          <ToolbarButton icon={Sparkles} label={tr("AI Autofill")} iconOnly active={autofillOpen} onClick={() => setAutofillOpen(true)} />
           {cfg && activeView && !activeModule && (
             <>
               <ToolbarSearch value={query} onChange={(q) => setSearch({ q: q || undefined })} />
@@ -628,6 +635,7 @@ function ProjectDetail() {
         />
       )}
       {openTask && <TaskDetailPanel taskId={openTask.id} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTask.id}` : undefined} />}
+      {data && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
       {pageComposerOpen && data && <PageComposer project={data} onClose={() => setPageComposerOpen(false)} />}

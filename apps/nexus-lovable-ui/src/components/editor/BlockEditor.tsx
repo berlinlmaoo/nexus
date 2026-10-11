@@ -11,6 +11,8 @@ import { SocketYProvider, colorFor, type CollabUser } from "@/lib/collab-provide
 import { buildExtensions, type MentionItem, type MentionKind } from "./extensions";
 import { createMenuStore } from "./menu-store";
 import { SlashMenu, MentionMenu } from "./SuggestionMenus";
+import { AskAiLayer } from "./AskAI";
+import { registerGideonEditor } from "@/lib/gideon-ai";
 import { BlockGutter, BlockMenu } from "./BlockGutter";
 import { MobileToolbar, SelectionToolbar, TableToolbar } from "./Toolbars";
 import { blockAt, currentBlockPos, revealBlockFromHash } from "./block-actions";
@@ -250,6 +252,20 @@ function LiveEditor(props: LiveProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
+  // GIDEON's "Insert into page" writes into this editor while it is open and editable (at the cursor, or the end).
+  const editable = canEdit && (!provider || provider.canWrite);
+  useEffect(() => {
+    if (!editor || !editable) return;
+    return registerGideonEditor({
+      key: props.roomKey,
+      title: "",
+      insert: (doc) => {
+        const at = editor.isFocused ? editor.state.selection.to : editor.state.doc.content.size;
+        editor.chain().focus().insertContentAt(at, doc.content ?? []).run();
+      },
+    });
+  }, [editor, editable, props.roomKey]);
+
   // Live status for the page header: saving/saved + who else is here.
   const tick = useSyncExternalStore(
     useCallback((f: () => void) => (provider ? provider.subscribe(f) : () => undefined), [provider]),
@@ -281,6 +297,7 @@ function LiveEditor(props: LiveProps) {
       <EditorContent editor={editor} />
       {editor.isEditable && <SelectionToolbar editor={editor} />}
       {editor.isEditable && <TableToolbar editor={editor} />}
+      {editor.isEditable && <AskAiLayer editor={editor} />}
       <SlashMenu store={slashStore} />
       <MentionMenu store={mentionStore} />
       {editor.isEditable && isCoarse && focused && (

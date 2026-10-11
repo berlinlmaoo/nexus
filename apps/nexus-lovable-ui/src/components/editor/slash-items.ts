@@ -1,12 +1,13 @@
 import type { Editor, Range } from "@tiptap/core";
 import {
   AtSign, Bell, Bookmark, CalendarDays, ChevronRight, Code2, FileText, FolderKanban, Heading1, Heading2, Heading3,
-  Image as ImageIcon, List, ListChecks, ListOrdered, Minus, Paperclip, Quote, SquareCheckBig, Table2, Type, Lightbulb, MonitorPlay,
+  Image as ImageIcon, Sparkles, List, ListChecks, ListOrdered, Minus, Paperclip, Quote, SquareCheckBig, Table2, Type, Lightbulb, MonitorPlay,
   type LucideIcon,
 } from "lucide-react";
 import { ctxOf, jakartaDate } from "./editor-context";
+import { openAskAi } from "./AskAI";
 
-export type SlashGroup = "Basic blocks" | "Media" | "NEXUS" | "Inline";
+export type SlashGroup = "AI" | "Basic blocks" | "Media" | "NEXUS" | "Inline";
 
 export type SlashItem = {
   id: string;
@@ -29,6 +30,8 @@ function openMention(editor: Editor, range: Range, kind: "user" | "task" | "doc"
 }
 
 export const SLASH_ITEMS: SlashItem[] = [
+  // Notion AI parity (12 Oct 2026): GIDEON writes at the cursor (also: Space on an empty line, ⌘/Ctrl+J).
+  { id: "ask-ai", group: "AI", label: "Ask AI", hint: "Space", icon: Sparkles, keywords: ["ai", "gideon", "write", "summarize", "translate", "tulis", "ringkas", "terjemah"], run: (e, r) => { e.chain().focus().deleteRange(r).run(); openAskAi(e, "cursor"); } },
   { id: "text", group: "Basic blocks", label: "Text", icon: Type, keywords: ["paragraph", "plain", "teks", "paragraf"], run: (e, r) => e.chain().focus().deleteRange(r).setParagraph().run() },
   { id: "h1", group: "Basic blocks", label: "Heading 1", hint: "#", icon: Heading1, keywords: ["title", "h1", "judul"], run: (e, r) => e.chain().focus().deleteRange(r).setNode("heading", { level: 1 }).run() },
   { id: "h2", group: "Basic blocks", label: "Heading 2", hint: "##", icon: Heading2, keywords: ["subtitle", "h2", "subjudul"], run: (e, r) => e.chain().focus().deleteRange(r).setNode("heading", { level: 2 }).run() },
@@ -60,7 +63,7 @@ export const SLASH_ITEMS: SlashItem[] = [
   },
 ];
 
-export const SLASH_GROUPS: SlashGroup[] = ["Basic blocks", "Media", "NEXUS", "Inline"];
+export const SLASH_GROUPS: SlashGroup[] = ["AI", "Basic blocks", "Media", "NEXUS", "Inline"];
 
 /** Items matching what was typed after "/", best first. Matches the translated and the English names. */
 export function filterSlash(query: string, translate: (s: string) => string): SlashItem[] {

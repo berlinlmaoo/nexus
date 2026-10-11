@@ -35,6 +35,7 @@ import { Route as AppMessagesRouteImport } from './routes/_app/messages'
 import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-calendar'
 import { Route as AppLeaderboardRouteImport } from './routes/_app/leaderboard'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
+import { Route as AppGideonRouteImport } from './routes/_app/gideon'
 import { Route as AppFormsRouteImport } from './routes/_app/forms'
 import { Route as AppDocsRouteImport } from './routes/_app/docs'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
@@ -181,6 +182,11 @@ const AppInboxRoute = AppInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGideonRoute = AppGideonRouteImport.update({
+  id: '/gideon',
+  path: '/gideon',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppFormsRoute = AppFormsRouteImport.update({
   id: '/forms',
   path: '/forms',
@@ -276,6 +282,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
   '/forms': typeof AppFormsRoute
+  '/gideon': typeof AppGideonRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
   '/master-calendar': typeof AppMasterCalendarRoute
@@ -318,6 +325,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
   '/forms': typeof AppFormsRoute
+  '/gideon': typeof AppGideonRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
   '/master-calendar': typeof AppMasterCalendarRoute
@@ -363,6 +371,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/docs': typeof AppDocsRouteWithChildren
   '/_app/forms': typeof AppFormsRoute
+  '/_app/gideon': typeof AppGideonRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaderboard': typeof AppLeaderboardRoute
   '/_app/master-calendar': typeof AppMasterCalendarRoute
@@ -409,6 +418,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/docs'
     | '/forms'
+    | '/gideon'
     | '/inbox'
     | '/leaderboard'
     | '/master-calendar'
@@ -451,6 +461,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/docs'
     | '/forms'
+    | '/gideon'
     | '/inbox'
     | '/leaderboard'
     | '/master-calendar'
@@ -495,6 +506,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/docs'
     | '/_app/forms'
+    | '/_app/gideon'
     | '/_app/inbox'
     | '/_app/leaderboard'
     | '/_app/master-calendar'
@@ -726,6 +738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/gideon': {
+      id: '/_app/gideon'
+      path: '/gideon'
+      fullPath: '/gideon'
+      preLoaderRoute: typeof AppGideonRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/forms': {
       id: '/_app/forms'
       path: '/forms'
@@ -884,6 +903,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppDocsRoute: typeof AppDocsRouteWithChildren
   AppFormsRoute: typeof AppFormsRoute
+  AppGideonRoute: typeof AppGideonRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
@@ -914,6 +934,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppDocsRoute: AppDocsRouteWithChildren,
   AppFormsRoute: AppFormsRoute,
+  AppGideonRoute: AppGideonRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
   AppMasterCalendarRoute: AppMasterCalendarRoute,

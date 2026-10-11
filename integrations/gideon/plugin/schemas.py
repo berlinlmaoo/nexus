@@ -150,6 +150,19 @@ SCHEMAS = {
         },
         required=["query"],
     ),
+    "nexus_search_workspace": object_schema(
+        "Search EVERYTHING the person can see in NEXUS at once: projects, tasks, docs/pages, task comments, forms and "
+        "chat messages. Use this first for any question about the workspace (who said what, where something is, what "
+        "the status of X is). Pass the person's words or a few keywords. Returns ranked hits with kind, id, title, "
+        "excerpt, project and link. Cite the titles you use; never claim something the hits do not show.",
+        {
+            "query": {"type": "string"},
+            "kinds": {"type": "array", "items": {"type": "string", "enum": ["project", "task", "doc", "comment", "form", "message"]}},
+            "projectId": {"type": "string"},
+            "limit": LIMIT,
+        },
+        required=["query"],
+    ),
     "nexus_get_doc": object_schema(
         "Read ONE NEXUS document (page) as plain text, with its title, project and URL.",
         {"docId": {"type": "string"}},

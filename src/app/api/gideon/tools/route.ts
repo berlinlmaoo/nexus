@@ -23,6 +23,7 @@ import { BODY_MAX, isBodPlus } from '@/lib/complaints'
 import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import { runAutomations } from '@/lib/automation-engine'
+import { searchWorkspace, type SearchHitKind } from '@/lib/workspace-search'
 import { emitCommentAdded, emitTaskCreated, emitTaskUpdated } from '@/lib/socket-emitter'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 import {
@@ -47,6 +48,7 @@ type GideonAction =
   | 'search_docs'
   | 'get_doc'
   | 'create_document'
+  | 'search_workspace'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -1275,6 +1277,8 @@ async function dispatch(actor: User, action: string, input: Record<string, unkno
       return searchDocs(actor, input)
     case 'get_doc':
       return getDoc(actor, input)
+    case 'search_workspace':
+      return searchWorkspaceTool(actor, input)
     case 'create_task':
       return createTask(actor, input)
     case 'update_task':
@@ -1383,6 +1387,23 @@ export async function POST(req: Request) {
     publishRunEvent(run.id, { type: 'step', step: { id: stepId, tool: action, arg, label, status: 'error', error: message.slice(0, 200) } })
     await recordStep(run.id, { tool: action, arg, ok: false, error: message, durationMs: Date.now() - started })
     return error(message, 400)
+  }
+}
+
+// ── Workspace Q&A (12 Oct 2026, Notion AI parity) ─────────────────────────────────────────────────────
+
+const SEARCH_KINDS = new Set<SearchHitKind>(['project', 'task', 'doc', 'comment', 'form', 'message'])
+
+/** One search across projects, tasks, docs, comments, forms and chat, with the asker's visibility only. */
+async function searchWorkspaceTool(actor: User, input: Record<string, unknown>) {
+  const query = asString(input.query)
+  if (!query) throw new Error('query is required')
+  const kinds = (asStringArray(input.kinds) ?? []).filter((k): k is SearchHitKind => SEARCH_KINDS.has(k as SearchHitKind))
+  const { terms, hits } = await searchWorkspace(actor.id, query, { kinds, projectId: asString(input.projectId) ?? null, limit: asLimit(input.limit, 12) })
+  return {
+    terms,
+    hits: hits.map((h) => ({ ...h, link: `${PUBLIC_BASE}${h.url}` })),
+    note: hits.length ? 'Cite what you use by its exact title. Only these results exist for this person; do not invent others.' : 'Nothing this person can see matches. Say so; do not guess.',
   }
 }
 

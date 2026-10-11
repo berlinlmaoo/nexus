@@ -31,6 +31,7 @@ import {
   User,
   UserPlus,
   X,
+  Sparkles,
 } from "lucide-react";
 import {
   fmtDate,
@@ -46,6 +47,8 @@ import {
   type NexusUser,
 } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { pushGideonPage } from "@/lib/gideon-ai";
+import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 import { StatusPicker, StatusPill } from "@/components/tasks/StatusPicker";
 import { usesStatusOptions } from "@/lib/status-options";
@@ -273,6 +276,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const canMakeQuest = wsMembers.data?.role === "BOD" || wsMembers.data?.role === "ONE_ABOVE_ALL";
   const [questOpen, setQuestOpen] = useState(false);
   const projectId = task.data?.taskList?.project?.id || task.data?.taskList?.projectId;
+  const ai = useAutofillMarks(projectId);
+  // While the task is open, GIDEON's context chip is this task (Notion AI's page chip).
+  useEffect(() => (task.data ? pushGideonPage({ kind: "task", id: taskId, title: task.data.title, projectId: projectId ?? null, projectName: task.data.taskList?.project?.name ?? null }) : undefined), [taskId, task.data?.title, projectId, task.data?.taskList?.project?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const customFields = useQuery({ queryKey: ["task-cf", taskId], queryFn: () => nexusApi.taskCustomFields(projectId!, taskId), enabled: !!projectId });
   // Project's sections (board columns = TaskLists) so the top dropdown follows the actual project.
   const [copyOpen, setCopyOpen] = useState(false);
@@ -390,7 +396,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   });
   const setCfMut = useMutation({
     mutationFn: ({ id, value }: { id: string; value: unknown }) => nexusApi.setCustomFieldValue(id, taskId, value),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-cf", taskId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["task-cf", taskId] }); if (projectId) qc.invalidateQueries({ queryKey: ["gideon-autofill", projectId] }); },
   });
   const [cfAdding, setCfAdding] = useState(false);
   const createCf = useMutation({
@@ -676,7 +682,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {(customFields.data?.fields?.length ?? 0) > 0 ? (
                   <div className="[column-gap:0.75rem] sm:columns-2">
                     {customFields.data!.fields.map((f) => (
-                      <div key={f.id} className="mb-3 break-inside-avoid">
+                      <div key={f.id} className="relative mb-3 break-inside-avoid">
+                        {ai.aiFields.has(f.id) && (
+                          <span className="absolute right-0 top-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary/80" title={ai.isMarked(f.id, taskId) ? "GIDEON" : undefined}>
+                            <Sparkles className="h-3 w-3" />{ai.isMarked(f.id, taskId) ? "AI" : null}
+                          </span>
+                        )}
                         <CustomFieldInput field={f} projectId={projectId} creatorLeft={!!t.creator?.deactivatedAt} onSet={(value) => setCfMut.mutate({ id: f.id, value })} />
                       </div>
                     ))}

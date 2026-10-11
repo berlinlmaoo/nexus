@@ -1,33 +1,46 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
-  AlertTriangle, ArrowUp, Check, ChevronDown, ChevronRight, Copy, FileText, FolderKanban, ImagePlus, ListChecks, Loader2,
-  Maximize2, MessageSquare, Minimize2, Paperclip, ShieldCheck, Trash2, X,
+  AlertTriangle, ArrowDownToLine, ArrowUp, AtSign, Check, ChevronDown, ChevronRight, ClipboardList, Copy, ExternalLink, FilePlus2, FileText,
+  FolderKanban, History, ImagePlus, ListChecks, Loader2, Maximize2, MessageCircle, MessageSquare, Minimize2, MoreHorizontal, PanelRight,
+  Paperclip, Pencil, Plus, Search, ShieldCheck, SquarePen, Trash2, UserRound, X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { GideonMark } from "./GideonMark";
 import { GideonMarkdown } from "./GideonMarkdown";
 import {
   clearGideonHistory, decideGideonProposal, gideonAttachmentLink, loadGideonHistory, pendingGideonProposals, streamGideon,
   GIDEON_APPROVAL_MODES, GIDEON_DEFAULT_APPROVAL, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, GIDEON_TIERS,
   isAcceptedGideonFile,
-  type GideonApprovalMode, type GideonAttachment, type GideonCard, type GideonContext, type GideonFile, type GideonMessage,
+  type GideonApprovalMode, type GideonAttachment, type GideonCard, type GideonContext, type GideonContextRef, type GideonFile, type GideonMessage,
   type GideonProposal, type GideonRef, type GideonStep, type GideonTier, type GideonTurn,
 } from "@/lib/gideon";
+import {
+  deleteGideonChat, getGideonPrefs, listGideonChats, markdownToDoc, renameGideonChat, saveGideonAnswerAsDoc, saveGideonPrefs, setCachedGideonPrefs,
+  setGideonLayout, useGideonEditorTarget, useGideonLayout, useGideonName, useGideonPage, useGideonPrefs,
+  type GideonChatRow, type GideonPageRef,
+} from "@/lib/gideon-ai";
+import { nexusApi } from "@/lib/nexus-api";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 /**
- * GIDEON chat (rebuilt 12 Oct 2026, owner: "reply like Notion's agent chat"): the answer streams in as it
- * is written and renders as Markdown; above it, the steps GIDEON is taking ("Searching tasks…", "Reading
- * project Atlas"); below it, the sources it read, cards for what it created or changed, and — depending
- * on the approval mode — the changes it wants to make, each with Apply / Discard. Opened from a project,
- * it carries that project as context (the chip above the box).
+ * GIDEON chat (owner, 12 Oct 2026: "1:1 like Notion AI, reading what each account can see with its own
+ * access"). The answer streams in as Markdown with the steps GIDEON takes, the sources it read (a workspace
+ * search runs before every question), cards for what it created or changed, and — per approval mode — the
+ * changes waiting for Apply / Discard.
+ *
+ * Like Notion AI: conversations with a searchable history and New chat (⌘/Ctrl+O); the page you are on is
+ * attached as context automatically, more pages with "@"; "+" attaches images and files; Personalize (what
+ * you call it + your own instructions); floating, docked as a side panel, or the full page (/gideon); an
+ * answer can be copied, inserted into the open page, or saved as a new doc.
  */
 
 type ChatTurn = GideonTurn & { streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean };
@@ -45,6 +58,7 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
     case "list_members": return t("Looking up people");
     case "list_tasks": return a ? t("Listing tasks in {name}", { name: a }) : t("Listing tasks");
     case "search_tasks": return a ? t("Searching tasks for “{q}”", { q: a }) : t("Searching tasks");
+    case "search_workspace": return a ? t("Searching your workspace for “{q}”", { q: a }) : t("Searching your workspace");
     case "get_project_summary": return a ? t("Reading project {name}", { name: a }) : t("Reading a project");
     case "list_custom_fields": return t("Reading the project's fields");
     case "get_task": return a ? t("Reading task {name}", { name: a }) : t("Reading a task");
@@ -61,18 +75,51 @@ function stepText(s: GideonStep, t: LangApi["t"]): string {
 
 const STATUS_WORD: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 
-export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWide }: {
-  onClose: () => void;
-  /** The project/task GIDEON was opened from (chip above the box). */
+export type GideonPanelVariant = "float" | "side" | "page";
+
+/** The page ref → what the chat route takes as `context` (project / task / doc it was opened from). */
+function contextOf(ref: GideonPageRef | null, explicit: GideonContext | null | undefined): GideonContext | null {
+  if (explicit) return explicit;
+  if (!ref) return null;
+  if (ref.kind === "project") return { projectId: ref.id, projectName: ref.title };
+  if (ref.kind === "task" && ref.projectId) return { projectId: ref.projectId, projectName: ref.projectName ?? "", taskId: ref.id, taskTitle: ref.title };
+  if (ref.kind === "doc" && ref.projectId) return { projectId: ref.projectId, projectName: ref.projectName ?? "", docId: ref.id, docTitle: ref.title };
+  return null;
+}
+
+function chipLabel(c: GideonContext): string {
+  if (c.taskTitle) return c.taskTitle;
+  if (c.docTitle) return c.docTitle;
+  return c.projectName;
+}
+
+export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWide, variant = "float", initialChatId = null, startNew = false }: {
+  onClose?: () => void;
+  /** The project/task GIDEON was explicitly opened about (project header "Ask GIDEON"). */
   context?: GideonContext | null;
   onClearContext?: () => void;
   wide?: boolean;
   onToggleWide?: () => void;
+  variant?: GideonPanelVariant;
+  /** Open this conversation; null = the latest one (or a new one with `startNew`). */
+  initialChatId?: string | null;
+  startNew?: boolean;
 }) {
   const L = useLang();
   const { t } = L;
   const qc = useQueryClient();
+  const router = useRouter();
+  const name = useGideonName();
+  const prefs = useGideonPrefs();
+  const layout = useGideonLayout();
+  const page = useGideonPage();
+  const editorTarget = useGideonEditorTarget();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [chatId, setChatId] = useState<string | null>(startNew ? null : initialChatId);
+  const [chatTitle, setChatTitle] = useState<string | null>(null);
+  /** true = the next question starts a new conversation (New chat / ⌘O). */
+  const [fresh, setFresh] = useState(startNew);
+  const [view, setView] = useState<"chat" | "history">("chat");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   /** A data URL, held only until the next message is sent. */
@@ -81,10 +128,14 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const [doc, setDoc] = useState<GideonFile | null>(null);
   /** Why the last pick was refused before it was ever uploaded. Cleared by the next pick, or by sending. */
   const [attachError, setAttachError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!startNew);
   const [confirmClear, setConfirmClear] = useState(false);
-  // Remembered per browser: somebody who picks Terra for quick questions should not have to pick it
-  // again every time the panel opens.
+  const [personalizeOpen, setPersonalizeOpen] = useState(false);
+  /** The page context chip was removed for this conversation. */
+  const [pageDismissed, setPageDismissed] = useState(false);
+  /** Pages added with "@". */
+  const [refs, setRefs] = useState<GideonContextRef[]>([]);
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
   const [tier, setTier] = useState<GideonTier>(() => {
     try {
       const saved = localStorage.getItem("gideon-tier");
@@ -101,33 +152,47 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       return GIDEON_DEFAULT_APPROVAL;
     }
   });
-  /** Proposals waiting for this person that no turn on screen shows (e.g. from an @GIDEON comment). */
+  /** Proposals waiting for this person that no turn on screen shows (e.g. from an @GIDEON comment or AI Autofill). */
   const [waiting, setWaiting] = useState<GideonProposal[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   /** Every blob: handle minted for a chip on a turn sent in this session, so all of them can go at once. */
   const localUrls = useRef<string[]>([]);
+
+  const pageContext = pageDismissed ? null : contextOf(page, context);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns]);
   useEffect(() => () => {
     abortRef.current?.abort();
-    // Released together with the chips that used them. The launcher unmounts this panel when it is
-    // closed, so a session's blobs live exactly as long as the messages pointing at them — and the
-    // stored copy takes over the moment the panel is opened again.
     for (const url of localUrls.current) URL.revokeObjectURL(url);
     localUrls.current = [];
   }, []);
-  useEffect(() => { inputRef.current?.focus(); }, [context?.projectId]);
-
-  // Restore the saved conversation on open. If the user already started typing a turn before the
-  // history landed, their turn wins — a late response must never wipe live messages.
+  useEffect(() => { inputRef.current?.focus(); }, [pageContext?.projectId, chatId, fresh]);
   useEffect(() => {
+    if (prefs) return;
+    getGideonPrefs().then(setCachedGideonPrefs).catch(() => undefined);
+  }, [prefs]);
+
+  /** Load a conversation (null = the latest). A turn typed before it lands wins over the late response. */
+  const openChat = useCallback((id: string | null) => {
+    abortRef.current?.abort();
+    setView("chat");
+    setFresh(false);
+    setLoading(true);
+    setTurns([]);
+    setRefs([]);
+    setPageDismissed(false);
     let cancelled = false;
-    Promise.all([loadGideonHistory(), pendingGideonProposals().catch(() => ({ proposals: [] as GideonProposal[] }))]).then(([rows, pending]) => {
+    Promise.all([
+      loadGideonHistory(id, (chat) => { if (!cancelled) { setChatId(chat?.id ?? null); setChatTitle(chat?.title ?? null); } }),
+      pendingGideonProposals().catch(() => ({ proposals: [] as GideonProposal[] })),
+    ]).then(([rows, pending]) => {
       if (cancelled) return;
       const restored = rows.map(fromHistory);
-      if (restored.length) setTurns((cur) => (cur.length ? cur : restored));
+      setTurns((cur) => (cur.length ? cur : restored));
       const shown = new Set(restored.flatMap((r) => (r.proposals ?? []).map((p) => p.id)));
       setWaiting(pending.proposals.filter((p) => !shown.has(p.id)));
       setLoading(false);
@@ -135,14 +200,49 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (startNew) {
+      pendingGideonProposals().then((p) => setWaiting(p.proposals)).catch(() => undefined);
+      return;
+    }
+    return openChat(initialChatId);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const newChat = useCallback(() => {
+    abortRef.current?.abort();
+    setTurns([]);
+    setChatId(null);
+    setChatTitle(null);
+    setFresh(true);
+    setView("chat");
+    setRefs([]);
+    setPageDismissed(false);
+    setLoading(false);
+    setBusy(false);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
+  // ⌘/Ctrl+O inside the panel = New chat (the launcher handles it when the panel is closed).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        newChat();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [newChat]);
+
   const clearHistory = async () => {
     setConfirmClear(false);
     setTurns([]);
+    setChatId(null);
+    setChatTitle(null);
+    setFresh(true);
     await clearGideonHistory();
   };
 
-  // Both checks are the route's own, run again here: refusing at the picker costs nothing, while
-  // discovering the same refusal after uploading ten megabytes costs the whole upload.
   const attachDocument = (picked: File) => {
     if (!isAcceptedGideonFile(picked.name)) { setAttachError(t("GIDEON can't read that file type yet.")); return; }
     if (picked.size > GIDEON_MAX_FILE_BYTES) { setAttachError(t("That file is too big. 10 MB at most.")); return; }
@@ -169,11 +269,10 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     const text = (override ?? input).trim();
     if (!text || busy) return;
     setInput("");
+    setMention(null);
     setAttachError(null);
     const history: GideonMessage[] = [...turns.map(({ role, content }) => ({ role, content })), { role: "user", content: text }];
 
-    // The chip on the turn being sent points at a copy of the bytes this tab is already holding; on the
-    // next open this turn comes back from history and the chip is drawn from the stored file instead.
     const sent: GideonAttachment[] = [];
     if (image) {
       const held = holdLocalFile(image);
@@ -192,9 +291,15 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     abortRef.current = controller;
     let acc = "";
     let wroteSomething = false;
+    const startFresh = fresh || !chatId;
 
     await streamGideon(history, (ev) => {
       switch (ev.type) {
+        case "chat":
+          setChatId(ev.id);
+          setChatTitle((cur) => cur ?? ev.title ?? null);
+          setFresh(false);
+          break;
         case "run":
           patchLast((x) => ({ ...x, runId: ev.id }));
           break;
@@ -242,17 +347,18 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           patchLast((x) => ({ ...x, failed: true, content: acc ? `${acc}\n\n${ev.content ?? ""}` : ev.content ?? t("Something went wrong.") }));
           break;
       }
-    }, { signal: controller.signal, model: tier, image, file: doc, approvalMode: mode, context }).catch(() => {
+    }, {
+      signal: controller.signal, model: tier, image, file: doc, approvalMode: mode, context: pageContext, refs,
+      chatId: startFresh ? null : chatId, newChat: startFresh,
+    }).catch(() => {
       patchLast((x) => ({ ...x, failed: true, content: x.content || t("GIDEON can't be reached right now. Try again in a moment.") }));
     });
-    // Cleared whatever happened: an attachment silently riding along on the NEXT question would be
-    // baffling, and re-attaching is one click.
     setImage(null);
     setDoc(null);
     patchLast((x) => ({ ...x, streaming: false, steps: (x.steps ?? []).map((s) => (s.status === "running" ? { ...s, status: "done" } : s)) }));
     setBusy(false);
-    // Something changed in NEXUS: lists and boards on screen refetch (realtime covers open project rooms).
     if (wroteSomething) qc.invalidateQueries({ queryKey: ["nexus"] });
+    qc.invalidateQueries({ queryKey: ["gideon-chats"] });
   };
 
   const onDecided = (p: GideonProposal) => {
@@ -261,52 +367,120 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
     if (p.status === "APPLIED") qc.invalidateQueries({ queryKey: ["nexus"] });
   };
 
-  const suggestions = useMemo(() => (
-    context
-      ? [
-          t("Summarize where {name} stands this week", { name: context.projectName }),
-          t("What's overdue in {name}, and who owns it?", { name: context.projectName }),
-          t("Turn the next steps of {name} into tasks", { name: context.projectName }),
-        ]
-      : [t("What's overdue for me?"), t("Summarize my week across projects"), t("Which tasks are due in the next 7 days?")]
-  ), [context, t]);
+  const suggestions = useMemo(() => {
+    const c = pageContext;
+    if (c?.docId) return [t("Summarize this page"), t("Find the action items in this page"), t("What questions does this page leave open?")];
+    if (c?.taskId) return [t("What's the latest on this task?"), t("Break this task into subtasks"), t("Draft a status comment for this task")];
+    if (c) return [
+      t("Summarize where {name} stands this week", { name: c.projectName }),
+      t("What's overdue in {name}, and who owns it?", { name: c.projectName }),
+      t("Turn the next steps of {name} into tasks", { name: c.projectName }),
+    ];
+    return [t("What's overdue for me?"), t("Summarize my week across projects"), t("What did my team decide recently? Cite the sources.")];
+  }, [pageContext, t]);
 
   const modeDef = GIDEON_APPROVAL_MODES.find((m) => m.id === mode) ?? GIDEON_APPROVAL_MODES[1];
   const openWaiting = waiting.filter((p) => p.status === "PENDING" || p.status === "APPLYING");
 
-  return (
-    <div lang={L.lang} className="flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
-      <div className="flex items-center gap-2 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
-        <span className="grid h-8 w-8 place-items-center rounded-xl bg-muted text-foreground"><GideonMark className="h-4 w-4" /></span>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">GIDEON</div>
-          <div className="truncate text-[11px] text-muted-foreground">{t("Acts in NEXUS as you")}</div>
-        </div>
-        <select
-          value={tier}
-          onChange={(e) => {
-            const next = e.target.value as GideonTier;
-            setTier(next);
-            try { localStorage.setItem("gideon-tier", next); } catch { /* private mode */ }
-          }}
-          title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}
-          aria-label={t("GIDEON tier")}
-          className="rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground outline-none focus:border-primary"
-        >
-          {GIDEON_TIERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-        </select>
-        {onToggleWide && (
-          <button type="button" onClick={onToggleWide} title={wide ? t("Narrow") : t("Widen")} aria-label={wide ? t("Narrow") : t("Widen")} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:inline-flex">
-            {wide ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-        )}
-        {turns.length > 0 && (
-          <button type="button" onClick={() => !busy && setConfirmClear(true)} title={t("Clear chat history")} aria-label={t("Clear chat history")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Trash2 className="h-4 w-4" /></button>
-        )}
-        <button type="button" onClick={onClose} aria-label={t("Close GIDEON")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
-      </div>
+  // "@" in the composer: the word after it is a search for a page to attach.
+  const onInputChange = (value: string, caret: number) => {
+    setInput(value);
+    const before = value.slice(0, caret);
+    const m = /(^|\s)@([^\s@]{0,40})$/.exec(before);
+    setMention(m ? { query: m[2], start: caret - m[2].length - 1 } : null);
+  };
+  const addRef = (r: GideonContextRef) => {
+    setRefs((cur) => (cur.some((x) => x.kind === r.kind && x.id === r.id) ? cur : [...cur, r].slice(0, 8)));
+    if (mention) {
+      const caret = inputRef.current?.selectionStart ?? input.length;
+      setInput(input.slice(0, mention.start) + input.slice(caret));
+    }
+    setMention(null);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
+  const startMention = () => {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? input.length;
+    const pre = input.slice(0, caret);
+    const next = `${pre}${pre && !/\s$/.test(pre) ? " " : ""}@${input.slice(caret)}`;
+    setInput(next);
+    const at = next.length - input.slice(caret).length;
+    setMention({ query: "", start: at - 1 });
+    window.setTimeout(() => { el?.focus(); el?.setSelectionRange(at, at); }, 0);
+  };
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+  const isPage = variant === "page";
+  const root = cn(
+    "flex h-full w-full flex-col overflow-hidden bg-card",
+    variant === "float" && "rounded-3xl border border-border shadow-pop",
+    variant === "side" && "border-l border-border",
+  );
+
+  const header = (
+    <div className="flex items-center gap-2 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-muted text-foreground"><GideonMark className="h-4 w-4" /></span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-bold">{name}</div>
+        <div className="truncate text-[11px] text-muted-foreground">{chatTitle && !fresh ? chatTitle : t("Acts in NEXUS as you")}</div>
+      </div>
+      {!isPage && (
+        <button type="button" onClick={() => setView((v) => (v === "history" ? "chat" : "history"))} title={t("Chat history")} aria-label={t("Chat history")} aria-pressed={view === "history"} className={cn("rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", view === "history" && "bg-accent text-foreground")}>
+          <History className="h-4 w-4" />
+        </button>
+      )}
+      <button type="button" onClick={newChat} title={t("New chat (⌘O)")} aria-label={t("New chat")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><SquarePen className="h-4 w-4" /></button>
+      <select
+        value={tier}
+        onChange={(e) => {
+          const next = e.target.value as GideonTier;
+          setTier(next);
+          try { localStorage.setItem("gideon-tier", next); } catch { /* private mode */ }
+        }}
+        title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}
+        aria-label={t("GIDEON tier")}
+        className="hidden rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground outline-none focus:border-primary sm:block"
+      >
+        {GIDEON_TIERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+      </select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" aria-label={t("More")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onSelect={() => setPersonalizeOpen(true)}><UserRound className="mr-2 h-4 w-4" />{t("Personalize")}</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-xs">{t("Open as")}</DropdownMenuLabel>
+          {!isPage && (
+            <DropdownMenuItem onSelect={() => setGideonLayout(layout === "side" ? "float" : "side")}>
+              {layout === "side" ? <Minimize2 className="mr-2 h-4 w-4" /> : <PanelRight className="mr-2 h-4 w-4" />}{layout === "side" ? t("Floating window") : t("Side panel")}
+            </DropdownMenuItem>
+          )}
+          {!isPage && variant === "float" && onToggleWide && (
+            <DropdownMenuItem onSelect={onToggleWide}><Maximize2 className="mr-2 h-4 w-4" />{wide ? t("Narrow") : t("Widen")}</DropdownMenuItem>
+          )}
+          {!isPage && (
+            <DropdownMenuItem onSelect={() => { onClose?.(); router.history.push(chatId && !fresh ? `/gideon?chat=${chatId}` : "/gideon"); }}>
+              <ExternalLink className="mr-2 h-4 w-4" />{t("Full page")}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          {chatId && !fresh && (
+            <DropdownMenuItem onSelect={() => { void deleteGideonChat(chatId).then(() => { qc.invalidateQueries({ queryKey: ["gideon-chats"] }); newChat(); }).catch(() => toast.error(t("Couldn't delete this chat."))); }}>
+              <Trash2 className="mr-2 h-4 w-4" />{t("Delete this chat")}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => !busy && setConfirmClear(true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />{t("Clear all chat history")}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {onClose && !isPage && <button type="button" onClick={onClose} aria-label={t("Close GIDEON")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>}
+    </div>
+  );
+
+  const body = view === "history" && !isPage ? (
+    <ChatHistoryList activeId={fresh ? null : chatId} onPick={(id) => openChat(id)} onNew={newChat} />
+  ) : (
+    <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div className={cn("mx-auto w-full space-y-4", isPage && "max-w-3xl")}>
         {openWaiting.length > 0 && (
           <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400"><ShieldCheck className="h-3.5 w-3.5" /> {L.tn(openWaiting.length, "1 change is waiting for your approval", "{n} changes are waiting for your approval")}</div>
@@ -314,14 +488,16 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           </section>
         )}
         {loading && turns.length === 0 && (
-          <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          <div className="grid h-40 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         )}
         {!loading && turns.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <GideonMark className="mb-3 h-8 w-8 text-foreground/70" />
-            <p className="text-sm font-semibold">{context ? t("Ask GIDEON about {name}", { name: context.projectName }) : t("What can GIDEON do for you?")}</p>
-            <p className="mt-1 max-w-xs text-xs text-muted-foreground">{t("It reads your projects and tasks with your access, and shows you what it read.")}</p>
-            <div className="mt-4 flex w-full max-w-sm flex-col gap-1.5">
+          <div className={cn("flex flex-col items-center justify-center text-center", isPage ? "pt-[12vh]" : "pt-8")}>
+            <span className="mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-border bg-background"><GideonMark className="h-7 w-7 text-foreground/80" /></span>
+            <p className={cn("font-bold tracking-tight", isPage ? "text-2xl" : "text-base")}>
+              {pageContext ? t("Ask {assistant} about {name}", { assistant: name, name: chipLabel(pageContext) }) : t("What can {assistant} do for you?", { assistant: name })}
+            </p>
+            <p className="mt-1 max-w-sm text-xs text-muted-foreground">{t("It searches and reads your projects, tasks, docs and chats with your access only, and shows what it read.")}</p>
+            <div className="mt-5 flex w-full max-w-md flex-col gap-1.5">
               {suggestions.map((s) => (
                 <button key={s} type="button" onClick={() => void send(s)} className="rounded-xl border border-border bg-background px-3 py-2 text-left text-xs font-medium transition-colors hover:border-primary/40 hover:bg-accent">{s}</button>
               ))}
@@ -340,28 +516,53 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             </div>
           </div>
         ) : (
-          <AssistantTurn key={i} turn={turn} onDecided={onDecided} />
+          <AssistantTurn
+            key={i}
+            turn={turn}
+            onDecided={onDecided}
+            question={turns[i - 1]?.role === "user" ? turns[i - 1].content : ""}
+            projectId={pageContext?.projectId ?? refs.find((r) => r.kind === "project")?.id ?? null}
+            editorTarget={editorTarget}
+          />
         ))}
       </div>
+    </div>
+  );
 
-      <div className="border-t border-border p-3">
-        {context && (
-          <div className="mb-2 flex items-center gap-1.5">
-            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-              <FolderKanban className="h-3 w-3 shrink-0" />
-              <span className="truncate">{context.taskTitle ? `${context.projectName} › ${context.taskTitle}` : context.projectName}</span>
-              {onClearContext && <button type="button" onClick={onClearContext} aria-label={t("Remove this context")} className="-mr-1 rounded-full p-0.5 hover:bg-accent hover:text-foreground"><X className="h-3 w-3" /></button>}
-            </span>
+  const composer = view === "chat" || isPage ? (
+    <div className="border-t border-border p-3">
+      <div className={cn("relative mx-auto w-full", isPage && "max-w-3xl")}>
+        {mention && <MentionPicker query={mention.query} onPick={addRef} onClose={() => setMention(null)} />}
+        {(pageContext || refs.length > 0) && (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            {pageContext && (
+              <ContextChip
+                icon={pageContext.docId ? FileText : pageContext.taskId ? ListChecks : FolderKanban}
+                label={pageContext.taskTitle ? `${pageContext.projectName} › ${pageContext.taskTitle}` : chipLabel(pageContext)}
+                hint={t("The page you're on")}
+                onRemove={() => { if (context && onClearContext) onClearContext(); setPageDismissed(true); }}
+              />
+            )}
+            {refs.map((r) => (
+              <ContextChip key={`${r.kind}-${r.id}`} icon={r.kind === "doc" ? FileText : r.kind === "task" ? ListChecks : FolderKanban} label={r.title} onRemove={() => setRefs((cur) => cur.filter((x) => !(x.kind === r.kind && x.id === r.id)))} />
+            ))}
           </div>
         )}
         <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-muted/40 focus-within:border-primary/50">
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
-            placeholder={context ? t("Ask about {name}…", { name: context.projectName }) : t("Ask GIDEON…")}
-            rows={2}
+            onChange={(e) => onInputChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+            onKeyDown={(e) => {
+              if (mention && ["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(e.key)) {
+                window.dispatchEvent(new CustomEvent("gideon-mention-key", { detail: e.key }));
+                e.preventDefault();
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); }
+            }}
+            placeholder={pageContext ? t("Ask about {name}… (@ to add a page)", { name: chipLabel(pageContext) }) : t("Ask {assistant} anything… (@ to add a page)", { assistant: name })}
+            rows={isPage ? 3 : 2}
             className="w-full resize-none bg-transparent px-3 pt-3 text-sm outline-none placeholder:text-muted-foreground"
           />
           {(image || doc) && (
@@ -372,37 +573,29 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           )}
           {attachError && <div className="border-t border-border/60 px-3 py-2 text-xs font-semibold text-destructive">{attachError}</div>}
           <div className="flex items-center gap-1 px-2 pb-2 pt-1">
-            <label title={t("Attach an image")} className="flex cursor-pointer items-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-              <ImagePlus className="h-4 w-4" />
-              <span className="sr-only">{t("Attach an image")}</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
-                  reader.readAsDataURL(file);
-                }}
-              />
-            </label>
-            <label title={t("Attach a file (PDF, Word, Excel, text…)")} className="flex cursor-pointer items-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-              <Paperclip className="h-4 w-4" />
-              <span className="sr-only">{t("Attach a file (PDF, Word, Excel, text…)")}</span>
-              <input
-                type="file"
-                accept={GIDEON_FILE_ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const picked = e.target.files?.[0];
-                  e.target.value = "";
-                  if (picked) attachDocument(picked);
-                }}
-              />
-            </label>
+            <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
+              reader.readAsDataURL(file);
+            }} />
+            <input ref={fileInput} type="file" accept={GIDEON_FILE_ACCEPT} className="hidden" onChange={(e) => {
+              const picked = e.target.files?.[0];
+              e.target.value = "";
+              if (picked) attachDocument(picked);
+            }} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" title={t("Add")} aria-label={t("Add photos, files or pages")} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Plus className="h-4 w-4" /></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onSelect={() => imageInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4" />{t("Add a photo")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => fileInput.current?.click()}><Paperclip className="mr-2 h-4 w-4" />{t("Add a file (PDF, Word, Excel, text…)")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => window.setTimeout(startMention, 0)}><AtSign className="mr-2 h-4 w-4" />{t("Add a page, task or project")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="inline-flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" title={t(modeDef.blurb)}>
@@ -439,12 +632,30 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           </div>
         </div>
       </div>
+    </div>
+  ) : null;
+
+  return (
+    <div lang={L.lang} className={root}>
+      {header}
+      {isPage ? (
+        <div className="flex min-h-0 flex-1">
+          <aside className="hidden w-72 shrink-0 flex-col border-r border-border md:flex">
+            <ChatHistoryList activeId={fresh ? null : chatId} onPick={(id) => { openChat(id); router.history.replace(`/gideon?chat=${id}`); }} onNew={() => { newChat(); router.history.replace("/gideon"); }} />
+          </aside>
+          <div className="flex min-w-0 flex-1 flex-col">{body}{composer}</div>
+        </div>
+      ) : (
+        <>{body}{composer}</>
+      )}
+
+      <PersonalizeDialog open={personalizeOpen} onOpenChange={setPersonalizeOpen} />
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("Clear the GIDEON chat history?")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("Every message and attached file in this chat is deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
+            <AlertDialogTitle>{t("Clear every GIDEON chat?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("Every conversation, message and attached file is deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
@@ -456,7 +667,260 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   );
 }
 
-function AssistantTurn({ turn, onDecided }: { turn: ChatTurn; onDecided: (p: GideonProposal) => void }) {
+function ContextChip({ icon: Icon, label, hint, onRemove }: { icon: typeof FileText; label: string; hint?: string; onRemove?: () => void }) {
+  const { t } = useLang();
+  return (
+    <span title={hint} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="max-w-[16rem] truncate">{label}</span>
+      {onRemove && <button type="button" onClick={onRemove} aria-label={t("Remove this context")} className="-mr-1 rounded-full p-0.5 hover:bg-accent hover:text-foreground"><X className="h-3 w-3" /></button>}
+    </span>
+  );
+}
+
+/** Pages to attach with "@": projects, tasks and docs from the normal search (the person's own access). */
+function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: GideonContextRef) => void; onClose: () => void }) {
+  const { t } = useLang();
+  const [items, setItems] = useState<GideonContextRef[]>([]);
+  const [index, setIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 1) {
+      setItems([]);
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    const timer = window.setTimeout(() => {
+      nexusApi.search(q).then((res) => {
+        if (!alive) return;
+        const next: GideonContextRef[] = [
+          ...(res.projects ?? []).slice(0, 4).map((p) => ({ kind: "project" as const, id: p.id, title: p.name })),
+          ...(res.docs ?? []).slice(0, 4).map((d) => ({ kind: "doc" as const, id: d.id, title: d.title })),
+          ...(res.tasks ?? []).slice(0, 6).map((x) => ({ kind: "task" as const, id: x.id, title: x.title })),
+        ];
+        setItems(next);
+        setIndex(0);
+      }).catch(() => alive && setItems([])).finally(() => alive && setLoading(false));
+    }, 180);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [query]);
+  useEffect(() => {
+    const onKey = (e: Event) => {
+      const key = (e as CustomEvent<string>).detail;
+      if (key === "Escape") onClose();
+      else if (key === "ArrowDown") setIndex((i) => (items.length ? (i + 1) % items.length : 0));
+      else if (key === "ArrowUp") setIndex((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
+      else if ((key === "Enter" || key === "Tab") && items[index]) onPick(items[index]);
+      else if (key === "Enter" || key === "Tab") onClose();
+    };
+    window.addEventListener("gideon-mention-key", onKey);
+    return () => window.removeEventListener("gideon-mention-key", onKey);
+  }, [items, index, onPick, onClose]);
+  return (
+    <div role="listbox" aria-label={t("Add a page, task or project")} className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-sm overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-pop">
+      <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold text-muted-foreground">{t("Add context")}</div>
+      {!query.trim() && <div className="px-2 pb-2 text-xs text-muted-foreground">{t("Type to search projects, tasks and docs you can see.")}</div>}
+      {query.trim() && loading && items.length === 0 && <div className="flex items-center gap-2 px-2 pb-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />{t("Searching…")}</div>}
+      {query.trim() && !loading && items.length === 0 && <div className="px-2 pb-2 text-xs text-muted-foreground">{t("Nothing you can see matches “{q}”.", { q: query })}</div>}
+      {items.map((r, i) => {
+        const Icon = r.kind === "doc" ? FileText : r.kind === "task" ? ListChecks : FolderKanban;
+        return (
+          <button key={`${r.kind}-${r.id}`} type="button" role="option" aria-selected={i === index} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(r)} className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", i === index ? "bg-muted" : "hover:bg-muted/60")}>
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{r.title}</span>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{r.kind === "doc" ? t("Doc") : r.kind === "task" ? t("Task") : t("Project")}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function dayBucket(iso: string): "today" | "yesterday" | "week" | "older" {
+  const d = new Date(iso);
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (d.getTime() >= start) return "today";
+  if (d.getTime() >= start - 86_400_000) return "yesterday";
+  if (d.getTime() >= start - 7 * 86_400_000) return "week";
+  return "older";
+}
+
+/** The conversation list with search (Notion AI "Chats"). */
+export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string | null; onPick: (id: string) => void; onNew: () => void }) {
+  const { t } = useLang();
+  const qc = useQueryClient();
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [rows, setRows] = useState<GideonChatRow[] | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const h = window.setTimeout(() => setDebounced(q), 220); return () => window.clearTimeout(h); }, [q]);
+  useEffect(() => {
+    let alive = true;
+    listGideonChats(debounced).then((r) => alive && setRows(r.chats)).catch(() => alive && setRows([]));
+    return () => { alive = false; };
+  }, [debounced, tick, activeId]);
+  // Other places (sending a message) invalidate "gideon-chats"; follow along.
+  useEffect(() => qc.getQueryCache().subscribe((e) => { if (e.query.queryKey[0] === "gideon-chats" && e.type === "removed") setTick((x) => x + 1); }), [qc]);
+  useEffect(() => { const h = window.setInterval(() => setTick((x) => x + 1), 30_000); return () => window.clearInterval(h); }, []);
+  const groups: Array<{ key: string; label: string; items: GideonChatRow[] }> = [
+    { key: "today", label: t("Today"), items: [] },
+    { key: "yesterday", label: t("Yesterday"), items: [] },
+    { key: "week", label: t("Previous 7 days"), items: [] },
+    { key: "older", label: t("Older"), items: [] },
+  ];
+  for (const r of rows ?? []) groups.find((g) => g.key === dayBucket(r.updatedAt))!.items.push(r);
+  const saveRename = async () => {
+    if (!renaming?.title.trim()) { setRenaming(null); return; }
+    await renameGideonChat(renaming.id, renaming.title).catch(() => toast.error(t("Couldn't rename this chat.")));
+    setRenaming(null);
+    setTick((x) => x + 1);
+  };
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-2 p-3">
+        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 focus-within:border-primary/50">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search chats")} aria-label={t("Search chats")} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+        </label>
+        <button type="button" onClick={onNew} title={t("New chat (⌘O)")} aria-label={t("New chat")} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border hover:bg-accent"><SquarePen className="h-4 w-4" /></button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {rows === null && <div className="grid h-24 place-items-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
+        {rows !== null && rows.length === 0 && (
+          <div className="px-3 py-8 text-center text-xs text-muted-foreground">
+            <MessageCircle className="mx-auto mb-2 h-5 w-5" />
+            {debounced ? t("No chat mentions “{q}”.", { q: debounced }) : t("No chats yet. Ask something to start one.")}
+          </div>
+        )}
+        {groups.filter((g) => g.items.length).map((g) => (
+          <div key={g.key} className="mb-2">
+            <div className="px-2 pb-1 pt-2 text-[11px] font-semibold text-muted-foreground">{g.label}</div>
+            {g.items.map((r) => (
+              <div key={r.id} className={cn("group flex items-center gap-1 rounded-lg", r.id === activeId ? "bg-accent" : "hover:bg-accent/60")}>
+                {renaming?.id === r.id ? (
+                  <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") setRenaming(null); }} className="m-1 min-w-0 flex-1 rounded-md border border-primary/50 bg-background px-2 py-1 text-sm outline-none" />
+                ) : (
+                  <button type="button" onClick={() => onPick(r.id)} className="min-w-0 flex-1 px-2 py-1.5 text-left">
+                    <span className="block truncate text-sm">{r.title || t("Untitled chat")}</span>
+                    {r.match && <span className="block truncate text-[11px] text-muted-foreground">{r.match}</span>}
+                  </button>
+                )}
+                {renaming?.id !== r.id && (
+                  <span className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <button type="button" onClick={() => setRenaming({ id: r.id, title: r.title ?? "" })} aria-label={t("Rename")} className="rounded-md p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => { void deleteGideonChat(r.id).then(() => { setTick((x) => x + 1); if (r.id === activeId) onNew(); }); }} aria-label={t("Delete this chat")} className="rounded-md p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Personalize (Notion AI): what this person calls GIDEON + their own standing instructions. */
+function PersonalizeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useLang();
+  const prefs = useGideonPrefs();
+  const [nameValue, setNameValue] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setNameValue(prefs?.assistantName ?? "");
+    setInstructions(prefs?.instructions ?? "");
+  }, [open, prefs]);
+  const save = async () => {
+    setSaving(true);
+    try {
+      setCachedGideonPrefs(await saveGideonPrefs({ assistantName: nameValue.trim() || null, instructions: instructions.trim() || null }));
+      toast.success(t("Saved"));
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Couldn't save."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("Personalize GIDEON")}</DialogTitle>
+          <DialogDescription>{t("Only for you. GIDEON still acts with your access and nothing more.")}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <label className="block">
+            <span className="text-xs font-semibold">{t("What do you call it?")}</span>
+            <input value={nameValue} maxLength={40} onChange={(e) => setNameValue(e.target.value)} placeholder="GIDEON" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold">{t("Instructions")}</span>
+            <span className="block text-[11px] text-muted-foreground">{t("How you like answers: language, length, tone, what to focus on. Applied to every chat of yours.")}</span>
+            <textarea value={instructions} maxLength={2000} rows={6} onChange={(e) => setInstructions(e.target.value)} placeholder={t("e.g. Answer in Indonesian, short bullet points. I lead the Atlas launch, so flag anything that blocks it.")} className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <span className="mt-0.5 block text-right text-[10px] tabular-nums text-muted-foreground">{instructions.length}/2000</span>
+          </label>
+        </div>
+        <DialogFooter>
+          <button type="button" onClick={() => onOpenChange(false)} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">{t("Cancel")}</button>
+          <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("Save")}</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** "Save as doc": a new page in a project the person can add pages to (default: the chat's project). */
+function SaveAsDocButton({ markdown, question, projectId }: { markdown: string; question: string; projectId: string | null }) {
+  const { t } = useLang();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const title = (question.split("\n")[0] || t("GIDEON answer")).slice(0, 120);
+  const save = async (pid: string) => {
+    setSaving(true);
+    try {
+      const { doc } = await saveGideonAnswerAsDoc(pid, title, markdown);
+      setOpen(false);
+      toast.success(t("Saved as a doc"), { action: { label: t("Open"), onClick: () => router.history.push(doc.url) } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("Couldn't save."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <DropdownMenu open={open} onOpenChange={(v) => { setOpen(v); if (v && !projects) nexusApi.projects().then((p) => setProjects(p.map((x) => ({ id: x.id, name: x.name })))).catch(() => setProjects([])); }}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground">
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <FilePlus2 className="h-3 w-3" />}{t("Save as doc")}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-y-auto">
+        <DropdownMenuLabel className="text-xs">{t("Save into project")}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {projectId && <DropdownMenuItem onSelect={() => void save(projectId)}><FolderKanban className="mr-2 h-4 w-4" />{t("This project")}</DropdownMenuItem>}
+        {projects === null && <div className="px-2 py-2 text-xs text-muted-foreground"><Loader2 className="inline h-3 w-3 animate-spin" /></div>}
+        {(projects ?? []).filter((p) => p.id !== projectId).slice(0, 40).map((p) => (
+          <DropdownMenuItem key={p.id} onSelect={() => void save(p.id)}><span className="truncate">{p.name}</span></DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
+  turn: ChatTurn;
+  onDecided: (p: GideonProposal) => void;
+  question: string;
+  projectId: string | null;
+  editorTarget: ReturnType<typeof useGideonEditorTarget>;
+}) {
   const L = useLang();
   const { t } = L;
   const [open, setOpen] = useState(false);
@@ -512,13 +976,13 @@ function AssistantTurn({ turn, onDecided }: { turn: ChatTurn; onDecided: (p: Gid
       {sources.length > 0 && !turn.streaming && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold text-muted-foreground">{t("Sources")}</span>
-          {sources.slice(0, 8).map((r) => <SourceChip key={`${r.kind}-${r.id}`} source={r} />)}
+          {sources.slice(0, 8).map((r, n) => <SourceChip key={`${r.kind}-${r.id}`} source={r} n={n + 1} />)}
           {sources.length > 8 && <span className="text-[11px] text-muted-foreground">{t("+{n} more", { n: sources.length - 8 })}</span>}
         </div>
       )}
 
       {!turn.streaming && turn.content && !turn.failed && (
-        <div className="flex opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <div className="flex flex-wrap gap-0.5 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           <button
             type="button"
             onClick={() => { void navigator.clipboard?.writeText(turn.content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}
@@ -526,6 +990,16 @@ function AssistantTurn({ turn, onDecided }: { turn: ChatTurn; onDecided: (p: Gid
           >
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}{copied ? t("Copied") : t("Copy")}
           </button>
+          {editorTarget && (
+            <button
+              type="button"
+              onClick={() => { editorTarget.insert(markdownToDoc(turn.content)); toast.success(t("Inserted into the page")); }}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <ArrowDownToLine className="h-3 w-3" />{t("Insert into page")}
+            </button>
+          )}
+          <SaveAsDocButton markdown={turn.content} question={question} projectId={projectId} />
         </div>
       )}
     </div>
@@ -537,16 +1011,17 @@ function useGo() {
   return (path: string) => router.history.push(path);
 }
 
-function SourceChip({ source }: { source: GideonRef }) {
+function SourceChip({ source, n }: { source: GideonRef; n?: number }) {
   const go = useGo();
-  const Icon = source.kind === "project" ? FolderKanban : source.kind === "doc" ? FileText : ListChecks;
+  const Icon = source.kind === "project" ? FolderKanban : source.kind === "doc" ? FileText : source.kind === "comment" ? MessageSquare : source.kind === "message" ? MessageCircle : source.kind === "form" ? ClipboardList : ListChecks;
   return (
     <a
       href={source.url}
       onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(source.url); }}
       className="inline-flex max-w-[14rem] items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground/80 transition-colors hover:border-primary/40 hover:text-foreground"
-      title={source.title}
+      title={source.excerpt ? `${source.title}\n${source.excerpt}` : source.title}
     >
+      {n ? <span className="tabular-nums text-muted-foreground">{n}</span> : null}
       <Icon className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="truncate">{source.title}</span>
     </a>
   );
