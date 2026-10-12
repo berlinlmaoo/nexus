@@ -882,6 +882,8 @@ async function createInline(args: {
   project: NexusProject; defs: PropDef[]; ctx: ViewCtx; cfg: ViewConfig; qc: ReturnType<typeof useQueryClient>;
   groupBy: string | null; groupKey: string | null; sub: string | null; subKey: string | null; title: string; dueDate: string | null;
   placement: "top" | "bottom"; withDraft?: boolean;
+  /** From InlineTaskDraft: true when the draft field takes the title back after a failure. */
+  kept?: () => boolean;
 }): Promise<NexusTask | null> {
   const { project, defs, ctx, cfg, qc, groupBy, groupKey, sub, subKey, title, dueDate, placement, withDraft } = args;
   const sections = project.taskLists ?? [];
@@ -916,10 +918,12 @@ async function createInline(args: {
     undo?.();
     // Offline / a blip: the typed task is kept in the toast so it isn't lost even when the draft row has
     // closed (QA S-05). "Try again" re-sends it as typed. A rejection (4xx) is not retried.
-    const transient = isTransientError(e);
+    // When the draft row is still open the title goes back into it (InlineTaskDraft) and that is the copy;
+    // else the toast keeps it.
+    const transient = isTransientError(e) && !args.kept?.();
     toast.error(tt("Couldn't add the task"), {
       description: transient ? `“${title}” · ${friendlyError(e) ?? ""}` : friendlyError(e),
-      ...(transient ? { duration: 30_000, action: { label: tt("Try again"), onClick: () => { void createInline({ ...args, withDraft: false }); } } } : {}),
+      ...(transient ? { duration: 30_000, action: { label: tt("Try again"), onClick: () => { void createInline({ ...args, withDraft: false, kept: undefined }); } } } : {}),
     });
     return null;
   } finally {
@@ -1208,7 +1212,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
 
   if (!sub) {
     return (
-      <div data-touch-drag-root="" className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+      <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8">
         <div className="flex min-w-max items-start gap-2.5">
           {linkedLaneEls}
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
@@ -1221,7 +1225,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // Sub-groups: one row (swimlane) per sub-group value, the same lanes in each row.
   const rows = buildGroups(tasks, sub, { keepHidden: true });
   return (
-    <div data-touch-drag-root="" className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+    <div data-touch-drag-root="" className="overflow-x-auto overscroll-x-contain px-4 pb-6 pt-3 md:px-8">
       <div className="min-w-max space-y-3">
         <div className="flex gap-2.5 pl-0.5">
           {lanes.map((g) => (

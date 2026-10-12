@@ -21,7 +21,9 @@ import type { NexusTask } from "@/lib/nexus-api";
  */
 export function InlineTaskDraft({ variant, onCreate, onExpand, onClose, accent }: {
   variant: "card" | "row";
-  onCreate: (p: { title: string; dueDate: string | null }) => Promise<NexusTask | null>;
+  /** `kept()` says, when the save failed, whether this field takes the title back (the caller then
+   *  doesn't offer its own "Try again" — two keepers would make the task twice). */
+  onCreate: (p: { title: string; dueDate: string | null; kept?: () => boolean }) => Promise<NexusTask | null>;
   onExpand: (task: NexusTask) => void;
   onClose: () => void;
   /** The column's colour (CSS colour) for the focus ring. */
@@ -53,7 +55,8 @@ export function InlineTaskDraft({ variant, onCreate, onExpand, onClose, accent }
     setTitle("");
     setDue("");
     if (mounted.current) setPending((n) => n + 1);
-    const job = queue.current.then(() => onCreate({ title: name, dueDate }));
+    const kept = () => mounted.current && !closed.current && !latest.current.title;
+    const job = queue.current.then(() => onCreate({ title: name, dueDate, kept }));
     queue.current = job.catch(() => null);
     void job.then(
       (task) => {
