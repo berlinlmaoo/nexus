@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, FileText, Plus } from "lucide-react";
 import { nexusApi, type NexusForm } from "@/lib/nexus-api";
@@ -11,6 +12,50 @@ import { coverCss } from "./form-model";
 
 // The builder itself lives in FormStudio.tsx (Notion-style rebuild, 12 Oct 2026).
 export { FormBuilder };
+
+/**
+ * The open builder lives in the address (`?form=<id>`, `?form=new`), like the task popup's `?task=`:
+ * opening pushes a history entry, so browser Back closes only the builder (it saves on the way out) and
+ * Forward / refresh open it again. Closing goes back over our entry; a builder opened from a link (no
+ * entry of ours) just drops the param. A new form's first save swaps "new" for its id (replace).
+ * The route must accept `form` in validateSearch.
+ */
+export function useFormBuilderParam(forms: NexusForm[] | undefined, loaded: boolean) {
+  const navigate = useNavigate();
+  const param = (useSearch({ strict: false }) as { form?: string }).form ?? null;
+  const pushed = useRef(false);
+  const created = useRef(new Set<string>());
+  // The form the builder was opened with; kept while it stays open (the list may refetch, or not hold a
+  // just-created form yet).
+  const [opened, setOpened] = useState<{ key: string; form?: NexusForm } | null>(null);
+  const setParam = useCallback((form: string | undefined, replace: boolean) => {
+    navigate({ to: ".", search: ((prev: Record<string, unknown>) => ({ ...prev, form })) as never, replace });
+  }, [navigate]);
+  const open = useCallback((form?: NexusForm) => {
+    const key = form?.id ?? "new";
+    setOpened({ key, form });
+    pushed.current = true;
+    setParam(key, false);
+  }, [setParam]);
+  const close = useCallback(() => {
+    if (pushed.current) { pushed.current = false; window.history.back(); }
+    else setParam(undefined, true);
+  }, [setParam]);
+  const onCreated = useCallback((id: string) => {
+    created.current.add(id);
+    setOpened((o) => (o ? { ...o, key: id } : o));
+    setParam(id, true);
+  }, [setParam]);
+  useEffect(() => {
+    if (!param) { pushed.current = false; setOpened(null); return; }
+    if (opened && (opened.key === param || created.current.has(param))) return;
+    if (param === "new") { setOpened({ key: "new" }); return; }
+    const f = forms?.find((x) => x.id === param || x.slug === param);
+    if (f) setOpened({ key: f.id, form: f });
+    else if (loaded) setParam(undefined, true); // deleted, or not a form of this place
+  }, [param, forms, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { builder: param ? opened : null, open, close, onCreated };
+}
 
 export function FormCard({ form, projectName, onEdit }: { form: NexusForm; projectName?: string; onEdit: () => void }) {
   const { t, tn } = useLang();
@@ -45,9 +90,9 @@ export function FormCard({ form, projectName, onEdit }: { form: NexusForm; proje
 /** Project-scoped forms list + builder (used in the project detail "Forms" tab). */
 export function ProjectFormsView({ projectId }: { projectId: string }) {
   const { t } = useLang();
-  const [builder, setBuilder] = useState<{ form?: NexusForm } | null>(null);
   const forms = useQuery({ queryKey: ["nexus", "forms", projectId], queryFn: () => nexusApi.forms(projectId), enabled: !!projectId, retry: false });
   const rows = forms.data ?? [];
+  const { builder, open, close, onCreated } = useFormBuilderParam(forms.data, forms.isSuccess || forms.isError);
   return (
     <div className="p-4 md:p-8">
       <div className="mb-4 flex items-center justify-between">
@@ -55,7 +100,7 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
           <h2 className="font-display text-lg font-bold tracking-tight">{t("Forms")}</h2>
           <p className="text-sm text-muted-foreground">{t("Each time someone submits a form, it creates a task in this project.")}</p>
         </div>
-        <button onClick={() => setBuilder({})} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
+        <button onClick={() => open()} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
       </div>
       {forms.isLoading && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -72,13 +117,13 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
           <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
           <div className="text-lg font-bold">{t("No forms yet")}</div>
           <p className="mt-2 text-sm text-muted-foreground">{t("Create the first form for this project.")}</p>
-          <button onClick={() => setBuilder({})} className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
+          <button onClick={() => open()} className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full"><FormCard form={f} onEdit={() => setBuilder({ form: f })} /></Reveal>)}
+        {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full"><FormCard form={f} onEdit={() => open(f)} /></Reveal>)}
       </div>
-      {builder && <FormBuilder projectId={projectId} form={builder.form} onClose={() => setBuilder(null)} />}
+      {builder && <FormBuilder projectId={projectId} form={builder.form} onClose={close} onCreated={onCreated} />}
     </div>
   );
 }

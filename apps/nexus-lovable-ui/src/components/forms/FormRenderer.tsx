@@ -225,7 +225,7 @@ export function FormRenderer({ form, formKey, me, mode = "live" }: {
       }
       fd.append("data", JSON.stringify(data));
       if (!attemptKey.current) attemptKey.current = newAttemptKey();
-      const res = await fetch(`/api/forms/${formKey}/submit`, { method: "POST", body: fd, headers: { "Idempotency-Key": attemptKey.current } });
+      const res = await fetch(`/api/forms/${formKey}/submit`, { method: "POST", body: fd, headers: { "Idempotency-Key": attemptKey.current, "X-Nexus-Client": "web/1" } });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || t("Couldn't send the form. Try again."));

@@ -32,7 +32,6 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "Monthly": "Bulanan",
   "Daily": "Harian",
   "{n}h before due": "{n} jam sebelum tenggat",
-  "Automations live in each project. Open a project, then its Automations tab, to set up “When … do …” rules and see their run log. Project leads edit them.": "Otomasi ada di tiap project. Buka project-nya, lalu tab Otomasi, untuk membuat aturan “Saat … lakukan …” dan melihat log jalannya. Lead project yang bisa mengubahnya.",
 
   "Automation notifications": "Notifikasi otomasi",
   "Push when a project automation notifies you. Off: they still land in your inbox, silently.": "Push saat otomasi project mengabarimu. Mati: tetap masuk kotak notifikasi, tanpa bunyi.",

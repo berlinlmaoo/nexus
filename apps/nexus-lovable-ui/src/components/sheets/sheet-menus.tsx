@@ -88,8 +88,14 @@ function MenuPanel({ nodes, anchor, onDone, onBack, depth = 0, width = 260 }: {
     if (depth > 0) return;
     const prev = document.activeElement as HTMLElement | null;
     if (prev && prev !== document.body && !prev.closest("[role=menu]")) menuReturnFocus = prev;
-    f.ref.current?.focus({ preventScroll: true });
+    // After it is placed (the floating panel is invisible until positioned, and can't take focus then).
+    const raf = requestAnimationFrame(() => { if (!f.ref.current?.contains(document.activeElement)) f.ref.current?.focus({ preventScroll: true }); });
+    // Esc closes it even if focus went elsewhere meanwhile (the panel's own handler stops the event first).
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); onDone(); } };
+    window.addEventListener("keydown", onKey);
     return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKey);
       requestAnimationFrame(() => {
         const a = document.activeElement;
         const back = menuReturnFocus;

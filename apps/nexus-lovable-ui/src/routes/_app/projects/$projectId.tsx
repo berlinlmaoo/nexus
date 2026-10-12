@@ -167,7 +167,7 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
   // (lib/project-views.ts encodes them). A reload or a shared link keeps all of it.
   // `&task=<id>`: the task popup that is open (bug hunt C-BUG-11, 12 Oct 2026) — Back closes it, a reload or a
   // shared link opens it again.
-  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string; task?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { settings?: 1; view?: OutletView; date?: string; event?: string; v?: string; q?: string; f?: Record<string, unknown>; s?: string; task?: string; form?: string } => ({
     settings: s.settings === 1 || s.settings === "1" ? 1 : undefined,
     view: s.view === "overview" || s.view === "calendar" || s.view === "board" || s.view === "form" ? s.view : undefined,
     date: typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
@@ -179,6 +179,8 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
     f: searchObject(s.f, 8000),
     s: searchString(s.s, 400),
     task: searchString(s.task, 64),
+    // The open form builder (?form=<id> | new), see useFormBuilderParam.
+    form: searchString(s.form, 64),
   }),
 });
 

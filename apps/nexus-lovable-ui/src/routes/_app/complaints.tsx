@@ -238,9 +238,15 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
   return (
     <button onClick={onOpen} className={cn("block w-full px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none", viewerIsBod ? ROW_GRID : ROW_GRID_MINE)}>
       {/* Subject (+ markers). On a phone the date rides on this line. */}
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
         <span className="min-w-0 truncate text-sm font-medium text-foreground">{c.subject}</span>
-        <span className="hidden min-w-0 lg:inline-flex">{markers}</span>
+        {/* Desktop: the same two markers as small labelled icons, so a long subject never pushes them into the next column. */}
+        {(c.pendingCorrection || c.gideonReplied) && (
+          <span className="hidden shrink-0 items-center gap-1 lg:inline-flex">
+            {c.pendingCorrection && <span title={t("Decision waiting")} aria-label={t("Decision waiting")} className="grid h-5 w-5 place-items-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><CalendarClock className="h-3 w-3" /></span>}
+            {c.gideonReplied && <span title={t("GIDEON replied")} aria-label={t("GIDEON replied")} className="grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground"><GideonMark className="h-3 w-3" /></span>}
+          </span>
+        )}
         <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground lg:hidden">{fmtWhen(c.lastMessageAt)}</span>
       </div>
       {viewerIsBod && (
@@ -250,16 +256,16 @@ function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: bool
         </div>
       )}
       <span className="hidden truncate text-sm text-muted-foreground lg:block">{cat ? t(cat.label) : "—"}</span>
-      <span className="hidden lg:block"><StatusChip status={c.status} /></span>
+      <span className="hidden lg:flex"><StatusChip status={c.status} /></span>
       <span className="hidden items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground lg:flex"><MessageSquare className="h-3.5 w-3.5" />{c.messageCount}</span>
       <span className="hidden text-right text-xs tabular-nums text-muted-foreground lg:block">{fmtWhen(c.lastMessageAt)}</span>
 
       {/* Phone / narrow: status · category · sender · replies on one quiet line, markers under it. */}
-      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground lg:hidden">
+      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground lg:hidden">
         <StatusChip status={c.status} />
         {cat && <span>{t(cat.label)}</span>}
-        {viewerIsBod && <span className="truncate">· {t("from {name}", { name: who })}</span>}
-        <span>· {tn(c.messageCount, "{n} message", "{n} messages")}</span>
+        {viewerIsBod && <span className="truncate">{t("from {name}", { name: who })}</span>}
+        <span className="inline-flex items-center gap-1 tabular-nums"><MessageSquare className="h-3 w-3" />{c.messageCount}</span>
         {markers}
       </div>
     </button>

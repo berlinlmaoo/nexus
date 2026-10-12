@@ -22,10 +22,11 @@ type JoinReply = { ok: true; room: string; epoch: string; canWrite: boolean; sta
 const toU8 = (v: ArrayBuffer | Uint8Array | number[]) => (v instanceof Uint8Array ? v : v instanceof ArrayBuffer ? new Uint8Array(v) : Uint8Array.from(v));
 
 /**
- * Edits made while the room is not live are also kept in localStorage, so closing or reloading the tab
- * before the connection is back does not lose them ("changes are kept here" — bughunt E-BUG-2). The next
- * time the page is joined in the same epoch they are merged and sent; another epoch cannot merge and
- * drops them. Cleared once the server confirms a save.
+ * Every local edit the server has not confirmed as saved is also kept in localStorage, so closing or
+ * reloading the tab while offline — or while a dropped connection has not been noticed yet — does not lose
+ * it ("changes are kept here" — bughunt E-BUG-2). The next time the page is joined in the same epoch the
+ * kept edits are merged and sent (already-known ones are a no-op); another epoch cannot merge and drops
+ * them. Cleared on a server save that came after the last local edit.
  */
 const STASH_PREFIX = "nx-ydoc-stash:";
 type Stash = { epoch: string; update: string };
@@ -55,8 +56,15 @@ export class SocketYProvider {
   /** Local changes the server has not confirmed as saved yet. */
   pending = false;
   lastSavedAt: string | null = null;
-  /** Unsent offline edits are in localStorage (see STASH_PREFIX). */
-  private stashed = false;
+  /** Local edits not confirmed saved yet (merged Yjs update), mirrored to localStorage (STASH_PREFIX). */
+  private unsaved: Uint8Array | null = null;
+  private lastLocalAt = 0;
+  private stashTimer: ReturnType<typeof setTimeout> | undefined;
+  private writeStashNow = () => {
+    clearTimeout(this.stashTimer);
+    this.stashTimer = undefined;
+    if (this.epoch) writeStash(this.room, this.unsaved ? { epoch: this.epoch, update: b64(this.unsaved) } : null);
+  };
 
   private socket: Socket | null = null;
   private destroyed = false;
@@ -106,12 +114,15 @@ export class SocketYProvider {
       if (d?.room !== this.room) return;
       this.lastSavedAt = d.at;
       this.pending = false;
-      if (this.status === "live" && this.stashed) { this.stashed = false; writeStash(this.room, null); }
+      if (this.status === "live" && this.unsaved && Date.now() - this.lastLocalAt > 1000) { this.unsaved = null; this.writeStashNow(); }
       this.emit();
     });
     on<{ room: string; reason: string }>("ydoc:reset", (d) => {
       if (d?.room === this.room) this.resetListeners.forEach((f) => f(d.reason));
     });
+    const onHide = () => { if (this.stashTimer) this.writeStashNow(); };
+    window.addEventListener("pagehide", onHide);
+    this.offHandlers.push(() => window.removeEventListener("pagehide", onHide));
     // Reconnected (network drop, a deploy): join again and merge what we typed meanwhile.
     on<void>("connect", () => { void this.join(timeoutMs); });
     on<void>("disconnect", () => this.setStatus("offline"));
@@ -156,7 +167,7 @@ export class SocketYProvider {
         // Offline edits kept from an earlier visit (tab closed before reconnecting): merge and send them.
         if (stash) {
           if (stash.epoch === res.epoch && this.canWrite) {
-            try { Y.applyUpdate(this.doc, unb64(stash.update), "stash"); this.stashed = true; } catch { writeStash(this.room, null); }
+            try { Y.applyUpdate(this.doc, unb64(stash.update), "stash"); } catch { writeStash(this.room, null); }
           } else writeStash(this.room, null);
         }
         resolve(true);
@@ -166,14 +177,15 @@ export class SocketYProvider {
 
   private onDocUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === this || this.destroyed) return;
+    if (this.epoch && this.canWrite) {
+      this.unsaved = this.unsaved ? Y.mergeUpdates([this.unsaved, update]) : update;
+      this.lastLocalAt = Date.now();
+      // Offline: write now (the tab may close any moment). Online: at most every 400 ms while typing.
+      if (this.status !== "live") this.writeStashNow();
+      else if (!this.stashTimer) this.stashTimer = setTimeout(this.writeStashNow, 400);
+    }
     if (!this.socket?.connected || this.status !== "live" || !this.canWrite) {
       this.pending = true;
-      if (this.epoch) {
-        const prev = readStash(this.room);
-        const merged = prev && prev.epoch === this.epoch ? Y.mergeUpdates([unb64(prev.update), update]) : update;
-        writeStash(this.room, { epoch: this.epoch, update: b64(merged) });
-        this.stashed = true;
-      }
       this.emit();
       return;
     }
@@ -230,6 +242,7 @@ export class SocketYProvider {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (this.stashTimer) this.writeStashNow();
     removeAwarenessStates(this.awareness, [this.doc.clientID], "local");
     this.socket?.emit("ydoc:leave", { room: this.room });
     this.offHandlers.forEach((f) => f());
