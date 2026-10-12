@@ -62,6 +62,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     await ensureSheetFormattingColumns()
 
     const body = (await req.json().catch(() => ({}))) as { name?: unknown; duplicateOf?: unknown }
+    // (projectId, position) is unique: two quick "Add sheet" clicks used to race for the same slot
+    // and the loser got a 500 (bughunt S-BUG-17). The loser now takes the next slot.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await createSheetAt(projectId, body, session.user.id)
+      } catch (error) {
+        if (attempt < 4 && (error as { code?: string })?.code === "P2002") continue
+        throw error
+      }
+    }
+  } catch (error) {
+    console.error("Error creating project sheet:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+async function createSheetAt(projectId: string, body: { name?: unknown; duplicateOf?: unknown }, userId: string) {
+  {
+    const session = { user: { id: userId } }
     const last = await prisma.projectSheet.findFirst({
       where: { projectId }, orderBy: { position: "desc" }, select: { position: true },
     })
@@ -89,9 +108,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       return created
     })
     return NextResponse.json(sheet, { status: 201 })
-  } catch (error) {
-    console.error("Error creating project sheet:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 

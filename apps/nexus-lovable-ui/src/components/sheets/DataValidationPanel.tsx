@@ -8,6 +8,8 @@ import { newRuleId, rangeFromA1, rangeToA1, type ValidationKind, type Validation
 import { chipClass, chipStyle } from "./sheet-dropdown";
 import { Floating } from "./sheet-float";
 import { COLOR_NAME, STYLE_COLORS, SWATCH_CLASS, type StyleColor } from "./sheet-style";
+import { HideGideonButton } from "./sheet-shell";
+import { SelectPicker } from "@/components/SelectPicker";
 
 /** A rule as the panel edits it: ranges as typed text, a column-backed rule flagged. */
 export type PanelRule = ValidationRule & { columnId?: string };
@@ -177,7 +179,8 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
   const label = "text-2xs font-semibold uppercase tracking-wide text-muted-foreground";
 
   return (
-    <aside aria-label={t("Data validation rules")} className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
+    <aside data-sheet-panel="" aria-label={t("Data validation rules")} className="flex w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <HideGideonButton />
       <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{t("Data validation rules")}</h2>
         <button onClick={onClose} aria-label={t("Close")} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
@@ -255,19 +258,17 @@ export function DataValidationPanel({ rules, shape, sheetName, selectionRange, e
 
             <section className="space-y-1.5">
               <div className={label}>{t("Criteria")}</div>
-              <select
+              <SelectPicker
                 value={draft.kind}
                 disabled={!canEdit || Boolean(draft.columnId)}
-                onChange={(e) => set({ kind: e.target.value as ValidationKind, values: [], ...(e.target.value === "list" && !draft.items.length ? { items: [item(t("Option 1")), item(t("Option 2"))] } : {}) })}
-                aria-label={t("Criteria")}
-                className={field}
-              >
-                {CRITERIA.map((g) => (
-                  <optgroup key={g.group} label={t(g.group)}>
-                    {g.kinds.map((k) => <option key={k.kind} value={k.kind}>{t(k.label)}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+                onChange={(v) => set({ kind: v as ValidationKind, values: [], ...(v === "list" && !draft.items.length ? { items: [item(t("Option 1")), item(t("Option 2"))] } : {}) })}
+                ariaLabel={t("Criteria")}
+                variant="field"
+                size="sm"
+                searchable={false}
+                className="w-full"
+                options={CRITERIA.flatMap((g) => g.kinds.map((k) => ({ value: k.kind, label: t(k.label), group: t(g.group) })))}
+              />
 
               {draft.kind === "list" && (
                 <div className="space-y-1 pt-1">

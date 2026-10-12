@@ -12,7 +12,8 @@ import {
   COND_ONE_VALUE, COND_PRESETS, COND_TWO_VALUES, DEFAULT_COND_STYLE, SCALE_PRESETS, interpolateHex, newCondId, type ScalePreset,
 } from "@/lib/sheet-cf";
 import { Floating } from "./sheet-float";
-import { FieldLabel, SidePanel, inputClass, primaryBtn, secondaryBtn, selectClass } from "./sheet-shell";
+import { SelectPicker } from "@/components/SelectPicker";
+import { FieldLabel, SidePanel, inputClass, primaryBtn, secondaryBtn } from "./sheet-shell";
 
 // ── Palette (Sheets' 10 × 8 swatches, palette.txt) ─────────────────────────────────────────────────
 
@@ -473,17 +474,13 @@ export function ConditionalFormatPanel({ rules, shape, sheetName, selectionRange
               <section className="space-y-1.5 px-3">
                 <div className="text-xs font-semibold">{t("Format rules")}</div>
                 <FieldLabel htmlFor="cf-cond">{t("Format cells if…")}</FieldLabel>
-                <select id="cf-cond" value={draft.cond} disabled={!canEdit}
-                  onChange={(e) => set({ cond: e.target.value as CondKind, values: ["", ""], dateMode: "today" })} className={selectClass}>
-                  {COND_OPTIONS.map((k, i) => (k
-                    ? <option key={k} value={k}>{t(COND_LABEL[k])}</option>
-                    : <option key={`sep${i}`} disabled>──────────</option>))}
-                </select>
+                <SelectPicker id="cf-cond" value={draft.cond} disabled={!canEdit} ariaLabel={t("Format cells if…")} variant="field" size="sm" className="w-full"
+                  onChange={(v) => set({ cond: v as CondKind, values: ["", ""], dateMode: "today" })}
+                  options={COND_OPTIONS.flatMap((k) => (k ? [{ value: k, label: t(COND_LABEL[k]) }] : []))} />
                 {isDateKind(draft.cond) && (
                   <>
-                    <select value={draft.dateMode} disabled={!canEdit} onChange={(e) => set({ dateMode: e.target.value as DateMode })} aria-label={t("Date")} className={selectClass}>
-                      {DATE_MODES.map(([m, l]) => <option key={m} value={m}>{t(l)}</option>)}
-                    </select>
+                    <SelectPicker value={draft.dateMode} disabled={!canEdit} onChange={(v) => set({ dateMode: v as DateMode })} ariaLabel={t("Date")} variant="field" size="sm" searchable={false} className="w-full"
+                      options={DATE_MODES.map(([m, l]) => ({ value: m, label: t(l) }))} />
                     {draft.dateMode === "exact" && (
                       <input value={draft.values[0]} disabled={!canEdit} onChange={(e) => set({ values: [e.target.value, ""] })} placeholder="11/10/2026"
                         aria-label={t("Value")} className={cn(inputClass, errors.value && "border-destructive")} />
@@ -559,14 +556,12 @@ export function ConditionalFormatPanel({ rules, shape, sheetName, selectionRange
                   <div key={which} className="space-y-1">
                     <FieldLabel>{t(which === "min" ? "Minpoint" : which === "mid" ? "Midpoint" : "Maxpoint")}</FieldLabel>
                     <div className="flex items-center gap-1.5">
-                      <select value={p.type} disabled={!canEdit} aria-label={t("Point type")}
-                        onChange={(e) => {
-                          const type = e.target.value as ScalePointType;
+                      <SelectPicker value={p.type} disabled={!canEdit} ariaLabel={t("Point type")} variant="field" size="sm" searchable={false} className="w-[118px] shrink-0"
+                        onChange={(v) => {
+                          const type = v as ScalePointType;
                           setPoint(which, { type, value: type === "pct" || type === "pctile" ? p.value || "50" : type === "num" ? p.value ?? "" : undefined });
                         }}
-                        className={cn(selectClass, "w-[118px] shrink-0")}>
-                        {types.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
-                      </select>
+                        options={types.map(([v, l]) => ({ value: v, label: t(l) }))} />
                       <input value={valueOn ? p.value ?? "" : ""} disabled={!canEdit || !valueOn} onChange={(e) => setPoint(which, { value: e.target.value })}
                         aria-label={t("Value")} className={cn(inputClass, "min-w-0 flex-1", valueOn && errors.value && !(p.value ?? "").trim() && "border-destructive")} />
                       <HexColorButton label={t("Colour")} icon={<PaintBucket className="h-3.5 w-3.5" />} allowReset={false}

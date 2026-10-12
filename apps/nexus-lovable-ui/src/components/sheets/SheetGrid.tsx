@@ -41,6 +41,7 @@ import { DatePicker, NotePopover } from "./sheet-popovers";
 import { ColorPicker } from "./ColorPicker";
 import { CurrencyFormatDialog, CustomNumberFormatDialog, DateTimeFormatDialog } from "./FormatDialogs";
 import { SheetDialog, SidePanel, primaryBtn } from "./sheet-shell";
+import { askText } from "./sheet-ask";
 import type { MenuNode } from "./sheet-menus";
 import { dedupe, replaceText, textMatches, type SplitSep } from "@/lib/sheet-datatools";
 import { stateAt } from "@/lib/sheet-versions";
@@ -234,7 +235,12 @@ export function SheetGrid({
   onSetCells, onSetStyles, onSettings, onAddRows, onDeleteRows, onReorderRow, onDeleteColumn, onEditColumn, onAddColumn,
   tasks, onOpenTask, commentCounts, onOpenComments, peerCursors, onEditingChange, onCursor, onResizeRow, onInsertColumn,
   canUndo, canRedo, onUndo, onRedo, footerLeft, saving, sheetName, host, command, aside, onReopenAside,
+  onAppendColumns, onUndoGroup,
 }: {
+  /** Add `count` blank columns at the end and resolve with them (paste wider than the sheet). */
+  onAppendColumns?: (count: number) => Promise<NexusSheetColumn[]>;
+  /** Run `fn`; every undo entry it records becomes ONE entry called `label`. */
+  onUndoGroup?: <T>(label: string, fn: () => T | Promise<T>) => Promise<T>;
   /** A sidebar from the page (the pivot table editor), shown when no other sidebar is open. */
   aside?: ReactNode;
   onReopenAside?: () => void;
@@ -628,24 +634,47 @@ export function SheetGrid({
     return () => ro.disconnect();
   }, [syncScroll]);
 
-  /** Keep the cursor on screen (windowing means the row may not be mounted). */
+  /**
+   * Keep the cursor on screen (windowing means the row may not be mounted) — but ONLY when the cursor
+   * MOVES. The effect used to re-run on every scroll-driven render and clamp scrollTop back to the
+   * selected cell, so the wheel, trackpad and scrollbar could not scroll the sheet at all (bughunt
+   * S-BUG-2). Now it follows the end of the selection that moved (Shift+arrows walk the far corner),
+   * and never fights a scroll the person is doing.
+   */
+  const lastSel = useRef<Selection | null>(null);
+  /** Set by Ctrl+Backspace ("scroll to the active cell"), which doesn't move the selection. */
+  const forceScroll = useRef(false);
   useEffect(() => {
     const el = gridRef.current;
-    if (!el || sel.r < frozenRows) return;
-    const pinned = (offsets[frozenRows] ?? 0) * zoom;
-    const top = (offsets[sel.r] ?? 0) * zoom;
-    const bottom = (offsets[sel.r + 1] ?? 0) * zoom;
-    const header = headH * zoom;
-    if (top - pinned < el.scrollTop) el.scrollTop = Math.max(0, top - pinned);
-    else if (bottom + header > el.scrollTop + el.clientHeight) el.scrollTop = bottom + header - el.clientHeight;
+    const prev = lastSel.current;
+    lastSel.current = sel;
+    if (!el || !prev) return;
+    const anchorMoved = prev.r !== sel.r || prev.c !== sel.c;
+    const endMoved = prev.r2 !== sel.r2 || prev.c2 !== sel.c2;
+    const forced = forceScroll.current;
+    forceScroll.current = false;
+    if (!anchorMoved && !endMoved && !forced) return;
+    // A mouse drag selects what is already visible; it must not jump the view under the pointer.
+    if (dragging.current && !forced) return;
+    const r = anchorMoved ? sel.r : sel.r2;
+    const c = anchorMoved ? sel.c : sel.c2;
+    if (r >= frozenRows) {
+      const pinned = (offsets[frozenRows] ?? 0) * zoom;
+      const top = (offsets[r] ?? 0) * zoom;
+      const bottom = (offsets[r + 1] ?? 0) * zoom;
+      const header = headH * zoom;
+      if (top - pinned < el.scrollTop) el.scrollTop = Math.max(0, top - pinned);
+      else if (bottom + header > el.scrollTop + el.clientHeight) el.scrollTop = bottom + header - el.clientHeight;
+    }
     // Horizontal: keep the active column visible past the frozen ones.
-    const cl = (lefts[sel.c] ?? 0) * zoom, cr = cl + (widths[sel.c] ?? 0) * zoom;
+    const cl = (lefts[c] ?? 0) * zoom, cr = cl + (widths[c] ?? 0) * zoom;
     const frozenW = ((lefts[frozenCols] ?? GUTTER_W)) * zoom;
-    if (sel.c >= frozenCols) {
+    if (c >= frozenCols) {
       if (cl - frozenW + GUTTER_W * zoom < el.scrollLeft + GUTTER_W * zoom) el.scrollLeft = Math.max(0, cl - frozenW);
       else if (cr > el.scrollLeft + el.clientWidth) el.scrollLeft = cr - el.clientWidth;
     }
-  }, [sel.r, sel.c, offsets, zoom, headH, frozenRows, lefts, widths, frozenCols]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel]);
 
   // ── Merged cells (only drawn while the view is in sheet order) ──────────────────────────────
   const naturalOrder = !sort && !Object.values(filters).some((q) => q.trim());
@@ -776,7 +805,7 @@ export function SheetGrid({
         return !bad;
       })),
     })).filter((e) => Object.keys(e.values).length);
-    if (refused && first) alert(`${t("{n} cells were not changed: {why}", { n: refused, why: invalidMessage(first, t) })}`);
+    if (refused && first) setProblem(t("{n} cells were not changed: {why}", { n: refused, why: invalidMessage(first, t) }));
     return out;
   };
 
@@ -788,7 +817,8 @@ export function SheetGrid({
     const next = inputToCell(col, raw, data.shape, prevRaw);
     if (sameCell(prevRaw, next)) return;
     const bad = rejectedBy(rowId, colId, next);
-    if (bad) { alert(invalidMessage(bad, t)); return; }
+    // Sheets' "There was a problem" box, not the browser's alert (bughunt S-BUG-22).
+    if (bad) { setProblem(invalidMessage(bad, t)); return; }
     onSetCells([{ rowId, values: { [colId]: next } }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, rows, onSetCells, data.shape, ruleAt, engine, t]);
@@ -1012,26 +1042,39 @@ export function SheetGrid({
     });
   }, [rect, view, columns, data, explicitRules, settings.condFormats]);
 
-  /** Paste a block at the selection (one value onto a range fills it; formulas shift). */
+  /**
+   * Paste a block at the selection (one value onto a range fills it; formulas shift).
+   *
+   * Like Sheets, a block that runs past the last row OR the last column grows the sheet first
+   * (columns used to be silently dropped, bughunt S-BUG-7), and the whole paste — new rows/columns,
+   * values, formats, rules — is ONE undo step (S-BUG-10).
+   */
   const applyPaste = useCallback(async (block: PasteBlock, opts: { stylesToo?: boolean } = {}) => {
     if (!canEdit || !block.cells.length) return;
+    const run = async () => {
     let cells = block.cells;
     const selRows = rect.bottom - rect.top + 1, selCols = rect.right - rect.left + 1;
     const single = cells.length === 1 && cells[0].length === 1;
     if (single && selRows * selCols > 1) cells = Array.from({ length: selRows }, () => Array.from({ length: selCols }, () => block.cells[0][0]));
     const startR = rect.top;
     const startC = rect.left;
-    // Grow the sheet downward if the block runs past the last row. Columns are NOT auto-created.
-    // While a filter hides rows the paste is clipped to what's visible instead.
+    const width = Math.max(...cells.map((l) => l.length));
+    // Grow the sheet downward / rightward if the block runs past the edge. While a filter hides rows
+    // the paste is clipped to what's visible instead.
     const needed = filtering ? 0 : startR + cells.length - view.length;
+    const neededCols = startC + width - columns.length;
+    let cols = columns;
+    if (neededCols > 0 && onAppendColumns) cols = [...columns, ...(await onAppendColumns(neededCols))];
     let working = view.map((v) => ({ row: v.row, rawIndex: v.rawIndex }));
     if (needed > 0) {
       const created = await onAddRows({ count: needed });
       working = [...working, ...created.map((row, i) => ({ row, rawIndex: rows.length + i }))];
     }
-    const shape = needed > 0
-      ? { columnIds: data.shape.columnIds, rowIds: [...data.shape.rowIds, ...working.slice(view.length).map((w) => w.row.id)] }
-      : data.shape;
+    const shape = {
+      columnIds: cols.map((c) => c.id),
+      rowIds: needed > 0 ? [...data.shape.rowIds, ...working.slice(view.length).map((w) => w.row.id)] : data.shape.rowIds,
+    };
+    const lastC = cols.length - 1;
     const edits: { rowId: string; values: Record<string, unknown> }[] = [];
     // A NEXUS→NEXUS paste brings the formatting along, like Sheets (Paste special › Values only doesn't).
     const styleEdits: StyleEdit[] = [];
@@ -1042,11 +1085,11 @@ export function SheetGrid({
       const values: Record<string, unknown> = {};
       if (withStyles) {
         const sv: Record<string, CellStyle | null> = {};
-        line.forEach((cell, j) => { const col = columns[startC + j]; if (col && cell.style !== undefined) sv[col.id] = (cell.style ?? null) as CellStyle | null; });
+        line.forEach((cell, j) => { const col = cols[startC + j]; if (col && cell.style !== undefined) sv[col.id] = (cell.style ?? null) as CellStyle | null; });
         if (Object.keys(sv).length) styleEdits.push({ rowId: target.row.id, values: sv });
       }
       line.forEach((cell, j) => {
-        const col = columns[startC + j];
+        const col = cols[startC + j];
         if (!col) return;
         const at = { r: target.rawIndex, c: startC + j };
         const srcI = single ? 0 : i, srcJ = single ? 0 : j;
@@ -1070,7 +1113,7 @@ export function SheetGrid({
       const added: ValidationRule[] = [];
       for (const v of block.validations) {
         const top = working[startR + v.r1], bottom = working[startR + Math.min(v.r2, cells.length - 1)];
-        const left = columns[startC + v.c1], right = columns[Math.min(maxC, startC + v.c2)];
+        const left = cols[startC + v.c1], right = cols[Math.min(lastC, startC + v.c2)];
         if (!top || !bottom || !left || !right) continue;
         added.push({ ...(v.rule as Omit<ValidationRule, "id" | "ranges">), id: newRuleId(), ranges: [`{${left.id}!${top.row.id}}:{${right.id}!${bottom.row.id}}`] });
       }
@@ -1080,10 +1123,12 @@ export function SheetGrid({
     setSel({
       r: startR, c: startC,
       r2: Math.min(view.length + Math.max(0, needed) - 1, startR + cells.length - 1),
-      c2: Math.min(maxC, startC + Math.max(...cells.map((l) => l.length)) - 1),
+      c2: Math.min(lastC, startC + width - 1),
     });
+    };
+    if (onUndoGroup) await onUndoGroup(t("paste"), run); else await run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit, rect, view, rows.length, columns, onAddRows, onSetCells, maxC, filtering, data.shape, explicitRules, ruleAt, engine]);
+  }, [canEdit, rect, view, rows.length, columns, onAddRows, onAppendColumns, onUndoGroup, onSetCells, maxC, filtering, data.shape, explicitRules, ruleAt, engine]);
 
   const openCommentsAt = (r: number, c: number) => {
     const row = view[r]?.row;
@@ -1095,12 +1140,12 @@ export function SheetGrid({
   };
 
   /** Insert link (any text or link column): a label plus an http(s) address. */
-  const insertLink = () => {
+  const insertLink = async () => {
     const row = activeRow, col = activeCol;
     if (!canEdit || !row || !col) return;
-    if (col.type !== "text" && col.type !== "link") { alert(t("Links can go in text and link columns.")); return; }
+    if (col.type !== "text" && col.type !== "link") { setProblem(t("Links can go in text and link columns.")); return; }
     const raw = row.cells[col.id];
-    const url = window.prompt(t("Link address for this cell:"), isLinkCell(raw) ? raw.u : "");
+    const url = await askText({ title: t("Insert link"), label: t("Link address for this cell:"), initial: isLinkCell(raw) ? raw.u : "", placeholder: "https://", ok: t("Apply") });
     if (url === null) return;
     const label = displayCell(col.type, raw, { data, rowId: row.id, colId: col.id });
     onSetCells([{ rowId: row.id, values: { [col.id]: url.trim() ? { t: label || url.trim(), u: url.trim() } : (label || null) } }]);
@@ -1312,7 +1357,7 @@ export function SheetGrid({
   };
 
   // ── Menus ───────────────────────────────────────────────────────────────────────────────────
-  const clipboardBlocked = (keys: string) => alert(t("The browser blocked the clipboard. Use {keys} instead.", { keys }));
+  const clipboardBlocked = (keys: string) => setToast(t("The browser blocked the clipboard. Use {keys} instead.", { keys }));
   const pasteVia = (valuesOnly: boolean) => () => {
     readClipboardAsync()
       .then((block) => {
@@ -1410,7 +1455,7 @@ export function SheetGrid({
     const cur = list.find((v) => v.id === activeView);
     if (what === "deleteAll") { onSettings({ filterViews: null }, t("delete filter views")); setActiveView(null); return; }
     if (!cur) return;
-    if (what === "rename") { const name = window.prompt(t("Rename view"), cur.name); if (name?.trim()) onSettings({ filterViews: list.map((v) => (v.id === cur.id ? { ...v, name: name.trim() } : v)) }, t("rename view")); return; }
+    if (what === "rename") { void askText({ title: t("Rename view"), initial: cur.name }).then((name) => { if (name?.trim()) onSettings({ filterViews: list.map((v) => (v.id === cur.id ? { ...v, name: name.trim() } : v)) }, t("rename view")); }); return; }
     if (what === "duplicate") { const copy = { ...cur, id: newId("fv"), name: t("Copy of {name}", { name: cur.name }) }; onSettings({ filterViews: [...list, copy] }, t("duplicate view")); setActiveView(copy.id); return; }
     if (what === "delete") { onSettings({ filterViews: list.filter((v) => v.id !== cur.id).length ? list.filter((v) => v.id !== cur.id) : null }, t("delete view")); setActiveView(null); return; }
     if (what === "update") { const range = storedOf(rect); if (range) onSettings({ filterViews: list.map((v) => (v.id === cur.id ? { ...v, range } : v)) }, t("update view")); return; }
@@ -1614,7 +1659,7 @@ export function SheetGrid({
         if (!row) continue;
         if (dir === "right") {
           const spill = columns.slice(columns.length - nC).some((c) => row.cells[c.id] !== undefined);
-          if (spill) { alert(t("There's data in the last columns. Add columns first, then insert cells.")); return; }
+          if (spill) { setProblem(t("There's data in the last columns. Add columns first, then insert cells.")); return; }
           for (let c = columns.length - 1; c >= rect.left; c -= 1) {
             const src = c - nC >= rect.left ? columns[c - nC] : null;
             put(row.id, columns[c].id, src ? row.cells[src.id] : null, src ? row.styles?.[src.id] : null);
@@ -1791,15 +1836,29 @@ export function SheetGrid({
     setTimeout(() => { frame.contentWindow?.focus(); frame.contentWindow?.print(); setTimeout(() => frame.remove(), 1000); }, 50);
   };
 
-  const act = (a: MenuAction, arg?: unknown) => {
+  /**
+   * After a menu command the keyboard belongs to the grid again (bughunt S-BUG-9: focus was left on
+   * <body>, so Ctrl+Z right after Data › Sort did nothing). Only when nothing else took focus — a
+   * dialog or sidebar the command opened keeps it.
+   */
+  const refocusGrid = () => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) gridRef.current?.focus({ preventScroll: true });
+    }));
+  };
+  const act = (a: MenuAction, arg?: unknown) => { runAction(a, arg); refocusGrid(); };
+  const runAction = (a: MenuAction, arg?: unknown) => {
     const firstRow = view[rect.top]?.row, lastRow = view[rect.bottom]?.row;
     switch (a) {
       case "import": host?.importFile(); return;
       case "download": if (arg === "pdf") print(); else host?.download(arg as "xlsx" | "csv" | "tsv" | "html"); return;
       case "renameSheet": host?.renameSheet(); return;
       case "nameVersion": {
-        const name = window.prompt(t("Name this version"), "");
-        if (name?.trim()) onSettings({ versions: [...(settings.versions ?? []), { id: newId("vr"), name: name.trim(), at: new Date().toISOString() }] }, t("name version"));
+        const at = new Date().toISOString();
+        void askText({ title: t("Name current version"), placeholder: t("Name this version"), ok: t("Save") }).then((name) => {
+          if (name?.trim()) onSettings({ versions: [...(settings.versions ?? []), { id: newId("vr"), name: name.trim(), at }] }, t("name version"));
+        });
         return;
       }
       case "versionHistory": setPanel({ kind: "versions" }); return;
@@ -2192,6 +2251,10 @@ export function SheetGrid({
   }, [editing]);
   useEffect(() => { if (datePick && (!editing || editing.rowId !== datePick.rowId || editing.colId !== datePick.colId)) { const id = setTimeout(() => setDatePick(null), 300); return () => clearTimeout(id); } }, [editing, datePick]);
   const nameBoxRef = useRef<HTMLInputElement>(null);
+  /** The formula bar: the cell its edit belongs to, and its key frozen while it has focus. */
+  const fxTarget = useRef<{ rowId: string; colId: string } | null>(null);
+  const fxKey = useRef("");
+  const [fxFocused, setFxFocused] = useState(false);
   const pasteValuesNext = useRef(false);
   /** Ctrl+; / Ctrl+Shift+; / Ctrl+Alt+Shift+; — today's date, the time, or both, into the selection. */
   const stampNow = (kind: "date" | "time" | "dt") => {
@@ -2302,11 +2365,12 @@ export function SheetGrid({
   selRef.current = sel;
   const afterCommit = (next: Next) => {
     const s = selRef.current;
-    if (next === "right") {
+    if (next === "tab") {
       if (tabRun.current === null) tabRun.current = s.c;
       move(0, 1, false);
       return;
     }
+    if (next === "shiftTab") { move(0, -1, false); return; }
     if (next === "down" && tabRun.current !== null) {
       const c = tabRun.current;
       tabRun.current = null;
@@ -2317,6 +2381,7 @@ export function SheetGrid({
     if (next === "down") move(1, 0, false);
     if (next === "up") move(-1, 0, false);
     if (next === "left") move(0, -1, false);
+    if (next === "right") move(0, 1, false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -2363,7 +2428,7 @@ export function SheetGrid({
       if (code === "Backquote") return go(() => act("toggleFormulas"));
       if (code === "F1") return go(() => act("fullScreen"));
       if (e.shiftKey && code === "KeyU") return go(() => act("toggleFormulaBar"));
-      if (code === "Backspace") return go(() => setSel((x) => ({ ...x })));
+      if (code === "Backspace") return go(() => { forceScroll.current = true; setSel((x) => ({ ...x })); });
       if (canEdit) {
         if (code === "KeyD" && !e.shiftKey) return go(() => fillDirection("down"));
         if (code === "KeyR" && !e.shiftKey) return go(() => fillDirection("right"));
@@ -2438,8 +2503,9 @@ export function SheetGrid({
       case "Escape": return setSel((s) => ({ ...s, r2: s.r, c2: s.c }));
       case "Delete":
       case "Backspace": e.preventDefault(); return clearSelection();
-      case "a": if (meta) { e.preventDefault(); setSel({ r: 0, c: 0, r2: maxR, c2: maxC }); } return;
-      case "f": if (meta) { e.preventDefault(); setFindOpen(true); } return;
+      // Only WITH Ctrl/⌘: a plain "a" or "f" starts typing like any other letter (bughunt S-BUG-3).
+      case "a": if (meta) { e.preventDefault(); setSel({ r: 0, c: 0, r2: maxR, c2: maxC }); return; } break;
+      case "f": if (meta) { e.preventDefault(); setFindOpen(true); return; } break;
       default: break;
     }
     // Space ticks / unticks checkboxes (every checkbox in the selection).
@@ -2660,7 +2726,7 @@ export function SheetGrid({
                 className="w-40 rounded-md border border-border bg-background px-2 py-0.5 text-xs outline-none focus:border-ring"
               />
               <button
-                onClick={() => { const n = replaceAll(); if (typeof n === "number") alert(n ? t("{n} rows changed.", { n }) : t("No matches.")); }}
+                onClick={() => { const n = replaceAll(); if (typeof n === "number") setToast(n ? t("{n} rows changed.", { n }) : t("No matches.")); }}
                 className="rounded-md bg-primary px-2 py-1 text-2xs font-semibold text-primary-foreground"
               >{t("Replace all")}</button>
             </>
@@ -2694,20 +2760,36 @@ export function SheetGrid({
         />
         <span className="grid shrink-0 place-items-center border-r border-border px-2 font-serif text-xs italic text-muted-foreground">fx</span>
         <input
-          key={`${activeRow?.id}:${activeCol?.id}:${JSON.stringify(activeRaw ?? "")}`}
+          // While the bar has focus its key is frozen: a click on another cell (or a colleague's save)
+          // must not swap the input out from under what is being typed. The edit lands on the cell it
+          // started on (fxTarget), like Sheets.
+          key={fxFocused ? fxKey.current : (fxKey.current = `${activeRow?.id}:${activeCol?.id}:${JSON.stringify(activeRaw ?? "")}`)}
+          onFocus={() => { fxTarget.current = activeRow && activeCol ? { rowId: activeRow.id, colId: activeCol.id } : null; setFxFocused(true); }}
           defaultValue={isFormula(activeRaw) ? editFormula(activeRaw, data.shape) ?? "" : editValue(activeCol?.type ?? "text", activeRaw)}
           readOnly={!canEdit}
           aria-label={t("Formula bar")}
           placeholder={canEdit ? t("Type a value or a formula…") : ""}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.key === "Enter" && activeRow && activeCol) {
-              commit(activeRow.id, activeCol.id, (e.target as HTMLInputElement).value);
+            const input = e.target as HTMLInputElement;
+            const target = fxTarget.current;
+            if (e.key === "Enter" && target) {
+              e.preventDefault();
+              // Committed here; the blur that follows sees nothing new and sends nothing.
+              if (input.value !== input.defaultValue) commit(target.rowId, target.colId, input.value);
+              input.defaultValue = input.value;
               gridRef.current?.focus();
             }
-            if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); gridRef.current?.focus(); }
+            // Esc DISCARDS what was typed in the bar, like Esc in a cell (bughunt S-BUG-8).
+            if (e.key === "Escape") { e.preventDefault(); input.value = input.defaultValue; gridRef.current?.focus(); }
           }}
-          onBlur={(e) => { if (activeRow && activeCol) commit(activeRow.id, activeCol.id, e.target.value); }}
+          // Only a real change is saved: focusing and leaving the bar used to re-save the cell (S-BUG-16).
+          onBlur={(e) => {
+            const target = fxTarget.current;
+            if (target && e.target.value !== e.target.defaultValue) commit(target.rowId, target.colId, e.target.value);
+            fxTarget.current = null;
+            setFxFocused(false);
+          }}
           className="min-w-0 flex-1 select-text bg-transparent px-2 py-1 font-mono text-xs outline-none"
         />
         {activeCol && (activeCol.name || activeCol.type !== "text") && (
@@ -3350,7 +3432,7 @@ export function SheetGrid({
     {dialog?.kind === "pivot" && (
       <Suspense fallback={null}><PivotCreateDialog
         defaultRange={`${sheetName ?? "Sheet1"}!${rangeToA1(storedOf(selInfo.single ? currentRegion() : rect) ?? "", data.shape)}`}
-        onCreate={(o) => { setDialog(null); const r = rangeFromA1(o.range, data.shape); if (r) host?.createPivot(r); else alert(t("That range isn't valid.")); }}
+        onCreate={(o) => { setDialog(null); const r = rangeFromA1(o.range, data.shape); if (r) host?.createPivot(r); else setProblem(t("That range isn't valid.")); }}
         onClose={() => setDialog(null)}
       /></Suspense>
     )}
@@ -3491,7 +3573,7 @@ export function SheetGrid({
       const update = (patch: Partial<TableSpec>, label: string) => onSettings({ tables: (settings.tables ?? []).map((x) => (x.id === tb.id ? { ...x, ...patch } : x)) }, label);
       const drop = () => onSettings({ tables: (settings.tables ?? []).filter((x) => x.id !== tb.id).length ? (settings.tables ?? []).filter((x) => x.id !== tb.id) : null }, t("revert table"));
       const items: MenuNode[] = [
-        { id: "tb-rename", label: "Rename table", disabled: !canEdit, run: () => { const name = window.prompt(t("Table name"), tb.name); if (name?.trim()) update({ name: name.trim() }, t("rename table")); } },
+        { id: "tb-rename", label: "Rename table", disabled: !canEdit, run: () => { void askText({ title: t("Rename table"), label: t("Table name"), initial: tb.name }).then((name) => { if (name?.trim()) update({ name: name.trim() }, t("rename table")); }); } },
         { sep: true },
         { id: "tb-range", label: "Adjust table range", disabled: !canEdit, run: () => { const r = storedOf(rect); if (r) update({ range: r }, t("adjust table range")); } },
         { id: "tb-header", label: "Table header colour", disabled: !canEdit, panel: (close) => <ColorPicker value={tb.header ?? TABLE_HEADER} onPick={(c) => { update({ header: c ?? undefined }, t("table header colour")); close(); }} /> },
@@ -4088,7 +4170,9 @@ const Row = memo(function Row(p: RowProps) {
             })()) : (
               <span
                 className={cn("block",
-                  st?.rt ? "whitespace-pre" : wrap === "w" ? "whitespace-pre-wrap break-words" : wrap === "c" ? "overflow-hidden whitespace-pre" : spill ? "relative z-[2] overflow-hidden whitespace-pre" : "truncate whitespace-pre",
+                  st?.rt ? "whitespace-pre" : wrap === "w" ? "whitespace-pre-wrap break-words" : wrap === "c" ? "overflow-hidden whitespace-pre" : // pointer-events-none: the overflowing text is drawn OVER the empty cells to its right, but a
+                  // click there belongs to the cell under the pointer (bughunt S-BUG-1), as in Sheets.
+                  spill ? "pointer-events-none relative z-[2] overflow-hidden whitespace-pre" : "truncate whitespace-pre",
                   isError(computed) && isFormula(value) ? "font-medium text-destructive" : "")}
                 style={{ ...rotationStyle(st), ...(spill ? { width: (p.widthsKey[ci] ?? 0) + spill - 12 } : {}) }}
                 title={isFormula(value) && isError(computed) ? `${computed} — ${errorHint(computed, p.lang)}` : undefined}

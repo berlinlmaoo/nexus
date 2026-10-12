@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Redo2, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { NexusSheet } from "@/lib/nexus-api";
@@ -24,11 +24,18 @@ const BUFFER = 10;
  * tap a cell to select it, edit it in a bar at the bottom — never a tiny input inside a cell.
  * Rows are windowed like the desktop grid, so a long sheet stays smooth.
  */
-export function SheetMobile({ sheet, onSetCells, footer, saving }: {
+export function SheetMobile({ sheet, onSetCells, footer, saving, status, canUndo, canRedo, onUndo, onRedo }: {
   sheet: NexusSheet;
   onSetCells: (edits: { rowId: string; values: Record<string, unknown> }[]) => void;
   footer: ReactNode;
   saving: boolean;
+  /** Save state shown in the bottom bar (offline / unsaved changes); replaces the plain "Saving…". */
+  status?: ReactNode;
+  /** Undo / redo on the phone too (bughunt S-BUG-24: there was no way back at all). */
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }) {
   const { t } = useLang();
   const settings = sheet.settings ?? {};
@@ -253,7 +260,19 @@ export function SheetMobile({ sheet, onSetCells, footer, saving }: {
         )}
         <div className="flex min-h-9 items-center gap-2 border-t border-border bg-muted/60 px-1.5">
           <div className="min-w-0 flex-1">{footer}</div>
-          {saving && <span className="shrink-0 text-2xs text-muted-foreground">{t("Saving…")}</span>}
+          {status ?? (saving && <span className="shrink-0 text-2xs text-muted-foreground">{t("Saving…")}</span>)}
+          {sheet.canEdit && onUndo && (
+            <>
+              <button onClick={onUndo} disabled={!canUndo} aria-label={t("Undo")} title={t("Undo")}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-background hover:text-foreground disabled:opacity-35">
+                <Undo2 className="h-4 w-4" />
+              </button>
+              <button onClick={onRedo} disabled={!canRedo} aria-label={t("Redo")} title={t("Redo")}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-background hover:text-foreground disabled:opacity-35">
+                <Redo2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

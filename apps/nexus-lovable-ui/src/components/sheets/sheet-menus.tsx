@@ -58,6 +58,9 @@ export function tidy(nodes: (MenuNode | null | false | undefined)[]): MenuNode[]
   return out;
 }
 
+/** Where the keyboard goes back to when a menu closes (the grid, usually). Shared by every top-level menu. */
+let menuReturnFocus: HTMLElement | null = null;
+
 /**
  * One menu panel at a fixed position. Submenus open to the right on hover, click or ArrowRight;
  * the keyboard walks items with ↑/↓, Enter runs, ← / Escape close a level.
@@ -79,6 +82,22 @@ function MenuPanel({ nodes, anchor, onDone, onBack, depth = 0, width = 260 }: {
   useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
   useEffect(() => { if (depth > 0) setFocus(nodes.findIndex((n) => isItem(n) && !n.disabled)); }, [depth, nodes]);
   useEffect(() => { if (focus >= 0) itemRefs.current[focus]?.focus(); }, [focus]);
+  // A top-level menu takes the keyboard while open (so Esc and the arrows reach it: a right-click menu
+  // used to ignore Esc, bughunt S-BUG-18) and hands it back to whoever had it when it closes.
+  useEffect(() => {
+    if (depth > 0) return;
+    const prev = document.activeElement as HTMLElement | null;
+    if (prev && prev !== document.body && !prev.closest("[role=menu]")) menuReturnFocus = prev;
+    f.ref.current?.focus({ preventScroll: true });
+    return () => {
+      requestAnimationFrame(() => {
+        const a = document.activeElement;
+        const back = menuReturnFocus;
+        if ((!a || a === document.body) && back?.isConnected) back.focus({ preventScroll: true });
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openSub = (i: number) => {
     const el = itemRefs.current[i];
@@ -106,6 +125,7 @@ function MenuPanel({ nodes, anchor, onDone, onBack, depth = 0, width = 260 }: {
       <div
         ref={f.ref}
         role="menu"
+        tabIndex={-1}
         style={{ ...f.style, width }}
         onKeyDown={(e) => {
           if (open) return;

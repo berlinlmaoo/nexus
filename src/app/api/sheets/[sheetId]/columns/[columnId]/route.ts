@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { MAX_COLUMNS, resolveSheetAccess } from "@/lib/project-sheets"
 import { deleteColumnKeepingSnapshot } from "@/lib/deletion-snapshot"
-import { emitSheetStructure } from "@/lib/socket-emitter"
+import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { shrinkRangesAfterDeletion } from "@/lib/sheet-structure"
 
 // DELETE /api/sheets/[sheetId]/columns/[columnId]
@@ -66,7 +66,7 @@ export async function DELETE(
         await rewrite.apply(tx, me)
       },
     })
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error deleting sheet column:", error)

@@ -22,9 +22,13 @@ export function SidePanel({ title, onClose, children, footer, className, label }
   const { t } = useLang();
   return (
     <aside
+      // Marks "a sheet sidebar is open": the floating GIDEON button steps aside so it can't cover
+      // the panel's Done button (GideonLauncher, bughunt S-BUG-13).
+      data-sheet-panel=""
       aria-label={label ?? (typeof title === "string" ? title : undefined)}
       className={cn("flex w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card max-md:fixed max-md:inset-x-2 max-md:bottom-2 max-md:top-24 max-md:z-[55] max-md:w-auto max-md:shadow-pop", className)}
     >
+      <HideGideonButton />
       <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</h2>
         <button onClick={onClose} aria-label={t("Close")} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
@@ -33,6 +37,15 @@ export function SidePanel({ title, onClose, children, footer, className, label }
       {footer && <footer className="flex items-center gap-2 border-t border-border p-2">{footer}</footer>}
     </aside>
   );
+}
+
+/**
+ * While a sheet sidebar is open, the floating GIDEON button (fixed bottom-right) would sit right on
+ * the sidebar's Done button and swallow the click (bughunt S-BUG-13). Rendered inside every sidebar,
+ * so the rule exists exactly as long as one is open. ⌘O still opens GIDEON.
+ */
+export function HideGideonButton() {
+  return <style>{"[data-gideon-launcher]{display:none!important}"}</style>;
 }
 
 /** Small field label used inside panels and dialogs. */
@@ -61,7 +74,13 @@ export function SheetDialog({ title, onClose, children, footer, width = 440, lab
   const { t } = useLang();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // A picker open inside the dialog (SelectPicker's popover) closes first, not the whole dialog.
+      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      e.stopPropagation();
+      onClose();
+    };
     window.addEventListener("keydown", onKey, true);
     const first = ref.current?.querySelector<HTMLElement>("input,select,textarea,button:not([data-close])");
     first?.focus();

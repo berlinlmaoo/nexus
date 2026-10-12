@@ -37,6 +37,7 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
   const [list, setList] = useState<{ left: number; top: number } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [cantDelete, setCantDelete] = useState<string | null>(null);
   const activeRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   useEffect(() => { activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [activeId]);
@@ -47,7 +48,16 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
   const index = tab ? visible.indexOf(tab) : -1;
 
   const tabMenu = (s: SheetTab): MenuNode[] => tidy([
-    { id: "tab-delete", label: "Delete", disabled: !canManage || sheets.length < 2 || s.position === 0, run: () => setConfirmDelete(s.id) },
+    // The first tab is the project's main sheet (the server refuses to delete it). The item stays
+    // clickable so it can SAY why, instead of just being grey (bughunt S-BUG-19).
+    {
+      id: "tab-delete", label: "Delete", disabled: !canManage,
+      run: () => {
+        if (sheets.length < 2) setCantDelete(t("A spreadsheet needs at least one sheet. Add another sheet first."));
+        else if (s.position === 0) setCantDelete(t("This is the project's main sheet, so it can't be deleted. Move another sheet to the first position if you want to delete this one."));
+        else setConfirmDelete(s.id);
+      },
+    },
     { id: "tab-dup", label: "Duplicate", disabled: !canEdit, run: () => onDuplicate(s.id) },
     { id: "tab-rename", label: "Rename", disabled: !canEdit, run: () => setRenaming(s.id) },
     {
@@ -146,6 +156,11 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
       {list && <MenuPopup nodes={allSheets} anchor={{ x: list.left, y: list.top }} onClose={() => setList(null)} />}
       {menu && tab && <MenuPopup nodes={tabMenu(tab)} anchor={{ x: menu.left, y: menu.top }} onClose={() => setMenu(null)} width={220} />}
 
+      {cantDelete && (
+        <SheetDialog title={t("Can't delete this sheet")} onClose={() => setCantDelete(null)} footer={<button className={primaryBtn} onClick={() => setCantDelete(null)}>{t("OK")}</button>}>
+          <p className="text-sm">{cantDelete}</p>
+        </SheetDialog>
+      )}
       {confirmDelete && (
         <SheetDialog
           title={t("Heads up!")}

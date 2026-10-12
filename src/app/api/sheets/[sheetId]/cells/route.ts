@@ -7,7 +7,7 @@ import {
   MAX_CELLS_PER_WRITE, MAX_ROWS_PER_WRITE,
   coerceCellValue, normalizeCellStyle, protectedCellsBlock, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
-import { emitSheetCells } from "@/lib/socket-emitter"
+import { emitSheetCells, originTabOf } from "@/lib/socket-emitter"
 
 // PATCH /api/sheets/[sheetId]/cells — the hot path.
 //
@@ -119,7 +119,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
 
     const payload = rows.map((r) => ({ id: r.id, cells: readCells(r.cells), styles: readStyles(r.styles), updatedAt: r.updatedAt }))
     // actorId travels with it so the sender's own browser can ignore the echo of its own write.
-    emitSheetCells(sheetId, payload, me)
+    emitSheetCells(sheetId, payload, me, originTabOf(req))
 
     return NextResponse.json({ updated: applied, rows: payload })
   } catch (error) {

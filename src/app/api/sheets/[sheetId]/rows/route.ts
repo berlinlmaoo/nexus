@@ -7,7 +7,7 @@ import {
   MAX_ROWS_PER_WRITE, ROW_HEIGHT_MAX, ROW_HEIGHT_MIN,
   coerceCellValue, normalizeCellStyle, protectedRowsBlock, readCells, readStyles, resolveSheetAccess,
 } from "@/lib/project-sheets"
-import { emitSheetStructure } from "@/lib/socket-emitter"
+import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { shrinkRangesAfterDeletion } from "@/lib/sheet-structure"
 
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       data,
       select: { id: true, position: true, cells: true, styles: true, height: true, updatedAt: true },
     })).sort((a, b) => a.position - b.position)
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({
       rows: created.map((r) => ({
         id: r.id, position: r.position, cells: readCells(r.cells), height: r.height, updatedAt: r.updatedAt,
@@ -197,7 +197,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
         FROM (SELECT unnest(${order}::text[]) AS id, unnest(${slots}::float8[]) AS pos) v
         WHERE r."id" = v.id AND r."sheetId" = ${sheetId}
       `
-      emitSheetStructure(sheetId, session.user.id)
+      emitSheetStructure(sheetId, session.user.id, originTabOf(req))
       return NextResponse.json({ ok: true, reordered: order.length })
     }
 
@@ -223,7 +223,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       await prisma.$transaction(items.map((h) =>
         prisma.sheetRow.updateMany({ where: { id: h.rowId, sheetId }, data: { height: h.height } }),
       ))
-      emitSheetStructure(sheetId, session.user.id)
+      emitSheetStructure(sheetId, session.user.id, originTabOf(req))
       return NextResponse.json({ ok: true, resized: items.length })
     }
 
@@ -253,7 +253,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
 
     const updated = await prisma.sheetRow.updateMany({ where: { id: rowId, sheetId }, data: { position } })
     if (!updated.count) return NextResponse.json({ error: "Barisnya nggak ketemu." }, { status: 404 })
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ok: true, position })
   } catch (error) {
     console.error("Error reordering sheet row:", error)
@@ -304,7 +304,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
         rewritten = await rewrite.apply(tx, me)
       },
     })
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({
       deleted: count,
       // Rows whose formulas were rewritten, so the client can patch its cache without a refetch.

@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { normalizeColumns, protectionChangeBlock, readCells, readSheetSettings, readStyles, resolveSheetAccess } from "@/lib/project-sheets"
-import { emitSheetStructure } from "@/lib/socket-emitter"
+import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { computeSheet } from "@/lib/sheet-formula"
 
 // GET /api/sheets/[sheetId] — the whole sheet: structure + every row.
@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
       data,
       select: { id: true, name: true, columns: true, settings: true },
     })
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ...updated, settings: readSheetSettings(updated.settings) })
   } catch (error) {
     console.error("Error updating sheet:", error)
@@ -146,7 +146,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       meta: { open: { type: "sheet", id: sheetId, projectId }, projectId, sheetId },
       remove: (tx) => tx.projectSheet.delete({ where: { id: sheetId } }),
     })
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error deleting sheet:", error)

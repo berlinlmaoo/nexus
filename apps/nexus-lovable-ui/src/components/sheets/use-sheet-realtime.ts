@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
-import type { NexusSheet, NexusSheetCellStyle, NexusSheetCellValue } from "@/lib/nexus-api";
+import { TAB_ID, type NexusSheet, type NexusSheetCellStyle, type NexusSheetCellValue } from "@/lib/nexus-api";
+
+/** My own write coming back: newer servers say which TAB wrote it; older ones only who. */
+const isOwnEcho = (d: { actorId?: string; originTab?: string | null }, meId: string | null) =>
+  d.originTab ? d.originTab === TAB_ID : d.actorId === meId;
 
 export type SheetPeer = { userId: string; name: string; avatar: string | null; color: string };
 export type PeerCursor = { userId: string; name: string; color: string; rowId: string; columnId: string };
@@ -56,10 +60,10 @@ export function useSheetRealtime({
       setCursors((prev) => ({ ...prev, [d.userId]: { ...d, at: Date.now() } }));
     };
 
-    const onCells = (d: { rows: IncomingRow[]; actorId: string }) => {
-      // My own write already patched the cache optimistically; re-applying the echo would just make
-      // the grid flash.
-      if (!d?.rows?.length || d.actorId === meId) return;
+    const onCells = (d: { rows: IncomingRow[]; actorId: string; originTab?: string | null }) => {
+      // This tab's own write already patched the cache optimistically; re-applying the echo would just
+      // make the grid flash. The same person's OTHER tabs do apply it (bughunt S-BUG-14).
+      if (!d?.rows?.length || isOwnEcho(d, meId)) return;
       const incoming = new Map(d.rows.map((r) => [r.id, r]));
       qc.setQueryData<NexusSheet>(["nexus", "sheet", sheetId], (prev) => {
         if (!prev) return prev;
@@ -88,8 +92,8 @@ export function useSheetRealtime({
     // Rows added/removed/reordered or columns changed: the shape moved, so a surgical patch can't
     // express it. Refetching is correct here and safe — it only happens on structural edits, which
     // nobody is doing while someone types.
-    const onStructure = (d: { actorId: string }) => {
-      if (d?.actorId === meId) return;
+    const onStructure = (d: { actorId: string; originTab?: string | null }) => {
+      if (!d || isOwnEcho(d, meId)) return;
       onStructureChange();
     };
 

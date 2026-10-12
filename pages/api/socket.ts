@@ -530,12 +530,13 @@ export function initializeSocketServer(
       .catch((error) => log.warn("conversation-membership: could not list the room", { room, error: String(error) }))
   })
 
-  eventBus.on(BUS_EVENTS.SHEET_CELLS, (data: { sheetId: string; rows: unknown; actorId: string }) => {
-    io.to(`sheet:${data.sheetId}`).emit("sheet-cells", { rows: data.rows, actorId: data.actorId })
+  // originTab (additive): the browser tab that wrote it, so only that tab skips the echo.
+  eventBus.on(BUS_EVENTS.SHEET_CELLS, (data: { sheetId: string; rows: unknown; actorId: string; originTab?: string | null }) => {
+    io.to(`sheet:${data.sheetId}`).emit("sheet-cells", { rows: data.rows, actorId: data.actorId, originTab: data.originTab ?? null })
   })
 
-  eventBus.on(BUS_EVENTS.SHEET_STRUCTURE, (data: { sheetId: string; actorId: string }) => {
-    io.to(`sheet:${data.sheetId}`).emit("sheet-structure", { actorId: data.actorId })
+  eventBus.on(BUS_EVENTS.SHEET_STRUCTURE, (data: { sheetId: string; actorId: string; originTab?: string | null }) => {
+    io.to(`sheet:${data.sheetId}`).emit("sheet-structure", { actorId: data.actorId, originTab: data.originTab ?? null })
   })
 
   // Projects/folders of a workspace changed (lib/socket-emitter.ts emitWorkspaceChanged). The payload is

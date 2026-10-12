@@ -85,13 +85,25 @@ export function emitSheetCells(
   sheetId: string,
   rows: { id: string; cells: Record<string, unknown>; updatedAt: Date | string }[],
   actorId: string,
+  originTab?: string | null,
 ) {
-  eventBus.emit(BUS_EVENTS.SHEET_CELLS, { sheetId, rows, actorId })
+  eventBus.emit(BUS_EVENTS.SHEET_CELLS, { sheetId, rows, actorId, originTab: originTab ?? null })
 }
 
 /** Rows added/removed/reordered, or columns changed — the receiver refetches rather than patches. */
-export function emitSheetStructure(sheetId: string, actorId: string) {
-  eventBus.emit(BUS_EVENTS.SHEET_STRUCTURE, { sheetId, actorId })
+export function emitSheetStructure(sheetId: string, actorId: string, originTab?: string | null) {
+  eventBus.emit(BUS_EVENTS.SHEET_STRUCTURE, { sheetId, actorId, originTab: originTab ?? null })
+}
+
+/**
+ * The browser tab that made a sheet write (web header X-Nexus-Tab, 12 Oct 2026). Sheet events carry
+ * it so ONLY that tab skips the echo of its own write; the same person's other tabs and devices apply
+ * it live (they used to wait for the 20 s poll, bughunt S-BUG-14). Absent on older clients → null,
+ * and receivers fall back to skipping by actorId as before.
+ */
+export function originTabOf(req: { headers: { get(name: string): string | null } }): string | null {
+  const v = req.headers.get("x-nexus-tab")
+  return v && /^[A-Za-z0-9_-]{6,64}$/.test(v) ? v : null
 }
 
 export type WorkspaceChangedKind = "projects" | "folders" | "audit" | "vault" | "submissions"
