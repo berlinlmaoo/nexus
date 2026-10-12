@@ -60,6 +60,7 @@ struct ProjectDetailView: View {
     /// peek). The phone pushes it, as before.
     @State private var sheetTask: TaskSheetRef?
     @Environment(\.horizontalSizeClass) private var hSize
+    @FocusState private var searchFocused: Bool
 
     private var meId: String? { auth.session?.userId }
 
@@ -442,7 +443,10 @@ struct ProjectDetailView: View {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(NX.foreground)
                     .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
             }
+            .hoverEffect(.lift)
+            .accessibilityLabel(T("Back"))
             if let d = detail {
                 ProjectMark(icon: d.icon, color: d.color, size: 30)
             }
@@ -454,7 +458,11 @@ struct ProjectDetailView: View {
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
+                .hoverEffect(.lift)
+                .keyboardShortcut(",", modifiers: .command)
+                .accessibilityLabel(T("Project settings"))
             }
             // On the Forms tab "+" means New form, as on the web's Forms tab; on every other tab it is
             // New task. It used to open New task on the Forms tab too (owner, 9 Oct 2026).
@@ -464,7 +472,9 @@ struct ProjectDetailView: View {
                 Button { newDealRequest += 1 } label: {
                     Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
+                .hoverEffect(.lift)
                 .accessibilityLabel(T("New deal"))
             } else if !isPipeline && !isOutlet {
                 // An outlet's "Add event" sits in its own header row, next to the month.
@@ -473,7 +483,9 @@ struct ProjectDetailView: View {
                 } label: {
                     Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(tab == .forms || canCreate ? NX.violetText : NX.mutedFg)
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
+                .hoverEffect(.lift)
                 .disabled(tab != .forms && !canCreate)
                 .accessibilityLabel(tab == .forms ? T("New form") : T("New task"))
             }
@@ -495,14 +507,33 @@ struct ProjectDetailView: View {
                             }
                             .foregroundStyle(tab == t ? NX.foreground : NX.mutedFg)
                             .padding(.horizontal, 12).padding(.vertical, 9)
+                            .frame(minHeight: 42)
                             Rectangle().fill(tab == t ? NX.violet : .clear).frame(height: 2)
                         }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityAddTraits(tab == t ? .isSelected : [])
                 }
             }
             .padding(.horizontal, 8)
         }
+        // Keyboard (iPad keyboard, Mac): ⌘[ / ⌘] previous / next tab, ⌘F search the project.
+        .background {
+            Group {
+                Button("") { stepTab(-1) }.keyboardShortcut("[", modifiers: .command)
+                Button("") { stepTab(1) }.keyboardShortcut("]", modifiers: .command)
+                Button("") { if searchApplies { searchFocused = true } }.keyboardShortcut("f", modifiers: .command)
+            }
+            .opacity(0).accessibilityHidden(true)
+        }
+    }
+
+    private func stepTab(_ d: Int) {
+        let tabs = visibleTabs
+        guard let i = tabs.firstIndex(of: tab), tabs.indices.contains(i + d) else { return }
+        tab = tabs[i + d]
     }
 
     // MARK: kotak pencarian
@@ -512,6 +543,7 @@ struct ProjectDetailView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
                 TextField(T("Search tasks in this project…"), text: $query)
+                    .focused($searchFocused)
                     .font(NXFont.text(14))
                     .foregroundStyle(NX.foreground)
                     .textInputAutocapitalization(.never)

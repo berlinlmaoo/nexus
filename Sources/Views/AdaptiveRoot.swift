@@ -517,6 +517,17 @@ struct SidebarRoot: View {
                     }
                 }
         }
+        // Keyboard (iPad keyboard, Mac): ⌘1…⌘7 jump to Home, Projects, My Tasks, Notifications, Messages,
+        // Calendar and Attendance — the menu bar lists them under the app's commands.
+        .background {
+            Group {
+                ForEach(Array(Self.shortcutScreens.enumerated()), id: \.offset) { i, screen in
+                    Button(screen.title) { selection = .screen(screen) }
+                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
+                }
+            }
+            .opacity(0).accessibilityHidden(true)
+        }
         // An outside instruction arrives as a request, not as state, and is cleared the moment it
         // is answered. Held as state it would keep dragging the sidebar back to attendance every
         // time this view redrew, and no amount of tapping elsewhere would stick.
@@ -548,6 +559,8 @@ struct SidebarRoot: View {
             }
         }
     }
+
+    private static let shortcutScreens: [NXScreen] = [.dashboard, .projects, .tasks, .inbox, .messages, .teamCalendar, .attendance]
 
     /// A project shortcut is selected by its whole ref (id, name, icon). When a refresh brings the same
     /// project back renamed or with a new icon, its row's tag changes and the List would show nothing
