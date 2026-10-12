@@ -139,4 +139,8 @@ export const ID_I18N_PROJECTS_EXTRA: Record<string, string> = {
   // Audit pass (parent): empty property placeholder
   "Not set": "Belum diisi",
   "The connection dropped. Getting the answer…": "Koneksi terputus. Mengambil jawabannya…",
+  "every week at {time} WIB": "setiap minggu pukul {time} WIB",
+  "every weekday at {time} WIB": "setiap hari kerja pukul {time} WIB",
+  "every month at {time} WIB": "setiap bulan pukul {time} WIB",
+  "every day at {time} WIB": "setiap hari pukul {time} WIB",
 }

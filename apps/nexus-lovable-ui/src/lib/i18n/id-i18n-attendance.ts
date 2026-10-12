@@ -467,7 +467,7 @@ export const ID_I18N_ATTENDANCE: Record<string, string> = {
   "Penalty": "Potongan",
   "Tasks shared by several people are split between them, so counts can be fractional.": "Task yang dipegang beberapa orang dibagi rata, jadi angkanya bisa pecahan.",
   "{n} pt": "{n} poin",
-  "Overdue now": "Lewat tenggat sekarang",
+  "Overdue now": "Lewat tenggat",
   "{n} min in total": "total {n} menit",
   "XP this period": "XP periode ini",
   "{n} XP in penalties": "{n} XP potongan",

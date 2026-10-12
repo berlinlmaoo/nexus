@@ -1036,7 +1036,7 @@ function CalendarCard() {
       </div>
       <div className="grid grid-cols-7 gap-y-1.5 text-center text-xs">
         {/* 5 Jan 2026 is a Monday: the weekday initials in the interface language. */}
-        {Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toLocaleDateString(locale, { weekday: "narrow", timeZone: "UTC" })).map((d, i) => <span key={i} className="text-muted-foreground">{d}</span>)}
+        {Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toLocaleDateString(locale, { weekday: locale.startsWith("id") ? "short" : "narrow", timeZone: "UTC" })).map((d, i) => <span key={i} className="text-muted-foreground">{d}</span>)}
         {days.map((key) => {
           const inMonth = sameMonth(key, anchor);
           const isToday = key === todayKey;

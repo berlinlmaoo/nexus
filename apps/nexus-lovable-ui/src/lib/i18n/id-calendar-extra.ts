@@ -8,7 +8,7 @@ export const ID_CALENDAR_EXTRA: Record<string, string> = {
   // the focus" are in id-calendar-page.ts.
   "Focus on {unit}, {n} task": "Fokus ke {unit}, {n} task",
   "Focus on {unit}, {n} tasks": "Fokus ke {unit}, {n} task",
-  "Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.": "Titik mengikuti Bagan IP & Divisi. Nama berikon fokus memfokuskan kalender ke divisi itu; nama lain memfilternya.",
+  "Dots follow the IP & Division Chart. A name with the focus icon focuses the calendar on that division; any other name filters it.": "Titik mengikuti Bagan IP & Divisi. Nama berikon fokus memusatkan kalender ke divisi itu; nama lain memfilternya.",
   "public holiday": "tanggal merah",
   "You have nothing due in {month}.": "Kamu tidak punya task bertenggat di {month}.",
   "Your division has nothing due in {month}.": "Divisimu tidak punya task bertenggat di {month}.",

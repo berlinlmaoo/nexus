@@ -43,7 +43,7 @@ export function DatePicker({ anchor, value, locale, onPick, onClose }: {
     [locale, month],
   );
   const initials = useMemo(() => {
-    const f = new Intl.DateTimeFormat(locale, { weekday: "narrow", timeZone: "UTC" });
+    const f = new Intl.DateTimeFormat(locale, { weekday: locale.startsWith("id") ? "short" : "narrow", timeZone: "UTC" });
     const long = new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" });
     // 4 Jan 1970 was a Sunday.
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.UTC(1970, 0, 4 + i)); return { short: f.format(d), long: long.format(d) }; });

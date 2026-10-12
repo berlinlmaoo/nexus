@@ -56,8 +56,9 @@ function triggerText(r: NexusAutomationRule | null | undefined, t: LangApi["t"],
   if (r.type === "STATUS_CHANGED" && (toSection || r.value)) return t("Status changed to {status}", { status: toSection ?? valueLabel(r.value, t) });
   if (r.type === "SCHEDULED") {
     const c = r.config ?? {};
-    const f = c.frequency === "weekly" ? t("Weekly") : c.frequency === "weekdays" ? t("Weekdays") : c.frequency === "monthly" ? t("Monthly") : t("Daily");
-    return `${f} ${String(c.time ?? "")} WIB`;
+    // Reads after "When": "When every day at 04:26 WIB" (was "When Daily 04:26 WIB").
+    const time = String(c.time ?? "");
+    return c.frequency === "weekly" ? t("every week at {time} WIB", { time }) : c.frequency === "weekdays" ? t("every weekday at {time} WIB", { time }) : c.frequency === "monthly" ? t("every month at {time} WIB", { time }) : t("every day at {time} WIB", { time });
   }
   if (r.type === "DUE_DATE_APPROACHING") return t("{n}h before due", { n: r.value || "24" });
   return base;

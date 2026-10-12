@@ -1268,7 +1268,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
   const sameMonth = (a: Date, b: Date) => a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
   const keys = visibleProps(cfg, "calendar", defs);
   const chipStyle = (task: NexusTask) => cardTint(task, cfg, defs, ctx);
-  const weekdays = useMemo(() => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(new Date(2026, 9, 12 + i))), [locale]);
+  const weekdays = useMemo(() => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: locale.startsWith("id") ? "short" : "narrow" }).format(new Date(2026, 9, 12 + i))), [locale]);
 
   // 6-week grid starting on the Monday on/before the 1st
   const gridStart = new Date(viewMonth);
@@ -1552,7 +1552,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                   const weekend = d.getDay() === 0 || d.getDay() === 6;
                   return (
                     <div key={i} className={cn("flex flex-col items-center justify-center gap-0.5 border-l border-border/40 text-[10px] leading-none", weekend && "bg-muted/30")} style={{ width: GANTT_DAY_W }}>
-                      <span className={cn("font-semibold", isToday ? "text-primary" : "text-muted-foreground/70")}>{new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(d)}</span>
+                      <span className={cn("font-semibold", isToday ? "text-primary" : "text-muted-foreground/70")}>{new Intl.DateTimeFormat(locale, { weekday: locale.startsWith("id") ? "short" : "narrow" }).format(d)}</span>
                       <span className={cn(isToday ? "grid h-4 w-4 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground" : "font-bold text-foreground/80")}>{d.getDate()}</span>
                     </div>
                   );

@@ -15,7 +15,7 @@ export const ID_TEMPLATES: Record<string, string> = {
   "Dashboards": "Dashboard",
   "Blank project": "Project kosong",
   "Start empty": "Mulai kosong",
-  "Start empty: To Do, In Progress and Done. You pick the tabs.": "Mulai kosong: To Do, In Progress, dan Done. Tab-nya kamu pilih sendiri.",
+  "Start empty: To Do, In Progress and Done. You pick the tabs.": "Mulai kosong: To Do, In Progress, dan Done. Kamu pilih tab-nya.",
   "Templates couldn't load. You can still start blank, or try again in a moment.": "Template gagal dimuat. Kamu tetap bisa mulai kosong, atau coba lagi sebentar lagi.",
   "No template matches “{q}”.": "Tidak ada template yang cocok dengan “{q}”.",
   "Assignee": "Assignee",

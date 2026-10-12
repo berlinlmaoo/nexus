@@ -45,7 +45,7 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   "For every task in this project": "Untuk semua task di project ini",
   "View only: project leads edit automations": "Hanya lihat: lead project yang mengubah otomasi",
   "Rule": "Aturan",
-  "Run log": "Log jalan",
+  "Run log": "Riwayat jalan",
   "When": "Saat",
   "If (optional)": "Jika (opsional)",
   "Do": "Lakukan",

@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -241,7 +242,9 @@ function PublicForm() {
                         <Lock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                       </div>
                     ) : (
-                      <input required={field.required} type={field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} placeholder={field.placeholder} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={input} />
+                      field.type === "date"
+                        ? <DateField value={val ? String(val) : null} onChange={(v) => set(field.id, v ?? "")} ariaLabel={field.label || field.name} placeholder={field.placeholder || ""} className={cn(input, "h-auto hover:bg-background")} />
+                        : <input required={field.required} type={field.type === "email" ? "email" : field.type === "number" ? "number" : "text"} placeholder={field.placeholder} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={input} />
                     )}
                     {field.autofill && <p className="mt-1 text-[11px] text-muted-foreground">{t("Filled in from your account")}</p>}
 

@@ -571,7 +571,6 @@ function ProjectsPage() {
 
       <div className="p-4 md:p-8 space-y-5">
         <section className="rounded-[28px] border border-border bg-card p-4 md:p-5 shadow-soft overflow-hidden relative">
-          <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-primary/10 dark:hidden" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">

@@ -281,7 +281,7 @@ export const ID_I18N_WORK: Record<string, string> = {
   "Resolved": "Selesai",
   "Closed": "Ditutup",
   "Inbox": "Kotak masuk",
-  "Mentions": "Mention",
+  "Mentions": "Sebutan",
   "Marked resolved by {name}": "Ditandai selesai oleh {name}",
   "Closed by {name}": "Ditutup oleh {name}",
   "Marked resolved": "Ditandai selesai",

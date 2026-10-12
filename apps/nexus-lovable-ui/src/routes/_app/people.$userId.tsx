@@ -219,7 +219,7 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
           <Stat label={tr("Absent (TK)")} value={counts.absent} tone={sCls.absent} />
           <Stat label={tr("Late")} value={counts.lateMinutes > 0 ? tr("{n} min", { n: counts.lateMinutes }) : "—"} hint={tr(counts.lateDays === 1 ? "{n} late day" : "{n} late days", { n: counts.lateDays })} />
           <Stat label={tr("Day-off balance")} value={tr("{n} left", { n: dayOff.remaining })} hint={tr("Used {used} of {quota}: {base} base{bonus}. Includes days cut automatically for TK or >120 min late.", { used: dayOff.usedRaw, quota: dayOff.quota, base: dayOff.baseQuota, bonus })} />
-          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">+{xp.gained}</span> <span className="text-rose-600 dark:text-rose-400">{xp.lost}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
+          <Stat label={tr("XP this period")} value={<span><span className="text-emerald-600 dark:text-emerald-400">+{xp.gained}</span> <span className="text-muted-foreground">·</span> <span className="text-rose-600 dark:text-rose-400">{xp.lost > 0 ? `−${xp.lost}` : xp.lost < 0 ? `−${Math.abs(xp.lost)}` : "−0"}</span></span>} hint={xp.removed > 0 ? tr("{n} XP of deductions removed by the BoD", { n: xp.removed }) : undefined} />
         </div>
       </div>
       {dayOff.bonusDays > 0 && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{tr("Day-off allowance {quota} = {base} + {n} extra for this period ({reasons}).", { quota: dayOff.quota, base: dayOff.baseQuota, n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => `${g.days}: ${g.reason}`).join("; ") })}</p>}
@@ -245,7 +245,7 @@ function StreakRow({ data, rows, historyLoading }: { data: NexusMemberRecord; ro
               <button key={d.date} disabled={d.isFuture} onClick={() => setOpen(d.date)}
                 title={`${dayLabel(d.date)} · ${toneLabel[tone] ? t(toneLabel[tone]) : (d.isFuture ? t("Not yet") : t("No record"))}${d.lateMinutes > 0 ? ` · ${t("{n} min late", { n: d.lateMinutes })}` : ""}${d.penaltyXp < 0 ? ` · ${d.penaltyXp} XP` : ""}`}
                 className={cn("flex w-8 flex-col items-center gap-1 rounded-lg py-1 transition-colors enabled:hover:bg-accent disabled:cursor-default", Number(d.day) === 1 && "border-l border-border/70")}>
-                <span className="text-[9px] font-medium uppercase text-muted-foreground">{d.weekday}</span>
+                <span className="text-[9px] font-medium uppercase text-muted-foreground">{new Date(`${d.date}T00:00:00Z`).toLocaleDateString(localeOf(), { weekday: "short", timeZone: "UTC" }).replace(/\.$/, "")}</span>
                 <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{d.day}</span>
                 <span className={cn("relative inline-block h-5 w-5 rounded-lg", sCls[tone], d.isToday && "ring-2 ring-primary ring-offset-1 ring-offset-card", d.isFuture && "opacity-40")}>
                   {d.penaltyXp < 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-rose-600 ring-1 ring-card" />}
