@@ -7,12 +7,8 @@ import { google } from "googleapis"
 // Dipakai untuk dua hal: menampilkan akun yang SUDAH ada supaya BoD bisa menautkannya ke
 // profil NEXUS, dan nanti membuat mailbox baru.
 //
-// Kredensialnya SENGAJA memakai nama sendiri (GOOGLE_DIRECTORY_*), bukan menumpang
-// GOOGLE_SERVICE_ACCOUNT_* yang sudah ada. Dua nama itu milik `finance-dashboard-data.ts`
-// untuk membaca spreadsheet PnL; emailnya sekarang kosong sehingga kode itu jatuh ke jalur
-// OAuth dan berjalan. Mengisinya dengan service account ini akan membuat dashboard finance
-// memakai JWT yang tidak punya akses ke spreadsheet itu — dashboard mati, dan penyebabnya
-// adalah fitur yang sama sekali tidak berhubungan.
+// Kredensialnya SENGAJA memakai nama sendiri (GOOGLE_DIRECTORY_*). GOOGLE_SERVICE_ACCOUNT_* dulu
+// milik dashboard finance berpassword (dihapus 13 Okt 2026) — jangan dipakai ulang di sini.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

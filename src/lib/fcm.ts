@@ -7,8 +7,7 @@ import { buildFcmMessage, classifyFcmError, type FcmFailure, type FcmPushInput }
  *
  * Credential: NEXUS_FCM_SERVICE_ACCOUNT_JSON — the Firebase project's service-account key file,
  * base64-encoded (one line, so it survives .env files and `docker inspect`). The project id comes from
- * the file. A dedicated name on purpose: GOOGLE_SERVICE_ACCOUNT_* belongs to finance and
- * GOOGLE_DIRECTORY_* / GOOGLE_OAUTH_* to the Workspace directory and Sheets sync; none of them is read
+ * the file. A dedicated name on purpose: GOOGLE_DIRECTORY_* / GOOGLE_OAUTH_* to the Workspace directory and Sheets sync; none of them is read
  * here, and this key must never be reused for them either.
  *
  * Unset → fcmConfigured() is false and apns.ts sendPushToUser skips Android devices (one warning per
