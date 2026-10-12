@@ -203,6 +203,9 @@ export const createTaskSchema = z.object({
   parentId: idString.nullable().optional(),
   estimatedHours: z.number().min(0).max(9999).nullable().optional(),
   taskType: z.enum(["TASK", "MILESTONE", "APPROVAL"]).optional(),
+  // "top": the task goes above the others of its section (web inline "+ New task" sits at the top of a
+  // column, 12 Oct 2026). Absent = the old placement (position 0), so released apps are unchanged.
+  placement: z.enum(["top", "bottom"]).optional(),
   isRecurring: z.boolean().optional(),
   recurPattern: z.object({
     frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY"]),

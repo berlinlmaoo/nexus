@@ -2219,6 +2219,8 @@ export type CreateTaskPayload = {
   assigneeIds?: string[];
   /** Set to create the task as a SUBTASK of an existing task in the same project. */
   parentId?: string | null;
+  /** "top": above every task of its section (inline "+ New task", 12 Oct 2026). Older servers ignore it. */
+  placement?: "top" | "bottom";
 };
 
 export type NexusReflectionDay = { date: string; reflection: string; summary: string | null };
@@ -2567,7 +2569,12 @@ export const nexusApi = {
 
   // --- Tasks (detail surface) ---
   taskDetail: (taskId: string) => apiFetch<NexusTaskDetail>(`/api/tasks/${taskId}`),
-  deleteTask: (taskId: string) => apiFetch<{ success?: boolean }>(`/api/tasks/${taskId}`, { method: "DELETE" }),
+  /** `auditLogId` (servers since 12 Oct 2026): hand it to undoDeleteTasks for Undo. */
+  deleteTask: (taskId: string) => apiFetch<{ success?: boolean; auditLogId?: string | null }>(`/api/tasks/${taskId}`, { method: "DELETE" }),
+  /** Undo of the caller's own task deletes (30 minutes; else Control Room → Audit). */
+  undoDeleteTasks: (auditLogIds: string[]) => apiFetch<{ restored: string[]; failed: Array<{ id: string; error: string }> }>("/api/tasks/undo-delete", { method: "POST", body: JSON.stringify({ auditLogIds }) }),
+  /** Manual order inside a section: its tasks in the new order, top first. */
+  reorderTasks: (payload: { taskListId: string; orderedIds: string[]; movedId?: string }) => apiFetch<{ ok: boolean; updated: number }>("/api/tasks/reorder", { method: "POST", body: JSON.stringify(payload) }),
   // Backend accepts an optional { dueDate } to override the copy's due date (used by batch duplicate).
   /**
    * Duplicate a task. Pass `taskListId` to copy it into ANOTHER list — which may belong to a

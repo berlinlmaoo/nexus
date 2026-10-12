@@ -185,7 +185,8 @@ export async function DELETE(
       emitTaskDeleted(projectId, taskId)
     }
 
-    return NextResponse.json({ message: "Task deleted" })
+    // auditLogId (additive, 12 Oct 2026): the web's Undo puts the task back through /api/tasks/undo-delete.
+    return NextResponse.json({ message: "Task deleted", auditLogId })
   } catch (error) {
     console.error("Error deleting task:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

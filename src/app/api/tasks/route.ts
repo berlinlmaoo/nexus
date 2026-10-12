@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     const validation = validateBody(createTaskSchema, body)
     if (!validation.success) return validation.error
 
-    const { title, description, status, priority, taskListId, dueDate, startDate, estimatedHours, tags, assigneeIds, parentId } =
+    const { title, description, status, priority, taskListId, dueDate, startDate, estimatedHours, tags, assigneeIds, parentId, placement } =
       validation.data
     // Validated by createTaskSchema but never written before. Same handling as PATCH /api/tasks/{id}:
     // "YYYY-MM-DD" or ISO, 400 on an unparseable date.
@@ -273,6 +273,13 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id
 
+    // `placement` (web, 12 Oct 2026): above / below every task already in the section.
+    let position: number | undefined
+    if (placement) {
+      const agg = await prisma.task.aggregate({ where: { taskListId, parentId: null }, _min: { position: true }, _max: { position: true } })
+      position = placement === "top" ? (agg._min.position ?? 0) - 1 : (agg._max.position ?? -1) + 1
+    }
+
     const task = await prisma.task.create({
       data: {
         title,
@@ -282,6 +289,7 @@ export async function POST(request: NextRequest) {
         status: status || taskList.taskStatus || undefined,
         priority: priority || undefined,
         taskListId,
+        ...(position !== undefined ? { position } : {}),
         creatorId: userId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         startDate: parsedStart ?? undefined,

@@ -68,12 +68,12 @@ export function patchTaskInCaches(qc: QueryClient, taskId: string, patch: TaskPa
   return () => { for (const [key, data] of snap) qc.setQueryData(key, data); };
 }
 
-/** Put a not-yet-saved card at the top of a section, so a new task shows the moment Enter is pressed. */
-export function insertDraftTask(qc: QueryClient, projectId: string, listId: string, task: NexusTask): () => void {
+/** Put a not-yet-saved card at the top (or end) of a section, so a new task shows the moment Enter is pressed. */
+export function insertDraftTask(qc: QueryClient, projectId: string, listId: string, task: NexusTask, placement: "top" | "bottom" = "top"): () => void {
   const key = ["nexus", "project", projectId];
   const data = qc.getQueryData<NexusProject>(key);
   if (!data?.taskLists?.some((l) => l.id === listId)) return () => {};
-  qc.setQueryData<NexusProject>(key, { ...data, taskLists: data.taskLists.map((l) => (l.id === listId ? { ...l, tasks: [task, ...(l.tasks ?? [])] } : l)) });
+  qc.setQueryData<NexusProject>(key, { ...data, taskLists: data.taskLists.map((l) => (l.id === listId ? { ...l, tasks: placement === "top" ? [task, ...(l.tasks ?? [])] : [...(l.tasks ?? []), task] } : l)) });
   return () => {
     const cur = qc.getQueryData<NexusProject>(key);
     if (cur?.taskLists) qc.setQueryData<NexusProject>(key, { ...cur, taskLists: cur.taskLists.map((l) => ({ ...l, tasks: (l.tasks ?? []).filter((x) => x.id !== task.id) })) });
