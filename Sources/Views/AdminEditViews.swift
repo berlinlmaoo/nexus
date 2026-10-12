@@ -326,7 +326,7 @@ struct AdminUsersSection: View {
                                 row(m)
                             }
                             if rows.isEmpty {
-                                Text(T("Nggak ada yang cocok.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(14)
+                                Text(T("Nothing matches that.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(14)
                             }
                         }
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -1632,7 +1632,7 @@ struct ApproverPickSheet: View {
                 }
             }
             if rows.isEmpty {
-                Section { Text(T("Nggak ada yang cocok.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+                Section { Text(T("Nothing matches that.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
             }
             if target.current != nil {
                 Section {
@@ -1816,7 +1816,7 @@ struct ProjectPickSheet: View {
                 }
             }
             if rows.isEmpty {
-                Text(projects.isEmpty ? T("Sudah masuk semua project.") : T("Nggak ada yang cocok."))
+                Text(projects.isEmpty ? T("Sudah masuk semua project.") : T("Nothing matches that."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
         }
