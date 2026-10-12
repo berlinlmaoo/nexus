@@ -15,12 +15,28 @@ struct TaskCustomFieldsCard: View {
     let taskId: String
     /// The task's creator was offboarded: the CREATED field marks them "Left".
     var creatorLeft = false
+    /// Bumped by the task screen when the task changed elsewhere (realtime): the values are read again,
+    /// except a field that is being edited here and not saved yet.
+    var refreshToken = 0
     @State private var fields: [CustomField] = []
     @State private var values: [String: CFVal] = [:]
     @State private var loaded = false
+    /// Typed but not sent yet. Text and number fields save when focus leaves them and when the task
+    /// closes (bughunt C-BUG-1: a typed Rupiah amount was lost when the screen closed before the field
+    /// lost focus — and the number pad has no Return key, so it never saved at all).
+    @State private var dirty: Set<String> = []
+    @State private var problem: String?
+    @FocusState private var focused: String?
 
     var body: some View {
-        cardBody.task { await load() }
+        cardBody
+            .task { await load() }
+            .onChange(of: refreshToken) { _, _ in Task { await reload() } }
+            .onChange(of: focused) { old, _ in
+                if let old, dirty.contains(old), let f = fields.first(where: { $0.id == old }) { Task { await commit(f) } }
+            }
+            // Leaving the task saves what was typed, as the web popup does on close.
+            .onDisappear { flushAll() }
     }
 
     @ViewBuilder private var cardBody: some View {
@@ -28,7 +44,10 @@ struct TaskCustomFieldsCard: View {
             Color.clear.frame(height: 0)   // real (zero-size) view so .task fires even with no fields yet
         } else {
             VStack(alignment: .leading, spacing: 14) {
-                taskCardHeader("Custom fields", "slider.horizontal.3")
+                taskCardHeader(T("Fields"), "slider.horizontal.3")
+                if let problem {
+                    Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                }
                 ForEach(fields) { f in cfRow(f) }
             }
             .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
@@ -51,7 +70,8 @@ struct TaskCustomFieldsCard: View {
                 }
                 Text(cfText(f.id).isEmpty ? "—" : cfText(f.id)).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             } else if type == "NUMBER" {
-                TextField("0", text: binding(f.id)).keyboardType(.decimalPad).font(NXFont.text(15)).padding(10)
+                NumberFieldInput(text: binding(f.id), idr: CustomFieldNumber.isIDR(f.options?.format), focus: $focused, focusId: f.id)
+                    .padding(10)
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .onSubmit { Task { await commit(f) } }
             } else if type == "DATE" {
@@ -66,7 +86,7 @@ struct TaskCustomFieldsCard: View {
                         Text(cfText(f.id).isEmpty ? "—" : cfText(f.id)).font(NXFont.text(15)).foregroundStyle(cfText(f.id).isEmpty ? NX.mutedFg : NX.foreground)
                         Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
                     }
-                    .padding(10).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(10).frame(minHeight: 44).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             } else if type == "MULTI_SELECT", !choices.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -85,12 +105,15 @@ struct TaskCustomFieldsCard: View {
             } else if type == "PLACE" {
                 VStack(spacing: 6) {
                     TextField(T("Place / location name"), text: placeLabel(f)).font(NXFont.text(15)).padding(10)
+                        .focused($focused, equals: f.id)
                         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
-                    TextField("Link Google Maps", text: placeMap(f)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
+                    TextField(T("Google Maps link"), text: placeMap(f)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
+                        .focused($focused, equals: f.id + "#map")
                         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
                 }
             } else {
                 TextField("…", text: binding(f.id)).font(NXFont.text(15)).padding(10)
+                    .focused($focused, equals: f.id)
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .onSubmit { Task { await commit(f) } }
             }
@@ -100,6 +123,20 @@ struct TaskCustomFieldsCard: View {
     private func load() async {
         guard !loaded else { return }
         fields = (try? await APIClient.shared.taskCustomFields(projectId: projectId, taskId: taskId)) ?? []
+        values = Self.seed(fields); loaded = true
+    }
+
+    /// The values as the server has them now; a field with unsaved typing keeps what was typed.
+    private func reload() async {
+        guard loaded, let fresh = try? await APIClient.shared.taskCustomFields(projectId: projectId, taskId: taskId) else { return }
+        let seeded = Self.seed(fresh)
+        var merged = values
+        for f in fresh where !dirty.contains(f.id) && focused != f.id && focused != f.id + "#map" { merged[f.id] = seeded[f.id] }
+        fields = fresh
+        values = merged
+    }
+
+    private static func seed(_ fields: [CustomField]) -> [String: CFVal] {
         var seed: [String: CFVal] = [:]
         for f in fields {
             switch f.value {
@@ -109,21 +146,54 @@ struct TaskCustomFieldsCard: View {
             case .none: break
             }
         }
-        values = seed; loaded = true
+        return seed
     }
+
     private func commit(_ f: CustomField) async {
+        dirty.remove(f.id)
         guard let v = values[f.id] else { return }
-        switch v {
-        case .text(let s): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s)
-        case .multi(let a): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a)
-        case .place(let l, let m): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: ["label": l, "mapUrl": m])
+        do {
+            switch v {
+            case .text(let s):
+                // A number is stored as a plain machine number ("369.000" Rupiah → "369000").
+                let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, idr: CustomFieldNumber.isIDR(f.options?.format)) : s
+                try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: out)
+            case .multi(let a): try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a)
+            case .place(let l, let m): try await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: ["label": l, "mapUrl": m])
+            }
+            problem = nil
+        } catch {
+            // Kept on screen and marked unsaved, so the next focus change or close tries again.
+            dirty.insert(f.id)
+            problem = String(format: T("“%@” wasn't saved. Check your connection and try again."), f.name)
         }
     }
+
+    /// Sends every field that was typed into and not saved yet. Runs as the task closes, so it does not
+    /// wait for the answers.
+    private func flushAll() {
+        let pending = fields.filter { dirty.contains($0.id) }
+        guard !pending.isEmpty else { return }
+        let snapshot = values, task = taskId
+        Task {
+            for f in pending {
+                guard case .some(let v) = snapshot[f.id] else { continue }
+                switch v {
+                case .text(let s):
+                    let out = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, idr: CustomFieldNumber.isIDR(f.options?.format)) : s
+                    try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: out)
+                case .multi(let a): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: a)
+                case .place(let l, let m): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: task, value: ["label": l, "mapUrl": m])
+                }
+            }
+        }
+    }
+
     private func placeVal(_ id: String) -> (String, String) { if case let .place(l, m) = values[id] { return (l, m) }; return ("", "") }
-    private func placeLabel(_ f: CustomField) -> Binding<String> { Binding(get: { placeVal(f.id).0 }, set: { values[f.id] = .place(label: $0, mapUrl: placeVal(f.id).1) }) }
-    private func placeMap(_ f: CustomField) -> Binding<String> { Binding(get: { placeVal(f.id).1 }, set: { values[f.id] = .place(label: placeVal(f.id).0, mapUrl: $0) }) }
+    private func placeLabel(_ f: CustomField) -> Binding<String> { Binding(get: { placeVal(f.id).0 }, set: { values[f.id] = .place(label: $0, mapUrl: placeVal(f.id).1); dirty.insert(f.id) }) }
+    private func placeMap(_ f: CustomField) -> Binding<String> { Binding(get: { placeVal(f.id).1 }, set: { values[f.id] = .place(label: placeVal(f.id).0, mapUrl: $0); dirty.insert(f.id) }) }
     private func cfText(_ id: String) -> String { if case let .text(s) = values[id] { return s }; return "" }
-    private func binding(_ id: String) -> Binding<String> { Binding(get: { cfText(id) }, set: { values[id] = .text($0) }) }
+    private func binding(_ id: String) -> Binding<String> { Binding(get: { cfText(id) }, set: { values[id] = .text($0); dirty.insert(id) }) }
     private func dateBinding(_ f: CustomField) -> Binding<Date> {
         Binding(get: { Self.ymdParse(cfText(f.id)) ?? Date() }, set: { values[f.id] = .text(Self.ymd($0)); Task { await commit(f) } })
     }

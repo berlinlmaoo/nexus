@@ -9,11 +9,6 @@ struct CFChip: Identifiable, Equatable {
 
 // Formatters are expensive to construct — build once and reuse. `customFieldChip` runs per card
 // per render while scrolling, so a fresh NumberFormatter/DateFormatter each call was real jank.
-private let cfCurrencyIDR: NumberFormatter = {
-    let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "IDR"
-    f.maximumFractionDigits = 0; f.locale = Locale(identifier: "id_ID")
-    return f
-}()
 private let cfYMD: DateFormatter = {
     let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
     return f
@@ -45,12 +40,10 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
 
     switch type {
     case "NUMBER":
-        let digits = raw.filter(\.isNumber)
-        guard !digits.isEmpty else { return nil }
-        if cfv.customField?.options?.format == "currency-idr", let n = Int(digits) {
-            return CFChip(id: cfv.customFieldId, label: cfCurrencyIDR.string(from: NSNumber(value: n)) ?? raw, tone: .neutral)
-        }
-        return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral)
+        // Rupiah reads id-ID grouping ("369.000" = 369 000, owner bug 12 Oct 2026); every other number
+        // is grouped in the app's language and is never shown with "Rp" (CustomFieldNumber.swift).
+        let label = CustomFieldNumber.display(raw, format: cfv.customField?.options?.format)
+        return label.isEmpty ? nil : CFChip(id: cfv.customFieldId, label: label, tone: .neutral)
     case "STATUS":
         return CFChip(id: cfv.customFieldId, label: raw, tone: cfStatusTone(raw))
     case "MULTI_SELECT":
@@ -118,5 +111,46 @@ struct FlowLayout: Layout {
             v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
             x += s.width + spacing; rowH = max(rowH, s.height)
         }
+    }
+}
+
+/// A NUMBER custom field's input (owner bug 12 Oct 2026, web RupiahInput). Rupiah: "Rp" and the digits
+/// grouped as they are typed ("369.000"); the binding holds the plain digits ("369000"), so what is saved
+/// can never be read back as 369. Plain: the decimal pad, the text as typed (normalised when it is saved).
+struct NumberFieldInput: View {
+    @Binding var text: String
+    let idr: Bool
+    var font: Font = NXFont.text(15)
+    /// Optional focus tracking, so a screen can save the value when focus leaves it.
+    var focus: FocusState<String?>.Binding? = nil
+    var focusId: String = ""
+
+    var body: some View {
+        if idr {
+            HStack(spacing: 6) {
+                Text("Rp").font(font).foregroundStyle(NX.mutedFg)
+                focusable(TextField("0", text: rupiah).keyboardType(.numberPad).font(font))
+            }
+        } else {
+            focusable(TextField("0", text: $text).keyboardType(.decimalPad).font(font))
+        }
+    }
+
+    @ViewBuilder private func focusable<V: View>(_ field: V) -> some View {
+        if let focus { field.focused(focus, equals: focusId) } else { field }
+    }
+
+    /// Shown grouped; stored as digits. While typing on the number pad the dots are only the grouping
+    /// this field drew itself, so the digits are kept as they are (reading "3.69" — a backspace away from
+    /// "3.690" — as 3,69 would round it to 4). Anything pasted with a comma, "Rp" or "jt" goes through
+    /// the full Rupiah rules.
+    private var rupiah: Binding<String> {
+        Binding(
+            get: { CustomFieldNumber.groupIDR(CustomFieldNumber.normalize(text, idr: true)) },
+            set: { typed in
+                let plainTyping = typed.allSatisfy { $0.isNumber || $0 == "." }
+                text = plainTyping ? typed.filter(\.isNumber) : CustomFieldNumber.normalize(typed, idr: true)
+            }
+        )
     }
 }

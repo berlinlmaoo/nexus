@@ -712,7 +712,8 @@ struct CreateTaskSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(f.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
             if type == "NUMBER" {
-                TextField("0", text: cfText(f.id)).keyboardType(.decimalPad).font(NXFont.text(15)).padding(10)
+                NumberFieldInput(text: cfText(f.id), idr: CustomFieldNumber.isIDR(f.options?.format))
+                    .padding(10)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
             } else if type == "DATE" {
                 DatePicker("", selection: cfDate(f.id), displayedComponents: .date)
@@ -786,7 +787,9 @@ struct CreateTaskSheet: View {
                 guard let v = cfValues[f.id] else { continue }
                 switch v {
                 case .text(let s):
-                    if !s.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s) }
+                    // A number is stored as a plain machine number ("369.000" Rupiah → "369000").
+                    let v = f.type.uppercased() == "NUMBER" ? CustomFieldNumber.normalize(s, idr: CustomFieldNumber.isIDR(f.options?.format)) : s
+                    if !v.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: v) }
                 case .multi(let a):
                     if !a.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a) }
                 case .place(let l, let m):

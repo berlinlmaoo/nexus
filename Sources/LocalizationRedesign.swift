@@ -13,6 +13,7 @@ import Foundation
 
 extension AppLanguage {
     static let indonesianRedesign: [String: String] = [
+        "“%@” wasn't saved. Check your connection and try again.": "“%@” belum tersimpan. Cek koneksimu lalu coba lagi.",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]
