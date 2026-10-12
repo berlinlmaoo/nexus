@@ -66,7 +66,7 @@ export async function POST(
       },
     })
 
-    // Send notification to the assignee, including self-assignment (don't block the response)
+    // Send notification to the assignee (not when you assign yourself: QA S-16; don't block the response)
     notifyTaskAssigned({
       assigneeId: userId,
       taskId: (await params).taskId,
@@ -74,6 +74,7 @@ export async function POST(
       projectName: task.taskList.project.name,
       projectId: task.taskList.projectId,
       assignedByName: session.user.name || "Someone",
+      actorId: session.user.id,
     }).catch((err) => console.error("Notification error:", err))
 
     logAudit({ action: "create", entityType: "task_assignee", entityId: (await params).taskId, entityName: task.title, userId: session.user.id!, request, metadata: { assigneeUserId: userId } })

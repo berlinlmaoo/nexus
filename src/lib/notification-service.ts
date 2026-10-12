@@ -448,7 +448,10 @@ export async function notifyTaskAssigned(data: {
   projectName: string
   projectId: string
   assignedByName: string
+  /** Who assigned. Nobody is notified about their own action (QA S-16/B13, 13 Oct 2026). */
+  actorId?: string | null
 }) {
+  if (data.actorId && data.actorId === data.assigneeId) return
   // Skip if user has DND active
   if (await isUserDnd(data.assigneeId)) return
 

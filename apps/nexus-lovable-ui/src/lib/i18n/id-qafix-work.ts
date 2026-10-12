@@ -1,0 +1,21 @@
+/** English → Indonesian for the QA fixes of 13 Oct 2026 (My Tasks, project offline state, Reports, Pipeline, Room booking, record score, status draft). Keys must be unique across all id-*.ts files. */
+export const ID_QAFIX_WORK: Record<string, string> = {
+  "Show all {n}": "Lihat semua {n}",
+  "Pick the project and the section it goes in. It's assigned to you.": "Pilih project dan bagiannya. Task ini ditugaskan ke kamu.",
+  "Couldn't load this project": "Project ini tidak bisa dimuat",
+  "No connection. NEXUS tries again by itself when you're back online.": "Tidak ada koneksi. NEXUS mencoba lagi sendiri begitu kamu online.",
+  "Trying again…": "Mencoba lagi…",
+  "At the end of the period ({date})": "Di akhir periode ({date})",
+  "Nothing was overdue at the end of this period.": "Tidak ada yang terlambat di akhir periode ini.",
+  "It goes in": "Masuk ke",
+  "e.g. Brand activation, Jakarta Fair": "mis. Aktivasi brand, Jakarta Fair",
+  "Add deal": "Tambah deal",
+  "{room} is already booked at that time ({title}).": "{room} sudah dibooking pada jam itu ({title}).",
+  "{room} is already booked at that time.": "{room} sudah dibooking pada jam itu.",
+  "That time has already passed. Pick a time later today or another day.": "Jam itu sudah lewat. Pilih jam yang lebih siang hari ini atau hari lain.",
+  "Only the person who booked it or a manager can change this booking.": "Hanya pembuat booking atau manager yang bisa mengubah booking ini.",
+  "Check the date and times, then try again.": "Cek tanggal dan jamnya, lalu coba lagi.",
+  "Add a title to book the room.": "Isi judul untuk membooking ruangan.",
+  "from {date}: {days} days, {working} working days ({days} − {quota} day-off allowance)": "sejak {date}: {days} hari, {working} hari kerja ({days} − {quota} jatah day off)",
+  "GIDEON isn't connected on this server. Write the update yourself.": "GIDEON tidak terhubung di server ini. Tulis update-nya sendiri.",
+};

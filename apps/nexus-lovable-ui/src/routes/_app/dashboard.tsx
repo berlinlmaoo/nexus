@@ -134,10 +134,19 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
       </div>
       {/* rail zone: search + notifications */}
       <div className="flex items-center gap-3">
-        <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-card px-5 text-muted-foreground transition-shadow focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+        {/* Opens the global search (⌘K), like the sidebar's box. It was an input with no handler (QA B12). */}
+        <button
+          type="button"
+          data-dashboard-search=""
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true }))}
+          aria-label={t("Search")}
+          aria-haspopup="dialog"
+          className="flex h-12 min-w-0 flex-1 cursor-text items-center gap-2 rounded-full border border-border bg-card px-5 text-left text-sm text-muted-foreground transition-shadow hover:border-primary/40 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+        >
           <Search className="h-4 w-4 shrink-0" />
-          <input placeholder={t("Search…")} aria-label={t("Search")} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />
-        </label>
+          <span className="min-w-0 flex-1 truncate">{t("Search…")}</span>
+          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] md:inline">{typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+        </button>
         <NotificationsBell unread={unread} />
       </div>
     </div>

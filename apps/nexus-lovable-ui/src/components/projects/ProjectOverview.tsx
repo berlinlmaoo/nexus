@@ -598,7 +598,7 @@ function StatusUpdatesCard({ projectId }: { projectId: string }) {
           placeholder={t("How is the project going? Wins, blockers, what's next.")}
           className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
         />
-        {(generate.isError || create.isError) && <p role="alert" className="text-xs text-destructive">{generate.isError ? t("Couldn't draft an update. Try again, or write it yourself.") : t("Couldn't post the update. Check your connection and try again.")}</p>}
+        {(generate.isError || create.isError) && <p role="alert" className="text-xs text-destructive">{generate.isError ? ((generate.error as { payload?: { code?: string } } | null)?.payload?.code === "GIDEON_UNAVAILABLE" ? t("GIDEON isn't connected on this server. Write the update yourself.") : t("Couldn't draft an update. Try again, or write it yourself.")) : t("Couldn't post the update. Check your connection and try again.")}</p>}
         <div className="flex justify-end">
           <button type="button" disabled={!text.trim() || create.isPending} onClick={() => create.mutate()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 pointer-coarse:h-11">
             {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{t("Post update")}
