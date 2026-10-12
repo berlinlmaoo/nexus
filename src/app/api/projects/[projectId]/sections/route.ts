@@ -8,9 +8,14 @@ import { restorableDelete } from "@/lib/deletion-snapshot"
 
 const SECTION_TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
 // A status option's colour (owner, 12 Oct 2026, Notion-style statuses): the web palette's keys
-// (lib/project-views.ts COLOR_PRESETS). Null = the colour of its group.
-const SECTION_COLORS = ["gray", "sky", "emerald", "amber", "orange", "rose", "violet", "pink"]
-const cleanColor = (v: unknown) => (typeof v === "string" && SECTION_COLORS.includes(v) ? v : null)
+// (lib/project-views.ts COLOR_KEYS). Null = the colour of its group. The first build's names (sky, emerald,
+// amber, rose, violet, slate) stay accepted for released apps; the web reads both (normalizeColor). Only
+// the old names used to pass here, so blue/green/yellow/red/purple/brown from the web were saved as empty.
+const SECTION_COLORS = [
+  "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red",
+  "sky", "emerald", "amber", "rose", "violet", "slate",
+]
+const cleanColor = (v: unknown) => (typeof v === "string" && SECTION_COLORS.includes(v.trim().toLowerCase()) ? v.trim().toLowerCase() : null)
 
 export async function GET(
   _request: NextRequest,
