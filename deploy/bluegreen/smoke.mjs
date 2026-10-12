@@ -58,7 +58,21 @@ await step("health", async () => {
 })
 
 if (!EMAIL || !PW) {
-  rec("QA credentials", false, "QA_EMAIL / QA_PW_FILE missing")
+  if (process.env.SMOKE_ANON === "1") {
+    // Production has no smoke account unless the owner approves one: prove the realtime server answers by
+    // asking it for a session it must refuse ("Invalid session"), and skip the signed-in reads.
+    console.log("   skip signed-in checks (SMOKE_ANON=1, no smoke account)")
+    await step("realtime (anonymous)", async () => {
+      const init = await get("/api/realtime-init")
+      rec("realtime-init", init.status === 204 || init.status === 200, `HTTP ${init.status}`)
+      const eio = (q) => `${BASE}/api/socket/?EIO=4&transport=polling&t=${Date.now()}${q}`
+      const h = await fetch(eio(""), { signal: AbortSignal.timeout(10000) })
+      const hs = await h.text()
+      rec("socket handshake (engine)", h.status === 200 && hs[0] === "0", `HTTP ${h.status}`)
+    })
+  } else {
+    rec("QA credentials", false, "QA_EMAIL / QA_PW_FILE missing")
+  }
 } else {
   await step("app login", async () => {
     const r = await fetch(BASE + "/api/auth/app-login", {

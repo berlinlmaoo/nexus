@@ -95,7 +95,7 @@ function connect() {
   ws.onerror = () => {}
 }
 connect()
-const created = await fetch(BASE + "/api/tasks", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ title: "bg-switch-test", taskListId: TASKLIST }) }).then((r) => r.json())
+const created = await fetch(BASE + "/api/tasks", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ title: "bg-switch-test", taskListId: TASKLIST, projectId: PROJECT }) }).then((r) => r.json())
 const taskId = created.id || created.task?.id
 if (!taskId) { console.log("cannot create test task", JSON.stringify(created).slice(0, 200)); process.exit(2) }
 log(`test task ${taskId}; load ${CONC} workers; realtime on project:${PROJECT}`)
