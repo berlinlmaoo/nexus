@@ -327,9 +327,9 @@ export async function POST(req: NextRequest) {
           : '',
         approvalPromptLine(approvalMode),
         rawUiLang === 'en'
-          ? '[BAHASA ANTARMUKA] English. Answer in English, even when the question or the records are in Indonesian (titles stay as they are).'
+          ? '[BAHASA ANTARMUKA] English. Reply in the language the person wrote their message in (Indonesian question → Indonesian answer). Use English only when the message language is unclear (a name, a link, an emoji). Titles stay as they are.'
           : rawUiLang === 'id'
-            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Jawab dalam bahasa Indonesia, walaupun pertanyaan atau datanya berbahasa Inggris (judul tetap apa adanya).'
+            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Balas dalam bahasa yang dipakai di pesannya (pertanyaan berbahasa Inggris → jawab bahasa Inggris). Pakai bahasa Indonesia hanya kalau bahasa pesannya tidak jelas (cuma nama, tautan, emoji). Judul tetap apa adanya.'
             : '',
         // Only for a client that renders Markdown; the released apps show the text as is.
         streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar. JANGAN tampilkan id apa pun (taskId, projectId, cuid/uuid, juga tidak dalam `code` atau kurung) dan JANGAN tampilkan nilai enum (TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED, URGENT, HIGH, MEDIUM, LOW, NONE): pakai nama kolom/status yang wajar (To do / In progress / In review / Done / Cancelled; prioritas Urgent / High / Medium / Low) dalam bahasa jawabanmu. Judul yang kamu sebut otomatis jadi tautan dan masuk Sources — sebut hanya yang benar-benar kamu pakai.' : '',
