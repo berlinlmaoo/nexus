@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import { generateUniqueFormSlug } from "@/lib/form-slugs"
 import { normalizeFormAccessSchedule } from "@/lib/form-access-schedule"
+import { normalizeFormBranding, normalizeFormSettings } from "@/lib/form-settings"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 
 export async function GET(request: NextRequest) {
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { name, description, fields, isPublic, requireAuth, projectId, accessSchedule } = await request.json()
+    const { name, description, fields, isPublic, requireAuth, projectId, accessSchedule, branding, settings } = await request.json()
 
     if (!name || !projectId || !fields) {
       return NextResponse.json({ error: "name, projectId, and fields are required" }, { status: 400 })
@@ -87,6 +88,8 @@ export async function POST(request: NextRequest) {
         description,
         fields,
         accessSchedule: normalizedAccessSchedule,
+        branding: (normalizeFormBranding(branding) ?? undefined) as InputJsonValue | undefined,
+        settings: (normalizeFormSettings(settings) ?? undefined) as InputJsonValue | undefined,
         isPublic: isPublic ?? false,
         requireAuth: requireAuth ?? false,
         projectId,

@@ -1731,8 +1731,11 @@ model Form {
   slug        String?  @unique
   description String?
   fields      Json
-  branding    Json?    // { logoUrl, primaryColor, backgroundColor, headerImage }
-  accessSchedule Json?  // { enabled, daysOfWeek, startTime, endTime, timezone }
+  branding    Json?    // { logoUrl, primaryColor, backgroundColor, headerImage, icon, cover } — lib/form-settings.ts
+  accessSchedule Json?  // { enabled, daysOfWeek, startTime, endTime, timezone, override, opensAt, closesAt }
+  // Builder rebuild (12 Oct 2026): { confirmationTitle, confirmationMessage, submitLabel, responseLimit,
+  // notifyUserIds } — lib/form-settings.ts. prisma/sql/2026-10-12-forms-settings.sql
+  settings    Json?
   isPublic    Boolean  @default(false)
   // When true, submitting requires a logged-in NEXUS account (any user, not just project
   // members) — the form page is still reachable, but submission is gated + submitterId is

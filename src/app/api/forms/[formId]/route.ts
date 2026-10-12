@@ -8,7 +8,11 @@ import { restorableDelete } from "@/lib/deletion-snapshot"
 import { checkProjectAccess } from "@/lib/rbac"
 import { generateUniqueFormSlug } from "@/lib/form-slugs"
 import { normalizeFormAccessSchedule } from "@/lib/form-access-schedule"
+import { normalizeFormBranding, normalizeFormSettings } from "@/lib/form-settings"
+import { Prisma } from "@/generated/prisma/client"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
+
+const jsonOrDbNull = (value: object | null) => (value ? (value as InputJsonValue) : Prisma.DbNull)
 
 export async function GET(
   request: NextRequest,
@@ -50,7 +54,7 @@ export async function PATCH(
 
     const { formId } = await params
     const body = await request.json()
-    const { name, description, fields, isPublic, requireAuth, accessSchedule } = body
+    const { name, description, fields, isPublic, requireAuth, accessSchedule, branding, settings } = body
 
     const existing = await prisma.form.findUnique({
       where: { id: formId },
@@ -76,6 +80,10 @@ export async function PATCH(
         ...(accessSchedule !== undefined && { accessSchedule: normalizedAccessSchedule }),
         ...(isPublic !== undefined && { isPublic }),
         ...(requireAuth !== undefined && { requireAuth }),
+        // Builder rebuild (12 Oct 2026): the page's icon/cover and the response settings. Absent = unchanged
+        // (released apps never send them); null or an empty object clears them.
+        ...(branding !== undefined && { branding: jsonOrDbNull(normalizeFormBranding(branding)) }),
+        ...(settings !== undefined && { settings: jsonOrDbNull(normalizeFormSettings(settings)) }),
       },
     })
 
