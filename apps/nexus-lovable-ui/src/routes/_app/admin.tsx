@@ -80,7 +80,7 @@ function Admin() {
   const wsId = wsm.data?.workspaceId;
   const viewerRole = wsm.data?.role;
   const viewerAssignable = assignableRoles(viewerRole);
-  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false, approverName: m.approver?.name ?? null, joinedAt: m.joinedAt ?? null }] as const));
+  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false, approverName: m.approver?.name ?? null, joinedAt: m.joinedAt ?? null, hidden: m.personalHidden === true }] as const));
   const orgCount = (role: string) => wsMembers.filter((m) => m.role === role).length;
   // Per-person shift (jam masuk/keluar) bisa diatur BoD ke atas, di sini di Members.
   const canManageShift = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
@@ -667,7 +667,7 @@ type UserRowProps = {
   onTeamAdd: (teamId: string) => void; onTeamOpen: (teamId: string) => void; onTeamCreated: (teamId: string) => void; onTeamExit: (team: { id: string; name: string }, losing: string[]) => void;
   gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean;
   user: NexusAdminUser;
-  orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean; approverName: string | null; joinedAt?: string | null };
+  orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean; approverName: string | null; joinedAt?: string | null; hidden?: boolean };
   assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean;
   canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void;
   shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void;
@@ -729,7 +729,7 @@ function UserRow(props: UserRowProps) {
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
               {/* Approver absensi — hanya untuk STAFF. "Belum ditaruh" berwarna peringatan karena
                   request orang ini masih jatuh ke BoD; bukan galat, tapi pekerjaan yang belum selesai. */}
-              {orgInfo && (
+              {orgInfo && !orgInfo.hidden && (
                 orgInfo.approverName
                   ? <div className="truncate text-[11px] text-muted-foreground">{t("Approver:")} <b className="text-foreground">{orgInfo.approverName}</b></div>
                   : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
@@ -746,8 +746,9 @@ function UserRow(props: UserRowProps) {
         </td>
         <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-muted-foreground xl:table-cell">{fmtJoined(orgInfo?.joinedAt ?? user.joinedAt, locale) ?? <span className="text-muted-foreground/60">—</span>}</td>
         <td className="hidden px-4 py-3 sm:table-cell">
-          {!orgInfo ? (
-            <span className="text-xs text-muted-foreground/60">—</span>
+          {!orgInfo || orgInfo.hidden ? (
+            // Hidden: not in this viewer's approval chain (personal data, owner 13 Oct 2026).
+            <span className="text-xs text-muted-foreground/60" title={orgInfo?.hidden ? t("Only their superiors see this") : undefined}>—</span>
           ) : (
             // Hanya yang MENYALA yang digambar. 46 dari 49 orang tidak memakai Flexi/Mobile;
             // lencana "mati" di tiap baris membuat yang menyala berhenti terlihat.
@@ -899,6 +900,11 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 )}
               </Card>
 
+              {orgInfo.hidden ? (
+                <Card title={t("Attendance")}>
+                  <p className="text-sm text-muted-foreground">{t("Their approver, work hours and attendance mode are visible only to the people above them in the Approval chart and to the BoD.")}</p>
+                </Card>
+              ) : (<>
               <Card title={t("Attendance approver")} hint={t("This person's leave, permit and sick requests go to the person above them in the Approval chart, whatever their role.")}>
                   <div className="flex items-center justify-between gap-3">
                     {orgInfo.approverName
@@ -916,6 +922,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                   <ToggleRow on={orgInfo.noGeofence} pending={geofencePending} onToggle={onToggleGeofence} icon={<Smartphone className="h-4 w-4" />} title={t("Mobile mode")} desc={t("Check in from anywhere: no geofence, and check-out outside the office needs no approval.")} tone="sky" />
                 </div>
               </Card>
+              </>)}
 
               {canManageShift && (
                 <Card title={t("Day-off quota")}>
@@ -933,7 +940,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
             </div>
 
             {/* ── kanan ── */}
-            <Card title={t("Work hours")} hint={orgInfo.flexi ? t("Flexi Time is on, so the fixed hours below are ignored.") : t("Leave empty to follow office or team hours. Per-day hours apply only to the days filled in.")} className="self-start">
+            {!orgInfo.hidden && <Card title={t("Work hours")} hint={orgInfo.flexi ? t("Flexi Time is on, so the fixed hours below are ignored.") : t("Leave empty to follow office or team hours. Per-day hours apply only to the days filled in.")} className="self-start">
               <div className={cn("space-y-4", orgInfo.flexi && "pointer-events-none opacity-40")}>
                 <div>
                   <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{t("Default")}</div>
@@ -953,7 +960,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                   </div>
                 )}
               </div>
-            </Card>
+            </Card>}
 
             {/* ── bawah, melebar ── */}
             <Card title={t("Teams and projects")} hint={canManageTeams ? t("Teams were replaced by the IP & Division Chart. Project access is set per person here.") : undefined} className="md:col-span-2">
@@ -996,7 +1003,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                         {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
                             sinkronisasi tim menuliskannya lagi. Sebut timnya, dan jangan beri tombol lepas. */}
                         {pr.viaTeam && <span className="font-normal text-muted-foreground">{t("· via {team}", { team: pr.viaTeam })}</span>}
-                        {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
+                        {pr.role === "LEAD" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{t("Project Owner")}</span>}
                         {canManageTeams && !pr.viaTeam ? (
                           <button aria-label={t("Remove from this project")} type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title={t("Remove from this project")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400"><X className="h-3 w-3" /></button>
                         ) : <span className="w-1" />}
@@ -1857,6 +1864,17 @@ function AdminQuests() {
 
   const teamsQuery = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, retry: false });
   const teams = teamsQuery.data ?? [];
+  // Audience = divisions/units of the IP & Division Chart (owner, 13 Oct 2026); the Crew Hub teams are gone.
+  const orgQ = useQuery({ queryKey: ["nexus", "org-chart"], queryFn: nexusApi.orgChart, retry: false, staleTime: 5 * 60_000 });
+  const units = orgQ.data?.units ?? [];
+  const unitById = new Map(units.map((u) => [u.id, u]));
+  const unitPath = (id: string) => {
+    const parts: string[] = [];
+    let cur = unitById.get(id);
+    for (let i = 0; cur && i < 8; i++) { parts.unshift(cur.name); cur = cur.parentId ? unitById.get(cur.parentId) : undefined; }
+    return parts.join(" › ");
+  };
+  const pickableUnits = units.filter((u) => u.kind !== "GROUP").map((u) => ({ id: u.id, label: unitPath(u.id) })).sort((a, b) => a.label.localeCompare(b.label, "id"));
   // A quest can point at a team that was deleted since (Crew Hub teams are gone: 0 rows). Its raw id meant
   // nothing to anyone (QA 13 Oct 2026); say what it is — and nobody sees such a quest, so say that too.
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? null;
@@ -1877,8 +1895,8 @@ function AdminQuests() {
   const [requiredCount, setRequiredCount] = useState("5");
   const [xpReward, setXpReward] = useState("50");
   const [deadline, setDeadline] = useState("");
-  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
-  const toggleTeam = (id: string) => setSelectedTeams((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
+  const toggleUnit = (id: string) => setSelectedUnits((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   // Task-based quest (specific_tasks): pick exact tasks. Done = all DONE; XP to doers; visible to project members.
   const isTasks = requirementType === "specific_tasks";
@@ -1895,8 +1913,8 @@ function AdminQuests() {
   const create = useMutation({
     mutationFn: () => isTasks
       ? nexusApi.createAdminQuest({ title: title.trim(), requirementType: "specific_tasks", xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), taskIds: questTasks.map((t) => t.id), deadline: deadline || null })
-      : nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), teamIds: Array.from(selectedTeams), deadline: deadline || null }),
-    onSuccess: () => { setTitle(""); setDeadline(""); setSelectedTeams(new Set()); setQuestTasks([]); setTaskSearch(""); invalidate(); },
+      : nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), unitIds: Array.from(selectedUnits), deadline: deadline || null }),
+    onSuccess: () => { setTitle(""); setDeadline(""); setSelectedUnits(new Set()); setQuestTasks([]); setTaskSearch(""); invalidate(); },
   });
   const del = useMutation({
     mutationFn: (id: string) => nexusApi.deleteAdminQuest(id),
@@ -1961,12 +1979,13 @@ function AdminQuests() {
               </div>
             ) : (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">{tq("Assign to team")} <span className="font-normal">{tq("(pick one or more · empty = everyone)")}</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">{tq("For")} <span className="font-normal">{tq("(pick divisions from the IP & Division Chart · none = everyone · people in a sub-division count too)")}</span></span>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {teams.length === 0 && <span className="text-xs text-muted-foreground">{teamsQuery.isError ? tq("Couldn't load the teams. The quest goes to everyone.") : tq("There are no teams in this workspace, so the quest goes to everyone.")}</span>}
-                  {teams.map((t) => {
-                    const on = selectedTeams.has(t.id);
-                    return <button key={t.id} type="button" onClick={() => toggleTeam(t.id)} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}><span className="h-2 w-2 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />{t.name}</button>;
+                  <button type="button" onClick={() => setSelectedUnits(new Set())} aria-pressed={selectedUnits.size === 0} className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition", selectedUnits.size === 0 ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>{tq("Everyone")}</button>
+                  {orgQ.isError && <span className="text-xs text-muted-foreground">{tq("Couldn't load the divisions. The quest goes to everyone.")}</span>}
+                  {pickableUnits.map((u) => {
+                    const on = selectedUnits.has(u.id);
+                    return <button key={u.id} type="button" aria-pressed={on} onClick={() => toggleUnit(u.id)} className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>{u.label}</button>;
                   })}
                 </div>
               </div>
@@ -1988,7 +2007,10 @@ function AdminQuests() {
                       {q.deadline && <span>· ⏰ {tq("until {date}", { date: fmtDate(q.deadline) })}</span>}
                       {q.requirementType === "specific_tasks"
                         ? <span>· {tq("members of the task's project")}</span>
-                        : <span>· {q.teamIds && q.teamIds.length > 0 ? (teamsQuery.isSuccess ? audienceText(q.teamIds) : tn(q.teamIds.length, "{n} team", "{n} teams")) : tq("Everyone")}</span>}
+                        : <span>· {q.unitIds && q.unitIds.length > 0
+                            ? q.unitIds.map((id) => (unitById.has(id) ? unitPath(id) : tq("Deleted division"))).join(", ")
+                            : q.teamIds && q.teamIds.length > 0 ? (teamsQuery.isSuccess ? audienceText(q.teamIds) : tn(q.teamIds.length, "{n} team", "{n} teams"))
+                            : q.teamsRetired ? tq("Everyone (was for a team that no longer exists)") : tq("Everyone")}</span>}
                     </div>
                   </div>
                   <button aria-label={tq("Delete this quest")} onClick={() => { if (confirm(tq("Delete this quest?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>

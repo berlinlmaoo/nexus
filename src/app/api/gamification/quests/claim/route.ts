@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { AUTO_QUESTS, awardXp, computeQuestProgress, currentPeriodKey, levelForXp, getPeriodScore, QUEST_ONCE_PERIOD } from "@/lib/gamification"
+import { audienceOf, questVisibleTo } from "@/lib/quest-audience"
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,9 +27,8 @@ export async function POST(req: NextRequest) {
         // XP cuma buat yang ngerjain: claimer harus assignee dari minimal 1 task dalam quest ini.
         const isDoer = admin.taskIds.length > 0 && (await prisma.task.findFirst({ where: { id: { in: admin.taskIds }, assignees: { some: { userId } } }, select: { id: true } }))
         if (!isDoer) return NextResponse.json({ error: "Quest ini bukan task kamu — XP cuma buat yang ngerjain." }, { status: 403 })
-      } else if (admin.teamIds.length > 0) {
-        const inTeam = await prisma.teamMember.findFirst({ where: { userId, teamId: { in: admin.teamIds } }, select: { id: true } })
-        if (!inTeam) return NextResponse.json({ error: "Quest ini bukan buat team kamu" }, { status: 403 })
+      } else if (admin.teamIds.length > 0 || admin.unitIds.length > 0) {
+        if (!questVisibleTo(admin, await audienceOf(userId))) return NextResponse.json({ error: "Quest ini bukan buat divisi kamu" }, { status: 403 })
       }
     }
 

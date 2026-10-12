@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { isSystemAdminUser } from "@/lib/rbac"
 import type { Prisma, TeamCalendarEventStatus, WorkspaceRole } from "@/generated/prisma"
+import { hasProjectWideAccess } from "@/lib/rbac"
 
 const MASTER_CALENDAR_UTC_OFFSET = "+07:00"
 
@@ -46,11 +47,11 @@ export async function getMasterCalendarTeamsForUser(userId: string): Promise<Tea
   })
 
   const adminWorkspaceIds = workspaceMemberships
-    .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
+    .filter((membership) => hasProjectWideAccess(membership.role)) // BoD / One Above All (owner 13 Oct 2026)
     .map((membership) => membership.workspaceId)
 
   const memberWorkspaceIds = workspaceMemberships
-    .filter((membership) => membership.role === "STAFF")
+    .filter((membership) => !hasProjectWideAccess(membership.role)) // Manager + Staff: member projects only
     .map((membership) => membership.workspaceId)
 
   const scopes: Prisma.TeamWhereInput[] = []

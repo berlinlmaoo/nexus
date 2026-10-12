@@ -15,7 +15,8 @@ import { runAutomations } from "@/lib/automation-engine"
 import { verifyMcpToken, mcpUserId } from "@/lib/mcp-token-auth"
 import { MCP_ISSUER } from "@/lib/mcp-oauth"
 
-const MGR_ROLES = ["ONE_ABOVE_ALL", "BOD", "MANAGER"]
+// Full access to every project: BoD / One Above All only (owner 13 Oct 2026, lib/rbac.ts PROJECT_WIDE_ROLES).
+const MGR_ROLES: string[] = ["ONE_ABOVE_ALL", "BOD"]
 const ok = (data: unknown) => ({ content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] })
 const forbidden = (msg = "Forbidden: kamu gak punya akses ke project ini.") => ({ content: [{ type: "text" as const, text: msg }], isError: true })
 const hasScope = (extra: { authInfo?: AuthInfo }, scope: string) => (extra.authInfo?.scopes ?? []).includes(scope)

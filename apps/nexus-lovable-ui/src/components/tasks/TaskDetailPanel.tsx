@@ -321,6 +321,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // Project's sections (board columns = TaskLists) so the top dropdown follows the actual project.
   const [copyOpen, setCopyOpen] = useState(false);
   const projDetail = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId!), enabled: !!projectId, staleTime: 60_000 });
+  // Deleting a task needs Can edit or Full access (Notion levels, owner 13 Oct 2026).
+  const lvl = projDetail.data?.viewerAccessLevel;
+  const canDeleteTask = lvl ? lvl === "FULL" || lvl === "EDIT" : projDetail.data?.viewerCanManage !== false;
   const sections = (projDetail.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const { t: tr } = useLang();
   // Only fetch the whole-workspace member list as a FALLBACK for tasks with no project. For a project
@@ -594,9 +597,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             <button onClick={() => setCopyOpen(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary sm:inline-flex" title={tr("Copy to another project")} aria-label={tr("Copy to another project")}>
               <FolderInput className="h-4 w-4" />
             </button>
-            <button onClick={() => setConfirmDelete(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:inline-flex" title={tr("Delete task")} aria-label={tr("Delete task")}>
+            {canDeleteTask && <button onClick={() => setConfirmDelete(true)} className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:inline-flex" title={tr("Delete task")} aria-label={tr("Delete task")}>
               <Trash2 className="h-4 w-4" />
-            </button>
+            </button>}
             {/* Phone: the secondary actions behind ⋯ */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -612,8 +615,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <DropdownMenuItem onSelect={() => setQuestOpen(true)} className="min-h-11"><Trophy className="h-4 w-4" />{tr("Make a quest")}</DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={() => setCopyOpen(true)} className="min-h-11"><FolderInput className="h-4 w-4" />{tr("Copy to another project")}</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="min-h-11 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{tr("Delete task")}</DropdownMenuItem>
+                {canDeleteTask && <DropdownMenuSeparator />}
+                {canDeleteTask && <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="min-h-11 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{tr("Delete task")}</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
             </>)}
@@ -658,7 +661,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
         {task.isError && !t && (
           <LoadError error={task.error} what={tr("this task")} onRetry={() => void task.refetch()}
             notFoundTitle={tr("This task doesn't exist any more")} notFoundMessage={tr("It was deleted, or the link is wrong. A BoD or manager can restore a deleted task from Control Room → Audit for 90 days.")}
-            forbiddenTitle={tr("You can't open this task")} forbiddenMessage={tr("It's in a project you're not a member of. Ask the project lead to add you.")}
+            forbiddenTitle={tr("You can't open this task")} forbiddenMessage={tr("It's in a project you're not a member of. Ask its Project Owner to add you.")}
             action={<EmptyAction onClick={requestClose}>{tr("Close")}</EmptyAction>} />
         )}
 

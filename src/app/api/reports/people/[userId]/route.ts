@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
+import { hasProjectWideAccess } from "@/lib/rbac"
 import { buildPeopleReports, publicPeriod, resolveReportWindows } from "@/lib/people-reports"
 import { leftKeyOf } from "@/lib/former-members"
 
@@ -57,6 +58,30 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!user || !report) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
     const isSelf = targetId === viewerId
+    // Project names follow project access (owner 13 Oct 2026): a manager reading a report sees the projects
+    // they can open; the rest are counted together as "Other projects", their overdue tasks without title.
+    let work = report.work
+    if (!isSelf) {
+      const [viewerUser, viewerMember] = await Promise.all([
+        prisma.user.findUnique({ where: { id: viewerId }, select: { role: true } }),
+        prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId: viewerId, workspaceId } }, select: { role: true } }),
+      ])
+      if (viewerUser?.role !== "ADMIN" && !hasProjectWideAccess(viewerMember?.role)) {
+        const ids = [...new Set([...work.perProject.map((p) => p.projectId), ...work.overdueList.map((o) => o.projectId)])]
+        const mine = new Set((await prisma.projectMember.findMany({ where: { userId: viewerId, projectId: { in: ids } }, select: { projectId: true } })).map((m) => m.projectId))
+        const shown = work.perProject.filter((p) => mine.has(p.projectId))
+        const hidden = work.perProject.filter((p) => !mine.has(p.projectId))
+        const r1 = (n: number) => Math.round(n * 10) / 10
+        const other = hidden.length
+          ? [{ projectId: "other", projectName: "Other projects", completed: r1(hidden.reduce((n, p) => n + p.completed, 0)), open: r1(hidden.reduce((n, p) => n + p.open, 0)), overdue: r1(hidden.reduce((n, p) => n + p.overdue, 0)), hiddenProjects: hidden.length }]
+          : []
+        work = {
+          ...work,
+          perProject: [...shown, ...other],
+          overdueList: work.overdueList.map((o) => (mine.has(o.projectId) ? o : { ...o, id: "", title: "Task in a project you're not in", projectId: "other", projectName: "Other projects" })),
+        }
+      }
+    }
     if (!isSelf) {
       await logAudit({
         action: "view",
@@ -86,7 +111,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       previousPeriod: publicPeriod(windows.previous),
       headline: report.headline,
       previous: report.previous,
-      work: report.work,
+      work,
       attendance: report.attendance,
       xp: report.xp,
       generatedAt: new Date().toISOString(),

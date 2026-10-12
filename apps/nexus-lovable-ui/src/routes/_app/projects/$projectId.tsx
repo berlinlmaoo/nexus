@@ -3,6 +3,7 @@ import { docTitle } from "@/lib/doc-title";
 import { useEscape } from "@/hooks/use-escape";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AccessLevelPicker, accessChangeFailed, accessLevelLabel } from "@/components/projects/AccessLevelPicker";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -12,7 +13,7 @@ import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
-import { fmtDate, isTransientError, nexusApi, retryTransient, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
+import { fmtDate, isTransientError, memberLevelOf, nexusApi, retryTransient, statusLabel, type ProjectAccessLevel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { openGideon } from "@/lib/gideon";
@@ -715,6 +716,10 @@ function ProjectDetail() {
         subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
         actions={
           <>
+            {/* Read-only levels say so up front (Notion shows "Can view" in the share button). */}
+            {data && (data.viewerAccessLevel === "VIEW" || data.viewerAccessLevel === "COMMENT") && (
+              <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground sm:inline" title={tr("Ask the Project Owner if you need more access.")}>{accessLevelLabel(data.viewerAccessLevel, tr)}</span>
+            )}
             {data && <ProjectMembersAvatars project={data} />}
             {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
             {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
@@ -732,7 +737,7 @@ function ProjectDetail() {
         ? <div className="px-4 py-10 md:px-8"><EmptyState icon={WifiOff} tone="muted" title={tr("Couldn't load this project")} message={tr("No connection. NEXUS tries again by itself when you're back online.")} action={<Button size="sm" variant="outline" isDisabled={project.isFetching} onClick={() => void project.refetch()}>{project.isFetching ? tr("Trying again…") : tr("Try again")}</Button>} /></div>
         : projectMissing
         ? <div className="px-4 py-10 md:px-8"><EmptyState icon={Search} tone="muted" title={tr("Project not found")} message={tr("It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.")} action={<EmptyAction to="/projects">{tr("Go to Projects")}</EmptyAction>} /></div>
-        : <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its project lead to add you.")} /></div>)}
+        : <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its Project Owner to add you.")} /></div>)}
       {!project.isLoading && data && isPipeline && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />}</Pending>
@@ -946,6 +951,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   const [dragLaneId, setDragLaneId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const isSection = groupBy === "section";
+  // Statuses / columns are managed with Full access (owner 13 Oct 2026); older payloads without the level: shown.
+  const canManageColumns = project.viewerAccessLevel ? project.viewerAccessLevel === "FULL" : true;
   const sub = cfg.subGroupBy && cfg.subGroupBy !== groupBy ? cfg.subGroupBy : null;
   const multiValued = (key: string | null) => !!key && (key === "assignee" || key === "tags" || ["multi", "person"].includes(propDef(defs, key)?.kind ?? ""));
   const singleValued = !multiValued(groupBy) && !multiValued(sub);
@@ -1154,7 +1161,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             </span>
             <span className="text-xs tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
             <div className="ml-auto flex shrink-0 items-center opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
-              {section && (
+              {section && canManageColumns && (
                 <StatusOptionMenu projectId={project.id} option={section} sections={sections} trigger={<button type="button" aria-label={t("Column options")} className={quiet}><MoreHorizontal className="h-3.5 w-3.5" /></button>} />
               )}
               <button type="button" aria-label={t("New task")} onClick={() => setDraft(id)} className={quiet}><Plus className="h-3.5 w-3.5" /></button>
@@ -1216,7 +1223,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         <div className="flex min-w-max items-start gap-2.5">
           {linkedLaneEls}
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
-          {isSection && <AddListColumn projectId={project.id} statusOptions={statusOptions} />}
+          {isSection && canManageColumns && <AddListColumn projectId={project.id} statusOptions={statusOptions} />}
         </div>
       </div>
     );
@@ -1450,7 +1457,8 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   // The server's rule for adding members (POST …/members: project LEAD = Manager and above, lib/rbac.ts),
   // the same one Project settings uses. It said BoD-only here, so a Manager leading the project could add
   // people from the settings drawer but not from this header (QA 13 Oct 2026).
-  const canAdd = myRole === "MANAGER" || myRole === "BOD" || myRole === "ONE_ABOVE_ALL";
+  // A Staff member who leads this project may add people too (server viewerCanManage, owner 13 Oct 2026).
+  const canAdd = project.viewerCanManage ?? (myRole === "MANAGER" || myRole === "BOD" || myRole === "ONE_ABOVE_ALL");
 
   const ids = members.map((m) => m.userId || m.user?.id).filter(Boolean) as string[];
   const memberIds = new Set(ids);
@@ -1460,6 +1468,13 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   if (ids.length === 0 && !canAdd) return null;
   const close = () => setOpen(false);
   const labelCls = "px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
+  // level null = Remove from the project.
+  const memberAccess = useMutation({
+    mutationFn: async ({ userId, level }: { userId: string; level: ProjectAccessLevel | null }): Promise<unknown> =>
+      level ? nexusApi.setProjectMemberAccess(project.id, userId, level) : nexusApi.removeProjectMember(project.id, userId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] }); qc.invalidateQueries({ queryKey: ["nexus", "project-members", project.id] }); },
+    onError: (e: unknown) => accessChangeFailed(e, t),
+  });
 
   return (
     <div className="relative">
@@ -1479,8 +1494,18 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
                     <Avatar userId={uid} name={m.user?.name} avatar={m.user?.avatar} size={28} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? "—"}</div>
-                      {m.role && <div className="text-[11px] capitalize text-muted-foreground">{m.role.toLowerCase()}</div>}
+                      {m.role === "LEAD" && <div className="text-[11px] text-muted-foreground">{t("Project Owner")}</div>}
                     </div>
+                    {/* Notion-style: each row has its own access dropdown (change it, or Remove) for someone with
+                        Full access; everyone else sees the level (owner, 13 Oct 2026). */}
+                    {canAdd && uid ? (
+                      <AccessLevelPicker value={memberLevelOf(m)} disabled={memberAccess.isPending}
+                        ariaLabel={t("Access for {name}", { name: m.user?.name ?? m.user?.email ?? "" })}
+                        onChange={(level) => memberAccess.mutate({ userId: uid, level })}
+                        onRemove={() => memberAccess.mutate({ userId: uid, level: null })} />
+                    ) : (
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{accessLevelLabel(memberLevelOf(m), t)}</span>
+                    )}
                   </div>
                 );
               })}

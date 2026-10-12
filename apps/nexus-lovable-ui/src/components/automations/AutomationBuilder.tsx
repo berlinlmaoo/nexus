@@ -345,7 +345,7 @@ const PERSON_SPECIALS = (t: LangApi["t"]): Opt[] => [
 const NOTIFY_SPECIALS = (t: LangApi["t"]): Opt[] => [
   { value: "@assignees", label: t("Assignees"), group: "Roles" },
   ...PERSON_SPECIALS(t),
-  { value: "@leads", label: t("Project leads"), group: "Roles" },
+  { value: "@leads", label: t("Project Owners"), group: "Roles" },
 ];
 
 function ActionConfig({ action, set, ctx, disabled }: { action: Rule; set: (r: Rule) => void; ctx: BuilderContext; disabled?: boolean }) {
@@ -598,7 +598,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
       ? nexusApi.updateAutomation({ id: automation.id, ...payload() })
       : nexusApi.createAutomation({ projectId: ctx.projectId, enabled: true, ...payload() }),
     onSuccess: () => { invalidate(); toast.success(automation ? t("Automation saved") : t("Automation is on")); onClose(); },
-    onError: (e) => toast.error(errorText(e, t("Couldn't save. Only project leads can edit automations."))),
+    onError: (e) => toast.error(errorText(e, t("Couldn't save. Only people with Full access can edit automations."))),
   });
   const runNow = useMutation({
     mutationFn: () => nexusApi.runAutomation(automation!.id, runTaskId || undefined),
@@ -645,7 +645,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
             <div className="min-w-0 flex-1">
               <h2 id="automation-builder-title" className="sr-only">{automation ? t("Edit automation") : t("New automation")}</h2>
               <input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} placeholder={t("Name this automation")} aria-label={t("Automation name")} className="w-full bg-transparent font-display text-lg font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 disabled:opacity-100" />
-              <p className="text-xs text-muted-foreground">{t("For every task in this project")}{readOnly ? ` · ${t("View only: project leads edit automations")}` : ""}</p>
+              <p className="text-xs text-muted-foreground">{t("For every task in this project")}{readOnly ? ` · ${t("View only: people with Full access edit automations")}` : ""}</p>
             </div>
             <button type="button" onClick={requestClose} aria-label={t("Close")} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
           </div>

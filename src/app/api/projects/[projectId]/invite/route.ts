@@ -7,6 +7,7 @@ import crypto from 'crypto'
 import { logAudit } from '@/lib/audit'
 import { syncProjectRoomSafe } from '@/lib/chat-membership'
 import { emitProjectChanged } from '@/lib/workspace-realtime'
+import { hasProjectLevel, isAccessLevel, memberAccessLevel, roleForLevel, type AccessLevel } from '@/lib/rbac'
 
 export async function GET(
   _req: Request,
@@ -20,12 +21,8 @@ export async function GET(
 
     const { projectId } = await params
 
-    // Check membership
-    const member = await prisma.projectMember.findUnique({
-      where: { userId_projectId: { userId: session.user.id, projectId } },
-    })
-
-    if (!member || member.role === 'GUEST') {
+    // Pending invites: anyone who can see the project (Notion shows who's invited to everyone with access).
+    if (!(await hasProjectLevel(session.user.id, projectId, 'VIEW'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -65,24 +62,22 @@ export async function POST(
 
     const { projectId } = await params
     const body = await req.json()
-    const { email, role = 'GUEST' } = body
+    const { email } = body
+    // Access level for the invitee (Notion's invite dropdown): `accessLevel` FULL | EDIT | COMMENT | VIEW,
+    // default EDIT. Older clients send `role` (GUEST / MEMBER / VIEWER), which maps onto the same levels.
+    const level: AccessLevel = isAccessLevel(body.accessLevel)
+      ? body.accessLevel
+      : (['GUEST', 'MEMBER', 'VIEWER'].includes(body.role) ? (memberAccessLevel({ role: body.role }) ?? 'EDIT') : 'EDIT')
+    const role = roleForLevel(level)
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    if (!['GUEST', 'MEMBER', 'VIEWER'].includes(role)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
-    }
-
-    // Check inviter's membership and permissions
-    const member = await prisma.projectMember.findUnique({
-      where: { userId_projectId: { userId: session.user.id, projectId } },
-    })
-
-    if (!member || member.role === 'GUEST' || member.role === 'VIEWER') {
+    // Inviting people is Full access (Notion: only Full access can share).
+    if (!(await hasProjectLevel(session.user.id, projectId, 'FULL'))) {
       return NextResponse.json(
-        { error: 'You do not have permission to invite users' },
+        { error: 'You need Full access to the project to invite people', code: 'NEEDS_FULL_ACCESS' },
         { status: 403 }
       )
     }
@@ -128,7 +123,7 @@ export async function POST(
       data: {
         email,
         token,
-        role: role as 'GUEST' | 'MEMBER' | 'VIEWER',
+        role,
         expiresAt,
         projectId,
         inviterId: session.user.id,
@@ -141,7 +136,8 @@ export async function POST(
         data: {
           userId: existingUser.id,
           projectId,
-          role: role as 'GUEST' | 'MEMBER' | 'VIEWER',
+          role,
+          accessLevel: level,
         },
       })
       await prisma.inviteToken.update({
@@ -213,11 +209,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'inviteId is required' }, { status: 400 })
     }
 
-    const member = await prisma.projectMember.findUnique({
-      where: { userId_projectId: { userId: session.user.id, projectId } },
-    })
-
-    if (!member || member.role === 'GUEST' || member.role === 'VIEWER') {
+    if (!(await hasProjectLevel(session.user.id, projectId, 'FULL'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

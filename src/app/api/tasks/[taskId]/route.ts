@@ -139,9 +139,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
-    const { allowed } = await checkProjectAccess(session.user.id!, existing.taskList.projectId, ["LEAD"])
+    // Can edit deletes tasks (Notion levels, owner 13 Oct 2026); the delete is restorable from the Audit.
+    const { allowed } = await checkProjectAccess(session.user.id!, existing.taskList.projectId, ["MEMBER"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: LEAD role required to delete tasks" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Can edit access in this project to delete tasks", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
     }
 
     await prisma.activityLog.create({

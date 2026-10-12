@@ -7,7 +7,7 @@ import { emitAutomationsChanged, emitCommentAdded, emitTaskCreated, emitTaskDele
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { autofillOnEvent } from "@/lib/gideon-autofill"
-import { isWorkspaceManagerRole } from "@/lib/rbac"
+import { hasProjectWideAccess, memberAccessLevel } from "@/lib/rbac"
 import { normalizeCustomFieldType, parseCustomFieldValue, serializeCustomFieldValue } from "@/lib/custom-fields"
 import {
   TASK_ACTIONS,
@@ -309,15 +309,15 @@ async function resolvePeople(spec: string[], ctx: ActionCtx): Promise<string[]> 
     else if (s === "@creator") { if (task) out.add(task.creatorId) }
     else if (s === "@assignees") { task?.assignees.forEach((a) => out.add(a.userId)) }
     else if (s === "@leads") {
-      // Who manages a project (lib/rbac.ts): its members with a Manager / BoD / One Above All workspace
-      // role, plus anyone still holding the old per-project LEAD role.
+      // Who manages a project (lib/rbac.ts): its members with Full access — the Project Owner(s) — and its
+      // BoD / One Above All members (owner 13 Oct 2026: Managers manage only where they have Full access).
       const members = await prisma.projectMember.findMany({
         where: { projectId: ctx.row.projectId },
-        select: { userId: true, role: true, user: { select: { workspaceMembers: { where: { workspaceId: ctx.workspaceId ?? "" }, select: { role: true }, take: 1 } } } },
+        select: { userId: true, role: true, accessLevel: true, user: { select: { workspaceMembers: { where: { workspaceId: ctx.workspaceId ?? "" }, select: { role: true }, take: 1 } } } },
       })
       for (const m of members) {
         const ws = m.user.workspaceMembers[0]?.role
-        if (m.role === "LEAD" || isWorkspaceManagerRole(ws)) out.add(m.userId)
+        if (memberAccessLevel(m) === "FULL" || hasProjectWideAccess(ws)) out.add(m.userId)
       }
     } else if (s) out.add(s)
   }

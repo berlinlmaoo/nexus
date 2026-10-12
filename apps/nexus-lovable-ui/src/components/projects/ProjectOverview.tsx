@@ -444,7 +444,7 @@ function TeamCard({ people, memberById, unassigned, onDrill }: { people: Map<str
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-medium">{r.name}</span>
-                        {r.role === "LEAD" && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold leading-4 text-primary">{t("Lead")}</span>}
+                        {r.role === "LEAD" && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold leading-4 text-primary">{t("Project Owner")}</span>}
                       </span>
                       <span className="mt-1 block h-1 max-w-40 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary/70" style={{ width: `${(r.open / max) * 100}%` }} /></span>
                     </span>

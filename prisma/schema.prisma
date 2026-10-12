@@ -626,6 +626,9 @@ model FolderPin {
 model ProjectMember {
   id        String      @id @default(cuid())
   role      ProjectRole @default(MEMBER)
+  /// Notion-style access level (13 Oct 2026): FULL | EDIT | COMMENT | VIEW. role LEAD (the Project Owner) is
+  /// always FULL whatever this says. lib/rbac.ts projectAccessLevel is the only reader.
+  accessLevel String    @default("EDIT")
   source    String      @default("direct")  // "direct" | "team:{teamId}"
   joinedAt  DateTime    @default(now())
 
@@ -2290,7 +2293,11 @@ model Quest {
   requiredCount   Int      @default(1)
   xpReward        Int      @default(50)
   isActive        Boolean  @default(true)
-  teamIds         String[] @default([]) // assigned teams; empty = semua crew (ignored for specific_tasks)
+  teamIds         String[] @default([]) // legacy Crew Hub teams (retired); empty = semua crew (ignored for specific_tasks)
+  /// IP & Division Chart units the quest is for (13 Oct 2026); empty = everyone. Members of a unit or any unit below it.
+  unitIds         String[] @default([])
+  /// Pointed at deleted teams and was moved to "everyone" by 2026-10-13-qafix-perm-quest-units.sql.
+  teamsRetired    Boolean  @default(false)
   taskIds         String[] @default([]) // specific_tasks quest: exact tasks to finish; visible to those tasks' project members, XP to whoever completes them
   deadline        DateTime?              // jangka waktu — quest expired setelah ini
   createdById     String

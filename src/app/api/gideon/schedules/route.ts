@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
   const projectId = typeof body.projectId === "string" ? body.projectId : ""
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 })
-  if (!(await checkProjectAccess(session.user.id, projectId, ["LEAD"])).allowed) return NextResponse.json({ error: "Only a project lead can set up GIDEON schedules" }, { status: 403 })
+  if (!(await checkProjectAccess(session.user.id, projectId, ["LEAD"])).allowed) return NextResponse.json({ error: "Only someone with Full access to the project (its Project Owner or the BoD) can set up GIDEON schedules" }, { status: 403 })
   const count = await prisma.gideonSchedule.count({ where: { projectId } })
   if (count >= 3) return NextResponse.json({ error: "A project can have at most 3 GIDEON schedules" }, { status: 400 })
   const v = validateScheduleInput(body, null)

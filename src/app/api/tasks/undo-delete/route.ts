@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         })
         if (!row) { failed.push({ id, error: "Not found" }); continue }
         const projectId = (row.metadata as { projectId?: unknown } | null)?.projectId
-        if (typeof projectId !== "string" || !(await checkProjectAccess(userId, projectId, ["LEAD"])).allowed) {
+        if (typeof projectId !== "string" || !(await checkProjectAccess(userId, projectId, ["MEMBER"])).allowed) {
           failed.push({ id, error: "Forbidden" }); continue
         }
         const outcome = await restoreDeletion(row.id, userId)

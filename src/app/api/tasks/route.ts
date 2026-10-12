@@ -15,6 +15,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
 import { notifyTaskAssigned } from "@/lib/notification-service"
+import { hasProjectWideAccess } from "@/lib/rbac"
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,11 +41,11 @@ export async function GET(request: NextRequest) {
       })
 
       const adminWorkspaceIds = workspaceMemberships
-        .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
+        .filter((membership) => hasProjectWideAccess(membership.role)) // BoD / One Above All (owner 13 Oct 2026)
         .map((membership) => membership.workspaceId)
 
       const memberWorkspaceIds = workspaceMemberships
-        .filter((membership) => membership.role === "STAFF")
+        .filter((membership) => !hasProjectWideAccess(membership.role)) // Manager + Staff: member projects only
         .map((membership) => membership.workspaceId)
 
       const accessScopes: Prisma.TaskWhereInput[] = []
@@ -71,6 +72,10 @@ export async function GET(request: NextRequest) {
           },
         })
       }
+
+      // Your own tasks wherever they are (assigned to you): a Manager who isn't a member of a project any more
+      // (owner 13 Oct 2026, membership-only access) still sees the tasks they were given, as search does.
+      accessScopes.push({ assignees: { some: { userId: session.user.id } } })
 
       if (accessScopes.length === 0) {
         return NextResponse.json([])

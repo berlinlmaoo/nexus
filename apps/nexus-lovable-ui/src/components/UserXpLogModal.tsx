@@ -29,6 +29,8 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
   // A 0 XP row moved nothing: the "clear penalty" marker, or a deduction the BoD removed (shown struck
   // through, with who removed it, on the person's record instead).
   const rows = (log.data?.pages.flatMap((p) => p.rows) ?? []).filter((r) => r.amount !== 0);
+  // Someone else's log, seen by a peer: the server leaves out penalties and attendance rows (owner, 13 Oct 2026).
+  const restricted = log.data?.pages[0]?.restricted === true;
   // The full record (/people/:id) is for the person themself, the BoD, and a manager (whose view the
   // server narrows to their direct reports) — not for every colleague who can read this public log.
   const today = useQuery({ queryKey: ["attendance-today"], queryFn: nexusApi.attendanceToday, retry: 1, staleTime: 60_000 });
@@ -41,7 +43,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
         <Avatar userId={user.id} name={user.name ?? undefined} avatar={user.avatar ?? undefined} size={36} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-base font-semibold">{user.name ?? "—"}</div>
-          <div className="text-[11px] text-muted-foreground">{t("XP log: every gain and loss")}{canOpenRecord && <> · <Link to="/people/$userId" params={{ userId: user.id }} className="font-semibold text-primary hover:underline">{t("Full record →")}</Link></>}</div>
+          <div className="text-[11px] text-muted-foreground">{restricted ? t("XP gained this period") : t("XP log: every gain and loss")}{canOpenRecord && <> · <Link to="/people/$userId" params={{ userId: user.id }} className="font-semibold text-primary hover:underline">{t("Full record →")}</Link></>}</div>
         </div>
         <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
@@ -55,6 +57,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
           </div>
         </div>
 
+        {restricted && <p className="mx-5 mb-2 rounded-lg bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">{t("Penalties and attendance details are private: only this person and the people above them can see them.")}</p>}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {log.isLoading && <div className="space-y-2 px-5 pb-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>}
           {log.isError && <p className="px-5 py-10 text-center text-sm text-muted-foreground">{t("Couldn't load the XP log.")}</p>}

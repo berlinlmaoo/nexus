@@ -4,13 +4,15 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Circle, ImagePlus, Loader2, Lock, Mail, Trash2, UserPlus, X } from "lucide-react";
-import { ApiError, nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser } from "@/lib/nexus-api";
+import { ApiError, memberLevelOf, nexusApi, ORG_HIERARCHY, statusLabel, type NexusProject, type NexusUser, type ProjectAccessLevel } from "@/lib/nexus-api";
 import { ProjectCustomFieldsManager } from "@/components/projects/ProjectCustomFieldsManager";
 import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
 import { ProjectMark, isProjectPhoto } from "@/components/projects/ProjectIcon";
 import { PROJECT_TAB_KEYS, PROJECT_TAB_LABELS, TASK_VIEW_TAB_KEYS, hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
 import { useLang } from "@/lib/lang";
 import { friendlyError } from "@/lib/task-undo";
+import { toastFailure } from "@/lib/failure";
+import { AccessLevelPicker, accessChangeFailed, accessLevelLabel } from "@/components/projects/AccessLevelPicker";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 
@@ -149,10 +151,13 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   // of it live and every save ended in a bare "Couldn't save." (QA 13 Oct 2026): it is read-only for them
   // now, with one line saying who can change it. Until the role is known nothing is editable.
   const profileQ = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 60_000 });
-  const canManage = canManageTabs || profileQ.data?.user?.role === "ADMIN";
-  const roleKnown = !!wsm.data;
+  // The server says what this viewer may do here (GET /api/projects/:id viewerCanManage, lib/rbac.ts): a Staff
+  // member who leads this project manages it too (owner, 13 Oct 2026). The org-role guess is only for an
+  // older payload without the flag.
+  const canManage = project.viewerCanManage ?? (canManageTabs || profileQ.data?.user?.role === "ADMIN");
+  const roleKnown = project.viewerCanManage !== undefined || !!wsm.data;
   const saveErrorText = (e: unknown) => e instanceof ApiError && e.status === 403
-    ? t("Only managers and the BoD can change this project's settings.")
+    ? t("You need Full access to change this project's settings.")
     : friendlyError(e) ?? t("Couldn't save.");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
@@ -161,13 +166,20 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     mutationFn: () => nexusApi.updateProject(project.id, { name: name.trim(), description: description || null, status }),
     onSuccess: () => { invalidate(); qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("projects") }); },
   });
+  // Per-member access level (Notion's dropdown on each row). 409 LAST_OWNER: the project keeps one Project Owner.
+  const setLevel = useMutation({
+    mutationFn: ({ userId, level }: { userId: string; level: ProjectAccessLevel }) => nexusApi.setProjectMemberAccess(project.id, userId, level),
+    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ["nexus", "project-members", project.id] }); },
+    onError: (e: unknown) => accessChangeFailed(e, t),
+  });
   const removeMember = useMutation({
     mutationFn: (userId: string) => nexusApi.removeProjectMember(project.id, userId),
     // The pipeline's BD / PM pickers read the same members under their own key.
     onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ["nexus", "project-members", project.id] }); },
   });
+  const [inviteLevel, setInviteLevel] = useState<ProjectAccessLevel>("EDIT");
   const invite = useMutation({
-    mutationFn: () => nexusApi.inviteToProject(project.id, inviteEmail.trim()),
+    mutationFn: () => nexusApi.inviteToProject(project.id, inviteEmail.trim(), inviteLevel),
     onSuccess: () => { setInviteMsg(t("Invite sent to {email}", { email: inviteEmail.trim() })); setInviteEmail(""); },
     onError: () => setInviteMsg(t("Invite failed. Check the email and your access.")),
   });
@@ -241,7 +253,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
           {roleKnown && !canManage && (
             <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{t("Only managers and the BoD can change this project's name, photo, status, auto assign and members. You can still invite people by email.")}</span>
+              <span>{t("You have {level} here. Only people with Full access (the Project Owner and the BoD) can change the project's name, photo, status, auto assign and members.", { level: accessLevelLabel(project.viewerAccessLevel ?? "EDIT", t) })}</span>
             </p>
           )}
           {/* identity */}
@@ -309,7 +321,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                         {checked ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                         <MiniAvatar user={m.user} size={22} />
                         <span className="flex-1 truncate text-sm font-medium">{m.user?.name ?? m.user?.email ?? id}</span>
-                        {m.role && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{m.role === "LEAD" ? t("Lead") : m.role === "MEMBER" ? t("Member") : m.role}</span>}
+                        {m.role && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{m.role === "LEAD" ? t("Project Owner") : accessLevelLabel(memberLevelOf(m), t)}</span>}
                       </button>
                     );
                   })}
@@ -320,7 +332,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
           {/* A Pipeline Dashboard shows its pipeline, not task tabs (owner, 9 Oct 2026): nothing to choose. */}
           {/* …and an Outlet Sales Dashboard its four views (owner, 10 Oct 2026). */}
-          {project.type !== "PIPELINE" && project.type !== "OUTLET_SALES" && <ProjectTabsSection project={project} canManage={canManageTabs} roleKnown={!!wsm.data} />}
+          {project.type !== "PIPELINE" && project.type !== "OUTLET_SALES" && <ProjectTabsSection project={project} canManage={canManage} roleKnown={roleKnown} />}
 
           {/* workflow bundle */}
           <div className="space-y-2 border-t border-border pt-5">
@@ -354,7 +366,14 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                 <div key={m.userId || m.user?.id} className="flex items-center gap-2 rounded-xl bg-muted/50 px-2 py-1.5">
                   <MiniAvatar user={m.user} />
                   <span className="flex-1 truncate text-sm font-semibold">{m.user?.name ?? m.user?.email ?? m.userId}</span>
-                  {canManage && <button onClick={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} aria-label={t("Remove member")} className="rounded p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
+                  {canManage ? (
+                    <AccessLevelPicker value={memberLevelOf(m)} disabled={setLevel.isPending || removeMember.isPending}
+                      ariaLabel={t("Access for {name}", { name: m.user?.name ?? m.user?.email ?? "" })}
+                      onChange={(level) => { const id = m.userId || m.user?.id; if (id) setLevel.mutate({ userId: id, level }); }}
+                      onRemove={() => { const id = m.userId || m.user?.id; if (id) removeMember.mutate(id); }} />
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground">{accessLevelLabel(memberLevelOf(m), t)}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -363,20 +382,23 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             {showPicker && <AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setShowPicker(false)} onAdded={() => setShowPicker(false)} />}
           </div>
 
-          {/* invite by email */}
+          {/* invite by email — Full access only (Notion: only Full access shares) */}
+          {canManage && <>
           <div className="space-y-2 border-t border-border pt-5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Invite by email")}</span>
             <div className="flex items-center gap-2">
               <input value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteMsg(null); }} type="email" placeholder="teammate@company.com" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+              <AccessLevelPicker value={inviteLevel} onChange={setInviteLevel} ariaLabel={t("Access for the person you invite")} />
               <button disabled={!inviteEmail.includes("@") || invite.isPending} onClick={() => invite.mutate()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-secondary px-3 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
                 {invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} {t("Invite")}
               </button>
             </div>
             {inviteMsg && <p className="text-xs font-semibold text-muted-foreground">{inviteMsg}</p>}
           </div>
+          </>}
 
-          {/* danger zone */}
-          <div className="mt-auto space-y-2 border-t border-border pt-5">
+          {/* danger zone — only for someone who can use it */}
+          {(canManage || isBod) && <div className="mt-auto space-y-2 border-t border-border pt-5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Danger zone")}</span>
             <div className="flex gap-2">
               {/* BoD+ only — duplicating clones every task, assignee and member at once. The server
@@ -386,11 +408,11 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                   {duplicate.isPending ? t("Duplicating…") : t("Duplicate")}
                 </button>
               )}
-              <button onClick={() => { if (confirm(t("Delete the project “{name}”? This can't be undone.", { name: project.name ?? "" }))) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
+              {canManage && <button onClick={() => { if (confirm(t("Delete the project “{name}”? A manager or the BoD can restore it from Control Room → Audit for 90 days.", { name: project.name ?? "" }))) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
                 <Trash2 className="h-4 w-4" /> {t("Delete")}
-              </button>
+              </button>}
             </div>
-          </div>
+          </div>}
         </div>
             </motion.div>
           </motion.aside>

@@ -101,7 +101,7 @@ export function OutletSalesView({
           icon={Store}
           tone="muted"
           title={code === 403 ? t("This outlet is for its project members") : t("The outlet didn't load")}
-          message={code === 403 ? t("Ask the project lead or a manager to add you to the project.") : t("Check your connection, then try again.")}
+          message={code === 403 ? t("Ask the Project Owner or a BoD to add you to the project.") : t("Check your connection, then try again.")}
           action={code === 403 ? undefined : <EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>}
         />
       </div>
@@ -227,7 +227,7 @@ function Overview({
             ? t("Target set by {name}", { name: data.target.updatedBy.name ?? "?" })
             : t("No target for {month} yet.", { month: monthName })}
           {" "}
-          {!data.canManageTargets && !data.target && t("The project lead or a manager sets it.")}
+          {!data.canManageTargets && !data.target && t("The Project Owner or a BoD sets it.")}
         </p>
         {data.canManageTargets && !editing && (
           <button type="button" onClick={() => setEditing(true)} className="rounded-lg px-2.5 py-1.5 font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-[40px]">

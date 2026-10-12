@@ -3,6 +3,8 @@ import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoadError } from "@/components/LoadError";
+import { AccessLevelPicker } from "@/components/projects/AccessLevelPicker";
+import type { ProjectAccessLevel } from "@/lib/nexus-api";
 import { Button, Card, CardContent as CardBody, Chip, Input } from "@heroui/react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
@@ -121,6 +123,7 @@ function ProjectsPage() {
   // Automations starts unticked (owner, 11 Oct 2026: off by default for new projects).
   const [newProjectHiddenTabs, setNewProjectHiddenTabs] = useState<string[]>(NEW_PROJECT_HIDDEN_TABS);
   const [newProjectMemberIds, setNewProjectMemberIds] = useState<string[]>([]);
+  const [newProjectMemberLevel, setNewProjectMemberLevel] = useState<ProjectAccessLevel>("EDIT");
   // What step one picked (owner, 12 Oct 2026: a template gallery): blank, a dashboard type or a template.
   // A template is a Task Project built from the server registry; its tabs prefill the tab cards.
   const [newProjectPick, setNewProjectPick] = useState<GalleryPick | null>(null);
@@ -218,7 +221,7 @@ function ProjectsPage() {
         // Always sent for a Task Project, [] included: the server hides Automations only when the key is
         // absent (owner, 11 Oct 2026), so someone who switches Automations back on gets it.
         ...((newProjectType ?? "TASK") === "TASK" ? { hiddenTabs: newProjectHiddenTabs } : {}),
-        ...(newProjectMemberIds.length > 0 ? { memberIds: newProjectMemberIds } : {}),
+        ...(newProjectMemberIds.length > 0 ? { memberIds: newProjectMemberIds, memberAccessLevel: newProjectMemberLevel } : {}),
         // Built in the creator's language: section, field and page names are the project's own data.
         ...(newProjectTemplate ? { templateId: newProjectTemplate.id, lang, starter: newProjectStarter } : {}),
       }),
@@ -546,8 +549,11 @@ function ProjectsPage() {
 
               {(newProjectWorkspaceId || workspaceOptions[0]?.id) && (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground">{tr("Members")}{newProjectMemberIds.length > 0 && ` · ${newProjectMemberIds.length}`}</div>
-                  <p className="text-xs text-muted-foreground">{tr("Optional. You lead the project; the people you pick join as members.")}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-muted-foreground">{tr("Members")}{newProjectMemberIds.length > 0 && ` · ${newProjectMemberIds.length}`}</div>
+                    <AccessLevelPicker value={newProjectMemberLevel} onChange={setNewProjectMemberLevel} ariaLabel={tr("Access for the people you add")} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{tr("Optional. You're the Project Owner (Full access); the people you pick get the access chosen here.")}</p>
                   <MemberMultiPicker workspaceId={newProjectWorkspaceId || workspaceOptions[0]?.id || ""} value={newProjectMemberIds} onChange={setNewProjectMemberIds} />
                 </div>
               )}

@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma"
 import { auth } from "@/lib/auth"
 import { getAppSetting } from "@/lib/app-setting"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
+import { hasProjectWideAccess } from "@/lib/rbac"
 import {
   buildItems, buildStructure, CALENDAR_SETTINGS_DEFAULTS, effectiveVisibility, inAudience, normalizeCalendarSettings,
   type CalendarSettings, type CalItem, type CalStructure, type CalViewer, type ItemContext, type TaskRow,
@@ -49,7 +50,8 @@ export async function calendarCaller(): Promise<CalendarCaller | NextResponse> {
   const orgRole = member?.role ?? null
   if (!isAdmin && !orgRole) return { kind: "none", userId }
   if (!inAudience(settings, { userId, orgRole, isAdmin })) return { kind: "off", userId }
-  const full = isAdmin || orgRole === "ONE_ABOVE_ALL" || orgRole === "BOD" || orgRole === "MANAGER"
+  // BoD / One Above All see every project; Managers only their own (owner 13 Oct 2026, lib/rbac.ts).
+  const full = isAdmin || hasProjectWideAccess(orgRole)
   const memberProjectIds = full
     ? new Set<string>()
     : new Set((await prisma.projectMember.findMany({ where: { userId, project: { workspaceId: ORG_WORKSPACE_ID } }, select: { projectId: true } })).map((m) => m.projectId))

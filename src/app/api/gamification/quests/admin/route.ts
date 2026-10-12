@@ -33,11 +33,13 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const { workspaceId, title, description, requirementType, requiredCount, xpReward, teamIds, taskIds, deadline } = await req.json()
+    const { workspaceId, title, description, requirementType, requiredCount, xpReward, teamIds, unitIds, taskIds, deadline } = await req.json()
     if (!title || !requirementType) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
     // Hadiah XP di-cap maks 50.
     const xp = Number.isFinite(Number(xpReward)) ? Math.max(0, Math.min(50, Math.trunc(Number(xpReward)))) : 50
     const teams = Array.isArray(teamIds) ? teamIds.filter((t: unknown): t is string => typeof t === "string" && t.length > 0) : []
+    // Divisions / units of the IP & Division Chart (13 Oct 2026). Older clients send no unitIds = everyone.
+    const units = Array.isArray(unitIds) ? [...new Set(unitIds.filter((t: unknown): t is string => typeof t === "string" && t.length > 0))] : []
     let deadlineDate: Date | null = null
     if (deadline) {
       const d = new Date(deadline)
@@ -62,9 +64,13 @@ export async function POST(req: NextRequest) {
 
     if (!wsId) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
     if (!(await canManage(session.user.id, wsId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (units.length) {
+      const found = await prisma.orgUnit.count({ where: { id: { in: units }, workspaceId: wsId } })
+      if (found !== units.length) return NextResponse.json({ error: "Divisi tidak ditemukan di workspace ini.", code: "UNKNOWN_UNIT" }, { status: 400 })
+    }
 
     const quest = await prisma.quest.create({
-      data: { workspaceId: wsId, title: String(title).trim(), description: description || null, requirementType, requiredCount: reqCount, xpReward: xp, teamIds: teams, taskIds: tasks, deadline: deadlineDate, createdById: session.user.id },
+      data: { workspaceId: wsId, title: String(title).trim(), description: description || null, requirementType, requiredCount: reqCount, xpReward: xp, teamIds: teams, unitIds: tasks.length ? [] : units, taskIds: tasks, deadline: deadlineDate, createdById: session.user.id },
     })
     return NextResponse.json({ quest }, { status: 201 })
   } catch (error) {

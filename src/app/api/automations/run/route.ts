@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const automation = await prisma.automation.findUnique({ where: { id }, select: { projectId: true } })
     if (!automation) return NextResponse.json({ error: "Automation not found" }, { status: 404 })
     const { allowed } = await checkProjectAccess(session.user.id, automation.projectId, ["LEAD"])
-    if (!allowed) return NextResponse.json({ error: "Forbidden: LEAD role required to run automations" }, { status: 403 })
+    if (!allowed) return NextResponse.json({ error: "Forbidden: you need Full access to the project to run automations" }, { status: 403 })
     if (taskId) {
       const task = await prisma.task.findFirst({ where: { id: taskId, taskList: { projectId: automation.projectId } }, select: { id: true } })
       if (!task) return NextResponse.json({ error: "Task not found in this project" }, { status: 404 })

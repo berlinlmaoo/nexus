@@ -4,12 +4,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getLeaderboardPeriodStart } from "@/lib/gamification"
+import { canSeePersonalAttendance } from "@/lib/personal-visibility"
 
 const LATE_PREFIX = "attendance:late:"
 
-// PUBLIC per-user XP log. Any authenticated user can view a workspace peer's XP history
-// (gains + penalties, full transparency — the leaderboard "click a person" view). Peer-scoped:
-// you can only see people who share a workspace with you. Late penalties get exact minutes.
+// Per-user XP log (the leaderboard "click a person" view). Peer-scoped: only people who share a workspace
+// with you. Owner decision 13 Oct 2026: XP penalties and attendance rows (late / absent / no check-out, with
+// their dates) are PERSONAL — the full log goes to the person themself and the people above them
+// (lib/personal-visibility.ts). Everyone else gets the public part: gains only (tasks, quests, bonuses),
+// with `restricted: true` so a client can say why the penalties aren't there. Same response shape, so the
+// released apps keep working. Late penalties get exact minutes.
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
@@ -33,9 +37,12 @@ export async function GET(req: NextRequest) {
     const limit = Math.max(1, Math.min(100, Number(req.nextUrl.searchParams.get("limit")) || 50))
     const offset = Math.max(0, Number(req.nextUrl.searchParams.get("offset")) || 0)
 
+    const full = await canSeePersonalAttendance(session.user.id, targetId)
     const where = {
       userId: targetId,
       ...(scope === "period" ? { createdAt: { gte: getLeaderboardPeriodStart() } } : {}),
+      // Public view: no deductions and no attendance rows at all (their dates are personal too).
+      ...(full ? {} : { amount: { gt: 0 }, NOT: { reason: { startsWith: "attendance:" } } }),
     }
     const txns = await prisma.xpTransaction.findMany({
       where,
@@ -71,7 +78,7 @@ export async function GET(req: NextRequest) {
       lateMinutes: lateMinutesByTxn.has(t.id) ? lateMinutesByTxn.get(t.id) : null,
     }))
 
-    return NextResponse.json({ rows, hasMore, nextOffset: offset + page.length, user: peer.user, scope })
+    return NextResponse.json({ rows, hasMore, nextOffset: offset + page.length, user: peer.user, scope, restricted: !full })
   } catch (error) {
     console.error("xp-log GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

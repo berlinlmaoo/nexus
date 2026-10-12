@@ -7,7 +7,8 @@ import { isSystemAdminUser } from "@/lib/rbac"
 import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 
-const ADMIN_ROLES: readonly string[] = ["BOD", "MANAGER", "ONE_ABOVE_ALL"]
+// Every project's tasks: BoD / One Above All only; Managers see their own projects (owner 13 Oct 2026).
+const ADMIN_ROLES: readonly string[] = ["BOD", "ONE_ABOVE_ALL"]
 
 // Task feed for a project-sourced calendar. Returns tasks (with a due/start date in range) from the
 // requested projects — BUT only those the viewer is actually allowed to see. Project access mirrors

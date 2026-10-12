@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser, isAccessLevel, roleForLevel, type AccessLevel } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
@@ -13,6 +13,7 @@ import { notifyProjectInvite } from "@/lib/notification-service"
 import { ORG_WORKSPACE_ID } from "@/lib/org"
 import { findProjectTemplate, templateHiddenTabs, templateLang } from "@/lib/project-templates"
 import { createProjectFromTemplate } from "@/lib/project-template-apply"
+import { hasProjectWideAccess } from "@/lib/rbac"
 
 const projectListSelect = {
   id: true,
@@ -120,8 +121,7 @@ export async function GET(request: NextRequest) {
       }
 
       const canSeeAllWorkspaceProjects =
-        workspaceMembership.role === "BOD" ||
-        workspaceMembership.role === "MANAGER" || workspaceMembership.role === "ONE_ABOVE_ALL" ||
+        hasProjectWideAccess(workspaceMembership.role) ||
         await canManageTeamInWorkspace(session.user.id, workspaceId, teamId)
 
       const where: Record<string, unknown> = {
@@ -154,11 +154,11 @@ export async function GET(request: NextRequest) {
     })
 
     const adminWorkspaceIds = workspaceMemberships
-      .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
+      .filter((membership) => hasProjectWideAccess(membership.role)) // BoD / One Above All (owner 13 Oct 2026)
       .map((membership) => membership.workspaceId)
 
     const memberWorkspaceIds = workspaceMemberships
-      .filter((membership) => membership.role === "STAFF")
+      .filter((membership) => !hasProjectWideAccess(membership.role)) // Manager + Staff: member projects only
       .map((membership) => membership.workspaceId)
 
     const whereScopes: Record<string, unknown>[] = []
@@ -287,6 +287,8 @@ export async function POST(request: NextRequest) {
       initialHiddenTabs = tabs.hiddenTabs
     }
     let initialMemberIds: string[] = []
+    // Level for the people added at creation (Notion-style invite dropdown, owner 13 Oct 2026); default EDIT.
+    const initialMemberLevel: AccessLevel = isAccessLevel(body.memberAccessLevel) ? body.memberAccessLevel : "EDIT"
     if (body.memberIds !== undefined && body.memberIds !== null) {
       if (!Array.isArray(body.memberIds) || body.memberIds.some((x: unknown) => typeof x !== "string" || !x)) {
         return NextResponse.json({ error: "memberIds harus berupa daftar id user.", code: "INVALID_MEMBERS" }, { status: 400 })
@@ -337,6 +339,7 @@ export async function POST(request: NextRequest) {
           hiddenTabs: initialHiddenTabs,
           userId,
           memberIds: initialMemberIds,
+          memberLevel: initialMemberLevel,
         })
       : await prisma.project.create({
       data: {
@@ -350,8 +353,9 @@ export async function POST(request: NextRequest) {
         ...(initialHiddenTabs.length > 0 && { hiddenTabs: initialHiddenTabs }),
         members: {
           create: [
-            { userId, role: "LEAD" },
-            ...initialMemberIds.map((memberId) => ({ userId: memberId, role: "MEMBER" as const })),
+            // The creator is the Project Owner (Full access); the people picked get the dialog's level.
+            { userId, role: "LEAD", accessLevel: "FULL" },
+            ...initialMemberIds.map((memberId) => ({ userId: memberId, role: roleForLevel(initialMemberLevel), accessLevel: initialMemberLevel })),
           ],
         },
         taskLists: {

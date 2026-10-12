@@ -5,6 +5,7 @@ import { secretMatches } from "@/lib/cron-auth"
 import prisma from "@/lib/prisma"
 import { notifyQuestClaimable } from "@/lib/notification-service"
 import { AUTO_QUESTS, computeQuestProgress, currentPeriodKey } from "@/lib/gamification"
+import { audienceOf, questVisibleTo } from "@/lib/quest-audience"
 
 /**
  * Nudge people who have finished a quest but never collected the XP.
@@ -35,13 +36,13 @@ export async function POST(req: NextRequest) {
 
     const quests = await prisma.quest.findMany({
       where: { isActive: true, requirementType: { not: "specific_tasks" } },
-      select: { id: true, title: true, requiredCount: true, xpReward: true, requirementType: true, teamIds: true, deadline: true, workspaceId: true },
+      select: { id: true, title: true, requiredCount: true, xpReward: true, requirementType: true, teamIds: true, unitIds: true, deadline: true, workspaceId: true },
     })
     const live = quests.filter((q) => !q.deadline || q.deadline >= now)
 
     const defs = [
-      ...AUTO_QUESTS.map((q) => ({ key: q.key, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: [] as string[], workspaceId: null as string | null })),
-      ...live.map((q) => ({ key: q.id, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: q.teamIds, workspaceId: q.workspaceId })),
+      ...AUTO_QUESTS.map((q) => ({ key: q.key, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: [] as string[], unitIds: [] as string[], workspaceId: null as string | null })),
+      ...live.map((q) => ({ key: q.id, title: q.title, requirementType: q.requirementType, requiredCount: q.requiredCount, teamIds: q.teamIds, unitIds: q.unitIds, workspaceId: q.workspaceId })),
     ]
     if (defs.length === 0) return NextResponse.json({ ok: true, quests: 0, sent: 0 })
 
@@ -49,13 +50,12 @@ export async function POST(req: NextRequest) {
 
     let sent = 0
     for (const member of members) {
-      const teamRows = await prisma.teamMember.findMany({ where: { userId: member.userId }, select: { teamId: true } })
-      const teamIds = new Set(teamRows.map((t) => t.teamId))
+      const audience = await audienceOf(member.userId)
 
       for (const def of defs) {
         if (def.workspaceId && def.workspaceId !== member.workspaceId) continue
-        // Empty teamIds means the whole crew.
-        if (def.teamIds.length > 0 && !def.teamIds.some((t) => teamIds.has(t))) continue
+        // No units and no teams = the whole crew (lib/quest-audience.ts).
+        if (!questVisibleTo(def, audience)) continue
 
         const claimed = await prisma.questClaim.findUnique({
           where: { userId_questKey_periodKey: { userId: member.userId, questKey: def.key, periodKey } },

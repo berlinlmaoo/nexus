@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { notifyMention, notifyCommentAdded } from "@/lib/notification-service"
 import { executeAutomations } from "@/lib/automation-engine"
 import { emitCommentAdded } from "@/lib/socket-emitter"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { answerGideonMention, mentionsGideon } from "@/lib/gideon-triggers"
 
 export async function GET(
@@ -87,7 +87,8 @@ export async function POST(
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
-    if (!(await checkProjectAccess(session.user.id!, task.taskList.projectId, ["MEMBER"])).allowed) {
+    // Writing a comment needs Can comment (Notion levels, lib/rbac.ts), not Can edit.
+    if (!(await hasProjectLevel(session.user.id!, task.taskList.projectId, "COMMENT"))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

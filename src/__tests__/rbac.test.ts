@@ -1,126 +1,92 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock prisma before importing rbac
+// Project access levels (owner decision 13 Oct 2026, Notion's model): FULL / EDIT / COMMENT / VIEW.
 vi.mock('@/lib/prisma', () => {
   const mockPrisma = {
-    user: {
-      findUnique: vi.fn(),
-    },
-    projectMember: {
-      findUnique: vi.fn(),
-    },
-    project: {
-      findUnique: vi.fn(),
-    },
+    user: { findUnique: vi.fn() },
+    projectMember: { findUnique: vi.fn() },
+    project: { findUnique: vi.fn() },
     $transaction: vi.fn((queries) => Promise.all(queries)),
   }
   return { default: mockPrisma }
 })
 
-import { checkProjectAccess } from '@/lib/rbac'
+import { checkProjectAccess, memberAccessLevel, projectAccessLevel, roleForLevel } from '@/lib/rbac'
 import prisma from '@/lib/prisma'
 
-const mockFindUnique = vi.mocked(prisma.projectMember.findUnique)
+const user = vi.mocked(prisma.user.findUnique)
+const member = vi.mocked(prisma.projectMember.findUnique)
+const project = vi.mocked(prisma.project.findUnique)
 
-describe('checkProjectAccess', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+type Setup = { sys?: 'ADMIN' | 'USER'; ws?: string | null; type?: string; m?: { role: string; accessLevel?: string } | null }
+function setup({ sys = 'USER', ws = 'STAFF', type = 'TASK', m = null }: Setup) {
+  user.mockResolvedValue({ role: sys } as never)
+  member.mockResolvedValue((m ? { accessLevel: 'EDIT', ...m } : null) as never)
+  project.mockResolvedValue({ type, workspace: { members: ws ? [{ role: ws }] : [] } } as never)
+}
+
+describe('project access levels', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('BoD and One Above All: Full everywhere, also without membership', async () => {
+    for (const ws of ['BOD', 'ONE_ABOVE_ALL']) {
+      setup({ ws })
+      expect(await projectAccessLevel('u', 'p')).toBe('FULL')
+    }
   })
 
-  it('returns allowed=false when user is not a member', async () => {
-    mockFindUnique.mockResolvedValue(null)
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['MEMBER'])
-    expect(result.allowed).toBe(false)
-    expect(result.role).toBeNull()
+  it('Manager and Staff: nothing without membership', async () => {
+    for (const ws of ['MANAGER', 'STAFF']) {
+      setup({ ws })
+      expect(await projectAccessLevel('u', 'p')).toBeNull()
+    }
   })
 
-  it('allows LEAD when MEMBER is required', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: '1',
-      role: 'LEAD',
-      source: 'direct',
-      joinedAt: new Date(),
-      userId: 'user-1',
-      projectId: 'project-1',
-    })
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['MEMBER'])
-    expect(result.allowed).toBe(true)
-    expect(result.role).toBe('LEAD')
+  it('members get their level; the Project Owner (LEAD) is Full', async () => {
+    const cases: Array<[{ role: string; accessLevel?: string }, string]> = [
+      [{ role: 'LEAD' }, 'FULL'],
+      [{ role: 'MEMBER', accessLevel: 'EDIT' }, 'EDIT'],
+      [{ role: 'MEMBER', accessLevel: 'COMMENT' }, 'COMMENT'],
+      [{ role: 'MEMBER', accessLevel: 'VIEW' }, 'VIEW'],
+      [{ role: 'GUEST' }, 'COMMENT'],
+      [{ role: 'VIEWER' }, 'VIEW'],
+    ]
+    for (const ws of ['MANAGER', 'STAFF']) {
+      for (const [m, want] of cases) {
+        setup({ ws, m })
+        expect(await projectAccessLevel('u', 'p')).toBe(want)
+      }
+    }
   })
 
-  it('allows MEMBER when MEMBER is required', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: '2',
-      role: 'MEMBER',
-      source: 'direct',
-      joinedAt: new Date(),
-      userId: 'user-1',
-      projectId: 'project-1',
-    })
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['MEMBER'])
-    expect(result.allowed).toBe(true)
-    expect(result.role).toBe('MEMBER')
+  it('a PIPELINE project: only its members, even for the BoD', async () => {
+    setup({ ws: 'BOD', type: 'PIPELINE' })
+    expect(await projectAccessLevel('u', 'p')).toBeNull()
+    setup({ ws: 'BOD', type: 'PIPELINE', m: { role: 'MEMBER' } })
+    expect(await projectAccessLevel('u', 'p')).toBe('EDIT')
   })
 
-  it('denies VIEWER when MEMBER is required', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: '3',
-      role: 'VIEWER',
-      source: 'direct',
-      joinedAt: new Date(),
-      userId: 'user-1',
-      projectId: 'project-1',
-    })
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['MEMBER'])
-    expect(result.allowed).toBe(false)
-    expect(result.role).toBe('VIEWER')
+  it('not in the workspace: nothing; system admin: Full', async () => {
+    setup({ ws: null, m: { role: 'LEAD' } })
+    expect(await projectAccessLevel('u', 'p')).toBeNull()
+    setup({ sys: 'ADMIN', ws: null })
+    expect(await projectAccessLevel('u', 'p')).toBe('FULL')
   })
 
-  it('denies GUEST when VIEWER is required', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: '4',
-      role: 'GUEST',
-      source: 'direct',
-      joinedAt: new Date(),
-      userId: 'user-1',
-      projectId: 'project-1',
-    })
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['VIEWER'])
-    expect(result.allowed).toBe(false)
-    expect(result.role).toBe('GUEST')
+  it('checkProjectAccess: LEAD needs Full, MEMBER needs Edit, VIEWER needs View', async () => {
+    setup({ ws: 'STAFF', m: { role: 'MEMBER', accessLevel: 'EDIT' } })
+    expect((await checkProjectAccess('u', 'p', ['LEAD'])).allowed).toBe(false)
+    expect((await checkProjectAccess('u', 'p', ['MEMBER'])).allowed).toBe(true)
+    setup({ ws: 'STAFF', m: { role: 'VIEWER' } })
+    expect((await checkProjectAccess('u', 'p', ['MEMBER'])).allowed).toBe(false)
+    expect((await checkProjectAccess('u', 'p', ['VIEWER'])).allowed).toBe(true)
+    setup({ ws: 'STAFF', m: { role: 'LEAD' } })
+    expect((await checkProjectAccess('u', 'p', ['LEAD'])).allowed).toBe(true)
   })
 
-  it('allows GUEST when GUEST is required', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: '5',
-      role: 'GUEST',
-      source: 'direct',
-      joinedAt: new Date(),
-      userId: 'user-1',
-      projectId: 'project-1',
-    })
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['GUEST'])
-    expect(result.allowed).toBe(true)
-    expect(result.role).toBe('GUEST')
-  })
-
-  it('allows when user meets any of multiple required roles', async () => {
-    mockFindUnique.mockResolvedValue({
-      id: '6',
-      role: 'VIEWER',
-      source: 'direct',
-      joinedAt: new Date(),
-      userId: 'user-1',
-      projectId: 'project-1',
-    })
-
-    const result = await checkProjectAccess('user-1', 'project-1', ['VIEWER', 'MEMBER'])
-    expect(result.allowed).toBe(true)
+  it('role and level stay in step', () => {
+    for (const l of ['FULL', 'EDIT', 'COMMENT', 'VIEW'] as const) {
+      expect(memberAccessLevel({ role: roleForLevel(l), accessLevel: l })).toBe(l)
+    }
   })
 })

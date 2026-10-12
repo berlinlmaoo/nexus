@@ -17,6 +17,7 @@ import { sendEmail, workspaceAddedEmail, workspaceInviteNewUserEmail } from '@/l
 import type { WorkspaceRole } from '@/generated/prisma/client'
 import { syncUserRoomsSafe } from '@/lib/chat-membership'
 import { pipelineFlags } from '@/lib/pipeline-access'
+import { personalScope } from '@/lib/personal-visibility'
 
 // Caller's effective tier (system super-admin = top). Used to gate who can assign which role.
 function callerTier(role: string | null | undefined, isSystemAdmin: boolean) {
@@ -75,6 +76,11 @@ export async function GET(req: NextRequest) {
     const canSeePhoneNumbers = callerTier(member.role, isSystemAdmin) >= 3
 
     const pipeline = await pipelineFlags(session.user.id)
+    // Personal attendance data (shift, per-day shift, rest days, Flexi / no-geofence, approver) only for
+    // yourself and the people below you in the approval chain; BoD / One Above All / system admin see all
+    // (owner decision 13 Oct 2026, lib/personal-visibility.ts). Hidden rows keep every key with a neutral
+    // value plus `personalHidden: true`, so the released apps decode them as before.
+    const personal = await personalScope(session.user.id, member.workspaceId)
 
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: member.workspaceId },
@@ -118,6 +124,8 @@ export async function GET(req: NextRequest) {
         approverId: string | null
         approver: { id: string; name: string | null; avatar: string | null } | null
         joinedAt: Date
+        /** True when the personal attendance fields above were withheld from this viewer (neutral values). */
+        personalHidden?: boolean
       }>
       availableUsers?: Array<{
         id: string
@@ -145,16 +153,31 @@ export async function GET(req: NextRequest) {
         // yang memang dipakai orang untuk saling menyurati, bukan data pribadi.
         googleWorkspaceEmail: m.user.googleWorkspaceEmail,
         role: m.role,
-        attendanceRole: m.attendanceRole,
-        attendanceShiftStartTime: m.attendanceShiftStartTime,
-        attendanceShiftEndTime: m.attendanceShiftEndTime,
-        attendanceShiftByDay: m.attendanceShiftByDay ?? null,
-        flexiTimeEnabled: m.flexiTimeEnabled,
-        noGeofenceMode: m.noGeofenceMode,
-        restDays: m.restDays ?? [],
-        approverId: m.approverId,
-        approver: m.approver,
         joinedAt: m.joinedAt,
+        ...(personal.canSee(m.user.id)
+          ? {
+              attendanceRole: m.attendanceRole,
+              attendanceShiftStartTime: m.attendanceShiftStartTime,
+              attendanceShiftEndTime: m.attendanceShiftEndTime,
+              attendanceShiftByDay: m.attendanceShiftByDay ?? null,
+              flexiTimeEnabled: m.flexiTimeEnabled,
+              noGeofenceMode: m.noGeofenceMode,
+              restDays: m.restDays ?? [],
+              approverId: m.approverId,
+              approver: m.approver,
+            }
+          : {
+              attendanceRole: "NONE",
+              attendanceShiftStartTime: null,
+              attendanceShiftEndTime: null,
+              attendanceShiftByDay: null,
+              flexiTimeEnabled: false,
+              noGeofenceMode: false,
+              restDays: [] as number[],
+              approverId: null,
+              approver: null,
+              personalHidden: true,
+            }),
       })),
     }
 

@@ -127,7 +127,7 @@ function actorScopedProjectWhere(actor: Pick<User, 'id' | 'role'>, input: Record
   if (actor.role !== 'ADMIN') {
     where.OR = [
       { members: { some: { userId: actor.id } } },
-      { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+      { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
     ]
   }
 
@@ -151,7 +151,7 @@ function actorScopedTaskWhere(actor: Pick<User, 'id' | 'role'>, input: Record<st
     taskListWhere.project = {
       OR: [
         { members: { some: { userId: actor.id } } },
-        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
       ],
     }
   }
@@ -271,7 +271,7 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
               project: {
                 OR: [
                   { members: { some: { userId: actor.id } } },
-                  { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+                  { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
                 ],
               },
             }),
@@ -339,7 +339,7 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
         : {
             OR: [
               { members: { some: { userId: actor.id } } },
-              { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+              { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
             ],
           }),
     },
@@ -835,7 +835,7 @@ async function getAccessibleProject(actor: User, projectId: string) {
         : {
             OR: [
               { members: { some: { userId: actor.id } } },
-              { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+              { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
             ],
           }),
     },
@@ -877,7 +877,7 @@ async function resolveTaskList(actor: User, input: Record<string, unknown>, stat
               project: {
                 OR: [
                   { members: { some: { userId: actor.id } } },
-                  { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+                  { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
                 ],
               },
             }),
@@ -1465,7 +1465,7 @@ function docProjectScope(actor: Pick<User, 'id' | 'role'>): Prisma.DocWhereInput
     project: {
       OR: [
         { members: { some: { userId: actor.id } } },
-        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
+        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD'] } } } } },
       ],
     },
   }

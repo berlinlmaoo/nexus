@@ -929,7 +929,12 @@ export async function notifyProjectInvite(data: {
     userId: data.userId,
     type: "project_invite",
     title: `${data.invitedByName} invited you to ${data.projectName}`,
-    message: `You're now ${data.role ? `a ${data.role.toLowerCase()}` : "a member"} of "${data.projectName}".`,
+    // Says the access level (Notion-style, 13 Oct 2026); LEAD reads "the Project Owner", never "a lead".
+    message: data.role === "LEAD"
+      ? `You have Full access to "${data.projectName}".`
+      : data.role === "GUEST" ? `You can comment in "${data.projectName}".`
+        : data.role === "VIEWER" ? `You can view "${data.projectName}".`
+          : `You can edit "${data.projectName}".`,
     projectId: data.projectId,
     link: `/projects/${data.projectId}`,
     push: prefs.projectInvite,

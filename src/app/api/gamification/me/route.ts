@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { AUTO_QUESTS, computeQuestProgress, currentPeriodKey, levelForXp, getPeriodScore, applyAutoPenalties, QUEST_ONCE_PERIOD } from "@/lib/gamification"
+import { audienceOf, questVisibleTo } from "@/lib/quest-audience"
 
 export async function GET() {
   try {
@@ -35,10 +36,11 @@ export async function GET() {
     const userProjectIds = new Set(projectMembers.map((p) => p.projectId))
     const liveQuests = adminQuestsRaw.filter((q) => !q.deadline || q.deadline >= now)
 
-    // Team/auto quests: visible by team assignment (empty = semua crew).
-    const teamQuests = liveQuests.filter(
-      (q) => q.requirementType !== "specific_tasks" && (q.teamIds.length === 0 || q.teamIds.some((t) => userTeamIds.has(t)))
-    )
+    // Team/auto quests: visible by audience — IP & Division Chart units (and sub-units), legacy teams;
+    // none = everyone (lib/quest-audience.ts).
+    const audience = await audienceOf(userId)
+    for (const id of userTeamIds) audience.teamIds.add(id)
+    const teamQuests = liveQuests.filter((q) => q.requirementType !== "specific_tasks" && questVisibleTo(q, audience))
 
     // specific_tasks quests are VISIBLE to anyone in a project that owns one of the quest's tasks; XP is
     // CLAIMABLE only by a task's assignee (the doer). Fetch every referenced task once for both checks.

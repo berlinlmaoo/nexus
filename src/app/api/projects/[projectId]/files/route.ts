@@ -121,8 +121,8 @@ export async function DELETE(
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { projectId } = await params
-  // Deleting requires elevated project rights.
-  const { allowed } = await checkProjectAccess(session.user.id!, projectId, ["LEAD"])
+  // Deleting a file is editing the project's content: Can edit (Notion levels, owner 13 Oct 2026).
+  const { allowed } = await checkProjectAccess(session.user.id!, projectId, ["MEMBER"])
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {

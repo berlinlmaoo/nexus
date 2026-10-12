@@ -180,7 +180,7 @@ export function AutomationsView({ projectId }: { projectId: string }) {
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <Zap className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" />
           <div className="font-semibold">{t("No automations yet")}</div>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{canEdit ? t("Set one up: pick what starts it, filter which tasks, then what NEXUS should do.") : t("Project leads can set up automations here.")}</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{canEdit ? t("Set one up: pick what starts it, filter which tasks, then what NEXUS should do.") : t("People with Full access can set up automations here.")}</p>
           {canEdit && <button type="button" onClick={() => setEditing({ id: null, tab: "rule" })} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><Plus className="h-4 w-4" /> {t("New automation")}</button>}
         </div>
       )}

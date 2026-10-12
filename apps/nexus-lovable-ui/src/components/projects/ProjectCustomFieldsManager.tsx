@@ -168,7 +168,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
 
       {adding && <FieldEditor saving={create.isPending} onCancel={() => setAdding(false)} onSave={(payload) => create.mutate(payload)} />}
 
-      {(create.isError || update.isError || del.isError) && <p className="text-xs font-semibold text-destructive">{tr("That didn't go through. You need the LEAD role; check your access.")}</p>}
+      {(create.isError || update.isError || del.isError) && <p className="text-xs font-semibold text-destructive">{tr("That didn't go through. You need Full access to the project.")}</p>}
     </div>
   );
 }

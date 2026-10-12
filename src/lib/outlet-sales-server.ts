@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma/client"
-import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser, hasProjectLevel } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { emitOutletSalesChanged } from "@/lib/socket-emitter"
@@ -60,18 +60,8 @@ export async function outletGate(userId: string, projectId: string, need: "read"
  * All of its workspace.
  */
 export async function canManageOutletTargets(userId: string, projectId: string): Promise<boolean> {
-  if (await isSystemAdminUser(userId)) return true
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { workspaceId: true, members: { where: { userId }, select: { role: true } } },
-  })
-  if (!project) return false
-  if (project.members[0]?.role === "LEAD") return true
-  const wm = await prisma.workspaceMember.findUnique({
-    where: { userId_workspaceId: { userId, workspaceId: project.workspaceId } },
-    select: { role: true },
-  })
-  return wm?.role === "BOD" || wm?.role === "MANAGER" || wm?.role === "ONE_ABOVE_ALL"
+  // Full access (lib/rbac.ts): the Project Owner, BoD / One Above All, a system admin (owner 13 Oct 2026).
+  return hasProjectLevel(userId, projectId, "FULL")
 }
 
 // ── Wire format ───────────────────────────────────────────────────────────────────────────────────────

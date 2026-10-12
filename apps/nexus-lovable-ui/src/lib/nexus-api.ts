@@ -362,7 +362,21 @@ export type NexusProjectFolder = {
   aggregateProjectIds?: string[];
 };
 
+/** Notion-style project access (owner 13 Oct 2026): Full access / Can edit / Can comment / Can view. */
+export type ProjectAccessLevel = "FULL" | "EDIT" | "COMMENT" | "VIEW";
+/** A member's level as the server reads it (lib/rbac.ts memberAccessLevel). */
+export function memberLevelOf(m: { role?: string | null; accessLevel?: string | null }): ProjectAccessLevel {
+  if (m.role === "LEAD") return "FULL";
+  if (m.role === "GUEST") return "COMMENT";
+  if (m.role === "VIEWER") return "VIEW";
+  return m.accessLevel === "EDIT" || m.accessLevel === "COMMENT" || m.accessLevel === "VIEW" ? m.accessLevel : "EDIT";
+}
+
 export type NexusProject = {
+  /** GET /api/projects/:id only: may the viewer manage this project (settings, members, deleting tasks)? */
+  viewerCanManage?: boolean;
+  /** GET /api/projects/:id only: the viewer's level here (Full access / Can edit / Can comment / Can view). */
+  viewerAccessLevel?: ProjectAccessLevel;
   id: string;
   name: string;
   description?: string | null;
@@ -388,7 +402,8 @@ export type NexusProject = {
   /** The template it was built from (12 Oct 2026, GET /api/project-templates); null/absent = blank. */
   templateId?: string | null;
   _count?: { members?: number; taskLists?: number; tasks?: number };
-  members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
+  /** role LEAD = the Project Owner. accessLevel: Notion-style level (13 Oct 2026); absent on older servers. */
+  members?: Array<{ userId?: string; role?: string; accessLevel?: ProjectAccessLevel; user?: NexusUser }>;
   /** taskStatus (12 Oct 2026): the task status the section stands for; moving a task in sets it (server). */
   taskLists?: Array<{ id: string; name: string; position?: number; taskStatus?: NexusTaskStatus | null; color?: string | null; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
 };
@@ -807,6 +822,8 @@ export type NexusWorkspaceMember = {
   approverId?: string | null;
   approver?: { id: string; name: string | null; avatar: string | null } | null;
   joinedAt: string;
+  /** The personal attendance fields above were withheld from this viewer (owner, 13 Oct 2026). */
+  personalHidden?: boolean;
 };
 
 /** Satu orang di Bagan Approval (Control Room). */
@@ -936,6 +953,8 @@ export type NexusUserXpLog = {
   nextOffset: number;
   user: { id: string; name?: string | null; avatar?: string | null } | null;
   scope?: "period" | "all";
+  /** True when the viewer may only see the public part (gains): penalties and attendance rows left out. */
+  restricted?: boolean;
 };
 
 /** One XP ledger row on a member record (GET /api/members/:id/record). `label` is ready to show; an
@@ -996,6 +1015,10 @@ export type NexusAdminQuest = {
   xpReward: number;
   isActive?: boolean;
   teamIds?: string[];
+  /** IP & Division Chart units (13 Oct 2026); empty = everyone. */
+  unitIds?: string[];
+  /** Pointed at deleted teams and was moved to everyone. */
+  teamsRetired?: boolean;
   deadline?: string | null;
 };
 
@@ -2206,6 +2229,8 @@ export type CreateProjectPayload = {
   hiddenTabs?: string[];
   /** People of that workspace added as MEMBER next to the creator (LEAD). 11 Oct 2026. */
   memberIds?: string[];
+  /** Access level for memberIds (Notion-style, default EDIT). The creator is always the Project Owner. */
+  memberAccessLevel?: ProjectAccessLevel;
   /** Build from a template (12 Oct 2026, TASK only), in this language; starter=false skips starter pages. */
   templateId?: string;
   lang?: "en" | "id";
@@ -2301,9 +2326,11 @@ export const nexusApi = {
   projectMembers: (projectId: string) => apiFetch<{ members?: Array<{ userId?: string; role?: string; user?: NexusUser }> } | Array<{ userId?: string; role?: string; user?: NexusUser }>>(`/api/projects/${projectId}/members`),
   addProjectMember: (projectId: string, userId: string, role = "MEMBER") => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ userId, role }) }),
   // Several at once (servers from 9 Oct 2026). People already in are skipped, not an error.
-  addProjectMembers: (projectId: string, userIds: string[], role = "MEMBER") => apiFetch<{ success?: boolean; added?: Array<{ userId: string; user?: NexusUser }>; alreadyMembers?: string[]; unknown?: string[] }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ userIds, role }) }),
+  addProjectMembers: (projectId: string, userIds: string[], accessLevel: ProjectAccessLevel = "EDIT") => apiFetch<{ success?: boolean; added?: Array<{ userId: string; user?: NexusUser }>; alreadyMembers?: string[]; unknown?: string[] }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ userIds, accessLevel }) }),
+  /** PATCH one member's access level (Full access only; 409 LAST_OWNER when it would leave no Project Owner). */
+  setProjectMemberAccess: (projectId: string, userId: string, accessLevel: ProjectAccessLevel) => apiFetch<{ userId: string; role: string; accessLevel: ProjectAccessLevel }>(`/api/projects/${projectId}/members`, { method: "PATCH", body: JSON.stringify({ userId, accessLevel }) }),
   removeProjectMember: (projectId: string, userId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/members`, { method: "DELETE", body: JSON.stringify({ userId }) }),
-  inviteToProject: (projectId: string, email: string, role = "GUEST") => apiFetch<{ success?: boolean; invite?: unknown }>(`/api/projects/${projectId}/invite`, { method: "POST", body: JSON.stringify({ email, role }) }),
+  inviteToProject: (projectId: string, email: string, accessLevel: ProjectAccessLevel = "EDIT") => apiFetch<{ success?: boolean; invite?: unknown }>(`/api/projects/${projectId}/invite`, { method: "POST", body: JSON.stringify({ email, accessLevel }) }),
   projectRollups: (projectId: string) => apiFetch<{ totalTasks?: number; completedTasks?: number; completionRate?: number; avgCompletionDays?: number; byStatus?: Record<string, number>; byPriority?: Record<string, number> }>(`/api/projects/${projectId}/rollups`),
   statusUpdates: (projectId: string) => apiFetch<NexusStatusUpdate[]>(`/api/status-updates?projectId=${encodeURIComponent(projectId)}`),
   createStatusUpdate: (projectId: string, text: string, status?: string) => apiFetch<NexusStatusUpdate>("/api/status-updates", { method: "POST", body: JSON.stringify({ projectId, text, status }) }),
@@ -2569,7 +2596,7 @@ export const nexusApi = {
     return apiFetch<NexusXpAuditResponse>(`/api/gamification/xp-transactions${s ? `?${s}` : ""}`);
   },
   adminQuests: (workspaceId?: string) => apiFetch<{ quests: NexusAdminQuest[] }>(`/api/gamification/quests/admin${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
+  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; unitIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
   deleteAdminQuest: (id: string) => apiFetch<{ success?: boolean }>(`/api/gamification/quests/admin?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- Tasks (detail surface) ---

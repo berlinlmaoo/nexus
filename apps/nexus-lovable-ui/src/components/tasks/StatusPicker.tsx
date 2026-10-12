@@ -39,7 +39,7 @@ type Section = StatusOption & { position?: number | null };
  * the project's sections, so a new option is a new board column at once. Picking one moves the task
  * there (the server gives it that status).
  */
-export function StatusPicker({ projectId, sections, value, onPick, canManage = true, trigger, align = "start", disabled }: {
+export function StatusPicker({ projectId, sections, value, onPick, canManage: canManageProp, trigger, align = "start", disabled }: {
   projectId: string;
   sections: Section[];
   value: string | null | undefined;
@@ -52,6 +52,10 @@ export function StatusPicker({ projectId, sections, value, onPick, canManage = t
   const { t } = useLang();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  // Adding / editing status options is Full access (owner 13 Oct 2026). Unless the caller says, follow the
+  // project payload already cached by the page (viewerAccessLevel); unknown = allowed, as before.
+  const cachedLevel = qc.getQueryData<{ viewerAccessLevel?: string }>(["nexus", "project", projectId])?.viewerAccessLevel;
+  const canManage = canManageProp ?? (cachedLevel ? cachedLevel === "FULL" : true);
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState<StatusGroupKey | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);

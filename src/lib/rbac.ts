@@ -1,10 +1,8 @@
 import prisma from '@/lib/prisma'
 import type { ProjectRole, WorkspaceRole } from '@/generated/prisma/client'
 
-// ProjectRole is now only used to express the REQUIRED level of an action
-// (LEAD=manage, MEMBER=contribute, VIEWER/GUEST=view). Project membership itself
-// carries no per-project role anymore — access is driven by the org-wide workspace
-// role (BoD / Manager / Staff) + whether the user is a member of the project.
+// ProjectRole expresses the REQUIRED level of an action (LEAD=Full, MEMBER=Edit, VIEWER/GUEST=View) and,
+// on ProjectMember, marks the project's Owner (LEAD). Access levels: see "Project access levels" below.
 const ROLE_HIERARCHY: Record<ProjectRole, number> = {
   LEAD: 4,
   MEMBER: 3,
@@ -38,77 +36,103 @@ export async function isSystemAdminUser(userId: string): Promise<boolean> {
   return user?.role === 'ADMIN'
 }
 
+// ─── Project access levels (owner decision 13 Oct 2026, Notion's model) ─────────────────────────────────
+//
+//   FULL     Full access — rename, settings, automations, statuses/columns, members, delete the project
+//   EDIT     Can edit    — create / edit / delete tasks, docs, sheets, comments
+//   COMMENT  Can comment — read, and comment
+//   VIEW     Can view    — read only
+//
+// Who gets which:
+//   - system admin, and the roles in PROJECT_WIDE_ROLES (One Above All, BoD) → FULL on every project of
+//     their workspace (Notion's workspace owners). Not on a PIPELINE project they are not a member of.
+//   - everyone else (Manager, Staff) → only projects they are a member of, at that membership's level.
+//     The project's Owner (ProjectMember.role LEAD — shown as "Project Owner") is FULL; otherwise
+//     ProjectMember.accessLevel (EDIT by default). Nobody else sees a project.
+// This is the ONE place that answers "what may this person do in this project"; every route asks it
+// through checkProjectAccess / projectAccessLevel.
+
+export type AccessLevel = 'FULL' | 'EDIT' | 'COMMENT' | 'VIEW'
+export const ACCESS_LEVELS: AccessLevel[] = ['FULL', 'EDIT', 'COMMENT', 'VIEW']
+export const LEVEL_RANK: Record<AccessLevel, number> = { VIEW: 1, COMMENT: 2, EDIT: 3, FULL: 4 }
+
+/** Workspace roles with Full access to every project of the workspace. The workspace-wide rule lives here. */
+export const PROJECT_WIDE_ROLES: WorkspaceRole[] = ['ONE_ABOVE_ALL', 'BOD']
+export function hasProjectWideAccess(role?: string | null): boolean {
+  return !!role && (PROJECT_WIDE_ROLES as string[]).includes(role)
+}
+
+export function isAccessLevel(v: unknown): v is AccessLevel {
+  return typeof v === 'string' && (ACCESS_LEVELS as string[]).includes(v)
+}
+
+/**
+ * A membership's level. role and accessLevel are written together (roleForLevel), so they agree; role wins
+ * where it is specific — LEAD (the Project Owner) = FULL, GUEST = COMMENT, VIEWER = VIEW — because older
+ * code paths (project create, email invites, team sync) write only role. A plain MEMBER reads accessLevel.
+ */
+export function memberAccessLevel(m: { role?: string | null; accessLevel?: string | null } | null | undefined): AccessLevel | null {
+  if (!m) return null
+  if (m.role === 'LEAD') return 'FULL'
+  if (m.role === 'GUEST') return 'COMMENT'
+  if (m.role === 'VIEWER') return 'VIEW'
+  return isAccessLevel(m.accessLevel) && m.accessLevel !== 'FULL' ? m.accessLevel : 'EDIT'
+}
+
+/** The ProjectMember.role written with a level, so released apps (which read role) see the same thing. */
+export function roleForLevel(level: AccessLevel): ProjectRole {
+  return level === 'FULL' ? 'LEAD' : level === 'COMMENT' ? 'GUEST' : level === 'VIEW' ? 'VIEWER' : 'MEMBER'
+}
+
+/** The viewer's level in a project, or null for no access. */
+export async function projectAccessLevel(userId: string, projectId: string): Promise<AccessLevel | null> {
+  const [user, membership, project] = await prisma.$transaction([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    prisma.projectMember.findUnique({ where: { userId_projectId: { userId, projectId } }, select: { role: true, accessLevel: true } }),
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { type: true, workspace: { select: { members: { where: { userId }, select: { role: true }, take: 1 } } } },
+    }),
+  ])
+  if (!project) return null
+  if (user?.role === 'ADMIN') return 'FULL'
+  const workspaceRole = project.workspace.members[0]?.role
+  if (!workspaceRole) return null
+  const own = memberAccessLevel(membership)
+  // A PIPELINE project is for the people added to it and nobody else (owner, 9 Oct 2026).
+  if (project.type === 'PIPELINE') return own
+  if (hasProjectWideAccess(workspaceRole)) return 'FULL'
+  return own
+}
+
+/** Required ProjectRole → level: LEAD = FULL, MEMBER = EDIT, VIEWER / GUEST = VIEW. */
+function levelForRequired(requiredRole: ProjectRole[]): AccessLevel {
+  const min = Math.min(...requiredRole.map((r) => ROLE_HIERARCHY[r]))
+  return min >= ROLE_HIERARCHY.LEAD ? 'FULL' : min >= ROLE_HIERARCHY.MEMBER ? 'EDIT' : 'VIEW'
+}
+
+const ROLE_FOR_LEVEL: Record<AccessLevel, ProjectRole> = { FULL: 'LEAD', EDIT: 'MEMBER', COMMENT: 'GUEST', VIEW: 'VIEWER' }
+
+/** Does the viewer have at least `min` in this project? */
+export async function hasProjectLevel(userId: string, projectId: string, min: AccessLevel): Promise<boolean> {
+  const level = await projectAccessLevel(userId, projectId)
+  return !!level && LEVEL_RANK[level] >= LEVEL_RANK[min]
+}
+
+/**
+ * The historical entry point every route uses: `requiredRole` LEAD = FULL, MEMBER = EDIT, VIEWER/GUEST =
+ * VIEW. `role` answers the viewer's level in the old vocabulary (FULL→LEAD, EDIT→MEMBER, COMMENT→GUEST,
+ * VIEW→VIEWER). Use hasProjectLevel(…, "COMMENT") for comment writes.
+ */
 export async function checkProjectAccess(
   userId: string,
   projectId: string,
   requiredRole: ProjectRole[]
-): Promise<{ allowed: boolean; role: ProjectRole | null }> {
-  const [user, membership, project] = await prisma.$transaction([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    }),
-    prisma.projectMember.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-      select: { role: true },
-    }),
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        workspaceId: true,
-        type: true,
-        workspace: {
-          select: {
-            members: {
-              where: { userId },
-              select: { role: true },
-              take: 1,
-            },
-          },
-        },
-      },
-    }),
-  ])
-
-  // System super-admin (cross-workspace, dev/owner) → full access everywhere.
-  if (user?.role === 'ADMIN') {
-    return { allowed: true, role: 'LEAD' }
-  }
-
-  const workspaceRole = project?.workspace.members[0]?.role
-  if (!workspaceRole) {
-    // Not a member of the project's workspace → no access.
-    return { allowed: false, role: null }
-  }
-
-  const isMember = !!membership
-  const minRequired = Math.min(...requiredRole.map((r) => ROLE_HIERARCHY[r]))
-  // What does the action need? LEAD(4)=manage, MEMBER(3)=contribute/edit, ≤VIEWER(2)=view.
-  const need: 'manage' | 'contribute' | 'view' =
-    minRequired >= ROLE_HIERARCHY.LEAD ? 'manage' : minRequired >= ROLE_HIERARCHY.MEMBER ? 'contribute' : 'view'
-
-  // A PIPELINE project is for the people added to it and nobody else (owner, 9 Oct 2026: "yg bisa
-  // buka chat dan project nya yg di add didalem projectnya doang"): no OAA/BoD/Manager reach-through.
-  // Members then follow the ordinary rules below (their project role decides what they may do).
-  if (project?.type === 'PIPELINE' && !isMember) {
-    return { allowed: false, role: null }
-  }
-
-  // One Above All / BoD → manage everything in the workspace.
-  if (workspaceRole === 'ONE_ABOVE_ALL' || workspaceRole === 'BOD') {
-    return { allowed: true, role: 'LEAD' }
-  }
-
-  // Manager → manage EVERY project in the workspace (member or not), same as BoD for project work.
-  if (workspaceRole === 'MANAGER') {
-    return { allowed: true, role: 'LEAD' }
-  }
-
-  // Staff → only projects they're a member of; can view + contribute, but not manage.
-  if (!isMember) {
-    return { allowed: false, role: null }
-  }
-  return need === 'manage' ? { allowed: false, role: 'MEMBER' } : { allowed: true, role: 'MEMBER' }
+): Promise<{ allowed: boolean; role: ProjectRole | null; level: AccessLevel | null }> {
+  const level = await projectAccessLevel(userId, projectId)
+  if (!level) return { allowed: false, role: null, level: null }
+  const need = levelForRequired(requiredRole)
+  return { allowed: LEVEL_RANK[level] >= LEVEL_RANK[need], role: ROLE_FOR_LEVEL[level], level }
 }
 
 /**

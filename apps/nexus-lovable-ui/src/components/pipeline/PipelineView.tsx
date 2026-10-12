@@ -231,7 +231,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
           icon={Filter}
           tone="muted"
           title={code === 403 ? t("This pipeline is for its project members") : t("The pipeline didn't load")}
-          message={code === 403 ? t("Ask the project lead or a manager to add you to the project.") : t("Check your connection, then try again.")}
+          message={code === 403 ? t("Ask the Project Owner or a BoD to add you to the project.") : t("Check your connection, then try again.")}
           action={code === 403 ? undefined : <EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>}
         />
       </div>

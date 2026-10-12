@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma"
-import { isWorkspaceManagerRole } from "@/lib/rbac"
+import { hasProjectWideAccess } from "@/lib/rbac"
 import { visibleConversationIdsOf } from "@/lib/chat-access"
 
 /**
@@ -94,7 +94,7 @@ export async function visibilityOf(userId: string) {
     prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
   ])
   const wsIds = memberships.map((m) => m.workspaceId)
-  const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => isWorkspaceManagerRole(m.role)).map((m) => m.workspaceId)
+  const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
   const visibleProject = {
     workspaceId: { in: wsIds.length ? wsIds : ["__none__"] },
     OR: [{ workspaceId: { in: fullWs.length ? fullWs : ["__none__"] } }, { members: { some: { userId } } }],

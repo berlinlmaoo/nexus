@@ -6,7 +6,7 @@ import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { deleteKeepingSnapshot } from "@/lib/deletion-snapshot"
-import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel, isSystemAdminUser } from "@/lib/rbac"
 import {
   normalizeAutoAssignConfig,
   ProjectAutoAssignConfigError,
@@ -15,47 +15,11 @@ import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { normalizeHiddenTabs } from "@/lib/project-tabs"
 
+// Deleting the project: Full access (lib/rbac.ts) — the Project Owner, BoD / One Above All, a system admin.
 async function canManageProject(userId: string, projectId: string) {
-  if (await isSystemAdminUser(userId)) {
-    return { allowed: true, reason: "system-admin" as const }
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      workspaceId: true,
-      members: {
-        where: { userId },
-        select: { role: true },
-      },
-    },
-  })
-
-  if (!project) {
-    return { allowed: false, reason: "Project not found" as const }
-  }
-
-  const projectRole = project.members[0]?.role ?? null
-  if (projectRole === "LEAD") {
-    return { allowed: true, reason: "project-lead" as const }
-  }
-
-  const workspaceMembership = await prisma.workspaceMember.findUnique({
-    where: {
-      userId_workspaceId: {
-        userId,
-        workspaceId: project.workspaceId,
-      },
-    },
-    select: { role: true },
-  })
-
-  const workspaceRole = workspaceMembership?.role ?? null
-  if (workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL") {
-    return { allowed: true, reason: "workspace-admin" as const }
-  }
-
-  return { allowed: false, reason: "forbidden" as const }
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
+  if (!project) return { allowed: false, reason: "Project not found" as const }
+  return (await hasProjectLevel(userId, projectId, "FULL")) ? { allowed: true, reason: "full-access" as const } : { allowed: false, reason: "forbidden" as const }
 }
 
 export async function GET(
@@ -158,7 +122,12 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(project)
+    // What the viewer may do here, from the one rule the write routes use (lib/rbac.ts checkProjectAccess
+    // LEAD = manage). Additive: clients gate settings, members, statuses and deletes on it instead of
+    // guessing from the org role (a Staff project lead manages their project, owner 13 Oct 2026).
+    const manage = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
+    // viewerAccessLevel: FULL | EDIT | COMMENT | VIEW (Notion-style levels, owner 13 Oct 2026).
+    return NextResponse.json({ ...project, viewerCanManage: manage.allowed, viewerAccessLevel: manage.level })
   } catch (error) {
     console.error("Error fetching project:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -208,7 +177,7 @@ export async function PATCH(
 
     const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: LEAD role required to update projects" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Full access to change this project" }, { status: 403 })
     }
 
     let normalizedAutoAssignConfig:
@@ -319,7 +288,7 @@ export async function DELETE(
 
     const { allowed } = await canManageProject(session.user.id!, (await params).projectId)
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: project lead or workspace admin required to delete projects" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Full access to delete this project" }, { status: 403 })
     }
 
     const projectId = (await params).projectId

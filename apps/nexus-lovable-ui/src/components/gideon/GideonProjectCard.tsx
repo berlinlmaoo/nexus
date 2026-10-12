@@ -143,7 +143,7 @@ export function GideonProjectCard({ projectId, projectName }: { projectId: strin
                 <Plus className="h-3.5 w-3.5" /> {schedules.length ? t("Add another time") : t("Set up a weekly digest")}
               </button>
             )}
-            {!q.isLoading && !schedules.length && !canManage && <p className="mt-2 text-xs text-muted-foreground">{t("Project leads can set up a weekly digest here.")}</p>}
+            {!q.isLoading && !schedules.length && !canManage && <p className="mt-2 text-xs text-muted-foreground">{t("People with Full access can set up a weekly digest here.")}</p>}
           </div>
 
           {/* When mentioned */}

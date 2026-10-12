@@ -9,7 +9,7 @@ import { scheduleView, validateScheduleInput } from "@/lib/gideon-schedule-api"
 async function load(id: string, userId: string) {
   const row = await prisma.gideonSchedule.findUnique({ where: { id } })
   if (!row) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) }
-  if (!(await checkProjectAccess(userId, row.projectId, ["LEAD"])).allowed) return { error: NextResponse.json({ error: "Only a project lead can change GIDEON schedules" }, { status: 403 }) }
+  if (!(await checkProjectAccess(userId, row.projectId, ["LEAD"])).allowed) return { error: NextResponse.json({ error: "Only someone with Full access to the project (its Project Owner or the BoD) can change GIDEON schedules" }, { status: 403 }) }
   return { row }
 }
 

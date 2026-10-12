@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth"
 import { notifyProjectInvite } from "@/lib/notification-service"
 import { logAudit } from "@/lib/audit"
 import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, isAccessLevel, memberAccessLevel, roleForLevel, type AccessLevel } from "@/lib/rbac"
 import { syncProjectRoomSafe } from "@/lib/chat-membership"
 import { emitWorkspaceChanged } from "@/lib/socket-emitter"
 import { emitProjectChanged } from "@/lib/workspace-realtime"
@@ -19,6 +19,11 @@ export async function GET(
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // Who is in a project is visible to the people who can see the project (it answered anyone signed in).
+    if (!(await checkProjectAccess(session.user.id!, (await params).projectId, ["VIEWER"])).allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     await syncProjectLinkedTeamAccess((await params).projectId)
 
@@ -54,8 +59,14 @@ export async function POST(
 
     const { projectId } = await params
     const body = await request.json().catch(() => ({}))
+    // Access level for everyone in this batch (Notion's invite dropdown, owner 13 Oct 2026): FULL | EDIT |
+    // COMMENT | VIEW, default EDIT. The released apps send `role` instead (LEAD/MEMBER/VIEWER/GUEST): it maps
+    // onto the same levels, and role is always written to match (lib/rbac.ts roleForLevel).
     const ROLES: ProjectRole[] = ["LEAD", "MEMBER", "VIEWER", "GUEST"]
-    const role: ProjectRole = ROLES.includes(body?.role) ? body.role : "MEMBER"
+    const level: AccessLevel = isAccessLevel(body?.accessLevel)
+      ? body.accessLevel
+      : (memberAccessLevel({ role: ROLES.includes(body?.role) ? body.role : "MEMBER" }) ?? "EDIT")
+    const role: ProjectRole = roleForLevel(level)
     const bulk = Array.isArray(body?.userIds)
     const requested: string[] = bulk
       ? Array.from(new Set((body.userIds as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)))
@@ -68,10 +79,10 @@ export async function POST(
       return NextResponse.json({ error: `At most ${MAX_BULK} people at once` }, { status: 400 })
     }
 
-    // Only project managers (BoD / Manager-member / system admin) may add members.
+    // Adding people is Full access (the Project Owner, BoD / One Above All, a system admin).
     const { allowed } = await checkProjectAccess(session.user.id!, projectId, ["LEAD"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: manage access required to add members" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Full access to the project to add members", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
     const existingRows = await prisma.projectMember.findMany({
@@ -104,7 +115,7 @@ export async function POST(
     for (const userId of toAdd) {
       try {
         added.push(await prisma.projectMember.create({
-          data: { userId, projectId, role },
+          data: { userId, projectId, role, accessLevel: level },
           include: { user: true },
         }))
       } catch (e) {
@@ -139,7 +150,7 @@ export async function POST(
           role,
         }).catch((err) => console.error("Project invite notification error:", err))
       }
-      logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || member.userId, userId: session.user.id!, request, metadata: { projectId, role } })
+      logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || member.userId, userId: session.user.id!, request, metadata: { projectId, role, accessLevel: level } })
     }
 
     if (!bulk) return NextResponse.json(added[0], { status: 201 })
@@ -168,10 +179,10 @@ export async function DELETE(
       return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
 
-    // Only project managers (BoD / Manager-member / system admin) may remove members.
+    // Removing people is Full access.
     const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: manage access required to remove members" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Full access to the project to remove members", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
     const existing = await prisma.projectMember.findUnique({
@@ -207,6 +218,51 @@ export async function DELETE(
     return NextResponse.json({ message: "Member removed" })
   } catch (error) {
     console.error("Error removing project member:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+
+/**
+ * PATCH { userId, accessLevel } — change one member's level (the per-row dropdown, Notion-style). Full access
+ * only. The project keeps at least one Project Owner unless the caller has workspace-wide Full access, so a
+ * project never ends up with nobody but the BoD able to manage it by accident.
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { projectId } = await params
+    const body = await request.json().catch(() => ({}))
+    const userId = typeof body?.userId === "string" ? body.userId : ""
+    if (!userId || !isAccessLevel(body?.accessLevel)) {
+      return NextResponse.json({ error: "userId and accessLevel (FULL, EDIT, COMMENT or VIEW) are required" }, { status: 400 })
+    }
+    const level: AccessLevel = body.accessLevel
+    if (!(await checkProjectAccess(session.user.id!, projectId, ["LEAD"])).allowed) {
+      return NextResponse.json({ error: "Forbidden: you need Full access to the project to change access", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
+    }
+    const existing = await prisma.projectMember.findUnique({ where: { userId_projectId: { userId, projectId } } })
+    if (!existing) return NextResponse.json({ error: "Member not found" }, { status: 404 })
+    if (memberAccessLevel(existing) === "FULL" && level !== "FULL") {
+      const owners = await prisma.projectMember.count({ where: { projectId, role: "LEAD" } })
+      if (owners <= 1) {
+        return NextResponse.json({ error: "A project keeps at least one Project Owner. Give someone else Full access first.", code: "LAST_OWNER" }, { status: 409 })
+      }
+    }
+    const member = await prisma.projectMember.update({
+      where: { userId_projectId: { userId, projectId } },
+      data: { role: roleForLevel(level), accessLevel: level },
+      include: { user: true },
+    })
+    await emitProjectChanged(projectId, { actorId: session.user.id!, userIds: [userId] })
+    logAudit({ action: "update", entityType: "project_member", entityId: member.id, entityName: member.user?.name || userId, userId: session.user.id!, request, metadata: { projectId, accessLevel: { from: memberAccessLevel(existing), to: level } } })
+    return NextResponse.json(member)
+  } catch (error) {
+    console.error("Error changing project member access:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -10,6 +10,7 @@
 import type { Prisma } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { planTemplate, type ProjectTemplate, type TemplateLang } from "@/lib/project-templates"
+import { roleForLevel, type AccessLevel } from "@/lib/rbac"
 
 export interface TemplateCreateInput {
   template: ProjectTemplate
@@ -25,6 +26,8 @@ export interface TemplateCreateInput {
   hiddenTabs: string[]
   userId: string
   memberIds: string[]
+  /** Access level for memberIds (the New project dialog's dropdown); EDIT when absent. */
+  memberLevel?: AccessLevel
 }
 
 export async function createProjectFromTemplate(input: TemplateCreateInput) {
@@ -43,8 +46,8 @@ export async function createProjectFromTemplate(input: TemplateCreateInput) {
         hiddenTabs: input.hiddenTabs,
         members: {
           create: [
-            { userId: input.userId, role: "LEAD" },
-            ...input.memberIds.map((memberId) => ({ userId: memberId, role: "MEMBER" as const })),
+            { userId: input.userId, role: "LEAD", accessLevel: "FULL" },
+            ...input.memberIds.map((memberId) => ({ userId: memberId, role: roleForLevel(input.memberLevel ?? "EDIT"), accessLevel: input.memberLevel ?? "EDIT" })),
           ],
         },
         taskLists: {

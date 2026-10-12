@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     const { allowed } = await checkProjectAccess(session.user.id, projectId, ['LEAD'])
     if (!allowed) {
-      return NextResponse.json({ error: 'Forbidden: LEAD role required to create automations' }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden: you need Full access to the project to create automations' }, { status: 403 })
     }
 
     const parsed = await parseRule(body, false)
@@ -175,7 +175,7 @@ export async function PATCH(req: NextRequest) {
 
     const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ['LEAD'])
     if (!allowed) {
-      return NextResponse.json({ error: 'Forbidden: LEAD role required to update automations' }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden: you need Full access to the project to update automations' }, { status: 403 })
     }
 
     const parsed = await parseRule(body, true)
@@ -218,7 +218,7 @@ export async function DELETE(req: NextRequest) {
 
     const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ['LEAD'])
     if (!allowed) {
-      return NextResponse.json({ error: 'Forbidden: LEAD role required to delete automations' }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden: you need Full access to the project to delete automations' }, { status: 403 })
     }
 
     // Kept first, so Control Room → Audit can restore it.

@@ -7,6 +7,8 @@ import { ApiError, nexusApi, type NexusUser } from "@/lib/nexus-api";
 import { Avatar } from "@/components/Avatar";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { AccessLevelPicker } from "@/components/projects/AccessLevelPicker";
+import type { ProjectAccessLevel } from "@/lib/nexus-api";
 
 const ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
 
@@ -39,6 +41,8 @@ export function AddProjectMembersDialog({
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  // The access level for everyone added in this batch, next to the Add button (Notion's invite, owner 13 Oct 2026).
+  const [level, setLevel] = useState<ProjectAccessLevel>("EDIT");
   const [active, setActive] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,7 +68,7 @@ export function AddProjectMembersDialog({
   }, [active]);
 
   const add = useMutation({
-    mutationFn: () => nexusApi.addProjectMembers(projectId, picked),
+    mutationFn: () => nexusApi.addProjectMembers(projectId, picked, level),
     onSuccess: (res) => {
       const n = res.added?.length ?? 0;
       qc.invalidateQueries({ queryKey: ["nexus", "project", projectId] });
@@ -76,7 +80,7 @@ export function AddProjectMembersDialog({
       onAdded();
     },
     onError: (e) => {
-      if (e instanceof ApiError && e.status === 403) setError(t("Only the project's managers can add members."));
+      if (e instanceof ApiError && e.status === 403) setError(t("Only people with Full access to the project can add members."));
       else setError(t("Couldn't add them. Try again."));
     },
   });
@@ -192,6 +196,7 @@ export function AddProjectMembersDialog({
 
         {error && <p className="mx-5 mt-2 text-xs font-semibold text-destructive">{error}</p>}
         <div className="flex items-center justify-end gap-2 px-5 py-4">
+          <AccessLevelPicker value={level} onChange={setLevel} ariaLabel={t("Access for the people you add")} className="mr-auto h-9 px-2 text-sm font-medium" />
           <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{t("Cancel")}</button>
           <button
             disabled={n === 0 || add.isPending}

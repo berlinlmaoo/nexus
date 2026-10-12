@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { isWorkspaceManagerRole } from "@/lib/rbac"
+import { hasProjectWideAccess } from "@/lib/rbac"
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,10 +32,10 @@ export async function GET(request: NextRequest) {
     const inWorkspace = { in: wsIds }
 
     // Projects the searcher may find things in (owner, 5 Oct 2026: "a task that shows up is only one
-    // inside a project they are in"): every project of a workspace where they are Manager / BoD / One
-    // Above All (they lead every project there) or system admin; otherwise only projects they are a
+    // inside a project they are in"): every project of a workspace where they are BoD / One Above All
+    // (Full access to every project, owner 13 Oct 2026 — Managers see only their own projects) or system admin; otherwise only projects they are a
     // member of. Their own tasks (assignee or creator) are found wherever they are.
-    const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => isWorkspaceManagerRole(m.role)).map((m) => m.workspaceId)
+    const fullWs = user?.role === "ADMIN" ? wsIds : memberships.filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
     const visibleProject = {
       workspaceId: inWorkspace,
       OR: [{ workspaceId: { in: fullWs.length ? fullWs : ["__none__"] } }, { members: { some: { userId: me } } }],

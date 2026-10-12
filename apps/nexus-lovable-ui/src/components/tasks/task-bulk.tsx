@@ -127,6 +127,10 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
   const [runGuard, busy] = useSubmitGuard();
   // The project payload is already cached by the page; this only reads it (sections, members, tasks).
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), staleTime: 30_000 });
+  // Deleting tasks needs Can edit or Full access (Notion levels, owner 13 Oct 2026); Can comment / Can view
+  // aren't offered a Delete the server would refuse. Unknown (older server) = shown, as before.
+  const lvl = project.data?.viewerAccessLevel;
+  const canDelete = lvl ? lvl === "FULL" || lvl === "EDIT" : project.data?.viewerCanManage !== false;
 
   const selecting = selected.size > 0;
   const refresh = useCallback(() => { settleTaskWrite(qc, projectId); qc.invalidateQueries({ queryKey: ["dashboard"] }); }, [qc, projectId]);
@@ -390,6 +394,7 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
       {/* Room under the last card while the selection bar floats over the bottom of the page. */}
       {selecting && <div aria-hidden className="h-24" />}
       <BulkLayer
+        canDelete={canDelete}
         menu={menu}
         menuIds={menuIds}
         onCloseMenu={(fromTouchOverlay) => {
@@ -439,7 +444,7 @@ function groupBy<T>(list: T[], key: (x: T) => string): Map<string, T[]> {
 
 type Section = NexusProject["taskLists"] extends Array<infer S> | undefined ? S : never;
 
-function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, hideBar, onBeginSelect, onSelectAll, onDuplicateNow, onDuplicateWithDate, onDelete, onCopyToProject, onEdit, onClear, datePopup, onCloseDate, onConfirmDate, confirmDelete, onCancelDelete, onConfirmDelete, busy, sections, statusOptions, members }: {
+function BulkLayer({ canDelete, menu, menuIds, onCloseMenu, selectedIds, hideBar, onBeginSelect, onSelectAll, onDuplicateNow, onDuplicateWithDate, onDelete, onCopyToProject, onEdit, onClear, datePopup, onCloseDate, onConfirmDate, confirmDelete, onCancelDelete, onConfirmDelete, busy, sections, statusOptions, members }: {
   menu: MenuState | null;
   menuIds: string[];
   onCloseMenu: (fromTouchOverlay?: boolean) => void;
@@ -450,6 +455,7 @@ function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, hideBar, onBeginSe
   onDuplicateNow: (ids: string[]) => void;
   onDuplicateWithDate: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
+  canDelete: boolean;
   onCopyToProject: (ids: string[]) => void;
   onEdit: (ids: string[], kind: EditKind, value: string | null) => void;
   onClear: () => void;
@@ -484,7 +490,7 @@ function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, hideBar, onBeginSe
               onDuplicateDate={() => onDuplicateWithDate(menuIds)}
               onCopyLink={() => { navigator.clipboard?.writeText(`${window.location.origin}/tasks/${menu.task.id}`); celebrate(tt("Link copied")); onCloseMenu(); }}
               onCopyToProject={() => onCopyToProject(menuIds)}
-              onDelete={() => onDelete(menuIds)}
+              onDelete={canDelete ? () => onDelete(menuIds) : undefined}
               onEdit={(kind, v) => onEdit(menuIds, kind, v)}
               busy={busy}
               {...editProps}
@@ -512,7 +518,7 @@ function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, hideBar, onBeginSe
             <button disabled={busy} onClick={() => onDuplicateNow(selectedIds)} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"><Copy className="h-3.5 w-3.5" /> {t("Duplicate")}</button>
             <button disabled={busy} onClick={() => onDuplicateWithDate(selectedIds)} title={t("Duplicate + set due date")} aria-label={t("Duplicate + set due date")} className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><CalendarDays className="h-4 w-4" /></button>
             <button disabled={busy} onClick={() => onCopyToProject(selectedIds)} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"><FolderInput className="h-3.5 w-3.5" /> {t("Copy to project")}</button>
-            <button disabled={busy} onClick={() => onDelete(selectedIds)} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> {t("Delete")}</button>
+            {canDelete && <button disabled={busy} onClick={() => onDelete(selectedIds)} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> {t("Delete")}</button>}
             <button onClick={onClear} className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent" aria-label={t("Cancel")}><X className="h-4 w-4" /></button>
           </motion.div>
         )}
@@ -548,7 +554,7 @@ function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, hideBar, onBeginSe
 
 function ContextMenu({ menu, count, reduce, onSelect, onSelectAll, onDuplicate, onDuplicateDate, onCopyLink, onCopyToProject, onDelete, onEdit, busy, sections, statusOptions, members }: {
   menu: MenuState; count: number; reduce: boolean | null;
-  onSelect: () => void; onSelectAll: () => void; onDuplicate: () => void; onDuplicateDate: () => void; onCopyLink: () => void; onCopyToProject: () => void; onDelete: () => void;
+  onSelect: () => void; onSelectAll: () => void; onDuplicate: () => void; onDuplicateDate: () => void; onCopyLink: () => void; onCopyToProject: () => void; onDelete?: () => void;
   onEdit: (kind: EditKind, v: string | null) => void; busy: boolean;
   sections: Section[]; statusOptions: boolean; members: Member[];
 }) {
@@ -585,8 +591,8 @@ function ContextMenu({ menu, count, reduce, onSelect, onSelectAll, onDuplicate, 
           <MenuRow icon={CopyPlus} label={t("Duplicate + date…")} onClick={onDuplicateDate} />
           <MenuRow icon={FolderInput} label={t("Copy to project")} onClick={onCopyToProject} />
           {!many && <MenuRow icon={Link2} label={t("Copy link")} onClick={onCopyLink} />}
-          <hr className="my-1 border-border" />
-          <MenuRow icon={Trash2} label={t("Delete")} onClick={onDelete} danger disabled={busy} />
+          {onDelete && <hr className="my-1 border-border" />}
+          {onDelete && <MenuRow icon={Trash2} label={t("Delete")} onClick={onDelete} danger disabled={busy} />}
         </>
       )}
     </motion.div>

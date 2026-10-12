@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 import { auditSnippet } from "@/lib/deletion-entities"
+import { hasProjectLevel } from "@/lib/rbac"
 
 export async function PATCH(
   request: NextRequest,
@@ -64,13 +65,7 @@ export async function DELETE(
           include: {
             taskList: {
               include: {
-                project: {
-                  include: {
-                    members: {
-                      where: { userId: session.user.id!, role: "LEAD" },
-                    },
-                  },
-                },
+                project: { select: { id: true, workspaceId: true } },
               },
             },
           },
@@ -83,10 +78,11 @@ export async function DELETE(
     }
 
     const isAuthor = comment.userId === session.user.id
-    const isProjectLead = comment.task.taskList.project.members.length > 0
+    // Someone else's comment: Full access only (the Project Owner / BoD — Notion's moderation).
+    const isProjectLead = !isAuthor && (await hasProjectLevel(session.user.id!, comment.task.taskList.project.id, "FULL"))
 
     if (!isAuthor && !isProjectLead) {
-      return NextResponse.json({ error: "You can only delete your own comments or be a project lead" }, { status: 403 })
+      return NextResponse.json({ error: "You can only delete your own comments, unless you have Full access to the project" }, { status: 403 })
     }
 
     // Kept with its replies and reactions first, so Control Room → Audit can restore it.

@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+// Statuses / columns (sections): read = Can view; add, rename, recolour, reorder, delete = Full access
+// (owner, 13 Oct 2026: Notion-style levels, Full access manages statuses/columns).
 import { checkProjectAccess } from "@/lib/rbac"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
@@ -25,7 +27,7 @@ export async function GET(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["VIEWER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -53,9 +55,9 @@ export async function POST(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: changing the statuses / columns needs Full access to the project", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
     const body = await request.json()
@@ -108,9 +110,9 @@ export async function PATCH(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: changing the statuses / columns needs Full access to the project", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
     const body = await request.json()
@@ -181,9 +183,9 @@ export async function DELETE(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: changing the statuses / columns needs Full access to the project", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
     const body = await request.json()

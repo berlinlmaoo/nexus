@@ -150,7 +150,7 @@ export async function runScheduledDigest(scheduleId: string, opts: { manual?: bo
     en
       ? `The FIRST line must be exactly one of: STATUS: ON_TRACK | STATUS: AT_RISK | STATUS: OFF_TRACK. Then Markdown, at most 220 words, with short sections: **Done this week**, **In progress**, **Overdue**, **Next 7 days**, **Needs attention**. Use exact task titles and owners. Skip a section that is empty.`
       : `Baris PERTAMA wajib persis salah satu: STATUS: ON_TRACK | STATUS: AT_RISK | STATUS: OFF_TRACK. Lalu Markdown, maksimal 220 kata, bagian pendek: **Selesai minggu ini**, **Sedang jalan**, **Terlambat**, **7 hari ke depan**, **Perlu perhatian**. Pakai judul task dan PIC persis. Lewati bagian yang kosong.`,
-    schedule.instructions ? (en ? `Extra focus from the project lead: ${schedule.instructions}` : `Fokus tambahan dari lead project: ${schedule.instructions}`) : "",
+    schedule.instructions ? (en ? `Extra focus from the Project Owner: ${schedule.instructions}` : `Fokus tambahan dari Pemilik Project: ${schedule.instructions}`) : "",
     approvalPromptLine("always_ask", en ? "en" : "id"),
     "",
     "DATA:",

@@ -217,7 +217,14 @@ function OverdueCard({ work }: { work: PersonReportResponse["work"] }) {
         <EmptyState compact tone="success" icon={CheckCircle2} title={t("Nothing overdue")} message={asOf ? t("Nothing was overdue at the end of this period.") : t("Every open task with a due date is still on schedule.")} />
       ) : (
         <ul className="-mx-2 max-h-[22rem] divide-y divide-border overflow-y-auto">
-          {list.map((task) => (
+          {list.map((task, i) => task.projectId === "other" ? (
+            // A task in a project the viewer isn't in (owner 13 Oct 2026): counted, not shown or linked.
+            <li key={`other-${i}`} className="flex items-start gap-3 px-2 py-2.5 text-sm text-muted-foreground">
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
+              <span className="min-w-0 flex-1">{t("Task in a project you're not in")}</span>
+              <span className="chip chip--sm chip--danger shrink-0 tabular-nums">{t("{n}d late", { n: fmtNum(task.daysOverdue) })}</span>
+            </li>
+          ) : (
             <li key={task.id}>
               <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="group flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                 <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.NONE }} title={PRIORITY_LABEL[task.priority] ? t(PRIORITY_LABEL[task.priority]) : task.priority} />
@@ -260,7 +267,9 @@ function ProjectsCard({ rows, asOf }: { rows: PersonReportResponse["work"]["perP
               {rows.map((p) => (
                 <tr key={p.projectId} className="border-t border-border">
                   <td className="max-w-[16rem] py-2.5 pr-3">
-                    <Link to="/projects/$projectId" params={{ projectId: p.projectId }} className="block truncate font-semibold hover:underline">{p.projectName || t("Untitled project")}</Link>
+                    {p.projectId === "other"
+                      ? <span className="block truncate font-semibold text-muted-foreground" title={t("Projects you're not a member of")}>{t("Other projects")}</span>
+                      : <Link to="/projects/$projectId" params={{ projectId: p.projectId }} className="block truncate font-semibold hover:underline">{p.projectName || t("Untitled project")}</Link>}
                   </td>
                   <td className="py-2.5 pr-3 text-right tabular-nums">{fmtNum(p.completed)}</td>
                   <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{fmtNum(p.open)}</td>

@@ -87,7 +87,7 @@ export function projectSettingsErrorText(code: unknown): string | null {
     case "PIPELINE_COMPANY_ONLY":
       return "The Pipeline Dashboard lives in the company workspace only.";
     case "PIPELINE_EXISTS":
-      return "The company's pipeline already exists. Ask its project lead to add you.";
+      return "The company's pipeline already exists. Ask its Project Owner to add you.";
     default:
       return null;
   }
