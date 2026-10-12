@@ -2355,7 +2355,7 @@ function AppInstalls() {
           <div className="text-lg font-bold">{t("Nobody has installed the app yet")}</div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+        <HScroll className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -2404,13 +2404,13 @@ function AppInstalls() {
               ))}
             </tbody>
           </table>
-        </div>
+        </HScroll>
       )}
 
       {notInstalled.length > 0 && (
         <div className="space-y-2">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Not using the app · {n}", { n: notInstalled.length })}</div>
-          <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+          <HScroll className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
             <table className="w-full text-sm">
               <tbody>
                 {notInstalled.map((m) => (
@@ -2426,7 +2426,7 @@ function AppInstalls() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </HScroll>
         </div>
       )}
     </div>
