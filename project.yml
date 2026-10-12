@@ -40,13 +40,16 @@ targets:
       # This fails the build instead, with the offending keys in the error.
       - name: Check Localization keys
         basedOnDependencyAnalysis: false
+        # Every Indonesian table counts: Localization.swift and LocalizationRedesign.swift (dev redesign,
+        # 12 Oct 2026). A key in both would not crash, but one would silently shadow the other, so it fails
+        # too. scripts/check-localization.sh runs the same check outside Xcode (Linux, CI).
         inputFiles:
           - $(SRCROOT)/Sources/Localization.swift
+          - $(SRCROOT)/Sources/LocalizationRedesign.swift
         script: |
-          F="$SRCROOT/Sources/Localization.swift"
-          DUP=$(grep -oE '"([^"\\]|\\.)*"[[:space:]]*:' "$F" | sed -E 's/[[:space:]]*:$//' | sort | uniq -d)
+          DUP=$(cat "$SRCROOT"/Sources/Localization*.swift | grep -oE '"([^"\\]|\\.)*"[[:space:]]*:' | sed -E 's/[[:space:]]*:$//' | sort | uniq -d)
           if [ -n "$DUP" ]; then
-            echo "error: Localization.swift has duplicate keys — the app would crash in Bahasa Indonesia:"
+            echo "error: Localization tables have duplicate keys — the app would crash in Bahasa Indonesia:"
             echo "$DUP" | sed 's/^/error:   /'
             exit 1
           fi

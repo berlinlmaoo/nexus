@@ -60,7 +60,8 @@ final class AppLanguage {
 
     func translate(_ english: String) -> String {
         guard lang == .id else { return english }
-        return Self.indonesian[english] ?? english
+        // The dev-redesign table (LocalizationRedesign.swift) holds the strings added since 12 Oct 2026.
+        return Self.indonesian[english] ?? Self.indonesianRedesign[english] ?? english
     }
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
