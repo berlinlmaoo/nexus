@@ -25,6 +25,14 @@ const PW = readFileSync(process.env.QA_PW_FILE, "utf8").trim()
 const PROJECT = process.env.PROJECT_ID
 const TASKLIST = process.env.TASKLIST_ID
 const t0 = Date.now()
+// Node 22's bundled undici can throw assert(!this.paused) from a socket's "end" when nginx reloads under
+// many keep-alive + websocket connections (seen twice during switches with the fresh-client probe). It is
+// the harness's HTTP client failing, not the app: log it and keep measuring.
+let undiciAsserts = 0
+process.on("uncaughtException", (e) => {
+  if (e?.code === "ERR_ASSERTION" && String(e.stack).includes("undici")) { undiciAsserts++; console.log(`[undici internal assertion ignored #${undiciAsserts}]`); return }
+  throw e
+})
 const ts = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6)
 const log = (...a) => console.log(`[${ts()}s]`, ...a)
 
@@ -195,6 +203,7 @@ console.log("slots seen on /api/health:", slotSeen.map((s) => `${s.slot}@${s.t.t
 console.log(`realtime: sent ${rt.sent} task updates, received ${rt.got}, lost during a reconnect (catch-up refetch covers) ${rt.covered.length}, MISSED on a live socket ${rt.missed.length}, reconnects ${rt.reconnects}, without realtime ${rt.downMs} ms`)
 for (const m of rt.covered) console.log("   during reconnect: " + m)
 for (const m of rt.missed) console.log("   MISSED " + m)
+if (undiciAsserts) console.log(`node/undici internal assertions ignored: ${undiciAsserts}`)
 console.log(`fresh clients (new tab after/around the switch): ${fresh.ok}/${fresh.tries} got their task-updated; by slot ${JSON.stringify(fresh.bySlot)}`)
 for (const m of fresh.failed) console.log("   FRESH FAILED " + m)
 process.exit(stats.fail || rt.missed.length || fresh.failed.length ? 1 : 0)
