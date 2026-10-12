@@ -347,7 +347,7 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
                 {items.map((i, n) => (
                   <li key={n}>
                     <label className="flex cursor-pointer items-start gap-2">
-                      <input type="checkbox" checked={i.on} onChange={(e) => setItems((cur) => cur!.map((x, k) => (k === n ? { ...x, on: e.target.checked } : x)))} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
+                      <input type="checkbox" checked={i.on} onChange={(e) => setItems((cur) => cur!.map((x, k) => (k === n ? { ...x, on: e.target.checked } : x)))} className="mt-0.5 h-4 w-4 accent-[var(--primary)]" />
                       <span className="min-w-0">
                         <span className="block">{i.title}</span>
                         {i.due && <span className="block text-[11px] text-muted-foreground">{i.due}</span>}

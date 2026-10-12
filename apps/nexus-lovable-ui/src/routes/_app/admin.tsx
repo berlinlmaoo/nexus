@@ -1445,7 +1445,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
             {shown.length === 0 && <div className="py-6 text-center text-xs text-muted-foreground">{t("No one matches “{q}”.", { q: search })}</div>}
             {shown.map((m) => (
               <label key={m.userId} className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-1.5 text-sm last:border-b-0 hover:bg-accent/50">
-                <input type="checkbox" checked={selected.has(m.userId)} onChange={() => toggle(m.userId)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                <input type="checkbox" checked={selected.has(m.userId)} onChange={() => toggle(m.userId)} className="h-4 w-4 accent-[var(--primary)]" />
                 <Avatar userId={m.userId} name={m.name} avatar={m.avatar} size={22} />
                 <span className="min-w-0 flex-1 truncate">{m.name || m.email}</span>
                 <span className="shrink-0 text-[10px] text-muted-foreground">{ORG_ROLE_LABEL[m.role] ?? m.role}</span>

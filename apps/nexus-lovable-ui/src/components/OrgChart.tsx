@@ -1752,7 +1752,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
             <div className="space-y-0.5">
               {rows.map((r) => { const on = person.unitIds.includes(r.id); return (
                 <label key={r.id} className={cn("flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent", on && "bg-primary/10 text-primary", busy && "pointer-events-none opacity-60")}>
-                  <input type="checkbox" checked={on} disabled={busy} onChange={(e) => onToggle(r.id, e.target.checked)} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
+                  <input type="checkbox" checked={on} disabled={busy} onChange={(e) => onToggle(r.id, e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--primary)]" />
                   <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md bg-[#1e3a5f] text-[9px] font-bold text-white">
                     {r.u.logoUrl ? <img src={r.u.logoUrl} alt="" className="h-full w-full bg-white object-contain" /> : initialsOf(r.u.name)}
                   </span>

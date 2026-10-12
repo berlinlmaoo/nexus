@@ -232,7 +232,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   }, []);
 
   const segState = (i: number): "todo" | "current" | "done" => (done || step > i ? "done" : step === i ? "current" : "todo");
-  const segColor = { todo: lightOn ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.28)", current: "hsl(var(--primary))", done: "#22c55e" };
+  const segColor = { todo: lightOn ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.28)", current: "var(--primary)", done: "#22c55e" };
   const ink = lightOn ? "text-black" : "text-white";
   const inkSoft = lightOn ? "text-black/70" : "text-white/80";
   const chipIdle = lightOn ? "bg-black/10 text-black/50" : "bg-white/15 text-white/50";
@@ -277,7 +277,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
             a rotated ellipse swaps its width and height). */}
         <motion.g animate={{ x: oval.cx, y: oval.cy }} transition={spring}>
           {!done && !reduce && (
-            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="hsl(var(--primary))" strokeWidth={9} strokeLinecap="round"
+            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="var(--primary)" strokeWidth={9} strokeLinecap="round"
               pathLength={100} strokeDasharray="14 86" opacity={presence === "ok" ? 0.9 : 0.35}
               animate={{ strokeDashoffset: [0, -100] }} transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }} />
           )}

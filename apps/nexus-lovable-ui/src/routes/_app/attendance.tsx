@@ -519,7 +519,7 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th data-member-col className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">{tr("Member")}</th>
+                  <th data-member-col className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">{tr("Member")}</th>
                   {periodDays.map((pd) => (
                     <th key={pd.key} data-day={pd.key} aria-current={pd.key === todayKey ? "date" : undefined} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70", pd.key === todayKey && "text-primary")}>
                       <span className={cn("block text-[9px] uppercase", pd.key === todayKey ? "font-bold" : "font-normal opacity-70")}>{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" })}</span>
@@ -540,7 +540,7 @@ function Attendance() {
                 )}
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="sticky left-0 z-10 w-[15rem] min-w-[15rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
+                    <td className="sticky left-0 z-10 w-[15rem] min-w-[15rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_var(--border)] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
                       {/* Two lines at every width: who, then everything about them. One row squeezed the
                           badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
                       <div className="flex min-w-0 flex-col gap-1.5">

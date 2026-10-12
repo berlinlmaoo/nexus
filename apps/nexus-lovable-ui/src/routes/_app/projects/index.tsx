@@ -524,7 +524,7 @@ function ProjectsPage() {
 
               {newProjectTemplate && (newProjectTemplate.starterDocs.length > 0 || newProjectTemplate.starterTasks > 0) && (
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5">
-                  <input type="checkbox" checked={newProjectStarter} onChange={(e) => setNewProjectStarter(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
+                  <input type="checkbox" checked={newProjectStarter} onChange={(e) => setNewProjectStarter(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--primary)]" />
                   <span className="min-w-0 text-xs">
                     <span className="block font-semibold text-foreground">{tr("Add starter pages")}</span>
                     <span className="block text-muted-foreground">
