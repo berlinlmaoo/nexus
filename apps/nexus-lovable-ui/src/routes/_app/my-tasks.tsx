@@ -224,7 +224,7 @@ function QuestSkeleton() {
 }
 
 function EmptyStateLegacy({ title, message }: { title: string; message: string }) {
-  return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><div className="text-lg font-black">{title}</div><p className="mt-2 text-sm text-muted-foreground">{message}</p></div>;
+  return <div className="px-6 py-12 text-center"><div className="text-base font-semibold">{title}</div><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{message}</p></div>;
 }
 
 function isDone(status?: string | null) {

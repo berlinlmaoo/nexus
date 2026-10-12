@@ -11,6 +11,7 @@ import {
   type NotificationGroupId,
 } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
+import { PageBody } from "@/components/PageLayout";
 import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
@@ -47,21 +48,19 @@ function InboxPage() {
         <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-60">
           {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Mark all as read")}
         </button>
-      } />
-      <div className="p-4 md:p-8 max-w-3xl mx-auto">
+      } tabs={!inbox.isLoading && !inbox.isError && notifications.length > 0
+        ? <NotificationFilterTabs list={notifications} group={group} onChange={setGroup} />
+        : undefined} />
+      {/* Full width under the header like every list page (it was a centred 3xl column, UI sweep 12 Oct 2026). */}
+      <PageBody>
         {/* Only when there is something unread (an empty inbox had a grey "0 unread" bar over the empty state). */}
         {(inbox.data?.unreadCount ?? 0) > 0 && (
-          <div className="mb-3 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
+          <div className="mb-3 text-sm font-medium text-muted-foreground">
             {tn(inbox.data?.unreadCount ?? 0, "{n} unread notification", "{n} unread notifications", { n: inbox.data?.unreadCount ?? 0 })}
           </div>
         )}
-        {!inbox.isLoading && !inbox.isError && notifications.length > 0 && (
-          <div className="mb-3">
-            <NotificationFilterTabs list={notifications} group={group} onChange={setGroup} layoutId="inbox-filter-tab" />
-          </div>
-        )}
         <Reveal>
-          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
             {inbox.isLoading && Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3 p-4">
                 <Skeleton className="h-9 w-9 rounded-full" />
@@ -81,7 +80,7 @@ function InboxPage() {
             {!inbox.isLoading && shown.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
           </div>
         </Reveal>
-      </div>
+      </PageBody>
     </div>
   );
 }
@@ -147,7 +146,7 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold">{notificationTitle(notification)}</p>
-        <p className="text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
+        <p className="max-w-3xl text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>
         <p className="text-xs text-muted-foreground mt-1">{fmtDay(notification.createdAt, locale)}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>

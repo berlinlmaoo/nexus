@@ -110,7 +110,7 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
           ) : null}
         </div>
 
-        <LeaderboardPodium rankings={podiumRankings} className="mb-6" />
+        <LeaderboardPodium rankings={podiumRankings} className="mx-auto mb-6 max-w-3xl" />
 
         <LeaderboardRankings
           rankings={rankings}

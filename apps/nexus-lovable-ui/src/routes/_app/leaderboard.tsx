@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Trophy } from "lucide-react";
+import { Lock, Trophy } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { PageBody } from "@/components/PageLayout";
 import { fmtDate, nexusApi, ORG_HIERARCHY } from "@/lib/nexus-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeaderboardCard } from "@/components/ui/leaderboard-card";
@@ -49,17 +50,15 @@ function Leaderboard() {
 
   return (
     <div>
-      <PageHeader title={t("Leaderboard")} subtitle={t("Everyone's XP this month. It resets on the 1st.")} />
-      <div className="p-4 md:p-8">
-        <div className="mx-auto max-w-3xl">
-          {board.data?.period && (
-            <div className="mb-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-center text-xs text-muted-foreground shadow-soft">
-              <span className="font-bold text-foreground">{t("Current period")}</span>
-              <span>{fmtDate(board.data.period.start)} → {fmtDate(board.data.period.end)}</span>
-              <span className="hidden sm:inline">·</span>
-              <span>{t("XP resets on the 1st at 00:00 WIB")}</span>
-            </div>
-          )}
+      {/* The period sits in the header's action slot (it was a floating pill above a centred 3xl column;
+          the content now runs full width like every list page, UI sweep 12 Oct 2026). */}
+      <PageHeader title={t("Leaderboard")} subtitle={t("Everyone's XP this month. It resets on the 1st.")} actions={board.data?.period ? (
+        <span className="text-xs text-muted-foreground" title={t("XP resets on the 1st at 00:00 WIB")}>
+          <span className="font-medium text-foreground">{t("Current period")}</span> · {fmtDate(board.data.period.start)} → {fmtDate(board.data.period.end)}
+        </span>
+      ) : undefined} />
+      <PageBody>
+        <div className="space-y-6">
           {board.isLoading && (
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
               <Skeleton className="mb-2 h-6 w-40" />
@@ -72,10 +71,7 @@ function Leaderboard() {
           )}
 
           {board.isError && (
-            <div className="rounded-2xl border border-dashed bg-card p-8 text-center shadow-sm">
-              <div className="text-lg font-black">{t("Couldn't load the leaderboard")}</div>
-              <p className="mt-2 text-sm text-muted-foreground">{t("Your session may have ended. Sign in again, then reload this page.")}</p>
-            </div>
+            <EmptyState icon={Lock} tone="muted" title={t("Couldn't load the leaderboard")} message={t("Your session may have ended. Sign in again, then reload this page.")} />
           )}
 
           {!board.isLoading && !board.isError && ranked.length === 0 && (
@@ -97,7 +93,7 @@ function Leaderboard() {
 
           {isAdmin && <XpAuditLog />}
         </div>
-      </div>
+      </PageBody>
       <AnimatePresence>
         {xpUser && <UserXpLogModal key={xpUser.id} user={xpUser} onClose={() => setXpUser(null)} />}
       </AnimatePresence>

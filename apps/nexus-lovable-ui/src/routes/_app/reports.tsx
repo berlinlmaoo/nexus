@@ -7,6 +7,7 @@ import { createFileRoute, Outlet, useChildMatches, useNavigate } from "@tanstack
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTabs } from "@/components/PageLayout";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { PersonReportSkeleton, PersonReportView, ReportError } from "@/components/reports/PersonReportView";
@@ -87,22 +88,11 @@ function Reports() {
         subtitle={tab === "team" ? (scope === "ALL" ? t("How everyone is doing this period.") : t("How your direct reports are doing this period.")) : t("Your work, attendance and XP for the period.")}
         actions={<PeriodSelect value={period} onChange={(p) => setSearch({ period: p })} />}
         tabs={canSeeTeam && !selfOnly ? (
-          <div role="tablist" aria-label={t("Report view")} className="mb-3 inline-flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
-            {([["me", t("Me")], ["team", teamLabel]] as const).map(([key, label]) => (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={tab === key}
-                onClick={() => setSearch({ tab: key === "team" ? "team" : undefined })}
-                className={cn("rounded-md px-4 py-1 text-sm font-semibold transition-colors", tab === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <PageTabs label={t("Report view")} value={tab === "team" ? "team" : "me"} onChange={(key) => setSearch({ tab: key === "team" ? "team" : undefined })}
+            tabs={[{ key: "me", label: t("Me") }, { key: "team", label: teamLabel }]} />
         ) : undefined}
       />
-      <div className="max-w-7xl p-4 md:p-8">
+      <div className="p-4 md:p-8">
         {me.isLoading && search.tab === "team" ? <TeamRosterSkeleton /> : tab === "me" ? (
           me.isLoading ? <PersonReportSkeleton /> :
           me.isError ? <ReportError title={t("Couldn't load your report")} message={errorMessage(me.error)} onRetry={() => me.refetch()} retrying={me.isFetching} /> :

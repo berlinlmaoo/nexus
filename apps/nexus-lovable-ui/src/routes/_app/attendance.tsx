@@ -8,6 +8,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { Segmented } from "@/components/PageLayout";
 import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -435,10 +436,7 @@ function Attendance() {
                   <Legend cls="bg-rose-500/75" label={tr("Absent")} />
                 </div>
               )}
-              <div className="inline-flex rounded-lg border border-border p-0.5">
-                <button onClick={() => setViewMode("grid")} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold transition-colors", viewMode === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Board")}</button>
-                <button onClick={() => setViewMode("log")} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold transition-colors", viewMode === "log" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Log")}</button>
-              </div>
+              <Segmented label={tr("Attendance view")} size="xs" value={viewMode} onChange={setViewMode} options={[{ key: "grid", label: tr("Board") }, { key: "log", label: tr("Log") }]} />
             </div>
           </div>
           {/* Audit controls: month navigation + per-staff search. */}

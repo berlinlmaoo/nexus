@@ -4,13 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
+import { AlertTriangle, AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Network, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone, RotateCcw, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
 import { OrgChart } from "@/components/OrgChart";
 import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTabs } from "@/components/PageLayout";
+import { EmptyState } from "@/components/EmptyState";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam, type NexusOffboardResult, type OffboardReason } from "@/lib/nexus-api";
 // Crew Hub tidak punya halaman lagi. Pengaturan TIM-nya sendiri — nama, divisi, jam shift,
 // tautan project, hapus — dibuka dari chip tim di baris ORANGNYA, memakai kartu yang sama
@@ -206,22 +208,30 @@ function Admin() {
 
   return (
     <div>
-      <PageHeader title={t("Control Room")} subtitle={t("Everyone in the workspace and their roles.")} />
+      {/* Sections are the header's tabs, the same light underline row as every page (they were a black
+          segmented pill inside the content, UI sweep 12 Oct 2026). */}
+      <PageHeader title={t("Control Room")} subtitle={t("Everyone in the workspace and their roles.")} tabs={
+        <PageTabs label={t("Control Room sections")} value={view} onChange={setView} tabs={[
+          { key: "users", label: t("Users"), icon: UsersIcon },
+          ...(canAnnounce ? [
+            { key: "approval" as const, label: t("Approval chart"), icon: GitBranch },
+            { key: "org" as const, label: t("IP & Division Chart"), icon: Network },
+            { key: "calendar" as const, label: t("Calendar"), icon: CalendarDays },
+          ] : []),
+          ...(canManageShift ? [
+            { key: "extra-dayoff" as const, label: t("Extra day off"), icon: CalendarPlus },
+            { key: "suspects" as const, label: t("Attendance monitor"), icon: ShieldAlert },
+          ] : []),
+          { key: "audit", label: t("Audit log"), icon: ScrollText },
+          { key: "quests", label: t("Quests"), icon: Trophy },
+          ...(canAnnounce ? [
+            { key: "announcements" as const, label: t("Announcements"), icon: Megaphone },
+            { key: "gideon" as const, label: "GIDEON", icon: GideonMark },
+            { key: "app" as const, label: t("App"), icon: Smartphone },
+          ] : []),
+        ]} />
+      } />
       <div className="p-4 md:p-8 space-y-5">
-        <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
-          <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> {t("Users")}</button>
-          {canAnnounce && <button onClick={() => setView("approval")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "approval" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GitBranch className="h-3.5 w-3.5" /> {t("Approval chart")}</button>}
-          {canAnnounce && <button onClick={() => setView("org")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "org" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Network className="h-3.5 w-3.5" /> {t("IP & Division Chart")}</button>}
-          {canAnnounce && <button onClick={() => setView("calendar")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarDays className="h-3.5 w-3.5" /> {t("Calendar")}</button>}
-          {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> {t("Extra day off")}</button>}
-          {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> {t("Attendance monitor")}</button>}
-          <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> {t("Audit log")}</button>
-          <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> {t("Quests")}</button>
-          {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> {t("Announcements")}</button>}
-          {canAnnounce && <button onClick={() => setView("gideon")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "gideon" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GideonMark className="h-3.5 w-3.5" /> GIDEON</button>}
-          {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> {t("App")}</button>}
-        </div>
-
         {view === "approval" && canAnnounce && <ApprovalChart />}
         {view === "org" && canAnnounce && <OrgChart />}
         {view === "calendar" && canAnnounce && <CalendarSettingsAdmin />}
@@ -233,7 +243,7 @@ function Admin() {
         {view === "gideon" && canAnnounce && <GideonAdmin />}
         {view === "app" && canAnnounce && <AppInstalls />}
 
-        {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{t("Admin access required")}</div><p className="mt-2 text-sm text-muted-foreground">{t("You need the system admin role to manage users.")}</p></div>}
+        {view === "users" && users.isError && <EmptyState icon={Shield} tone="muted" title={t("Admin access required")} message={t("You need the system admin role to manage users.")} />}
 
         {view === "users" && !users.isError && (
           <>
@@ -1490,11 +1500,8 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
         </div>
         {list.isLoading && <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
         {!list.isLoading && grants.length === 0 && (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center">
-            <CalendarPlus className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
-            <div className="text-sm font-semibold">{t("No extra day off in this period yet")}</div>
-            <p className="mt-1 text-xs text-muted-foreground">{t("Pick people on the left, set the days and a reason, and they’ll see it in their day-off quota right away.")}</p>
-          </div>
+          <EmptyState compact icon={CalendarPlus} tone="muted" title={t("No extra day off in this period yet")}
+            message={t("Pick people on the left, set the days and a reason, and they’ll see it in their day-off quota right away.")} />
         )}
         <ul className="divide-y divide-border">
           {[...active, ...revoked].map((g: NexusDayOffBonus) => (
@@ -1836,7 +1843,7 @@ function AdminQuests() {
 
   return (
     <div className="space-y-4">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{tq("BoD access required")}</div><p className="mt-2 text-sm text-muted-foreground">{tq("You need the BoD or Manager role to manage quests.")}</p></div>}
+      {list.isError && <EmptyState icon={Trophy} tone="muted" title={tq("BoD access required")} message={tq("You need the BoD or Manager role to manage quests.")} />}
       {!list.isError && (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
@@ -1990,7 +1997,7 @@ function AnnouncementsAdmin() {
 
   return (
     <div className="space-y-5">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Megaphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{t("BoD access required")}</div><p className="mt-2 text-sm text-muted-foreground">{t("You need the BoD role or above to manage announcements.")}</p></div>}
+      {list.isError && <EmptyState icon={Megaphone} tone="muted" title={t("BoD access required")} message={t("You need the BoD role or above to manage announcements.")} />}
       {!list.isError && (
         <>
           <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
@@ -2146,7 +2153,7 @@ function AnnouncementsAdmin() {
                 </div>
               </div>
             ))}
-            {!list.isLoading && rows.length === 0 && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">{t("No announcements yet.")}</div>}
+            {!list.isLoading && rows.length === 0 && <EmptyState icon={Megaphone} tone="muted" compact title={t("No announcements yet.")} />}
           </div>
         </>
       )}
@@ -2187,7 +2194,7 @@ function GideonUsage() {
     iso ? new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
   if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Loading…")}</div>;
-  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Couldn't load GIDEON usage.")}</div>;
+  if (q.isError) return <EmptyState icon={AlertTriangle} tone="muted" compact title={t("Couldn't load GIDEON usage.")} />;
 
   return (
     <div className="space-y-4">
@@ -2200,10 +2207,7 @@ function GideonUsage() {
       )}
 
       {users.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
-          <GideonMark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-          <div className="text-lg font-bold">{t("No one has used GIDEON yet")}</div>
-        </div>
+        <EmptyState icon={GideonMark} tone="muted" title={t("No one has used GIDEON yet")} />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
           <table className="w-full text-sm">
@@ -2254,7 +2258,7 @@ function AppInstalls() {
   const when = (iso: string) => new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short" });
 
   if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Loading…")}</div>;
-  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Couldn't load the app list.")}</div>;
+  if (q.isError) return <EmptyState icon={AlertTriangle} tone="muted" compact title={t("Couldn't load the app list.")} />;
 
   return (
     <div className="space-y-4">

@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { SelectPicker } from "@/components/SelectPicker";
 import { fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
@@ -144,7 +144,7 @@ function RoomBooking() {
         </div>
 
         {bookingsQ.isLoading && <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-        {bookingsQ.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><div className="text-lg font-black">{t("Couldn't load bookings")}</div><p className="mt-2 text-sm text-muted-foreground">{t("Your session may have ended. Sign in again, then try again. If it keeps happening, tell your admin.")}</p></div>}
+        {bookingsQ.isError && <EmptyState icon={AlertTriangle} tone="muted" title={t("Couldn't load bookings")} message={t("Your session may have ended. Sign in again, then try again. If it keeps happening, tell your admin.")} />}
         {!bookingsQ.isLoading && !bookingsQ.isError && agenda.length === 0 && (
           <EmptyState icon={CalendarDays} title={t("Nothing booked in {month}", { month: viewMonth.toLocaleDateString(locale, { month: "long" }) })}
             message={t("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.")}

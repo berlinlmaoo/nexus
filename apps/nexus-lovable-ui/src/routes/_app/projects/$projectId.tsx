@@ -1858,7 +1858,7 @@ function ComingSoon({ title, message }: { title: string; message: string }) {
 }
 
 function Empty({ title, message }: { title: string; message: string }) {
-  return <Card className="border border-dashed border-border bg-card shadow-soft"><CardBody className="p-8 text-center"><div className="text-lg font-black">{title}</div><p className="mt-2 text-sm text-muted-foreground">{message}</p></CardBody></Card>;
+  return <div className="px-6 py-12 text-center"><div className="text-base font-semibold">{title}</div><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{message}</p></div>;
 }
 
 function PriorityChip({ priority }: { priority?: string | null }) {

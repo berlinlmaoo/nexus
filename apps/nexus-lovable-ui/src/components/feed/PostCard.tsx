@@ -81,10 +81,11 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
           {editing ? (
             <EditBox post={post} members={members} onCancel={() => setEditing(false)} onSave={(text, m) => { onEdit(post.id, text, m); setEditing(false); }} />
           ) : (
-            post.text && <div className="mt-0.5 whitespace-pre-wrap text-[15px] leading-normal"><RenderText text={post.text} /></div>
+            post.text && <div className="mt-0.5 max-w-2xl whitespace-pre-wrap text-[15px] leading-normal"><RenderText text={post.text} /></div>
           )}
 
-          {post.images.length > 0 && <ImageGrid images={post.images} onOpen={(i) => setLightbox(i)} />}
+          {/* The feed runs full width now; text and photos keep a readable column inside the row. */}
+          {post.images.length > 0 && <div className="max-w-2xl"><ImageGrid images={post.images} onOpen={(i) => setLightbox(i)} /></div>}
 
           {/* action row — like · comment · repost · share */}
           {!pending && !failed && !editing && (
