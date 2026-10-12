@@ -41,6 +41,7 @@ import { ID_FORMS } from "@/lib/i18n/id-forms";
 import { ID_I18N_PROJECTS_EXTRA } from "@/lib/i18n/id-i18n-projects";
 import { ID_SESSIONS } from "@/lib/i18n/id-sessions";
 import { ID_FIX_PAGES } from "@/lib/i18n/id-fix-pages";
+import { ID_UISWEEP } from "@/lib/i18n/id-uisweep";
 
 /**
  * Interface language, English or Indonesian (owner, 5 Oct 2026: "make sure there is English and
@@ -56,7 +57,7 @@ export type Lang = "id" | "en";
 const KEY = "nexus-lang";
 const listeners = new Set<() => void>();
 
-const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES };
+const ID: Record<string, string> = { ...ID_COMMON, ...ID_ORGCHART, ...ID_CALENDAR, ...ID_CALENDAR_PAGE, ...ID_CALENDAR_EXTRA, ...ID_CHAT, ...ID_AUDIT, ...ID_OFFBOARD, ...ID_FORMER, ...ID_PROJECTS, ...ID_TEMPLATES, ...ID_PROFILE, ...ID_VAULT, ...ID_NAV, ...ID_PIPELINE, ...ID_AUTOMATIONS, ...ID_FOLDERS, ...ID_OUTLET, ...ID_PROJECT_OVERVIEW, ...ID_SHEETS, ...ID_SHEETS_MENUS, ...ID_SHEETS_PANELS, ...ID_SHEETS_CHART, ...ID_SHEETS_DATA, ...ID_SHEETS_TOOLBAR, ...ID_SHEETS_GRID, ...ID_SHEETS_PIVOT, ...ID_SHEETS_FORMATS, ...ID_VIEWS, ...ID_EDITOR, ...ID_GIDEON, ...ID_GIDEON_AI, ...ID_CATEGORIES, ...ID_COPY, ...ID_I18N_ADMIN, ...ID_I18N_SHELL, ...ID_I18N_ATTENDANCE, ...ID_I18N_WORK, ...ID_FORMS, ...ID_I18N_PROJECTS_EXTRA, ...ID_SESSIONS, ...ID_FIX_PAGES, ...ID_UISWEEP };
 
 function read(): Lang {
   try {

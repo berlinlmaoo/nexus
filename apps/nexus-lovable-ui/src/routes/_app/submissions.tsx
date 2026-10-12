@@ -303,14 +303,14 @@ function MySubmissions() {
     if (search.id) navigate({ to: "/submissions", search: {}, replace: true }).catch(() => {});
   };
 
-  const chip = (on: boolean) => cn("rounded-full border px-3 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-accent");
+  const chip = (on: boolean) => cn("rounded-full border px-3 py-1 text-xs font-semibold transition", on ? "border-foreground/25 bg-accent text-foreground" : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground");
 
   return (
     <div>
       <PageHeader title={t("My Submissions")} subtitle={t("Requests you sent through a form. The team that handles them moves them along; this board follows.")} />
       <div className="p-4 md:p-8">
         {q.isLoading && <div className="flex gap-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-64 w-72 rounded-2xl" />)}</div>}
-        {q.isError && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">{t("Couldn't load your submissions.")}</div>}
+        {q.isError && <EmptyState icon={AlertCircle} tone="muted" title={t("Couldn't load your submissions.")} action={<EmptyAction onClick={() => q.refetch()}>{t("Try again")}</EmptyAction>} />}
 
         {!q.isLoading && !q.isError && subs.length === 0 && (
           <EmptyState icon={Inbox} title={t("No submissions yet")}

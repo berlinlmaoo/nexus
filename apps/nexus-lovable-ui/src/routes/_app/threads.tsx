@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AtSign, ArrowUp, Loader2, X } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
 import { PageHeader } from "@/components/PageHeader";
+import { PageBody, PageTabs } from "@/components/PageLayout";
+import { EmptyState } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
-import { cn } from "@/lib/utils";
 import { ApiError, nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
@@ -201,22 +202,14 @@ function FeedPage() {
         <PageHeader
           title={t("Threads")}
           subtitle={t("Short updates from the team. Tag someone with @ and they get notified.")}
-          tabs={
-            <div role="tablist" aria-label={t("Threads")} className="mb-3 inline-flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
-              {([["all", "All"], ["mentions", "Mentions"]] as const).map(([tk, label]) => (
-                <button key={tk} type="button" role="tab" aria-selected={tab === tk} onClick={() => setTab(tk)}
-                  className={cn("rounded-md px-4 py-1 text-sm font-semibold transition-colors", tab === tk ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
-                  {t(label)}
-                </button>
-              ))}
-            </div>
-          }
+          tabs={<PageTabs label={t("Threads")} value={tab} onChange={setTab} tabs={[{ key: "all", label: t("All") }, { key: "mentions", label: t("Mentions") }]} />}
         />
       </div>
 
-      {/* Same gutters as the other pages; the feed keeps a readable column, left-aligned like the lists. */}
-      <div className="p-4 md:p-8">
-      <div className="max-w-2xl overflow-clip rounded-2xl border border-border bg-card shadow-soft">
+      {/* Same gutters as the other pages and full width like them (it was a 2xl column with half the
+          screen empty, UI sweep 12 Oct 2026); each post keeps a readable text column inside its row. */}
+      <PageBody>
+      <div className="overflow-clip rounded-xl border border-border bg-card">
       {focusId && (
         <div className="border-b-4 border-border/60">
           <div className="flex items-center justify-between px-4 pt-2.5 text-xs font-semibold text-muted-foreground">
@@ -259,11 +252,8 @@ function FeedPage() {
         {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
 
         {empty && (
-          <div className="px-6 py-16 text-center">
-            <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><AtSign className="h-7 w-7" /></div>
-            <div className="text-base font-black">{tab === "mentions" ? t("No mentions yet") : t("No posts yet")}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{tab === "mentions" ? t("When someone tags you, it shows up here.") : t("Share what you're working on today.")}</p>
-          </div>
+          <EmptyState icon={AtSign} tone="muted" title={tab === "mentions" ? t("No mentions yet") : t("No posts yet")}
+            message={tab === "mentions" ? t("When someone tags you, it shows up here.") : t("Share what you're working on today.")} />
         )}
 
         <AnimatePresence initial={false}>
@@ -276,7 +266,7 @@ function FeedPage() {
         {feed.isFetchingNextPage && <div className="flex justify-center py-4 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
       </div>
       </div>
-      </div>
+      </PageBody>
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { Segmented } from "@/components/PageLayout";
 import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
 import { Settings as SettingsIcon, User, Bell, Lock, Palette, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, AtSign, Sun, Moon, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -98,11 +100,7 @@ function WorkspaceMembersSection() {
 
   if (q.isError) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
-        <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-        <div className="text-lg font-bold">{t("Workspace not found")}</div>
-        <p className="mt-2 text-sm text-muted-foreground">{t("You need to be signed in to manage members.")}</p>
-      </div>
+      <EmptyState icon={ShieldCheck} tone="muted" title={t("Workspace not found")} message={t("You need to be signed in to manage members.")} />
     );
   }
 
@@ -661,14 +659,7 @@ function McpTutorial() {
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
       <h2 className="font-semibold">{t("How to set it up")}</h2>
-      <div className="flex flex-wrap gap-1.5">
-        {tabs.map((o) => (
-          <button key={o.id} onClick={() => setTab(o.id)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === o.id ? "bg-primary text-primary-foreground" : "border border-border hover:bg-accent"}`}>
-            <o.icon className="h-3.5 w-3.5" /> {t(o.label)}
-          </button>
-        ))}
-      </div>
+      <Segmented label={t("How to set it up")} size="xs" value={tab} onChange={setTab} options={tabs.map((o) => ({ key: o.id, label: t(o.label), icon: o.icon }))} />
 
       {tab === "app" && (
         <div className="space-y-4">

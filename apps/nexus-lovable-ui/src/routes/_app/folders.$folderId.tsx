@@ -128,8 +128,9 @@ function FolderAggregatePage() {
 }
 
 function EmptyState({ text }: { text: string }) {
+  // Calm, borderless like the shared EmptyState (UI sweep 12 Oct 2026); it was a dashed 28px box.
   return (
-    <div className="rounded-[28px] border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground shadow-soft">{text}</div>
+    <div className="px-6 py-12 text-center text-sm text-muted-foreground">{text}</div>
   );
 }
 
