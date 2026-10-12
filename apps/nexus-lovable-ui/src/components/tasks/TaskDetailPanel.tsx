@@ -70,6 +70,7 @@ import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
 import { patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { friendlyError, pushUndo } from "@/lib/task-undo";
 
 // The description's block editor (TipTap + Yjs) is the heaviest part of the popup; it loads beside the popup
 // rather than in front of it, so the title, status and fields show first (perf pass, 12 Oct 2026).
@@ -240,8 +241,17 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // CLOSE: shrink back to the card's CURRENT on-screen rect — but ONLY if we morphed from one and it's
   // still visible. If the card moved off-screen, was filtered out, or we opened without a rect, fall back
   // to a neutral centred fade (symmetric with that open, and never flies toward an empty region).
+  // Fields save on blur. A popup that closes while one is focused (Esc, the X, the backdrop, browser Back)
+  // would unmount it without a blur and drop the edit (bug hunt C-BUG-1, 12 Oct 2026): blur it first.
+  const flushEdits = () => {
+    const el = document.activeElement as HTMLElement | null;
+    if (el && el !== document.body && asideRef.current?.contains(el)) el.blur();
+  };
+  // Closed from outside (Back removed ?task=…): the same flush while the fields are still in the page.
+  useLayoutEffect(() => () => flushEdits(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const requestClose = () => {
     if (closingRef.current) return;
+    flushEdits();
     closingRef.current = true;
     setClosing(true);
     const el = asideRef.current;
@@ -316,9 +326,20 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
   // local mirrors for inline edits
   const [title, setTitle] = useState("");
+  // The title follows the task (a rename by someone else shows at once) until you start typing in it; only
+  // a title you typed is ever written back, so a focus + blur can't put an old title over a new one
+  // (bug hunt C-BUG-3, 12 Oct 2026).
+  const titleDirty = useRef(false);
   useEffect(() => {
-    if (t) setTitle(t.title ?? "");
-  }, [t?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (t && !titleDirty.current) setTitle(t.title ?? "");
+  }, [t?.id, t?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  const commitTitle = () => {
+    if (!t || !titleDirty.current) return;
+    titleDirty.current = false;
+    const next = title.replace(/\s*\n+\s*/g, " ").trim();
+    if (!next) { setTitle(t.title ?? ""); return; }
+    if (next !== t.title) update.mutate({ title: next });
+  };
 
   // After a write: this task, its activity, and the project on screen refetch; other task lists are only
   // marked stale (they refetch when opened) — perf pass, 12 Oct 2026.
@@ -337,7 +358,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     },
     onSuccess: invalidateAll,
     // Surfaces the "wajib lampiran sebelum Done" gate (and any other reject) instead of failing silently.
-    onError: (e: unknown, _v, c) => { c?.rollback?.(); invalidateAll(); toast.error(e instanceof Error ? e.message : tr("Couldn't update the task.")); },
+    onError: (e: unknown, _v, c) => { c?.rollback?.(); invalidateAll(); toast.error(friendlyError(e) ?? tr("Couldn't update the task.")); },
   });
   // --- subtasks (Asana-style: full tasks linked via parentId; hidden from board, live here) ---
   const [openSub, setOpenSub] = useState<string | null>(null);
@@ -361,6 +382,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const addComment = useMutation({
     mutationFn: ({ content, mentionedUserIds }: { content: string; mentionedUserIds?: string[] }) => nexusApi.addComment(taskId, content, { mentionedUserIds }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["task-comments", taskId] }); qc.invalidateQueries({ queryKey: ["task", taskId] }); },
+    // The composer keeps the text (C-BUG-7); this says why it didn't go.
+    onError: (e: unknown) => toast.error(tr("Couldn't send the comment. Your text is still there — try again."), { description: friendlyError(e) }),
   });
   const delComment = useMutation({
     mutationFn: (commentId: string) => nexusApi.deleteComment(taskId, commentId),
@@ -380,11 +403,23 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     mutationFn: (like: boolean) => nexusApi.toggleTaskLike(taskId, like),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task", taskId] }),
   });
+  // Several files per pick (C-BUG-31), uploaded one after the other; each failure says so.
   const uploadMut = useMutation({
-    mutationFn: (file: File) => nexusApi.uploadAttachmentProgress(taskId, file, setUploadPct),
+    mutationFn: async (files: File[]) => {
+      let failed = 0;
+      let why: string | undefined;
+      for (const file of files) {
+        setUploadPct(0);
+        try { await nexusApi.uploadAttachmentProgress(taskId, file, setUploadPct); }
+        catch (e) { failed++; why ??= friendlyError(e); }
+        qc.invalidateQueries({ queryKey: ["task-attachments", taskId] });
+      }
+      if (failed) throw new Error(why ?? "");
+      return files.length;
+    },
     onMutate: () => setUploadPct(0),
     onSettled: () => setUploadPct(null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
+    onError: (e: unknown) => toast.error(tr("Couldn't upload the file."), { description: friendlyError(e) }),
   });
   // "Generate dokumen" only shows on a document-request task — detected by the presence of the
   // "Jenis Dokumen" field rather than a hardcoded project id, so it also works if the Legal field set
@@ -403,7 +438,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const delAttachment = useMutation({
     mutationFn: (id: string) => nexusApi.deleteAttachment(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
+    onError: (e: unknown) => toast.error(tr("Couldn't delete the attachment."), { description: friendlyError(e) }),
   });
+  // A file goes only after a confirm (C-BUG-32): payout proofs are finance's evidence.
+  const [confirmAtt, setConfirmAtt] = useState<NexusAttachment | null>(null);
   const favMut = useMutation({
     mutationFn: () => nexusApi.toggleFavorite("task", taskId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
@@ -441,7 +479,14 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   });
   const delTask = useMutation({
     mutationFn: () => nexusApi.deleteTask(taskId),
-    onSuccess: () => { invalidateAll(); requestClose(); },
+    onSuccess: (res) => {
+      invalidateAll();
+      requestClose();
+      // Undo (toast + Ctrl/⌘+Z on the project) puts it back while the server allows (C-BUG-16).
+      const auditId = res?.auditLogId;
+      if (auditId) pushUndo(tr("Task deleted"), async () => { await nexusApi.undoDeleteTasks([auditId]); settleTaskWrite(qc, projectId, taskId); });
+    },
+    onError: (e: unknown) => toast.error(tr("Couldn't delete the task."), { description: friendlyError(e) }),
   });
 
   const currentUserId = comments.data?.currentUserId;
@@ -580,6 +625,23 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           </AlertDialogContent>
         </AlertDialog>
 
+        <AlertDialog open={!!confirmAtt} onOpenChange={(o) => { if (!o) setConfirmAtt(null); }}>
+          <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmAtt?.kind === "PROOF" ? tr("Delete this payout proof?") : tr("Delete this attachment?")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {tr("“{name}” is removed from the task.", { name: confirmAtt?.name || tr("(unnamed)") })}{" "}
+                {confirmAtt?.kind === "PROOF" ? tr("Finance uses it as evidence of the payment.") + " " : ""}
+                {tr("Control Room → Audit can restore it for 90 days.")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{tr("Cancel")}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { if (confirmAtt) delAttachment.mutate(confirmAtt.id); setConfirmAtt(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{tr("Delete")}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {task.isLoading && (
           <div className="flex flex-1 items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         )}
@@ -668,8 +730,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             {/* title */}
             <textarea
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => { if (title.trim() && title !== t.title) update.mutate({ title: title.trim() }); }}
+              aria-label={tr("Task title")}
+              data-keep-font
+              onChange={(e) => { titleDirty.current = true; setTitle(e.target.value.replace(/\n/g, " ")); }}
+              onBlur={commitTitle}
+              // A title is one line (C-BUG-25): Enter saves it, it never adds a line break.
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); (e.currentTarget as HTMLTextAreaElement).blur(); } }}
               rows={2}
               className="w-full resize-none rounded-lg bg-transparent font-display text-2xl font-bold leading-tight tracking-tight text-foreground outline-none transition-colors focus:bg-muted/50 sm:text-[1.75rem]"
             />
@@ -892,11 +958,13 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <span className="hidden text-[11px] text-muted-foreground sm:inline">{tr("Max {size}", { size: MAX_ATTACH_LABEL })}</span>
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                     {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {tr("Upload")}
-                    <input type="file" className="hidden" disabled={uploadMut.isPending} onChange={(e) => {
-                      const f = e.target.files?.[0]; e.target.value = "";
-                      if (!f) return;
-                      if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: (f.size / 1024 / 1024).toFixed(1), max: MAX_ATTACH_LABEL })); return; }
-                      setSizeWarn(null); uploadMut.mutate(f);
+                    <input type="file" multiple className="hidden" disabled={uploadMut.isPending} onChange={(e) => {
+                      const picked = Array.from(e.target.files ?? []); e.target.value = "";
+                      if (!picked.length) return;
+                      const tooBig = picked.filter((f) => f.size > MAX_ATTACH_BYTES);
+                      const ok = picked.filter((f) => f.size <= MAX_ATTACH_BYTES);
+                      setSizeWarn(tooBig.length ? tr("The file is {mb} MB, over the {max} limit. Upload rejected.", { mb: (tooBig[0].size / 1024 / 1024).toFixed(1), max: MAX_ATTACH_LABEL }) : null);
+                      if (ok.length) uploadMut.mutate(ok);
                     }} />
                   </label>
                 </div>
@@ -928,7 +996,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} aria-label={tr("Preview")} title={tr("Preview")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} aria-label={tr("Download")} title={tr("Download")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
-                    <button aria-label={tr("Delete attachment")} onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button aria-label={tr("Delete attachment")} onClick={() => setConfirmAtt(att)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 {(attachments.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">{tr("No attachments.")}</p>}
@@ -995,7 +1063,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
             {/* comments */}
             <SecCard icon={MessageCircle} label={tr("Comments")}>
-              <CommentComposer members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutate({ content, mentionedUserIds })} />
+              <CommentComposer members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />
               <div className="space-y-3">
                 {(comments.data?.comments ?? []).map((c) => (
                   <CommentItem key={c.id} comment={c} currentUserId={currentUserId} onReact={(emoji, has) => reactMut.mutate({ commentId: c.id, emoji, has })} onDelete={() => delComment.mutate(c.id)} />
@@ -1125,8 +1193,22 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   const arrVal = Array.isArray(field.value) ? field.value.map(String) : [];
   const placeInit = field.value && typeof field.value === "object" && !Array.isArray(field.value) ? (field.value as { label?: string; mapUrl?: string }) : { label: "", mapUrl: "" };
 
-  const [local, setLocal] = useState<string>(type === "DATE" && strVal.includes("T") ? strVal.slice(0, 10) : strVal);
-  const [place, setPlace] = useState({ label: placeInit.label ?? "", mapUrl: placeInit.mapUrl ?? "" });
+  const shownVal = type === "DATE" && strVal.includes("T") ? strVal.slice(0, 10) : strVal;
+  const [local, setLocalState] = useState<string>(shownVal);
+  const [place, setPlaceState] = useState({ label: placeInit.label ?? "", mapUrl: placeInit.mapUrl ?? "" });
+  // The field follows the server (someone else's change shows at once) until you type in it; only what you
+  // typed is written back, so a focus + blur never puts an old value over a newer one (C-BUG-18).
+  const dirty = useRef(false);
+  const setLocal = (v: string) => { dirty.current = true; setLocalState(v); };
+  const setPlace = (f: (p: { label: string; mapUrl: string }) => { label: string; mapUrl: string }) => { dirty.current = true; setPlaceState(f); };
+  const placeKey = JSON.stringify(field.value ?? null);
+  useEffect(() => {
+    if (dirty.current) return;
+    setLocalState(shownVal);
+    if (type === "PLACE") setPlaceState({ label: placeInit.label ?? "", mapUrl: placeInit.mapUrl ?? "" });
+  }, [shownVal, placeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** On blur: write what was typed (once), else nothing. */
+  const commit = (value: unknown, changed: boolean) => { if (!dirty.current) return; dirty.current = false; if (changed) onSet(value); };
 
   let body: ReactNode;
   if (type === "SELECT" || type === "STATUS") {
@@ -1160,8 +1242,8 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   } else if (type === "PLACE") {
     body = (
       <div className="space-y-1.5">
-        <input value={place.label} onChange={(e) => setPlace((p) => ({ ...p, label: e.target.value }))} onBlur={() => onSet(place)} placeholder={tr("Location / place name")} className={cls} />
-        <input value={place.mapUrl} onChange={(e) => setPlace((p) => ({ ...p, mapUrl: e.target.value }))} onBlur={() => onSet(place)} placeholder={tr("Google Maps link")} className={cls} />
+        <input value={place.label} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, label: v })); }} onBlur={() => commit(place, true)} placeholder={tr("Location / place name")} className={cls} />
+        <input value={place.mapUrl} onChange={(e) => { const v = e.target.value; setPlace((p) => ({ ...p, mapUrl: v })); }} onBlur={() => commit(place, true)} placeholder={tr("Google Maps link")} className={cls} />
       </div>
     );
   } else if (type === "CREATED") {
@@ -1179,7 +1261,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   } else if (type === "URL") {
     body = (
       <div className="space-y-1">
-        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => { if (local !== strVal) onSet(local); }} placeholder="https://…" className={cls} />
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => commit(local, local !== strVal)} placeholder="https://…" className={cls} />
         {strVal.trim() && (
           <a href={strVal} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
             <Link2 className="h-3 w-3" /> {tr("Open link")}
@@ -1191,17 +1273,17 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     body = <FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} />;
   } else if (type === "NUMBER" && field.options && typeof field.options === "object" && !Array.isArray(field.options) && (field.options as { format?: string }).format === "currency-idr") {
     // Rupiah-formatted number: show "Rp 9.240.943" (id-ID separators), store the raw digits.
-    body = <RupiahInput value={local} onChange={setLocal} onBlur={() => { if (local !== strVal) onSet(local); }} className={cls} ariaLabel={field.name} />;
+    body = <RupiahInput value={local} onChange={setLocal} onBlur={() => commit(local, local !== strVal)} className={cls} ariaLabel={field.name} />;
   } else if (type === "DATE") {
     // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
-    body = <DateField value={local || null} onChange={(v) => { setLocal(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? "" : tr("Not set")} />;
+    body = <DateField value={local || null} onChange={(v) => { setLocalState(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? "" : tr("Not set")} />;
   } else {
     body = (
       <input
         type={type === "NUMBER" ? "number" : "text"}
         value={local}
         onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => { if (local !== (type === "DATE" && strVal.includes("T") ? strVal.slice(0, 10) : strVal)) onSet(local); }}
+        onBlur={() => commit(local, local !== shownVal)}
         className={cls}
       />
     );
@@ -1275,7 +1357,7 @@ function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; valu
 
 /** Comment input with @-mention autocomplete (project members). Tracks the EXACT userIds picked and sends
  *  them as `mentionedUserIds` so the backend notifies the right person regardless of name. */
-function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => void }) {
+function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[]; pending: boolean; onSubmit: (content: string, mentionedUserIds: string[]) => Promise<boolean> }) {
   const { t: tr } = useLang();
   const [text, setText] = useState("");
   const [mentions, setMentions] = useState<{ id: string; name: string }[]>([]);
@@ -1313,13 +1395,18 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
     requestAnimationFrame(() => { el.focus(); const pos = at + insert.length; el.setSelectionRange(pos, pos); });
   };
 
+  const sending = useRef(false);
   const submit = () => {
     const content = text.trim();
-    if (!content || pending) return;
+    if (!content || pending || sending.current) return;
+    sending.current = true;
     // Only keep mentions whose "@Name" is still present in the final text.
     const ids = [...new Set(mentions.filter((mm) => content.includes(`@${mm.name}`)).map((mm) => mm.id))];
-    onSubmit(content, ids);
-    setText(""); setMentions([]); setQuery(null);
+    // Cleared only once the server has it: a send that fails (offline, a blip) keeps the text to retry (C-BUG-7).
+    void onSubmit(content, ids).then((ok) => {
+      sending.current = false;
+      if (ok) { setText((cur) => (cur.trim() === content ? "" : cur)); setMentions([]); setQuery(null); }
+    });
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
