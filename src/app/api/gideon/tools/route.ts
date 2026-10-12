@@ -1099,6 +1099,7 @@ async function createTask(actor: User, input: Record<string, unknown>) {
       projectName: taskList.project.name,
       projectId: taskList.projectId,
       assignedByName: actor.name,
+      actorId: actor.id,
     })
   ))
 
@@ -1177,6 +1178,7 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
       projectName: verified.taskList.project.name,
       projectId: verified.taskList.projectId,
       assignedByName: actor.name,
+      actorId: actor.id,
     })
   ))
 

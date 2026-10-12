@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { EscClose } from "@/hooks/use-escape";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,6 +62,8 @@ export function AnnouncementModal() {
     <AnimatePresence>
       {current && (
         <div className="fixed inset-0 z-[85] grid place-items-center p-4">
+          {/* Esc = the same as the close button and the backdrop (QA B50). */}
+          <EscClose onClose={() => { if (!dismiss.isPending) dismiss.mutate(current.id); }} />
           <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => dismiss.mutate(current.id)} />
           <motion.div
             role="dialog" aria-modal="true"

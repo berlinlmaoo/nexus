@@ -70,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
         },
       })
       if (conflict) {
-        return NextResponse.json({ error: `${nextRoom} sudah dibooking pada jam itu (${conflict.title}).` }, { status: 409 })
+        return NextResponse.json({ error: `${nextRoom} sudah dibooking pada jam itu (${conflict.title}).`, code: "ROOM_TAKEN", conflict: { id: conflict.id, title: conflict.title } }, { status: 409 })
       }
     }
 

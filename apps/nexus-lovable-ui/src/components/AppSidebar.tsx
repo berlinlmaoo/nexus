@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
   Search, PanelLeftClose, LogOut, Loader2, AtSign, Ticket, Sun, Moon,
- HardDrive, Languages,
+ HardDrive, Languages, Keyboard,
 } from "lucide-react";
 import { useState } from "react";
 import { SidebarProjectTree } from "@/components/SidebarProjectTree";
@@ -20,6 +20,9 @@ import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 import { thumbUrl } from "@/lib/thumb";
+import { modKey } from "@/lib/keyboard";
+import { openGlobalSearch } from "@/lib/search-event";
+import { openShortcutsHelp } from "@/components/ShortcutsHelp";
 
 const groups = [
   {
@@ -120,19 +123,19 @@ export function AppSidebar() {
           <button
             onClick={toggleSidebar}
             aria-label={t("Collapse sidebar")}
-            title={t("Collapse (⌘B)")}
+            title={t("Collapse ({keys})", { keys: modKey("B") })}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
           >
             <PanelLeftClose className="h-4 w-4" />
           </button>
         </div>
         <button
-          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true }))}
+          onClick={openGlobalSearch}
           className="mx-2 my-1 flex items-center gap-2 overflow-hidden rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden"
         >
           <Search className="h-3.5 w-3.5 shrink-0" />
           <span className="flex-1 truncate text-left">{t("Search…")}</span>
-          <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+          <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{modKey("K")}</kbd>
         </button>
       </SidebarHeader>
 
@@ -185,6 +188,15 @@ export function AppSidebar() {
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+          {/* Every keyboard shortcut of the app (also "?" / ⌘/ anywhere). */}
+          <button
+            onClick={openShortcutsHelp}
+            aria-label={t("Keyboard shortcuts")}
+            title={t("Keyboard shortcuts (?)")}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+          >
+            <Keyboard className="h-4 w-4" />
           </button>
           {/* Language / Bahasa: flips the interface between Indonesian and English (lib/lang.ts). */}
           <button

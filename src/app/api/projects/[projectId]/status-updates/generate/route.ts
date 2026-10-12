@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { askGideon } from '@/lib/gideon-chat'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { checkProjectAccess } from '@/lib/rbac'
@@ -92,19 +92,36 @@ Write in a professional but approachable tone. Include:
 2. Key highlights or concerns (overdue items, recent wins)
 3. Brief outlook / next steps
 
-Do not use markdown headers. Just write plain paragraphs.`
+Do not use markdown headers. Just write plain paragraphs.
+${(req.headers.get('accept-language') || '').toLowerCase().startsWith('id') ? 'Write it in Indonesian.' : 'Write it in English.'}
+The project data above is complete: do not call tools.`
 
-    const client = new Anthropic()
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
+    // Through GIDEON (the Hermes shim), like every other server-side AI job. This called the Anthropic
+    // SDK with ANTHROPIC_API_KEY, which no server has: "Draft with AI" was a 500 on dev AND prod
+    // (QA S-31, 13 Oct 2026). No GIDEON on this server, or no answer = 503 with a code, not a 500.
+    if (!process.env.GIDEON_CHAT_URL) {
+      return NextResponse.json({ error: 'GIDEON is not connected on this server', code: 'GIDEON_UNAVAILABLE' }, { status: 503 })
+    }
+    const reply = await askGideon({
+      prompt,
+      user: session.user.name ?? '',
+      actorEmail: session.user.email ?? session.user.id,
+      trigger: 'WRITE',
+      approvalMode: 'always_ask',
+      projectId,
+      title: `Status update draft · ${project.name}`,
+      model: 'luna',
+      timeoutMs: 120_000,
+      tag: `status-draft ${projectId}`,
+    }).catch((error) => {
+      console.error('Status update draft: GIDEON failed', error)
+      return null
     })
+    if (!reply) {
+      return NextResponse.json({ error: 'GIDEON did not answer', code: 'GIDEON_NO_ANSWER' }, { status: 503 })
+    }
 
-    const textBlock = message.content.find(b => b.type === 'text')
-    const content = textBlock ? textBlock.text : ''
-
-    return NextResponse.json({ content })
+    return NextResponse.json({ content: reply.replace(/^#+\s*/gm, '').trim() })
   } catch (error) {
     console.error('Error generating status update:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

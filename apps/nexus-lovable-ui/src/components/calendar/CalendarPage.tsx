@@ -323,6 +323,8 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   // ── Navigation ──
   const go = useCallback((d: string) => setSearch({ date: d === today ? undefined : d }), [setSearch, today]);
   const stepDate = (n: number) => (view === "people" ? addDays(date, 7 * n) : shiftMonth(date, n));
+  // Swiping the month grid sideways on a touch screen turns the month.
+  const swipeMonth = (dir: 1 | -1) => go(shiftMonth(date, dir));
   const step = (n: number) => go(stepDate(n));
   const setFilters = useCallback((f: CalFilters) => setSearch({
     scope: f.scope === "all" ? undefined : f.scope, unit: joined(f.units), person: joined(f.people), project: joined(f.projects),
@@ -697,7 +699,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-8 py-6">
           {banner}
-          <MonthGrid days={days} month={month} cells={cells} selected={date} today={today} holidays={holidays} ix={ix} onSelect={selectFromGrid} busy={itemsQ.isPlaceholderData} compact={lay.gridCompact} refocus={gridRefocus} fill />
+          <MonthGrid days={days} month={month} cells={cells} selected={date} today={today} holidays={holidays} ix={ix} onSelect={selectFromGrid} busy={itemsQ.isPlaceholderData} compact={lay.gridCompact} refocus={gridRefocus} onSwipe={swipeMonth} fill />
           {legendKey}
           {truncated}
         </div>
@@ -709,7 +711,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       // Side gutters in px on a phone: they stay 12px when the text size grows, and the text keeps the room.
       <div className="space-y-3 px-[12px] py-3 md:px-8 md:py-6">
         {banner}
-        <MonthGrid days={days} month={month} cells={cells} selected={date} today={today} holidays={holidays} ix={ix} onSelect={selectFromGrid} busy={itemsQ.isPlaceholderData} compact={lay.gridCompact} refocus={gridRefocus} />
+        <MonthGrid days={days} month={month} cells={cells} selected={date} today={today} holidays={holidays} ix={ix} onSelect={selectFromGrid} busy={itemsQ.isPlaceholderData} compact={lay.gridCompact} refocus={gridRefocus} onSwipe={swipeMonth} />
         {legendKey}
         {truncated}
         {/* On a phone the day is not a card holding cards: it spans the screen, its sticky header edge to

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -103,6 +104,7 @@ export function AttendanceReminderModal() {
     <AnimatePresence>
       {shouldShow && (
         <div className="fixed inset-0 z-[80] grid place-items-center p-4">
+          <EscClose onClose={() => setDismissed(true)} />
           <motion.div className="absolute inset-0 bg-foreground/40 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDismissed(true)} />
           <motion.div
             role="dialog" aria-modal="true"

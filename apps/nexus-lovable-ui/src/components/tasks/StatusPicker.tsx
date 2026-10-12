@@ -189,7 +189,7 @@ function OptionMenu({ option, open, onOpenChange, others, isDefault, onRename, o
     <Popover open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { setDeleting(false); if (name.trim() && name.trim() !== option.name) onRename(name.trim()); } }}>
       <PopoverTrigger asChild>
         {trigger ?? (
-          <button type="button" aria-label={t("Edit {name}", { name: option.name })} className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-card hover:text-foreground focus-visible:opacity-100 group-hover/opt:opacity-100 data-[state=open]:opacity-100">
+          <button type="button" aria-label={t("Edit {name}", { name: option.name })} className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition-opacity hover:bg-card hover:text-foreground focus-visible:opacity-100 group-hover/opt:opacity-100 data-[state=open]:opacity-100">
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         )}

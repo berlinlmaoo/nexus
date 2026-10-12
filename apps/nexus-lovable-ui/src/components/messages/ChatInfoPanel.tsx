@@ -521,7 +521,7 @@ function Description({ info, onSaved }: { info: Info; onSaved: () => void }) {
         {c.canEdit ? (
           <button onClick={() => setEditing(true)} title={t("Edit description")} className="group/desc w-full rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-accent">
             <span className="whitespace-pre-wrap break-words text-sm leading-relaxed">{c.description}</span>
-            <Pencil className="ml-1 inline h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/desc:opacity-100" />
+            <Pencil className="ml-1 inline h-3 w-3 text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition-opacity group-hover/desc:opacity-100" />
           </button>
         ) : (
           <p className="whitespace-pre-wrap break-words px-2 text-sm leading-relaxed">{c.description}</p>

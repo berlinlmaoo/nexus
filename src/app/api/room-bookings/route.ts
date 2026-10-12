@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
     if (end <= start) {
       return NextResponse.json({ error: "End time must be after start time" }, { status: 400 })
     }
+    // A booking that has already ended can't be made (QA S-13, 13 Oct 2026); one under way can.
+    if (end.getTime() <= Date.now()) {
+      return NextResponse.json({ error: "That time has already passed.", code: "BOOKING_IN_PAST" }, { status: 400 })
+    }
 
     const workspaceIds = await getUserWorkspaceIds(session.user.id)
     const workspaceId = workspaceIds[0]
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
     })
     if (conflict) {
       return NextResponse.json(
-        { error: `${room} sudah dibooking pada jam itu (${conflict.title}).`, conflict },
+        { error: `${room} sudah dibooking pada jam itu (${conflict.title}).`, code: "ROOM_TAKEN", conflict },
         { status: 409 }
       )
     }

@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type TouchEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,7 +37,8 @@ function weekdays(locale: string, weekday: "narrow" | "long"): string[] {
  * The month: Monday first, always six weeks. One dot per unit at the focus level that has a task that
  * day (filled = still something to do, tick = only done / status-less), in Bagan order — the same order as the legend.
  * Desktop also shows the day's count; a red bar under the number = a task overdue (within the window)
- * is due that day. Days of other months sit on a muted background and carry no dots.
+ * is due that day. Days of other months sit on a muted background; their dots and counts show too, a
+ * little quieter (the grid's data covers all 42 days — QA B18: they used to read "No tasks").
  * `fill` = the grid stretches its six rows over the height it is given (the desktop pane), so a whole
  * month fits a laptop screen; otherwise each row has a fixed minimum height and the page scrolls.
  * Hovering a legend chip dims the other units' dots through CSS (CalendarPage), via data-unit.
@@ -47,13 +48,15 @@ function weekdays(locale: string, weekday: "narrow" | "long"): string[] {
  * which ones only have done or status-less tasks (the ticks). The tooltip is for the pointer only.
  */
 export const MonthGrid = memo(function MonthGrid({
-  days, month, cells, selected, today, holidays, ix, onSelect, busy, compact, fill = false, refocus,
+  days, month, cells, selected, today, holidays, ix, onSelect, busy, compact, fill = false, refocus, onSwipe,
 }: {
   days: string[]; month: string; cells: Map<string, MonthCell>; selected: string; today: string
   holidays: Map<string, string>; ix: CalIndex
   onSelect: (day: string) => void; busy: boolean; compact: boolean; fill?: boolean
   /** The page sets it before a shortcut pressed on a day (T, J / K) selects another one: focus follows. */
   refocus?: MutableRefObject<boolean>
+  /** A horizontal swipe on a touch screen: 1 = next month (finger to the left), -1 = previous. */
+  onSwipe?: (dir: 1 | -1) => void
 }) {
   const { t, tn, locale, lang } = useLang();
   const names = weekdayNames(locale);
@@ -86,10 +89,29 @@ export const MonthGrid = memo(function MonthGrid({
     want.current = true;
     onSelect(to);
   };
+  // Swipe between months on a touch screen (QA S-11): a clearly sideways stroke of 50 px or more.
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+    const tp = e.touches[0];
+    swipe.current = onSwipe && e.touches.length === 1 ? { x: tp.clientX, y: tp.clientY, t: Date.now() } : null;
+  };
+  const onTouchEnd = (e: TouchEvent<HTMLDivElement>) => {
+    const st = swipe.current;
+    swipe.current = null;
+    const tp = e.changedTouches[0];
+    if (!st || !tp || !onSwipe || Date.now() - st.t > 800) return;
+    const dx = tp.clientX - st.x;
+    const dy = tp.clientY - st.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    onSwipe(dx < 0 ? 1 : -1);
+  };
   return (
     <div
       ref={gridRef}
       role="grid"
+      onTouchStart={onSwipe ? onTouchStart : undefined}
+      onTouchEnd={onSwipe ? onTouchEnd : undefined}
+      onTouchCancel={onSwipe ? () => { swipe.current = null; } : undefined}
       data-cal-grid=""
       data-cal-region="grid"
       aria-label={fmtDay(`${month}-01`, { month: "long", year: "numeric" }, locale)}
@@ -118,7 +140,7 @@ export const MonthGrid = memo(function MonthGrid({
         {days.slice(w * 7, w * 7 + 7).map((day, j) => {
           const i = w * 7 + j;
           const inMonth = day.slice(0, 7) === month;
-          const cell = inMonth ? cells.get(day) : undefined;
+          const cell = cells.get(day);
           const isToday = day === today;
           const isSel = day === selected;
           const holiday = holidays.get(day);
@@ -180,7 +202,7 @@ export const MonthGrid = memo(function MonthGrid({
                     )}
                     <span className={cn("mt-auto flex flex-wrap items-center gap-[3px] pt-1", compact && "justify-center")}>
                       {shown.map((d) => (
-                        <span key={d.unitId} data-unit={d.unitId} className={cn("inline-flex transition-opacity", busy && "opacity-40")}>
+                        <span key={d.unitId} data-unit={d.unitId} className={cn("inline-flex transition-opacity", busy ? "opacity-40" : !inMonth && "opacity-60")}>
                           <UnitDot unit={ix.byId.get(d.unitId)} filled={d.filled} size={compact ? 6 : 7} />
                         </span>
                       ))}
@@ -208,7 +230,7 @@ export const MonthGrid = memo(function MonthGrid({
           stay out of the grid's rows, which may hold cells only. */}
       <div hidden>
         {days.map((day) => {
-          const cell = day.slice(0, 7) === month ? cells.get(day) : undefined;
+          const cell = cells.get(day);
           if (!cell || cell.dots.length === 0) return null;
           return (
             <span key={day} id={`${descId}${day}`}>

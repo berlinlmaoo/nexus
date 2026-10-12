@@ -41,7 +41,7 @@ export function PersonReportView({ data, showIdentity }: { data: PersonReportRes
         <OverdueCard work={work} />
       </Reveal>
 
-      <Reveal delay={0.08}><ProjectsCard rows={work.perProject} /></Reveal>
+      <Reveal delay={0.08}><ProjectsCard rows={work.perProject} asOf={pastAsOf(work)} /></Reveal>
 
       <Reveal delay={0.1} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <AttendanceCard a={attendance} />
@@ -195,12 +195,26 @@ function WeeklyCard({ weekly }: { weekly: PersonReportResponse["work"]["weekly"]
   );
 }
 
+/** A past period's open/overdue figures are taken at its last day (server `asOf`, QA B02): say so. */
+function pastAsOf(work: PersonReportResponse["work"]): string | null {
+  if (!work.asOf) return null;
+  const today = new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10);
+  return work.asOf < today ? work.asOf : null;
+}
+
+function AsOfNote({ day }: { day: string | null }) {
+  if (!day) return null;
+  return <p className="-mt-3 mb-3 text-xs text-muted-foreground">{t("At the end of the period ({date})", { date: fmtDayKey(day, true) })}</p>;
+}
+
 function OverdueCard({ work }: { work: PersonReportResponse["work"] }) {
   const list = work.overdueList;
+  const asOf = pastAsOf(work);
   return (
     <Card title={t("Overdue tasks")} icon={AlertTriangle} right={list.length > 0 ? <span className="chip chip--sm chip--danger tabular-nums">{fmtNum(work.overdueNow)}</span> : undefined}>
+      <AsOfNote day={asOf} />
       {list.length === 0 ? (
-        <EmptyState compact tone="success" icon={CheckCircle2} title={t("Nothing overdue")} message={t("Every open task with a due date is still on schedule.")} />
+        <EmptyState compact tone="success" icon={CheckCircle2} title={t("Nothing overdue")} message={asOf ? t("Nothing was overdue at the end of this period.") : t("Every open task with a due date is still on schedule.")} />
       ) : (
         <ul className="-mx-2 max-h-[22rem] divide-y divide-border overflow-y-auto">
           {list.map((task) => (
@@ -225,9 +239,10 @@ function OverdueCard({ work }: { work: PersonReportResponse["work"] }) {
   );
 }
 
-function ProjectsCard({ rows }: { rows: PersonReportResponse["work"]["perProject"] }) {
+function ProjectsCard({ rows, asOf }: { rows: PersonReportResponse["work"]["perProject"]; asOf: string | null }) {
   return (
     <Card title={t("By project")} icon={FolderKanban}>
+      <AsOfNote day={asOf} />
       {rows.length === 0 ? (
         <EmptyState compact tone="muted" icon={FolderKanban} title={t("No project activity")} message={t("Tasks assigned in this period show up here, grouped by project.")} />
       ) : (

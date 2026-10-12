@@ -963,7 +963,8 @@ export type NexusMemberRecord = {
   viewer: { scope: "ALL" | "DIRECT_REPORTS" | "SELF"; canManageAttendance: boolean; canRemoveXp: boolean };
   period: { key: string; from: string; to: string; label: string; isCurrent: boolean; days: number; daysElapsed: number; previousKey: string; nextKey: string | null };
   summary: {
-    score: { worked: number; working: number; surplus: number; totalWorked: number };
+    /** days/allowance/from (servers since 13 Oct 2026): what the score is out of — fewer days for someone who joined mid-period. */
+    score: { worked: number; working: number; surplus: number; totalWorked: number; days?: number; allowance?: number; from?: string };
     counts: { present: number; permit: number; leave: number; sick: number; dayOff: number; absent: number; lateDays: number; lateMinutes: number };
     dayOff: { quota: number; baseQuota: number; bonusDays: number; bonusGrants: { days: number; reason: string }[]; used: number; usedRaw: number; remaining: number };
     xp: NexusRecordXpTotals;
@@ -1277,6 +1278,8 @@ export type ReportPersonWork = {
   openTotal: number; openByPriority: Record<ReportPriority, number>; dueNext7: number;
   medianCycleDays: number | null; cycleSample: number; weekly: { from: string; to: string; completed: number; onTime: number }[];
   perProject: { projectId: string; projectName: string; completed: number; open: number; overdue: number }[];
+  /** WIB day the open/overdue figures describe: today, or a past period's last day (servers since 13 Oct 2026). */
+  asOf?: string;
 };
 export type ReportPersonAttendance = {
   present: number; late: number; lateMinutes: number; earlyLeave: number; absent: number; leave: number; sick: number; permit: number; dayOff: number;
@@ -3254,6 +3257,20 @@ export const nexusApi = {
   passwordResetResend: (email: string) =>
     apiFetch<{ ok?: boolean; resendCooldownSeconds?: number; retryAfterSeconds?: number }>("/api/auth/password/reset/resend", { method: "POST", body: JSON.stringify({ email }) }),
 };
+
+/**
+ * A failure that says nothing about the data or about access: the request never reached the app
+ * (offline, Wi-Fi blip → TypeError "Failed to fetch"), or a proxy/server hiccup (502/503/504, status 0).
+ * Screens retry these and keep what they already show instead of turning into "no access" (QA S-05).
+ */
+export function isTransientError(error: unknown) {
+  if (error instanceof ApiError) return error.status === 0 || error.status === 408 || error.status >= 500;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const msg = error instanceof Error ? error.message : String(error ?? "");
+  return error instanceof TypeError || /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(msg);
+}
+/** react-query `retry` for screens that must survive a blip: up to 3 tries on transient errors only. */
+export const retryTransient = (failureCount: number, error: unknown) => failureCount < 3 && isTransientError(error);
 
 export function isAuthError(error: unknown) {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);

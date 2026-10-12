@@ -96,7 +96,7 @@ export function VersionHistoryPanel({ revisions, loading, named, selectedAt, sho
             aria-label={t("More actions")}
             aria-haspopup="menu"
             onClick={(e) => setMenu({ at: v.at, rect: e.currentTarget.getBoundingClientRect() })}
-            className="absolute right-1 top-1.5 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+            className="absolute right-1 top-1.5 rounded p-1 text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-background hover:text-foreground group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
           ><MoreVertical className="h-3.5 w-3.5" /></button>
         )}
         {isSel && !v.current && (

@@ -805,7 +805,7 @@ export function OrgChart() {
                             <UnitCard u={u} busy={busy} {...cardInfo(u)} dragging={dragKey === key} onKeyOpen={() => setEditing(u)} />
                             {!dragKey && !busy && (
                               <button type="button" data-oc-add="" onClick={(e) => { e.stopPropagation(); setAdding({ parentId: u.id }); }} aria-label={t("Add under {name}", { name: u.name })} title={t("Add under {name}", { name: u.name })}
-                                className="absolute -bottom-3 left-1/2 z-10 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:border-cal-accent hover:text-cal-accent focus-visible:opacity-100 group-hover/card:opacity-100">
+                                className="absolute -bottom-3 left-1/2 z-10 grid h-6 w-6 -translate-x-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 pointer-coarse:opacity-100! shadow-sm transition hover:border-cal-accent hover:text-cal-accent focus-visible:opacity-100 group-hover/card:opacity-100">
                                 <Plus className="h-3.5 w-3.5" />
                               </button>
                             )}
@@ -1269,7 +1269,7 @@ function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemo
     </button>
     {onRemove && (
       <button type="button" onClick={onRemove} disabled={busy} aria-label={t("Remove {name} from this card", { name: label(p) })} title={t("Remove from this card")}
-        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition hover:text-rose-700 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 dark:hover:text-rose-300">
+        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 pointer-coarse:opacity-100! shadow-sm transition hover:text-rose-700 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40 dark:hover:text-rose-300">
         <X className="h-3 w-3" />
       </button>
     )}

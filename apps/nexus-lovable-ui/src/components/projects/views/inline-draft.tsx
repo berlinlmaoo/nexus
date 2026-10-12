@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { modKey } from "@/lib/keyboard";
 import { Calendar, Loader2, Maximize2, MoreHorizontal, Trash2, X } from "lucide-react";
 import { enGB, id as idLocale } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -108,8 +109,8 @@ export function InlineTaskDraft({ variant, onCreate, onExpand, onClose, accent }
           className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground/70"
         />
         {pending > 0 && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
-        <div className={cn("flex shrink-0 items-center gap-0.5", card && "opacity-0 transition-opacity focus-within:opacity-100 group-hover/draft:opacity-100")}>
-          <button type="button" onClick={() => save("expand")} disabled={!title.trim()} title={t("Open as task (⌘/Ctrl+Enter)")} aria-label={t("Open as task")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40">
+        <div className={cn("flex shrink-0 items-center gap-0.5", card && "opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/draft:opacity-100")}>
+          <button type="button" onClick={() => save("expand")} disabled={!title.trim()} title={t("Open as task ({keys})", { keys: modKey("Enter") })} aria-label={t("Open as task")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40">
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
           <Popover>

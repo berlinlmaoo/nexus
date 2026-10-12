@@ -459,6 +459,7 @@ export async function applyTaskUpdate({
         projectName: existing.taskList.project.name,
         projectId: effectiveProjectId,
         assignedByName: session.user.name || "Someone",
+        actorId: session.user.id,
       })))
     }
 

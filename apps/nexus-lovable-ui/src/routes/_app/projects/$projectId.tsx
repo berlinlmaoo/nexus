@@ -1,4 +1,6 @@
 import { useRealtimeRoom } from "@/lib/realtime";
+import { docTitle } from "@/lib/doc-title";
+import { useEscape } from "@/hooks/use-escape";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
@@ -10,7 +12,7 @@ import { EmptyAction, EmptyState } from "@/components/EmptyState";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
-import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
+import { fmtDate, isTransientError, nexusApi, retryTransient, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { openGideon } from "@/lib/gideon";
@@ -29,6 +31,7 @@ import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
+import { useTouchDrag } from "@/components/projects/views/touch-drag";
 import { canDragTask, DragHandle, droppable, moveToGroup, setStackDragImage, useGroupMove } from "@/components/projects/views/group-move";
 import { optionColorKey, StatusOptionMenu, StatusPicker } from "@/components/tasks/StatusPicker";
 import { defaultOption, orderedOptions, statusForNewOption, statusGroupOf, STATUS_GROUPS, usesStatusOptions, type StatusGroupKey } from "@/lib/status-options";
@@ -100,6 +103,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Trash2,
+  WifiOff,
   X,
   Zap,
   Sparkles,
@@ -301,10 +305,15 @@ function ProjectDetail() {
   // Phone: the view tools (filter/sort/group/search/view settings/automations/autofill) sit behind ⋯ so the
   // header is one title row + one tabs row (audit 12 Oct 2026). Desktop always shows them.
   const [toolsOpen, setToolsOpen] = useState(false);
-  const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
+  // A network blip is not "no access" (QA S-05): transient errors retry, the page refetches when the
+  // connection is back, and a failed REFETCH keeps showing the project it already has.
+  const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: retryTransient, retryDelay: (n) => Math.min(1000 * 2 ** n, 8000), refetchOnReconnect: true });
   const data = project.data;
-  // 404 = deleted or a wrong link; anything else (403) = not a member (bughunt N-BUG-5).
+  // Only a failure with nothing to show replaces the page.
+  const projectFailed = project.isError && !data;
+  // 404 = deleted or a wrong link; 401/403 = not a member (bughunt N-BUG-5); anything else = connection.
   const projectMissing = (project.error as { status?: number } | null)?.status === 404;
+  const projectOffline = projectFailed && isTransientError(project.error);
   // GIDEON opened here carries this project as context (Notion AI's page chip).
   useEffect(() => (data ? pushGideonPage({ kind: "project", id: data.id, title: data.name, projectId: data.id, projectName: data.name }) : undefined), [data?.id, data?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const search = Route.useSearch();
@@ -703,7 +712,7 @@ function ProjectDetail() {
         className="bg-card/95"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
-        subtitle={data?.description || (project.isLoading ? tr("Loading…") : project.isError ? (projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
+        subtitle={data?.description || (project.isLoading ? tr("Loading…") : projectFailed ? (projectOffline ? tr("No connection. Check your internet and try again.") : projectMissing ? tr("This project was deleted, or the link is wrong.") : tr("Couldn't open this project. You may not be a member.")) : undefined)}
         actions={
           <>
             {data && <ProjectMembersAvatars project={data} />}
@@ -719,14 +728,16 @@ function ProjectDetail() {
       />
 
       {project.isLoading && <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}
-      {project.isError && (projectMissing
+      {projectFailed && (projectOffline
+        ? <div className="px-4 py-10 md:px-8"><EmptyState icon={WifiOff} tone="muted" title={tr("Couldn't load this project")} message={tr("No connection. NEXUS tries again by itself when you're back online.")} action={<Button size="sm" variant="outline" isDisabled={project.isFetching} onClick={() => void project.refetch()}>{project.isFetching ? tr("Trying again…") : tr("Try again")}</Button>} /></div>
+        : projectMissing
         ? <div className="px-4 py-10 md:px-8"><EmptyState icon={Search} tone="muted" title={tr("Project not found")} message={tr("It was deleted, or the link is wrong. A deleted project can be restored from Control Room → Audit.")} action={<EmptyAction to="/projects">{tr("Go to Projects")}</EmptyAction>} /></div>
         : <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its project lead to add you.")} /></div>)}
-      {!project.isLoading && !project.isError && data && isPipeline && (
+      {!project.isLoading && data && isPipeline && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />}</Pending>
       )}
-      {!project.isLoading && !project.isError && data && isOutlet && (
+      {!project.isLoading && data && isOutlet && (
         <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : (
             <OutletSalesView
@@ -738,7 +749,7 @@ function ProjectDetail() {
             />
           )}</Pending>
       )}
-      {!project.isLoading && !project.isError && data && !isSpecial && (
+      {!project.isLoading && data && !isSpecial && (
         // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
         <TaskBulkProvider projectId={data.id} visibleIds={activeModule ? undefined : visibleIds}>
           <FilterHintProvider ids={filteredOut}>
@@ -867,11 +878,12 @@ function filterPrefill(filter: ViewFilter, defs: PropDef[], meId: string | null)
  * group's (and sub-group's) value is written as a drop would. The server gives it its section's status.
  * `placement` "top" for the drafts at the top of a column / group, "bottom" for the Table's row under it.
  */
-async function createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey, sub, subKey, title, dueDate, placement, withDraft }: {
+async function createInline(args: {
   project: NexusProject; defs: PropDef[]; ctx: ViewCtx; cfg: ViewConfig; qc: ReturnType<typeof useQueryClient>;
   groupBy: string | null; groupKey: string | null; sub: string | null; subKey: string | null; title: string; dueDate: string | null;
   placement: "top" | "bottom"; withDraft?: boolean;
 }): Promise<NexusTask | null> {
+  const { project, defs, ctx, cfg, qc, groupBy, groupKey, sub, subKey, title, dueDate, placement, withDraft } = args;
   const sections = project.taskLists ?? [];
   const pre = filterPrefill(cfg.filter, defs, ctx.meId ?? null);
   const statusOpts = usesStatusOptions(sections);
@@ -902,7 +914,13 @@ async function createInline({ project, defs, ctx, cfg, qc, groupBy, groupKey, su
     return task;
   } catch (e) {
     undo?.();
-    toast.error(tt("Couldn't add the task"), { description: friendlyError(e) });
+    // Offline / a blip: the typed task is kept in the toast so it isn't lost even when the draft row has
+    // closed (QA S-05). "Try again" re-sends it as typed. A rejection (4xx) is not retried.
+    const transient = isTransientError(e);
+    toast.error(tt("Couldn't add the task"), {
+      description: transient ? `“${title}” · ${friendlyError(e) ?? ""}` : friendlyError(e),
+      ...(transient ? { duration: 30_000, action: { label: tt("Try again"), onClick: () => { void createInline({ ...args, withDraft: false }); } } } : {}),
+    });
     return null;
   } finally {
     settleTaskWrite(qc, project.id);
@@ -931,6 +949,8 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // A drop lands at once (perf pass, 12 Oct 2026) and moves the whole selection when the dragged card is
   // part of it (multi-drag, 12 Oct 2026): components/projects/views/group-move.tsx.
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks: tasks });
+  // Phone/iPad: hold a card, then drag (touch-drag.ts) — the same drop code as the mouse.
+  useTouchDrag();
   const drag = mover.drag;
   const { startDrag, endDrag } = mover;
   const onCardDrag = useCallback<CardDrag>((task, from, fromRow, e) => startDrag(e ?? null, task, from, fromRow), [startDrag]);
@@ -1114,7 +1134,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
       >
         {showHeader && (
           <div className="mb-1 flex items-center gap-1 px-0.5" style={{ color: tone.text }}>
-            <button type="button" onClick={() => onToggleGroup(g.key)} aria-label={t("Collapse {name}", { name: laneLabel(g) })} className={cn(quiet, "h-6 w-5 opacity-0 focus-visible:opacity-100 group-hover/lane:opacity-100")}>
+            <button type="button" onClick={() => onToggleGroup(g.key)} aria-label={t("Collapse {name}", { name: laneLabel(g) })} className={cn(quiet, "tap-area h-6 w-5 opacity-0 pointer-coarse:opacity-100! focus-visible:opacity-100 group-hover/lane:opacity-100")}>
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
             <span
@@ -1129,7 +1149,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               <span className="truncate">{laneLabel(g)}</span>
             </span>
             <span className="text-xs tabular-nums" title={t(groupCalcValue(laneTasks, cfg.groupCalc, defs).label)}>{groupCalcValue(laneTasks, cfg.groupCalc, defs).value}</span>
-            <div className="ml-auto flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
+            <div className="ml-auto flex shrink-0 items-center opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100">
               {section && (
                 <StatusOptionMenu projectId={project.id} option={section} sections={sections} trigger={<button type="button" aria-label={t("Column options")} className={quiet}><MoreHorizontal className="h-3.5 w-3.5" /></button>} />
               )}
@@ -1188,7 +1208,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
 
   if (!sub) {
     return (
-      <div className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+      <div data-touch-drag-root="" className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
         <div className="flex min-w-max items-start gap-2.5">
           {linkedLaneEls}
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
@@ -1201,7 +1221,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   // Sub-groups: one row (swimlane) per sub-group value, the same lanes in each row.
   const rows = buildGroups(tasks, sub, { keepHidden: true });
   return (
-    <div className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
+    <div data-touch-drag-root="" className="overflow-x-auto px-4 pb-6 pt-3 md:px-8">
       <div className="min-w-max space-y-3">
         <div className="flex gap-2.5 pl-0.5">
           {lanes.map((g) => (
@@ -1325,7 +1345,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
   const filteredOut = useFilteredOut(task.id);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
+    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] [&>[data-touch-lifted]]:scale-[1.02] [&>[data-touch-lifted]]:shadow-[0_6px_18px_rgba(15,15,15,0.18)]", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
       <div
         role="button"
         tabIndex={0}
@@ -1352,7 +1372,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); toggleDone.mutate(done ? "TODO" : "DONE"); }}
             disabled={draft}
-            className="mt-px shrink-0 rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90"
+            className="tap-area mt-px shrink-0 rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90"
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
           >
@@ -1430,6 +1450,8 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
   const ids = members.map((m) => m.userId || m.user?.id).filter(Boolean) as string[];
   const memberIds = new Set(ids);
+  // Esc closes the popover (QA S-09).
+  useEscape(() => setOpen(false), open);
 
   if (ids.length === 0 && !canAdd) return null;
   const close = () => setOpen(false);
@@ -1437,13 +1459,13 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center rounded-full transition hover:opacity-80" title={t("Project members")} aria-label={t("Project members")}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog" className="inline-flex items-center justify-center rounded-full transition hover:opacity-80 pointer-coarse:min-h-11 pointer-coarse:min-w-11" title={t("Project members")} aria-label={t("Project members")}>
         {ids.length > 0 ? <AvatarStack ids={ids} size={isMobile ? 24 : 26} max={isMobile ? 2 : 4} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ {t("Members")}</span>}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-pop">
+          <div role="dialog" aria-label={t("Project members")} className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-pop">
             <div className={labelCls}>{t("Project members · {n}", { n: members.length })}</div>
             <div className="max-h-72 space-y-0.5 overflow-y-auto">
               {members.map((m) => {
@@ -1524,7 +1546,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
         title={done ? t("Mark as not done") : t("Mark as done")}
         tabIndex={-1}
         onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
-        className="-m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90"
+        className="tap-area -m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90"
       >
         {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
       </span>
@@ -1555,6 +1577,7 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const sub = groupBy && subGroupBy && subGroupBy !== groupBy ? subGroupBy : null;
   const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
+  useTouchDrag();
   const rows = (tasks: NexusTask[], gKey: string | null = null, subKey: string | null = null) => (
     <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => (
       <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph}
@@ -1576,10 +1599,10 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
       </button>
     ));
   if (!groupBy) {
-    return <div className="px-4 py-3 md:px-8">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
+    return <div data-touch-drag-root="" className="px-4 py-3 md:px-8">{newRow("all", null, null)}{rows(groups[0]?.tasks ?? [])}</div>;
   }
   return (
-    <div className="space-y-5 px-4 py-3 md:px-8">
+    <div data-touch-drag-root="" className="space-y-5 px-4 py-3 md:px-8">
       {groups.map((g) => {
         const isCollapsed = collapsed.has(g.key);
         const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
@@ -1630,6 +1653,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
   tasks: NexusTask[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx;
   onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDates: (moves: Array<{ task: NexusTask; iso: string }>) => void; canDrag: boolean;
 }) {
+  const swipeAt = useRef<{ x: number; y: number; t: number } | null>(null);
   const { t, locale } = useLang();
   const bulk = useTaskBulk();
   const isMobile = useIsMobile();
@@ -1695,8 +1719,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
       <div className="flex items-center gap-1">
         <h2 className="mr-auto text-base font-semibold capitalize">{new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(viewMonth)}</h2>
         <button type="button" onClick={() => { const n = new Date(); setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1)); }} className="h-8 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">{t("Today")}</button>
-        <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
-        <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
+        <button type="button" onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
+        <button type="button" onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="grid h-8 w-8 pointer-coarse:size-11 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><ChevronRight className="h-4 w-4" /></button>
       </div>
 
       {isMobile ? (
@@ -1730,7 +1754,18 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
           {agenda.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">{t("Nothing on the calendar this month.")}</p>}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div
+          className="overflow-hidden rounded-lg border border-border"
+          // A sideways swipe on a touch screen (iPad) turns the month (QA S-11).
+          onTouchStart={(e) => { const tp = e.touches[0]; swipeAt.current = e.touches.length === 1 ? { x: tp.clientX, y: tp.clientY, t: Date.now() } : null; }}
+          onTouchEnd={(e) => {
+            const st = swipeAt.current; swipeAt.current = null;
+            const tp = e.changedTouches[0];
+            if (!st || !tp || Date.now() - st.t > 800) return;
+            const dx = tp.clientX - st.x; const dy = tp.clientY - st.y;
+            if (Math.abs(dx) >= 50 && Math.abs(dx) >= Math.abs(dy) * 1.5) shiftMonth(dx < 0 ? 1 : -1);
+          }}
+        >
           <div className="grid grid-cols-7 border-b border-border text-xs text-muted-foreground">
             {weekdays.map((d, i) => <div key={i} className="px-2 py-1.5 text-right">{d}</div>)}
           </div>
@@ -1750,7 +1785,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
                   className={cn("group/cal relative min-h-28 border-border p-1", idx % 7 !== 6 && "border-r", idx >= 7 && "border-t", !inMonth && "bg-muted/30", dropKey === key && "bg-accent")}
                 >
                   <div className="mb-1 flex items-center justify-between">
-                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
+                    {inMonth ? <button type="button" onClick={() => onCreate(ymd(day))} aria-label={t("Add a task on this date")} title={t("Add a task on this date")} className="grid h-6 w-6 place-items-center rounded text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5" /></button> : <span />}
                     <span className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums", isToday ? "bg-rose-500 font-semibold text-white" : inMonth ? "text-foreground" : "text-muted-foreground/50")}>{day.getDate()}</span>
                   </div>
                   <div className="space-y-0.5">
@@ -2186,7 +2221,7 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg">{doc.icon || "📄"}</span>
                 <div className="min-w-0">
-                  <h3 className="truncate text-base font-black tracking-tight">{doc.title}</h3>
+                  <h3 className="truncate text-base font-black tracking-tight">{docTitle(doc.title)}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">{tr("Updated {date}", { date: fmtDate(doc.updatedAt) })}{(doc.owner?.name || doc.author?.name) ? ` · ${doc.owner?.name || doc.author?.name}` : ""}</p>
                 </div>
               </div>

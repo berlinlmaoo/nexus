@@ -56,7 +56,6 @@ export const ID_QAFIX_PERM: Record<string, string> = {
   "This ticket is closed, but the attendance fix below still waits for a decision. It stays under In review until someone approves or rejects it.": "Tiket ini sudah ditutup, tapi perbaikan absensi di bawah masih menunggu keputusan. Tiket tetap di Ditinjau sampai ada yang menyetujui atau menolaknya.",
   "This ticket is closed, but your attendance fix below still waits for a BoD decision.": "Tiket ini sudah ditutup, tapi perbaikan absensimu di bawah masih menunggu keputusan BoD.",
   "This ticket isn't yours": "Tiket ini bukan milikmu",
-  "Ticket": "Tiket",
   "You can't open this task": "Kamu tidak bisa membuka task ini",
   "You don't have access": "Kamu tidak punya akses",
   "Your browser couldn't create the passkey. Try again.": "Browsermu tidak bisa membuat passkey. Coba lagi.",

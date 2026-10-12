@@ -332,6 +332,7 @@ export async function POST(request: NextRequest) {
         projectName: taskList.project.name,
         projectId: taskList.projectId,
         assignedByName: session.user.name || "Someone",
+        actorId: userId,
       })
     ))
 

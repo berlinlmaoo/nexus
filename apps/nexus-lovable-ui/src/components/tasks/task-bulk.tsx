@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { modKey } from "@/lib/keyboard";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -46,7 +47,7 @@ type CardProps = {
   onContextMenu?: (e: React.MouseEvent) => void;
   onTouchStart?: (e: React.TouchEvent) => void;
   onTouchEnd?: (e: React.TouchEvent) => void;
-  onTouchMove?: () => void;
+  onTouchMove?: (e: React.TouchEvent) => void;
 };
 type RowProps = {
   "data-bulk-task": string;
@@ -119,6 +120,7 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const lpTimer = useRef<number | undefined>(undefined);
   const lpFired = useRef(false);
+  const lpStart = useRef({ x: 0, y: 0 });
   const lastTouchEnd = useRef(0);
   // The last task clicked into the selection: the other end of a Shift+click range.
   const anchor = useRef<string | null>(null);
@@ -348,6 +350,7 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
     onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); openMenu(task, e.clientX, e.clientY); },
     onTouchStart: (e) => {
       const touch = e.touches[0];
+      lpStart.current = { x: touch.clientX, y: touch.clientY };
       lpFired.current = false;
       window.clearTimeout(lpTimer.current);
       lpTimer.current = window.setTimeout(() => { lpFired.current = true; if (navigator.vibrate) navigator.vibrate(8); openMenu(task, touch.clientX, touch.clientY, true); }, LONG_PRESS_MS);
@@ -355,7 +358,12 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
     // The finger lifting after a long-press must not become a click on the menu's backdrop (C-BUG-20):
     // preventDefault cancels the compatibility mouse events; the backdrop also ignores a click right after.
     onTouchEnd: (e: React.TouchEvent) => { window.clearTimeout(lpTimer.current); lastTouchEnd.current = Date.now(); if (lpFired.current && e.cancelable) e.preventDefault(); },
-    onTouchMove: () => window.clearTimeout(lpTimer.current),
+    onTouchMove: (e: React.TouchEvent) => {
+      window.clearTimeout(lpTimer.current);
+      // Held, the menu opened, then the finger moves: that's a drag (views/touch-drag.ts) — close the menu.
+      const tc = e.touches[0];
+      if (lpFired.current && tc && Math.hypot(tc.clientX - lpStart.current.x, tc.clientY - lpStart.current.y) > 8) { lpFired.current = false; setMenu(null); }
+    },
   }), [selected, toggle, modifierClick, openMenu]);
 
   // Table rows are full of inline editors, so a plain click stays theirs; only modifier clicks select.
@@ -566,7 +574,7 @@ function ContextMenu({ menu, count, reduce, onSelect, onSelectAll, onDuplicate, 
         <>
           <div className="truncate px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">{many ? tn(count, "{n} task selected", "{n} tasks selected") : menu.task.title || t("Task")}</div>
           {!many && <MenuRow icon={CheckSquare} label={t("Select multiple")} onClick={onSelect} />}
-          <MenuRow icon={ListChecks} label={t("Select all")} hint="⌘A" onClick={onSelectAll} />
+          <MenuRow icon={ListChecks} label={t("Select all")} hint={modKey("A")} onClick={onSelectAll} />
           <hr className="my-1 border-border" />
           <MenuRow icon={CircleDot} label={t("Status")} more onClick={() => setSub("status")} />
           <MenuRow icon={Flag} label={t("Priority")} more onClick={() => setSub("priority")} />
@@ -590,7 +598,8 @@ function MenuRow({ icon: Icon, label, onClick, more, danger, disabled, hint }: {
     <button role="menuitem" type="button" disabled={disabled} onClick={onClick} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors active:scale-[0.98] disabled:opacity-50", danger ? "text-destructive hover:bg-destructive/10" : "hover:bg-accent")}>
       <Icon className={cn("h-4 w-4 shrink-0", danger ? "" : "text-muted-foreground")} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+      {/* A key hint means nothing on a touch screen (QA B44). */}
+      {hint && <span className="text-[11px] text-muted-foreground pointer-coarse:hidden">{hint}</span>}
       {more && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
     </button>
   );

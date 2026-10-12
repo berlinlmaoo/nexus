@@ -1,4 +1,5 @@
 import { plainPreview } from "@/lib/plain-preview";
+import { docTitle } from "@/lib/doc-title";
 import { createFileRoute, Link, Outlet, useChildMatches, useNavigate } from "@tanstack/react-router";
 import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
@@ -68,7 +69,7 @@ function DocTreeNode({ doc, allDocs, depth }: { doc: NexusDoc; allDocs: NexusDoc
     <div>
       <Link to="/docs/$docId" params={{ docId: doc.id }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent pointer-coarse:min-h-11" style={{ paddingLeft: `${depth * 14 + 8}px` }}>
         <span className="shrink-0">{emojiForDoc(doc)}</span>
-        <span className="truncate">{doc.title}</span>
+        <span className="truncate">{docTitle(doc.title)}</span>
       </Link>
       {children.map((c) => <DocTreeNode key={c.id} doc={c} allDocs={allDocs} depth={depth + 1} />)}
     </div>
@@ -146,7 +147,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
       <div className="flex items-start gap-3">
         <span className="text-2xl">{emojiForDoc(doc)}</span>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold tracking-tight truncate">{doc.title}</h3>
+          <h3 className="font-semibold tracking-tight truncate">{docTitle(doc.title)}</h3>
           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{plainPreview(doc.contentText) || (doc.project?.name ? t("In {project}", { project: doc.project.name }) : t("No content yet"))}</p>
         </div>
       </div>

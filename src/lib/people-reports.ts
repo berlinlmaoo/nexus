@@ -210,6 +210,12 @@ export type PersonWork = {
   cycleSample: number
   weekly: { from: string; to: string; completed: number; onTime: number }[]
   perProject: { projectId: string; projectName: string; completed: number; open: number; overdue: number }[]
+  /**
+   * The WIB day the open/overdue figures (overdueNow, overdueList, openTotal, openByPriority, dueNext7,
+   * perProject open/overdue) describe: today for the running period, the period's last day for a past
+   * one (QA B02, 13 Oct 2026 — a past period used to show today's overdue list).
+   */
+  asOf: string
 }
 
 export type PersonAttendance = {
@@ -425,6 +431,11 @@ export async function buildPeopleReports(opts: {
   const liveProject = { workspaceId }
   const openProject = { workspaceId, status: { not: "ARCHIVED" as const } }
 
+  // A past period's open/overdue state is taken at its end, not now (QA B02): the tasks open at that
+  // moment (created before it, not done before it), with the assignees they have today.
+  const pastPeriod = current.toAt.getTime() < now.getTime()
+  const stateAt = snapshotAt(current)
+  const stateKey = pastPeriod ? current.to : todayKey
   const [completedTasks, openTasks, assignments, attendanceDays, curScores, prevScores, penaltyTxns, streaks, curOverdue, prevOverdue] =
     await Promise.all([
       prisma.task.findMany({
@@ -438,7 +449,9 @@ export async function buildPeopleReports(opts: {
         select: TASK_SELECT,
       }),
       prisma.task.findMany({
-        where: { parentId: null, assignees: inUsers, status: { notIn: ["DONE", "CANCELLED"] }, taskList: { project: openProject } },
+        where: pastPeriod
+          ? { parentId: null, assignees: inUsers, status: { not: "CANCELLED" }, createdAt: { lt: stateAt }, OR: [{ completedAt: null }, { completedAt: { gte: stateAt } }], taskList: { project: openProject } }
+          : { parentId: null, assignees: inUsers, status: { notIn: ["DONE", "CANCELLED"] }, taskList: { project: openProject } },
         select: TASK_SELECT,
       }),
       prisma.taskAssignee.findMany({
@@ -512,7 +525,10 @@ export async function buildPeopleReports(opts: {
     const mineOpen = openTasks.filter((t) => t.assignees.some((a) => a.userId === userId))
     const openByPriority = { URGENT: 0, HIGH: 0, MEDIUM: 0, LOW: 0, NONE: 0 }
     let openTotal = 0, overdueNow = 0, dueNext7 = 0
-    const next7Key = addDaysToKey(todayKey, 6)
+    // Overdue = due before the day the state is taken (today, or the day after a past period's last day,
+    // like overdueSnapshot's cut).
+    const cutKey = pastPeriod ? addDaysToKey(stateKey, 1) : todayKey
+    const next7Key = addDaysToKey(cutKey, 6)
     const overdueList: OverdueTask[] = []
     const projects = new Map<string, { projectId: string; projectName: string; completed: number; open: number; overdue: number }>()
     const projectOf = (t: TaskRow) => {
@@ -529,7 +545,7 @@ export async function buildPeopleReports(opts: {
       if (proj) proj.open += share
       if (!t.dueDate) continue
       const dueKey = formatAttendanceDateKey(t.dueDate)
-      if (dueKey < todayKey) {
+      if (dueKey < cutKey) {
         overdueNow += share
         if (proj) proj.overdue += share
         if (opts.detail) {
@@ -540,7 +556,7 @@ export async function buildPeopleReports(opts: {
             projectName: t.taskList.project.name,
             dueDate: t.dueDate.toISOString(),
             dueKey,
-            daysOverdue: daysBetweenKeys(dueKey, todayKey),
+            daysOverdue: daysBetweenKeys(dueKey, cutKey),
             priority: t.priority,
             assigneeCount: t.assignees.length,
             share: r1(share),
@@ -605,6 +621,7 @@ export async function buildPeopleReports(opts: {
         cycleSample: workCur.cycleDays.length,
         weekly,
         perProject,
+        asOf: stateKey,
       },
       attendance: attCur,
       xp: {

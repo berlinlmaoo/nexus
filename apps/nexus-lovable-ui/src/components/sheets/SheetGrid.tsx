@@ -2559,6 +2559,66 @@ export function SheetGrid({
     return () => window.removeEventListener("mouseup", up);
   }, [applyFill, fillTo]);
 
+  // Touch: a finger drag scrolls the sheet; press and hold a cell, then drag, to select a range (Google
+  // Sheets app). Holding without moving still opens the cell menu (contextmenu). QA 13 Oct 2026 S-11.
+  const touchCells = useRef({ view, columns });
+  touchCells.current = { view, columns };
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    let timer: number | undefined;
+    let start: { x: number; y: number } | null = null;
+    let active = false;
+    const cellAt = (x: number, y: number): { r: number; c: number } | null => {
+      const td = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-cell]");
+      if (!td || !grid.contains(td)) return null;
+      const [rowId, colId] = (td.dataset.cell ?? "").split(":");
+      const r = touchCells.current.view.findIndex((v) => v.row.id === rowId);
+      const c = touchCells.current.columns.findIndex((col) => col.id === colId);
+      return r < 0 || c < 0 ? null : { r, c };
+    };
+    const reset = () => { window.clearTimeout(timer); start = null; if (active) { active = false; dragging.current = false; } };
+    const onStart = (e: TouchEvent) => {
+      reset();
+      if (e.touches.length !== 1 || editorEl.current?.contains(e.target as Node)) return;
+      const tp = e.touches[0];
+      const cell = cellAt(tp.clientX, tp.clientY);
+      if (!cell) return;
+      start = { x: tp.clientX, y: tp.clientY };
+      timer = window.setTimeout(() => {
+        active = true;
+        dragging.current = true;
+        tabRun.current = null;
+        setSel({ r: cell.r, c: cell.c, r2: cell.r, c2: cell.c });
+        navigator.vibrate?.(8);
+      }, 350);
+    };
+    const onMove = (e: TouchEvent) => {
+      const tp = e.touches[0];
+      if (!tp || !start) return;
+      if (!active) {
+        // Moved before the hold: it is a scroll.
+        if (Math.hypot(tp.clientX - start.x, tp.clientY - start.y) > 8) reset();
+        return;
+      }
+      e.preventDefault();
+      const cell = cellAt(tp.clientX, tp.clientY);
+      if (cell) setSel((sl) => (sl.r2 === cell.r && sl.c2 === cell.c ? sl : { ...sl, r2: cell.r, c2: cell.c }));
+    };
+    const onEnd = () => reset();
+    grid.addEventListener("touchstart", onStart, { passive: true });
+    grid.addEventListener("touchmove", onMove, { passive: false });
+    grid.addEventListener("touchend", onEnd);
+    grid.addEventListener("touchcancel", onEnd);
+    return () => {
+      reset();
+      grid.removeEventListener("touchstart", onStart);
+      grid.removeEventListener("touchmove", onMove);
+      grid.removeEventListener("touchend", onEnd);
+      grid.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   // ── Find & replace ──────────────────────────────────────────────────────────────────────────
   const findHits = useMemo(() => {
     if (!find.q.trim()) return [] as { r: number; c: number }[];

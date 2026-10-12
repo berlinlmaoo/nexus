@@ -203,7 +203,10 @@ function SummaryCard({ data }: { data: NexusMemberRecord }) {
   const { score, counts, dayOff, xp } = data.summary;
   const bonus = dayOff.bonusDays > 0 ? ` + ${tr("{n} extra ({reasons})", { n: dayOff.bonusDays, reasons: dayOff.bonusGrants.map((g) => g.reason).join(", ") })}` : "";
   return (
-    <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${periodRangeText(data.period.from, data.period.to)} · ${tr("{days} days, {working} working days ({days} − {quota} day-off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
+    <Card title={data.period.isCurrent ? tr("This period") : tr("Attendance period")} hint={`${periodRangeText(data.period.from, data.period.to)} · ${score.days !== undefined && score.days < data.period.days && score.from
+          // Joined during the period: the score counts from their first day (QA S-20).
+          ? tr("from {date}: {days} days, {working} working days ({days} − {quota} day-off allowance)", { date: periodRangeText(score.from, score.from).split(" – ")[0], days: score.days, working: score.working, quota: score.allowance ?? 0 })
+          : tr("{days} days, {working} working days ({days} − {quota} day-off allowance)", { days: data.period.days, working: score.working, quota: dayOff.quota })}`}>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,14rem)_1fr]">
         <div className="rounded-2xl bg-primary/5 p-4" title={tr("Days worked (present or permit) out of the period's working days — the board's Score column")}>
           <div className="text-[11px] font-bold uppercase tracking-wider text-primary">{tr("Score")}</div>

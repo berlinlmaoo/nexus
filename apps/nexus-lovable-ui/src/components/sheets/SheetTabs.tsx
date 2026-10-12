@@ -140,7 +140,7 @@ export function SheetTabs({ sheets, activeId, canEdit, canManage, onSelect, onAd
                 <button
                   onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ id: s.id, left: r.left, top: r.top }); }}
                   aria-label={t("Sheet menu")}
-                  className="-mr-1 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  className="tap-area -mr-1 rounded p-0.5 text-muted-foreground hover:text-foreground"
                 >
                   <svg viewBox="0 0 10 6" className="h-1.5 w-2.5" aria-hidden><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
                 </button>

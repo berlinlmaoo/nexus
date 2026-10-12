@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowDown, Clock, ImagePlus, Loader2, Reply, RotateCw, Send, X } from "lucide-react";
+import { AlertCircle, ArrowDown, Clock, Copy, ImagePlus, Loader2, Reply, RotateCw, Send, X } from "lucide-react";
+import { EscClose } from "@/hooks/use-escape";
 import { ApiError, fmtTime, nexusApi, type NexusConversation, type NexusMessage, type NexusMessagePage, type NexusUser } from "@/lib/nexus-api";
 import { useRealtime, useRealtimeRoom } from "@/lib/realtime";
 import { useTypers, useTypingSender, type Typer } from "@/lib/chat-typing";
@@ -558,6 +560,37 @@ export function ChatThread({
   };
 
   const startReply = (m: NexusMessage) => { setReplyTo(m); inputRef.current?.focus(); };
+  // Long-press (touch) or right-click on a bubble: Reply / Copy text. A phone has no hover, so the Reply
+  // button beside the bubble was out of reach there (QA S-10 / B17).
+  const [pressMenu, setPressMenu] = useState<{ m: NexusMessage; x: number; y: number } | null>(null);
+  const pressTimer = useRef<number | undefined>(undefined);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const bubblePress = (m: NexusMessage) => ({
+    onContextMenu: (e: React.MouseEvent) => {
+      // Text selected inside the bubble keeps the browser's own menu (copy, look up).
+      if (window.getSelection()?.toString()) return;
+      e.preventDefault();
+      setPressMenu({ m, x: e.clientX, y: e.clientY });
+    },
+    onTouchStart: (e: React.TouchEvent) => {
+      const tp = e.touches[0];
+      pressStart.current = { x: tp.clientX, y: tp.clientY };
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = window.setTimeout(() => {
+        if (pressStart.current) setPressMenu({ m, x: pressStart.current.x, y: pressStart.current.y });
+      }, 480);
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      const tp = e.touches[0];
+      const st = pressStart.current;
+      if (st && Math.hypot(tp.clientX - st.x, tp.clientY - st.y) > 10) { window.clearTimeout(pressTimer.current); pressStart.current = null; }
+    },
+    onTouchEnd: () => { window.clearTimeout(pressTimer.current); pressStart.current = null; },
+  });
+  const copyMessage = (m: NexusMessage) => {
+    const text = m.content ?? "";
+    if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
+  };
 
   // Walk to a message and highlight it: a quote, a search result. One that isn't loaded yet brings
   // the page around it (servers since 8 Oct 2026: `around=`), which then grows as you scroll.
@@ -745,7 +778,8 @@ export function ChatThread({
                 {!mine && <MiniAvatar user={m.user} size={26} />}
                 <div
                   ref={(el) => { bubbleRefs.current[m.id] = el; }}
-                  className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm transition-shadow", mine ? "bg-primary text-primary-foreground" : "bg-muted", flashId === m.id && "ring-2 ring-primary ring-offset-2 ring-offset-background")}
+                  {...bubblePress(m)}
+                  className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm transition-shadow [-webkit-touch-callout:none]", mine ? "bg-primary text-primary-foreground" : "bg-muted", flashId === m.id && "ring-2 ring-primary ring-offset-2 ring-offset-background")}
                 >
                   {!mine && <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{m.user?.name}</div>}
                   {renderQuote(m.replyTo, mine)}
@@ -761,7 +795,7 @@ export function ChatThread({
                   onClick={() => startReply(m)}
                   title={t("Reply")}
                   aria-label={t("Reply")}
-                  className="mb-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-accent focus:opacity-100 group-hover:opacity-100"
+                  className="mb-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-accent focus:opacity-100 group-hover:opacity-100 pointer-coarse:size-9 pointer-coarse:opacity-60"
                 >
                   <Reply className="h-3.5 w-3.5" />
                 </button>
@@ -769,6 +803,27 @@ export function ChatThread({
             </div>
           );
         })}
+        {pressMenu && (
+          <>
+            <EscClose onClose={() => setPressMenu(null)} />
+            <div className="fixed inset-0 z-[70]" onClick={() => setPressMenu(null)} onContextMenu={(e) => { e.preventDefault(); setPressMenu(null); }} />
+            <div
+              role="menu"
+              aria-label={t("Message actions")}
+              className="fixed z-[71] w-44 overflow-hidden rounded-xl border border-border bg-popover py-1 text-popover-foreground shadow-pop"
+              style={{ left: Math.max(8, Math.min(pressMenu.x, window.innerWidth - 184)), top: Math.max(8, Math.min(pressMenu.y, window.innerHeight - 110)) }}
+            >
+              <button type="button" role="menuitem" autoFocus onClick={() => { startReply(pressMenu.m); setPressMenu(null); }} className="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none">
+                <Reply className="h-4 w-4 text-muted-foreground" />{t("Reply")}
+              </button>
+              {pressMenu.m.content && (
+                <button type="button" role="menuitem" onClick={() => { copyMessage(pressMenu.m); setPressMenu(null); }} className="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none">
+                  <Copy className="h-4 w-4 text-muted-foreground" />{t("Copy text")}
+                </button>
+              )}
+            </div>
+          </>
+        )}
         {detached && (
           <div className="flex justify-center pt-2">
             <button

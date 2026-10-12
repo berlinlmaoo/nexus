@@ -16,6 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { priorityTone } from "@/lib/calendar/tone";
 import { useLang } from "@/lib/lang";
+import { DateField } from "@/components/DateField";
+import { daysLate, groupMyTasks, isOverdueAt, MY_TASKS_FIRST, type MyTaskGroupKey } from "@/lib/my-tasks";
 
 export const Route = createFileRoute("/_app/my-tasks")({ component: MyTasks });
 
@@ -34,23 +36,15 @@ function MyTasks() {
     enabled: !!myId,
     retry: false,
   });
-  const rawRows = tasks.data ?? [];
-  // Hide tasks done more than a week ago (uses updatedAt as the completion proxy —
-  // Task model has no completedAt); open tasks always stay.
-  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  // Overdue on top, then due soon, later, done in the last 7 days — each most urgent first (lib/my-tasks.ts,
+  // QA S-04/B01). Nothing is silently cut: a long group shows its first rows and "Show all".
   const now = Date.now();
-  const rows = rawRows.filter((x) => {
-    if (!isDone(x.status)) return true;
-    const ts = x.updatedAt ? new Date(x.updatedAt).getTime() : 0;
-    return ts > 0 && now - ts <= WEEK;
-  });
+  const groups = useMemo(() => groupMyTasks(tasks.data ?? [], now), [tasks.data, Math.floor(now / 60_000)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = groups.flatMap((g) => g.items);
+  const [expanded, setExpanded] = useState<Set<MyTaskGroupKey>>(new Set());
+  const label: Record<MyTaskGroupKey, string> = { overdue: t("Overdue"), soon: t("Due soon"), later: t("Later"), done: t("Done recently") };
   const sessionLost = profile.isError || tasks.isError;
   const loading = !sessionLost && (profile.isLoading || !myId || tasks.isLoading);
-  const groups = [
-    { label: t("Due soon"), items: rows.filter((x) => !isDone(x.status) && isDueSoon(x.dueDate)).slice(0, 8) },
-    { label: t("Later"), items: rows.filter((x) => !isDone(x.status) && !isDueSoon(x.dueDate)).slice(0, 12) },
-    { label: t("Done recently"), items: rows.filter((x) => isDone(x.status)).slice(0, 8) },
-  ].filter((g) => g.items.length > 0);
 
   return (
     <div>
@@ -66,26 +60,38 @@ function MyTasks() {
             message={t("Tasks assigned to you show up here, from a project or a form. Nothing is waiting on you right now — pick something up from a project.")}
             action={<EmptyAction to="/projects">{t("Browse projects")}</EmptyAction>} />
         )}
-        {groups.map((g, i) => (
-          <Reveal key={g.label} delay={i * 0.08}>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{g.label} <span className="text-muted-foreground/70">· {g.items.length}</span></h3>
-            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-              {g.items.map((x) => <TaskRow key={x.id} task={x} onOpen={() => setOpenTaskId(x.id)} />)}
-            </div>
-          </Reveal>
-        ))}
+        {groups.map((g, i) => {
+          const first = MY_TASKS_FIRST[g.key];
+          const all = expanded.has(g.key);
+          const shown = all ? g.items : g.items.slice(0, first);
+          return (
+            <Reveal key={g.key} delay={i * 0.08}>
+              <h3 data-mytasks-group={g.key} className={cn("mb-2 text-xs font-semibold uppercase tracking-wider", g.key === "overdue" ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>{label[g.key]} <span className="text-muted-foreground/70">· {g.items.length}</span></h3>
+              <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+                {shown.map((x) => <TaskRow key={x.id} task={x} now={now} onOpen={() => setOpenTaskId(x.id)} />)}
+                {g.items.length > first && (
+                  <button type="button" onClick={() => setExpanded((prev) => { const next = new Set(prev); if (all) next.delete(g.key); else next.add(g.key); return next; })}
+                    className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                    {all ? t("Show fewer") : t("Show all {n}", { n: g.items.length })}
+                  </button>
+                )}
+              </div>
+            </Reveal>
+          );
+        })}
       </div>
-      {composerOpen && <TaskComposer onClose={() => setComposerOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["nexus", "tasks"] })} />}
+      {composerOpen && <TaskComposer myId={myId} onClose={() => setComposerOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["nexus", "tasks"] })} />}
       {openTaskId && <TaskDetailPanel taskId={openTaskId} onClose={() => setOpenTaskId(null)} morphId={`mytasks-taskcard-${openTaskId}`} />}
     </div>
   );
 }
 
-function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
+function TaskRow({ task, now, onOpen }: { task: NexusTask; now: number; onOpen: () => void }) {
   const { t } = useLang();
   const qc = useQueryClient();
   const assignee = task.assignees?.[0]?.user;
   const nextStatus = isDone(task.status) ? "TODO" : "DONE";
+  const late = !isDone(task.status) && isOverdueAt(task.dueDate, now) ? daysLate(task.dueDate!, now) : null;
   const update = useMutation({
     mutationFn: () => nexusApi.updateTask(task.id, { status: nextStatus }),
     onSuccess: () => {
@@ -98,7 +104,7 @@ function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
   return (
     <motion.div layoutId={`mytasks-taskcard-${task.id}`} data-morph-id={`mytasks-taskcard-${task.id}`} style={{ borderRadius: 12 }} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
       <button
-        className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary hover:text-primary")}
+        className={cn("tap-area grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary hover:text-primary")}
         disabled={update.isPending}
         onClick={() => update.mutate()}
         aria-label={nextStatus === "DONE" ? t("Mark done") : t("Reopen task")}
@@ -112,10 +118,16 @@ function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
           <span className="inline-flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary" />{task.taskList?.name || t("No section")}</span>
           {typeof task._count?.comments === "number" && <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" />{task._count.comments}</span>}
           {update.isError && <span className="text-red-500">{t("Couldn't update")}</span>}
+          {/* Phone: due + priority live under the title (they were hidden below md — QA S-22/B16). */}
+          {task.dueDate && <span className={cn("md:hidden whitespace-nowrap", late !== null && "font-semibold text-red-600 dark:text-red-400")}>{fmtDue(task.dueDate)}</span>}
+          {task.priority && task.priority !== "NONE" && <span className={`sm:hidden inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold leading-4 ${priorityTone(task.priority)}`}>{statusLabel(task.priority)}</span>}
         </div>
       </div>
       <span className={`hidden sm:inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4 ${priorityTone(task.priority)}`}>{statusLabel(task.priority || "NONE")}</span>
-      <span className="hidden md:block text-xs text-muted-foreground w-24 text-right">{fmtDue(task.dueDate)}</span>
+      <span className={cn("hidden md:block w-28 text-right text-xs", late !== null ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+        {fmtDue(task.dueDate)}
+        {late !== null && late > 0 && <span className="block text-[10px] font-medium">{t("{n}d late", { n: late })}</span>}
+      </span>
       <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-bold text-muted-foreground">{statusLabel(task.status)}</span>
       {assignee?.id
         ? <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={28} className="shrink-0" />
@@ -124,7 +136,7 @@ function TaskRow({ task, onOpen }: { task: NexusTask; onOpen: () => void }) {
   );
 }
 
-function TaskComposer({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function TaskComposer({ myId, onClose, onCreated }: { myId?: string; onClose: () => void; onCreated: () => void }) {
   const { t } = useLang();
   const [projectId, setProjectId] = useState("");
   const [taskListId, setTaskListId] = useState("");
@@ -135,7 +147,8 @@ function TaskComposer({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const projectDetail = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), enabled: Boolean(projectId), retry: false });
   const lists = projectDetail.data?.taskLists ?? [];
   const create = useMutation({
-    mutationFn: () => nexusApi.createTask({ title, projectId, taskListId, priority, status: "TODO", dueDate: dueDate || null }),
+    // Assigned to me: a task made from My Tasks must show up in My Tasks (QA S-03).
+    mutationFn: () => nexusApi.createTask({ title, projectId, taskListId, priority, status: "TODO", dueDate: dueDate || null, ...(myId ? { assigneeIds: [myId] } : {}) }),
     onSuccess: () => {
       onCreated();
       celebrate(t("Task created"));
@@ -166,7 +179,7 @@ function TaskComposer({ onClose, onCreated }: { onClose: () => void; onCreated: 
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-xl font-bold tracking-tight">{t("New task")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("Pick the project and the section it goes in.")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("Pick the project and the section it goes in. It's assigned to you.")}</p>
           </div>
           <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
         </div>
@@ -184,7 +197,7 @@ function TaskComposer({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Due date")}</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={cn(field, "mt-1")} />
+              <DateField value={dueDate || null} onChange={(v) => setDueDate(v ?? "")} ariaLabel={t("Due date")} placeholder={t("Pick a date")} className={cn(field, "mt-1 min-h-[38px]")} />
             </div>
           </div>
           {projectDetail.isError && <p className="text-sm text-destructive">{t("Couldn't load this project's sections. Check that you're a member, then try again.")}</p>}
@@ -230,12 +243,3 @@ function EmptyStateLegacy({ title, message }: { title: string; message: string }
 function isDone(status?: string | null) {
   return ["DONE", "COMPLETED", "COMPLETE"].includes((status || "").toUpperCase());
 }
-
-function isDueSoon(value?: string | null) {
-  if (!value) return false;
-  const due = new Date(value).getTime();
-  if (Number.isNaN(due)) return false;
-  return due <= Date.now() + 3 * 24 * 60 * 60 * 1000 && due >= Date.now() - 24 * 60 * 60 * 1000;
-}
-
-

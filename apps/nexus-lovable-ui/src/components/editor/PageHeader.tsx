@@ -107,7 +107,7 @@ export function DocPageHeader(p: PageHeaderProps) {
       {style && (
         <div className="group/cover relative h-[22vh] min-h-[120px] max-h-[280px] w-full bg-muted" style={style}>
           {p.editable && (
-            <div className="absolute bottom-3 right-3 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/cover:opacity-100">
+            <div className="absolute bottom-3 right-3 flex gap-1 opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/cover:opacity-100">
               {coverPopover(<button type="button" className="rounded-md bg-background/85 px-2 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur hover:bg-background">{t("Change cover")}</button>)}
               <button type="button" onClick={() => p.onCover(null)} className="rounded-md bg-background/85 px-2 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur hover:bg-background">{t("Remove")}</button>
             </div>
@@ -129,7 +129,7 @@ export function DocPageHeader(p: PageHeaderProps) {
           </Popover>
         )}
         {p.editable && (!p.icon || !p.cover) && (
-          <div className={cn("flex h-7 items-center gap-1 text-sm text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/header:opacity-100 max-md:opacity-100", !p.icon && !style ? "mt-12" : "mt-2")}>
+          <div className={cn("flex h-7 items-center gap-1 text-sm text-muted-foreground opacity-0 pointer-coarse:opacity-100! transition-opacity focus-within:opacity-100 group-hover/header:opacity-100 max-md:opacity-100", !p.icon && !style ? "mt-12" : "mt-2")}>
             {!p.icon && (
               <button type="button" onClick={() => p.onIcon(ALL_EMOJIS[Math.floor(Math.random() * 30)])} className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-muted"><Smile className="h-4 w-4" />{t("Add icon")}</button>
             )}
