@@ -17,7 +17,7 @@ export const ID_SHEETS_MENUS: Record<string, string> = {
   "Version history": "Histori versi",
   "Name current version": "Beri nama versi saat ini",
   "See version history": "Lihat histori versi",
-  "Settings": "Setelan",
+  "Settings": "Pengaturan",
   "Print": "Cetak",
   // Edit
   "Paste special": "Tempel khusus",

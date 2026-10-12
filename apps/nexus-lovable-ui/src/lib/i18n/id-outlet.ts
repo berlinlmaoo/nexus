@@ -9,7 +9,7 @@ export const ID_OUTLET: Record<string, string> = {
   "Outlet Sales Dashboard": "Outlet Sales Dashboard",
   "One outlet: sales and pax against the month's target, a calendar of events, and a report form for every night.":
     "Satu outlet: sales dan pax dibanding target bulanan, kalender event, dan form laporan untuk tiap malam.",
-  "Create project + open dashboard": "Buat proyek + buka dashboard",
+  "Create project + open dashboard": "Buat project + buka dashboard",
   "Report form": "Form laporan",
 
   // Status

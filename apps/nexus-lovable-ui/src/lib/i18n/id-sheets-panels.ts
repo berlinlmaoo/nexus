@@ -68,7 +68,7 @@ export const ID_SHEETS_PANELS: Record<string, string> = {
   "Accent {n}": "Aksen {n}",
   "Link colour": "Warna link",
   "Current theme": "Tema Saat Ini",
-  "Settings for this spreadsheet": "Setelan untuk spreadsheet ini",
+  "Settings for this spreadsheet": "Pengaturan untuk spreadsheet ini",
   "Save settings": "Simpan setelan",
   "General": "Umum",
   "Calculation": "Penghitungan",

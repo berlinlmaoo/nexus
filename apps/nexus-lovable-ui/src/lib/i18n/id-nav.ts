@@ -18,7 +18,7 @@ export const ID_NAV: Record<string, string> = {
   "Two or more people always make a group.": "Dua orang atau lebih otomatis jadi grup.",
   "Start a group with just one other person, and add more later.": "Mulai grup berdua dulu, tambah orang lain nanti.",
   "Team": "Tim",
-  "My Tasks": "Tugas Saya",
+  "My Tasks": "Task Saya",
   "Notifications": "Notifikasi",
   "Sign in": "Masuk",
   "Passkey sign-in failed. Use your email and password instead.": "Masuk pakai passkey gagal. Pakai email dan password.",

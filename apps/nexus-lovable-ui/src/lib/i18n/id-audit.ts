@@ -57,8 +57,8 @@ export const ID_AUDIT: Record<string, string> = {
 
   // Restore
   "Bring it back": "Kembalikan",
-  "Restore project": "Pulihkan proyek",
-  "Restore task": "Pulihkan tugas",
+  "Restore project": "Pulihkan project",
+  "Restore task": "Pulihkan task",
   "Restoring…": "Memulihkan…",
   "Restore “{name}”?": "Pulihkan “{name}”?",
   "It comes back as it was when it was deleted: {what}.": "Kembali seperti saat dihapus: {what}.",
@@ -71,8 +71,8 @@ export const ID_AUDIT: Record<string, string> = {
   "Yes, restore": "Ya, pulihkan",
   "{n} list": "{n} list",
   "{n} lists": "{n} list",
-  "{n} subtask": "{n} subtugas",
-  "{n} subtasks": "{n} subtugas",
+  "{n} subtask": "{n} subtask",
+  "{n} subtasks": "{n} subtask",
   "{n} file": "{n} file",
   "{n} files": "{n} file",
   "{n} comment": "{n} komentar",
@@ -81,17 +81,17 @@ export const ID_AUDIT: Record<string, string> = {
   "{n} sheets": "{n} sheet",
   "Restored by {name} · {when}": "Dipulihkan oleh {name} · {when}",
   "Restored · {when}": "Dipulihkan · {when}",
-  "Open project": "Buka proyek",
-  "Open task": "Buka tugas",
+  "Open project": "Buka project",
+  "Open task": "Buka task",
   "Restored. It's back where it was.": "Sudah dipulihkan. Kembali ke tempat semula.",
   "Someone has restored this already.": "Sudah dipulihkan oleh orang lain.",
   "It's already back.": "Sudah kembali.",
   "Its project was deleted too. Restore the project first, then this task.":
-    "Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru tugas ini.",
+    "Project-nya juga terhapus. Pulihkan project-nya dulu, baru task ini.",
   "No copy of this delete was kept, so it can't be restored.": "Tidak ada salinan dari penghapusan ini, jadi tidak bisa dipulihkan.",
   "Couldn't restore it. Try again in a moment.": "Belum bisa dipulihkan. Coba lagi sebentar lagi.",
   "This was deleted before NEXUS started keeping deleted projects and tasks, so it can't be restored.":
-    "Ini dihapus sebelum NEXUS mulai menyimpan proyek dan tugas yang dihapus, jadi tidak bisa dipulihkan.",
+    "Ini dihapus sebelum NEXUS mulai menyimpan project dan task yang dihapus, jadi tidak bisa dipulihkan.",
 
   // Restore, every kind of delete (owner, 8 Oct 2026)
   "This was deleted before NEXUS started keeping deleted items, so it can't be restored.":
@@ -139,9 +139,9 @@ export const ID_AUDIT: Record<string, string> = {
   "Restore event": "Pulihkan acara",
   "Restore extra day off": "Pulihkan extra day off",
   "Tasks moved out of it go back in, unless someone has moved them since.":
-    "Tugas yang dipindahkan keluar akan kembali ke sini, kecuali sudah dipindahkan lagi oleh seseorang.",
+    "Task yang dipindahkan keluar akan kembali ke sini, kecuali sudah dipindahkan lagi oleh seseorang.",
   "Projects and folders moved out of it go back in, unless someone has moved them since. If its name is taken, it comes back as “Name (2)”.":
-    "Proyek dan folder yang dipindahkan keluar akan kembali ke dalamnya, kecuali sudah dipindahkan lagi. Kalau namanya sudah dipakai, folder ini kembali sebagai “Nama (2)”.",
+    "Project dan folder yang dipindahkan keluar akan kembali ke dalamnya, kecuali sudah dipindahkan lagi. Kalau namanya sudah dipakai, folder ini kembali sebagai “Nama (2)”.",
   "Its people come back on the card, and units moved up go back under it unless someone has moved them since.":
     "Orang-orangnya kembali ke kartu, dan unit yang dinaikkan kembali ke bawahnya kecuali sudah dipindahkan lagi.",
   "They go back where they were. If new rows have taken those places, they go after the last row.":
@@ -149,7 +149,7 @@ export const ID_AUDIT: Record<string, string> = {
   "Its values come back in the rows that still exist.": "Isinya kembali di baris yang masih ada.",
   "If its tab position is taken, it comes back as the last tab.": "Kalau posisi tab-nya sudah dipakai, sheet ini kembali sebagai tab terakhir.",
   "If its link has been taken since, it comes back with “-2” at the end.": "Kalau link-nya sudah dipakai, form ini kembali dengan akhiran “-2”.",
-  "Its task comes back with it.": "Tugasnya ikut kembali.",
+  "Its task comes back with it.": "Task-nya ikut kembali.",
   "XP penalties refunded and the waiver given when it was deleted stay as they are.":
     "Potongan XP yang sudah dikembalikan dan pengecualian yang diberikan saat dihapus tetap seperti sekarang.",
   "It posts again from this month on. The months it was deleted are not billed.":
@@ -176,8 +176,8 @@ export const ID_AUDIT: Record<string, string> = {
     "Sudah diubah setelah dihapus, jadi tidak bisa dikembalikan seperti semula.",
   "Something has taken its place since, so it can't come back as it was.":
     "Tempatnya sudah diisi yang lain, jadi tidak bisa kembali seperti semula.",
-  "Its project was deleted too. Restore the project first, then this.": "Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru ini.",
-  "Its task was deleted too. Restore the task first, then this.": "Tugasnya juga terhapus. Pulihkan tugasnya dulu, baru ini.",
+  "Its project was deleted too. Restore the project first, then this.": "Project-nya juga terhapus. Pulihkan project-nya dulu, baru ini.",
+  "Its task was deleted too. Restore the task first, then this.": "Task-nya juga terhapus. Pulihkan task-nya dulu, baru ini.",
   "Its section was deleted too. Restore the section first, then this.": "Bagiannya juga terhapus. Pulihkan bagiannya dulu, baru ini.",
   "The comment it replied to was deleted too. Restore that comment first, then this.":
     "Komentar yang dibalasnya juga terhapus. Pulihkan komentar itu dulu, baru ini.",
@@ -199,7 +199,7 @@ export const ID_AUDIT: Record<string, string> = {
   "The workspace it belonged to no longer exists, so it can't come back.": "Workspace-nya sudah tidak ada, jadi tidak bisa dikembalikan.",
   "The team it belonged to no longer exists, so it can't come back.": "Tim-nya sudah tidak ada, jadi tidak bisa dikembalikan.",
   "Its parent task was deleted too. Restore that task first, then this subtask.":
-    "Tugas induknya juga terhapus. Pulihkan tugas itu dulu, baru subtugas ini.",
+    "Task induknya juga terhapus. Pulihkan task itu dulu, baru subtask ini.",
   "What it belonged to was deleted too. Restore that first, then this.": "Induknya juga terhapus. Pulihkan itu dulu, baru ini.",
   "{n} row": "{n} baris",
   "{n} rows": "{n} baris",

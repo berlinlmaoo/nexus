@@ -15,7 +15,7 @@ export const ID_PIPELINE: Record<string, string> = {
   "SPK (Work Order)": "SPK",
 
   // Creating one, and Audit
-  "Create project + open pipeline": "Buat proyek + buka pipeline",
+  "Create project + open pipeline": "Buat project + buka pipeline",
   // One company pipeline (owner/GM, 9 Oct 2026); its people are its project members (9 Oct evening)
   "Opens the company's pipeline: one board for every deal.": "Membuka pipeline perusahaan: satu papan untuk semua deal.",
   "The Pipeline Dashboard lives in the company workspace only.": "Pipeline Dashboard hanya ada di workspace perusahaan.",
