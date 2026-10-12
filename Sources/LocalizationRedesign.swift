@@ -280,6 +280,16 @@ extension AppLanguage {
         "Inbox is clear": "Kotak masuk bersih",
         "Every new ticket has been picked up. New ones from staff land here first.": "Semua tiket baru sudah ditangani. Tiket baru dari staff masuk ke sini dulu.",
         "Show all tickets": "Tampilkan semua tiket",
+        "Profile": "Profil",
+        "Security": "Keamanan",
+        "Appearance": "Tampilan",
+        "Claude (MCP)": "Claude (MCP)",
+        "No workspace yet": "Belum ada workspace",
+        "Members appear here once you are in a workspace. Ask a BoD or Manager to add you.": "Anggota muncul di sini setelah kamu masuk workspace. Minta BoD atau Manager menambahkanmu.",
+        "Connect Claude (the app, Claude Code or Claude Desktop) to NEXUS so it can read and update your tasks and pages with your access. The connection token is created on the web, in Settings › Claude (MCP), and shown once.": "Hubungkan Claude (aplikasi, Claude Code, atau Claude Desktop) ke NEXUS agar bisa membaca dan mengubah task dan halamanmu dengan aksesmu. Token koneksinya dibuat di web, di Pengaturan › Claude (MCP), dan hanya ditampilkan sekali.",
+        "Open on the web": "Buka di web",
+        "Full name": "Nama lengkap",
+        "Google Workspace": "Google Workspace",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]
