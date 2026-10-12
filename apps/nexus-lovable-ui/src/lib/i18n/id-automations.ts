@@ -127,7 +127,7 @@ export const ID_AUTOMATIONS: Record<string, string> = {
   // Action settings
   "Person who triggered it": "Orang yang memicunya",
   "Task creator": "Pembuat task",
-  "Assignees": "Penanggung jawab",
+  "Assignees": "Assignee",
   "Project leads": "Lead project",
   "Pick a status…": "Pilih status…",
   "Pick a priority…": "Pilih prioritas…",
