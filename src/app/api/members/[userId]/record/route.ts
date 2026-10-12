@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { logAudit } from "@/lib/audit"
+import { logAudit, logViewOncePerDay } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
 import { buildMemberRecord, buildRecordXp, parseRecordPeriod, recordWindow } from "@/lib/member-record"
 import { memberRecordQuerySchema } from "@/lib/validations"
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!user || !member) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
 
     if (!isSelf) {
-      await logAudit({
+      await logViewOncePerDay({
         action: "view",
         entityType: "member_record",
         entityId: targetId,

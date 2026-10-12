@@ -107,3 +107,25 @@ export async function logAuditBatch(
     log.error('Batch audit log write failed', { error: String(error) })
   }
 }
+
+
+/**
+ * A "view" (someone opened a report or a member record) is logged once per viewer, thing and WIB day, not on
+ * every open: 10 identical rows in 6 minutes buried the audit log (QA BoD R2 B29). The first view of the day
+ * still says who looked at whose data.
+ */
+export async function logViewOncePerDay(params: AuditLogParams): Promise<string | null> {
+  try {
+    const now = new Date()
+    const wib = new Date(now.getTime() + 7 * 3600_000)
+    const dayStart = new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()) - 7 * 3600_000)
+    const seen = await prisma.auditLog.findFirst({
+      where: { userId: params.userId, action: "view", entityType: params.entityType, entityId: params.entityId, createdAt: { gte: dayStart } },
+      select: { id: true },
+    })
+    if (seen) return null
+  } catch {
+    // On a lookup failure, log as before.
+  }
+  return logAudit({ ...params, action: "view" })
+}

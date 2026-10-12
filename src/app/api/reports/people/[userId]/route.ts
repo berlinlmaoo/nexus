@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { logAudit } from "@/lib/audit"
+import { logAudit, logViewOncePerDay } from "@/lib/audit"
 import { reportableUserIds } from "@/lib/attendance-approvers"
 import { hasProjectWideAccess } from "@/lib/rbac"
 import { buildPeopleReports, publicPeriod, resolveReportWindows } from "@/lib/people-reports"
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
     if (!isSelf) {
-      await logAudit({
+      await logViewOncePerDay({
         action: "view",
         entityType: "person_report",
         entityId: targetId,

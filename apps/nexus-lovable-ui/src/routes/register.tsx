@@ -40,7 +40,7 @@ function RegisterPage() {
   const [info, setInfo] = useState<string | null>(null);
 
   const input =
-    "w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50";
+    "w-full bg-white/60 dark:bg-card/90 border border-white/80 dark:border-border rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50";
   const labelCls = "text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1 block";
 
   const submitForm = async (e: React.FormEvent) => {
@@ -94,11 +94,11 @@ function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#fdfcfb] p-6 force-light" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#fdfcfb] dark:bg-background p-6" style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}>
       <div className="absolute left-[-10%] top-[-10%] h-[50%] w-[50%] animate-pulse rounded-full bg-primary/20 blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] h-[50%] w-[50%] animate-pulse rounded-full bg-orange-200/40 blur-[120px]" style={{ animationDelay: "1s" }} />
 
-      <div className="relative w-full max-w-md rounded-[2.5rem] border border-white/60 bg-white/40 p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] backdrop-blur-2xl md:p-12">
+      <div className="relative w-full max-w-md rounded-[2.5rem] border border-white/60 dark:border-border bg-white/40 dark:bg-card/80 p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] backdrop-blur-2xl md:p-12">
         <div className="mb-6 flex justify-center">
           <img src={nexusLogo} alt="NEXUS" className="block h-20 w-20 object-contain drop-shadow-[0_12px_24px_rgba(79,70,229,0.35)]" />
         </div>

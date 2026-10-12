@@ -52,8 +52,10 @@ const LeaderboardPodium = React.forwardRef<HTMLDivElement, LeaderboardPodiumProp
       <div ref={ref} className={cn("flex items-end justify-center gap-3", className)} {...props}>
         {order.map((rank) => {
           const item = byRank(rank)
-          const s = PODIUM_STYLE[rank]
           if (!item) return <div key={rank} className="flex-1" />
+          // Tied people share a rank, so they share its step too: 1 / 1 / 1 are three gold steps of one height
+          // (QA BoD R2 N05). The place only decides left / middle / right.
+          const s = PODIUM_STYLE[Math.min(3, Math.max(1, item.label ?? rank))] ?? PODIUM_STYLE[rank]
           return (
             <div key={rank} className="flex min-w-0 flex-1 flex-col items-center">
               <div className="relative mb-2">

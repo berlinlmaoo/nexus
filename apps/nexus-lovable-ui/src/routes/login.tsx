@@ -116,7 +116,7 @@ function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-[#fdfcfb] force-light"
+      className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-[#fdfcfb] dark:bg-background"
       style={{ fontFamily: "Plus Jakarta Sans, sans-serif", perspective: "1400px" }}
     >
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px] animate-pulse will-change-[opacity]" />
@@ -139,7 +139,7 @@ function LoginPage() {
       </div>
 
       <div
-        className="relative w-full max-w-md bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[2.5rem] p-10 md:p-12"
+        className="relative w-full max-w-md bg-white/40 dark:bg-card/80 backdrop-blur-2xl border border-white/60 dark:border-border shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[2.5rem] p-10 md:p-12"
         style={{
           willChange: "transform, opacity",
           opacity: showForm ? undefined : 0,
@@ -172,7 +172,7 @@ function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder={lang.t("name@company.com")}
               autoComplete="username"
-              className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50"
+              className="w-full bg-white/60 dark:bg-card/90 border border-white/80 dark:border-border rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
@@ -189,7 +189,7 @@ function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               autoComplete="current-password"
-              className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50"
+              className="w-full bg-white/60 dark:bg-card/90 border border-white/80 dark:border-border rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
@@ -236,7 +236,7 @@ function LoginPage() {
               type="button"
               onClick={onPasskey}
               disabled={loading || passkeyLoading}
-              className="w-full bg-white/60 hover:bg-white/80 border border-white/80 text-foreground font-bold py-4 rounded-2xl shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full bg-white/60 dark:bg-card/90 hover:bg-white/80 dark:hover:bg-accent border border-white/80 dark:border-border text-foreground font-bold py-4 rounded-2xl shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {passkeyLoading ? (
                 <>
@@ -257,7 +257,7 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground">{lang.t("New here?")} <a href="/register" className="text-primary font-bold hover:underline underline-offset-4 decoration-2 decoration-primary/30 transition-all ml-1">{lang.t("Request access")}</a></p>
         </div>
 
-        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-[#FF7F50] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg border-2 border-white">{lang.t("Secure sign-in")}</div>
+        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-[#FF7F50] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg border-2 border-white dark:border-background">{lang.t("Secure sign-in")}</div>
       </div>
 
       <style>{`

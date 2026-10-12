@@ -436,9 +436,13 @@ export async function buildPeopleReports(opts: {
   const pastPeriod = current.toAt.getTime() < now.getTime()
   const stateAt = snapshotAt(current)
   const stateKey = pastPeriod ? current.to : todayKey
+  // Slow-request trace (QA BoD R2 B32): each part's time, logged only when the whole build is slow.
+  const t0 = Date.now()
+  const timings: Record<string, number> = {}
+  const timed = <T,>(name: string, p: Promise<T>): Promise<T> => p.then((v) => { timings[name] = Date.now() - t0; return v })
   const [completedTasks, openTasks, assignments, attendanceDays, curScores, prevScores, penaltyTxns, streaks, curOverdue, prevOverdue] =
     await Promise.all([
-      prisma.task.findMany({
+      timed("completed", prisma.task.findMany({
         where: {
           parentId: null,
           assignees: inUsers,
@@ -447,40 +451,41 @@ export async function buildPeopleReports(opts: {
           taskList: { project: liveProject },
         },
         select: TASK_SELECT,
-      }),
-      prisma.task.findMany({
+      })),
+      timed("open", prisma.task.findMany({
         where: pastPeriod
           ? { parentId: null, assignees: inUsers, status: { not: "CANCELLED" }, createdAt: { lt: stateAt }, OR: [{ completedAt: null }, { completedAt: { gte: stateAt } }], taskList: { project: openProject } }
           : { parentId: null, assignees: inUsers, status: { notIn: ["DONE", "CANCELLED"] }, taskList: { project: openProject } },
         select: TASK_SELECT,
-      }),
-      prisma.taskAssignee.findMany({
+      })),
+      timed("assignments", prisma.taskAssignee.findMany({
         where: {
           userId: { in: userIds },
           assignedAt: { gte: earliest.fromAt, lt: latestToAt },
           task: { parentId: null, status: { not: "CANCELLED" }, taskList: { project: liveProject } },
         },
         select: { userId: true, assignedAt: true, task: { select: { _count: { select: { assignees: true } } } } },
-      }),
-      classifyAttendanceDays({
+      })),
+      timed("attendance", classifyAttendanceDays({
         workspaceId,
         userIds,
         start: earliest.fromDate,
         end: previous.toDate.getTime() > current.toDate.getTime() ? previous.toDate : current.toDate,
-      }),
-      getPeriodScores(userIds, current.fromAt, current.toAt),
-      getPeriodScores(userIds, previous.fromAt, previous.toAt),
-      prisma.xpTransaction.findMany({
+      })),
+      timed("curScores", getPeriodScores(userIds, current.fromAt, current.toAt)),
+      timed("prevScores", getPeriodScores(userIds, previous.fromAt, previous.toAt)),
+      timed("penalties", prisma.xpTransaction.findMany({
         where: { userId: { in: userIds }, amount: { lt: 0 }, createdAt: { gte: earliest.fromAt, lt: latestToAt } },
         select: { userId: true, amount: true, reason: true, createdAt: true },
-      }),
-      opts.detail
+      })),
+      timed("streaks", opts.detail
         ? prisma.userStreak.findMany({ where: { userId: { in: userIds } }, select: { userId: true, currentStreak: true, longestStreak: true } })
-        : Promise.resolve([] as { userId: string; currentStreak: number; longestStreak: number }[]),
-      overdueSnapshot(workspaceId, userIds, snapshotAt(current)),
-      overdueSnapshot(workspaceId, userIds, snapshotAt(previous)),
+        : Promise.resolve([] as { userId: string; currentStreak: number; longestStreak: number }[])),
+      timed("curOverdue", overdueSnapshot(workspaceId, userIds, snapshotAt(current))),
+      timed("prevOverdue", overdueSnapshot(workspaceId, userIds, snapshotAt(previous))),
     ])
 
+  if (Date.now() - t0 > 700) console.warn("people-reports: slow build", JSON.stringify({ users: userIds.length, detail: opts.detail, ms: Date.now() - t0, timings }))
   const streakBy = new Map(streaks.map((s) => [s.userId, s]))
 
   for (const userId of userIds) {

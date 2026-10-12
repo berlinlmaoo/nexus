@@ -31,6 +31,7 @@ import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdm
 import { useLang } from "@/lib/lang";
 import { LeftTag } from "@/components/LeftTag";
 import { HScroll } from "@/components/HScroll";
+import { UnitTreePicker } from "@/components/UnitTreePicker";
 
 // The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
 // on the same section (QA 13 Oct 2026; it was memory-only and always reset to Users).
@@ -1981,13 +1982,10 @@ function AdminQuests() {
             ) : (
               <div className="mt-3">
                 <span className="text-xs font-semibold text-muted-foreground">{tq("For")} <span className="font-normal">{tq("(pick divisions from the IP & Division Chart · none = everyone · people in a sub-division count too)")}</span></span>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <button type="button" onClick={() => setSelectedUnits(new Set())} aria-pressed={selectedUnits.size === 0} className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition", selectedUnits.size === 0 ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>{tq("Everyone")}</button>
-                  {orgQ.isError && <span className="text-xs text-muted-foreground">{tq("Couldn't load the divisions. The quest goes to everyone.")}</span>}
-                  {pickableUnits.map((u) => {
-                    const on = selectedUnits.has(u.id);
-                    return <button key={u.id} type="button" aria-pressed={on} onClick={() => toggleUnit(u.id)} className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>{u.label}</button>;
-                  })}
+                <div className="mt-1.5">
+                  {orgQ.isError
+                    ? <span className="text-xs text-muted-foreground">{tq("Couldn't load the divisions. The quest goes to everyone.")}</span>
+                    : <UnitTreePicker units={units} value={selectedUnits} onChange={setSelectedUnits} disabled={orgQ.isLoading} />}
                 </div>
               </div>
             )}

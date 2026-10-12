@@ -1510,7 +1510,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
                     {/* Notion-style: each row has its own access dropdown (change it, or Remove) for someone with
                         Full access; everyone else sees the level (owner, 13 Oct 2026). */}
                     {canAdd && uid ? (
-                      <AccessLevelPicker value={memberLevelOf(m)} disabled={memberAccess.isPending}
+                      <AccessLevelPicker value={memberLevelOf(m)} removeName={m.user?.name ?? m.user?.email ?? undefined} disabled={memberAccess.isPending}
                         ariaLabel={t("Access for {name}", { name: m.user?.name ?? m.user?.email ?? "" })}
                         onChange={(level) => memberAccess.mutate({ userId: uid, level })}
                         onRemove={() => memberAccess.mutate({ userId: uid, level: null })} />

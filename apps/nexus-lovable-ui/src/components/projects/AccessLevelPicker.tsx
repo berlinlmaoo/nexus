@@ -20,8 +20,10 @@ export function accessLevelLabel(level: ProjectAccessLevel, t: (s: string) => st
  * Notion's access dropdown: next to the Invite / Add button (the level for everyone being added in that
  * batch, default Can edit) and on each member row (change it, or Remove). `onRemove` adds the Remove item.
  */
-export function AccessLevelPicker({ value, onChange, onRemove, disabled, ariaLabel, className }: {
+export function AccessLevelPicker({ value, onChange, onRemove, removeName, disabled, ariaLabel, className }: {
   value: ProjectAccessLevel;
+  /** The member's name for the Remove confirmation. */
+  removeName?: string;
   onChange: (level: ProjectAccessLevel) => void;
   onRemove?: () => void;
   disabled?: boolean;
@@ -42,7 +44,11 @@ export function AccessLevelPicker({ value, onChange, onRemove, disabled, ariaLab
       disabled={disabled}
       ariaLabel={ariaLabel ?? t("Access")}
       options={options}
-      onChange={(v) => { if (v === "__remove") onRemove?.(); else onChange(v as ProjectAccessLevel); }}
+      // Remove asks first (QA BoD R2 N01): it takes their access away at once.
+      onChange={(v) => {
+        if (v !== "__remove") { onChange(v as ProjectAccessLevel); return; }
+        if (window.confirm(removeName ? t("Remove {name} from this project? They lose access right away.", { name: removeName }) : t("Remove them from this project? They lose access right away."))) onRemove?.();
+      }}
       className={className ?? "h-8 shrink-0 px-2 text-xs font-medium text-muted-foreground"}
     />
   );
