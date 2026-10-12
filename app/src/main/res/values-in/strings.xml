@@ -2112,7 +2112,6 @@
     <string name="au_rb_custom_field">Pulihkan custom field</string>
     <string name="au_rb_form">Pulihkan form</string>
     <string name="au_rb_automation">Pulihkan otomasi</string>
-    <string name="au_rb_webhook">Pulihkan webhook</string>
     <string name="au_rb_workflow_bundle">Pulihkan workflow bundle</string>
     <string name="au_rb_goal">Pulihkan goal</string>
     <string name="au_rb_portfolio">Pulihkan portofolio</string>
@@ -3071,6 +3070,7 @@
     <string name="au_t_form_submitted">Formulir dikirim</string>
     <string name="au_t_scheduled">Terjadwal</string>
     <string name="au_t_webhook">Webhook diterima</string>
+    <string name="au_t_webhook_removed">Webhook diterima (sudah dihapus)</string>
     <string name="au_t_status_to">Status berubah ke %1$s</string>
     <string name="au_t_status_from_to">Status berubah dari %1$s ke %2$s</string>
     <string name="au_t_assigned_to">%1$s ditugaskan</string>
@@ -3103,7 +3103,6 @@
     <string name="au_a_create_subtask">Buat subtask</string>
     <string name="au_a_duplicate">Duplikat task</string>
     <string name="au_a_archive">Arsipkan task</string>
-    <string name="au_a_webhook">Kirim webhook</string>
     <string name="au_f_status">Status</string>
     <string name="au_f_priority">Prioritas</string>
     <string name="au_f_assignee">Penanggung jawab</string>

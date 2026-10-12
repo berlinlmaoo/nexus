@@ -94,7 +94,9 @@ object AutomationText {
         "ASSIGNEE_CHANGED" to R.string.au_t_assignee_changed, "FIELD_CHANGED" to R.string.au_t_field_changed,
         "DUE_DATE_APPROACHING" to R.string.au_t_due_approaching, "DUE_DATE_REACHED" to R.string.au_t_due_reached,
         "COMMENT_ADDED" to R.string.au_t_comment_added, "FORM_SUBMITTED" to R.string.au_t_form_submitted,
-        "SCHEDULED" to R.string.au_t_scheduled, "WEBHOOK_RECEIVED" to R.string.au_t_webhook,
+        "SCHEDULED" to R.string.au_t_scheduled,
+        // Removed with NEXUS webhooks (12 Oct 2026): such a rule never fires; it stays so its owner can change it.
+        "WEBHOOK_RECEIVED" to R.string.au_t_webhook_removed,
     )
     val ACTIONS = mapOf(
         "SET_STATUS" to R.string.au_a_set_status, "MARK_COMPLETE" to R.string.au_a_mark_complete, "SET_PRIORITY" to R.string.au_a_set_priority,
@@ -102,7 +104,6 @@ object AutomationText {
         "MOVE_TO_SECTION" to R.string.au_a_move, "ADD_TAG" to R.string.au_a_add_tag, "REMOVE_TAG" to R.string.au_a_remove_tag,
         "ADD_COMMENT" to R.string.au_a_comment, "SEND_NOTIFICATION" to R.string.au_a_notify, "CREATE_TASK" to R.string.au_a_create_task,
         "CREATE_SUBTASK" to R.string.au_a_create_subtask, "DUPLICATE_TASK" to R.string.au_a_duplicate, "ARCHIVE_TASK" to R.string.au_a_archive,
-        "CALL_WEBHOOK" to R.string.au_a_webhook,
     )
     /** Built-in task fields (conditions, Field changed, Set a field). */
     val FIELDS = mapOf(
@@ -207,7 +208,6 @@ object AutomationText {
             "SET_FIELD" -> fieldName(a.field, names, say) + (v?.takeIf { it.isNotBlank() }?.let { " = " + valueText(it, names, say) }.orEmpty())
             "ADD_COMMENT" -> v?.takeIf { it.isNotBlank() }?.let { "“" + (if (it.length > 60) it.take(59) + "…" else it) + "”" }.orEmpty()
             "SEND_NOTIFICATION" -> people((a.config?.get("to") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }?.joinToString(",") ?: "@assignees", names, say)
-            "CALL_WEBHOOK" -> v?.let { runCatching { java.net.URI(it).host }.getOrNull() }.orEmpty()
             else -> ""
         }
         return if (detail.isBlank()) base else "$base: $detail"

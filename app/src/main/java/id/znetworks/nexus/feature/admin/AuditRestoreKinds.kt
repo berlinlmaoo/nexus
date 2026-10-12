@@ -38,7 +38,7 @@ object RestoreKinds {
     /** Server lib/deletion-entities.ts RESTORABLE: a delete of one of these without a copy predates the copies. */
     val RESTORABLE = setOf(
         "project", "task", "comment", "attachment", "proof_annotation", "doc", "project_page", "project_sheet", "sheet_comment",
-        "custom_field", "form", "automation", "webhook", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
+        "custom_field", "form", "automation", "workflow_bundle", "goal", "portfolio", "calendar", "room_booking",
         "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment", "pnl_category", "pnl_stage", "pnl_recurring",
         "pnl_expense_attachment", "pnl_budget", "holiday", "attendance_request", "attendance_office", "org_unit_member",
         "vault_file", "vault_folder", "vault_trash", "task_list", "project_folder", "org_unit", "sheet_rows", "form_submission",
@@ -56,7 +56,7 @@ object RestoreKinds {
         "comment", "sheet_comment" -> R.string.au_rb_comment; "attachment", "vault_file" -> R.string.au_rb_file
         "proof_annotation" -> R.string.au_rb_annotation; "doc" -> R.string.au_rb_doc; "project_page" -> R.string.au_rb_page
         "project_sheet" -> R.string.au_rb_sheet; "custom_field" -> R.string.au_rb_custom_field; "form" -> R.string.au_rb_form
-        "automation" -> R.string.au_rb_automation; "webhook" -> R.string.au_rb_webhook; "workflow_bundle" -> R.string.au_rb_workflow_bundle
+        "automation" -> R.string.au_rb_automation; "workflow_bundle" -> R.string.au_rb_workflow_bundle
         "goal" -> R.string.au_rb_goal; "portfolio" -> R.string.au_rb_portfolio; "calendar" -> R.string.au_rb_calendar
         "room_booking" -> R.string.au_rb_booking; "announcement" -> R.string.au_rb_announcement; "saved_search" -> R.string.au_rb_saved_search
         "pnl_expense" -> R.string.au_rb_expense; "pnl_income" -> R.string.au_rb_income; "pnl_payment" -> R.string.au_rb_payment

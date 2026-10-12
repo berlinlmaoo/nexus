@@ -2127,7 +2127,6 @@
     <string name="au_rb_custom_field">Restore custom field</string>
     <string name="au_rb_form">Restore form</string>
     <string name="au_rb_automation">Restore automation</string>
-    <string name="au_rb_webhook">Restore webhook</string>
     <string name="au_rb_workflow_bundle">Restore workflow bundle</string>
     <string name="au_rb_goal">Restore goal</string>
     <string name="au_rb_portfolio">Restore portfolio</string>
@@ -3122,6 +3121,7 @@
     <string name="au_t_form_submitted">Form submitted</string>
     <string name="au_t_scheduled">On a schedule</string>
     <string name="au_t_webhook">Webhook received</string>
+    <string name="au_t_webhook_removed">Webhook received (removed)</string>
     <string name="au_t_status_to">Status changed to %1$s</string>
     <string name="au_t_status_from_to">Status changed from %1$s to %2$s</string>
     <string name="au_t_assigned_to">%1$s assigned</string>
@@ -3154,7 +3154,6 @@
     <string name="au_a_create_subtask">Create subtask</string>
     <string name="au_a_duplicate">Duplicate task</string>
     <string name="au_a_archive">Archive task</string>
-    <string name="au_a_webhook">Send webhook</string>
     <string name="au_f_status">Status</string>
     <string name="au_f_priority">Priority</string>
     <string name="au_f_assignee">Assignee</string>

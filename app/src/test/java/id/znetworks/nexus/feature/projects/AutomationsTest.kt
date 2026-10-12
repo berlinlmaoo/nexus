@@ -21,9 +21,9 @@ class AutomationsTest {
 
     // The server's lists (lib/automation-rules.ts TRIGGER_TYPES / ACTION_TYPES, nexus-dev ef89b80).
     private val triggers = listOf("TASK_CREATED", "TASK_UPDATED", "STATUS_CHANGED", "TASK_COMPLETED", "ASSIGNEE_CHANGED", "FIELD_CHANGED",
-        "DUE_DATE_APPROACHING", "DUE_DATE_REACHED", "COMMENT_ADDED", "FORM_SUBMITTED", "SCHEDULED", "WEBHOOK_RECEIVED")
+        "DUE_DATE_APPROACHING", "DUE_DATE_REACHED", "COMMENT_ADDED", "FORM_SUBMITTED", "SCHEDULED", "WEBHOOK_RECEIVED" /* removed 12 Oct 2026, still labelled */)
     private val actions = listOf("SET_STATUS", "MARK_COMPLETE", "SET_PRIORITY", "ASSIGN_TO", "UNASSIGN", "SET_FIELD", "MOVE_TO_SECTION", "ADD_TAG",
-        "REMOVE_TAG", "ADD_COMMENT", "SEND_NOTIFICATION", "CREATE_TASK", "CREATE_SUBTASK", "DUPLICATE_TASK", "ARCHIVE_TASK", "CALL_WEBHOOK")
+        "REMOVE_TAG", "ADD_COMMENT", "SEND_NOTIFICATION", "CREATE_TASK", "CREATE_SUBTASK", "DUPLICATE_TASK", "ARCHIVE_TASK")
 
     private fun rule(json: String) = NexusJson.decodeFromString(Rule.serializer(), json)
 
@@ -55,7 +55,6 @@ class AutomationsTest {
         assertEquals("Set priority: High", AutomationText.action(rule("""{"type":"SET_PRIORITY","value":"HIGH"}"""), project, say))
         assertEquals("Set a field: Platform = TikTok", AutomationText.action(rule("""{"type":"SET_FIELD","field":"cf:f1","value":"TikTok"}"""), project, say))
         assertEquals("Send notification: Project leads", AutomationText.action(rule("""{"type":"SEND_NOTIFICATION","config":{"to":["@leads"]}}"""), project, say))
-        assertEquals("Send webhook: hooks.example.com", AutomationText.action(rule("""{"type":"CALL_WEBHOOK","value":"https://hooks.example.com/x"}"""), project, say))
         assertEquals("Mark complete", AutomationText.action(rule("""{"type":"MARK_COMPLETE"}"""), project, say))
         fun cond(json: String) = AutomationText.condition(NexusJson.decodeFromString(ConditionRule.serializer(), json), project, say)
         assertEquals("Priority is High", cond("""{"field":"priority","op":"is","value":"HIGH"}"""))
