@@ -250,7 +250,11 @@ struct TaskSelectionBar: View {
                 .disabled(targetIds.isEmpty)
                 .accessibilityLabel(T("Change the selected tasks"))
             }
-            Button { selection.requestDuplicateSelection() } label: {
+            Button {
+                // Visible tasks only (C-BUG-4); everything selected when the caller gave no list.
+                let ids = visibleIds.isEmpty ? Array(selection.ids) : targetIds
+                if !ids.isEmpty { selection.pendingDuplicate = TaskDuplicateRequest(taskIds: ids) }
+            } label: {
                 Label(T("Duplicate"), systemImage: "plus.square.on.square")
                     .font(NXFont.text(14, .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 14).padding(.vertical, 9)
