@@ -868,7 +868,6 @@ function VaultPage() {
       <PageHeader
         title={t("Z Vault")}
         subtitle={t("The whole office's shared shelf — logos, decks, assets.")}
-        icon={<HardDrive className="h-6 w-6" />}
         actions={
           <>
             <div className="relative hidden sm:block">

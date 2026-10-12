@@ -90,10 +90,9 @@ function MemberRecordPage() {
       <PageHeader
         title={title}
         subtitle={data ? (data.person.isSelf ? tr("Your attendance, XP and requests, one period at a time.") : tr("Attendance, XP and requests, one period at a time.")) : undefined}
-        icon={<UserRound className="h-6 w-6 text-primary" />}
         actions={data ? <PeriodPicker data={data} onChange={setPeriod} /> : undefined}
       />
-      <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-8">
+      <div className="max-w-6xl space-y-5 p-4 md:p-8">
         {record.isLoading ? (
           <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : code === "FORBIDDEN" ? (

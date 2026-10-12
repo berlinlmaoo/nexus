@@ -39,7 +39,7 @@ function Settings() {
   const stripFade = useEdgeFade(strip);
   return (
     <div>
-      <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} icon={<SettingsIcon className="h-6 w-6 text-primary" />} />
+      <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Below lg the sections are a sideways-scrolling strip (stacked, the list pushed the section below the fold). */}
         <aside ref={strip} className={cn("relative -mx-4 flex gap-1 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:-mx-8 md:px-8 lg:col-span-1 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0", stripFade)}>

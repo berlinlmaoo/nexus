@@ -258,15 +258,17 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary";
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] grid place-items-center p-0 sm:p-4">
+    // Phone: a bottom sheet with rounded top corners, like Add task (audit 12 Oct 2026: it floated mid-screen, square).
+    <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <motion.div className="absolute inset-0 bg-foreground/30 dark:bg-scrim backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
         role="dialog" aria-modal="true" aria-label={editing ? t("Edit booking") : t("New booking")}
         initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}
-        className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col overflow-y-auto bg-card shadow-pop sm:max-h-[92dvh] sm:rounded-3xl sm:border sm:border-border"
+        className="relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl border-t border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-pop sm:rounded-3xl sm:border sm:pb-0"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur">
+          <span aria-hidden className="absolute left-1/2 top-1.5 h-1 w-9 -translate-x-1/2 rounded-full bg-border sm:hidden" />
           <h2 className="font-display text-lg font-bold tracking-tight">{editing ? t("Edit booking") : t("New booking")}</h2>
           <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
