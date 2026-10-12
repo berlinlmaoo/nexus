@@ -171,7 +171,7 @@ function WorkspaceMembersSection() {
                     <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">{t("(you)")}</span>}</div>
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                   </div>
-                  <div className="flex items-center gap-2 max-sm:w-full max-sm:pl-12">
+                  <div className="flex items-center gap-2 max-sm:w-full max-sm:flex-wrap max-sm:pl-12">
                   <MemberPhoneEditor member={m} workspaceId={wsId} canEdit={canManage} />
                   <span className="flex-1 sm:hidden" />
                   {canEditTier(myRole, m.role) && !isSelf ? (
@@ -206,8 +206,8 @@ function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWork
   if (!canEdit) return member.phoneNumber ? <span className="hidden text-xs text-muted-foreground sm:inline">{member.phoneNumber}</span> : null;
   return (
     // Wide enough for "+62 8xx xxxx xxxx" (QA B11: the number was cut on a phone).
-    <div className="flex min-w-0 items-center gap-1">
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-36 min-w-0 rounded-lg tabular-nums border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
+    <div className="flex min-w-0 items-center gap-1 max-sm:basis-full">
+      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone number. For numbers outside Indonesia, use + and the country code.")} className="w-36 min-w-0 rounded-lg tabular-nums max-sm:flex-1 border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
       {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label={t("Save number")} title={t("Save")}>{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
     </div>
   );
