@@ -1528,22 +1528,6 @@ export type NexusProjectView = {
   updatedAt: string;
 };
 
-export type NexusDependency = {
-  id: string;
-  type?: string | null;
-  dependsOnTask?: { id: string; title: string; status?: string | null } | null;
-  task?: { id: string; title: string; status?: string | null } | null;
-};
-
-export type NexusTimeEntry = {
-  id: string;
-  duration?: number | null;
-  description?: string | null;
-  startTime?: string | null;
-  endTime?: string | null;
-  user?: NexusUser | null;
-};
-
 export type NexusAttachment = {
   id: string;
   name?: string | null;
@@ -2754,13 +2738,6 @@ export const nexusApi = {
   updateCustomField: (id: string, payload: { name?: string; type?: string; options?: NexusCustomFieldOptions | null }) => apiFetch<{ field: NexusCustomField }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, ...payload }) }),
   deleteCustomField: (id: string) => apiFetch<{ success?: boolean }>(`/api/custom-fields?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   reorderCustomFields: (projectId: string, orderedIds: string[]) => apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ projectId, reorder: orderedIds.map((id) => ({ id })) }) }),
-
-  // --- Task dependencies + time entries ---
-  taskDependencies: (taskId: string) => apiFetch<{ dependencies: NexusDependency[]; dependedOnBy: NexusDependency[] }>(`/api/tasks/${taskId}/dependencies`),
-  addDependency: (taskId: string, dependsOnTaskId: string, type = "BLOCKING") => apiFetch<{ dependency: NexusDependency }>(`/api/tasks/${taskId}/dependencies`, { method: "POST", body: JSON.stringify({ dependsOnTaskId, type }) }),
-  removeDependency: (taskId: string, id: string) => apiFetch<{ success?: boolean }>(`/api/tasks/${taskId}/dependencies?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
-  timeEntries: (taskId: string) => apiFetch<{ entries: NexusTimeEntry[] }>(`/api/time-entries?taskId=${encodeURIComponent(taskId)}`),
-  logTime: (payload: { taskId: string; duration: number; description?: string | null }) => apiFetch<{ entry: NexusTimeEntry }>("/api/time-entries", { method: "POST", body: JSON.stringify(payload) }),
 
   // --- Z Vault ---
   vaultList: (opts: { parentId?: string | null; trash?: boolean; q?: string } = {}) => {

@@ -40,7 +40,7 @@ export const ID_I18N_PROJECTS_EXTRA: Record<string, string> = {
   "(unnamed)": "(tanpa nama)",
   "No attachments.": "Belum ada lampiran.",
   "Upload failed. Max {size}.": "Upload gagal. Maks {size}.",
-  "Payout proof": "Bukti Pencairan",
+  "Payout proof": "Bukti pencairan",
   "No payout proof yet.": "Belum ada bukti pencairan.",
   "file": "file",
   "The .mov (HEVC) format often won't play on Android or in a webview. If the screen stays black, download it to watch.": "Format .mov (HEVC) sering tidak bisa diputar di Android atau webview. Kalau layarnya tetap hitam, download untuk menontonnya.",
