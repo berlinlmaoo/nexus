@@ -33,6 +33,7 @@ import { FilterHint, useFilteredOut } from "@/components/projects/views/filter-h
 import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
 import { canDragTask, DragHandle, useGroupMove } from "@/components/projects/views/group-move";
 import { useTouchDrag } from "@/components/projects/views/touch-drag";
+import { useProjectCanEdit } from "@/components/projects/project-access";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
@@ -73,7 +74,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
 }) {
   const projectId = project.id;
   const [draft, setDraft] = useState<string | null>(null);
-  const newRow = (id: string, gKey: string | null, subKey: string | null) => !onCreateInGroup ? null : draft === id
+  const canEdit = useProjectCanEdit();
+  const newRow = (id: string, gKey: string | null, subKey: string | null) => !onCreateInGroup || !canEdit ? null : draft === id
     // The row's divider runs the table's full width (QA S-26: it stopped at ~930 px with the sticky part).
     ? <div data-table-new-row="" className="border-b border-border/70"><div className="sticky left-0 max-w-[min(100%,640px)] [&>*]:border-b-0"><InlineTaskDraft variant="row" onCreate={(p) => onCreateInGroup(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} /></div></div>
     : (

@@ -20,7 +20,13 @@ export function failureText(e: unknown): string {
   }
   if (e instanceof ApiError) {
     if (e.status === 401) return t("Your session ended. Sign in again, then retry.");
-    if (e.status === 403) return t("Your role can't do this. Ask a BoD if you need it.");
+    if (e.status === 403) {
+      const code = (e.payload as { code?: string } | null)?.code;
+      if (code === "NEEDS_EDIT_ACCESS") return t("You can view this project but not change it. Ask its Project Owner for Can edit access.");
+      if (code === "NEEDS_COMMENT_ACCESS") return t("You can view this project but not comment. Ask its Project Owner for Can comment access.");
+      if (code === "NEEDS_FULL_ACCESS") return t("Only people with Full access to the project can do this.");
+      return t("Your role can't do this. Ask a BoD if you need it.");
+    }
     if (e.status === 404) return t("It no longer exists. Refresh the page.");
     if (e.status === 429) return e.message; // already translated by apiFetch
     if (e.status >= 500) return t("Something went wrong on our side. Try again in a moment.");

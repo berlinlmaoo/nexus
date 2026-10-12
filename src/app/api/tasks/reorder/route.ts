@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const list = await prisma.taskList.findUnique({ where: { id: taskListId }, select: { projectId: true } })
     if (!list) return NextResponse.json({ error: "Section not found" }, { status: 404 })
     if (!(await checkProjectAccess(session.user.id, list.projectId, ["MEMBER"])).allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
     }
 
     const inList = await prisma.task.findMany({

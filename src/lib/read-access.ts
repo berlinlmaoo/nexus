@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { isSystemAdminUser } from "@/lib/rbac"
+import { hasProjectLevel, isSystemAdminUser } from "@/lib/rbac"
 
 /**
  * Read access for single items that used to check only "is someone signed in" (API.md §4 E5).
@@ -58,13 +58,11 @@ export async function canReadTask(userId: string, taskId: string): Promise<ReadV
   if (task.creatorId === userId || task.assignees.length > 0) return "ok"
 
   const projectIds = unique([task.taskList.projectId, ...task.taskProjects.map((link) => link.projectId)])
-  const workspaceIds = unique([
-    task.taskList.project.workspaceId,
-    ...task.taskProjects.map((link) => link.project.workspaceId),
-  ])
-  if (await isMemberOfAnyWorkspace(userId, workspaceIds)) return "ok"
-  if (await isSystemAdminUser(userId)) return "ok"
-  if (await isMemberOfAnyProject(userId, projectIds)) return "ok"
+  // Project access by membership (owner 13 Oct 2026): any access level in the task's project or a project it
+  // is linked into (BoD / One Above All / system admin have every project). Being in the same WORKSPACE no
+  // longer opens a task (QA R2 Manager N1). The calendar's own previews (/api/calendar/*) are a separate,
+  // pending owner decision and don't go through here.
+  for (const id of projectIds) if (await hasProjectLevel(userId, id, "VIEW")) return "ok"
   const submitted = await prisma.formSubmission.count({ where: { taskId, submitterId: userId } })
   return submitted > 0 ? "ok" : "forbidden"
 }
@@ -77,14 +75,11 @@ export function taskReadRefusal(verdict: Exclude<ReadVerdict, "ok">) {
 }
 
 /**
- * Who may open something that belongs to a project and is reachable from search (a doc): a system
- * admin, a member of the project's workspace, or a ProjectMember of the project.
+ * Who may open something that belongs to a project (a doc): anyone with an access level in the project.
  */
 export async function canReadProjectContent(userId: string, projectId: string): Promise<boolean> {
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } })
-  if (project && (await isMemberOfAnyWorkspace(userId, [project.workspaceId]))) return true
-  if (await isSystemAdminUser(userId)) return true
-  return isMemberOfAnyProject(userId, [projectId])
+  // Any access level in the project (membership-only access, owner 13 Oct 2026); was any workspace member.
+  return hasProjectLevel(userId, projectId, "VIEW")
 }
 
 /** Workspace-owned items (a goal, a portfolio): the lists show them to members of the workspace; admins too. */

@@ -10,6 +10,7 @@ import { orderedOptions, usesStatusOptions } from "@/lib/status-options";
 import { optionColorKey } from "@/components/tasks/StatusPicker";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { useProjectCanEdit } from "@/components/projects/project-access";
 
 /**
  * A task project's Overview tab (owner, 11 Oct 2026: "UI-nya jelek banget, data yang ditampilin cuma gitu
@@ -104,6 +105,7 @@ export function ProjectOverview({
   onAddTask: () => void;
 }) {
   const { t, tn, locale } = useLang();
+  const canEdit = useProjectCanEdit();
   const today = startOfDay(new Date());
 
   const m = useMemo(() => {
@@ -218,7 +220,7 @@ export function ProjectOverview({
             icon={ListChecks}
             title={t("No tasks in this project yet")}
             message={t("Progress, deadlines and who's working on what show up here once the project has tasks. Add the first one, or open the Board to set up its columns.")}
-            action={<EmptyAction onClick={onAddTask}><Plus className="h-4 w-4" />{t("Add task")}</EmptyAction>}
+            action={canEdit ? <EmptyAction onClick={onAddTask}><Plus className="h-4 w-4" />{t("Add task")}</EmptyAction> : undefined}
           />
         </div>
         <div className="space-y-4 md:space-y-6 lg:col-span-4">

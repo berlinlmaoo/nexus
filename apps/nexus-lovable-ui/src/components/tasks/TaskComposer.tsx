@@ -18,6 +18,7 @@ import { defaultOption, usesStatusOptions } from "@/lib/status-options";
 import { StatusPicker, StatusPill } from "./StatusPicker";
 import { SelectPicker } from "@/components/SelectPicker";
 import { choiceColor, optionColor } from "@/lib/project-views";
+import { friendlyError } from "@/lib/task-undo";
 
 const PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const;
 const PRIORITY_TEXT: Record<string, string> = { URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };
@@ -97,7 +98,7 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
       celebrate(t("Task created"));
       onClose();
     } catch (e) {
-      toast.error(t("Couldn't create the task"), { description: e instanceof Error ? e.message : undefined });
+      toast.error(t("Couldn't create the task"), { description: friendlyError(e) });
     } finally {
       setBusy(false);
     }

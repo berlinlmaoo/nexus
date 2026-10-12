@@ -40,12 +40,13 @@ import { LoadError, retryTransient } from "@/components/LoadError";
  * pasted link all land in the same place; `?trash=1` the trash; `?item=<id>` opens any item from
  * elsewhere (Control Room → Audit's "Open Vault"): a folder is browsed, a file opens in its folder.
  */
-type VaultSearch = { folder?: string; trash?: "1"; item?: string };
+// trash is the NUMBER 1: the router writes a string search value as JSON ("1" → ?trash=%221%22, QA B23).
+type VaultSearch = { folder?: string; trash?: 1; item?: string };
 export const Route = createFileRoute("/_app/vault")({
   component: VaultPage,
   validateSearch: (s: Record<string, unknown>): VaultSearch => ({
     folder: typeof s.folder === "string" && s.folder ? s.folder : undefined,
-    trash: s.trash === "1" || s.trash === 1 ? "1" : undefined,
+    trash: s.trash === "1" || s.trash === 1 || s.trash === '"1"' || s.trash === true ? 1 : undefined,
     item: typeof s.item === "string" && s.item ? s.item : undefined,
   }),
 });
@@ -108,7 +109,7 @@ function VaultPage() {
   const route = Route.useSearch();
   const navigate = useNavigate({ from: "/vault" });
   const parentId = route.folder ?? null;
-  const trash = route.trash === "1";
+  const trash = route.trash === 1;
   const [search, setSearch] = useState("");
   // Opening a folder is a step Back can undo, so each one is a history entry.
   const setParentId = useCallback((id: string | null) => {
@@ -116,7 +117,7 @@ function VaultPage() {
     void navigate({ search: (id ? { folder: id } : {}) as VaultSearch });
   }, [navigate]);
   const setTrash = useCallback((on: boolean) => {
-    void navigate({ search: (on ? { trash: "1" } : parentId ? { folder: parentId } : {}) as VaultSearch });
+    void navigate({ search: (on ? { trash: 1 } : parentId ? { folder: parentId } : {}) as VaultSearch });
   }, [navigate, parentId]);
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ kind: "purge"; item: VaultItem } | { kind: "empty" } | null>(null);
@@ -394,7 +395,7 @@ function VaultPage() {
     let gone = false;
     nexusApi.vaultItem(deepItem).then(({ item }) => {
       if (gone) return;
-      if (item.trashed) void navigate({ search: { trash: "1" } as VaultSearch, replace: true });
+      if (item.trashed) void navigate({ search: { trash: 1 } as VaultSearch, replace: true });
       else if (item.kind === "FOLDER") void navigate({ search: { folder: item.id } as VaultSearch, replace: true });
       else {
         void navigate({ search: (item.parentId ? { folder: item.parentId } : {}) as VaultSearch, replace: true });

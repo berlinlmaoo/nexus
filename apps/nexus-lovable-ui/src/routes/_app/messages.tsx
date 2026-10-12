@@ -318,6 +318,7 @@ function Messages() {
                 )}
               </div>
               <div className="min-h-0 flex-1"><ChatThread
+                readOnly={active.canPost === false}
                 conversationId={active.id}
                 meId={meId}
                 members={threadMembers}

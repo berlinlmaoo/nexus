@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { taskWriteRefusal } from '@/lib/write-access'
+import { taskEditRefusal } from '@/lib/write-access'
 import { isUniqueViolation } from '@/lib/prisma-errors'
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
@@ -39,8 +39,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     // Signed in is not enough (writes batch): whoever may open the task — and the task it is made to
     // depend on (its title comes back in the dependency list).
     const refusal =
-      (await taskWriteRefusal(session.user.id, (await params).taskId)) ??
-      (await taskWriteRefusal(session.user.id, String(dependsOnTaskId)))
+      (await taskEditRefusal(session.user.id, (await params).taskId)) ??
+      (await taskEditRefusal(session.user.id, String(dependsOnTaskId)))
     if (refusal) return refusal
     const dep = await prisma.taskDependency
       .create({
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
     if (!depRef || (depRef.taskId !== taskId && depRef.dependsOnTaskId !== taskId)) {
       return NextResponse.json({ error: 'Dependency not found' }, { status: 404 })
     }
-    const refusal = await taskWriteRefusal(session.user.id, taskId)
+    const refusal = await taskEditRefusal(session.user.id, taskId)
     if (refusal) return refusal
     await prisma.taskDependency.delete({ where: { id } })
 

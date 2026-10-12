@@ -9,6 +9,7 @@ import { useLang } from "@/lib/lang";
 import { priorityTone } from "@/lib/calendar/tone";
 import { cn } from "@/lib/utils";
 import { Incremental } from "./incremental";
+import { useProjectCanEdit } from "@/components/projects/project-access";
 import {
   COLOR_PRESETS,
   groupCalcValue,
@@ -224,12 +225,13 @@ export function GalleryView({ projectId, groups, groupBy, cfg, keys, defs, ctx, 
   const { t } = useLang();
   const covers = useQuery({ queryKey: ["nexus", "project-task-covers", projectId], queryFn: () => nexusApi.projectTaskCovers(projectId), enabled: cfg.cardCover === "image", staleTime: 60_000, retry: false });
   const cover = (id: string) => covers.data?.covers[id]?.url;
+  const canEdit = useProjectCanEdit();
   const grid = (tasks: NexusTask[]) => (
     <div className={cn("grid gap-3", GALLERY_COLS[cfg.cardSize])}>
       <Incremental items={tasks} first={40} step={40} markerClassName="col-span-full h-px" keyOf={(task) => task.id} render={(task) => <GalleryCard task={task} cover={cover(task.id)} keys={keys} defs={defs} ctx={ctx} cfg={cfg} onOpen={onOpen} />} />
-      <button type="button" onClick={onCreate} className="grid min-h-24 place-items-center rounded-[10px] border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground">
+      {canEdit && <button type="button" onClick={onCreate} className="grid min-h-24 place-items-center rounded-[10px] border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground">
         <span className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" />{t("New task")}</span>
-      </button>
+      </button>}
     </div>
   );
   return (

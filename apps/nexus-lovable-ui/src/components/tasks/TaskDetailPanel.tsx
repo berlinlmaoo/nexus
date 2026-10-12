@@ -324,6 +324,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // Deleting a task needs Can edit or Full access (Notion levels, owner 13 Oct 2026).
   const lvl = projDetail.data?.viewerAccessLevel;
   const canDeleteTask = lvl ? lvl === "FULL" || lvl === "EDIT" : projDetail.data?.viewerCanManage !== false;
+  // Can view / Can comment: the task opens read-only (QA round 2, N-02) — every control in the editing part sits
+  // in a disabled <fieldset>; comments stay open for Can comment.
+  const canEditTask = !lvl || lvl === "FULL" || lvl === "EDIT";
+  const canCommentTask = lvl !== "VIEW";
   const sections = (projDetail.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const { t: tr } = useLang();
   // Only fetch the whole-workspace member list as a FALLBACK for tasks with no project. For a project
@@ -679,6 +683,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 </div>
               </div>
             ))}
+            {!canEditTask && (
+              <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{lvl === "COMMENT" ? tr("You can comment on this task, but not change it.") : tr("View only: you can read this task, but not change it.")}</p>
+            )}
+            <fieldset disabled={!canEditTask} className="contents [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-60 [&_input:disabled]:opacity-60">
             {/* toolbar: mark done + status + priority (old-NEXUS pills). Phone: Mark done on its own row, status and
                 priority side by side below it (they wrapped raggedly, audit 12 Oct 2026). */}
             <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
@@ -1077,9 +1085,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               document.body,
             )}
 
+            </fieldset>
+
             {/* comments */}
             <SecCard icon={MessageCircle} label={tr("Comments")}>
-              <CommentComposer members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />
+              {canCommentTask && <CommentComposer members={projectMembers} pending={addComment.isPending} onSubmit={(content, mentionedUserIds) => addComment.mutateAsync({ content, mentionedUserIds }).then(() => true, () => false)} />}
               <div className="space-y-3">
                 {(comments.data?.comments ?? []).map((c) => (
                   <CommentItem key={c.id} comment={c} currentUserId={currentUserId} onReact={(emoji, has) => reactMut.mutate({ commentId: c.id, emoji, has })} onDelete={() => delComment.mutate(c.id)} />

@@ -188,8 +188,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden: changing the statuses / columns needs Full access to the project", code: "NEEDS_FULL_ACCESS" }, { status: 403 })
     }
 
-    const body = await request.json()
-    const { id, moveTo } = body
+    // Body { id, moveTo }, or the same as query params (a DELETE without a body answered 500, QA R2 N-04).
+    const body = (await request.json().catch(() => null)) ?? {}
+    const sp = request.nextUrl.searchParams
+    const id = typeof body.id === "string" && body.id ? body.id : sp.get("id")
+    const moveTo = typeof body.moveTo === "string" && body.moveTo ? body.moveTo : (sp.get("moveTo") ?? undefined)
 
     if (!id) {
       return NextResponse.json({ error: "Section id is required" }, { status: 400 })

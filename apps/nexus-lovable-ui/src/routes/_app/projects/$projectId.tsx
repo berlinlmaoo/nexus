@@ -4,6 +4,7 @@ import { useEscape } from "@/hooks/use-escape";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AccessLevelPicker, accessChangeFailed, accessLevelLabel } from "@/components/projects/AccessLevelPicker";
+import { ProjectAccessContext, canEditLevel, useProjectCanEdit } from "@/components/projects/project-access";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -310,6 +311,8 @@ function ProjectDetail() {
   // connection is back, and a failed REFETCH keeps showing the project it already has.
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: retryTransient, retryDelay: (n) => Math.min(1000 * 2 ** n, 8000), refetchOnReconnect: true });
   const data = project.data;
+  // Can view / Can comment get no task-creating controls (QA round 2, N-02).
+  const canEditProject = canEditLevel(data?.viewerAccessLevel);
   // Only a failure with nothing to show replaces the page.
   const projectFailed = project.isError && !data;
   // 404 = deleted or a wrong link; 401/403 = not a member (bughunt N-BUG-5); anything else = connection.
@@ -431,7 +434,8 @@ function ProjectDetail() {
     else activeView = visibleViews.find((v) => v.builtin === template.defaultTab) ?? null;
   }
   if (!activeModule && !activeView) activeView = visibleViews[0] ?? null;
-  const canEditView = (v: NexusProjectView) => !v.id.startsWith("fallback:") && (v.shared ? pv.canEditShared : true);
+  // Can view / Can comment: no saved or personal views (Notion: filter and sort on screen only, QA R2 N3).
+  const canEditView = (v: NexusProjectView) => canEditProject && !v.id.startsWith("fallback:") && (v.shared ? pv.canEditShared : true);
   const canEdit = activeView ? canEditView(activeView) : false;
   const select = (key: string) => {
     setViewSettingsOpen(false);
@@ -607,7 +611,11 @@ function ProjectDetail() {
     onSuccess: () => { rootQc.invalidateQueries({ queryKey: ["nexus", "project", projectId] }); setViewSettingsOpen(false); navigate({ to: "/projects/$projectId", params: { projectId }, search: {} }); },
     onError: (e) => toast.error(projectSettingsErrorText((e as { payload?: { code?: unknown } })?.payload?.code) ? tr(projectSettingsErrorText((e as { payload?: { code?: unknown } }).payload?.code)!) : e instanceof Error ? e.message : tr("Couldn't hide the view")),
   });
-  const addTask = (sectionId?: string) => setComposerListId(sectionId ?? defaultOption(taskLists)?.id ?? null);
+  const addTask = (sectionId?: string) => {
+    // Calendar / timeline "add on this date" and any other entry: Can view / Can comment can't create (N-02).
+    if (!canEditProject) { toast.message(tr("You can view this project but not change it. Ask its Project Owner for Can edit access.")); return; }
+    setComposerListId(sectionId ?? defaultOption(taskLists)?.id ?? null);
+  };
 
   // ── the one toolbar row ──
   const beforeTabs: ToolbarTab[] = moduleTabs.filter((m) => m.before).map((m) => ({ key: m.id, label: tr(m.label), icon: m.icon }));
@@ -632,12 +640,12 @@ function ProjectDetail() {
           onDelete={deleteView}
           onHide={(v) => isBuiltinTab(v) && hideBuiltin.mutate(v.builtin!)}
           divideAfter={lastViewKey}
-          addView={<AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} />}
+          addView={canEditProject ? <AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} /> : undefined}
         />
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:hidden">
           <ToolbarButton icon={MoreHorizontal} label={toolsOpen ? tr("Hide view tools") : tr("View tools")} active={toolsOpen || filterCount > 0 || activeModule === "automations"} count={!toolsOpen && filterCount > 0 ? filterCount : undefined} onClick={() => setToolsOpen((o) => !o)} />
-          <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-0.5 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></button>
+          {canEditProject && <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-0.5 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></button>}
         </div>
         <div className={cn("shrink-0 items-center gap-0.5 sm:ml-auto sm:flex", toolsOpen ? "flex basis-full justify-end sm:basis-auto" : "hidden")}>
           {cfg && activeView && !activeModule && (
@@ -701,12 +709,13 @@ function ProjectDetail() {
         message={emptyHint ? tr("Nothing in this project fits the search or filters. Clear them to see every task again.") : noTasksAtAll ? tr("Tasks you add to this project show up here. Start with the first one.") : tr("Every group of this view is hidden. Show some groups again in Group.")}
         action={emptyHint
           ? <EmptyAction onClick={() => setSearch({ q: undefined, f: cfg && saved && !sameFilter(saved.filter, { simple: [], advanced: null }) ? ({ simple: [], advanced: null } as never) : undefined })}>{tr("Clear filters")}</EmptyAction>
-          : noTasksAtAll ? <EmptyAction onClick={() => addTask()}><Plus className="h-4 w-4" />{tr("Add task")}</EmptyAction> : undefined}
+          : noTasksAtAll && canEditProject ? <EmptyAction onClick={() => addTask()}><Plus className="h-4 w-4" />{tr("Add task")}</EmptyAction> : undefined}
       />
     </div>
   );
 
   return (
+    <ProjectAccessContext.Provider value={data?.viewerAccessLevel}>
     <div className="min-h-dvh bg-card">
       <PageHeader
         compact
@@ -852,6 +861,7 @@ function ProjectDetail() {
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
       </Suspense>
     </div>
+    </ProjectAccessContext.Provider>
   );
 }
 
@@ -951,6 +961,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   const [dragLaneId, setDragLaneId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const isSection = groupBy === "section";
+  const canEditHere = useProjectCanEdit();
   // Statuses / columns are managed with Full access (owner 13 Oct 2026); older payloads without the level: shown.
   const canManageColumns = project.viewerAccessLevel ? project.viewerAccessLevel === "FULL" : true;
   const sub = cfg.subGroupBy && cfg.subGroupBy !== groupBy ? cfg.subGroupBy : null;
@@ -1164,14 +1175,14 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               {section && canManageColumns && (
                 <StatusOptionMenu projectId={project.id} option={section} sections={sections} trigger={<button type="button" aria-label={t("Column options")} className={quiet}><MoreHorizontal className="h-3.5 w-3.5" /></button>} />
               )}
-              <button type="button" aria-label={t("New task")} onClick={() => setDraft(id)} className={quiet}><Plus className="h-3.5 w-3.5" /></button>
+              {canEditHere && <button type="button" aria-label={t("New task")} onClick={() => setDraft(id)} className={quiet}><Plus className="h-3.5 w-3.5" /></button>}
             </div>
           </div>
         )}
         <div data-lane-cards className="relative flex min-h-16 flex-col gap-1.5">
           {slot?.lane === id && <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full" style={{ top: slot.y, backgroundColor: tone.dot }} />}
           {/* "+ New task" sits at the TOP of the column (owner, 10 Oct 2026: "Add task di atas lane"). */}
-          {draft === id ? (
+          {!canEditHere ? null : draft === id ? (
             <InlineTaskDraft variant="card" accent={tone.dot} onCreate={(p) => createHere(g, rowKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
           ) : (
             <button type="button" onClick={() => setDraft(id)} style={{ color: tone.text }} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-sm opacity-80 transition-[opacity,background-color] hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10">
@@ -1620,7 +1631,8 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
     return task;
   };
   // "+ New task" at the TOP of each group (owner, 10 Oct 2026), opening an inline row (12 Oct 2026).
-  const newRow = (id: string, gKey: string | null, subKey: string | null) => (draft === id
+  const canEditList = useProjectCanEdit();
+  const newRow = (id: string, gKey: string | null, subKey: string | null) => (!canEditList ? null : draft === id
     ? <InlineTaskDraft variant="row" onCreate={(p) => create(gKey, subKey, p)} onExpand={onOpen} onClose={() => setDraft(null)} />
     : (
       <button type="button" onClick={() => setDraft(id)} className="flex h-9 w-full items-center gap-2 border-b border-border/70 px-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
@@ -2228,9 +2240,10 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
       qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
       if (res.doc?.id) onOpen(res.doc);
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : tr("Couldn't create the page.")),
+    onError: (e: unknown) => toast.error(tr("Couldn't create the page."), { description: friendlyError(e) }),
   });
   const onCreate = () => create.mutate();
+  const canEditPages = useProjectCanEdit();
   return (
     <div className="p-4 md:p-8 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2238,7 +2251,7 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
           <h2 className="text-xl font-black tracking-tight">{tr("Pages")}</h2>
           <p className="text-sm text-muted-foreground">{tr("SOPs, meeting notes, briefs and reference pages for this project.")}</p>
         </div>
-        <Button variant="primary" isDisabled={create.isPending} onClick={onCreate}><Plus className="h-4 w-4" />{tr("Add page")}</Button>
+        {canEditPages && <Button variant="primary" isDisabled={create.isPending} onClick={onCreate}><Plus className="h-4 w-4" />{tr("Add page")}</Button>}
       </div>
       {docs.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">{tr("Loading pages…")}</CardBody></Card>}
       {docs.isError && <Empty title={tr("Couldn't load pages")} message={tr("Check that you're a member of this project, then try again.")} />}
@@ -2277,7 +2290,7 @@ function ProjectChat({ projectId }: { projectId: string }) {
       <div className="mx-auto h-[70vh] max-w-2xl overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
         {convos.isLoading && <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
         {!convos.isLoading && !room && <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground"><div><MessageSquare className="mx-auto mb-3 h-8 w-8 opacity-40" />{t("This project's chat room isn't active yet.")}</div></div>}
-        {room && <ChatThread conversationId={room.id} meId={me.data?.user?.id} />}
+        {room && <ChatThread conversationId={room.id} meId={me.data?.user?.id} readOnly={room.canPost === false} />}
       </div>
     </div>
   );

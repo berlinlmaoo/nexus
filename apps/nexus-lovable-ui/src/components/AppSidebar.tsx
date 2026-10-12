@@ -114,7 +114,7 @@ export function AppSidebar() {
             logo never jumps or pops when expanding/collapsing. */}
         <div className="flex items-center gap-1 overflow-hidden">
           <Link to="/dashboard" className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-2 py-1.5">
-            <img src={nexusLogo} alt="NEXUS" className="h-8 w-8 shrink-0 object-contain" />
+            <img src={nexusLogo} alt="NEXUS" data-nexus-logo="" className="h-8 w-8 shrink-0 object-contain dark:invert" />
             <div className="flex min-w-0 flex-col whitespace-nowrap leading-tight">
               <span className="truncate text-sm font-semibold tracking-tight">NEXUS</span>
               <span className="truncate text-[11px] text-muted-foreground">Phaëthon</span>

@@ -73,7 +73,7 @@ export async function POST(
 
     const { allowed } = await checkProjectAccess(session.user.id, existing.taskList.projectId, ["MEMBER"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to duplicate tasks" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
     }
 
     // ── resolve the copy target ───────────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ export async function POST(
       if (!target) return NextResponse.json({ error: "Target list not found" }, { status: 404 })
       const targetAccess = await checkProjectAccess(session.user.id, target.projectId, ["MEMBER"])
       if (!targetAccess.allowed) {
-        return NextResponse.json({ error: "Forbidden: MEMBER role or higher required in the destination project" }, { status: 403 })
+        return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
       }
       destList = target
     }

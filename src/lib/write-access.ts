@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel, type AccessLevel } from "@/lib/rbac"
 import type { ProjectRole } from "@/generated/prisma/client"
 import { canReadProjectContent, canReadTask, isWorkspaceMemberOrAdmin, taskReadRefusal } from "@/lib/read-access"
 
@@ -36,15 +36,39 @@ export async function projectWriteRefusal(
 }
 
 /**
- * A doc: the rule of GET /api/docs/{id} (canReadProjectContent) — search lists every doc of the
- * searcher's workspaces and the doc page lets whoever opens it edit, duplicate or delete it, so the
- * bar is the doc's workspace (or membership of its project), not checkProjectAccess.
+ * A doc / page of a project: Can edit or more (Notion levels, owner 13 Oct 2026). It used to be the READ rule
+ * (canReadProjectContent), so a Can view member — or anyone in the workspace — could edit, create and delete
+ * pages (QA round 2, N-01).
  */
 export async function docWriteRefusal(userId: string, projectId: string): Promise<NextResponse | null> {
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
-  return (await canReadProjectContent(userId, projectId)) ? null : forbidden()
+  return (await hasProjectLevel(userId, projectId, "EDIT")) ? null : needsEdit()
 }
+
+/**
+ * Changing a task's content-like links (dependencies, relations, putting it in a sprint): Can edit in the
+ * task's project or in a project it is linked into. Follow / like stay on taskWriteRefusal (anyone who can
+ * open the task); proof annotations on taskCommentRefusal (Can comment).
+ */
+export async function taskEditRefusal(userId: string, taskId: string): Promise<NextResponse | null> {
+  return taskLevelRefusal(userId, taskId, "EDIT")
+}
+export async function taskCommentRefusal(userId: string, taskId: string): Promise<NextResponse | null> {
+  return taskLevelRefusal(userId, taskId, "COMMENT")
+}
+async function taskLevelRefusal(userId: string, taskId: string, min: AccessLevel): Promise<NextResponse | null> {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { taskList: { select: { projectId: true } }, taskProjects: { select: { projectId: true } } },
+  })
+  if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+  const projects = [...new Set([task.taskList?.projectId, ...task.taskProjects.map((p) => p.projectId)].filter((x): x is string => !!x))]
+  for (const id of projects) if (await hasProjectLevel(userId, id, min)) return null
+  return min === "EDIT" ? needsEdit() : NextResponse.json({ error: "Forbidden: you need Can comment access in this project", code: "NEEDS_COMMENT_ACCESS" }, { status: 403 })
+}
+
+const needsEdit = () => NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
 
 /**
  * Things hung off a task that the task panel lets whoever has it open change (dependencies,

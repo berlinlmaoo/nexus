@@ -145,7 +145,7 @@ export function reportErrorStatus(e: unknown): number | null {
 /** Don't hammer the server on 4xx (scope / bad period / not found) — those won't fix themselves. */
 export function reportRetry(count: number, e: unknown): boolean {
   if (e instanceof ApiError && e.status >= 400 && e.status < 500) return false;
-  return count < 2;
+  return count < 1; // one quick retry on a blip, so the error state shows in ~1 s (QA R2 Manager B19)
 }
 
 export const ROLE_LABEL: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };

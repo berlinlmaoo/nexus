@@ -60,7 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const userId = session.user.id
     const { projectId } = await params
     const access = await viewAccess(userId, projectId)
-    if (!access.read) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!access.editPersonal) return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     if (!isViewLayout(body.layout)) return NextResponse.json({ error: "Unknown layout", code: "INVALID_VIEW" }, { status: 400 })
@@ -107,7 +107,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const userId = session.user.id
     const { projectId } = await params
     const access = await viewAccess(userId, projectId)
-    if (!access.read) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!access.editPersonal) return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
 
     const body = (await request.json().catch(() => ({}))) as { order?: unknown }
     const order = Array.isArray(body.order) ? body.order.filter((x): x is string => typeof x === "string").slice(0, MAX_VIEWS_PER_PROJECT) : null
