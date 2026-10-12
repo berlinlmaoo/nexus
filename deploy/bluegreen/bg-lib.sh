@@ -118,7 +118,10 @@ bg_switch() {  # new [reason] [old]
 # Stop the previous slot after KEEP_MINUTES unless something changed meanwhile (epoch).
 bg_schedule_finish() {  # epoch slot
   [ "${KEEP_MINUTES:-0}" -gt 0 ] || { "$SELF" finish "$1" "$2"; return; }
-  setsid nohup bash -c "sleep $((KEEP_MINUTES * 60)); exec '$SELF' finish '$1' '$2'" >> "$BG_STATE/finish.log" 2>&1 < /dev/null &
+  # Close every inherited descriptor first: the caller may run under `flock` (deploy lock) and a 10-minute
+  # sleeper holding that fd would block every other dev deploy until it fires.
+  setsid nohup bash -c 'for fd in /proc/$$/fd/*; do n=${fd##*/}; [ "$n" -gt 2 ] && eval "exec $n>&-"; done 2>/dev/null
+    sleep '"$((KEEP_MINUTES * 60))"'; exec "$0" finish "$1" "$2"' "$SELF" "$1" "$2" >> "$BG_STATE/finish.log" 2>&1 < /dev/null &
   echo "$(date -d "+$KEEP_MINUTES min" '+%F %T') $2 $1" > "$BG_STATE/finish-at"
   echo "   $(bg_c "$2") stays up $KEEP_MINUTES min for an instant rollback: $SELF rollback"
 }
