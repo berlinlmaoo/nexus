@@ -180,8 +180,9 @@ struct ListTab: View {
     var selection: TaskSelection? = nil
     /// Status options (or a grouped view): each group's header is its coloured pill.
     var statusStyle = false
-    /// Rows dropped on a group (ids, group id). nil = rows are not draggable.
-    var onDrop: (([String], String) -> Void)? = nil
+    /// Rows dropped on a group (ids, group id, the row they were dropped on — nil = the group's end).
+    /// nil = rows are not draggable.
+    var onDrop: (([String], String, String?) -> Void)? = nil
 
     var body: some View {
         ScrollView {
@@ -202,7 +203,7 @@ struct ListTab: View {
                         } else {
                             let order = { (lane.tasks ?? []).map(\.id) }
                             ForEach(lane.tasks ?? []) { t in
-                                row(t, order: order)
+                                row(t, laneId: lane.id, order: order)
                             }
                         }
                     }
@@ -211,7 +212,7 @@ struct ListTab: View {
                     // A whole group takes a drop (web: drag a row's grip onto another group).
                     .dropDestination(for: String.self) { ids, _ in
                         guard let onDrop, !ids.isEmpty else { return false }
-                        onDrop(ids, lane.id)
+                        onDrop(ids, lane.id, nil)
                         return true
                     }
                 }
@@ -219,7 +220,7 @@ struct ListTab: View {
         }
     }
 
-    @ViewBuilder private func row(_ t: BoardTask, order: @escaping () -> [String]) -> some View {
+    @ViewBuilder private func row(_ t: BoardTask, laneId: String, order: @escaping () -> [String]) -> some View {
         let base = ProjectTaskRow(task: t, onOpen: onOpen, selection: selection, order: order)
         Group {
             if t.isSubtask {
@@ -231,6 +232,12 @@ struct ListTab: View {
             }
         }
         .draggable(t.id)
+        // Dropped on a row: just before it (manual order inside the group, or a move to that place).
+        .dropDestination(for: String.self) { ids, _ in
+            guard let onDrop, !ids.isEmpty, !ids.contains(t.id) else { return false }
+            onDrop(ids, laneId, t.id)
+            return true
+        }
     }
 }
 

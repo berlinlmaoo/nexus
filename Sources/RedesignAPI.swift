@@ -99,6 +99,17 @@ extension APIClient {
         return try await redesignRun(req, as: BatchMoveResult.self)
     }
 
+    // MARK: manual order
+
+    /// Manual order inside a column (dev server, 12 Oct 2026): the column's top-level tasks in this order;
+    /// tasks left out keep theirs after the listed ones. One task-updated event for `movedId`.
+    func reorderTasks(taskListId: String, orderedIds: [String], movedId: String?) async throws {
+        var body: [String: Any] = ["taskListId": taskListId, "orderedIds": orderedIds]
+        if let movedId { body["movedId"] = movedId }
+        let req = try redesignJSON("/api/tasks/reorder", method: "POST", body: body)
+        _ = try await redesignRun(req, as: Whatever.self)
+    }
+
     // MARK: My Submissions
 
     /// A reply to the team that handles a submission (a comment on the task it created).

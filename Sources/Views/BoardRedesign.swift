@@ -466,3 +466,11 @@ enum BoardAlert: Identifiable {
         }
     }
 }
+
+/// A manual reorder's previous column order, for Undo.
+struct ReorderUndo: Identifiable {
+    let id = UUID()
+    let laneId: String
+    let order: [String]
+    let count: Int
+}

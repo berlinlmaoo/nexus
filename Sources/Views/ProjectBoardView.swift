@@ -53,6 +53,8 @@ struct ProjectDetailView: View {
     @State private var boardViewId: String?
     @State private var listViewId: String?
     @State private var undo: MoveUndo?
+    /// The column order before a manual reorder, for its Undo.
+    @State private var reorderUndo: ReorderUndo?
     @State private var boardAlert: BoardAlert?
     @State private var alertText = ""
     @State private var filterView: ProjectViewFull?
@@ -365,6 +367,8 @@ struct ProjectDetailView: View {
                                          onPriority: { ids, p in bulkPriority(ids, p) })
                     } else if let undo {
                         MoveUndoBar(undo: undo, onUndo: { Task { await performUndo(undo) } }, onDismiss: { if self.undo == undo { self.undo = nil } })
+                    } else if let r = reorderUndo {
+                        MoveUndoBar(undo: MoveUndo(count: r.count, groups: []), onUndo: { Task { await undoReorder(r) } }, onDismiss: { if reorderUndo?.id == r.id { reorderUndo = nil } })
                     }
                 }
                 // On `content` rather than the root, which already carries two sheets.
@@ -733,7 +737,7 @@ struct ProjectDetailView: View {
             groupLabel: label,
             onOpen: { id in open(id) },
             onAddTask: { title in await addTask(laneId: lane.id, title: title) },
-            onDrop: { ids in dropped(ids, on: lane.id, visible: shown) },
+            onDrop: { ids, before in dropped(ids, on: lane.id, before: before, visible: shown) },
             onMoveTo: { tid, lid in moveLater([tid], to: lid) },
             options: statusStyle ? optionActions(lane) : nil,
             onSetStatus: sectionStatus,
@@ -757,7 +761,7 @@ struct ProjectDetailView: View {
             viewChips("list")
             ListTab(lanes: shown, onOpen: { open($0) }, selection: selection,
                     statusStyle: StatusOptions.inUse(lanes) || shown.contains { $0.id.hasPrefix("grp:") },
-                    onDrop: { ids, laneId in dropped(ids, on: laneId, visible: shown) })
+                    onDrop: { ids, laneId, before in dropped(ids, on: laneId, before: before, visible: shown) })
         }
     }
 
@@ -918,7 +922,7 @@ struct ProjectDetailView: View {
     /// Cards dropped on a column: a card that is part of the selection carries the whole selection (in
     /// screen order, only what is visible — bughunt C-BUG-4); an unselected card moves alone and clears
     /// the selection (web group-move).
-    private func dropped(_ ids: [String], on laneId: String, visible: [ProjectDetail.Lane]) {
+    private func dropped(_ ids: [String], on laneId: String, before beforeId: String?, visible: [ProjectDetail.Lane]) {
         guard let first = ids.first else { return }
         let onScreen = visible.flatMap { ($0.tasks ?? []).map(\.id) }
         var moving: [String]
@@ -929,9 +933,54 @@ struct ProjectDetailView: View {
             selection.clear()
         }
         let target = visible.first { $0.id == laneId }
-        moving = moving.filter { id in !(target?.tasks ?? []).contains { $0.id == id } }
+        let inColumn: Set<String> = Set((target?.tasks ?? []).map(\.id))
+        // Cards that already live in this column: manual order (web board, C-BUG-6) — only on a status /
+        // section column of a view without a sort, as on the web.
+        let sameColumn = moving.filter { inColumn.contains($0) }
+        if !sameColumn.isEmpty, sameColumn.count == moving.count {
+            if canReorder(laneId) { Task { await reorder(sameColumn, in: laneId, before: beforeId) } }
+            return
+        }
+        moving = moving.filter { !inColumn.contains($0) }
         guard !moving.isEmpty else { return }
         Task { await moveTasks(moving, to: laneId) }
+    }
+
+    /// Manual order is offered on real columns of a view that is not sorted (web canReorder).
+    private func canReorder(_ laneId: String) -> Bool {
+        guard !laneId.hasPrefix("grp:") else { return false }
+        let layout = tab == .list ? "list" : "board"
+        let config = activeView(layout)?.config
+        return (config?.sort.isEmpty ?? true) && ((config?.groupBy ?? "section") == "section")
+    }
+
+    /// The web's reorderIn: the moved cards (in their order) go before `beforeId`, or to the end.
+    private func reorder(_ moved: [String], in laneId: String, before beforeId: String?) async {
+        guard let lane = lanes.first(where: { $0.id == laneId }) else { return }
+        let all = lane.tasks ?? []
+        let order = all.filter { !$0.isSubtask }.map(\.id)
+        let set = Set(moved)
+        let rest = order.filter { !set.contains($0) }
+        let at = beforeId.flatMap { rest.firstIndex(of: $0) } ?? rest.count
+        let next = Array(rest[..<at]) + order.filter { set.contains($0) } + Array(rest[at...])
+        guard next != order else { return }
+        // On screen at once: top-level cards in the new order, each followed by its subtasks.
+        let byId = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let subs = all.filter(\.isSubtask)
+        var arranged: [BoardTask] = []
+        for id in next {
+            if let t = byId[id] { arranged.append(t) }
+            arranged.append(contentsOf: subs.filter { $0.parentId == id })
+        }
+        arranged.append(contentsOf: subs.filter { s in !next.contains(s.parentId ?? "") })
+        lanes = lanes.map { l -> ProjectDetail.Lane in l.id == laneId ? l.with(tasks: arranged) : l }
+        do {
+            try await APIClient.shared.reorderTasks(taskListId: laneId, orderedIds: next, movedId: moved.first)
+            reorderUndo = ReorderUndo(laneId: laneId, order: order, count: moved.count)
+        } catch {
+            actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
+            await reloadQuietly()
+        }
     }
 
     /// Moves tasks to a column: on screen at once, then one POST /api/tasks/batch-move (the server runs
@@ -990,6 +1039,12 @@ struct ProjectDetailView: View {
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.")
         }
+        await reloadQuietly()
+    }
+
+    private func undoReorder(_ r: ReorderUndo) async {
+        reorderUndo = nil
+        try? await APIClient.shared.reorderTasks(taskListId: r.laneId, orderedIds: r.order, movedId: nil)
         await reloadQuietly()
     }
 
@@ -1110,9 +1165,10 @@ struct LaneColumn: View {
     let onOpen: (String) -> Void
     /// Creates a task in this column from the inline card; answers its id (nil = failed).
     let onAddTask: (String) async -> String?
-    /// Task ids dropped on this column. The board decides what moves (a selected card drags the whole
-    /// selection) and does it with one batch call.
-    let onDrop: ([String]) -> Void
+    /// Task ids dropped on this column, and the card they were dropped on (nil = the column's empty end).
+    /// The board decides: cards from this column are reordered (manual order), others move here; a
+    /// selected card drags the whole selection.
+    let onDrop: ([String], String?) -> Void
     /// The card menu's "Move to": one task to another column.
     let onMoveTo: (String, String) -> Void
     /// Status option actions (status options only); nil hides them.
@@ -1179,7 +1235,7 @@ struct LaneColumn: View {
             // The whole column is the target, not just the gap under the last card.
             .dropDestination(for: String.self) { ids, _ in
                 guard !ids.isEmpty else { return false }
-                onDrop(ids)
+                onDrop(ids, nil)
                 return true
             } isTargeted: { targeted in
                 withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
@@ -1240,6 +1296,13 @@ struct LaneColumn: View {
                             .offset(x: 6, y: -6)
                     }
                 }
+        }
+        // A card dropped ON a card lands just before it (manual order, or a move into this column at
+        // that place). Standard drop API — no geometry.
+        .dropDestination(for: String.self) { ids, _ in
+            guard !ids.isEmpty, !ids.contains(task.id) else { return false }
+            onDrop(ids, task.id)
+            return true
         }
         .contextMenu {
             TaskSelectionMenuItems(taskId: task.id, selection: selection)
