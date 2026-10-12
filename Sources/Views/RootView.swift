@@ -43,6 +43,8 @@ struct RootView: View {
                     withAnimation(.easeOut(duration: 0.3)) { showSplash = false }
                     // The files carry on behind the app, and stop themselves on mobile data.
                     sync.syncMedia(userId: userId)
+                    // Page / description edits made offline go out now (a conflict waits for its page).
+                    await BlockEditOutbox.shared.flush()
                 }
                 // GIDEON first, announcements second: the overlay added last draws on top, and an
                 // announcement must never end up behind a floating button.

@@ -8,6 +8,8 @@ struct Doc: Decodable, Identifiable, Sendable {
     let icon: String?
     let updatedAt: String?
     let project: ProjectRef?
+    /// The project the page belongs to (GIDEON action items become its tasks).
+    let projectId: String?
     /// The block-editor document (dev server): drawn by BlockDocView. Read leniently — an older shape
     /// (a string, a list) is simply nil and `contentText` is shown as before.
     let content: LenientBlockDoc?

@@ -540,3 +540,76 @@ struct TaskActivityCard: View {
         }
     }
 }
+
+// MARK: - Description (block editor)
+
+/// The task's description as a block document (headings, lists, to-dos, toggles…), edited in place. Saved
+/// when the task closes and with Save; kept on the phone when offline (BlockEditOutbox).
+struct TaskBodyCard: View {
+    let taskId: String
+    let projectId: String?
+    let title: String
+    /// Bumped when the task changed elsewhere: the document is read again unless it is being edited.
+    var refreshToken = 0
+    @State private var model: BlockEditorModel
+    @State private var aiRequest: GideonWriteRequest?
+
+    init(taskId: String, projectId: String?, title: String, refreshToken: Int = 0) {
+        self.taskId = taskId
+        self.projectId = projectId
+        self.title = title
+        self.refreshToken = refreshToken
+        _model = State(initialValue: BlockEditorModel(ref: BlockBodyRef(kind: "taskbody", id: taskId)))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            if let note = model.note {
+                Label(note, systemImage: "icloud.slash").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if model.loaded {
+                BlockEditorView(model: model, fontSize: 14, onAI: model.canEdit ? { aiRequest = $0 } : nil)
+                    .disabled(!model.canEdit)
+            } else {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        .task { await model.load() }
+        .onChange(of: refreshToken) { _, _ in
+            if !model.isDirty && !model.saving { Task { await model.load() } }
+        }
+        .onDisappear { model.saveOnClose() }
+        .sheet(item: $aiRequest) { r in aiSheet(r) }
+        .alert(T("Someone changed the same part"), isPresented: conflictShown) {
+            Button(T("Keep both")) { Task { await model.save(keepBoth: true) } }
+            Button(T("Use their version"), role: .destructive) { model.discardMine() }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { Text(T("While you were editing, someone else changed a block you also changed. Keep both versions, or drop yours.")) }
+    }
+
+    private var header: some View {
+        HStack {
+            Text(T("Description")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+            Spacer()
+            if model.saving { ProgressView().scaleEffect(0.7) }
+            else if model.isDirty && model.canEdit {
+                Button(T("Save")) { Task { await model.save() } }
+                    .font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+                    .frame(minHeight: 32)
+            }
+        }
+    }
+
+    private var conflictShown: Binding<Bool> {
+        // Cancel only closes the alert: the edit stays on the phone and is asked about again next time.
+        Binding(get: { model.conflictDoc != nil }, set: { if !$0 { model.conflictDoc = nil } })
+    }
+
+    private func aiSheet(_ r: GideonWriteRequest) -> GideonWriteSheet {
+        GideonWriteSheet(request: r, docTitle: title, docId: nil, taskId: taskId, projectId: projectId,
+                         onReplace: { text, result in BlockEditorApply.replace(model, r.blockId, text: text, doc: result) },
+                         onInsert: { result, text in BlockEditorApply.insert(model, after: r.blockId, doc: result, text: text) })
+    }
+}

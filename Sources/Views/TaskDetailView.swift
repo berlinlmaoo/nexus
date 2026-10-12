@@ -56,7 +56,9 @@ struct TaskDetailView: View {
                         questBanner(task)
                         metaRow(task)
                         if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil, refreshToken: fieldsRefresh) }
-                        descriptionCard(task)
+                        // The description is a block document, edited like a page (merged into the live
+                        // document on the server, so web editors see it at once).
+                        TaskBodyCard(taskId: task.id, projectId: task.projectId, title: task.title, refreshToken: fieldsRefresh)
                         subtasksCard(task)
                         // Payout proofs are ordinary attachments since 12 Oct 2026 (owner); Blocked by and
                         // Time tracked are gone from the task, as on the web.
@@ -349,27 +351,6 @@ struct TaskDetailView: View {
         }
     }
 
-    private func descriptionCard(_ t: TaskDetail) -> some View {
-        let dirty = descDraft != descOriginal
-        return VStack(alignment: .leading, spacing: 8) {
-            Text(T("Description")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
-            TextField(T("Add a description…"), text: $descDraft, axis: .vertical)
-                .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(2...12)
-                .focused($descFocused)
-                .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            if dirty {
-                HStack {
-                    Button(T("Cancel")) { descDraft = descOriginal }.font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
-                    Spacer()
-                    Button(T("Save")) { Task { await update(t, ["description": descDraft]) } }
-                        .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).padding(.vertical, 7).background(NX.violet, in: Capsule())
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
-    }
-
     private func subtasksCard(_ t: TaskDetail) -> some View {
         let subs = t.subtasks ?? []
         let done = subs.filter(\.isDone).count
@@ -543,7 +524,6 @@ struct TaskDetailView: View {
         var fields: [String: Any] = [:]
         let title = editTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !title.isEmpty, title != t.title { fields["title"] = title }
-        if descDraft != descOriginal { fields["description"] = descDraft }
         guard !fields.isEmpty else { return }
         let id = t.id
         Task { try? await APIClient.shared.updateTask(id, fields) }
