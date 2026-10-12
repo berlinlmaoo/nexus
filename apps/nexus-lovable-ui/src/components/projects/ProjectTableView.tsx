@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
@@ -122,7 +123,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
     <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
-        <div key={key} className="relative min-w-0 border-l border-border px-1.5 py-1">
+        <div key={key} className="relative flex min-w-0 items-center border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
           {key.startsWith("cf:") && ai.isMarked(key.slice(3), task.id) && <Sparkles aria-label={t("Filled by GIDEON")} className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-primary/70" />}
           <Cell colKey={key} task={task} members={members} cfById={cfById} sections={sections} projectId={projectId} patchTask={patchTask} toggleAssignee={toggleAssignee} setCf={setCf} />
         </div>
@@ -238,8 +239,9 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   toggleAssignee: (taskId: string, userId: string, has: boolean) => void;
   setCf: (fieldId: string, taskId: string, value: unknown) => void;
 }) {
-  const { locale } = useLang();
-  const cls = "w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none hover:border-border focus:border-primary focus:bg-background";
+  const { t, locale } = useLang();
+  // Cells read as text until hovered (Notion): no select chevrons, no "mm/dd/yyyy" in empty dates.
+  const cls = "w-full min-w-0 appearance-none truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-background";
 
   if (colKey.startsWith("cf:")) {
     const def = cfById.get(colKey.slice(3));
@@ -273,11 +275,11 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
   }
   if (colKey === "dueDate" || colKey === "due") {
     const d = task.dueDate ? localYmd(task.dueDate) : "";
-    return <input type="date" value={d} onChange={(e) => patchTask(task.id, { dueDate: e.target.value || null })} className={cls} />;
+    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { dueDate: v })} ariaLabel={t("Due date")} />;
   }
   if (colKey === "start") {
     const d = task.startDate ? localYmd(task.startDate) : "";
-    return <input type="date" value={d} onChange={(e) => patchTask(task.id, { startDate: e.target.value || null } as Parameters<typeof nexusApi.updateTask>[1])} className={cls} />;
+    return <DateField value={d || null} onChange={(v) => patchTask(task.id, { startDate: v } as Parameters<typeof nexusApi.updateTask>[1])} ariaLabel={t("Start date")} />;
   }
   if (colKey === "section") {
     const current = task.taskListId ?? task.taskList?.id ?? "";

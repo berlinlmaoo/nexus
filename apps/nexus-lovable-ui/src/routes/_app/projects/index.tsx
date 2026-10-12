@@ -12,7 +12,6 @@ import { TabPreviewCards } from "@/components/projects/TabPreviewCards";
 import { NEW_PROJECT_HIDDEN_TABS, projectSettingsErrorText, type ProjectTypeId } from "@/components/projects/project-tabs";
 import { MemberMultiPicker } from "@/components/projects/MemberMultiPicker";
 import { useLang } from "@/lib/lang";
-import { projects as fallbackProjects } from "@/lib/mock-data";
 import { nexusApi, ORG_HIERARCHY, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
 import { folderPath } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
@@ -127,23 +126,8 @@ function ProjectsPage() {
   const { t: tr, tn, lang } = useLang();
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1 });
-  const projects: NexusProject[] = projectsQuery.data?.length
-    ? projectsQuery.data
-    : fallbackProjects.map(
-        (p) =>
-          ({
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            color: p.color,
-            icon: p.emoji,
-            status: p.status,
-            totalTasks: p.taskCount,
-            completedTasks: Math.round((p.progress / 100) * p.taskCount),
-            progress: p.progress,
-            members: p.members.map((id) => ({ userId: id })),
-          }) satisfies NexusProject,
-      );
+  // Real projects only: an empty workspace shows the empty state, never sample projects (audit, 12 Oct 2026).
+  const projects: NexusProject[] = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
 
   const computedProjects = useMemo<ProjectWithComputed[]>(() => {
     return projects.map((p) => {

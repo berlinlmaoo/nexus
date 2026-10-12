@@ -12,7 +12,7 @@ export const ID_SHEETS_PIVOT: Record<string, string> = {
   "Enter a data range": "Masukkan rentang data",
   "Suggested": "Disarankan",
   "Clear all": "Hapus semua",
-  "Add field": "Tambahkan",
+  "Add field": "Tambah field",
   "No fields in this range": "Tidak ada kolom di rentang ini",
   "Order": "Urutan",
   "Ascending": "Menaik",

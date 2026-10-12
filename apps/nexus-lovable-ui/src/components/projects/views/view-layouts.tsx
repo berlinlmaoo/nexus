@@ -41,7 +41,7 @@ function useDateFmt() {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
     const sameYear = d.getFullYear() === new Date().getFullYear();
-    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) }).format(d);
+    return (new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) }).format(d)).replace(/\bSept\b/, "Sep");
   };
 }
 

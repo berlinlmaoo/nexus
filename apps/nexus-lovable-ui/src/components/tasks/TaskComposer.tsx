@@ -139,7 +139,7 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
               <span className={labelCls}><Users className="h-4 w-4" />{t("Assignee")}</span>
               <PeoplePicker members={members} value={assigneeIds} onChange={setAssigneeIds} trigger={
                 <button type="button" className={fieldBtn}>
-                  {people.length === 0 ? <span className="text-muted-foreground">{t("Empty")}</span> : (
+                  {people.length === 0 ? <span className="text-muted-foreground">{t("Not set")}</span> : (
                     <>
                       <span className="flex -space-x-1.5">{people.slice(0, 4).map((u) => <Avatar key={u.id} userId={u.id} name={u.name} avatar={u.avatar} size={20} className="ring-2 ring-card" />)}</span>
                       <span className="max-w-48 truncate">{people.map((u) => u.name ?? u.email).join(", ")}</span>
@@ -165,12 +165,12 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
               const set = (v: string | string[]) => setCf((p) => ({ ...p, [f.id]: v }));
               const input = "h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border focus:outline-none";
               let control: React.ReactNode;
-              if (type === "NUMBER" && numberFieldFormat(f.options) === "currency-idr") control = <RupiahInput value={typeof val === "string" ? val : ""} onChange={set} className={input} wrapperClassName="min-w-0 flex-1" placeholder={t("Empty")} ariaLabel={f.name} />;
-              else if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Empty")} />;
+              if (type === "NUMBER" && numberFieldFormat(f.options) === "currency-idr") control = <RupiahInput value={typeof val === "string" ? val : ""} onChange={set} className={input} wrapperClassName="min-w-0 flex-1" placeholder={t("Not set")} ariaLabel={f.name} />;
+              else if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Not set")} />;
               else if (type === "DATE") control = <input type="date" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} />;
               else if ((type === "SELECT" || type === "STATUS" || type === "DROPDOWN") && opts.length) control = (
                 <select value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input}>
-                  <option value="">{t("Empty")}</option>
+                  <option value="">{t("Not set")}</option>
                   {opts.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               );
@@ -184,7 +184,7 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
                 </div>
               );
               else if (type === "FILE" || type === "PLACE" || type === "CREATED") control = <span className="text-xs text-muted-foreground">{t("Fill this in after creating the task.")}</span>;
-              else control = <input type={type === "URL" ? "url" : "text"} value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Empty")} />;
+              else control = <input type={type === "URL" ? "url" : "text"} value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Not set")} />;
               return (
                 <div key={f.id} className={row}>
                   <span className={labelCls}><span className="truncate">{f.name}</span></span>

@@ -32,7 +32,7 @@ export const ID_PIPELINE: Record<string, string> = {
   "Invoice date": "Tanggal invoice",
   "Amount paid": "Sudah dibayar",
   "Amount": "Jumlah",
-  "Due date": "Jatuh tempo",
+  "Due date": "Tenggat",
   "Paid on": "Tanggal bayar",
   "Total received": "Total diterima",
   "Mark paid": "Tandai lunas",

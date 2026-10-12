@@ -141,4 +141,6 @@ export const ID_I18N_PROJECTS_EXTRA: Record<string, string> = {
   "2 rows": "2 baris",
   "{shown} of {n} project": "{shown} dari {n} project",
   "{shown} of {n} projects": "{shown} dari {n} project",
+  // Audit pass (parent): empty property placeholder
+  "Not set": "Belum diisi",
 }

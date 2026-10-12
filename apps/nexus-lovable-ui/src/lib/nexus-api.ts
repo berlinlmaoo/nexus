@@ -3252,10 +3252,11 @@ export function isAuthError(error: unknown) {
 }
 
 export function fmtDate(value?: string | null) {
-  if (!value) return "No due date";
+  if (!value) return t("No due date");
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Interface language (was en-US everywhere); en-GB's "Sept" reads "Sep".
+  return date.toLocaleDateString(getLang() === "id" ? "id-ID" : "en-GB", { month: "short", day: "numeric" }).replace(/\bSept\b/, "Sep");
 }
 
 export function fmtTime(value?: string | null) {

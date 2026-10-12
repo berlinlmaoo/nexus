@@ -100,21 +100,7 @@ export async function GET(request: NextRequest) {
           orderBy: { createdAt: "desc" },
         })
 
-        const result = projects.map((project) => {
-          const taskCount = project.taskLists.reduce(
-            (sum, tl) => sum + tl._count.tasks,
-            0
-          )
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { taskLists: _lists, ...rest } = project
-          return {
-            ...rest,
-            _count: {
-              ...project._count,
-              tasks: taskCount,
-            },
-          }
-        })
+        const result = await withTaskCounts(projects)
 
         return NextResponse.json(result)
       }
@@ -157,21 +143,7 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: "desc" },
       })
 
-      const result = projects.map((project) => {
-        const taskCount = project.taskLists.reduce(
-          (sum, tl) => sum + tl._count.tasks,
-          0
-        )
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { taskLists: _lists, ...rest } = project
-        return {
-          ...rest,
-          _count: {
-            ...project._count,
-            tasks: taskCount,
-          },
-        }
-      })
+      const result = await withTaskCounts(projects)
 
       return NextResponse.json(result)
     }
@@ -226,21 +198,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     })
 
-    const result = projects.map((project) => {
-      const taskCount = project.taskLists.reduce(
-        (sum, tl) => sum + tl._count.tasks,
-        0
-      )
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { taskLists: _lists, ...rest } = project
-      return {
-        ...rest,
-        _count: {
-          ...project._count,
-          tasks: taskCount,
-        },
-      }
-    })
+    const result = await withTaskCounts(projects)
 
     return NextResponse.json(result)
   } catch (error) {
@@ -460,4 +418,30 @@ export async function POST(request: NextRequest) {
     console.error("Error creating project:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+/**
+ * List rows: `_count.tasks` (every task in the project's sections) plus, additive since 12 Oct 2026,
+ * `completedTasks` (status DONE) and `progress` (0–100), so the Projects page shows real progress
+ * instead of 0% everywhere. Released apps ignore the new keys.
+ */
+async function withTaskCounts<P extends { taskLists: Array<{ id: string; _count: { tasks: number } }>; _count: Record<string, number> }>(projects: P[]) {
+  const listIds = projects.flatMap((p) => p.taskLists.map((tl) => tl.id))
+  const done = listIds.length
+    ? await prisma.task.groupBy({ by: ["taskListId"], where: { taskListId: { in: listIds }, status: "DONE" }, _count: { _all: true } })
+    : []
+  const doneBy = new Map(done.map((d) => [d.taskListId, d._count._all]))
+  return projects.map((project) => {
+    const taskCount = project.taskLists.reduce((sum, tl) => sum + tl._count.tasks, 0)
+    const completedTasks = project.taskLists.reduce((sum, tl) => sum + (doneBy.get(tl.id) ?? 0), 0)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { taskLists: _lists, ...rest } = project
+    return {
+      ...rest,
+      _count: { ...project._count, tasks: taskCount },
+      totalTasks: taskCount,
+      completedTasks,
+      progress: taskCount ? Math.round((completedTasks / taskCount) * 100) : 0,
+    }
+  })
 }

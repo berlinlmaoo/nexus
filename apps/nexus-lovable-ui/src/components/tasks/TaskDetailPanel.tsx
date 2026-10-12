@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { animate as fmAnimate, motion, useMotionValue, useReducedMotion } from "framer-motion";
@@ -655,9 +656,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 </div>
               </SecCard>
               <SecCard icon={Calendar} label={tr("Due date")}>
-                {/* datetime-local so a TIME can be set (not just a date). Value is formatted in LOCAL time;
-                    onChange turns the local value back into a UTC ISO string for the API. */}
-                <input type="datetime-local" value={(() => { if (!t.dueDate) return ""; const d = new Date(t.dueDate); if (Number.isNaN(d.getTime())) return ""; const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; })()} onChange={(e) => update.mutate({ dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-primary" />
+                {/* Date + optional time; DateField returns a UTC ISO string for the API. */}
+                <DateField withTime value={t.dueDate ?? null} onChange={(v) => update.mutate({ dueDate: v })} ariaLabel={tr("Due date")} placeholder={tr("No due date")} className="h-10 rounded-xl border border-border bg-background px-3 font-semibold hover:bg-background hover:border-primary/40" />
               </SecCard>
             </div>
 
@@ -1154,7 +1154,10 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   const { t: tr, locale } = useLang();
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
-  const cls = "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
+  // In a table cell (hideLabel) the editor reads as plain text until hovered, like a Notion property.
+  const cls = hideLabel
+    ? "w-full min-w-0 appearance-none truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-background"
+    : "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
 
   const strVal = typeof field.value === "string" ? field.value : "";
   const arrVal = Array.isArray(field.value) ? field.value.map(String) : [];
@@ -1220,10 +1223,13 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   } else if (type === "NUMBER" && field.options && typeof field.options === "object" && !Array.isArray(field.options) && (field.options as { format?: string }).format === "currency-idr") {
     // Rupiah-formatted number: show "Rp 9.240.943" (id-ID separators), store the raw digits.
     body = <RupiahInput value={local} onChange={setLocal} onBlur={() => { if (local !== strVal) onSet(local); }} className={cls} ariaLabel={field.name} />;
+  } else if (type === "DATE") {
+    // Notion-style date: the day as text, a calendar on click; no "mm/dd/yyyy" in empty fields.
+    body = <DateField value={local || null} onChange={(v) => { setLocal(v ?? ""); onSet(v ?? ""); }} ariaLabel={field.name} className={hideLabel ? undefined : "h-[34px] rounded-lg border border-border bg-background px-2.5 hover:bg-background hover:border-primary/40"} placeholder={hideLabel ? "" : tr("Not set")} />;
   } else {
     body = (
       <input
-        type={type === "NUMBER" ? "number" : type === "DATE" ? "date" : "text"}
+        type={type === "NUMBER" ? "number" : "text"}
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={() => { if (local !== (type === "DATE" && strVal.includes("T") ? strVal.slice(0, 10) : strVal)) onSet(local); }}

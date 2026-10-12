@@ -63,26 +63,15 @@ function fmtDueDay(value: string | null | undefined, locale: string) {
   return hasTime ? `${fmtDay(value, locale)}, ${fmtTime(value)}` : fmtDay(value, locale);
 }
 
-const fallbackDashboard: NexusDashboardResponse = {
-  stats: { totalTasks: 10, inProgressTasks: 3, overdueTasks: 2, completedThisWeek: 5 },
-  projects: [
-    { id: "fallback-1", name: "NEXUS Revamp", color: "#a168be", totalTasks: 8, completedTasks: 3, progress: 95 },
-    { id: "fallback-2", name: "PATS Attendance", color: "#40c4aa", totalTasks: 10, completedTasks: 3, progress: 25 },
-    { id: "fallback-3", name: "Ops Rituals", color: "#ffbe4c", totalTasks: 20, completedTasks: 5, progress: 60 },
-  ],
-  tasks: [
-    { id: "t1", title: "Creating Logo", status: "TODO", priority: "HIGH", dueDate: "2026-05-15", project: { id: "fallback-3", name: "Design Graphic", color: "#ffbe4c" } },
-    { id: "t2", title: "Tone of Voice", status: "DONE", priority: "MEDIUM", dueDate: "2026-05-07", project: { id: "fallback-2", name: "Digital Marketing", color: "#40c4aa" } },
-    { id: "t3", title: "Wireframing Web", status: "DONE", priority: "LOW", dueDate: "2026-05-06", project: { id: "fallback-1", name: "UI/UX Design", color: "#a168be" } },
-  ],
-  sprints: [
-    { id: "s1", name: "UI/UX Design", project: "23/40 tasks", projectColor: "#a168be", totalTasks: 40, completedTasks: 38, progress: 95 },
-    { id: "s2", name: "Digital Marketing", project: "23/40 tasks", projectColor: "#40c4aa", totalTasks: 40, completedTasks: 10, progress: 25 },
-  ],
-  goals: [
-    { id: "g1", title: "Join 2 Workshops", status: "active", progress: 50 },
-    { id: "g2", title: "Finish 2 Assignments", status: "active", progress: 90 },
-  ],
+// Before the dashboard loads (or if it fails) the stats show zeros: never demo data. It used to fall
+// back to sample projects/tasks ("NEXUS Revamp", "Sophia Carie", 5 unread) whenever someone had no
+// projects and no tasks yet (audit, 12 Oct 2026).
+const emptyDashboard: NexusDashboardResponse = {
+  stats: { totalTasks: 0, inProgressTasks: 0, overdueTasks: 0, completedThisWeek: 0 },
+  projects: [],
+  tasks: [],
+  sprints: [],
+  goals: [],
 };
 
 function Dashboard() {
@@ -91,14 +80,13 @@ function Dashboard() {
   const notifications = useQuery({ queryKey: ["notifications-unread"], queryFn: () => nexusApi.notifications(), retry: 1 });
 
   const live = dashboard.data;
-  const data: NexusDashboardResponse =
-    live && ((live.projects?.length ?? 0) > 0 || (live.tasks?.length ?? 0) > 0) ? live : fallbackDashboard;
-  const userName = profile.data?.user?.name || "Sophia Carie";
+  const data: NexusDashboardResponse = live ?? emptyDashboard;
+  const userName = profile.data?.user?.name ?? "";
 
   return (
     <div className="w-full px-5 py-6 md:px-8 md:py-8 2xl:px-10">
       <OnboardingWizard />
-      <TopBar userName={userName} unread={notifications.data?.unreadCount ?? 5} />
+      <TopBar userName={userName} unread={notifications.data?.unreadCount ?? 0} />
       <AndroidAppBanner className="mt-5" />
 
       <div className="mt-7 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
