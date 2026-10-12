@@ -21,6 +21,30 @@ type JoinReply = { ok: true; room: string; epoch: string; canWrite: boolean; sta
 
 const toU8 = (v: ArrayBuffer | Uint8Array | number[]) => (v instanceof Uint8Array ? v : v instanceof ArrayBuffer ? new Uint8Array(v) : Uint8Array.from(v));
 
+/**
+ * Edits made while the room is not live are also kept in localStorage, so closing or reloading the tab
+ * before the connection is back does not lose them ("changes are kept here" — bughunt E-BUG-2). The next
+ * time the page is joined in the same epoch they are merged and sent; another epoch cannot merge and
+ * drops them. Cleared once the server confirms a save.
+ */
+const STASH_PREFIX = "nx-ydoc-stash:";
+type Stash = { epoch: string; update: string };
+const b64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
+const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+function readStash(room: string): Stash | null {
+  try {
+    const raw = localStorage.getItem(STASH_PREFIX + room);
+    const v = raw ? (JSON.parse(raw) as Stash) : null;
+    return v && typeof v.epoch === "string" && typeof v.update === "string" ? v : null;
+  } catch { return null; }
+}
+function writeStash(room: string, v: Stash | null) {
+  try {
+    if (v) localStorage.setItem(STASH_PREFIX + room, JSON.stringify(v));
+    else localStorage.removeItem(STASH_PREFIX + room);
+  } catch { /* storage full or blocked: the in-memory copy still syncs on reconnect */ }
+}
+
 export class SocketYProvider {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
@@ -31,6 +55,8 @@ export class SocketYProvider {
   /** Local changes the server has not confirmed as saved yet. */
   pending = false;
   lastSavedAt: string | null = null;
+  /** Unsent offline edits are in localStorage (see STASH_PREFIX). */
+  private stashed = false;
 
   private socket: Socket | null = null;
   private destroyed = false;
@@ -80,6 +106,7 @@ export class SocketYProvider {
       if (d?.room !== this.room) return;
       this.lastSavedAt = d.at;
       this.pending = false;
+      if (this.status === "live" && this.stashed) { this.stashed = false; writeStash(this.room, null); }
       this.emit();
     });
     on<{ room: string; reason: string }>("ydoc:reset", (d) => {
@@ -106,6 +133,7 @@ export class SocketYProvider {
           resolve(false);
           return;
         }
+        const stash = firstSyncStash(this.epoch, this.room);
         if (this.epoch && this.epoch !== res.epoch) {
           // Another lineage: merging would duplicate the page. Start over.
           this.resetListeners.forEach((f) => f("epoch"));
@@ -125,6 +153,12 @@ export class SocketYProvider {
         }
         this.sendAwareness([this.doc.clientID]);
         this.setStatus("live");
+        // Offline edits kept from an earlier visit (tab closed before reconnecting): merge and send them.
+        if (stash) {
+          if (stash.epoch === res.epoch && this.canWrite) {
+            try { Y.applyUpdate(this.doc, unb64(stash.update), "stash"); this.stashed = true; } catch { writeStash(this.room, null); }
+          } else writeStash(this.room, null);
+        }
         resolve(true);
       });
     });
@@ -134,6 +168,12 @@ export class SocketYProvider {
     if (origin === this || this.destroyed) return;
     if (!this.socket?.connected || this.status !== "live" || !this.canWrite) {
       this.pending = true;
+      if (this.epoch) {
+        const prev = readStash(this.room);
+        const merged = prev && prev.epoch === this.epoch ? Y.mergeUpdates([unb64(prev.update), update]) : update;
+        writeStash(this.room, { epoch: this.epoch, update: b64(merged) });
+        this.stashed = true;
+      }
       this.emit();
       return;
     }
@@ -200,6 +240,11 @@ export class SocketYProvider {
     this.listeners.clear();
     this.resetListeners.clear();
   }
+}
+
+/** The stash to merge on the first join of this page in this tab (later joins resend from memory). */
+function firstSyncStash(epoch: string | null, room: string): Stash | null {
+  return epoch ? null : readStash(room);
 }
 
 /** A stable colour per person for cursors and avatars rings. */

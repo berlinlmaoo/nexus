@@ -24,6 +24,8 @@ import type { MenuStore } from "./menu-store";
 import { filterSlash, pendingMention, type SlashItem } from "./slash-items";
 import { BookmarkView, CalloutView, DateChipView, FileBlockView, ImageView, MentionView } from "./node-views";
 import { currentBlockPos, duplicateBlock, moveBlock } from "./block-actions";
+import { looksLikeMarkdown, markdownToHtml } from "./markdown-paste";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 /**
  * The block editor's schema and behaviour. The JSON these produce is the stored format, described in
@@ -211,6 +213,32 @@ function menuRender<I>(store: MenuStore<I>) {
   });
 }
 
+/** Plain-text Markdown paste → blocks (Notion). HTML on the clipboard, files and code blocks keep the default. */
+const MarkdownPaste = Extension.create({
+  name: "markdownPaste",
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [new Plugin({
+      key: new PluginKey("markdownPaste"),
+      props: {
+        handlePaste: (view, event) => {
+          const cd = event.clipboardData;
+          if (!cd || !editor.isEditable) return false;
+          if (cd.types.includes("text/html") || cd.files.length > 0) return false;
+          const text = cd.getData("text/plain");
+          if (!looksLikeMarkdown(text)) return false;
+          const { $from } = view.state.selection;
+          if ($from.parent.type.spec.code) return false;
+          const html = markdownToHtml(text);
+          if (!html) return false;
+          event.preventDefault();
+          return editor.chain().focus().insertContent(html).run();
+        },
+      },
+    })];
+  },
+});
+
 function SlashCommand(store: MenuStore<SlashItem>) {
   return Extension.create({
     name: "slashCommand",
@@ -219,10 +247,16 @@ function SlashCommand(store: MenuStore<SlashItem>) {
         Suggestion<SlashItem, SlashItem>({
           editor: this.editor,
           char: "/",
-          allowSpaces: false,
+          // Notion keeps the menu open through spaces ("/heading 1", "/to-do list") and closes it once
+          // nothing matches any more (bughunt E-BUG-3).
+          allowSpaces: true,
           allow: ({ state, range }) => {
             const $from = state.doc.resolve(range.from);
-            return $from.parent.type.name !== "codeBlock";
+            if ($from.parent.type.name === "codeBlock") return false;
+            const query = state.doc.textBetween(range.from, range.to, "\n").slice(1);
+            if (!/\s/.test(query)) return true;
+            if (/^\s/.test(query) || /\s\s/.test(query)) return false;
+            return filterSlash(query, (s) => t(s)).length > 0;
           },
           items: ({ query }) => filterSlash(query, (s) => t(s)).slice(0, 30),
           command: ({ editor, range, props }) => props.run(editor, range),
@@ -305,6 +339,7 @@ export function buildExtensions(o: BuildOptions): AnyExtension[] {
       onDrop: (editor, files, pos) => o.onFiles(editor, files, pos),
     }),
     SlashCommand(o.slashStore),
+    MarkdownPaste,
     NexusMention.configure({
       HTMLAttributes: { class: "nx-mention" },
       renderText: ({ node }) => ((node.attrs.kind ?? "user") === "user" ? `@${node.attrs.label ?? ""}` : String(node.attrs.label ?? "")),

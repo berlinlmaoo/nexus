@@ -10,6 +10,10 @@
 // Realtime: one websocket client (session cookie) joins project:<id>; every 3 s the test PATCHes a task it
 // created in that project and expects the `task-updated` event back. Reconnects like the real client
 // (re-joins its room). Reports events missed, reconnects, and the time without realtime.
+// Fresh tabs: every FRESH_EVERY s (default 15) a NEW websocket client — what a tab opened after the switch
+// does: realtime-init, connect, join-room, wait for its presence-update — then one PATCH; it must get its own
+// `task-updated` within 6 s. Catches a slot that accepts sockets but never delivers room events (bughunt
+// C-BUG-21, 12 Oct 2026: traced to a build without the project-room join, not to the switch; kept as a guard).
 import { readFileSync } from "node:fs"
 
 const BASE = process.env.BASE || "http://127.0.0.1:8080"
@@ -61,6 +65,8 @@ async function worker(i) {
 // ---------------- realtime
 const rt = { sent: 0, got: 0, missed: [], covered: [], reconnects: 0, downSince: null, downMs: 0 }
 const pending = new Map()
+const FRESH_EVERY = Number(process.env.FRESH_EVERY || 15) * 1000
+const fresh = { tries: 0, ok: 0, failed: [], bySlot: {} }
 let ws = null
 let connected = false
 async function connect() {
@@ -110,7 +116,55 @@ function settle(t, p) {
   if (!p.wasConnected || p.rc !== rt.reconnects) rt.covered.push(line)
   else rt.missed.push(line)
 }
+// One fresh client end to end. Resolves when it got its event or gave up (8 s).
+async function freshProbe() {
+  const k = ++fresh.tries
+  const slot = await fetch(BASE + "/api/health", { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).then((j) => j.slot ?? "?").catch(() => "?")
+  await fetch(BASE + "/api/realtime-init", { headers: { Cookie: cookie }, signal: AbortSignal.timeout(5000) }).catch(() => {})
+  const title = `bg-switch-fresh ${k}`
+  const url = BASE.replace(/^http/, "ws") + "/api/socket/?EIO=4&transport=websocket"
+  await new Promise((resolve) => {
+    let stage = "connect"
+    let done = false
+    const sock = new WebSocket(url, { headers: { Cookie: cookie } })
+    const finish = (ok, why) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      try { sock.close() } catch { /* already closed */ }
+      const b = (fresh.bySlot[slot] ??= { ok: 0, failed: 0 })
+      if (ok) { fresh.ok++; b.ok++ } else { b.failed++; fresh.failed.push(`#${k} slot ${slot} at ${ts().trim()}s: ${why}`); log(`fresh client #${k} (slot ${slot}) FAILED: ${why}`) }
+      resolve()
+    }
+    const timer = setTimeout(() => finish(false, `stuck at ${stage}`), 8000)
+    sock.onmessage = (ev) => {
+      const m = String(ev.data)
+      if (m === "2") return sock.send("3")
+      if (m.startsWith("0")) return sock.send("40")
+      if (m.startsWith("44")) return finish(false, `socket refused ${m.slice(0, 80)}`)
+      if (m.startsWith("40")) {
+        stage = "join"
+        sock.send("42" + JSON.stringify(["join-room", { room: `project:${PROJECT}`, userId: login.user.id, name: "bg-test-fresh" }]))
+        return
+      }
+      if (!m.startsWith("42")) return
+      const [ev2, data] = JSON.parse(m.slice(2))
+      if (ev2 === "join-denied") return finish(false, "join-room denied")
+      if (ev2 === "presence-update" && stage === "join") {
+        stage = "task-updated"
+        fetch(BASE + `/api/tasks/${taskId}`, { method: "PATCH", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ title }) })
+          .then((r) => { if (r.status !== 200) finish(false, `PATCH ${r.status}`) })
+          .catch((e) => finish(false, `PATCH ${e.cause?.code || e.name}`))
+        return
+      }
+      if (ev2 === "task-updated" && data?.title === title) finish(true)
+    }
+    sock.onerror = () => finish(false, `socket error at ${stage}`)
+  })
+}
+
 const workers = Array.from({ length: CONC }, (_, i) => worker(i))
+const freshLoop = (async () => { while (!stop) { await freshProbe(); await new Promise((r) => setTimeout(r, FRESH_EVERY)) } })()
 let n = 0
 const pinger = setInterval(async () => {
   const title = `bg-switch-test ${++n}`
@@ -126,7 +180,7 @@ const pinger = setInterval(async () => {
 await new Promise((r) => setTimeout(r, DURATION))
 stop = true
 clearInterval(pinger)
-await Promise.allSettled(workers)
+await Promise.allSettled([...workers, freshLoop])
 await new Promise((r) => setTimeout(r, 4000))
 for (const [t, p] of pending) settle(t, p)
 await fetch(BASE + `/api/tasks/${taskId}`, { method: "DELETE", headers: { Cookie: cookie } }).catch(() => {})
@@ -139,4 +193,6 @@ console.log("slots seen on /api/health:", slotSeen.map((s) => `${s.slot}@${s.t.t
 console.log(`realtime: sent ${rt.sent} task updates, received ${rt.got}, lost during a reconnect (catch-up refetch covers) ${rt.covered.length}, MISSED on a live socket ${rt.missed.length}, reconnects ${rt.reconnects}, without realtime ${rt.downMs} ms`)
 for (const m of rt.covered) console.log("   during reconnect: " + m)
 for (const m of rt.missed) console.log("   MISSED " + m)
-process.exit(stats.fail || rt.missed.length ? 1 : 0)
+console.log(`fresh clients (new tab after/around the switch): ${fresh.ok}/${fresh.tries} got their task-updated; by slot ${JSON.stringify(fresh.bySlot)}`)
+for (const m of fresh.failed) console.log("   FRESH FAILED " + m)
+process.exit(stats.fail || rt.missed.length || fresh.failed.length ? 1 : 0)

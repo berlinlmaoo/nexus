@@ -31,7 +31,7 @@ type CardProps = {
   onClick: (e: React.MouseEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onTouchStart?: (e: React.TouchEvent) => void;
-  onTouchEnd?: () => void;
+  onTouchEnd?: (e: React.TouchEvent) => void;
   onTouchMove?: () => void;
 };
 type RowProps = {
@@ -81,7 +81,7 @@ function isEditable(target: EventTarget | null): boolean {
 export function TaskBulkProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [menu, setMenu] = useState<{ task: NexusTask; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ task: NexusTask; x: number; y: number; at?: number } | null>(null);
   const [datePopup, setDatePopup] = useState<{ ids: string[] } | null>(null);
   const [copyIds, setCopyIds] = useState<string[] | null>(null);
   const lpTimer = useRef<number | undefined>(undefined);
@@ -130,7 +130,7 @@ export function TaskBulkProvider({ projectId, children }: { projectId: string; c
     onSuccess: (n) => { refresh(); clear(); setMenu(null); celebrate(ttn(n, "Task deleted", "{n} tasks deleted")); },
   });
 
-  const openMenu = useCallback((task: NexusTask, x: number, y: number) => setMenu({ task, x, y }), []);
+  const openMenu = useCallback((task: NexusTask, x: number, y: number) => setMenu({ task, x, y, at: Date.now() }), []);
 
   const bindCard = useCallback((task: NexusTask, onOpen: () => void): CardProps => ({
     "data-bulk-task": task.id,
@@ -147,7 +147,10 @@ export function TaskBulkProvider({ projectId, children }: { projectId: string; c
       window.clearTimeout(lpTimer.current);
       lpTimer.current = window.setTimeout(() => { lpFired.current = true; if (navigator.vibrate) navigator.vibrate(8); openMenu(task, touch.clientX, touch.clientY); }, LONG_PRESS_MS);
     },
-    onTouchEnd: () => window.clearTimeout(lpTimer.current),
+    // The finger lifting after a long-press must not become a click: the browser would fire it on the
+    // menu's full-screen backdrop that is now under the finger and close the menu at once (bughunt
+    // C-BUG-20). preventDefault on touchend cancels those compatibility mouse events and the click.
+    onTouchEnd: (e) => { window.clearTimeout(lpTimer.current); if (lpFired.current && e.cancelable) e.preventDefault(); },
     onTouchMove: () => window.clearTimeout(lpTimer.current),
   }), [selected, toggle, modifierClick, openMenu]);
 
@@ -201,7 +204,7 @@ export function TaskBulkProvider({ projectId, children }: { projectId: string; c
 }
 
 function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, onBeginSelect, onDuplicateNow, onDuplicateWithDate, onDelete, onCopyToProject, onClear, datePopup, onCloseDate, onConfirmDate, busy }: {
-  menu: { task: NexusTask; x: number; y: number } | null;
+  menu: { task: NexusTask; x: number; y: number; at?: number } | null;
   menuIds: string[];
   onCloseMenu: () => void;
   selectedIds: string[];
@@ -225,7 +228,8 @@ function BulkLayer({ menu, menuIds, onCloseMenu, selectedIds, onBeginSelect, onD
       <AnimatePresence>
         {menu && (
           <>
-            <div className="fixed inset-0 z-[93]" onClick={onCloseMenu} onContextMenu={(e) => { e.preventDefault(); onCloseMenu(); }} />
+            {/* A click within 400 ms of opening is the tail of the long-press that opened it (iOS can still send one), not a dismiss. */}
+            <div className="fixed inset-0 z-[93]" onClick={() => { if (Date.now() - (menu.at ?? 0) > 400) onCloseMenu(); }} onContextMenu={(e) => { e.preventDefault(); onCloseMenu(); }} />
             <ContextMenu key={menu.task.id} menu={menu} count={menuIds.length} reduce={reduce}
               onSelect={() => onBeginSelect(menu.task)}
               onDuplicate={() => { onDuplicateNow(menuIds); onCloseMenu(); }}

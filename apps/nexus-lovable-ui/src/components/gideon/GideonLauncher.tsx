@@ -33,6 +33,12 @@ export function GideonLauncher() {
     try { return localStorage.getItem("gideon-wide") === "1"; } catch { return false; }
   });
 
+  // "Ask GIDEON" pins its project as context only while that project is on screen: leaving it (another
+  // project, the dashboard) lets the chip follow the page again (bughunt G-BUG-1).
+  useEffect(() => {
+    if (context && !pathname.includes(context.projectId)) clearGideonContext();
+  }, [pathname, context]);
+
   // ⌘/Ctrl+O anywhere = a new GIDEON chat (the open panel handles it itself).
   useEffect(() => {
     if (open || onFullPage) return;

@@ -1558,9 +1558,9 @@ export type NexusAttachment = {
 };
 
 export type NexusSearchResults = {
-  tasks?: Array<{ id: string; title: string; taskList?: { projectId?: string } | null }>;
+  tasks?: Array<{ id: string; title: string; taskList?: { projectId?: string; project?: { name?: string | null } | null } | null }>;
   projects?: Array<{ id: string; name: string; color?: string | null }>;
-  docs?: Array<{ id: string; title: string }>;
+  docs?: Array<{ id: string; title: string; projectId?: string | null; project?: { name?: string | null } | null }>;
   goals?: Array<{ id: string; title: string }>;
   members?: Array<{ id: string; name?: string | null; email?: string | null }>;
   forms?: Array<{ id: string; name: string }>;
@@ -2001,9 +2001,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
   const payload = await parseResponse(res);
   if (!res.ok) {
-    const message = typeof payload === "object" && payload && "error" in payload
-      ? String((payload as { error?: unknown }).error)
-      : `Request failed (${res.status})`;
+    // A rate limit reads the same in every screen, in the person's language, with how long to wait
+    // (the server's text is English only — bughunt N-BUG-9).
+    const retry = Number(res.headers.get("Retry-After") ?? "");
+    const message = res.status === 429
+      ? t("Too many changes at once. Wait {n} seconds and try again.", { n: Number.isFinite(retry) && retry > 0 ? Math.min(retry, 60) : 10 })
+      : typeof payload === "object" && payload && "error" in payload
+        ? String((payload as { error?: unknown }).error)
+        : `Request failed (${res.status})`;
     throw new ApiError(res.status, message, payload);
   }
   return payload as T;

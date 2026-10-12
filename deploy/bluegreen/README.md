@@ -103,7 +103,9 @@ version against the current schema. So:
 
 `switch-test.mjs`: 6 workers (half through the public tailscale URL, half on 127.0.0.1:8080; keep-alive like a
 browser) over health, `/`, the entry bundle, two signed-in reads; plus one websocket client in `project:<id>`
-receiving `task-updated` for a task the test PATCHes every 3 s. `leader-sampler.sh`: the leader flag of both
+receiving `task-updated` for a task the test PATCHes every 3 s, and every 15 s a fresh client (a tab opened
+around the switch: realtime-init, connect, join-room, then its own PATCH) that must get its event within 6 s,
+reported per slot. `leader-sampler.sh`: the leader flag of both
 slots + the advisory-lock holder in `pg_locks`, every second.
 
 | test | requests | failed | realtime | switch / rollback |

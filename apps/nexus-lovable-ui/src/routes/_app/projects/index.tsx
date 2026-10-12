@@ -16,6 +16,7 @@ import { useLang } from "@/lib/lang";
 import { nexusApi, ORG_HIERARCHY, type NexusProject, type NexusProjectFolder } from "@/lib/nexus-api";
 import { folderPath } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { Reveal } from "@/components/motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -238,6 +239,16 @@ function ProjectsPage() {
       }
     },
   });
+
+  // A double-click on "Create project" made two projects (bughunt N-BUG-1): one call in flight at a time.
+  const [guardCreate, creating] = useSubmitGuard();
+  // Esc closes the dialog, unless a menu or picker inside it used the key first (bughunt N-BUG-7).
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) setIsCreateOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isCreateOpen]);
 
   const createErrorKnown = projectSettingsErrorText((createProject.error as { payload?: { code?: unknown } } | null)?.payload?.code);
   const createErrorMessage = createErrorKnown
@@ -553,9 +564,9 @@ function ProjectsPage() {
 
               <Button
                 isDisabled={
-                  !newProjectName.trim() || !(newProjectWorkspaceId || workspaceOptions[0]?.id) || createProject.isPending
+                  !newProjectName.trim() || !(newProjectWorkspaceId || workspaceOptions[0]?.id) || createProject.isPending || creating
                 }
-                onPress={() => createProject.mutate()}
+                onPress={() => guardCreate(() => createProject.mutateAsync())}
                 variant="primary"
                 className="w-full font-bold"
               >

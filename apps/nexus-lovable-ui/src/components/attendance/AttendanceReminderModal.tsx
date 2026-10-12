@@ -19,6 +19,19 @@ import { useLang } from "@/lib/lang";
  * person could check in fine from the attendance page.
  */
 const REMINDER_LEAD_MINUTES = 60; // pop-up mulai muncul 1 jam sebelum jam shift
+/**
+ * "Later" on the check-in reminder snoozes it for 30 minutes on this device, across reloads and tabs
+ * (bughunt N-BUG-10: it came back on every full page load). The forgotten-check-out reminder is not
+ * snoozed past the current page: that one must be resolved.
+ */
+const SNOOZE_MS = 30 * 60_000;
+const SNOOZE_KEY = "nx-checkin-reminder-snooze";
+function snoozedNow(): boolean {
+  try { return Number(localStorage.getItem(SNOOZE_KEY) ?? 0) > Date.now(); } catch { return false; }
+}
+function snooze() {
+  try { localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS)); } catch { /* private mode */ }
+}
 const ATTENDANCE_TZ = "Asia/Jakarta";
 
 function parseHHMM(value?: string | null): number | null {
@@ -46,7 +59,7 @@ export function AttendanceReminderModal() {
   // BoD ke atas (BoD / One Above All) nggak wajib absen → jangan munculin reminder ini.
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 300_000 });
   const exemptFromAttendance = wsm.data?.role === "BOD" || wsm.data?.role === "ONE_ABOVE_ALL";
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedHere, setDismissedHere] = useState(false);
 
   const data = today.data;
   const checkedIn = Boolean(data?.today?.checkInAt);
@@ -54,11 +67,13 @@ export function AttendanceReminderModal() {
   const pending = data?.pendingCheckout ?? null;
   const forcedCheckout = Boolean(pending);
   const isCheckout = forcedCheckout;
+  const dismissed = dismissedHere || (!forcedCheckout && snoozedNow());
+  const setDismissed = (v: boolean) => { if (v && !forcedCheckout) snooze(); setDismissedHere(v); };
 
   // Re-tick every 30s so the reminder appears exactly when its lead window opens, even if the app was
   // already open before then. Only runs while a reminder is actually pending (cheap, self-stopping).
   const [, setTick] = useState(0);
-  const reminderEligible = !checkedIn && !hasApprovedLeave && !dismissed && !exemptFromAttendance && !!data;
+  const reminderEligible = !checkedIn && !hasApprovedLeave && !dismissedHere && !exemptFromAttendance && !!data;
   useEffect(() => {
     if (!reminderEligible) return;
     const id = setInterval(() => setTick((t) => t + 1), 30_000);

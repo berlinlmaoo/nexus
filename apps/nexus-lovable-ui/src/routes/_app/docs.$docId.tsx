@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { ArrowLeft, Check, CloudOff, Copy, Link2, Loader2, Lock, MoreHorizontal, MoveHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { ApiError, fmtDate, nexusApi, textToTiptap } from "@/lib/nexus-api";
+import { ApiError, apiFetch, fmtDate, nexusApi, textToTiptap } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import { useRealtimeRoom } from "@/lib/realtime";
@@ -78,15 +78,37 @@ function DocPage() {
     }
   }, [docId, projectId, qc, t]);
 
+  // The title typed but not yet sent (debounced 600 ms). Leaving the page — Back, a link, closing the tab —
+  // sends it right away instead of dropping it (bughunt E-BUG-1: a title typed just before Back was lost).
+  const pendingTitle = useRef<string | null>(null);
   const onTitle = (v: string) => {
     setTitle(v);
     titleDirty.current = true;
+    pendingTitle.current = v;
     if (titleTimer.current) clearTimeout(titleTimer.current);
     titleTimer.current = setTimeout(() => {
+      titleTimer.current = null;
+      pendingTitle.current = null;
       void patch({ title: v.trim() || "Untitled" }).finally(() => { titleDirty.current = false; });
     }, 600);
   };
-  useEffect(() => () => { if (titleTimer.current) clearTimeout(titleTimer.current); }, []);
+  useEffect(() => {
+    const flush = (unloading: boolean) => {
+      if (titleTimer.current) clearTimeout(titleTimer.current);
+      titleTimer.current = null;
+      const v = pendingTitle.current;
+      pendingTitle.current = null;
+      if (v === null) return;
+      const body = JSON.stringify({ title: v.trim() || "Untitled" });
+      // keepalive lets the request finish while the tab is closing.
+      void apiFetch(`/api/docs/${docId}`, { method: "PATCH", body, keepalive: unloading })
+        .then(() => { qc.invalidateQueries({ queryKey: ["nexus", "doc", docId] }); qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); if (projectId) qc.invalidateQueries({ queryKey: ["nexus", "project-docs", projectId] }); })
+        .catch(() => { /* the page is gone; nothing to show the error on */ });
+    };
+    const onHide = () => flush(true);
+    window.addEventListener("pagehide", onHide);
+    return () => { window.removeEventListener("pagehide", onHide); flush(false); };
+  }, [docId, projectId, qc]);
 
   const onRestSave = useCallback(async (content: JSONContent, force: boolean): Promise<RestSaveResult> => {
     try {
