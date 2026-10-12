@@ -1129,6 +1129,15 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
   // Delete asks the server to stop if more responses came in than the dialog showed (the count is from
   // when the builder opened): then the dialog shows the new count and asks again. It never deletes
   // responses nobody saw.
+  // The count shown in the Delete dialog is re-read when it opens (the builder may have been open for a while).
+  const refreshCount = async () => {
+    if (!meta.id) return;
+    try {
+      const f = await nexusApi.form(meta.id);
+      const n = (f as { _count?: { submissions?: number } } | undefined)?._count?.submissions;
+      if (typeof n === "number") setMeta((m) => ({ ...m, count: n }));
+    } catch { /* the server still refuses a delete over unseen responses */ }
+  };
   const deleting = useRef(false);
   const del = useMutation({
     mutationFn: async () => {
@@ -1237,7 +1246,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                 {url && <a href={url} target="_blank" rel="noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"><ExternalLink className="h-4 w-4 text-muted-foreground" /> {t("Open the form page")}</a>}
                 <button type="button" disabled={!meta.id} onClick={() => { setMoreOpen(false); setDupName(draft.name); setDupOpen(true); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:opacity-50"><Copy className="h-4 w-4 text-muted-foreground" /> {t("Duplicate to another project")}</button>
                 <div className="my-1 h-px bg-border" />
-                <button type="button" onClick={() => { setMoreOpen(false); if (meta.id) setConfirmDelete(true); else onClose(); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> {meta.id ? t("Delete form") : t("Discard draft")}</button>
+                <button type="button" onClick={() => { setMoreOpen(false); if (meta.id) { setConfirmDelete(true); void refreshCount(); } else onClose(); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> {meta.id ? t("Delete form") : t("Discard draft")}</button>
               </PopoverContent>
             </Popover>
           </div>
