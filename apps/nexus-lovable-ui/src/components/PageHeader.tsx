@@ -25,7 +25,7 @@ export function PageHeader({
 }) {
   return (
     // Sticky from md up only: on a phone a sticky header took a fifth of the screen (audit 12 Oct 2026).
-    <div className={cn("border-b border-border bg-background/80 backdrop-blur md:sticky md:top-0 md:z-40", className)}>
+    <div data-page-header className={cn("border-b border-border bg-background/80 backdrop-blur md:sticky md:top-0 md:z-40", className)}>
       <div className={cn("px-4 md:px-8 md:pt-6 flex sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:pt-4 sm:pb-3", compact ? "flex-row items-center justify-between gap-2 pt-3 pb-1" : "flex-col gap-3 pt-4 pb-3")}>
         <div className="flex items-start gap-3 min-w-0">
           {icon && <div className="hidden sm:block text-2xl mt-0.5 shrink-0">{icon}</div>}

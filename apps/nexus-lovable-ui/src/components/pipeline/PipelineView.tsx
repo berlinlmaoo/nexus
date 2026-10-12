@@ -79,6 +79,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
   }, [socket, projectId, qc]);
 
   const [view, setViewState] = useState<View>(readView);
+  const stickyTop = useStickyHeaderOffset();
   const setView = (v: View) => {
     setViewState(v);
     try { localStorage.setItem(VIEW_KEY, v); } catch { /* not remembered */ }
@@ -317,7 +318,10 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
               <div className="order-7 basis-full lg:hidden">{viewSwitch}</div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* The health chips and the view switch stay in view under the page header while the page scrolls
+                (owner, 12 Oct 2026: the row slid half under the tab bar). Its top is the header's height where
+                that header is sticky (md+), else the top of the screen. */}
+            <div className="sticky z-30 -mx-4 flex items-center gap-3 bg-card px-4 py-1.5 md:-mx-8 md:px-8" style={{ top: stickyTop }}>
               <div role="group" aria-label={t("Health")} className="-mx-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 xl:flex-wrap xl:overflow-visible">
                 {(["", ...HEALTH_ORDER] as const).map((k) => {
                   const on = health === k;
@@ -425,4 +429,20 @@ function FirstDeal({ adding, onAdd }: { adding: boolean; onAdd: () => void }) {
       </button>
     </section>
   );
+}
+
+/** Height of the page's sticky header (PageHeader is sticky from md up), so a sticky row sits right under it. */
+function useStickyHeaderOffset(): number {
+  const [top, setTop] = useState(0);
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>("[data-page-header]");
+    if (!header) return;
+    const measure = () => setTop(getComputedStyle(header).position === "sticky" ? Math.round(header.getBoundingClientRect().height) : 0);
+    measure();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(header);
+    window.addEventListener("resize", measure);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+  return top;
 }

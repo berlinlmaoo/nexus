@@ -95,32 +95,10 @@ export function PipelineBoard({
     if (!p.moved) { p.moved = true; e.currentTarget.setPointerCapture(p.id); }
     e.currentTarget.scrollLeft = p.left - dx;
   };
-  // A touchpad swipe sideways scrolls the board natively. A plain mouse wheel only moves up and down, so
-  // over the board it moves sideways instead — unless the pointer is over a column that can still scroll
-  // down/up itself (owner, 9 Oct 2026: "kenapa ga bisa scroll aja pake touchpad/mouse?"). Shift+wheel is
-  // the browser's own sideways wheel and is left alone.
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.shiftKey || e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      if (el.scrollWidth <= el.clientWidth) return;
-      let node = e.target as HTMLElement | null;
-      while (node && node !== el) {
-        const oy = getComputedStyle(node).overflowY;
-        if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) {
-          const canMove = e.deltaY > 0 ? node.scrollTop + node.clientHeight < node.scrollHeight - 1 : node.scrollTop > 0;
-          if (canMove) return;
-        }
-        node = node.parentElement;
-      }
-      const before = el.scrollLeft;
-      el.scrollLeft += e.deltaY;
-      if (el.scrollLeft !== before) e.preventDefault();
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  // Wheel / touchpad: native only (owner, 12 Oct 2026). Scrolling down never turns into sideways scrolling
+  // once a column or the page reaches its end — the old handler mapped deltaY to scrollLeft. Sideways is a
+  // real sideways swipe (deltaX), Shift + wheel, the scrollbar, the arrow buttons, keys, or dragging the
+  // empty board with the mouse.
   const endPan = (e: PointerEvent<HTMLDivElement>) => {
     const p = pan.current;
     pan.current = null;
@@ -183,7 +161,7 @@ export function PipelineBoard({
                     </button>
                   )}
                 </header>
-                <div className="flex min-h-16 flex-1 flex-col gap-1.5 overscroll-y-contain px-1.5 pb-1.5 [scrollbar-width:thin] md:overflow-y-auto">
+                <div className="flex min-h-16 flex-1 flex-col gap-1.5 px-1.5 pb-1.5 [scrollbar-width:thin] md:overflow-y-auto">
                   {sorted.map((d) => (
                     <DealCard key={d.id} deal={d} today={today} onOpen={onOpen} onMove={onMove} canEdit={canEdit} />
                   ))}
