@@ -304,6 +304,19 @@ export function SheetGrid({
   const [dragRow, setDragRow] = useState<string | null>(null);
   const [dropRow, setDropRow] = useState<string | null>(null);
   const rect = useMemo(() => rectOf(sel), [sel]);
+  /**
+   * Ctrl/⌘+click (or drag) adds another range, like Sheets (bughunt S-BUG-23). These are the EARLIER
+   * ranges; the live one is still `sel`. Any other selection change drops them.
+   */
+  const [extraRects, setExtraRects] = useState<ReturnType<typeof rectOf>[]>([]);
+  /** True from a Ctrl/⌘+mousedown until the mouse goes up: that drag shapes the NEW range. */
+  const addingRange = useRef(false);
+  useEffect(() => {
+    if (addingRange.current) return;
+    setExtraRects((x) => (x.length ? [] : x));
+  }, [sel]);
+  /** Every selected rectangle: the earlier Ctrl+click ranges, then the live one. */
+  const allRects = useMemo(() => [...extraRects, rect], [extraRects, rect]);
   const [zoom, setZoomState] = useState(readZoom);
   const setZoom = (z: number) => { setZoomState(z); try { localStorage.setItem("nexus-sheet-zoom", String(z)); } catch { /* ignore */ } };
   /** The column whose settings popover is open (name, type, choices, colours, rules). */
@@ -644,6 +657,8 @@ export function SheetGrid({
   const lastSel = useRef<Selection | null>(null);
   /** Set by Ctrl+Backspace ("scroll to the active cell"), which doesn't move the selection. */
   const forceScroll = useRef(false);
+  /** Set by the grid's key handler: the next selection change came from the keyboard. */
+  const keyNav = useRef(false);
   useEffect(() => {
     const el = gridRef.current;
     const prev = lastSel.current;
@@ -656,9 +671,16 @@ export function SheetGrid({
     if (!anchorMoved && !endMoved && !forced) return;
     // A mouse drag selects what is already visible; it must not jump the view under the pointer.
     if (dragging.current && !forced) return;
+    // Only the keyboard (Shift+arrows) walks the far corner into view; a column/row header click or
+    // Select all selects to the last row/column and must not jump the view there.
+    const byKey = keyNav.current;
+    keyNav.current = false;
+    if (!anchorMoved && !byKey && !forced) return;
     const r = anchorMoved ? sel.r : sel.r2;
     const c = anchorMoved ? sel.c : sel.c2;
-    if (r >= frozenRows) {
+    const wholeCols = sel.r !== sel.r2 && Math.min(sel.r, sel.r2) === 0 && Math.max(sel.r, sel.r2) === maxR;
+    const wholeRows = sel.c !== sel.c2 && Math.min(sel.c, sel.c2) === 0 && Math.max(sel.c, sel.c2) === maxC;
+    if (r >= frozenRows && !(wholeCols && !byKey)) {
       const pinned = (offsets[frozenRows] ?? 0) * zoom;
       const top = (offsets[r] ?? 0) * zoom;
       const bottom = (offsets[r + 1] ?? 0) * zoom;
@@ -669,7 +691,7 @@ export function SheetGrid({
     // Horizontal: keep the active column visible past the frozen ones.
     const cl = (lefts[c] ?? 0) * zoom, cr = cl + (widths[c] ?? 0) * zoom;
     const frozenW = ((lefts[frozenCols] ?? GUTTER_W)) * zoom;
-    if (c >= frozenCols) {
+    if (c >= frozenCols && !(wholeRows && !byKey)) {
       if (cl - frozenW + GUTTER_W * zoom < el.scrollLeft + GUTTER_W * zoom) el.scrollLeft = Math.max(0, cl - frozenW);
       else if (cr > el.scrollLeft + el.clientWidth) el.scrollLeft = cr - el.clientWidth;
     }
@@ -826,39 +848,45 @@ export function SheetGrid({
   /** Clear every VALUE in the current rectangle in one request (formatting stays, as in Sheets). */
   const clearSelection = useCallback(() => {
     if (!canEdit) return;
-    const edits: { rowId: string; values: Record<string, unknown> }[] = [];
-    for (let r = rect.top; r <= rect.bottom; r += 1) {
-      const row = view[r]?.row;
-      if (!row) continue;
-      const values: Record<string, unknown> = {};
-      for (let c = rect.left; c <= rect.right; c += 1) {
-        const col = columns[c];
-        if (col && row.cells[col.id] !== undefined) values[col.id] = null;
+    const byRow = new Map<string, Record<string, unknown>>();
+    for (const rc of allRects) {
+      for (let r = rc.top; r <= rc.bottom; r += 1) {
+        const row = view[r]?.row;
+        if (!row) continue;
+        const values = byRow.get(row.id) ?? {};
+        for (let c = rc.left; c <= rc.right; c += 1) {
+          const col = columns[c];
+          if (col && row.cells[col.id] !== undefined) values[col.id] = null;
+        }
+        if (Object.keys(values).length) byRow.set(row.id, values);
       }
-      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
     }
+    const edits = [...byRow].map(([rowId, values]) => ({ rowId, values }));
     if (edits.length) onSetCells(edits);
-  }, [canEdit, rect, view, columns, onSetCells]);
+  }, [canEdit, allRects, view, columns, onSetCells]);
 
   /** Apply a formatting change to every cell of the selection. */
   const styleSelection = useCallback((fn: (st: CellStyle | undefined, r: number, c: number) => CellStyle | null, label: string) => {
     if (!canEdit) return;
-    const edits: StyleEdit[] = [];
-    for (let r = rect.top; r <= rect.bottom; r += 1) {
-      const row = view[r]?.row;
-      if (!row) continue;
-      const values: Record<string, CellStyle | null> = {};
-      for (let c = rect.left; c <= rect.right; c += 1) {
-        const col = columns[c];
-        if (!col || colHidden(c)) continue;
-        const before = row.styles?.[col.id];
-        const next = fn(before, r, c);
-        if (JSON.stringify(before ?? null) !== JSON.stringify(next ?? null)) values[col.id] = next;
+    const byRow = new Map<string, Record<string, CellStyle | null>>();
+    for (const rc of allRects) {
+      for (let r = rc.top; r <= rc.bottom; r += 1) {
+        const row = view[r]?.row;
+        if (!row) continue;
+        const values = byRow.get(row.id) ?? {};
+        for (let c = rc.left; c <= rc.right; c += 1) {
+          const col = columns[c];
+          if (!col || colHidden(c)) continue;
+          const before = row.styles?.[col.id];
+          const next = fn(before, r, c);
+          if (JSON.stringify(before ?? null) !== JSON.stringify(next ?? null)) values[col.id] = next;
+        }
+        if (Object.keys(values).length) byRow.set(row.id, values);
       }
-      if (Object.keys(values).length) edits.push({ rowId: row.id, values });
     }
+    const edits: StyleEdit[] = [...byRow].map(([rowId, values]) => ({ rowId, values }));
     if (edits.length) onSetStyles(edits, label);
-  }, [canEdit, rect, view, columns, colHidden, onSetStyles]);
+  }, [canEdit, allRects, view, columns, colHidden, onSetStyles]);
 
   const activeRow = view[sel.r]?.row;
   const activeCol = columns[sel.c];
@@ -2386,6 +2414,7 @@ export function SheetGrid({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (editing) return; // the input owns the keyboard while editing
+    keyNav.current = true;
     if (note?.editing) { e.preventDefault(); return; } // keys typed before the note's box takes focus stay out of the cell
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.altKey && e.code === "KeyM") { e.preventDefault(); openCommentsAt(sel.r, sel.c); return; }
@@ -2523,6 +2552,7 @@ export function SheetGrid({
       filling.current = false;
       setFillTo(null);
       dragging.current = false;
+      addingRange.current = false;
       refSpan.current = null;
     };
     window.addEventListener("mouseup", up);
@@ -2977,6 +3007,8 @@ export function SheetGrid({
                     selected={ri >= rect.top && ri <= rect.bottom}
                     rowSelected={ri >= rect.top && ri <= rect.bottom && rect.left === 0 && rect.right === maxC}
                     rect={rect}
+                    extraRects={extraRects}
+                    onAddRange={(c) => { tabRun.current = null; dragging.current = true; addingRange.current = true; setExtraRects((x) => [...x, rectOf(selRef.current)]); setSel({ r: ri, c, r2: ri, c2: c }); }}
                     activeC={ri === sel.r ? sel.c : -1}
                     editing={editing}
                     canEdit={canEdit}
@@ -3808,6 +3840,9 @@ type RowProps = {
   onUnhideRows: (ids: string[]) => void;
   merges: { anchors: Map<string, { rowSpan: number; colSpan: number }>; covered: Set<string> };
   selected: boolean; rowSelected: boolean; rect: ReturnType<typeof rectOf>; activeC: number;
+  /** Earlier ranges of a Ctrl/⌘+click multi-selection (tinted, not outlined). */
+  extraRects: ReturnType<typeof rectOf>[];
+  onAddRange: (c: number) => void;
   editing: Editing; canEdit: boolean;
   data: ReturnType<typeof buildSheetData>;
   lang: "en" | "id";
@@ -3947,6 +3982,7 @@ const Row = memo(function Row(p: RowProps) {
         if (p.hiddenCols.has(col.id)) return <td key={col.id} style={sticky()} className="overflow-hidden border-0 p-0" />;
         const lastCol = span ? ci + span.colSpan - 1 : ci;
         const inRect = p.selected && lastCol >= p.rect.left && ci <= p.rect.right;
+        const inExtra = p.extraRects.length > 0 && p.extraRects.some((x) => p.rowIndex >= x.top && p.rowIndex <= x.bottom && ci >= x.left && ci <= x.right);
         const refHit = p.refRects.find(
           (x) => p.rawIndex >= x.top && p.rawIndex <= x.bottom && ci >= x.left && ci <= x.right,
         );
@@ -4010,7 +4046,7 @@ const Row = memo(function Row(p: RowProps) {
             key={col.id}
             data-cell={key}
             role="gridcell"
-            aria-selected={inRect}
+            aria-selected={inRect || inExtra}
             rowSpan={span?.rowSpan}
             colSpan={span?.colSpan}
             style={{
@@ -4028,7 +4064,9 @@ const Row = memo(function Row(p: RowProps) {
                 p.onPickRef(ci);
                 return;
               }
-              if (e.shiftKey) p.onSelect(ci, true); else p.onStartDrag(ci);
+              if (e.shiftKey) p.onSelect(ci, true);
+              else if ((e.ctrlKey || e.metaKey) && !p.editing) p.onAddRange(ci);
+              else p.onStartDrag(ci);
             }}
             onMouseEnter={() => {
               p.onFillOver(ci);
@@ -4078,7 +4116,7 @@ const Row = memo(function Row(p: RowProps) {
               />
             )}
             {/* Selection tint as an overlay, so it sits over fills and pinned cells stay opaque. */}
-            {inRect && p.activeC !== ci && <span aria-hidden className="pointer-events-none absolute inset-0 bg-info/10" />}
+            {((inRect && p.activeC !== ci) || inExtra) && <span aria-hidden className="pointer-events-none absolute inset-0 bg-info/10" />}
             {peerHere && (
               <>
                 <span className="pointer-events-none absolute inset-0 z-[1]" style={{ boxShadow: `inset 0 0 0 2px ${peerHere.color}` }} />
@@ -4221,6 +4259,7 @@ const Row = memo(function Row(p: RowProps) {
   a.showFillHandle === b.showFillHandle &&
   a.fillRect === b.fillRect &&
   a.activeC === b.activeC &&
+  a.extraRects === b.extraRects &&
   a.rowSelected === b.rowSelected &&
   // Only re-render when this row's selected-ness or the selection's edges in it changed.
   (a.selected === b.selected && (!a.selected || (a.rect.left === b.rect.left && a.rect.right === b.rect.right && a.rect.top === b.rect.top && a.rect.bottom === b.rect.bottom))) &&
