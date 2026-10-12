@@ -45,7 +45,8 @@ export function XpRulesCard() {
         <motion.span whileTap={reduce ? undefined : { scale: 0.9 }} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Gift className="h-5 w-5" /></motion.span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-black tracking-tight">{tr("XP rules")}</div>
-          <div className="text-xs text-muted-foreground">{tr("What takes XP away and what adds it")}</div>
+          {/* text-balance: the Indonesian line wrapped to leave "XP" alone on the second line (audit 12 Oct 2026). */}
+          <div className="text-balance text-xs text-muted-foreground">{tr("What takes XP away and what adds it")}</div>
         </div>
         <motion.span animate={reduce ? undefined : { rotate: open ? 180 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 22 }} className="shrink-0 text-muted-foreground">
           <ChevronDown className="h-5 w-5" />

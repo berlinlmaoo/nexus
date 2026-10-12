@@ -231,6 +231,9 @@ function ProjectDetail() {
   const [composerListId, setComposerListId] = useState<string | null>(null);
   const [composerDueDate, setComposerDueDate] = useState<string>("");
   const [chipsHidden, setChipsHidden] = useState(false);
+  // Phone: the view tools (filter/sort/group/search/view settings/automations/autofill) sit behind ⋯ so the
+  // header is one title row + one tabs row (audit 12 Oct 2026). Desktop always shows them.
+  const [toolsOpen, setToolsOpen] = useState(false);
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
   const data = project.data;
   // GIDEON opened here carries this project as context (Notion AI's page chip).
@@ -445,7 +448,7 @@ function ProjectDetail() {
   const toolbar = data && !isSpecial ? (
     <div className="pb-px">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
-        <div className="flex min-w-0 basis-full sm:basis-0 sm:flex-1">
+        <div className="flex min-w-0 flex-1 basis-0">
         <ViewTabsBar
           tabs={[...beforeTabs, ...viewTabs, ...afterTabs]}
           activeKey={activeKey}
@@ -462,7 +465,11 @@ function ProjectDetail() {
           addView={<AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} />}
         />
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 sm:hidden">
+          <ToolbarButton icon={MoreHorizontal} label={toolsOpen ? tr("Hide view tools") : tr("View tools")} active={toolsOpen || filterCount > 0 || activeModule === "automations"} count={!toolsOpen && filterCount > 0 ? filterCount : undefined} onClick={() => setToolsOpen((o) => !o)} />
+          <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-0.5 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"><Plus className="h-4 w-4" /></button>
+        </div>
+        <div className={cn("shrink-0 items-center gap-0.5 sm:ml-auto sm:flex", toolsOpen ? "flex basis-full justify-end sm:basis-auto" : "hidden")}>
           {cfg && activeView && !activeModule && (
             <>
               <FilterButton filter={cfg.filter} defs={defs} onChange={setFilter} chipsOpen={showChips} onToggleChips={() => setChipsHidden((h) => !h)} />
@@ -481,7 +488,6 @@ function ProjectDetail() {
           <span className="ml-1.5 hidden sm:inline-flex">
             <AddTaskSplit sections={[...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((l) => ({ id: l.id, name: l.name }))} onAdd={addTask} />
           </span>
-          <button type="button" onClick={() => addTask()} aria-label={tr("Add task")} className="ml-1 grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground sm:hidden"><Plus className="h-4 w-4" /></button>
         </div>
       </div>
       {showChips && cfg && (
@@ -530,6 +536,7 @@ function ProjectDetail() {
   return (
     <div className="min-h-dvh bg-card">
       <PageHeader
+        compact
         className="bg-card/95"
         icon={<span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/60 text-2xl leading-none"><ProjectMark icon={data?.icon} color={data?.color} className="max-h-9 max-w-9 rounded-lg object-cover" /></span>}
         title={data?.name || tr("Project")}
@@ -538,9 +545,10 @@ function ProjectDetail() {
           <>
             {data && <ProjectMembersAvatars project={data} />}
             {/* Ask GIDEON about this project (12 Oct 2026): opens the chat with the project as context. */}
-            {data && <Button size="sm" variant="outline" onClick={() => openGideon({ projectId: data.id, projectName: data.name })}><GideonMark className="h-3.5 w-3.5" />{tr("Ask GIDEON")}</Button>}
+            {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
+            {data && <Button size="sm" variant="outline" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0" onClick={() => openGideon({ projectId: data.id, projectName: data.name })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
-              <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" />{tr("Project settings")}</Button>
+              <Button size="sm" variant="outline" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
             </motion.div>
           </>
         }
@@ -1086,6 +1094,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const { t } = useLang();
+  const isMobile = useIsMobile();
 
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const myRole = wsm.data?.role ?? "";
@@ -1101,7 +1110,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
   return (
     <div className="relative">
       <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center rounded-full transition hover:opacity-80" title={t("Project members")} aria-label={t("Project members")}>
-        {ids.length > 0 ? <AvatarStack ids={ids} size={26} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ {t("Members")}</span>}
+        {ids.length > 0 ? <AvatarStack ids={ids} size={isMobile ? 24 : 26} max={isMobile ? 2 : 4} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ {t("Members")}</span>}
       </button>
       {open && (
         <>
@@ -1494,6 +1503,10 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
 }) {
   const bulk = useTaskBulk();
   const { t, tn, locale } = useLang();
+  // Phone: the frozen column is the title only, ~40% of the width, so the bars have room (Duration and
+  // Progress are hidden; the bar's tooltip and the task itself still say both). Audit 12 Oct 2026.
+  const compact = useIsMobile();
+  const leftW = compact ? Math.round(Math.min(200, Math.max(120, ((typeof window !== "undefined" ? window.innerWidth : 390) - 32) * 0.4))) : GANTT_LEFT_W;
   const groups = taskGroups.map((g) => {
     const tasks = g.tasks.map((task) => ({ task, win: taskWindow(task, cfg.startProp, cfg.endProp) }));
     // The view's own sort wins; without one, bars run by start date.
@@ -1531,14 +1544,14 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   return (
     <div className="px-4 py-3 md:px-8">
       {/* Opens on today (Notion does), not on the oldest task's month: a callback ref scrolls once. */}
-      <div ref={(el) => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = "1"; el.scrollLeft = Math.max(0, xOf(today) - GANTT_DAY_W * 3); } }} className="relative overflow-x-auto rounded-lg border border-border bg-card">
-        <div style={{ width: GANTT_LEFT_W + timelineW }}>
+      <div ref={(el) => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = "1"; el.scrollLeft = Math.max(0, xOf(today) - GANTT_DAY_W * (compact ? 1 : 3)); } }} className="relative overflow-x-auto rounded-lg border border-border bg-card">
+        <div style={{ width: leftW + timelineW }}>
           {/* HEADER */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
-            <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: GANTT_LEFT_W }}>
-              <div className="flex flex-1 items-end px-4 pb-2 pt-6 text-xs text-muted-foreground">{t("Name")}</div>
-              <div className="flex w-[90px] items-end px-2 pb-2 pt-6 text-xs text-muted-foreground">{t("Duration")}</div>
-              <div className="flex w-[150px] items-end border-l border-border px-3 pb-2 pt-6 text-xs text-muted-foreground">{t("Progress")}</div>
+            <div className="sticky left-0 z-30 flex shrink-0 border-r border-border bg-card" style={{ width: leftW }}>
+              <div className={cn("flex flex-1 items-end pb-2 pt-6 text-xs text-muted-foreground", compact ? "px-3" : "px-4")}>{t("Name")}</div>
+              {!compact && <div className="flex w-[90px] items-end px-2 pb-2 pt-6 text-xs text-muted-foreground">{t("Duration")}</div>}
+              {!compact && <div className="flex w-[150px] items-end border-l border-border px-3 pb-2 pt-6 text-xs text-muted-foreground">{t("Progress")}</div>}
             </div>
             <div className="relative" style={{ width: timelineW }}>
               <div className="flex h-8 border-b border-border/50">
@@ -1564,7 +1577,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
           {/* BODY */}
           <div className="relative">
             {today >= min && today <= max && (
-              <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-primary/50" style={{ left: GANTT_LEFT_W + xOf(today) + GANTT_DAY_W / 2 }} />
+              <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-primary/50" style={{ left: leftW + xOf(today) + GANTT_DAY_W / 2 }} />
             )}
             {groups.map((g) => {
               const isCollapsed = collapsed.has(g.list.id);
@@ -1577,16 +1590,16 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                 <div key={g.list.id}>
                   {/* GROUP ROW */}
                   {!single && <div className="flex border-b border-border bg-muted/40">
-                    <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted" style={{ width: GANTT_LEFT_W }}>
+                    <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted" style={{ width: leftW }}>
                       <button onClick={() => toggle(g.list.id)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
                         <span className="truncate font-bold tracking-tight">{g.list.name}</span>
                       </button>
-                      <div className="w-[90px] px-2 text-xs text-muted-foreground">{gDur ? tn(gDur, "{n} day", "{n} days") : "—"}</div>
-                      <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
+                      {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{gDur ? tn(gDur, "{n} day", "{n} days") : "—"}</div>}
+                      {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-blue-500" style={{ width: `${gPct}%` }} /></div>
                         <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{gPct}%</span>
-                      </div>
+                      </div>}
                     </div>
                     <div className="relative" style={{ width: timelineW }}>
                       {gStart && <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold text-muted-foreground" style={{ left: xOf(gStart) + 6 }}>{g.list.name}</span>}
@@ -1606,16 +1619,16 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     const selected = bulk.isSelected(task.id);
                     return (
                       <div key={task.id} className={cn("flex border-b border-border/50 hover:bg-accent/20", selected && "bg-primary/10 ring-1 ring-inset ring-primary")}>
-                        <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: GANTT_LEFT_W }}>
+                        <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-card" style={{ width: leftW }}>
                           <button {...cp} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                             {isDone ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                             <span className={cn("truncate text-sm font-medium", isDone && "text-muted-foreground line-through")}>{task.title}</span>
                           </button>
-                          <div className="w-[90px] px-2 text-xs text-muted-foreground">{tn(dur, "{n} day", "{n} days")}</div>
-                          <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
+                          {!compact && <div className="w-[90px] px-2 text-xs text-muted-foreground">{tn(dur, "{n} day", "{n} days")}</div>}
+                          {!compact && <div className="flex w-[150px] items-center gap-2 border-l border-border px-3">
                             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", pctTone(pct))} style={{ width: `${pct}%` }} /></div>
                             <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">{pct}%</span>
-                          </div>
+                          </div>}
                         </div>
                         <div className="relative py-2" style={{ width: timelineW }}>
                           <motion.button

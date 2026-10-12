@@ -509,7 +509,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
       <div className="flex min-w-0 items-center gap-1">
         <button type="button" data-cal-step="-1" onClick={() => step(-1)} aria-label={view === "people" ? t("Previous week") : t("Previous month")} className={iconButton}><ChevronLeft className="h-4 w-4" /></button>
         {/* Wraps onto a second line when a large text size leaves no room, rather than being cut off. */}
-        <div className="min-w-[min(8.25rem,40vw)] text-balance text-center font-display text-base font-bold leading-tight tabular-nums md:min-w-40">{span}</div>
+        <div className="min-w-[min(7.5rem,36vw)] text-balance text-center font-display text-base font-bold leading-tight tabular-nums md:min-w-40">{span}</div>
         <button type="button" data-cal-step="1" onClick={() => step(1)} aria-label={view === "people" ? t("Next week") : t("Next month")} className={iconButton}><ChevronRight className="h-4 w-4" /></button>
       </div>
       {/* aria-disabled, not disabled: a disabled button drops the keyboard focus it has just been given. */}
@@ -532,13 +532,15 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
         <Segmented label={t("View")} value={view} onChange={(v) => setSearch({ view: v === "people" ? "people" : undefined })}
           options={[{ value: "month", label: t("Month") }, { value: "people", label: t("People") }]} />
       </div>
-      <Segmented label={t("Show")} value={filters.scope} onChange={(v) => setFilters({ ...filters, scope: v })} options={scopeOptions} />
+      {/* Phone: the scope takes the rest of the row in equal columns (a long label wraps) instead of
+          wrapping onto a third header row (audit 12 Oct 2026). */}
+      <Segmented label={t("Show")} value={filters.scope} onChange={(v) => setFilters({ ...filters, scope: v })} options={scopeOptions} className={phone ? "w-full min-w-0 flex-1" : undefined} />
     </>
   );
 
   const filterTrigger = phone ? (
     <Drawer open={filterOpen} onOpenChange={setFilterOpen} shouldScaleBackground={false}>
-      <DrawerTrigger asChild><FilterButton count={nFilters} /></DrawerTrigger>
+      <DrawerTrigger asChild><FilterButton count={nFilters} iconOnly /></DrawerTrigger>
       <DrawerContent lang={lang} data-cal-surface="" aria-describedby={undefined} className="max-h-[92dvh]">
         <DrawerHeader><DrawerTitle>{t("Filters")}</DrawerTitle></DrawerHeader>
         {/* The drawer body is the one scroller; the panel's Reset / Done footer sticks to its bottom, and
@@ -567,7 +569,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
 
   const header = (
     <header ref={headerRef} className={cn("z-30 border-b border-border", headerSticky ? "sticky top-0 bg-background/85 backdrop-blur" : "bg-background")}>
-      <div data-cal-region="header" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-2.5 pt-3 md:px-8 md:pt-4">
+      <div data-cal-region="header" className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 pb-2.5 pt-3 sm:gap-x-3 md:px-8 md:pt-4">
         {/* On a phone with ‹ month › in the header the title is for screen readers only (the tab bar already
             says Calendar): two rows instead of three (audit 12 Oct 2026). */}
         <div className={cn("flex items-center gap-2", phone && !weekBar && "sr-only")}>
@@ -578,9 +580,10 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
             switches on a line of their own. */}
         {phone ? (
           <>
+            {/* Two rows: ‹ month › Today + the Filters icon (its drawer has Reset), then the two switches. */}
             {!weekBar && dateNav}
-            <div className="ml-auto flex items-center gap-2">{filterTrigger}{reset}</div>
-            <div className="flex basis-full flex-wrap items-center gap-2">{switches}</div>
+            <div className="ml-auto flex items-center gap-2">{filterTrigger}</div>
+            <div className="flex basis-full items-center gap-2">{switches}</div>
           </>
         ) : (
           <>
@@ -732,13 +735,14 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   );
 }
 
-function FilterButton({ count, className, ...rest }: { count: number } & ComponentPropsWithRef<"button">) {
+function FilterButton({ count, className, iconOnly, ...rest }: { count: number; iconOnly?: boolean } & ComponentPropsWithRef<"button">) {
   const { t } = useLang();
   return (
-    <button {...rest} type="button" className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors", coarseText, FOCUS_PILL,
+    <button {...rest} type="button" aria-label={iconOnly ? (count ? t("Filters, {n} on", { n: count }) : t("Filters")) : undefined} title={iconOnly ? t("Filters") : undefined}
+      className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border text-xs font-semibold transition-colors", iconOnly ? "min-w-8 justify-center px-2 pointer-coarse:min-w-[44px]" : "px-2.5", coarseText, FOCUS_PILL,
       count ? "border-cal-accent bg-cal-accent-soft text-foreground" : "border-border hover:bg-muted", className)}>
       <SlidersHorizontal className="h-3.5 w-3.5" />
-      {t("Filters")}
+      {!iconOnly && t("Filters")}
       {count > 0 && <span className="rounded-full bg-cal-accent px-1.5 text-2xs text-cal-accent-foreground">{count}</span>}
     </button>
   );
