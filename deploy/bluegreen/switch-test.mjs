@@ -71,7 +71,7 @@ let ws = null
 let connected = false
 async function connect() {
   // Like the web/iOS/Android clients: bootstrap the socket server first, then open the websocket.
-  await fetch(BASE + "/api/realtime-init", { headers: { Cookie: cookie }, signal: AbortSignal.timeout(5000) }).catch(() => {})
+  await fetch(BASE + "/api/realtime-init", { headers: { Cookie: cookie }, signal: AbortSignal.timeout(5000) }).then((r) => r.arrayBuffer()).catch(() => {})
   const url = BASE.replace(/^http/, "ws") + "/api/socket/?EIO=4&transport=websocket"
   ws = new WebSocket(url, { headers: { Cookie: cookie } })
   ws.onmessage = (ev) => {
@@ -120,7 +120,7 @@ function settle(t, p) {
 async function freshProbe() {
   const k = ++fresh.tries
   const slot = await fetch(BASE + "/api/health", { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).then((j) => j.slot ?? "?").catch(() => "?")
-  await fetch(BASE + "/api/realtime-init", { headers: { Cookie: cookie }, signal: AbortSignal.timeout(5000) }).catch(() => {})
+  await fetch(BASE + "/api/realtime-init", { headers: { Cookie: cookie }, signal: AbortSignal.timeout(5000) }).then((r) => r.arrayBuffer()).catch(() => {})
   const title = `bg-switch-fresh ${k}`
   const url = BASE.replace(/^http/, "ws") + "/api/socket/?EIO=4&transport=websocket"
   await new Promise((resolve) => {
@@ -153,7 +153,8 @@ async function freshProbe() {
       if (ev2 === "presence-update" && stage === "join") {
         stage = "task-updated"
         fetch(BASE + `/api/tasks/${taskId}`, { method: "PATCH", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ title }) })
-          .then((r) => { if (r.status !== 200) finish(false, `PATCH ${r.status}`) })
+          // Read the body: an unread response on a closing keep-alive socket trips an undici assertion (crash).
+          .then(async (r) => { await r.arrayBuffer().catch(() => {}); if (r.status !== 200) finish(false, `PATCH ${r.status}`) })
           .catch((e) => finish(false, `PATCH ${e.cause?.code || e.name}`))
         return
       }
@@ -172,6 +173,7 @@ const pinger = setInterval(async () => {
   rt.sent++
   try {
     const r = await fetch(BASE + `/api/tasks/${taskId}`, { method: "PATCH", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ title }) })
+    await r.arrayBuffer().catch(() => {})
     if (r.status !== 200) log(`PATCH ${r.status}`)
   } catch (e) { log("PATCH error", e.cause?.code || e.name) }
   for (const [t, p] of pending) if (Date.now() - p.at > 6000) { settle(t, p) }
