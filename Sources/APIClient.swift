@@ -351,7 +351,7 @@ struct APIClient {
     /// great deal: ten quiet seconds on a weak office AP would fail a 20 MB form submit that had
     /// sixty through Cloudflare. And that failure is one of the ones `isReplayable` correctly
     /// refuses to retry, because the route behind a submit creates a task, a submission and its
-    /// attachments, writes an activity log, then fires the project's automations and its webhook.
+    /// attachments, writes an activity log, then fires the project's automations.
     ///
     /// Decided here rather than in `makeRequest` because the body is attached after that returns,
     /// and on the request rather than in `route` because the watched path lifts the body off before
@@ -3333,14 +3333,6 @@ extension APIClient {
         if let id { b["id"] = id } else { b["projectId"] = projectId; b["enabled"] = true }
         req.httpBody = try JSONSerialization.data(withJSONObject: b)
         return try await run(req, decode: AutomationSaveResponse.self).automation
-    }
-
-    /// A new private webhook URL for a WEBHOOK_RECEIVED rule; the old one stops working.
-    func regenerateAutomationWebhook(id: String) async throws {
-        var req = makeRequest("/api/automations", method: "PATCH")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "regenerateWebhookToken": true])
-        _ = try await run(req, decode: AutomationSaveResponse.self)
     }
 
     /// Restorable from Control Room → Audit.

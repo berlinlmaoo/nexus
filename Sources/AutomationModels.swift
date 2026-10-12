@@ -131,8 +131,6 @@ struct Automation: Decodable, Identifiable, Sendable {
     let lastRunStatus: String?
     let runCount: Int?
     let nextRunAt: String?
-    /// WEBHOOK_RECEIVED only, and only for people who can edit.
-    let webhookUrl: String?
 
     /// Every action in order: `actions`, else the single `action` of a row from before 12 Oct 2026.
     var allActions: [AutomationRule] {
@@ -185,7 +183,6 @@ enum AutomationVocab {
         .init(type: "DUE_DATE_APPROACHING", label: "Due date approaching", hint: "Some hours before a task is due", symbol: "alarm", group: "Time"),
         .init(type: "DUE_DATE_REACHED", label: "Due date reached", hint: "A task's due date passes and it isn't done", symbol: "calendar.badge.exclamationmark", group: "Time"),
         .init(type: "SCHEDULED", label: "Every…", hint: "On a schedule: daily, weekdays, weekly or monthly", symbol: "repeat", group: "Time"),
-        .init(type: "WEBHOOK_RECEIVED", label: "Webhook received", hint: "Another app calls a private URL", symbol: "link", group: "Other"),
     ]
 
     static let actions: [AutomationTypeDef] = [
@@ -204,7 +201,6 @@ enum AutomationVocab {
         .init(type: "DUPLICATE_TASK", label: "Duplicate task", hint: "", symbol: "plus.square.on.square", group: "Create"),
         .init(type: "ADD_COMMENT", label: "Add comment", hint: "", symbol: "text.bubble", group: "Tell someone"),
         .init(type: "SEND_NOTIFICATION", label: "Send notification", hint: "", symbol: "bell", group: "Tell someone", needsTask: false),
-        .init(type: "CALL_WEBHOOK", label: "Send webhook", hint: "", symbol: "paperplane", group: "Tell someone", needsTask: false),
     ]
 
     static func trigger(_ type: String?) -> AutomationTypeDef? { triggers.first { $0.type == type } }
@@ -292,7 +288,7 @@ enum AutomationVocab {
 
     static let weekdays: [(d: Int, label: String)] = [(1, "Mo"), (2, "Tu"), (3, "We"), (4, "Th"), (5, "Fr"), (6, "Sa"), (7, "Su")]
 
-    static let templateHint = "{task} {project} {actor} {status} {due} {payload.key}"
+    static let templateHint = "{task} {project} {actor} {status} {due}"
 }
 
 /// Names the summary needs: sections, people, custom fields and forms of the project, by id.
@@ -349,6 +345,8 @@ struct AutomationContext: Sendable {
             if !from.isEmpty { return String(format: T("Status changes from %@"), TaskStatusName.label(from)) }
             return T("Status changed")
         case "TASK_COMPLETED": return T("Task completed")
+        // Removed with NEXUS webhooks (12 Oct 2026): such a rule never fires; it stays so its owner can change it.
+        case "WEBHOOK_RECEIVED": return T("Webhook received (removed)")
         case "ASSIGNEE_CHANGED":
             if let v = r.value, !v.isEmpty { return String(format: T("%@ is assigned"), personName(v)) }
             return T("Assignee changed")
@@ -411,9 +409,6 @@ struct AutomationContext: Sendable {
             return v.isEmpty ? base : "\(base): “\(v)”"
         case "DUPLICATE_TASK":
             if let s = a.cfg("sectionId")?.string, let name = sectionName(s) { return "\(base) → \(name)" }
-            return base
-        case "CALL_WEBHOOK":
-            if let host = URL(string: v)?.host { return "\(base) → \(host)" }
             return base
         default:
             return base

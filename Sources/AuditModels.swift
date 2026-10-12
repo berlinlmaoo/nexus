@@ -418,7 +418,7 @@ enum AuditRestoreKinds {
     /// NEXUS kept copies of it.
     static let restorable: Set<String> = [
         "project", "task", "comment", "attachment", "proof_annotation", "doc", "project_page", "project_sheet",
-        "sheet_comment", "custom_field", "form", "automation", "webhook", "workflow_bundle", "goal", "portfolio",
+        "sheet_comment", "custom_field", "form", "automation", "workflow_bundle", "goal", "portfolio",
         "calendar", "room_booking", "announcement", "saved_search", "pnl_expense", "pnl_income", "pnl_payment",
         "pnl_category", "pnl_stage", "pnl_recurring", "pnl_expense_attachment", "pnl_budget", "holiday",
         "attendance_request", "attendance_office", "org_unit_member", "vault_file", "vault_folder", "vault_trash",
@@ -435,7 +435,7 @@ enum AuditRestoreKinds {
         "attachment": "Restore file", "proof_annotation": "Restore annotation", "doc": "Restore doc",
         "project_page": "Restore page", "project_sheet": "Restore sheet", "sheet_comment": "Restore comment",
         "custom_field": "Restore custom field", "form": "Restore form", "automation": "Restore automation",
-        "webhook": "Restore webhook", "workflow_bundle": "Restore workflow bundle", "goal": "Restore goal",
+        "workflow_bundle": "Restore workflow bundle", "goal": "Restore goal",
         "portfolio": "Restore portfolio", "calendar": "Restore calendar", "room_booking": "Restore booking",
         "announcement": "Restore announcement", "saved_search": "Restore saved search",
         "pnl_expense": "Restore expense", "pnl_income": "Restore income", "pnl_payment": "Restore payment",

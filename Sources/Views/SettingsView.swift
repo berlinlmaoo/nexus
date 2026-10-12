@@ -3,7 +3,7 @@ import PhotosUI
 import UIKit
 
 /// Focused port of settings.tsx ("Tuning Room"): profile (name edit, email, role) + account/logout.
-/// The web's webhooks/integrations/billing/MCP sections are desktop-oriented; omitted on mobile.
+/// The web's integrations/billing/MCP sections are desktop-oriented; omitted on mobile.
 struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
     @State private var name = ""

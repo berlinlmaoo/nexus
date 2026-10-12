@@ -30,7 +30,6 @@ struct AutomationBuilder: View {
     @State private var actions: [DraftAction] = []
     @State private var saving = false
     @State private var error: String?
-    @State private var confirmRegen = false
     @State private var seeded = false
 
     var body: some View {
@@ -93,10 +92,6 @@ struct AutomationBuilder: View {
             }
         }
         .onAppear(perform: seed)
-        .alert(T("Make a new URL"), isPresented: $confirmRegen) {
-            Button(T("Cancel"), role: .cancel) {}
-            Button(T("Make a new URL"), role: .destructive) { Task { await regenerate() } }
-        } message: { Text(T("New URL made. The old one stops working.")) }
     }
 
     private func seed() {
@@ -110,15 +105,17 @@ struct AutomationBuilder: View {
         actions = a.allActions.map { DraftAction(rule: $0) }
     }
 
-    /// No task to act on: a webhook, or a schedule without conditions.
+    /// No task to act on: a schedule without conditions.
     private var noTask: Bool {
-        trigger?.type == "WEBHOOK_RECEIVED" || (trigger?.type == "SCHEDULED" && conditions.isEmpty)
+        trigger?.type == "SCHEDULED" && conditions.isEmpty
     }
 
     /// Why it cannot be saved yet, as the web says it.
     private var problem: String? {
         if name.trimmingCharacters(in: .whitespaces).isEmpty { return T("Give it a name") }
         guard let trigger else { return T("Pick a trigger") }
+        // "Webhook received" was removed (12 Oct 2026): the rule can only be saved with another trigger.
+        if trigger.type == "WEBHOOK_RECEIVED" { return T("Pick a trigger") }
         if trigger.type == "FIELD_CHANGED" && (trigger.field ?? "").isEmpty { return T("Pick the field to watch") }
         if trigger.type == "SCHEDULED" && trigger.cfgString("frequency") == "weekly" && (trigger.cfg("days")?.ints ?? []).isEmpty {
             return T("Pick at least one day")
@@ -129,7 +126,7 @@ struct AutomationBuilder: View {
             let label = AutomationVocab.action(a.type).map { T($0.label) } ?? a.type
             let v = (a.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             switch a.type {
-            case "SET_STATUS", "SET_PRIORITY", "MOVE_TO_SECTION", "ADD_TAG", "REMOVE_TAG", "ADD_COMMENT", "CALL_WEBHOOK":
+            case "SET_STATUS", "SET_PRIORITY", "MOVE_TO_SECTION", "ADD_TAG", "REMOVE_TAG", "ADD_COMMENT":
                 if v.isEmpty { return String(format: T("Finish the “%@” step"), label) }
             case "ASSIGN_TO", "UNASSIGN":
                 if v.isEmpty { return String(format: T("Pick who in “%@”"), label) }
@@ -222,16 +219,6 @@ struct AutomationBuilder: View {
                 .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
         case "SCHEDULED":
             scheduleConfig(t)
-        case "WEBHOOK_RECEIVED":
-            if let url = automation?.webhookUrl {
-                Text(url).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-                Button { UIPasteboard.general.string = url } label: { Label(T("Copy"), systemImage: "doc.on.doc") }
-                Button(role: .destructive) { confirmRegen = true } label: { Label(T("Make a new URL"), systemImage: "arrow.clockwise") }
-                Text(T("POST JSON here. Use {payload.key} in texts; \"title\" names a new task, \"taskId\" picks a task of this project."))
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-            } else {
-                Text(T("Save the automation to get its private URL.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            }
         default:
             EmptyView()
         }
@@ -280,7 +267,7 @@ struct AutomationBuilder: View {
         if let next = automation?.nextRunAt {
             Text(String(format: T("Next run: %@"), AutoTime.stamp(next))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
-        Text(T("Without conditions it runs once (create a task, notify, webhook). With conditions it runs on every task that matches them."))
+        Text(T("Without conditions it runs once (create a task, notify). With conditions it runs on every task that matches them."))
             .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
     }
 
@@ -343,7 +330,7 @@ struct AutomationBuilder: View {
             }
             ActionEditor(rule: a, ctx: ctx)
             if def?.needsTask == true && noTask {
-                Label(T("This trigger has no task, so this step is skipped. Add a condition (schedule) or send a taskId (webhook)."),
+                Label(T("This trigger has no task, so this step is skipped. Add a condition to run it on every matching task."),
                       systemImage: "exclamationmark.triangle")
                     .font(NXFont.text(12)).foregroundStyle(NX.warning)
             }
@@ -389,11 +376,6 @@ struct AutomationBuilder: View {
         }
     }
 
-    private func regenerate() async {
-        guard let id = automation?.id else { return }
-        do { try await APIClient.shared.regenerateAutomationWebhook(id: id); await onSaved() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't make a new URL.") }
-    }
 }
 
 // MARK: - Pieces
@@ -607,12 +589,6 @@ private struct ActionEditor: View {
         case "ARCHIVE_TASK":
             Text(T("The task is deleted and can be restored from Control Room → Audit for 90 days."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-        case "CALL_WEBHOOK":
-            TextField("https://example.com/hook", text: value)
-                .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                .font(.system(size: 13, design: .monospaced))
-            Text(T("NEXUS POSTs the task and what changed as JSON. https only; private addresses are refused."))
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         default:
             EmptyView()
         }

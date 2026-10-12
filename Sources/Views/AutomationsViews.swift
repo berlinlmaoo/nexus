@@ -386,7 +386,7 @@ struct AutomationSheet: View {
     }
 }
 
-/// The rule as sentences: When, If, Do, with the trigger's details (schedule, webhook URL).
+/// The rule as sentences: When, If, Do, with the trigger's details (schedule).
 struct AutomationReadView: View {
     let automation: Automation
     let ctx: AutomationContext
@@ -403,16 +403,6 @@ struct AutomationReadView: View {
                     Text(ctx.triggerText(automation.trigger)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     if let next = automation.nextRunAt, automation.enabled ?? false {
                         Text(String(format: T("Next run: %@"), AutoTime.stamp(next))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    }
-                    if let url = automation.webhookUrl {
-                        HStack(spacing: 8) {
-                            Text(url).font(.system(size: 11, design: .monospaced)).foregroundStyle(NX.foreground)
-                                .lineLimit(1).truncationMode(.middle)
-                            Spacer(minLength: 0)
-                            Button { UIPasteboard.general.string = url } label: {
-                                Label(T("Copy"), systemImage: "doc.on.doc").font(NXFont.text(12, .semibold))
-                            }
-                        }
                     }
                 }
                 block(T("If (optional)"), icon: "line.3.horizontal.decrease") {
