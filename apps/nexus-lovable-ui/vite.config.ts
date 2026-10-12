@@ -46,12 +46,29 @@ function precompress(): Plugin {
   };
 }
 
+/** `<link rel="preload">` for the Latin Inter file (hashed name), so text paints in Inter from the start. */
+function preloadFonts(): Plugin {
+  return {
+    name: "nexus-preload-fonts",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        const font = Object.values(ctx.bundle ?? {}).find((f) => f.type === "asset" && /inter-latin-[\w-]+\.woff2$/.test(f.fileName) && !f.fileName.includes("latin-ext"));
+        if (!font) return html;
+        return html.replace("</title>", `</title>\n    <link rel="preload" href="/${font.fileName}" as="font" type="font/woff2" crossorigin />`);
+      },
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     tanstackRouter({ target: "react", autoCodeSplitting: true }),
     react(),
     tailwindcss(),
     tsconfigPaths(),
+    preloadFonts(),
     precompress(),
   ],
   build: {

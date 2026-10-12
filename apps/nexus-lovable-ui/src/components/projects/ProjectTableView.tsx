@@ -184,7 +184,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           </div>
 
           {groups.map((g) => {
-            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={50} step={60} keyOf={(x) => x.id} render={row} /></div>;
+            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} /></div>;
             const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
             return (
               <div key={g.key}>
@@ -192,9 +192,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
                 {!collapsed.has(g.key) && (subs
                   ? subs.map((s) => {
                     const k = `${g.key}/${s.key}`;
-                    return <div key={k}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <Incremental items={s.tasks} first={50} step={60} keyOf={(x) => x.id} render={row} />}</div>;
+                    return <div key={k}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} />}</div>;
                   })
-                  : g.tasks.length ? <Incremental items={g.tasks} first={50} step={60} keyOf={(x) => x.id} render={row} /> : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
+                  : g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} /> : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
               </div>
             );
           })}

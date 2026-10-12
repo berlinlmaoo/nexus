@@ -1333,7 +1333,7 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const [draft, setDraft] = useState<string | null>(null);
   const multi = (k: string | null) => !!k && (k === "assignee" || k === "tags" || ["multi", "person"].includes(propDef(defs, k)?.kind ?? ""));
   const morph = !multi(groupBy) && !multi(subGroupBy);
-  const rows = (tasks: NexusTask[]) => <Incremental items={tasks} first={50} step={60} keyOf={(task) => task.id} render={(task) => <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />} />;
+  const rows = (tasks: NexusTask[]) => <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />} />;
   const create = async (gKey: string | null, subKey: string | null, p: { title: string; dueDate: string | null }) => {
     const task = await createTaskInGroup({ project, defs, groupBy, groupKey: gKey, sub: subGroupBy, subKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
     settleTaskWrite(qc, project.id);
@@ -1743,7 +1743,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     </div>
                   </div>}
                   {/* TASK ROWS */}
-                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={50} keyOf={(x) => x.task.id} render={({ task, win }) => {
+                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win }) => {
                     const pct = tlProgress(task.status);
                     const dur = daysBetween(win.start, win.end) + 1;
                     const left = xOf(win.start);

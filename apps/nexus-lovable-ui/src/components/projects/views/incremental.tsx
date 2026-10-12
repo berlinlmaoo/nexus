@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, startTransition, useEffect, useRef, useState, type ReactNode } from "react";
 
 /**
  * Long lists render in slices (perf pass, 12 Oct 2026). A board column, list group or table group shows its
@@ -9,7 +9,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
  *
  * Keys come from `keyOf`; items keep their React identity as the slice grows.
  */
-export function Incremental<T>({ items, render, keyOf, first = 30, step = 40, markerClassName }: {
+export function Incremental<T>({ items, render, keyOf, first = 30, step = 20, markerClassName }: {
   items: readonly T[];
   render: (item: T, index: number) => ReactNode;
   keyOf: (item: T) => string;
@@ -24,7 +24,9 @@ export function Incremental<T>({ items, render, keyOf, first = 30, step = 40, ma
     const el = marker.current;
     if (!el || !more || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
-      (entries) => { if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + step); },
+      // A transition: React renders the next slice in small pieces between frames, so scrolling never
+      // stalls while it mounts.
+      (entries) => { if (entries.some((e) => e.isIntersecting)) startTransition(() => setLimit((n) => n + step)); },
       { rootMargin: "1200px 600px" },
     );
     io.observe(el);
