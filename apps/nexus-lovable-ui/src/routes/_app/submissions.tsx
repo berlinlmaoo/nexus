@@ -171,7 +171,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                 )}
               </section>
 
-              {/* Bukti Pencairan uploaded by the finance team. */}
+              {/* Proof from the team: legacy PROOF files plus anything someone else attached (lib/my-submissions.ts). */}
               {(sub.proofs?.length ?? 0) > 0 && (
                 <section>
                   <h3 className={cn(label, "mb-2")}>{t("Proof of payment (Bukti Pencairan)")}</h3>

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { restorableDelete } from "@/lib/deletion-snapshot"
-import { amountOf, categoryFields, columnOf, dateOf, legacyProcStatus, needsAction, submissionKind } from "@/lib/my-submissions"
+import { amountOf, categoryFields, columnOf, dateOf, legacyProcStatus, needsAction, proofAttachmentsWhere, submissionKind } from "@/lib/my-submissions"
 
 type FormField = { id: string; name?: string; type?: string }
 
@@ -35,7 +35,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             taskList: { select: { name: true, color: true, taskStatus: true } },
             assignees: { select: { user: { select: { id: true, name: true, avatar: true } } } },
             customFieldValues: { select: { value: true, customField: { select: { id: true, name: true, type: true, options: true } } } },
-            attachments: { where: { kind: "PROOF" }, orderBy: { createdAt: "desc" }, select: { id: true, filename: true, url: true, mimeType: true, size: true } },
+            attachments: { where: proofAttachmentsWhere(me), orderBy: { createdAt: "desc" }, select: { id: true, filename: true, url: true, mimeType: true, size: true } },
             comments: { orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, parentId: true, userId: true, user: { select: { id: true, name: true, avatar: true } } } },
             activityLogs: { where: { action: "changed status" }, orderBy: { createdAt: "asc" }, select: { id: true, details: true, createdAt: true, user: { select: { name: true } } } },
           },
