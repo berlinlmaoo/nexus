@@ -75,6 +75,11 @@ struct TaskDetailView: View {
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                if let task {
+                    AskGideonButton(context: GideonContext(projectId: task.projectId, projectName: nil, taskId: task.id, taskTitle: task.title))
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") }
                 } label: { Image(systemName: "ellipsis.circle") }

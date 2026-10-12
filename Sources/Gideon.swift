@@ -46,6 +46,85 @@ struct GideonAttachment: Sendable, Equatable {
     }
 }
 
+// MARK: - the new GIDEON (dev server, 12 Oct 2026: Notion AI 1:1 — context, steps, sources, cards, approval)
+
+/// A string that may arrive as a string, a number, a bool or null.
+struct GideonLoose: Decodable, Sendable, Equatable {
+    let text: String?
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { text = nil }
+        else if let s = try? c.decode(String.self) { text = s }
+        else if let d = try? c.decode(Double.self) { text = d == d.rounded() ? String(Int64(d)) : String(d) }
+        else if let b = try? c.decode(Bool.self) { text = b ? "true" : "false" }
+        else { text = nil }
+    }
+}
+
+/// One thing GIDEON did while answering ("Reading Finance Management").
+struct GideonStep: Decodable, Sendable, Equatable, Identifiable {
+    let id: String
+    let tool: String?
+    let label: String?
+    let status: String?
+}
+
+/// Something an answer is drawn from: a task, project, page… the account can open.
+struct GideonRef: Decodable, Sendable, Equatable, Identifiable, Hashable {
+    let kind: String
+    let id: String
+    let title: String?
+    let projectId: String?
+}
+
+/// Something GIDEON made or changed (with "Don't ask" or after an approval).
+struct GideonCard: Decodable, Sendable, Equatable, Identifiable {
+    let kind: String?
+    let action: String?
+    let id: String
+    let title: String?
+    let projectName: String?
+    let status: String?
+}
+
+/// A change GIDEON proposes and waits to be approved for ("Review" mode).
+struct GideonProposal: Decodable, Sendable, Equatable, Identifiable {
+    let id: String
+    let action: String?
+    let summary: String?
+    let status: String
+    let error: String?
+    let diff: [Row]?
+    struct Row: Decodable, Sendable, Equatable {
+        let field: String?
+        let from: GideonLoose?
+        let to: GideonLoose?
+    }
+    var isPending: Bool { status == "PENDING" }
+}
+
+/// Where the person asked from: GIDEON reads that project first, with the person's own access.
+struct GideonContext: Equatable, Sendable {
+    var projectId: String?
+    var projectName: String?
+    var taskId: String?
+    var taskTitle: String?
+    var isEmpty: Bool { projectId == nil && taskId == nil }
+    var json: [String: Any] {
+        var o: [String: Any] = [:]
+        if let projectId { o["projectId"] = projectId }
+        if let taskId { o["taskId"] = taskId }
+        return o
+    }
+}
+
+/// One conversation in the chats list.
+struct GideonChatSummary: Decodable, Identifiable, Sendable {
+    let id: String
+    let title: String?
+    let updatedAt: String?
+}
+
 /// One turn of a GIDEON conversation.
 struct GideonTurn: Identifiable, Sendable, Equatable {
     enum Role: String, Codable, Sendable { case user, assistant }
@@ -59,6 +138,11 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     /// What was attached to this question. Always empty on an assistant turn. A turn read back from
     /// history carries whatever the server kept for it — see `GideonAttachment`.
     var attachments: [GideonAttachment]
+    /// What GIDEON did, what it read, what it made and what it asks to change (assistant turns).
+    var steps: [GideonStep] = []
+    var sources: [GideonRef] = []
+    var cards: [GideonCard] = []
+    var proposals: [GideonProposal] = []
 
     init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = [],
          attachments: [GideonAttachment] = []) {
@@ -73,10 +157,20 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
 /// Wire shapes. The server answers history as `{messages:[{role,content,tools,attachments}]}`.
 private struct GideonHistoryResponse: Decodable {
     let messages: [Row]?
+    /// The conversation this is (dev server): absent from older servers.
+    let chat: ChatRef?
+    struct ChatRef: Decodable { let id: String; let title: String? }
+    struct Meta: Decodable {
+        let steps: [GideonStep]?
+        let sources: [GideonRef]?
+        let cards: [GideonCard]?
+        let proposals: [GideonProposal]?
+    }
     struct Row: Decodable {
         let role: String?
         let content: String?
         let tools: [String]?
+        let meta: Meta?
         /// Absent from any server that predates kept attachments, and an empty array on every turn
         /// that carried nothing — which is nearly all of them. Optional covers both.
         let attachments: [Attachment]?
@@ -91,11 +185,35 @@ private struct GideonHistoryResponse: Decodable {
     }
 }
 
-/// One SSE frame: `data: {"type":"text","content":"…"}`.
+/// One SSE frame: `data: {"type":"text","content":"…"}`, and the new events (dev server).
 private struct GideonEvent: Decodable {
     let type: String
     let content: String?
+    let id: String?
+    let title: String?
+    let step: GideonStep?
+    let sources: [GideonRef]?
+    let card: GideonCard?
+    let proposal: GideonProposal?
 }
+
+/// What the stream hands the chat, in order.
+enum GideonStreamEvent: Sendable {
+    /// Append (`delta`, or the old single `text`).
+    case delta(String)
+    /// A tool round started: drop the text so far.
+    case reset
+    /// The authoritative answer: replace.
+    case final(String)
+    case step(GideonStep)
+    case sources([GideonRef])
+    case card(GideonCard)
+    case proposal(GideonProposal)
+    case chat(id: String, title: String?)
+}
+
+private struct GideonChatsResponse: Decodable { let chats: [GideonChatSummary]? }
+private struct GideonProposalEnvelope: Decodable { let proposal: GideonProposal?; let error: String? }
 
 /// A refusal that arrives INSTEAD of the stream — a rejected attachment comes back as plain JSON
 /// with a 4xx before any SSE exists. `error` is written in Indonesian for the user to read.
@@ -169,13 +287,13 @@ enum GideonClient {
 
     /// A conversation is stored server-side per user, so the same thread continues on the web and on
     /// the phone rather than each device keeping its own half.
-    static func history() async throws -> [GideonTurn] {
-        var request = authed("/api/gideon/history")
+    static func history(chatId: String? = nil) async throws -> (turns: [GideonTurn], chatId: String?, title: String?) {
+        var request = authed("/api/gideon/history", query: chatId.map { "chatId=\(enc($0))" })
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         try check(response)
         let decoded = try JSONDecoder().decode(GideonHistoryResponse.self, from: data)
-        return (decoded.messages ?? []).compactMap { row in
+        let turns: [GideonTurn] = (decoded.messages ?? []).compactMap { row in
             guard let role = GideonTurn.Role(rawValue: row.role ?? ""), let content = row.content else { return nil }
             // A kept file with no url is dropped rather than drawn. A chip that opens nothing is
             // precisely what this feature exists to stop showing, so an attachment the server can
@@ -188,12 +306,50 @@ enum GideonClient {
                                         url: url,
                                         mime: item.mime ?? "")
             }
-            return GideonTurn(role: role, content: content, tools: row.tools ?? [], attachments: carried)
+            var turn = GideonTurn(role: role, content: content, tools: row.tools ?? [], attachments: carried)
+            turn.steps = row.meta?.steps ?? []
+            turn.sources = row.meta?.sources ?? []
+            turn.cards = row.meta?.cards ?? []
+            turn.proposals = row.meta?.proposals ?? []
+            return turn
         }
+        return (turns, decoded.chat?.id, decoded.chat?.title)
     }
 
-    static func clearHistory() async throws {
-        var request = authed("/api/gideon/history")
+    /// The person's conversations, newest first; `q` searches titles and messages.
+    static func chats(query: String = "") async throws -> [GideonChatSummary] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        var request = authed("/api/gideon/chats", query: q.isEmpty ? "limit=50" : "limit=50&q=\(enc(q))")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try check(response)
+        return (try JSONDecoder().decode(GideonChatsResponse.self, from: data)).chats ?? []
+    }
+
+    static func deleteChat(_ id: String) async throws {
+        var request = authed("/api/gideon/chats/\(enc(id))")
+        request.httpMethod = "DELETE"
+        let (_, response) = try await URLSession.shared.data(for: request)
+        try check(response)
+    }
+
+    /// Apply or discard a proposed change. The server re-checks access at the moment of applying, and a
+    /// double tap applies once (409 "Already decided" still carries the proposal).
+    static func decide(_ proposalId: String, apply: Bool) async throws -> GideonProposal? {
+        var request = authed("/api/gideon/proposals/\(enc(proposalId))")
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["decision": apply ? "apply" : "discard"])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.offline }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        let env = try? JSONDecoder().decode(GideonProposalEnvelope.self, from: data)
+        if (200..<300).contains(http.statusCode) || [409, 410, 422].contains(http.statusCode), let p = env?.proposal { return p }
+        throw APIError.http(http.statusCode, env?.error)
+    }
+
+    static func clearHistory(chatId: String? = nil) async throws {
+        var request = authed("/api/gideon/history", query: chatId.map { "chatId=\(enc($0))" })
         request.httpMethod = "DELETE"
         let (_, response) = try await URLSession.shared.data(for: request)
         try check(response)
@@ -209,7 +365,8 @@ enum GideonClient {
     /// Today the backend answers in a single frame. Appending rather than replacing means nothing
     /// here changes when that stops being true.
     static func stream(messages: [GideonTurn], model: String, image: Data? = nil,
-                       document: GideonDocument? = nil) -> AsyncThrowingStream<String, Error> {
+                       document: GideonDocument? = nil, chatId: String? = nil, newChat: Bool = false,
+                       context: GideonContext? = nil) -> AsyncThrowingStream<GideonStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -223,7 +380,15 @@ enum GideonClient {
                     var payload: [String: Any] = [
                         "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] },
                         "model": model,
+                        // The new contract (dev server): delta/reset/step/sources/card/proposal/final.
+                        "stream": true,
+                        "uiLang": AppLanguage.shared.lang == .id ? "id" : "en",
+                        // A change GIDEON wants to make waits for Apply here, as on the web (the
+                        // server's default for clients that send nothing is to just do it).
+                        "approvalMode": "review",
                     ]
+                    if let chatId { payload["chatId"] = chatId } else if newChat { payload["newChat"] = true }
+                    if let context, !context.isEmpty { payload["context"] = context.json }
                     // Base64 rather than multipart: the route already speaks JSON, and the server
                     // downscales again on arrival, so a slightly large upload costs seconds, not
                     // correctness.
@@ -253,8 +418,22 @@ enum GideonClient {
                         guard let event = try? JSONDecoder().decode(GideonEvent.self, from: data) else { continue }
 
                         switch event.type {
-                        case "text":
-                            if let content = event.content, !content.isEmpty { continuation.yield(content) }
+                        case "text", "delta":
+                            if let content = event.content, !content.isEmpty { continuation.yield(.delta(content)) }
+                        case "reset":
+                            continuation.yield(.reset)
+                        case "final":
+                            continuation.yield(.final(event.content ?? ""))
+                        case "step":
+                            if let step = event.step { continuation.yield(.step(step)) }
+                        case "sources", "cited":
+                            continuation.yield(.sources(event.sources ?? []))
+                        case "card":
+                            if let card = event.card { continuation.yield(.card(card)) }
+                        case "proposal":
+                            if let p = event.proposal { continuation.yield(.proposal(p)) }
+                        case "chat":
+                            if let id = event.id { continuation.yield(.chat(id: id, title: event.title)) }
                         case "error":
                             throw APIError.transport(event.content ?? "GIDEON failed.")
                         case "done":
@@ -276,13 +455,22 @@ enum GideonClient {
 
     // MARK: - plumbing
 
-    private static func authed(_ path: String) -> URLRequest {
-        var request = URLRequest(url: Config.baseURL.appendingPathComponent(path))
+    private static func authed(_ path: String, query: String? = nil) -> URLRequest {
+        var url = Config.baseURL.appendingPathComponent(path)
+        if let query, var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            comps.percentEncodedQuery = query
+            url = comps.url ?? url
+        }
+        var request = URLRequest(url: url)
         if let session = Keychain.load() {
             request.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie")
         }
+        // Who is asking, like every other request in the app (it was missing here).
+        request.setValue(APIClient.clientTag, forHTTPHeaderField: "X-Nexus-Client")
         return request
     }
+
+    private static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
 
     private static func check(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
@@ -359,6 +547,13 @@ final class GideonChat {
     /// task while they are reading the dashboard is a worse surprise than the next screen they open
     /// doing it, and this type having no view attachments is what lets it survive the panel at all.
     private(set) var sessionExpired = false
+    /// The conversation on screen (dev server). nil = the person's latest, which the next history read
+    /// names; `startNew` makes the next question open a new one.
+    private(set) var chatId: String?
+    private(set) var chatTitle: String?
+    private var startNew = false
+    /// Where GIDEON was opened from; sent with every question until removed.
+    var context = GideonContext()
 
     /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
     private var outbox: [Outgoing] = []
@@ -400,14 +595,59 @@ final class GideonChat {
     /// outlives the panel, it would blank a conversation the app is still holding the moment
     /// somebody opened the panel out of signal.
     func refresh() async {
-        guard !sending, outbox.isEmpty else { return }
-        guard let fresh = try? await GideonClient.history() else { return }
-        turns = fresh
+        guard !sending, outbox.isEmpty, !startNew else { return }
+        guard let fresh = try? await GideonClient.history(chatId: chatId) else { return }
+        turns = fresh.turns
+        if chatId == nil { chatId = fresh.chatId }
+        chatTitle = fresh.title ?? chatTitle
+    }
+
+    /// A fresh conversation, optionally about a project or task ("Ask GIDEON" from there opens a new chat
+    /// with that context, not the last chat about something else — web G-BUG-1).
+    func startChat(context: GideonContext = GideonContext()) {
+        guard !sending else { self.context = context; return }
+        turns = []
+        chatId = nil
+        chatTitle = nil
+        startNew = true
+        error = nil
+        self.context = context
+    }
+
+    /// Opens one conversation from the chats list.
+    func openChat(_ id: String) async {
+        guard !sending else { return }
+        chatId = id
+        startNew = false
+        if let fresh = try? await GideonClient.history(chatId: id) {
+            turns = fresh.turns
+            chatTitle = fresh.title
+        }
+    }
+
+    /// Apply or discard a proposal shown in the thread; the turn shows the result.
+    func decide(_ proposal: GideonProposal, apply: Bool) async {
+        do {
+            if let updated = try await GideonClient.decide(proposal.id, apply: apply) {
+                replace(updated)
+                if apply, let e = updated.error, !e.isEmpty { error = e }
+            }
+        } catch APIError.unauthorized {
+            sessionExpired = true
+        } catch {
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("GIDEON failed.")
+        }
+    }
+
+    private func replace(_ p: GideonProposal) {
+        for i in turns.indices {
+            if let j = turns[i].proposals.firstIndex(where: { $0.id == p.id }) { turns[i].proposals[j] = p }
+        }
     }
 
     func clear() async {
         do {
-            try await GideonClient.clearHistory()
+            try await GideonClient.clearHistory(chatId: chatId)
             turns = []
             error = nil
         } catch {
@@ -484,20 +724,44 @@ final class GideonChat {
         let at = turns.firstIndex(where: { $0.id == item.turnId }).map { $0 + 1 } ?? turns.count
         withAnimation(arrive) { turns.insert(answer, at: at) }
 
+        let wantNew = startNew
+        startNew = false
         do {
-            for try await chunk in GideonClient.stream(messages: messages, model: item.model,
-                                                       image: item.image, document: item.document) {
+            for try await event in GideonClient.stream(messages: messages, model: item.model,
+                                                       image: item.image, document: item.document,
+                                                       chatId: chatId, newChat: wantNew && chatId == nil,
+                                                       context: context) {
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
-                // Only the first chunk is animated, and only to cross-fade the dots out. Animating
-                // every chunk would put an animation on the path a token-by-token backend takes.
-                if turns[index].content.isEmpty {
-                    withAnimation(.easeOut(duration: 0.18)) { turns[index].content += chunk }
-                } else {
-                    turns[index].content += chunk
+                switch event {
+                case .delta(let chunk):
+                    // Only the first chunk is animated, and only to cross-fade the dots out.
+                    if turns[index].content.isEmpty {
+                        withAnimation(.easeOut(duration: 0.18)) { turns[index].content += chunk }
+                    } else {
+                        turns[index].content += chunk
+                    }
+                case .reset:
+                    turns[index].content = ""
+                case .final(let text):
+                    if !text.isEmpty { turns[index].content = text }
+                case .step(let step):
+                    if let j = turns[index].steps.firstIndex(where: { $0.id == step.id }) { turns[index].steps[j] = step }
+                    else { turns[index].steps.append(step) }
+                case .sources(let refs):
+                    turns[index].sources = refs
+                case .card(let card):
+                    turns[index].cards.append(card)
+                case .proposal(let p):
+                    if let j = turns[index].proposals.firstIndex(where: { $0.id == p.id }) { turns[index].proposals[j] = p }
+                    else { turns[index].proposals.append(p) }
+                case .chat(let id, let title):
+                    chatId = id
+                    if let title { chatTitle = title }
                 }
             }
             // A stream that ends without a word is a failure the user can see but not explain.
-            if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty {
+            if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty,
+               turns[index].proposals.isEmpty, turns[index].cards.isEmpty {
                 turns.remove(at: index)
                 error = T("GIDEON didn't answer. Try again.")
             }
@@ -552,5 +816,9 @@ final class GideonChat {
         error = nil
         sessionExpired = false
         sending = false
+        chatId = nil
+        chatTitle = nil
+        startNew = false
+        context = GideonContext()
     }
 }

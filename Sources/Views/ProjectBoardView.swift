@@ -449,6 +449,8 @@ struct ProjectDetailView: View {
             Text(displayName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
             Spacer(minLength: 6)
             if detail != nil {
+                // Ask GIDEON about this project: a new chat scoped to it (web header, 12 Oct 2026).
+                AskGideonButton(context: GideonContext(projectId: projectId, projectName: displayName))
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))

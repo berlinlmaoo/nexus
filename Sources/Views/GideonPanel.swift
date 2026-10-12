@@ -74,6 +74,8 @@ struct GideonLauncher: View {
 }
 
 struct GideonPanel: View {
+    /// Opened from a project or a task ("Ask GIDEON"): a new chat about it (web, 12 Oct 2026).
+    var openContext: GideonContext? = nil
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -94,6 +96,11 @@ struct GideonPanel: View {
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
+    /// A source or card tapped in an answer: opened inside this sheet's own stack.
+    @State private var openRef: GideonRef?
+    @State private var showChats = false
+    /// Apply / Discard asks first, in a centred alert (house rule).
+    @State private var decision: GideonDecision?
 
     private var tier: GideonTier { GideonTier(rawValue: tierRaw) ?? .fallback }
 
@@ -103,6 +110,7 @@ struct GideonPanel: View {
                 NX.background.ignoresSafeArea()
                 VStack(spacing: 0) {
                     transcript
+                    contextStrip
                     attachmentStrip
                     composer
                 }
@@ -115,14 +123,41 @@ struct GideonPanel: View {
                 ToolbarItem(placement: .principal) { title }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        Button { chat.startChat(context: chat.context) } label: { Label(T("New chat"), systemImage: "square.and.pencil") }
+                            .disabled(chat.sending)
+                        Button { showChats = true } label: { Label(T("Chats"), systemImage: "clock.arrow.circlepath") }
+                        Divider()
                         Button(T("Clear chat"), role: .destructive) {
                             Task { await chat.clear() }
                         }
+                        .disabled(chat.sending || chat.turns.isEmpty)
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .disabled(chat.sending || chat.turns.isEmpty)
+                    .accessibilityLabel(T("Chat options"))
                 }
+            }
+            .navigationDestination(item: $openRef) { ref in
+                if ref.kind == "project" {
+                    ProjectDetailView(projectId: ref.id, projectName: ref.title ?? "")
+                } else {
+                    TaskDetailView(taskId: ref.id)
+                }
+            }
+            .sheet(isPresented: $showChats) {
+                GideonChatsSheet { id in Task { await chat.openChat(id) } }
+            }
+            .alert(decision?.title ?? "", isPresented: Binding(get: { decision != nil }, set: { if !$0 { decision = nil } }), presenting: decision) { d in
+                Button(d.apply ? T("Apply") : T("Discard"), role: d.apply ? nil : .destructive) {
+                    Task { await chat.decide(d.proposal, apply: d.apply) }
+                }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: { d in Text(d.proposal.summary ?? "") }
+        }
+        .onAppear {
+            // "Ask GIDEON" from a project/task: a new chat about it, unless that is already the one open.
+            if let openContext, openContext != chat.context {
+                chat.startChat(context: openContext)
             }
         }
         // GIDEON answered a 401 while the panel was closed, or answers one now. The store has no
@@ -325,6 +360,7 @@ struct GideonPanel: View {
                         .font(NXFont.text(10))
                         .foregroundStyle(turn.role == .user ? .white.opacity(0.7) : NX.mutedFg)
                 }
+                if turn.role == .assistant { answerExtras(turn) }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -337,6 +373,141 @@ struct GideonPanel: View {
                     .strokeBorder(turn.role == .user ? .clear : NX.border)
             )
             if turn.role == .assistant { Spacer(minLength: 44) }
+        }
+    }
+
+    // MARK: - steps, sources, cards, proposals
+
+    /// Under an answer: one quiet line of what GIDEON did, the sources it cites (tap to open), what it
+    /// made, and the changes waiting for Apply.
+    @ViewBuilder private func answerExtras(_ turn: GideonTurn) -> some View {
+        let shownSteps = turn.steps.filter { $0.status != "error" }
+        if let last = shownSteps.last, let label = last.label, !label.isEmpty {
+            HStack(spacing: 5) {
+                if last.status == "running" && turn.content.isEmpty { ProgressView().scaleEffect(0.55) }
+                else { Image(systemName: "checkmark.circle").font(.system(size: 10)) }
+                Text(shownSteps.count > 1 ? "\(label) · \(shownSteps.count)" : label).lineLimit(1)
+            }
+            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+        if !turn.sources.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(T("Sources")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                FlowLayout(spacing: 5) {
+                    ForEach(turn.sources) { ref in refChip(ref) }
+                }
+            }
+        }
+        ForEach(turn.cards) { card in
+            Button { openRef = GideonRef(kind: card.kind == "doc" ? "doc" : "task", id: card.id, title: card.title, projectId: nil) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: card.action == "created" ? "plus.circle.fill" : "pencil.circle.fill").foregroundStyle(NX.success)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(card.title ?? T("Task")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text([cardActionLabel(card.action), card.projectName].compactMap { $0 }.joined(separator: " · "))
+                            .font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(8).background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(card.kind == "doc" || card.kind == "comment")
+        }
+        ForEach(turn.proposals) { p in proposalCard(p) }
+    }
+
+    private func cardActionLabel(_ a: String?) -> String {
+        switch a {
+        case "created": return T("Created")
+        case "commented": return T("Commented")
+        default: return T("Updated")
+        }
+    }
+
+    private func refChip(_ ref: GideonRef) -> some View {
+        Button { openRef = ref } label: {
+            HStack(spacing: 4) {
+                Image(systemName: ref.kind == "project" ? "folder" : (ref.kind == "task" ? "checklist" : "doc.text")).font(.system(size: 9, weight: .semibold))
+                Text(ref.title ?? "").lineLimit(1)
+            }
+            .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(NX.violet.opacity(0.10), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        // Only what the app can open; pages and messages are named but not linked here.
+        .disabled(!(ref.kind == "task" || ref.kind == "project"))
+    }
+
+    private func proposalCard(_ p: GideonProposal) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "hand.raised.fill").font(.system(size: 11)).foregroundStyle(NX.warning)
+                Text(p.summary ?? T("GIDEON wants to make a change")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(Array((p.diff ?? []).enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(row.field ?? "").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    if let from = row.from?.text, !from.isEmpty { Text(ServerText.enumWord(from)).strikethrough().font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+                    Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(NX.mutedFg)
+                    Text(ServerText.enumWord(row.to?.text ?? "—")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground)
+                }
+            }
+            if p.isPending {
+                HStack(spacing: 8) {
+                    Button { decision = GideonDecision(proposal: p, apply: true) } label: {
+                        Text(T("Apply")).font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 14).frame(minHeight: 36)
+                            .background(NX.violetFill, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button { decision = GideonDecision(proposal: p, apply: false) } label: {
+                        Text(T("Discard")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                            .padding(.horizontal, 12).frame(minHeight: 36)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Text(proposalStatus(p)).font(NXFont.text(11, .semibold))
+                    .foregroundStyle(p.status == "APPLIED" ? NX.success : (p.status == "FAILED" ? NX.danger : NX.mutedFg))
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.3)))
+    }
+
+    private func proposalStatus(_ p: GideonProposal) -> String {
+        switch p.status {
+        case "APPLIED": return T("Applied")
+        case "DISCARDED": return T("Discarded")
+        case "APPLYING": return T("Applying…")
+        case "FAILED": return p.error ?? T("Couldn't apply it.")
+        default: return p.status.capitalized
+        }
+    }
+
+    /// The project / task this chat is about, removable (then GIDEON looks across everything you can see).
+    @ViewBuilder private var contextStrip: some View {
+        let ctx = chat.context
+        if !ctx.isEmpty {
+            HStack(spacing: 6) {
+                Image(systemName: ctx.taskId != nil ? "checklist" : "folder").font(.system(size: 11, weight: .semibold))
+                Text(ctx.taskTitle ?? ctx.projectName ?? T("This project")).lineLimit(1)
+                Button { chat.context = GideonContext() } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Remove context"))
+                Spacer(minLength: 0)
+            }
+            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+            .padding(.horizontal, 16).padding(.top, 4)
         }
     }
 
@@ -744,5 +915,98 @@ extension GideonPanel {
         } catch {
             return nil
         }
+    }
+}
+
+/// A proposal waiting for the person's answer in the centred alert.
+struct GideonDecision: Identifiable {
+    let proposal: GideonProposal
+    let apply: Bool
+    var id: String { proposal.id + (apply ? "-apply" : "-discard") }
+    var title: String { apply ? T("Apply this change?") : T("Discard this change?") }
+}
+
+/// The person's GIDEON conversations, searchable; open one or delete it (asks first).
+struct GideonChatsSheet: View {
+    let onOpen: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var chats: [GideonChatSummary] = []
+    @State private var query = ""
+    @State private var loading = true
+    @State private var toDelete: GideonChatSummary?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if loading && chats.isEmpty {
+                    ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if chats.isEmpty {
+                    EmptyState(icon: "bubble.left.and.text.bubble.right", title: query.isEmpty ? T("No chats yet") : T("No chats match"),
+                               subtitle: query.isEmpty ? T("Every conversation with GIDEON is kept here, on the web and in the app.") : T("Try other words."))
+                } else {
+                    List {
+                        ForEach(chats) { c in
+                            Button { onOpen(c.id); dismiss() } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(c.title ?? T("Untitled chat")).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
+                                    if let d = ProjDate.parse(c.updatedAt) {
+                                        Text(ProjDate.dayLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                    }
+                                }
+                                .frame(minHeight: 44, alignment: .leading)
+                            }
+                            .swipeActions {
+                                Button(role: .destructive) { toDelete = c } label: { Label(T("Delete"), systemImage: "trash") }
+                            }
+                        }
+                    }
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(NX.background.ignoresSafeArea())
+            .searchable(text: $query, prompt: T("Search chats"))
+            .navigationTitle(T("Chats"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
+            .task(id: query) {
+                try? await Task.sleep(for: .milliseconds(250))
+                await load()
+            }
+            .alert(T("Delete this chat?"), isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), presenting: toDelete) { c in
+                Button(T("Delete"), role: .destructive) {
+                    Task { try? await GideonClient.deleteChat(c.id); await load() }
+                }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: { _ in Text(T("Its messages are deleted for you on every device.")) }
+        }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        if let list = try? await GideonClient.chats(query: query) { chats = list }
+    }
+}
+
+/// "Ask GIDEON" about the project or task on screen (web header button): opens the panel on a new chat
+/// with that context. The panel reads only what this account can open.
+struct AskGideonButton: View {
+    let context: GideonContext
+    @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                .frame(width: 17, height: 17)
+                .foregroundStyle(NX.violetText)
+                .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.lift)
+        .accessibilityLabel(T("Ask GIDEON"))
+        .sheet(isPresented: $open) { GideonPanel(openContext: context).environment(auth).environment(router) }
     }
 }
