@@ -5,6 +5,8 @@ struct CFChip: Identifiable, Equatable {
     let id: String
     let label: String
     let tone: ChipTone
+    /// A select option's colour (web choiceColor: the palette by the option's position); nil = tone.
+    var colorKey: String? = nil
 }
 
 // Formatters are expensive to construct — build once and reuse. `customFieldChip` runs per card
@@ -61,18 +63,37 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
     case "DATE", "CREATED":
         if let d = parseDay(raw) { return CFChip(id: cfv.customFieldId, label: ProjDate.dayLabel(d), tone: .neutral) }
         return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral)
+    case "SELECT":
+        return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral, colorKey: choiceColorKey(raw, choices: cfv.customField?.options?.list ?? []))
     default:
         return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral)
     }
+}
+
+/// The colour a select option draws in: the option palette by its position (gray and brown are left
+/// for "none"), else a stable hash of the text — the web's choiceColor.
+func choiceColorKey(_ value: String, choices: [String]) -> String {
+    let palette = StatusColor.keys.filter { $0 != "gray" && $0 != "brown" }
+    if let i = choices.firstIndex(of: value) { return palette[i % palette.count] }
+    var h: UInt32 = 0
+    for u in value.unicodeScalars { h = h &* 31 &+ u.value }
+    return palette[Int(h % UInt32(palette.count))]
 }
 
 /// Compact, single-line chip for cards.
 struct CFChipView: View {
     let chip: CFChip
     var body: some View {
-        Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .foregroundStyle(chip.tone.fg).background(chip.tone.bg, in: Capsule())
+        if let key = chip.colorKey {
+            let sw = StatusColor.swatch(key)
+            Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .foregroundStyle(sw.fg).background(sw.bg, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else {
+            Text(chip.label).font(NXFont.text(10, .semibold)).lineLimit(1)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .foregroundStyle(chip.tone.fg).background(chip.tone.bg, in: Capsule())
+        }
     }
 }
 
