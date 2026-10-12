@@ -27,22 +27,18 @@ export function EmptyState({
   compact?: boolean;
   className?: string;
 }) {
-  // Dark mode: success takes the theme's success token, and the default tone the accent violet (the
-  // near-white primary at 8–18% made a muddy grey stack); light is unchanged.
-  const [fg, bg] = tone === "success" ? ["text-emerald-600 dark:text-success", "bg-emerald-500 dark:bg-success"]
-    : tone === "muted" ? ["text-muted-foreground", "bg-muted-foreground"]
-    : ["text-primary dark:text-accent-foreground", "bg-primary dark:bg-accent-foreground"];
+  // Calm, Notion-like (owner, 12 Oct 2026): no dashed box and no stacked, blurred icon tiles. One quiet
+  // glyph in a soft circle, a plain title, the reason, the next step. It sits on whatever surface is
+  // around it (the page, or a card), so a card holding an empty state no longer draws a box in a box.
+  const fg = tone === "success" ? "text-emerald-600 dark:text-success" : "text-muted-foreground";
   return (
-    <div className={cn("rounded-2xl border border-dashed border-border bg-card/60 text-center dark:border-muted-foreground/30", compact ? "px-6 py-8" : "px-6 py-14", className)}>
-      <div className="relative mx-auto mb-4 h-20 w-20" aria-hidden>
-        <div className={cn("absolute inset-0 rounded-2xl opacity-[.08] -rotate-[9deg] -translate-x-3 translate-y-1", bg)} />
-        <div className={cn("absolute inset-0 rounded-2xl opacity-[.13] rotate-[7deg] translate-x-2.5 translate-y-0.5", bg)} />
-        <div className={cn("absolute inset-0 rounded-2xl opacity-[.18]", bg)} />
-        <div className={cn("absolute inset-0 grid place-items-center", fg)}><Icon className="h-8 w-8" /></div>
+    <div className={cn("flex flex-col items-center text-center", compact ? "px-4 py-6" : "px-6 py-12 md:py-16", className)}>
+      <div className={cn("mb-3 grid place-items-center rounded-full bg-muted", compact ? "h-9 w-9" : "h-11 w-11", fg)} aria-hidden>
+        <Icon className={compact ? "h-4 w-4" : "h-5 w-5"} />
       </div>
-      <div className={cn("font-black", compact ? "text-base" : "text-lg")}>{title}</div>
-      {message && <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">{message}</p>}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
+      <div className={cn("font-semibold text-foreground", compact ? "text-sm" : "text-base")}>{title}</div>
+      {message && <p className={cn("mx-auto mt-1 max-w-md text-muted-foreground text-pretty", compact ? "text-xs" : "text-sm")}>{message}</p>}
+      {action && <div className="mt-4 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
   );
 }
@@ -54,8 +50,10 @@ export function EmptyState({
  * touch screen.
  */
 export function EmptyAction({ onClick, children, to }: { onClick?: () => void; children: ReactNode; to?: string }) {
+  // Same shape as the page header's primary button (rounded-md, px-3 py-1.5), so an empty state never
+  // carries a second, bigger version of the action that already sits in the header.
   const cls = cn(
-    "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold shadow-soft transition-all active:scale-[0.98] pointer-coarse:min-h-[44px]",
+    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium shadow-soft transition-all duration-150 active:scale-[0.98] pointer-coarse:min-h-[44px]",
     "bg-[color:var(--action,var(--primary))] text-[color:var(--action-foreground,var(--primary-foreground))] hover:bg-[color:var(--action,var(--primary))]/90",
   );
   if (to) return <Link to={to} className={cls}>{children}</Link>;
