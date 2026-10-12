@@ -4,6 +4,7 @@
 // (what it read), `card` (what it created/changed), `proposal` (a write waiting for approval), `final`
 // (the authoritative answer), `error`, `done`. Released iOS/Android keep the old one: `text` + `done`.
 import { useSyncExternalStore } from "react";
+import { getLang } from "@/lib/lang";
 
 /** The three GIDEON tiers. Which model each one runs is decided on the server side. */
 export const GIDEON_TIERS = [
@@ -86,6 +87,8 @@ export type GideonEvent =
   | { type: "final"; content: string }
   | { type: "step"; step: GideonStep }
   | { type: "sources"; sources: GideonRef[] }
+  /** Sent once before `final`: the sources the answer actually cites. Replaces the `sources` collected so far. */
+  | { type: "cited"; sources: GideonRef[] }
   | { type: "card"; card: GideonCard }
   | { type: "proposal"; proposal: GideonProposal }
   | { type: "done" }
@@ -186,6 +189,8 @@ export async function streamGideon(
       messages,
       model: opts.model ?? GIDEON_DEFAULT_TIER,
       stream: true,
+      // The interface language, so the answer comes back in it (12 Oct 2026; older servers ignore it).
+      uiLang: getLang(),
       approvalMode: opts.approvalMode ?? GIDEON_DEFAULT_APPROVAL,
       ...(opts.context || opts.refs?.length
         ? { context: {
