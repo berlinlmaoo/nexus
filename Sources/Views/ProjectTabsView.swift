@@ -83,7 +83,7 @@ struct PriorityPill: View {
     let priority: String
     var body: some View {
         let tone = prioTone(priority)
-        Text(priority.capitalized)
+        Text(TaskPriorityName.label(priority))
             .font(NXFont.text(10, .bold)).lineLimit(1)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .foregroundStyle(tone.fg)
@@ -653,7 +653,7 @@ struct CreateTaskSheet: View {
                             HStack(spacing: 8) {
                                 ForEach(priorities, id: \.self) { p in
                                     Button { priority = p } label: {
-                                        Text(p == "NONE" ? "None" : p.capitalized).font(NXFont.text(12, .semibold))
+                                        Text(TaskPriorityName.label(p)).font(NXFont.text(12, .semibold))
                                             .padding(.horizontal, 12).padding(.vertical, 8)
                                             .foregroundStyle(priority == p ? .white : NX.mutedFg)
                                             .background(priority == p ? prioColor(p) : NX.card, in: Capsule())

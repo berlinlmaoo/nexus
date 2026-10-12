@@ -81,16 +81,11 @@ struct ProjectDetailView: View {
         guard !tokens.isEmpty || drill != nil || mineOnly else { return lanes }
         let now = Date()
         return lanes.map { lane in
-            ProjectDetail.Lane(
-                id: lane.id,
-                name: lane.name,
-                tasks: (lane.tasks ?? []).filter {
-                    (tokens.isEmpty || Self.matches($0, laneName: lane.name, tokens: tokens))
-                        && (drill?.matches($0, laneId: lane.id, today: now) ?? true)
-                        && (!mineOnly || Self.isMine($0, me: meId))
-                },
-                taskStatus: lane.taskStatus
-            )
+            lane.with(tasks: (lane.tasks ?? []).filter {
+                (tokens.isEmpty || Self.matches($0, laneName: lane.name, tokens: tokens))
+                    && (drill?.matches($0, laneId: lane.id, today: now) ?? true)
+                    && (!mineOnly || Self.isMine($0, me: meId))
+            })
         }
     }
 
@@ -641,7 +636,10 @@ struct ProjectDetailView: View {
 
     /// Merge subtasks into their section lane, placed right under their parent (orphans — parent in
     /// another lane — go at the lane's end). Resolves each subtask's parent title client-side.
-    static func mergeSubtasks(into lanes: [ProjectDetail.Lane], all: [BoardTask]) -> [ProjectDetail.Lane] {
+    static func mergeSubtasks(into sections: [ProjectDetail.Lane], all: [BoardTask]) -> [ProjectDetail.Lane] {
+        // Status options draw in the web's order: To-do, In progress, Complete, then the project's own
+        // order inside each group (StatusOptions.swift). Plain sections keep theirs.
+        let lanes = StatusOptions.ordered(sections)
         let subs = all.filter { $0.isSubtask && !($0.taskListId ?? "").isEmpty }
         if subs.isEmpty { return lanes }
         var titleById: [String: String] = [:]
@@ -665,7 +663,7 @@ struct ProjectDetailView: View {
             var out: [BoardTask] = []
             for p in parents { out.append(p); out.append(contentsOf: byParent[p.id] ?? []) }
             out.append(contentsOf: orphans)
-            return ProjectDetail.Lane(id: lane.id, name: lane.name, tasks: out, taskStatus: lane.taskStatus)
+            return lane.with(tasks: out)
         }
     }
 

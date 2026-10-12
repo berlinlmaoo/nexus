@@ -59,6 +59,11 @@ struct ProjectDetail: Decodable, Sendable {
         /// The task status this section stands for (project templates, 12 Oct 2026; DEV server): a task
         /// moved in takes it. nil = a plain section, and every section from an older server.
         var taskStatus: String? = nil
+        /// The status option's colour (Notion-style statuses, 12 Oct 2026): a palette key, or an older
+        /// one the server keeps ("sky", "emerald", …); nil = its status's colour. See StatusOptions.swift.
+        var color: String? = nil
+        /// The project's own order of its sections. nil from older payloads (they arrive in order).
+        var position: Int? = nil
     }
     struct ProjectMember: Decodable, Identifiable, Sendable {
         let userId: String?
@@ -255,7 +260,11 @@ struct TaskAttachment: Decodable, Identifiable, Sendable {
     let mimeType: String?
     let createdAt: String?
     let uploader: Uploader?
+    /// "PROOF" for a payout proof uploaded by an older app or the old web section; since 12 Oct 2026 a
+    /// proof is an ordinary attachment and only keeps this tag (owner). nil/"GENERAL" otherwise.
+    var kind: String? = nil
     struct Uploader: Decodable, Sendable { let name: String? }
+    var isPayoutProof: Bool { (kind ?? "").uppercased() == "PROOF" }
 }
 
 /// GET /api/tasks/{id}/dependencies — blocking + blocked-by relations.
