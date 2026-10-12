@@ -150,7 +150,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   return (
     <div className="px-4 py-3 md:px-8">
       <div className="overflow-x-auto rounded-lg border border-border">
-        <div className="min-w-max">
+        {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
+            row that loaded wider content widened every column and the header jumped. */}
+        <div className="w-full" style={{ minWidth: 240 + 140 * columns.length + 40 }}>
           {/* Header row */}
           <div className="sticky top-0 z-[1] grid items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
