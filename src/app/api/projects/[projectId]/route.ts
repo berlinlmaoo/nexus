@@ -91,7 +91,9 @@ export async function GET(
                 subtasks: { select: { id: true, status: true } },
                 customFieldValues: { select: cfvSelect },
               },
-              orderBy: { position: "asc" },
+              // Ties (every task the apps create is position 0) in a fixed order: without it Postgres
+              // returned them in a different order after any write and cards jumped around the column.
+              orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }],
             },
             // Tasks linked into this project from other projects ("Also in projects").
             taskProjects: {

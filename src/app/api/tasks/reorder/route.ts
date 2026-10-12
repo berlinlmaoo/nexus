@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const inList = await prisma.task.findMany({
       where: { taskListId, parentId: null },
       select: { id: true, position: true },
-      orderBy: [{ position: "asc" }, { id: "asc" }],
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }], // the board's order
     })
     const known = new Set(inList.map((t) => t.id))
     const order = Array.from(new Set(orderedIds)).filter((id) => known.has(id))
