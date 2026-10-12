@@ -75,12 +75,13 @@ type LeaderState = {
   busy: boolean
   demotedHandlers: Array<() => void>
   since: number | null
+  lastError: string | null
 }
 
 const g = globalThis as unknown as { __nexusLeader?: LeaderState }
 function state(): LeaderState {
   if (!g.__nexusLeader) {
-    g.__nexusLeader = { started: false, held: false, fallbackSince: null, freeSince: null, client: null, busy: false, demotedHandlers: [], since: null }
+    g.__nexusLeader = { started: false, held: false, fallbackSince: null, freeSince: null, client: null, busy: false, demotedHandlers: [], since: null, lastError: null }
   }
   return g.__nexusLeader
 }
@@ -134,6 +135,16 @@ async function check(reason = "tick"): Promise<void> {
     const live = isLiveSlot()
     const now = Date.now()
     const c = await connect(s)
+    // A read-only replica (the VPS warm standby) runs no clocks at all: nobody leads there. After a
+    // promotion the next check takes the lock as usual.
+    const ro = await c.query<{ ro: boolean }>("select pg_is_in_recovery() as ro")
+    if (ro.rows[0]?.ro) {
+      if (s.held) { s.held = false; s.since = null; s.fallbackSince = null }
+      s.freeSince = null
+      s.lastError = null
+      return
+    }
+    s.lastError = null
     if (s.held) {
       await c.query("select 1") // a dead connection surfaces here (and in the error handler)
       const fallbackOver = s.fallbackSince !== null && now - s.fallbackSince > FALLBACK_HOLD_MS
@@ -173,7 +184,9 @@ async function check(reason = "tick"): Promise<void> {
       await unlock(c)
     }
   } catch (err) {
-    log.warn("leader check failed", { error: String(err) })
+    // Logged once per distinct failure, not every 5 s while the database is away.
+    if (s.lastError !== String(err)) log.warn("leader check failed", { error: String(err) })
+    s.lastError = String(err)
     if (s.client) {
       const c = s.client
       s.client = null
