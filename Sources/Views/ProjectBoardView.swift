@@ -169,7 +169,7 @@ struct ProjectDetailView: View {
             Button {
                 mineOnly.toggle()
                 // Turning it on lands on the preset's own tab when this one draws no tasks for it.
-                if mineOnly, let t = template?.myViewTab, visibleTabs.contains(t), !ProjectTab.taskViews.contains(tab) && tab != .sheet {
+                if mineOnly, let t = template?.myViewTab, visibleTabs.contains(t), !ProjectTab.taskViews.contains(tab) && tab != .table {
                     tab = t
                 }
             } label: {
@@ -249,7 +249,7 @@ struct ProjectDetailView: View {
         switch tab {
         // Overview SENGAJA tidak ikut: ia menggambar dari `detail`, bukan `lanes`, jadi kotak
         // pencarian di sana akan ada tapi tidak menyaring apa pun.
-        case .board, .list, .sheet, .calendar, .timeline: return true
+        case .board, .list, .table, .calendar, .timeline: return true
         default: return false
         }
     }
@@ -681,6 +681,8 @@ struct ProjectDetailView: View {
             if isPipeline { PipelineTab(projectId: projectId, newDealRequest: newDealRequest) }
             else { EmptyView() }
         case .pages: ProjectPagesTab(projectId: projectId)
+        // The project's spreadsheet: its own data, not the tasks — no search box, no task filters.
+        case .sheet: ProjectSheetsTab(projectId: projectId)
         case .forms: ProjectFormsBuilderTab(projectId: projectId, projectName: displayName, onNewForm: { newFormOpen = true })
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
         case .automations: AutomationsTab(projectId: projectId)
@@ -702,7 +704,7 @@ struct ProjectDetailView: View {
                     )
                 case .board:    boardTab(detail)
                 case .list:     listTab()
-                case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { open($0) })
+                case .table:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { open($0) })
                 case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { open($0) }, onCreate: { date in prefillDue = date; showCreate = true },
                                             dateFieldId: plotBy, plotChoices: plotChoices, onPlotBy: { choosePlot($0) })
                 case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { open($0) })

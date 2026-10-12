@@ -77,6 +77,7 @@ extension ProjectTab {
         case .overview:    return T("Progress, members and what's due")
         case .board:       return T("Cards in columns by status")
         case .list:        return T("Tasks as a simple checklist")
+        case .table:       return T("Every task in a grid, fields as columns")
         case .sheet:       return T("A spreadsheet with formulas")
         case .calendar:    return T("Tasks on a month by due date")
         case .timeline:    return T("Start-to-end bars, Gantt style")
@@ -109,7 +110,7 @@ struct TabThumbnail: View {
         case .overview: overview
         case .board: board
         case .list: list
-        case .sheet: sheet
+        case .sheet, .table: sheet
         case .calendar: calendar
         case .timeline: timeline
         case .automations: automations

@@ -146,6 +146,10 @@ struct APIClient {
         // about it. A server that knows the client version can hold each build to the rules that
         // build can actually meet, instead of every rule being a gamble on who has updated.
         req.setValue(Self.clientTag, forHTTPHeaderField: "X-Nexus-Client")
+        // The in-app language (never the phone's): the server stores and pushes notifications in it
+        // (13 Oct 2026: English unless the person chose Indonesian). Read from defaults, not from
+        // AppLanguage, so building a request never touches observable UI state off the main thread.
+        req.setValue(UserDefaults.standard.string(forKey: "nexus.language") == "id" ? "id" : "en", forHTTPHeaderField: "X-Nexus-Lang")
         if authed, let session = Keychain.load() {
             // Written onto the request itself, so the session travels with whichever host was picked.
             // Nothing here consults a cookie store, so no domain rule can quietly withhold it — and
@@ -1835,6 +1839,17 @@ struct APIClient {
         return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
     }
     @discardableResult
+    /// The in-app language for notifications and pushes (server User.uiLanguage, 13 Oct 2026). Sent on
+    /// launch / sign-in and whenever the picker changes; best effort (the X-Nexus-Lang header on every
+    /// request carries it as well).
+    func sendUiLanguage(_ lang: AppLang) async {
+        guard Keychain.load() != nil else { return }
+        var req = makeRequest("/api/user/profile", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["uiLanguage": lang.rawValue])
+        _ = try? await perform(req)
+    }
+
     func updateProfile(name: String) async throws -> Bool {
         var req = makeRequest("/api/user/profile", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -92,6 +92,8 @@ final class AuthStore {
             Task.detached { _ = try? await URLSession.shared.data(for: req) }
         }
         AttendanceQueue.shared.clearAll()
+        // Unsent spreadsheet edits belong to this account; the next person must not send them.
+        SheetOutbox.shared.clearAll()
         logout()
     }
 

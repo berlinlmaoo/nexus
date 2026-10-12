@@ -66,6 +66,7 @@ struct NexusApp: App {
                         .task(id: auth.session?.userId) {
                             if let userId = auth.session?.userId {
                                 await NotificationManager.shared.activate(userId: userId)
+                                await APIClient.shared.sendUiLanguage(AppLanguage.shared.lang)
                                 // The banner promises "sends itself when NEXUS is back". Until 0.1.5 the
                                 // only thing that drained the queue was opening the Attendance screen.
                                 await AttendanceQueue.shared.flush()

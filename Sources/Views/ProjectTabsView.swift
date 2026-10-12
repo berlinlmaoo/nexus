@@ -5,7 +5,9 @@ import SwiftUI
 enum ProjectTab: String, CaseIterable, Identifiable {
     // First, so a Pipeline Dashboard opens on it (owner, 9 Oct 2026); no other project shows it.
     case pipeline = "Pipeline"
-    case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
+    // "Table" is the grid of every task with the project's fields as columns; "Spreadsheet" is the
+    // project's real spreadsheet (ProjectSheet, native since 13 Oct 2026). Same keys as the web.
+    case overview = "Overview", board = "Board", list = "List", table = "Table", sheet = "Spreadsheet", calendar = "Calendar"
     // Sprints was removed (owner, 11 Oct 2026); an old "sprints" key in hiddenTabs is just ignored.
     case timeline = "Timeline", automations = "Automations"
     case pages = "Pages", forms = "Forms", chat = "Chat"
@@ -18,7 +20,8 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2.fill"
         case .board:    return "rectangle.split.3x1.fill"
         case .list:     return "list.bullet"
-        case .sheet:    return "tablecells"
+        case .table:    return "tablecells"
+        case .sheet:    return "tablecells.badge.ellipsis"
         case .calendar: return "calendar"
         case .timeline: return "chart.bar.xaxis"
         case .automations: return "bolt.fill"

@@ -54,6 +54,10 @@ extension Notification.Name {
     /// A page (Doc) of a project changed (server `doc-changed` { projectId, docId, actorId } to the
     /// project's room). userInfo, optional: `RealtimeKey.projectId`. An open page re-reads.
     static let nexusDocChanged = Notification.Name("nexus.doc.changed")
+    /// `sheet-cells` in an open spreadsheet's room: other people's saves, with the rows (RealtimeKey.json).
+    static let nexusSheetCells = Notification.Name("nexus.sheet.cells")
+    /// `sheet-structure`: rows / columns / settings changed; the open sheet reads itself again.
+    static let nexusSheetStructure = Notification.Name("nexus.sheet.structure")
 }
 
 /// The userInfo keys of the notifications above.
@@ -70,6 +74,8 @@ enum RealtimeKey {
     static let dealId = "dealId"
     /// On `.nexusAutomationsChanged`: the rule that changed or ran.
     static let automationId = "automationId"
+    /// On the sheet notifications: the event's payload as JSON text.
+    static let json = "json"
 }
 
 /// The values of `RealtimeKey.kind`.

@@ -170,8 +170,12 @@ struct XpLogResponse: Decodable, Sendable {
 /// Inbox notification (GET /api/notifications).
 struct NexusNotification: Decodable, Identifiable, Sendable {
     let id: String
-    let title: String?
-    let message: String?
+    /// The server's single pair: the recipient's chosen language, else English (13 Oct 2026).
+    private let rawTitle: String?
+    private let rawMessage: String?
+    /// Both languages, when the notifier wrote both (`Notification.texts`, 13 Oct 2026). Shown in the
+    /// app's language; older rows have none and show `title` / `message` as stored.
+    let texts: [String: LocalizedText]?
     let type: String?
     /// `var` so a row just opened can be struck off where it stands. Refetching the whole dashboard
     /// to grey out one dot is a lot of network for a value we already know.
@@ -183,6 +187,18 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     let link: String?
 
     var isRead: Bool { read == true }
+
+    struct LocalizedText: Decodable, Sendable { let title: String?; let message: String? }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, type, read, createdAt, taskId, projectId, link, texts
+        case rawTitle = "title"
+        case rawMessage = "message"
+    }
+
+    private var localized: LocalizedText? { texts?[AppLanguage.shared.lang.rawValue] }
+    var title: String? { localized?.title ?? rawTitle }
+    var message: String? { localized?.message ?? rawMessage }
 
     /// "Budi is outside the office" — the one push a staff member's attendance approvers get per
     /// outside episode, at 1 h 30 (server cd89d72, owner 8 Oct 2026). Its link is "/attendance".

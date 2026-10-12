@@ -100,6 +100,39 @@ full-width pages on iPad/Mac.
 | What's New | copy swept |
 | Watch / widgets | "Team", "No division" |
 
+## Spreadsheet — native (13 Oct 2026, was planned for 0.1.7)
+
+The project tab **Spreadsheet** (key `sheet`) is now the real project spreadsheet (ProjectSheet), as on the
+web; the old grid of tasks is the tab **Table** (key `table`), matching the web's keys and names.
+
+| Piece | Where |
+|---|---|
+| Formula engine, number formats, data validation, conditional formats, sheet-types helpers, clipboard (pure) — 1:1 Swift ports of the web's lib/sheet-*.ts and components/sheets/sheet-types.ts / sheet-clipboard.ts; formula.js functions reimplemented from the MIT source (no HyperFormula) | Sources/Sheets/SheetFormula*.swift, SheetNumFmt, SheetValidation, SheetCF, SheetTypes, SheetClipboard |
+| Tests on Linux: every case of the web's sheet-formula / numfmt / validation / cf tests plus a corpus produced by running the web engine itself (439 formulas × id-ID/en-US, every SUPPORTED_FUNCTION and formula.js function, typed input, formats, A1↔stored, shift, R1C1, deletion rewrite, validation, CF): **17,486 checks, 0 fails** | Tests/SheetFormula (command in main.swift) |
+| App text vs the server's `GET /api/sheets/:id?computed=1` on real dev sheets: 0 mismatches; model test (selection, save queue) 18/18; bridge smoke test 13/13 | Tests/SheetModel, scratch harness |
+| Grid: UICollectionView with its own layout (rows × columns, cells reused) inside UIViewRepresentable; column letters / row numbers in strips that follow the scroll; free two-axis scroll; selection drawn over the cells | SheetGrid.swift |
+| Touch: tap selects, tap the selected cell or double-tap edits, press-and-hold then drag selects a range (release without moving = menu: cut/copy/paste/clear, rows, columns). Pointer (iPad trackpad, Mac): drag selects a range, ⌘-click adds a range, ⇧-click extends, right-click = menu | SheetGrid.swift |
+| Keyboard (iPad keyboard, Mac): arrows (⇧ extends, ⌘ jumps to the edge), Tab / ⇧Tab, Enter (edits; after a Tab run returns to the start column), ⇧Enter, Delete, Esc, F2, ⌘C ⌘X ⌘V, ⌘Z ⇧⌘Z ⌘Y, ⌘A, ⌘B ⌘I; typing starts editing with that key | SheetGrid.swift |
+| Formula bar: name box (A1 / range) + the cell's content, edited there (Enter saves and moves down, Tab right, **Esc cancels**, ✓ / ✕ buttons); while typing a formula a tap on a cell inserts its address | SheetViews.swift |
+| Dropdown cells (validation lists, select / multi-select columns) open a picker with the chip colours; checkbox cells tick on tap; invalid cells get the red corner; conditional formats and column rules paint cells; cell formats (bold, italic, strike, colours, alignment, wrap, number formats, font size) drawn | SheetBridge.swift |
+| Saving: **per-sheet serial save queue** (one request in flight per sheet, newest value per cell wins), kept on disk; **offline queue + badge** (cloud-slash with the count), sent on reconnect / app foreground / next launch; refused writes reload the sheet with the server's sentence; sign-out clears it | SheetOutbox.swift |
+| **Undo / redo** per sheet (toolbar on iPad/Mac, bottom bar on iPhone, ⌘Z): cell edits, formats, paste (one step incl. auto-added rows/columns), row insert/delete (rows come back in place with values and formats), **column delete restores the columns with their old ids, values, formats, the formulas the server rewrote and the validation rules** (web S-BUG-6) | SheetStore.swift |
+| Paste: NEXUS JSON (formulas move with the paste), HTML table, or TSV from other apps; **auto-expands columns and rows** when the block is bigger than what is left | SheetStore.paste |
+| Realtime: room `sheet:<id>`; `sheet-cells` applied live except this app's own echo (**X-Nexus-Tab originTab**), never over the cell being edited or with an older row; `sheet-structure` re-reads the sheet | RealtimeClient, SheetStore |
+| Sheet tabs: switch, add, rename, duplicate, delete (centred alert; lead+ and never the first sheet); Sum of a selected block in the bottom bar | SheetViews.swift |
+
+Not on the phone/tablet yet (web only): charts, pivot tables, filter views / slicers, borders / merges /
+freeze panes, column resize, comments and version history panels, find & replace, conditional-format and
+validation EDITORS (the rules made on the web apply here), protected-range editing UI (the server still
+enforces it). Long text is clipped at the cell edge (no overflow into empty neighbours yet).
+
+## Notification language (13 Oct 2026)
+
+Notifications and pushes are English unless the person chose Indonesian. The app sends its in-app
+language (never the phone's): `X-Nexus-Lang: en|id` on every request, and `PATCH /api/user/profile
+{ uiLanguage }` on launch / sign-in and whenever the language picker changes. The inbox shows
+`texts[appLanguage]` when the server sent both languages, else the stored title / message.
+
 ## Server pieces that must ship to production WITH the app
 
 All of these exist on the dev server only (branch `dev` of the NEXUS repo). The app calls them; on today's
@@ -119,6 +152,8 @@ production they answer 404 or behave the old way, so they go out in the same rel
 | `/api/forms/my-submissions` `columns` + replies / delete | My Submissions |
 | Calendar: no-PIC tasks excluded, "No division" placement | calendar |
 | `GET /api/user/sessions` with `client` + `current`; `DELETE /api/user/sessions/:id` answering `{ current }` (prod has the routes but neither field: no "This device" badge there) | Settings › Security › Active sessions |
+| Sheets: `X-Nexus-Tab` → `originTab` on sheet-cells / sheet-structure events, rows POST with `positions` + `styles`, column-delete range shrinking, the 25 sheet fixes of 13 Oct | Spreadsheet tab |
+| `User.uiLanguage`, `PATCH /api/user/profile { uiLanguage }`, `X-Nexus-Lang`, `Notification.texts` | notification / push language |
 
 ## Residual risks
 
@@ -143,3 +178,7 @@ production they answer 404 or behave the old way, so they go out in the same rel
 6. GIDEON: @ a project, Personalize name, Save as doc → Open page; a proposal Apply.
 7. Tickets as BoD (lands on the first non-empty queue); Settings tabs; Notifications tabs.
 8. iPad + keyboard: sidebar ⌘1–⌘7, GIDEON page, task sheet, ⌘N / ⌘F / ⌘[ ⌘].
+9. Spreadsheet (ZZ Bughunt sheet): scroll both ways; type 1.500 and =SUM(…) via the formula bar; press-and-
+   hold then drag a range → Copy → Paste elsewhere (formula shifts); delete a column → ⌘Z (values and
+   formulas back); airplane mode → edit → badge → back online (sent); edit on the web → appears live.
+10. Bahasa → a new notification arrives in Indonesian; English → English.

@@ -48,6 +48,8 @@ final class AppLanguage {
             UserDefaults.standard.set(lang.rawValue, forKey: Self.key)
             // The calendar widgets read the language from the App Group, not from here.
             Task { @MainActor in CalendarWidgetPresence.languageChanged() }
+            // Notifications and pushes follow the in-app language (server, 13 Oct 2026).
+            if lang != oldValue { let chosen = lang; Task { await APIClient.shared.sendUiLanguage(chosen) } }
         }
     }
 

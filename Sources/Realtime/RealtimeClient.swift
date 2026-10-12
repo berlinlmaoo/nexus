@@ -162,6 +162,8 @@ final class RealtimeClient {
         center.post(name: .nexusOutletSalesChanged, object: nil)
         center.post(name: .nexusAutomationsChanged, object: nil)
         center.post(name: .nexusDocChanged, object: nil)
+        center.post(name: .nexusSheetStructure, object: nil, userInfo: [RealtimeKey.json: "{}"])
+        SheetOutbox.shared.flushAll()
         chatMoved(nil)
         Task { await InboxBadge.shared.refresh(force: true) }
     }
@@ -233,8 +235,13 @@ final class RealtimeClient {
             var info: [String: String] = [:]
             if let projectId = payload?["projectId"]?.string { info[RealtimeKey.projectId] = projectId }
             center.post(name: .nexusDocChanged, object: nil, userInfo: info)
+        case "sheet-cells", "sheet-structure":
+            // The open spreadsheet's room (13 Oct 2026). Rows travel with `sheet-cells` (what the server
+            // saved, never what another device claims); the screen applies them, skipping its own echo.
+            let info: [String: String] = [RealtimeKey.json: payload?.serialized ?? "{}"]
+            center.post(name: name == "sheet-cells" ? .nexusSheetCells : .nexusSheetStructure, object: nil, userInfo: info)
         default:
-            // presence-*, sheet-*, cursor-move, content-change, the web's own task-update relay:
+            // presence-*, sheet-presence / sheet-cursor, cursor-move, content-change, the web's own task-update relay:
             // nothing on iOS draws them.
             break
         }

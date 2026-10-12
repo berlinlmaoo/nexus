@@ -108,11 +108,9 @@ struct ProjectTemplate: Decodable, Identifiable, Hashable, Sendable {
 struct ProjectTemplatesResponse: Decodable, Sendable { let templates: [ProjectTemplate]? }
 
 extension ProjectTab {
-    /// A server tab key (lib/project-tabs.ts) as an app tab. "table" is the Spreadsheet tab here: the
-    /// app's grid of every task with the project's fields as columns.
+    /// A server tab key (lib/project-tabs.ts) as an app tab: "table" is the task grid, "sheet" the spreadsheet.
     static func fromServerKey(_ key: String?) -> ProjectTab? {
         guard let key else { return nil }
-        if key == "table" { return .sheet }
         return ProjectTab.allCases.first { $0.key == key }
     }
 }
