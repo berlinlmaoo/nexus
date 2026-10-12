@@ -30,3 +30,5 @@ assert.equal(s("Data coveringRequests kosong, xpPenalties nol."), "Data covering
 assert.equal(s("Tanggal acuan: 4 Agustus 2026 (`2026-08-04`), jam `--:--`."), "Tanggal acuan: 4 Agustus 2026 (2026-08-04), jam --:--.")
 assert.equal(s("Buka nexus.znetworks.id di iPhone (iOS)."), "Buka nexus.znetworks.id di iPhone (iOS).")
 console.log("gideon-reply-scrub: round 2 ok")
+assert.equal(s("Pengajuan izin masih PENDING, yang lain APPROVED."), "Pengajuan izin masih menunggu, yang lain disetujui.")
+console.log("gideon-reply-scrub: bare statuses ok")

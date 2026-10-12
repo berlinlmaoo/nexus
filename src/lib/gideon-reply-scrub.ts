@@ -54,6 +54,8 @@ export function scrubGideonReply(text: string): string {
   s = s.replace(new RegExp(String.raw`\b(?:${SEG}\.)*(${CAMEL})\b`, "g"), (_m, id: string) => humanize(id))
   // A bare enum value in capitals with an underscore (DAY_OFF) reads as words.
   s = s.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (m) => ENUM_WORDS[m] ?? m.replace(/_/g, " ").toLowerCase())
+  // …and so do the request statuses written bare ("status PENDING").
+  s = s.replace(/\b(PENDING|APPROVED|REJECTED|CANCELED|CANCELLED)\b/g, (m) => ENUM_WORDS[m])
   // Tidy what the removals leave: list items with nothing left, doubled spaces, a space before punctuation,
   // empty parentheses, a comma right before a full stop.
   s = s.replace(/\(\s*\)/g, "")
