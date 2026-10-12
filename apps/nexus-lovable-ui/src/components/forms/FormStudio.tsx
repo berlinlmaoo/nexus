@@ -227,10 +227,8 @@ function OptionsEditor({ field, onChange, disabled }: { field: RichField; onChan
     if (focusAt.current !== null) { refs.current[focusAt.current]?.focus(); focusAt.current = null; }
   });
   const multi = field.type === "multi_select";
-  const listMode = multi || field.display === "list";
   return (
     <div className="space-y-0.5">
-      {!listMode && <div className="mb-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">{t("Choose…")} <span className="float-right text-xs">▾</span></div>}
       {list.map((opt, i) => (
         <div key={i} className="group/opt flex items-center gap-2 rounded-md px-1.5 hover:bg-muted/50">
           <span className={cn("h-4 w-4 shrink-0 border border-muted-foreground/40", multi ? "rounded" : "rounded-full")} aria-hidden />
@@ -325,26 +323,33 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
       </div>
 
       <div className="relative pr-24 @md:pr-40">
-        <div className="flex items-start gap-1">
-          <AutoTextarea
+        {/* The title sizes to its text (the hidden copy sets the width), so the required star sits right after it. */}
+        <div className="min-w-0">
+          <span className="inline-grid max-w-full align-top [&>*]:[grid-area:1/1]">
+            <span aria-hidden className="invisible min-w-[2ch] whitespace-pre-wrap break-words text-[15px] font-semibold leading-6">{(title || t("Question, or type / for a type")) + " "}</span>
+          <textarea
+            rows={1}
+            cols={1}
             value={title}
-            ariaLabel={t("Question {n} title", { n: index + 1 })}
+            aria-label={t("Question {n} title", { n: index + 1 })}
             placeholder={t("Question, or type / for a type")}
-            onChange={(v) => {
+            onChange={(e) => {
+              const v = e.target.value.replace(/\n/g, " ");
               if (v.startsWith("/") && !title.startsWith("/")) setSlashFor({ id: field.id, before: title });
               if (!v.startsWith("/") && slashFor?.id === field.id) setSlashFor(null);
               onChange({ name: v, label: v });
             }}
             onKeyDown={(e) => {
-              if (!slash) return;
+              if (!slash) { if (e.key === "Enter") e.preventDefault(); return; }
               if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, slashList.length - 1)); }
               else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
               else if (e.key === "Enter") { e.preventDefault(); if (slashList[active]) pickSlash(slashList[active].kind); }
               else if (e.key === "Escape") { e.preventDefault(); const before = slashFor?.before ?? ""; onChange({ name: before, label: before }); setSlashFor(null); }
             }}
-            className="text-[15px] font-semibold leading-6"
+            className="block w-full resize-none overflow-hidden bg-transparent text-[15px] font-semibold leading-6 outline-none placeholder:text-muted-foreground/50"
           />
-          {field.required && <span className="pt-0.5 text-[15px] font-semibold text-destructive" aria-label={t("Required")}>*</span>}
+          </span>
+          {field.required && <span className="ml-0.5 align-top text-[15px] font-semibold leading-6 text-destructive" aria-label={t("Required")}>*</span>}
         </div>
         {slash && (
           <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-popover shadow-pop" onClick={(e) => e.stopPropagation()}>
@@ -774,7 +779,7 @@ function ResponsesTab({ formId, onOpenProject }: { formId: string | null; onOpen
                 <span className="block truncate text-sm font-medium">{r.task?.title ?? t("Task deleted")}</span>
                 <span className="block truncate text-xs text-muted-foreground">{r.submitter?.name ?? r.submitter?.email ?? t("Unknown sender")} · {fmt.format(new Date(r.createdAt))}</span>
               </span>
-              {r.task && <span className="hidden shrink-0 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground @md:inline">{r.task.section ? `${r.task.section} · ` : ""}{t(STATUS_LABEL[r.task.status] ?? r.task.status)}</span>}
+              {r.task && <span className="hidden shrink-0 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground @md:inline">{r.task.section || t(STATUS_LABEL[r.task.status] ?? r.task.status)}</span>}
             </button>
           ))}
         </div>
