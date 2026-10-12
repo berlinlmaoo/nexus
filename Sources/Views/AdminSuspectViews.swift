@@ -185,9 +185,9 @@ struct AdminSuspectSection: View {
         Button { tab = i } label: {
             Text(n.map { "\(title) \($0)" } ?? title)
                 .font(NXFont.text(12, .semibold))
-                .foregroundStyle(tab == i ? Color.white : NX.mutedFg)
                 .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(tab == i ? NX.violet : NX.muted.opacity(0.6), in: Capsule())
+                .nxChoiceChip(on: tab == i)
+                .frame(minHeight: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
