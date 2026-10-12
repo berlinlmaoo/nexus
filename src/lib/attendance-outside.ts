@@ -486,6 +486,50 @@ export function outsideApproverCopy(o: { name: string | null; minutesOutside: nu
   }
 }
 
+/** English twins of the two copies above (bilingual notifications, 13 Oct 2026). Same shapes, same types. */
+export function durationTextEn(minutes: number): string {
+  const m = Math.max(0, Math.floor(minutes))
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  if (h === 0) return `${r} min`
+  return r === 0 ? `${h} h` : `${h} h ${r} min`
+}
+export function outsidePushCopyEn(fire: Fire, o: Parameters<typeof outsidePushCopy>[1]): { type: string; title: string; body: string } {
+  const tz = o.timeZone || "Asia/Jakarta"
+  const now = o.now ?? new Date()
+  const left = (autoAt: Date) => {
+    const minutes = Math.max(0, Math.ceil((autoAt.getTime() - now.getTime()) / MIN - 0.001))
+    return `${durationTextEn(minutes)} left · automatic check-out at ${clockText(autoAt, tz)}`
+  }
+  const ask = "Request a permission if you're working outside."
+  if (fire === "reminder") {
+    return {
+      type: "attendance_outside_reminder",
+      title: "Still away from the office",
+      body: o.autoAt ? `${durationTextEn(o.minutesOutside)} away from the office · ${left(o.autoAt)}. ${ask}` : `${durationTextEn(o.minutesOutside)} away from the office. ${ask}`,
+    }
+  }
+  if (fire === "warning") {
+    if (!o.autoAt) return { type: "attendance_outside_warning", title: "2 hours away from the office", body: `${durationTextEn(o.minutesOutside)} away from the office. ${ask}` }
+    return { type: "attendance_outside_warning", title: "30 minutes left", body: `${durationTextEn(o.minutesOutside)} away from the office · ${left(o.autoAt)}.` }
+  }
+  const who = o.approverMode === "DIRECT_MANAGER" ? "your manager" : "the BoD"
+  return {
+    type: "attendance_auto_offsite_checkout",
+    title: "Checked out automatically",
+    body: `You've been away from the office since ${clockText(o.outsideSince, tz)}, so you were checked out off-site. Waiting for ${who} to approve.`,
+  }
+}
+export function outsideApproverCopyEn(o: Parameters<typeof outsideApproverCopy>[0]): { type: string; title: string; body: string } {
+  const tz = o.timeZone || "Asia/Jakarta"
+  const who = o.name?.trim() || "A staff member"
+  return {
+    type: "attendance_outside_approver",
+    title: `${who} is away from the office`,
+    body: `Away from the office since ${clockText(o.outsideSince, tz)} (${durationTextEn(o.minutesOutside)}). The route is in Attendance.`,
+  }
+}
+
 /** The offsite reason the automatic check-out records (the "Auto:" prefix is how it is recognised). */
 export function autoCheckoutReason(outsideSince: Date, timeZone = "Asia/Jakarta"): string {
   return `Auto: di luar kantor lebih dari 2 jam 30 menit (sejak ${clockText(outsideSince, timeZone)})`

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { bi } from "@/lib/notification-text"
 import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
 import { GIDEON_TICKET_CATEGORIES } from "@/lib/gideon-ticket"
@@ -104,8 +105,10 @@ export async function POST(req: NextRequest) {
       const made = await createInAppNotification({
         userId: m.userId,
         type: "system_gideon",
-        title: "GIDEON Support tidak menjawab",
-        message,
+        ...bi(
+          ["GIDEON Support isn't answering", `${waiting.length} ticket${waiting.length === 1 ? "" : "s"} waited for GIDEON for more than ${WAIT_MINUTES} minutes. Oldest: "${oldest.subject.slice(0, 60)}" (${oldestMin} min). GIDEON usually answers within half a minute, so the shim/Hermes chain is probably down or refusing.`],
+          ["GIDEON Support tidak menjawab", message],
+        ),
         link: "/complaints",
         push: true,
         dedupeWindowMs: 23 * 60 * 60 * 1000,

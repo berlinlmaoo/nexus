@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { statfs } from "fs/promises"
 import prisma from "@/lib/prisma"
+import { bi } from "@/lib/notification-text"
 import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
 
@@ -66,8 +67,10 @@ export async function POST(req: NextRequest) {
       const made = await createInAppNotification({
         userId: m.userId,
         type: "system_disk",
-        title,
-        message,
+        ...bi(
+          [level === "alarm" ? "Server disk almost full" : "Server disk filling up", `Storage is ${usedPct}% used, ${freeGb} GB left. ` + (level === "alarm" ? "When it runs out, uploads and attendance stop working." : "Not urgent yet, but keep an eye on it.")],
+          [title, message],
+        ),
         link: "/admin",
         push: level === "alarm",
         dedupeWindowMs: 23 * 60 * 60 * 1000,

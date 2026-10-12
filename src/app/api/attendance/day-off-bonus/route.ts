@@ -11,6 +11,7 @@ import { effectiveDayOffQuota } from "@/lib/day-off-usage"
 import {
   DAY_OFF_BONUS_MAX_DAYS,
   bonusGrantNotice,
+  bonusGrantTexts,
   checkGrantPeriod,
   grantablePeriods,
   periodBounds,
@@ -182,10 +183,10 @@ export async function POST(req: NextRequest) {
     } catch { /* audit best-effort */ }
 
     // Tell each person. After the commit and best-effort: a failed push never undoes a grant.
-    const notice = bonusGrantNotice(days, periodKey, reason)
+    const notice = bonusGrantTexts(days, periodKey, reason)
     const sent = await Promise.allSettled(
       userIds.map((userId) =>
-        createInAppNotification({ userId, type: "dayoff_bonus_granted", title: notice.title, message: notice.message, link: "/attendance", push: true }),
+        createInAppNotification({ userId, type: "dayoff_bonus_granted", ...notice, link: "/attendance", push: true }),
       ),
     )
     const notified = sent.filter((r) => r.status === "fulfilled").length

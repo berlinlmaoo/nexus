@@ -5,6 +5,7 @@ import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import type { Prisma } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
+import { bi, dayText } from "@/lib/notification-text"
 import { auth } from "@/lib/auth"
 import { compareVersions, parseClientTag } from "@/lib/client-version"
 import { logAudit } from "@/lib/audit"
@@ -800,11 +801,15 @@ export async function POST(request: NextRequest) {
       const labels: Record<string, string> = { DAY_OFF: "day off", SICK: "sakit", PERMIT: "izin", LEAVE: "cuti", RED_DATE: "tanggal merah" }
       const fmt = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" })
       const start = fmt(attendanceRequest.startDate), end = fmt(attendanceRequest.endDate)
+      const labelsEn: Record<string, string> = { DAY_OFF: "a day off", SICK: "sick leave", PERMIT: "permission", LEAVE: "leave", RED_DATE: "a public holiday" }
+      const startEn = dayText(attendanceRequest.startDate, "en"), endEn = dayText(attendanceRequest.endDate, "en")
       createInAppNotification({
         userId: effectiveUserId,
         type: "attendance_request_reviewed",
-        title: `${context.user?.name ?? "BoD"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`,
-        message: `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`,
+        ...bi(
+          [`${context.user?.name ?? "The BoD"} recorded ${labelsEn[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} for you`, `${startEn === endEn ? startEn : `${startEn} – ${endEn}`} is approved already. If this is wrong, talk to your approver.`],
+          [`${context.user?.name ?? "BoD"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`, `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`],
+        ),
         link: `/attendance?request=${attendanceRequest.id}`,
         push: true,
       }).catch((e) => console.error("grant notify failed", e))

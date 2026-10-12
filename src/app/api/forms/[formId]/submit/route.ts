@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { bi } from "@/lib/notification-text"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
@@ -688,8 +689,10 @@ export async function POST(
       createInAppNotification({
         userId: recipient,
         type: "form_submission",
-        title: `New response: ${form.name}`,
-        message: `${submitterName} sent "${result.task.title}"`,
+        ...bi(
+          [`New response: ${form.name}`, `${submitterName} sent "${result.task.title}"`],
+          [`Respons baru: ${form.name}`, `${submitterName} mengirim "${result.task.title}"`],
+        ),
         taskId: result.task.id,
         projectId: form.projectId,
         link: `/projects/${form.projectId}/tasks/${result.task.id}`,

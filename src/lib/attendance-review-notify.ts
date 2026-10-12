@@ -4,9 +4,18 @@
 // hapus aja"), so only the in-app/push half remains — same titles, texts, links and push flags.
 import prisma from "@/lib/prisma"
 import { createInAppNotification } from "@/lib/notification-service"
+import { bi } from "@/lib/notification-text"
 
 const REQ_TYPE_LABEL: Record<string, string> = {
   LEAVE: "Cuti", SICK: "Sakit", PERMIT: "Izin", DAY_OFF: "Day off", RED_DATE: "Tanggal merah",
+}
+const REQ_TYPE_LABEL_EN: Record<string, string> = {
+  LEAVE: "Leave", SICK: "Sick leave", PERMIT: "Permission", DAY_OFF: "Day off", RED_DATE: "Public holiday",
+}
+function fmtDateRangeEn(start: Date, end: Date) {
+  const f = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" }).replace(/\bSept\b/, "Sep")
+  const s = f(start), e = f(end)
+  return s === e ? s : `${s}–${e}`
 }
 
 function fmtDateRange(start: Date, end: Date) {
@@ -47,8 +56,11 @@ export async function notifyAttendanceRequestReviewed(input: {
   await createInAppNotification({
     userId: req.userId,
     type: "attendance_request_reviewed",
-    title: input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak",
-    message: `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}${refundSuffix}`,
+    ...bi(
+      [input.approved ? "Attendance request approved" : "Attendance request rejected",
+        `${who} ${input.approved ? "approved" : "rejected"} your ${(REQ_TYPE_LABEL_EN[req.type] ?? req.type).toLowerCase()} (${fmtDateRangeEn(req.startDate, req.endDate)}).${note ? ` Reason: "${note}"` : ""}${refunded > 0 ? ` That day's attendance penalty is cancelled — +${refunded} XP back.` : ""}`],
+      [input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak", `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}${refundSuffix}`],
+    ),
     link: `/attendance?request=${input.requestId}`,
     // A decision is exactly the kind of thing you shouldn't have to open the app to learn.
     push: true,
@@ -76,6 +88,12 @@ export async function notifyAttendanceOverride(input: {
   const d = new Date(`${input.dateKey}T00:00:00+07:00`)
   const dateStr = isNaN(d.getTime()) ? input.dateKey : fmtDateRange(d, d)
 
+  const dateEn = isNaN(d.getTime()) ? input.dateKey : fmtDateRangeEn(d, d)
+  const byEn = isSelf ? "" : ` by ${who}`
+  const OVERRIDE_EN: Record<string, string> = { PRESENT: "Present", LEAVE: "Leave", SICK: "Sick leave", DAY_OFF: "Day off", PERMIT: "Permission" }
+  const en: [string, string] = input.action === "CLEAR_PENALTY"
+    ? ["Attendance penalty cleared", `Your attendance penalty (${dateEn}) was cleared${byEn} — XP and day off are restored.`]
+    : ["Your attendance status changed", `Your attendance status (${dateEn}) was changed to ${OVERRIDE_EN[input.action] ?? input.action}${byEn}.`]
   let title: string, message: string
   if (input.action === "CLEAR_PENALTY") {
     title = "Penalty absen dibersihin"
@@ -87,7 +105,7 @@ export async function notifyAttendanceOverride(input: {
   }
   // Pushed: a day flipped to Cuti/Sakit/Day-off (which also closes their open record) is not
   // something to discover by opening the app.
-  await createInAppNotification({ userId: target.id, type: "attendance_override", title, message, link: "/attendance", push: true }).catch(() => {})
+  await createInAppNotification({ userId: target.id, type: "attendance_override", ...bi(en, [title, message]), link: "/attendance", push: true }).catch(() => {})
 }
 
 /** An offsite checkout was approved/rejected → tell the staff member. */
@@ -105,8 +123,11 @@ export async function notifyOffsiteCheckoutReviewed(input: {
   await createInAppNotification({
     userId: rec.userId,
     type: "offsite_checkout_reviewed",
-    title: input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak",
-    message: `Check-out di luar (${dateStr}) di-${verb} sama ${who}.${input.approved ? "" : " Dihitung seperti tidak check-out (−25 XP)."}`,
+    ...bi(
+      [input.approved ? "Off-site check-out approved" : "Off-site check-out rejected",
+        `${who} ${input.approved ? "approved" : "rejected"} your off-site check-out (${fmtDateRangeEn(rec.attendanceDate, rec.attendanceDate)}).${input.approved ? "" : " It counts as no check-out (−25 XP)."}`],
+      [input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak", `Check-out di luar (${dateStr}) di-${verb} sama ${who}.${input.approved ? "" : " Dihitung seperti tidak check-out (−25 XP)."}`],
+    ),
     link: `/attendance?offsite=${input.recordId}`,
     // A rejection costs 25 XP; it pushes like the request-review notice.
     push: true,

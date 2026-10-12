@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { isCronRequest } from "@/lib/cron-auth"
 import { createInAppNotification } from "@/lib/notification-service"
+import { bi, dayText } from "@/lib/notification-text"
 import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 import { loadChart, topBodOf } from "@/lib/attendance-chart"
 
@@ -40,6 +41,8 @@ function businessDaysAgo(days: number, now = new Date()): Date {
 }
 
 const TYPE_LABEL: Record<string, string> = { LEAVE: "Cuti", SICK: "Sakit", PERMIT: "Izin", DAY_OFF: "Day Off", RED_DATE: "Public Holiday" }
+/** The English word for each TYPE_LABEL value (and the checkout label), for bilingual notifications. */
+const TYPE_LABEL_EN: Record<string, string> = { Cuti: "Leave", Sakit: "Sick leave", Izin: "Permission", "Day Off": "Day off", "Public Holiday": "Public holiday", "Checkout luar kantor": "Off-site check-out" }
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,20 +94,27 @@ export async function POST(req: NextRequest) {
 
       const name = who ?? "Seseorang"
       const mgr = manager?.name ?? "manager-nya"
+      const nameEn = who ?? "someone"
+      const mgrEn = manager?.name ?? "their manager"
+      const labelEn = TYPE_LABEL_EN[label] ?? label
       await Promise.all([
         ...bod.map((b) => createInAppNotification({
           userId: b.userId,
           type: "attendance_request_escalated",
-          title: `${label} ${name} belum ditanggapi`,
-          message: `Diajukan ${fmt(since)}, masih menunggu ${mgr} lewat ${days} hari kerja. Kamu bisa menyetujuinya langsung di Attendance.`,
+          ...bi(
+            [`${labelEn} from ${nameEn} not answered yet`, `Filed ${dayText(since, "en")}, still waiting for ${mgrEn} after ${days} working day${days === 1 ? "" : "s"}. You can approve it yourself in Attendance.`],
+            [`${label} ${name} belum ditanggapi`, `Diajukan ${fmt(since)}, masih menunggu ${mgr} lewat ${days} hari kerja. Kamu bisa menyetujuinya langsung di Attendance.`],
+          ),
           link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
           push: true,
         }).catch(() => null)),
         createInAppNotification({
           userId: managerId,
           type: "attendance_request_escalated",
-          title: `${label} ${name} masih menunggu kamu`,
-          message: `Diajukan ${fmt(since)}. BoD sudah diberi tahu karena lewat ${days} hari kerja — tapi keputusannya tetap punyamu.`,
+          ...bi(
+            [`${labelEn} from ${nameEn} is still waiting for you`, `Filed ${dayText(since, "en")}. The BoD was told because it's past ${days} working day${days === 1 ? "" : "s"} — but the decision is still yours.`],
+            [`${label} ${name} masih menunggu kamu`, `Diajukan ${fmt(since)}. BoD sudah diberi tahu karena lewat ${days} hari kerja — tapi keputusannya tetap punyamu.`],
+          ),
           link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
           push: true,
         }).catch(() => null),

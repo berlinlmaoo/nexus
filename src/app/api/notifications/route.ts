@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { rememberUiLanguage } from '@/lib/notification-text'
 import { logAudit } from '@/lib/audit'
 
 // Integrity (peer reports) and Social Approvals were removed on 12 Oct 2026. Their old notifications stay
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { searchParams } = new URL(req.url)
     const unreadOnly = searchParams.get('unread') === 'true'
+    void rememberUiLanguage(session.user.id, req.headers)
     const notifications = await prisma.notification.findMany({
       where: { userId: session.user.id, ...(unreadOnly && { read: false }) },
       orderBy: { createdAt: 'desc' },

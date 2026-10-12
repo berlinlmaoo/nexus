@@ -6,7 +6,8 @@ import prisma from "@/lib/prisma"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
 import { updateRoomBookingSchema, validateBody } from "@/lib/validations"
-import { createInAppNotification } from "@/lib/notification-service"
+import { createInAppNotification, roomName } from "@/lib/notification-service"
+import { bi } from "@/lib/notification-text"
 import { formatBookingSlot } from "@/lib/room-booking-format"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
@@ -93,10 +94,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
       await createInAppNotification({
         userId: existing.createdById,
         type: "booking_changed",
-        title: cancelled ? `Booking ${existing.room} dibatalkan` : `Booking ${booking.room} diubah`,
-        message: cancelled
-          ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
-          : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`,
+        ...bi(
+          [cancelled ? `${roomName(existing.room, "en")} booking cancelled` : `${roomName(booking.room, "en")} booking changed`, cancelled
+            ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was cancelled by a manager.`
+            : `${booking.title} is now ${formatBookingSlot(booking.startsAt, booking.endsAt, "en")} in ${roomName(booking.room, "en")}.`],
+          [cancelled ? `Booking ${existing.room} dibatalkan` : `Booking ${booking.room} diubah`, cancelled
+            ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
+            : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`],
+        ),
         link: "/room-booking",
         push: true,
       }).catch(() => null)
@@ -132,8 +137,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       await createInAppNotification({
         userId: existing.createdById,
         type: "booking_changed",
-        title: `Booking ${existing.room} dihapus`,
-        message: `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`,
+        ...bi(
+          [`${roomName(existing.room, "en")} booking deleted`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt, "en")} was deleted by a manager.`],
+          [`Booking ${existing.room} dihapus`, `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`],
+        ),
         link: "/room-booking",
         push: true,
       }).catch(() => null)

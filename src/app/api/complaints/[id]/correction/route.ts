@@ -288,7 +288,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           reason: correction.reason, note,
         },
       })
-      void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan pembatalan potongan ${dateKey} disetujui BoD — XP dan jatah day off hari itu sudah kembali.` }).catch(() => {})
+      void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan pembatalan potongan ${dateKey} disetujui BoD — XP dan jatah day off hari itu sudah kembali.`, detailEn: `The BoD approved cancelling the ${dateKey} cut — that day's XP and day off are back.` }).catch(() => {})
       // record: null, and it means it — no AttendanceRecord was read, written or created.
       return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
     }
@@ -494,7 +494,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         penaltiesReversed,
       },
     })
-    void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan koreksi absen ${dateKey} disetujui BoD — catatan absen hari itu sudah diperbarui.` }).catch(() => {})
+    void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan koreksi absen ${dateKey} disetujui BoD — catatan absen hari itu sudah diperbarui.`, detailEn: `The BoD approved the attendance correction for ${dateKey} — that day's record is updated.` }).catch(() => {})
 
     return NextResponse.json({
       correction: serializeAttendanceCorrection(updatedCorrection),

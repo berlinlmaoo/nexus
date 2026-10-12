@@ -1,3 +1,4 @@
+import { bi } from "@/lib/notification-text"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import { askGideon } from "@/lib/gideon-chat"
@@ -152,8 +153,10 @@ export async function runAutofill(input: { projectId: string; fieldIds: string[]
       createInAppNotification({
         userId: actor.id,
         type: "gideon_proposal",
-        title: "GIDEON is waiting for your approval",
-        message: `AI Autofill suggested ${proposed} value${proposed === 1 ? "" : "s"} in ${project?.name ?? "a project"}. Open GIDEON to review.`,
+        ...bi(
+          ["GIDEON is waiting for your approval", `AI Autofill suggested ${proposed} value${proposed === 1 ? "" : "s"} in ${project?.name ?? "a project"}. Open GIDEON to review.`],
+          ["GIDEON menunggu persetujuanmu", `AI Autofill mengusulkan ${proposed} nilai di ${project?.name ?? "sebuah project"}. Buka GIDEON untuk meninjau.`],
+        ),
         projectId: input.projectId,
         link: `/projects/${input.projectId}`,
         push: false,

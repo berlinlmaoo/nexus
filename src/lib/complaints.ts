@@ -26,6 +26,12 @@ export const COMPLAINT_CATEGORY_LABEL: Record<string, string> = {
   OTHER: "Lainnya",
 }
 export const complaintCategoryLabel = (k: string) => COMPLAINT_CATEGORY_LABEL[k] ?? k
+const COMPLAINT_CATEGORY_LABEL_EN: Record<string, string> = {
+  ATTENDANCE: "Attendance", EXP: "XP / Gamification", PAYROLL: "Payroll", DAY_OFF: "Leave / Day off",
+  OPERATIONAL: "Operations", HR: "HR", LEADERSHIP: "Leadership", OTHER: "Other",
+}
+/** English category label (bilingual notifications, 13 Oct 2026). */
+export const complaintCategoryLabelEn = (k: string) => COMPLAINT_CATEGORY_LABEL_EN[k] ?? k
 
 // AWAITING_DECISION ("Menunggu keputusan") sits between OPEN and IN_REVIEW: GIDEON has answered,
 // and/or a correction proposal is sitting there undecided. It is NOT IN_REVIEW and must never be

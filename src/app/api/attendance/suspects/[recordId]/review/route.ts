@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { bi } from "@/lib/notification-text"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { formatAttendanceDateKey, getAttendanceWorkspaceContext } from "@/lib/attendance"
@@ -110,11 +111,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
       }
       const d = record.attendanceDate
       const label = `${d.getUTCDate()} ${["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][d.getUTCMonth()]}`
+      const labelEn = `${d.getUTCDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()]}`
       createInAppNotification({
         userId: record.userId,
         type: "attendance_invalid",
-        title: `Absen ${label} dinyatakan tidak sah`,
-        message: `BoD meninjau absenmu tanggal ${label}: lokasinya terdeteksi palsu (fake GPS), jadi hari itu dihitung TK. Catatan: ${note}`,
+        ...bi(
+          [`Attendance on ${labelEn} ruled invalid`, `The BoD reviewed your attendance on ${labelEn}: the location was faked (fake GPS), so that day counts as absent without notice (TK). Note: ${note}`],
+          [`Absen ${label} dinyatakan tidak sah`, `BoD meninjau absenmu tanggal ${label}: lokasinya terdeteksi palsu (fake GPS), jadi hari itu dihitung TK. Catatan: ${note}`],
+        ),
         link: "/attendance",
         push: true,
       }).catch((e) => console.error("[suspects] notify failed", e))

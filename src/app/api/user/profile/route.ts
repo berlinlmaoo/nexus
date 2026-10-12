@@ -3,15 +3,18 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { rememberUiLanguage } from "@/lib/notification-text"
 import { logAudit } from "@/lib/audit"
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    // The web's interface language, for the notifications made for this person later (notification-text.ts).
+    void rememberUiLanguage(session.user.id, req.headers)
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
