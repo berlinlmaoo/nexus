@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Ticket, Plus, X, Loader2, Send, CheckCircle2, MessageSquare, Camera, Inbox as InboxIcon, AlertTriangle, ArrowRight, Ban, CalendarClock, Check } from "lucide-react";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
+import { PageBody, PageTabs } from "@/components/PageLayout";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import { localeOf, useLang } from "@/lib/lang";
@@ -77,10 +78,23 @@ const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 type Tab = "open" | "review" | "all";
 
+// Tab badges straight from the server's counts (GET /api/complaints): INBOX and REVIEW are the
+// counts of exactly what those tabs return; every other key is one literal status, so All is their sum.
+const countFor = (counts: Record<string, number>, tab: Tab) =>
+  tab === "open" ? counts.INBOX ?? counts.OPEN ?? 0
+    : tab === "review" ? counts.REVIEW ?? ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0))
+      : Object.entries(counts).reduce((n, [k, v]) => (k === "INBOX" || k === "REVIEW" ? n : n + v), 0);
+
+// Desktop row grid: subject · from · category · status · replies · last activity. Header and rows share it.
+const ROW_GRID = "lg:grid lg:grid-cols-[minmax(0,1fr)_11rem_8rem_9rem_4.5rem_7.5rem] lg:items-center lg:gap-4";
+const ROW_GRID_MINE = "lg:grid lg:grid-cols-[minmax(0,1fr)_8rem_9rem_4.5rem_7.5rem] lg:items-center lg:gap-4";
+
 function ComplaintsPage() {
   const { t } = useLang();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("open");
+  // null = not chosen yet: the BoD lands on the first queue that has something in it (below), instead of
+  // an empty Inbox while eight tickets wait under "In review" (owner, 12 Oct 2026).
+  const [tab, setTab] = useState<Tab | null>(null);
   const [composing, setComposing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   // A ticket asked for by id: open it, on the tab that is guaranteed to contain it. "All" rather than
@@ -94,10 +108,24 @@ function ComplaintsPage() {
 
   const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const viewerIsBod = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");
+  const shownTab: Tab = tab ?? "open";
 
   // BoD filter by status; staff just see their own thread list.
-  const status = !viewerIsBod ? "ALL" : tab === "open" ? INBOX_STATUS : tab === "review" ? REVIEW_STATUS : "ALL";
-  const listQ = useQuery({ queryKey: ["complaints", viewerIsBod ? status : "MINE"], queryFn: () => nexusApi.complaints(status) });
+  const status = !viewerIsBod ? "ALL" : shownTab === "open" ? INBOX_STATUS : shownTab === "review" ? REVIEW_STATUS : "ALL";
+  const listQ = useQuery({ queryKey: ["complaints", viewerIsBod ? status : "MINE"], queryFn: () => nexusApi.complaints(status), enabled: !roleQ.isLoading });
+  // Every response carries the counts for ALL tabs; keep the last ones so the badges stay put while the
+  // next tab loads.
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => { if (listQ.data?.counts) setCounts(listQ.data.counts); }, [listQ.data]);
+  // First answer for the BoD: pick the first non-empty queue (Inbox → In review → All). Layout effect, so
+  // the empty Inbox never paints before the switch.
+  const autoPicking = viewerIsBod && tab === null;
+  useLayoutEffect(() => {
+    if (!autoPicking || !listQ.data) return;
+    const c = listQ.data.counts ?? {};
+    setTab(countFor(c, "open") > 0 ? "open" : countFor(c, "review") > 0 ? "review" : "all");
+  }, [autoPicking, listQ.data]);
+
   // Tickets with a decision waiting float to the top; everything else keeps the server's own
   // lastMessageAt-desc order (Array#sort is stable, so the two orders compose). Tickets GIDEON merely
   // ANSWERED are deliberately not floated — a queue sorted "assistant first" buries the genuinely
@@ -106,55 +134,67 @@ function ComplaintsPage() {
     () => [...(listQ.data?.complaints ?? [])].sort((a, b) => Number(b.pendingCorrection) - Number(a.pendingCorrection)),
     [listQ.data],
   );
-  // counts.OPEN is what ?status=OPEN returns, i.e. the whole inbox (OPEN + AWAITING_DECISION) — the
-  // server widens it so this badge can never disagree with the list under it.
-  const counts = listQ.data?.counts ?? {};
+  const loading = roleQ.isLoading || listQ.isLoading || autoPicking;
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["complaints"] }); };
+  const newTicket = (
+    <button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New ticket")}</button>
+  );
+  const emptyCopy = !viewerIsBod
+    ? { title: t("No tickets yet"), message: t("A ticket is how you raise something with the BoD: a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the BoD decides, and it stays between you and them.") }
+    : shownTab === "all"
+      ? { title: t("No tickets yet"), message: t("Tickets from staff land here: complaints, questions, attendance records that look wrong. GIDEON checks the data first; the decision is yours.") }
+      : shownTab === "open"
+        ? { title: t("Inbox is clear"), message: t("Every new ticket has been picked up. New ones from staff land here first.") }
+        : { title: t("Nothing in review"), message: t("Tickets you take on, and the ones GIDEON has answered, wait here for a decision.") };
 
   return (
     <div>
       <PageHeader
         title={t("Tickets")}
         subtitle={t("A direct line to the BoD for work or HR issues. Only the BoD can read it.")}
-        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New ticket")}</button>}
+        actions={newTicket}
+        tabs={viewerIsBod ? (
+          <PageTabs label={t("Ticket queues")} value={shownTab} onChange={setTab} tabs={[
+            { key: "open", label: t("Inbox"), count: countFor(counts, "open"), attention: true },
+            { key: "review", label: t("In review"), count: countFor(counts, "review") },
+            { key: "all", label: t("All"), count: countFor(counts, "all") },
+          ]} />
+        ) : undefined}
       />
 
-      {/* Full-width header and the same p-4 md:p-8 gutters as the other list pages; the list keeps a
-          readable width, left-aligned like them (it was a centred 3xl column, header included). */}
-      <div className="p-4 md:p-8">
-      <div className="max-w-3xl">
-      {viewerIsBod && (
-        <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
-          {([["open", "Inbox"], ["review", "In review"], ["all", "All"]] as [Tab, string][]).map(([tk, label]) => (
-            <button key={tk} onClick={() => setTab(tk)} className="relative shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold transition">
-              {tab === tk && <motion.span layoutId="complaint-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
-              <span className={cn("relative flex items-center gap-1.5", tab === tk ? "text-primary-foreground" : "text-muted-foreground")}>
-                {t(label)}
-                {tk === "open" && (counts.OPEN ?? 0) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300")}>{counts.OPEN}</span>}
-                {tk === "review" && ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300")}>{(counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)}</span>}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="space-y-2.5">
-        {listQ.isLoading && Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 animate-pulse rounded-2xl border border-border bg-card" />)}
-        {!listQ.isLoading && complaints.length === 0 && (
-          <EmptyState icon={InboxIcon}
-            title={viewerIsBod ? (tab === "all" ? t("No tickets yet") : t("Nothing in this queue")) : t("No tickets yet")}
-            message={viewerIsBod
-              ? (tab === "all" ? t("Tickets from staff land here: complaints, questions, attendance records that look wrong. GIDEON checks the data first; the decision is yours.") : t("Only tickets with this status are shown. The rest are still under All."))
-              : t("A ticket is how you raise something with the BoD: a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the BoD decides, and it stays between you and them.")}
+      <PageBody>
+        {loading && (
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="flex items-center gap-3 px-4 py-3.5"><div className="h-4 flex-1 animate-pulse rounded bg-muted" /><div className="h-4 w-24 animate-pulse rounded bg-muted" /></div>)}
+          </div>
+        )}
+        {!loading && listQ.isError && (
+          <EmptyState icon={AlertTriangle} tone="muted" title={t("Couldn't load tickets")} message={t("Check your connection and try again.")}
+            action={<EmptyAction onClick={() => listQ.refetch()}>{t("Try again")}</EmptyAction>} />
+        )}
+        {!loading && !listQ.isError && complaints.length === 0 && (
+          <EmptyState icon={InboxIcon} tone={viewerIsBod && shownTab !== "all" ? "success" : "muted"} title={emptyCopy.title} message={emptyCopy.message}
             action={viewerIsBod
-              ? (tab !== "all" ? <EmptyAction onClick={() => setTab("all")}>{t("Show all")}</EmptyAction> : undefined)
+              ? (shownTab !== "all" && countFor(counts, "all") > 0 ? <EmptyAction onClick={() => setTab("all")}>{t("Show all tickets")}</EmptyAction> : undefined)
               : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> {t("New ticket")}</EmptyAction>} />
         )}
-        {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
-      </div>
-      </div>
-      </div>
+        {!loading && complaints.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div aria-hidden className={cn("hidden border-b border-border bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground", viewerIsBod ? ROW_GRID : ROW_GRID_MINE)}>
+              <span>{t("Subject")}</span>
+              {viewerIsBod && <span>{t("From")}</span>}
+              <span>{t("Category")}</span>
+              <span>{t("Status")}</span>
+              <span className="text-right">{t("Replies")}</span>
+              <span className="text-right">{t("Last activity")}</span>
+            </div>
+            <ul className="divide-y divide-border">
+              {complaints.map((c) => <li key={c.id}><TicketRow c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} /></li>)}
+            </ul>
+          </div>
+        )}
+      </PageBody>
 
       <AnimatePresence>
         {composing && <Composer onClose={() => setComposing(false)} onDone={() => { setComposing(false); invalidate(); }} />}
@@ -166,39 +206,61 @@ function ComplaintsPage() {
   );
 }
 
-function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
+function StatusChip({ status }: { status: string }) {
+  const { t } = useLang();
+  const st = statusOf(status);
+  return <span className={cn("inline-flex w-fit shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1", st.cls)}>{t(st.label)}</span>;
+}
+
+/** One ticket as a table row on desktop, a two-line row on a phone. The whole row opens the thread. */
+function TicketRow({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
   const { t, tn } = useLang();
-  const st = statusOf(c.status);
   const cat = catOf(c.category);
-  const who = c.reporter?.name ?? "—";
+  // The server only sends a reporter the viewer may see (BoD, or the reporter themself); anything else
+  // stays anonymous here too.
+  const who = c.reporter?.name ?? t("Anonymous");
+  // The two things a row has to say beyond its status: GIDEON has been in here, and a decision is
+  // sitting unmade. Both come straight off /api/complaints and are independent of the status chip.
+  const markers = (c.pendingCorrection || c.gideonReplied) && (
+    <span className="inline-flex shrink-0 items-center gap-1.5">
+      {c.pendingCorrection && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-px text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+          <CalendarClock className="h-3 w-3" /> {t("Decision waiting")}
+        </span>
+      )}
+      {c.gideonReplied && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground">
+          <GideonMark className="h-3 w-3" /> {t("GIDEON replied")}
+        </span>
+      )}
+    </span>
+  );
   return (
-    <button onClick={onOpen} className="block w-full rounded-2xl border border-border bg-card p-3.5 text-left shadow-soft transition hover:border-primary/40 hover:shadow-pop active:scale-[0.99]">
-      <div className="flex items-center gap-2">
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>
-        <span className="text-xs font-semibold text-muted-foreground">{cat ? t(cat.label) : null}</span>
-        <span className="ml-auto text-[11px] text-muted-foreground">{fmtWhen(c.lastMessageAt)}</span>
+    <button onClick={onOpen} className={cn("block w-full px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none", viewerIsBod ? ROW_GRID : ROW_GRID_MINE)}>
+      {/* Subject (+ markers). On a phone the date rides on this line. */}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 truncate text-sm font-medium text-foreground">{c.subject}</span>
+        <span className="hidden min-w-0 lg:inline-flex">{markers}</span>
+        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground lg:hidden">{fmtWhen(c.lastMessageAt)}</span>
       </div>
-      <div className="mt-1.5 line-clamp-1 text-sm font-bold">{c.subject}</div>
-      {/* The two things the row could never say before: GIDEON has been in here, and there is a
-          decision sitting unmade. Both come straight off /api/complaints (see the list markers in
-          src/lib/complaints.ts) and both are independent of the chip above — a ticket a director has
-          already taken on still shows the proposal waiting inside it. */}
-      {(c.pendingCorrection || c.gideonReplied) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {c.pendingCorrection && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30">
-              <CalendarClock className="h-3 w-3" /> {t("Decision waiting")}
-            </span>
-          )}
-          {c.gideonReplied && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-              <GideonMark className="h-3 w-3" /> {t("GIDEON replied")}
-            </span>
-          )}
+      {viewerIsBod && (
+        <div className="hidden min-w-0 items-center gap-2 lg:flex">
+          {c.reporter ? <Avatar userId={c.reporter.id} name={c.reporter.name} avatar={c.reporter.avatar ?? null} size={20} /> : null}
+          <span className="truncate text-sm text-muted-foreground">{who}</span>
         </div>
       )}
-      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <MessageSquare className="h-3 w-3" /> {tn(c.messageCount, "{n} message", "{n} messages")} · {viewerIsBod ? t("from {name}", { name: who }) : t("your ticket")}
+      <span className="hidden truncate text-sm text-muted-foreground lg:block">{cat ? t(cat.label) : "—"}</span>
+      <span className="hidden lg:block"><StatusChip status={c.status} /></span>
+      <span className="hidden items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground lg:flex"><MessageSquare className="h-3.5 w-3.5" />{c.messageCount}</span>
+      <span className="hidden text-right text-xs tabular-nums text-muted-foreground lg:block">{fmtWhen(c.lastMessageAt)}</span>
+
+      {/* Phone / narrow: status · category · sender · replies on one quiet line, markers under it. */}
+      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground lg:hidden">
+        <StatusChip status={c.status} />
+        {cat && <span>{t(cat.label)}</span>}
+        {viewerIsBod && <span className="truncate">· {t("from {name}", { name: who })}</span>}
+        <span>· {tn(c.messageCount, "{n} message", "{n} messages")}</span>
+        {markers}
       </div>
     </button>
   );
