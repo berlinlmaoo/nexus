@@ -149,6 +149,7 @@ export const Route = createFileRoute("/_app/projects/$projectId")({
     const qc = context.queryClient;
     void qc.prefetchQuery({ queryKey: ["nexus", "project", params.projectId], queryFn: () => nexusApi.project(params.projectId), staleTime: 30_000, retry: false });
     void qc.prefetchQuery({ queryKey: ["nexus", "project-views", params.projectId], queryFn: () => nexusApi.projectViews(params.projectId), staleTime: 30_000, retry: false });
+    void qc.prefetchQuery({ queryKey: ["nexus", "project-calendar-tasks", params.projectId, "subtasks"], queryFn: () => nexusApi.tasks(`projectId=${params.projectId}&subtasksOnly=1`), staleTime: 30_000, retry: false });
   },
   // `?settings=1` opens Project settings (the project tree's "Project settings" menu item, 10 Oct 2026).
   // An Outlet Sales Dashboard (10 Oct 2026): `?view=overview|calendar|board|form`, `&date=YYYY-MM-DD`,
@@ -683,7 +684,12 @@ function ProjectDetail() {
           {!activeModule && !activeView && (pv.query.isLoading
             ? <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
             : <div className="px-4 py-10 md:px-8"><EmptyState icon={LayoutGrid} tone="muted" title={tr("No views to show")} message={tr("Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.")} /></div>)}
-          {!activeModule && activeView && cfg && (() => {
+          {/* Subtask cards are placed under their parents: wait for them (they come with the project, see the
+              loader) rather than drawing the board and pushing cards down when they land. */}
+          {!activeModule && activeView && cfg && (cfg.showSubtasks || layout === "calendar") && allProjTasks.isLoading && (
+            <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
+          )}
+          {!activeModule && activeView && cfg && !((cfg.showSubtasks || layout === "calendar") && allProjTasks.isLoading) && (() => {
             const groupBy = layout === "board" ? cfg.groupBy ?? "section" : layout === "calendar" ? null : cfg.groupBy;
             const groups = buildGroups(shown, groupBy);
             // An empty Board still shows its lanes (to add the first task into one), unless a filter emptied it.
