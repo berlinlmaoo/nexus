@@ -5,6 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import { useMentionAutocomplete, type MentionUser } from "@/hooks/useMentionAutocomplete";
 import { MentionList } from "./feed-shared";
+import { useLang } from "@/lib/lang";
 
 const TEXT_MAX = 280;
 const IMG_MAX = 4;
@@ -13,6 +14,7 @@ export type ComposerPayload = { text: string; mentions: string[]; images: File[]
 type Pic = { file: File; url: string; w?: number; h?: number };
 
 export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser; members: MentionUser[]; onPost: (p: ComposerPayload) => void; autoFocus?: boolean }) {
+  const { t } = useLang();
   const [pics, setPics] = useState<Pic[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const mention = useMentionAutocomplete({ members });
@@ -60,7 +62,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
             onChange={mention.onChange}
             onKeyDown={mention.onKeyDown}
             rows={2}
-            placeholder="What's new?"
+            placeholder={t("What's new?")}
             className="w-full resize-none border-0 bg-transparent px-0 py-1.5 text-[15px] outline-none placeholder:text-muted-foreground"
           />
           {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
@@ -70,7 +72,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
               {pics.map((p, i) => (
                 <div key={p.url} className="group relative aspect-square overflow-hidden rounded-xl border border-border">
                   <img src={p.url} alt="" className="h-full w-full object-cover" />
-                  <button onClick={() => removePic(i)} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => removePic(i)} aria-label={t("Remove photo")} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
@@ -84,7 +86,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
           disabled={pics.length >= IMG_MAX}
           className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:opacity-40"
         >
-          <ImageIcon className="h-4 w-4" /> Photo {pics.length > 0 && `(${pics.length}/${IMG_MAX})`}
+          <ImageIcon className="h-4 w-4" /> {t("Photo")} {pics.length > 0 && `(${pics.length}/${IMG_MAX})`}
         </button>
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
 
@@ -113,7 +115,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
             disabled={!canPost}
             className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97] disabled:scale-100 disabled:opacity-40"
           >
-            <Send className="h-4 w-4" /> Post
+            <Send className="h-4 w-4" /> {t("Post")}
           </button>
         </div>
       </div>

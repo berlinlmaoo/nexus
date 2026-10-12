@@ -9,7 +9,8 @@ import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
-import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, type AttendanceCorrectionKind, type Complaint } from "@/lib/nexus-api";
+import { localeOf, useLang } from "@/lib/lang";
+import { ApiError, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, type AttendanceCorrectionKind, type Complaint } from "@/lib/nexus-api";
 
 export const Route = createFileRoute("/_app/complaints")({
   component: ComplaintsPage,
@@ -22,11 +23,12 @@ export const Route = createFileRoute("/_app/complaints")({
 // Visibility is enforced server-side, not here: GET /api/complaints scopes non-BoD viewers to
 // `reporterId: me`, so a staff member sees only their own tickets while BoD see all of them.
 
-const CATEGORIES: { key: string; label: string; emoji: string }[] = [
-  { key: "ATTENDANCE", label: "Attendance", emoji: "🕐" },
-  { key: "EXP", label: "EXP / Gamification", emoji: "⭐" },
-  { key: "DAY_OFF", label: "Leave / Day-Off", emoji: "🌴" },
-  { key: "OTHER", label: "Other", emoji: "💬" },
+// Labels stay English here and go through t() where they are drawn.
+const CATEGORIES: { key: string; label: string }[] = [
+  { key: "ATTENDANCE", label: "Attendance" },
+  { key: "EXP", label: "XP" },
+  { key: "DAY_OFF", label: "Leave / day off" },
+  { key: "OTHER", label: "Other" },
 ];
 const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
 // The wording is the APP's, deliberately. iOS renders the same ComplaintStatus as "Open" and
@@ -59,7 +61,9 @@ const statusOf = (key: string) => STATUS[key] ?? { label: statusLabel(key), cls:
 // GIDEON masih di inbox terus".
 const INBOX_STATUS = "OPEN";
 const REVIEW_STATUS = "IN_REVIEW,AWAITING_DECISION";
-const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString(localeOf(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+// Day of a correction ("YYYY-MM-DD"), in the interface language.
+const fmtDay = (d: string) => { const x = new Date(d); return Number.isNaN(x.getTime()) ? d : x.toLocaleDateString(localeOf(), { day: "numeric", month: "short" }); };
 const CORRECTION_STATUS: Record<string, { label: string; cls: string }> = {
   PENDING: { label: "Awaiting decision", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
   APPROVED: { label: "Approved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
@@ -74,6 +78,7 @@ const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 type Tab = "open" | "review" | "all";
 
 function ComplaintsPage() {
+  const { t } = useLang();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("open");
   const [composing, setComposing] = useState(false);
@@ -110,21 +115,21 @@ function ComplaintsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl">
       <PageHeader
-        title="Tickets"
-        subtitle="A direct line to the BoD for work or HR issues. Only the BoD can read it."
+        title={t("Tickets")}
+        subtitle={t("A direct line to the BoD for work or HR issues. Only the BoD can read it.")}
         icon={<Ticket className="h-6 w-6 text-primary" />}
-        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> Submit a complaint</button>}
+        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> {t("New ticket")}</button>}
       />
 
       {viewerIsBod && (
         <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
-          {([["open", "Inbox"], ["review", "In review"], ["all", "All"]] as [Tab, string][]).map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)} className="relative shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold transition">
-              {tab === t && <motion.span layoutId="complaint-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
-              <span className={cn("relative flex items-center gap-1.5", tab === t ? "text-primary-foreground" : "text-muted-foreground")}>
-                {label}
-                {t === "open" && (counts.OPEN ?? 0) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === t ? "bg-primary-foreground/20" : "bg-amber-100 text-amber-700")}>{counts.OPEN}</span>}
-                {t === "review" && ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === t ? "bg-primary-foreground/20" : "bg-violet-100 text-violet-700")}>{(counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)}</span>}
+          {([["open", "Inbox"], ["review", "In review"], ["all", "All"]] as [Tab, string][]).map(([tk, label]) => (
+            <button key={tk} onClick={() => setTab(tk)} className="relative shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold transition">
+              {tab === tk && <motion.span layoutId="complaint-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
+              <span className={cn("relative flex items-center gap-1.5", tab === tk ? "text-primary-foreground" : "text-muted-foreground")}>
+                {t(label)}
+                {tk === "open" && (counts.OPEN ?? 0) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-amber-100 text-amber-700")}>{counts.OPEN}</span>}
+                {tk === "review" && ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === tk ? "bg-primary-foreground/20" : "bg-violet-100 text-violet-700")}>{(counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)}</span>}
               </span>
             </button>
           ))}
@@ -135,13 +140,13 @@ function ComplaintsPage() {
         {listQ.isLoading && Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 animate-pulse rounded-2xl border border-border bg-card" />)}
         {!listQ.isLoading && complaints.length === 0 && (
           <EmptyState icon={InboxIcon}
-            title={viewerIsBod ? (tab === "all" ? "No tickets yet" : "Nothing in this queue") : "No tickets yet"}
+            title={viewerIsBod ? (tab === "all" ? t("No tickets yet") : t("Nothing in this queue")) : t("No tickets yet")}
             message={viewerIsBod
-              ? (tab === "all" ? "Tickets staff raise — complaints, questions, attendance records that look wrong — arrive here. GIDEON checks the data first; the decision is yours." : "Only tickets with this status are shown. The rest are still under All.")
-              : "A ticket is how you raise something with BoD — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, BoD decides, and it stays between you and them."}
+              ? (tab === "all" ? t("Tickets from staff land here: complaints, questions, attendance records that look wrong. GIDEON checks the data first; the decision is yours.") : t("Only tickets with this status are shown. The rest are still under All."))
+              : t("A ticket is how you raise something with the BoD: a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, the BoD decides, and it stays between you and them.")}
             action={viewerIsBod
-              ? (tab !== "all" ? <EmptyAction onClick={() => setTab("all")}>Show all</EmptyAction> : undefined)
-              : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> New ticket</EmptyAction>} />
+              ? (tab !== "all" ? <EmptyAction onClick={() => setTab("all")}>{t("Show all")}</EmptyAction> : undefined)
+              : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> {t("New ticket")}</EmptyAction>} />
         )}
         {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
       </div>
@@ -157,14 +162,15 @@ function ComplaintsPage() {
 }
 
 function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
+  const { t, tn } = useLang();
   const st = statusOf(c.status);
   const cat = catOf(c.category);
-  const who = viewerIsBod ? (c.reporter?.name ?? "—") : "You";
+  const who = c.reporter?.name ?? "—";
   return (
     <button onClick={onOpen} className="block w-full rounded-2xl border border-border bg-card p-3.5 text-left shadow-soft transition hover:border-primary/40 hover:shadow-pop active:scale-[0.99]">
       <div className="flex items-center gap-2">
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>
-        <span className="text-xs font-semibold text-muted-foreground">{cat?.emoji} {cat?.label}</span>
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>
+        <span className="text-xs font-semibold text-muted-foreground">{cat ? t(cat.label) : null}</span>
         <span className="ml-auto text-[11px] text-muted-foreground">{fmtWhen(c.lastMessageAt)}</span>
       </div>
       <div className="mt-1.5 line-clamp-1 text-sm font-bold">{c.subject}</div>
@@ -176,18 +182,18 @@ function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: 
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {c.pendingCorrection && (
             <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200">
-              <CalendarClock className="h-3 w-3" /> Decision waiting
+              <CalendarClock className="h-3 w-3" /> {t("Decision waiting")}
             </span>
           )}
           {c.gideonReplied && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-              <GideonMark className="h-3 w-3" /> GIDEON replied
+              <GideonMark className="h-3 w-3" /> {t("GIDEON replied")}
             </span>
           )}
         </div>
       )}
       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <MessageSquare className="h-3 w-3" /> {c.messageCount} message{c.messageCount === 1 ? "" : "s"} · {viewerIsBod ? `from ${who}` : "your complaint"}
+        <MessageSquare className="h-3 w-3" /> {tn(c.messageCount, "{n} message", "{n} messages")} · {viewerIsBod ? t("from {name}", { name: who }) : t("your ticket")}
       </div>
     </button>
   );
@@ -205,6 +211,7 @@ function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: (
 }
 
 function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { t, tn } = useLang();
   const [category, setCategory] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -224,8 +231,8 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
     const room = MAX_PHOTOS - evidence.length;
     setEvidence([...evidence, ...kept.slice(0, room)]);
     setFileNote(
-      tooBig > 0 ? `Skipped ${tooBig} photo${tooBig === 1 ? "" : "s"} over 8MB.`
-        : kept.length > room ? `Kept the first ${MAX_PHOTOS} photos.`
+      tooBig > 0 ? tn(tooBig, "Skipped {n} photo over 8 MB.", "Skipped {n} photos over 8 MB.")
+        : kept.length > room ? t("Kept the first {n} photos.", { n: MAX_PHOTOS })
           : "",
     );
     // Clearing the input lets someone re-pick the exact same file after removing it.
@@ -237,58 +244,58 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
   return (
     <Backdrop onClose={onClose}>
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-lg font-black">Submit a complaint</h2>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+        <h2 className="text-lg font-black">{t("New ticket")}</h2>
+        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <div className="space-y-4 overflow-y-auto p-5">
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Category</label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Category")}</label>
           <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map((c) => (
               <button key={c.key} onClick={() => setCategory(c.key)} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition", category === c.key ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
-                {c.emoji} {c.label}
+                {t(c.label)}
               </button>
             ))}
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Short title</label>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder="e.g. My leave balance got deducted wrong this month" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Short title")}</label>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder={t("e.g. My leave balance got deducted wrong this month")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tell us what happened</label>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder="Describe the issue in as much detail as you can — what happened, when, and what you're hoping for." className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("What happened")}</label>
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder={t("Describe the issue in as much detail as you can: what happened, when, and what you'd like to happen.")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           <p className="text-right text-[11px] text-muted-foreground">{body.trim().length}/4000</p>
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Photo evidence <span className="text-rose-500">*required</span></label>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Photo evidence")} <span className="text-rose-500">{t("*required")}</span></label>
             {evidence.length > 0 && <span className="text-[11px] font-semibold text-muted-foreground">{evidence.length}/{MAX_PHOTOS}</span>}
           </div>
           {evidence.length > 0 ? (
             <div className="grid grid-cols-3 gap-2">
               {previews.map((url, i) => (
                 <div key={url} className="relative aspect-square overflow-hidden rounded-xl border border-border">
-                  <img src={url} alt={`Evidence ${i + 1}`} className="h-full w-full object-cover" />
-                  <button onClick={() => setEvidence((prev) => prev.filter((_, j) => j !== i))} aria-label={`Remove photo ${i + 1}`}
+                  <img src={url} alt={t("Evidence {n}", { n: i + 1 })} className="h-full w-full object-cover" />
+                  <button onClick={() => setEvidence((prev) => prev.filter((_, j) => j !== i))} aria-label={t("Remove photo {n}", { n: i + 1 })}
                     className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/80"><X className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
               {evidence.length < MAX_PHOTOS && (
                 <button onClick={() => fileRef.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary">
                   <Plus className="h-5 w-5" />
-                  <span className="text-[11px] font-semibold">Add photo</span>
+                  <span className="text-[11px] font-semibold">{t("Add photo")}</span>
                 </button>
               )}
             </div>
           ) : (
             <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-6 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
               <Camera className="h-6 w-6" />
-              <span className="text-sm font-semibold">Take / pick photos for evidence</span>
-              <span className="text-[11px]">Up to {MAX_PHOTOS} photos — you can pick several at once</span>
+              <span className="text-sm font-semibold">{t("Take or pick photos as evidence")}</span>
+              <span className="text-[11px]">{t("Up to {n} photos. You can pick several at once.", { n: MAX_PHOTOS })}</span>
             </button>
           )}
           {/* NO `capture` on purpose: it forces the phone straight into the camera, and the evidence
@@ -300,14 +307,14 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
         </div>
 
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
-          🔒 Only the <b>BoD</b> can read this complaint — it won't hit the feed or be seen by other staff. The BoD will reply right here.
+          {t("Only the BoD can read this ticket. It won't show up in the feed or to other staff. The BoD replies right here.")}
         </div>
-        {create.isError && <p className="text-sm font-semibold text-rose-600">{(create.error as Error)?.message || "Couldn't send. Check your connection."}</p>}
+        {create.isError && <p className="text-sm font-semibold text-rose-600">{(create.error as Error)?.message || t("Couldn't send. Check your connection.")}</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-        <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
+        <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">{t("Cancel")}</button>
         <button onClick={() => create.mutate()} disabled={!canSubmit || create.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-40">
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />} Send complaint
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />} {t("Send ticket")}
         </button>
       </div>
     </Backdrop>
@@ -315,6 +322,7 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
 }
 
 function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; viewerIsBod: boolean; onClose: () => void; onChanged: () => void }) {
+  const { t, tn } = useLang();
   const qc = useQueryClient();
   const [reply, setReply] = useState("");
   const [zoom, setZoom] = useState<string | null>(null);   // evidence photo shown full size
@@ -361,12 +369,12 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
       <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            {st && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>}
-            <span className="truncate text-xs font-semibold text-muted-foreground">{cat?.emoji} {cat?.label}</span>
+            {st && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>}
+            <span className="truncate text-xs font-semibold text-muted-foreground">{cat ? t(cat.label) : null}</span>
           </div>
           <div className="mt-0.5 line-clamp-1 text-sm font-black">{c?.subject ?? "…"}</div>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
 
       {/* Reporter identity strip (BoD view) */}
@@ -383,20 +391,20 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {!!c?.attachments?.length && (
           <div className="rounded-2xl border border-border bg-card p-3">
             <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Camera className="h-3.5 w-3.5" /> Photo evidence{c.attachments.length > 1 && <span className="font-semibold normal-case tracking-normal">· {c.attachments.length} photos</span>}
+              <Camera className="h-3.5 w-3.5" /> {t("Photo evidence")}{c.attachments.length > 1 && <span className="font-semibold normal-case tracking-normal">· {tn(c.attachments.length, "{n} photo", "{n} photos")}</span>}
             </div>
             {/* A single photo keeps the full-width look it always had; several tile into a grid so the
                 whole set is visible at once instead of hidden behind a carousel. Tap to see it full size. */}
             {c.attachments.length === 1 ? (
               <button onClick={() => setZoom(c.attachments[0].url)} className="block w-full">
-                <img src={c.attachments[0].url} alt="Evidence" className="max-h-80 w-full rounded-xl border border-border object-contain" />
+                <img src={c.attachments[0].url} alt={t("Evidence")} className="max-h-80 w-full rounded-xl border border-border object-contain" />
               </button>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {c.attachments.map((a, i) => (
-                  <button key={a.id} onClick={() => setZoom(a.url)} aria-label={`Open evidence photo ${i + 1} full size`}
+                  <button key={a.id} onClick={() => setZoom(a.url)} aria-label={t("Open evidence photo {n} full size", { n: i + 1 })}
                     className="aspect-[4/3] overflow-hidden rounded-xl border border-border transition hover:border-primary/50">
-                    <img src={a.url} alt={`Evidence ${i + 1}`} className="h-full w-full object-cover" />
+                    <img src={a.url} alt={t("Evidence {n}", { n: i + 1 })} className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -428,17 +436,19 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
           <ProposeRemedyForm complaintId={id} defaultDate={dateKeyOf(c.createdAt)} onProposed={refreshAfterDecision} />
         )}
         {c && c.status !== "OPEN" && c.resolvedAt && (c.status === "RESOLVED" || c.status === "CLOSED") && (
-          <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.status === "RESOLVED" ? "Marked resolved" : "Closed"} {c.resolvedBy ? `by ${c.resolvedBy.name}` : ""} —</div>
+          <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.resolvedBy
+            ? t(c.status === "RESOLVED" ? "Marked resolved by {name}" : "Closed by {name}", { name: c.resolvedBy.name })
+            : t(c.status === "RESOLVED" ? "Marked resolved" : "Closed")} —</div>
         )}
       </div>
 
       {/* BoD status controls */}
       {c?.canManage && (
         <div className="flex flex-wrap gap-1.5 border-t border-border px-4 py-2">
-          {c.status !== "IN_REVIEW" && c.status !== "CLOSED" && c.status !== "RESOLVED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50">Take it on</button>}
-          {c.status !== "RESOLVED" && c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("RESOLVED")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"><CheckCircle2 className="h-3.5 w-3.5" /> Mark resolved</button>}
-          {c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("CLOSED")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Close</button>}
-          {c.status === "CLOSED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Reopen</button>}
+          {c.status !== "IN_REVIEW" && c.status !== "CLOSED" && c.status !== "RESOLVED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50">{t("Take it on")}</button>}
+          {c.status !== "RESOLVED" && c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("RESOLVED")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"><CheckCircle2 className="h-3.5 w-3.5" /> {t("Mark resolved")}</button>}
+          {c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("CLOSED")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Close")}</button>}
+          {c.status === "CLOSED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{t("Reopen")}</button>}
         </div>
       )}
 
@@ -452,19 +462,19 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (reply.trim().length >= 10) send.mutate(); } }}
               rows={1}
               maxLength={4000}
-              placeholder={viewerIsBod ? "Reply to this complaint…" : "Write a reply…"}
+              placeholder={viewerIsBod ? t("Reply to this ticket…") : t("Write a reply…")}
               className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
             />
-            <button onClick={() => send.mutate()} disabled={busy || reply.trim().length < 10} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40">
+            <button onClick={() => send.mutate()} disabled={busy || reply.trim().length < 10} aria-label={t("Send")} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40">
               {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
           </div>
           {reply.trim().length > 0 && reply.trim().length < 10 && (
-            <p className="mt-1 pl-1 text-[11px] text-muted-foreground">At least 10 characters ({reply.trim().length}/10)</p>
+            <p className="mt-1 pl-1 text-[11px] text-muted-foreground">{t("At least 10 characters ({n}/10)", { n: reply.trim().length })}</p>
           )}
         </div>
       ) : (
-        c && <div className="border-t border-border px-4 py-3 text-center text-xs font-semibold text-muted-foreground">This complaint has been closed.</div>
+        c && <div className="border-t border-border px-4 py-3 text-center text-xs font-semibold text-muted-foreground">{t("This ticket is closed.")}</div>
       )}
       {zoom && <PhotoZoom url={zoom} onClose={() => setZoom(null)} />}
     </Backdrop>
@@ -493,6 +503,7 @@ function dateKeyOf(iso: string) {
  * that is not about numbers.
  */
 function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaintId: string; defaultDate: string; onProposed: () => void }) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<AttendanceCorrectionKind>("TIME_CORRECTION");
   const [date, setDate] = useState(defaultDate);
@@ -516,7 +527,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
     onSuccess: () => { setOpen(false); setCheckIn(""); setCheckOut(""); setReason(""); setError(null); onProposed(); },
     // The server's refusals are written to be read (wrong day, ticket closed, one already pending,
     // nothing left to cancel).
-    onError: (e) => setError(e instanceof ApiError ? e.message : "Gagal mengirim usulan."),
+    onError: (e) => setError(e instanceof ApiError ? e.message : t("Couldn't send the request.")),
   });
 
   const ready = !!date && reason.trim().length >= 10 && (cancelling || !!checkIn || !!checkOut);
@@ -524,7 +535,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-2.5 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
-        <CalendarClock className="h-3.5 w-3.5" /> Ajukan perbaikan absen
+        <CalendarClock className="h-3.5 w-3.5" /> {t("Request an attendance fix")}
       </button>
     );
   }
@@ -532,15 +543,15 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
   return (
     <div className="rounded-2xl border border-border bg-card p-3.5">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{cancelling ? "Usulan pembatalan potongan" : "Usulan koreksi absen"}</span>
-        <button onClick={() => setOpen(false)} className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{cancelling ? t("Request to cancel a deduction") : t("Request to correct attendance")}</span>
+        <button onClick={() => setOpen(false)} aria-label={t("Close")} className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
       </div>
 
       {/* The choice comes first, because it changes what the rest of the form even asks for. */}
       <div className="mb-2.5 grid grid-cols-2 gap-1.5">
         {([
-          { k: "TIME_CORRECTION" as const, title: "Jamnya salah", sub: "Jam masuk/pulang yang tercatat tidak sesuai kenyataan" },
-          { k: "PENALTY_CANCELLATION" as const, title: "Potongannya tidak adil", sub: "Jamnya benar, tapi hari itu ada izin/cuti/sakit, atau NEXUS-nya down" },
+          { k: "TIME_CORRECTION" as const, title: t("The time is wrong"), sub: t("The recorded check-in or check-out time isn't what happened") },
+          { k: "PENALTY_CANCELLATION" as const, title: t("The deduction is unfair"), sub: t("The time is right, but that day you had a permit, leave or sick day, or NEXUS was down") },
         ]).map((opt) => (
           <button key={opt.k} onClick={() => { setKind(opt.k); setError(null); }}
             className={cn("rounded-xl border px-2.5 py-2 text-left transition", kind === opt.k ? "border-primary bg-primary/5" : "border-border hover:bg-accent")}>
@@ -552,13 +563,13 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
 
       <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground">
         {cancelling
-          ? <>Jam absen kamu <b>tidak akan diubah</b>. Yang diusulkan cuma pembatalan potongan XP hari itu, dan itu <b>belum terjadi</b> — nunggu approve BoD.</>
-          : <>Isi jam yang seharusnya tercatat. Absen kamu <b>belum berubah</b> — ini cuma usulan yang nunggu approve BoD.</>}
+          ? t("Your attendance times won't change. This only asks to cancel that day's XP deduction, and nothing happens until the BoD approves.")
+          : t("Enter the times that should have been recorded. Your attendance doesn't change yet: this is a request waiting for BoD approval.")}
       </p>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="col-span-2 text-[11px] font-semibold text-muted-foreground">
-          Tanggal
+          {t("Date")}
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
         </label>
         {!cancelling && (
@@ -576,11 +587,11 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
       </div>
 
       <label className="mt-2 block text-[11px] font-semibold text-muted-foreground">
-        Alasan
+        {t("Reason")}
         <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
           placeholder={cancelling
-            ? "Kenapa potongannya tidak adil? Contoh: hari itu sudah ajukan izin, statusnya masih nunggu approval."
-            : "Kenapa jamnya salah? Contoh: server NEXUS down jam 08.00, absen gagal kekirim."}
+            ? t("Why is the deduction unfair? For example: you requested a permit that day and it's still waiting for approval.")
+            : t("Why is the time wrong? For example: NEXUS was down at 08:00 and your check-in didn't go through.")}
           className="mt-0.5 w-full resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground placeholder:text-muted-foreground" />
       </label>
 
@@ -592,7 +603,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
 
       <button onClick={() => { setError(null); propose.mutate(); }} disabled={!ready || propose.isPending}
         className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
-        {propose.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Kirim ke BoD
+        {propose.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {t("Send to the BoD")}
       </button>
     </div>
   );
@@ -613,6 +624,7 @@ function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaint
  * explicitly STAYING.
  */
 function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecided }: { complaintId: string; correction: AttendanceCorrection; canDecide: boolean; onDecided: () => void }) {
+  const { t, tn } = useLang();
   const [note, setNote] = useState("");
   const pending = correction.status === "PENDING";
   const approved = correction.status === "APPROVED";
@@ -646,15 +658,15 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
     <div className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
       <div className="flex items-center gap-1.5">
         <CalendarClock className="h-3.5 w-3.5 text-primary" />
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{isCancellation ? "Penalty cancellation" : "Attendance correction"}</span>
-        <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{isCancellation ? t("Deduction cancellation") : t("Attendance correction")}</span>
+        <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{t(st.label)}</span>
       </div>
 
       <div className="mt-2 flex items-center gap-2">
         <Avatar userId={correction.user.id} name={correction.user.name} avatar={correction.user.avatar ?? null} size={26} />
         <div className="min-w-0">
-          <div className="truncate text-sm font-bold">{correction.user.name} · {fmtDate(correction.date)}</div>
-          <div className="truncate text-[11px] text-muted-foreground">Proposed by {correction.proposedBy.name} · {fmtWhen(correction.createdAt)}</div>
+          <div className="truncate text-sm font-bold">{correction.user.name} · {fmtDay(correction.date)}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{t("Proposed by {name}", { name: correction.proposedBy.name })} · {fmtWhen(correction.createdAt)}</div>
         </div>
       </div>
 
@@ -665,31 +677,31 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
           kartu yang cuma bilang "ubah jam" membuat BoD mengira jatah day off-nya tidak ikut. */}
       {!isCancellation && pending && (penaltyXp < 0 || dayOffs > 0) && (
         <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          Kalau di-approve, potongan hari itu ikut kembali: {penaltyXp < 0 ? <b>{penaltyXp} XP</b> : null}{penaltyXp < 0 && dayOffs > 0 ? " dan " : ""}{dayOffs > 0 ? <b>{dayOffs} jatah day off</b> : null}.
+          {t("If approved, that day's deduction comes back too:")} {penaltyXp < 0 ? <b>{penaltyXp} XP</b> : null}{penaltyXp < 0 && dayOffs > 0 ? ` ${t("and")} ` : ""}{dayOffs > 0 ? <b>{tn(dayOffs, "{n} day off", "{n} days off")}</b> : null}.
         </div>
       )}
       {isCancellation ? (
         <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
           <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">XP dipotong hari itu</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("XP deducted that day")}</span>
             <span className="ml-auto text-lg font-black tabular-nums text-rose-600">{penaltyXp === 0 ? "—" : penaltyXp}</span>
           </div>
           {dayOffs > 0 && (
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Jatah day off kepotong</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Days off deducted")}</span>
               <span className="ml-auto text-lg font-black tabular-nums text-rose-600">-{dayOffs}</span>
             </div>
           )}
           <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-            Usulannya: <b>batalkan potongan itu</b>{dayOffs > 0 ? <> — XP <b>dan</b> {dayOffs} jatah day off-nya sama-sama balik</> : null}. Jam masuk/pulang yang tercatat <b>tidak diubah sama sekali</b>
-            {correction.before.checkInAt || correction.before.checkOutAt ? (
-              <> — tetap {correction.before.checkInAt ? fmtTime(correction.before.checkInAt) : "—"} / {correction.before.checkOutAt ? fmtTime(correction.before.checkOutAt) : "—"}.</>
-            ) : (
-              <> — hari itu memang tidak punya catatan absen, dan tetap tidak akan punya.</>
-            )}
+            {dayOffs > 0
+              ? tn(dayOffs, "The request: cancel that deduction, so the XP and {n} day off both come back.", "The request: cancel that deduction, so the XP and {n} days off both come back.")
+              : t("The request: cancel that deduction.")}{" "}
+            {correction.before.checkInAt || correction.before.checkOutAt
+              ? t("The recorded check-in and check-out times don't change at all: they stay {in} / {out}.", { in: correction.before.checkInAt ? fmtTime(correction.before.checkInAt) : "—", out: correction.before.checkOutAt ? fmtTime(correction.before.checkOutAt) : "—" })
+              : t("That day has no attendance record, and it still won't have one.")}
           </p>
           {correction.before.status && (
-            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">Hari itu tercatat <b>{statusLabel(correction.before.status)}</b>, dan status itu juga tidak berubah.</p>
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{t("That day is recorded as {status}, and that doesn't change either.", { status: statusLabel(correction.before.status) })}</p>
           )}
         </div>
       ) : (
@@ -698,9 +710,9 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
         <div className="grid grid-cols-[4.5rem_1fr_1rem_1fr] items-center gap-x-2 gap-y-1.5">
           <span />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">On record</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("On record")}</span>
           <span />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Proposed</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Proposed")}</span>
           {rows.map((r) => {
             const changed = !!r.after;
             return (
@@ -708,14 +720,14 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
                 <span className="text-[11px] font-semibold text-muted-foreground">{r.label}</span>
                 <span className={cn("text-sm tabular-nums", changed ? "text-muted-foreground line-through" : "font-semibold")}>{r.before ? fmtTime(r.before) : "—"}</span>
                 <ArrowRight className={cn("h-3.5 w-3.5", changed ? "text-primary" : "text-transparent")} />
-                <span className={cn("text-sm", changed ? "font-black tabular-nums text-emerald-600" : "italic text-muted-foreground/70")}>{changed ? fmtTime(r.after) : "unchanged"}</span>
+                <span className={cn("text-sm", changed ? "font-black tabular-nums text-emerald-600" : "italic text-muted-foreground/70")}>{changed ? fmtTime(r.after) : t("unchanged")}</span>
               </Fragment>
             );
           })}
         </div>
         {correction.before.status && (
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-            That day is recorded as <b>{statusLabel(correction.before.status)}</b>. Late / early-leave minutes are recalculated from the new times on approval.
+            {t("That day is recorded as {status}. Late and early-leave minutes are worked out again from the new times when this is approved.", { status: statusLabel(correction.before.status) })}
           </p>
         )}
       </div>
@@ -723,26 +735,30 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       )}
 
       <div className="mt-2.5">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div>
+        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Reason")}</div>
         <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">{correction.reason}</p>
       </div>
 
       {!pending && (
         <div className={cn("mt-2.5 rounded-xl border px-3 py-2 text-xs leading-snug", approved ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-muted/40 text-muted-foreground")}>
           <p className="font-bold">
-            {approved ? "Approved" : "Rejected"}{correction.decidedBy ? ` by ${correction.decidedBy.name}` : ""}{correction.decidedAt ? ` · ${fmtWhen(correction.decidedAt)}` : ""}
+            {correction.decidedBy
+              ? t(approved ? "Approved by {name}" : "Rejected by {name}", { name: correction.decidedBy.name })
+              : t(approved ? "Approved" : "Rejected")}{correction.decidedAt ? ` · ${fmtWhen(correction.decidedAt)}` : ""}
           </p>
-          {approved && !isCancellation && <p className="mt-0.5">The attendance record for {fmtDate(correction.date)} was rewritten to the proposed times.</p>}
+          {approved && !isCancellation && <p className="mt-0.5">{t("The attendance record for {date} was changed to the proposed times.", { date: fmtDay(correction.date) })}</p>}
           {approved && !isCancellation && ((correction.refundedXp ?? 0) > 0 || (correction.restoredDayOffs ?? 0) > 0) && (
-            <p className="mt-0.5">Yang ikut kembali: {(correction.refundedXp ?? 0) > 0 ? `+${correction.refundedXp} XP` : ""}{(correction.refundedXp ?? 0) > 0 && (correction.restoredDayOffs ?? 0) > 0 ? " dan " : ""}{(correction.restoredDayOffs ?? 0) > 0 ? `${correction.restoredDayOffs} jatah day off` : ""}.</p>
+            <p className="mt-0.5">{t("Also returned:")} {(correction.refundedXp ?? 0) > 0 ? `+${correction.refundedXp} XP` : ""}{(correction.refundedXp ?? 0) > 0 && (correction.restoredDayOffs ?? 0) > 0 ? ` ${t("and")} ` : ""}{(correction.restoredDayOffs ?? 0) > 0 ? tn(correction.restoredDayOffs ?? 0, "{n} day off", "{n} days off") : ""}.</p>
           )}
           {approved && isCancellation && (
             <p className="mt-0.5">
-              Potongan XP {fmtDate(correction.date)} dibatalkan{typeof correction.refundedXp === "number" && correction.refundedXp > 0 ? <> — <b>+{correction.refundedXp} XP</b> dikembalikan</> : " (ternyata sudah tidak ada potongan yang tersisa)"}.
-              {" "}Jam absennya tidak diubah.{" "}
+              {typeof correction.refundedXp === "number" && correction.refundedXp > 0
+                ? t("The XP deduction for {date} was cancelled: +{xp} XP returned.", { date: fmtDay(correction.date), xp: correction.refundedXp })
+                : t("The XP deduction for {date} was cancelled (there was no deduction left to return).", { date: fmtDay(correction.date) })}
+              {" "}{t("The attendance times were not changed.")}{" "}
               {correction.waiverGranted
-                ? "Hari ini ditandai bebas potongan secara permanen, karena tidak ada pengajuan yang menutupinya dan tanggalnya belum tercatat sebagai hari NEXUS down."
-                : "Tidak ditandai permanen: sudah ada yang menahan potongannya, jadi kalau pengajuan itu nanti ditolak potongannya berlaku lagi."}
+                ? t("This day is now permanently free of deductions, because no request covers it and it isn't recorded as a day NEXUS was down.")
+                : t("Not marked permanently: something else already holds the deduction back, so if that request is rejected later, the deduction applies again.")}
             </p>
           )}
           {correction.decisionNote && <p className="mt-1 whitespace-pre-wrap break-words italic">“{correction.decisionNote}”</p>}
@@ -750,7 +766,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       )}
 
       {pending && !canDecide && (
-        <p className="mt-2.5 text-[11px] font-semibold text-muted-foreground">Waiting for the BoD to approve or reject this. Nothing has changed on your attendance yet.</p>
+        <p className="mt-2.5 text-[11px] font-semibold text-muted-foreground">{t("Waiting for the BoD to approve or reject this. Nothing has changed on your attendance yet.")}</p>
       )}
 
       {pending && canDecide && (
@@ -760,23 +776,25 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
             onChange={(e) => setNote(e.target.value)}
             rows={2}
             maxLength={1000}
-            placeholder="Note for the reporter (optional) — it goes into the thread with your decision."
+            placeholder={t("Note for the reporter (optional). It goes into the thread with your decision.")}
             className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
           />
           <div className="flex gap-2">
             <button onClick={() => decide.mutate("APPROVE")} disabled={decide.isPending}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-40">
-              {decide.isPending && decide.variables === "APPROVE" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve
+              {decide.isPending && decide.variables === "APPROVE" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {t("Approve")}
             </button>
             <button onClick={() => decide.mutate("REJECT")} disabled={decide.isPending}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-bold text-muted-foreground transition hover:bg-accent active:scale-[0.98] disabled:opacity-40">
-              {decide.isPending && decide.variables === "REJECT" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Reject
+              {decide.isPending && decide.variables === "REJECT" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} {t("Reject")}
             </button>
           </div>
           <p className="text-[11px] leading-snug text-muted-foreground">
             {isCancellation
-              ? `Approving mengembalikan XP${dayOffs > 0 ? ` dan ${dayOffs} jatah day off` : ""} yang kepotong di ${fmtDate(correction.date)} dan TIDAK menulis apa pun ke catatan absennya. Kalau tidak ada pengajuan izin/cuti yang menutupi hari itu, hari ini sekalian ditandai bebas potongan supaya cron malam tidak memotongnya lagi.`
-              : `Approving writes the attendance record for ${fmtDate(correction.date)}. “On record” is the snapshot taken when this proposal was written.`}
+              ? `${dayOffs > 0
+                ? tn(dayOffs, "Approving returns the XP and {n} day off deducted on {date}, and writes nothing to the attendance record.", "Approving returns the XP and {n} days off deducted on {date}, and writes nothing to the attendance record.", { date: fmtDay(correction.date) })
+                : t("Approving returns the XP deducted on {date}, and writes nothing to the attendance record.", { date: fmtDay(correction.date) })} ${t("If no permit or leave request covers that day, it is also marked free of deductions so the nightly check doesn't deduct it again.")}`
+              : t("Approving writes the attendance record for {date}. “On record” is how it looked when this request was made.", { date: fmtDay(correction.date) })}
           </p>
         </div>
       )}
@@ -787,16 +805,14 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
         <div className={cn("mt-2 rounded-xl border px-3 py-2 text-xs leading-snug", stale ? "border-amber-300 bg-amber-50 text-amber-900" : "border-rose-200 bg-rose-50 text-rose-700")}>
           {stale ? (
             <>
-              <p className="flex items-center gap-1.5 font-bold"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Out of date — nothing was changed.</p>
+              <p className="flex items-center gap-1.5 font-bold"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {t("Out of date. Nothing was changed.")}</p>
               <p className="mt-1 font-semibold">{err.message}</p>
               <p className="mt-1">
-                That day&rsquo;s attendance no longer matches what this proposal was written against — someone edited it in the meantime,
-                or the proposal was already decided. Approving now would have overwritten that edit, so the server refused.
-                Re-check {fmtDate(correction.date)} on the attendance board; if the record has moved on, reject this one and ask for a fresh proposal from the current data.
+                {t("That day's attendance has changed since this request was made: someone edited it, or the request was already decided. Approving now would overwrite that edit, so it was refused. Check {date} on the attendance board; if the record has changed, reject this one and ask for a new request based on the current data.", { date: fmtDay(correction.date) })}
               </p>
             </>
           ) : (
-            <p className="font-semibold">{err.message || "Couldn't save that decision. Check your connection and try again."}</p>
+            <p className="font-semibold">{err.message || t("Couldn't save that decision. Check your connection and try again.")}</p>
           )}
         </div>
       )}
@@ -810,6 +826,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
  * which would turn a `position: fixed` child into a box clipped inside that modal instead of the viewport.
  */
 function PhotoZoom({ url, onClose }: { url: string; onClose: () => void }) {
+  const { t } = useLang();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -817,8 +834,8 @@ function PhotoZoom({ url, onClose }: { url: string; onClose: () => void }) {
   }, [onClose]);
   return createPortal(
     <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/85 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <img src={url} alt="Evidence, full size" className="max-h-full max-w-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
-      <button onClick={onClose} aria-label="Close photo" className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25"><X className="h-5 w-5" /></button>
+      <img src={url} alt={t("Evidence, full size")} className="max-h-full max-w-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
+      <button onClick={onClose} aria-label={t("Close photo")} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25"><X className="h-5 w-5" /></button>
     </motion.div>,
     document.body,
   );

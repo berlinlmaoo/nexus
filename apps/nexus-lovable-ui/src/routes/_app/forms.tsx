@@ -7,11 +7,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { nexusApi, type NexusForm, type NexusProject } from "@/lib/nexus-api";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLang } from "@/lib/lang";
 import { FormCard, FormBuilder } from "@/components/forms/form-kit";
 
 export const Route = createFileRoute("/_app/forms")({ component: Forms });
 
 function Forms() {
+  const { t } = useLang();
   const [filter, setFilter] = useState("all");
   const [builder, setBuilder] = useState<{ form?: NexusForm; projectId: string } | null>(null);
   // Member-scoped projects → derive workspaces → fetch ALL projects per workspace
@@ -30,7 +32,7 @@ function Forms() {
     },
   });
   const projectList = (projectsQuery.data?.length ? projectsQuery.data : memberProjects.data) ?? [];
-  const projectName = (id?: string) => projectList.find((p) => p.id === id)?.name ?? "Project";
+  const projectName = (id?: string) => projectList.find((p) => p.id === id)?.name ?? t("Project");
 
   // Aggregate forms across ALL projects (live /api/forms is project-scoped & requires projectId,
   // so we fan out per project) — this is why forms looked "not synced" before.
@@ -52,15 +54,15 @@ function Forms() {
   return (
     <div>
       <PageHeader
-        title="Forms"
-        subtitle="Forms that create a task each time someone submits them."
+        title={t("Forms")}
+        subtitle={t("Forms that create a task each time someone submits them.")}
         actions={
           <>
             <select value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary">
-              <option value="all">All projects</option>
+              <option value="all">{t("All projects")}</option>
               {projectList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            <button disabled={!builderProjectId} onClick={() => setBuilder({ projectId: builderProjectId })} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> New form</button>
+            <button disabled={!builderProjectId} onClick={() => setBuilder({ projectId: builderProjectId })} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
           </>
         }
       />
@@ -76,8 +78,8 @@ function Forms() {
           </div>
         )}
         {!forms.isLoading && rows.length === 0 && (
-          <EmptyState icon={FileText} title="No forms yet"
-            message="A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it's submitted. Build the first one and it appears here for everyone to fill in." />
+          <EmptyState icon={FileText} title={t("No forms yet")}
+            message={t("A form is a page people fill in, like a request, a reimbursement or a report. Each answer becomes a task. Make the first one and it shows up here for everyone to fill in.")} />
         )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full"><FormCard form={f} projectName={projectName(f.projectId)} onEdit={() => setBuilder({ form: f, projectId: f.projectId ?? builderProjectId })} /></Reveal>)}

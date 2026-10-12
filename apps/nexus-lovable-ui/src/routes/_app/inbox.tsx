@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import {
   activeNotifications,
-  fmtDate,
   nexusApi,
   notificationGroup,
   type NexusNotification,
@@ -107,7 +106,7 @@ function notificationTarget(n: NexusNotification): { to: string; params?: Record
 }
 
 function NotificationRow({ notification, idx }: { notification: NexusNotification; idx: number }) {
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const Icon = iconMap[idx % iconMap.length];
@@ -143,9 +142,9 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold">{notification.title || typeTitle(notification)}</p>
+        <p className="text-sm font-semibold">{notification.title || t(typeTitle(notification))}</p>
         <p className="text-sm text-muted-foreground mt-0.5">{notification.message || t("New notification")}</p>
-        <p className="text-xs text-muted-foreground mt-1">{fmtDate(notification.createdAt)}</p>
+        <p className="text-xs text-muted-foreground mt-1">{fmtDay(notification.createdAt, locale)}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">{t("That didn't work. Check your connection and try again.")}</p>}
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -157,6 +156,12 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
       </div>
     </div>
   );
+}
+
+function fmtDay(value: string | null | undefined, locale: string) {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
 /** A notification with no title: its type in plain words ("task_assigned" → "Task assigned"). */
