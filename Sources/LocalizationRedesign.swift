@@ -192,6 +192,8 @@ extension AppLanguage {
         "Delete this chat?": "Hapus chat ini?",
         "Its messages are deleted for you on every device.": "Pesannya terhapus untukmu di semua perangkat.",
         "Ask GIDEON": "Tanya GIDEON",
+        "Image": "Gambar",
+        "Not done": "Belum selesai",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]

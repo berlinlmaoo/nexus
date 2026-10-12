@@ -103,7 +103,11 @@ struct DocReaderView: View {
                             Text(doc.emoji).font(.system(size: 30))
                             Text(doc.title).font(NXFont.display(26, .bold)).foregroundStyle(NX.foreground)
                         }
-                        if let body = doc.contentText, !body.isEmpty {
+                        // The block document as the web draws it (headings, lists, to-dos, callouts, toggles,
+                        // tables, images); its plain text when it has none.
+                        if let node = doc.content?.node, node.hasContent {
+                            BlockDocView(doc: node)
+                        } else if let body = doc.contentText, !body.isEmpty {
                             Text(body).font(NXFont.text(15)).foregroundStyle(NX.foreground.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true).lineSpacing(4)
                         } else {
