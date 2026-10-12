@@ -324,7 +324,7 @@ function MySubmissions() {
               <button className={chip(filter === "all")} onClick={() => setFilter("all")}>{t("All")}</button>
               {kinds.has("finance") && <button className={chip(filter === "finance")} onClick={() => setFilter("finance")}>{t("Finance")}</button>}
               {kinds.has("multimedia") && <button className={chip(filter === "multimedia")} onClick={() => setFilter("multimedia")}>{t("Multimedia")}</button>}
-              {projectOptions.length > 1 && (
+              {projectOptions.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className={cn(chip(!!activeProject), "inline-flex max-w-[16rem] items-center gap-1")} aria-label={t("Filter by project")}>
