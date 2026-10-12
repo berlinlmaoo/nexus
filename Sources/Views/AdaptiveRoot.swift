@@ -22,6 +22,8 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     // `teamCalendar` is the Calendar (0.1.7). The case keeps its old name because its raw value is
     // what `nexus://teamCalendar` resolves against, and links written before the rename must still open.
     case messages, threads, submissions, teamCalendar, roomBooking
+    // GIDEON's own page (web sidebar, 12 Oct 2026): the conversation with its chats list. iPad / Mac sidebar.
+    case gideon
     // Missions
     case leaderboard, reports
     // Knowledge
@@ -40,6 +42,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .inbox:        return T("Notifications")
         case .projects:     return T("Projects")
         case .messages:     return T("Messages")
+        case .gideon:       return "GIDEON"
         case .threads:      return T("Threads")
         case .submissions:  return T("My Submissions")
         case .teamCalendar: return T("Calendar")
@@ -64,6 +67,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .inbox:        return "tray.fill"
         case .projects:     return "rectangle.stack.fill"
         case .messages:     return "bubble.left.and.bubble.right.fill"
+        case .gideon:       return "sparkles"
         case .threads:      return "text.bubble.fill"
         case .submissions:  return "tray.full.fill"
         case .teamCalendar: return "calendar"
@@ -83,7 +87,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
 
     var tint: Color {
         switch self {
-        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings: return NX.violetText
+        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings, .gideon: return NX.violetText
         case .tasks, .attendance, .reports:                                    return NX.success
         case .inbox, .messages, .forms, .tickets:                              return NX.blue
         case .submissions, .leaderboard:                                       return NX.warning
@@ -102,21 +106,10 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// A board with horizontal columns is *less* usable squeezed into a column, and a map shows more
     /// ground the wider it is.
     var contentMaxWidth: CGFloat? {
-        #if targetEnvironment(macCatalyst)
-        // Mac: every screen fills the window. Capped, a full-screen Mac showed one column in the
-        // middle with most of the window empty either side (owner, 29 Sep 2026).
-        return nil
-        #else
-        switch self {
-        // Messages is two panes side by side once there is room, and a two-column layout wants the
-        // width the same way a board does — capped, it sat squeezed in the middle of the screen
-        // with empty margins either side.
-        case .attendance, .projects, .submissions, .teamCalendar, .roomBooking, .reports, .messages:
-            return nil
-        default:
-            return 900
-        }
-        #endif
+        // Every page runs the full width of the detail column, as the web's shared PageLayout does since
+        // its UI sweep (12 Oct 2026). Readable widths are kept INSIDE the screens that need them (the
+        // page reader caps its text at 760 pt; cards lay out in NXCardGrid columns).
+        nil
     }
 
     /// True for screens that draw their own header instead of a navigation bar. They are the only
@@ -134,7 +127,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     var ownsNavigationStack: Bool {
         switch self {
         // Messages builds its own stacks in the split layout — one per pane.
-        case .dashboard, .tasks, .inbox, .projects, .messages: return true
+        case .dashboard, .tasks, .inbox, .projects, .messages, .gideon: return true
         default: return false
         }
     }
@@ -146,6 +139,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .inbox:        InboxView()
         case .projects:     ProjectsView()
         case .messages:     MessagesView(providesOwnStack: true)
+        case .gideon:       GideonPanel(embedded: true)
         case .threads:      ThreadsView()
         case .submissions:  SubmissionsView()
         case .teamCalendar: CalendarView()
@@ -172,7 +166,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// System, with Projects, My Tasks and Notifications at the top.
     static var groups: [(title: String?, screens: [NXScreen])] { [
         (nil,                 [.dashboard, .projects, .tasks, .inbox]),
-        (T("Home"),           [.messages, .threads, .vault, .submissions, .teamCalendar, .roomBooking]),
+        (T("Home"),           [.messages, .gideon, .threads, .vault, .submissions, .teamCalendar, .roomBooking]),
         (T("Work"),           [.leaderboard, .reports, .forms]),
         (T("Team"),           [.attendance]),
         // `.teams` dilepas dari daftar: halaman daftar-tim sudah tidak ada di web maupun di HP.

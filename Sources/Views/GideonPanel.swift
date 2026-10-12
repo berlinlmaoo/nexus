@@ -76,6 +76,8 @@ struct GideonLauncher: View {
 struct GideonPanel: View {
     /// Opened from a project or a task ("Ask GIDEON"): a new chat about it (web, 12 Oct 2026).
     var openContext: GideonContext? = nil
+    /// GIDEON's own page in the iPad / Mac sidebar: no Close button (it is not a sheet).
+    var embedded = false
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -149,7 +151,7 @@ struct GideonPanel: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(T("Close")) { dismiss() }
+                    if !embedded { Button(T("Close")) { dismiss() } }
                 }
                 ToolbarItem(placement: .principal) { title }
                 ToolbarItem(placement: .primaryAction) {
