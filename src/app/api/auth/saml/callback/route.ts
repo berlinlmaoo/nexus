@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import crypto from "crypto"
+import { reissueSessionCookie } from "@/lib/session-issue"
 
 // SSO / SAML / SCIM are not used (their tables are empty): every handler answers 404 until someone needs them.
 const SSO_DISABLED = true
@@ -85,20 +85,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create a session token for the user
-    const sessionToken = crypto.randomBytes(32).toString("hex")
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
-
-    await prisma.userSession.create({
-      data: {
-        userId: user.id,
-        token: sessionToken,
-        ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined,
-        userAgent: req.headers.get("user-agent") || undefined,
-        expiresAt,
-      },
-    })
-
     logAudit({
       action: "login",
       entityType: "user",
@@ -110,16 +96,13 @@ export async function POST(req: NextRequest) {
     })
 
     // Redirect to dashboard with session info
-    // In production, this would set the NextAuth session cookie properly
     const redirectUrl = relayState || "/dashboard"
     const response = NextResponse.redirect(new URL(redirectUrl, req.url))
-    response.cookies.set("saml-session", sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
-      path: "/",
-    })
+    // A real NEXUS session (the same cookie every sign-in route sets), listed under Active sessions.
+    // This used to set a `saml-session` cookie nothing read, so an SSO sign-in never signed anyone in.
+    const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true, email: true, avatar: true, sessionVersion: true } })
+    if (!fresh) return NextResponse.redirect(new URL("/login?error=SamlError", req.url))
+    await reissueSessionCookie(response, fresh, fresh.sessionVersion, req.headers)
 
     return response
   } catch (error) {

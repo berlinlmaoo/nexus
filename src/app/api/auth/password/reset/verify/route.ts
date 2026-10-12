@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { markSessionsEnded } from "@/lib/user-sessions"
 import bcrypt from "bcryptjs"
 import { OtpPurpose } from "@/generated/prisma"
 import prisma from "@/lib/prisma"
@@ -119,6 +120,7 @@ export async function POST(request: NextRequest) {
         },
       })
     })
+    await markSessionsEnded(user.id)
 
     await logAudit({
       action: "update",

@@ -1,3 +1,4 @@
+import { recordUserSession } from "@/lib/user-sessions"
 import { NextRequest, NextResponse } from "next/server"
 import { encode } from "next-auth/jwt"
 import { verifyAuthenticationResponse } from "@simplewebauthn/server"
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
   if (!secret) return NextResponse.json({ ok: false, error: "Configuration" }, { status: 500 })
 
   const cookieName = getSessionCookieName()
+  const sid = newSessionId()
   const token = await encode({
     secret,
     salt: cookieName,
@@ -84,9 +86,10 @@ export async function POST(request: NextRequest) {
       email: passkey.user.email,
       picture: passkey.user.avatar,
       sessionVersion: await currentSessionVersion(passkey.user.id),
-      sid: newSessionId(),
+      sid,
     },
   })
+  await recordUserSession({ userId: passkey.user.id, sid, headers: request.headers, expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000) })
 
   await logAudit({
     action: "login",

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { canWriteGlobalAccount } from "@/lib/org"
+import { markSessionsEnded } from "@/lib/user-sessions"
 import { WORKSPACE_HIERARCHY, isSystemAdminUser } from "@/lib/rbac"
 import type { WorkspaceRole } from "@/generated/prisma/client"
 
@@ -62,6 +63,8 @@ export async function POST(
       where: { id: targetMember.user.id },
       data: { password: hashed, sessionVersion: { increment: 1 } },
     })
+    await markSessionsEnded(targetMember.user.id)
+    await markSessionsEnded(targetMember.user.id)
 
     // Log the EVENT (who reset whose password, when, from where) — never the password value.
     const targetLabel = targetMember.user.name ?? targetMember.user.email ?? targetMember.user.id

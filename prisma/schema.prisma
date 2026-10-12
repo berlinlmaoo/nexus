@@ -16,6 +16,9 @@ model User {
   /// carries the value; bumping it ends every token carrying an older one. Bumped by a password reset,
   /// and by a password change made from the web (which re-issues that browser's own cookie).
   sessionVersion Int               @default(0)
+  /// "Sign out other sessions" (src/lib/user-sessions.ts): a token issued before this that has no
+  /// UserSession row yet is refused instead of being listed lazily.
+  sessionsCutoffAt DateTime?
   /// Offboarded (owner, 8 Oct 2026): set = this account can no longer sign in anywhere. Nothing of
   /// theirs is deleted; see FormerMember.
   deactivatedAt   DateTime?
@@ -2208,6 +2211,7 @@ model SsoConfig {
 
 model UserSession {
   id           String   @id @default(cuid())
+  /// The JWT `sid` claim (or legacy:<userId>:<iat>), never the JWT itself: src/lib/user-sessions.ts.
   token        String   @unique
   ipAddress    String?
   userAgent    String?
@@ -2215,6 +2219,8 @@ model UserSession {
   expiresAt    DateTime
   lastActiveAt DateTime @default(now())
   revoked      Boolean  @default(false)
+  /// X-Nexus-Client of the device (ios/0.1.6/12, android/…, web/1); null for browsers without it.
+  client       String?
 
   userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -11,6 +11,7 @@ import { passkeysSupported, registerPasskey } from "@/lib/passkey";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLang, type Lang } from "@/lib/lang";
 import { thumbUrl } from "@/lib/thumb";
+import { ActiveSessions } from "@/components/settings/ActiveSessions";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
 
@@ -939,31 +940,11 @@ function AppearanceSection() {
 }
 
 function SecuritySection() {
-  const { t, locale } = useLang();
-  const qc = useQueryClient();
-  const sessions = useQuery({ queryKey: ["nexus", "sessions"], queryFn: nexusApi.userSessions, retry: false });
-  const revoke = useMutation({ mutationFn: (id: string) => nexusApi.revokeSession(id), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "sessions"] }) });
-  const rows = sessions.data?.sessions ?? [];
   return (
     <div className="space-y-6">
       <PasswordSection />
       <PasskeysSection />
-      <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
-        <h2 className="font-semibold">{t("Active sessions")}</h2>
-        {sessions.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
-        {!sessions.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No active sessions.")}</p>}
-        <div className="space-y-2">
-          {rows.map((s) => (
-            <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{s.userAgent || t("Unknown device")}</div>
-                <div className="text-xs text-muted-foreground">{s.ipAddress || "—"} · {t("started {date}", { date: fmtDay(s.createdAt, locale) })}</div>
-              </div>
-              <button onClick={() => revoke.mutate(s.id)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-[0.97]">{t("Revoke")}</button>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ActiveSessions />
     </div>
   );
 }

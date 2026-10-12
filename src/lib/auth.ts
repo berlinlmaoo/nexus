@@ -7,6 +7,9 @@ import { verifyCredentialUser } from '@/lib/credentials-auth'
 import prisma from '@/lib/prisma'
 import { isDeletedAccountEmail } from '@/lib/account-deletion'
 import { sessionVersionRejects } from '@/lib/session-version'
+import { recordUserSession, sessionRejected } from '@/lib/user-sessions'
+import { SESSION_MAX_AGE_SECONDS } from '@/lib/session-issue'
+import { headers } from 'next/headers'
 
 const log = createLogger('auth')
 
@@ -67,7 +70,7 @@ export const nexusNextAuthConfig = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { avatar: true, name: true, email: true, sessionVersion: true, deactivatedAt: true },
+            select: { avatar: true, name: true, email: true, sessionVersion: true, deactivatedAt: true, sessionsCutoffAt: true },
           })
           // Sessions are stateless JWTs (web cookie and the iOS app's Keychain copy alike), so
           // deleting an account cannot revoke them. Returning null here makes auth() answer
@@ -84,13 +87,24 @@ export const nexusNextAuthConfig = {
           // reset, or a password change from the web) and is treated like a deleted account's. A token
           // without the field — every session issued before this existed — is left alone.
           if (dbUser && user) token.sessionVersion = dbUser.sessionVersion
-          if (user && !token.sid) token.sid = crypto.randomUUID()
-          // One session signed out on its own (POST /api/auth/app-logout).
-          if (typeof token.sid === 'string') {
-            const revoked = await prisma.revokedSession.findUnique({ where: { sid: token.sid }, select: { sid: true } })
-            if (revoked) return null
+          // The request's headers, for the session list (IP, device). Absent outside a request scope.
+          let reqHeaders: Awaited<ReturnType<typeof headers>> | null = null
+          try { reqHeaders = await headers() } catch { reqHeaders = null }
+          if (user && !token.sid) {
+            token.sid = crypto.randomUUID()
+            await recordUserSession({
+              userId: token.id as string,
+              sid: token.sid as string,
+              headers: reqHeaders,
+              expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000),
+            })
           }
           if (dbUser && sessionVersionRejects(token.sessionVersion, dbUser.sessionVersion)) {
+            return null
+          }
+          // One session signed out on its own: logout (POST /api/auth/app-logout) or Settings >
+          // Security > Active sessions. Cached per process (lib/user-sessions.ts), not a query per request.
+          if (await sessionRejected(token, token.id as string, dbUser?.sessionsCutoffAt, reqHeaders)) {
             return null
           }
           if (dbUser) {
