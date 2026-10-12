@@ -52,10 +52,32 @@ Not done: in-column manual reorder (web C-BUG-6) — SwiftUI's drop on a column 
 custom geometry, which the house rules forbid without a device.
 Check-in reminder "Later" (web): the app has no in-app reminder modal (push only), so nothing to change.
 
-## Phase 3 — block editor, GIDEON, templates, iPad/Mac
+## Phase 3 — block editor, GIDEON, templates, iPad/Mac (done, with limits)
 
-_Not started._
+| What | Where | Verify on device |
+|---|---|---|
+| Pages drawn from the block doc (headings, lists, to-dos, callout, toggle, code, table, image, file, bookmark), read-only | BlockDocView.swift, DocsView reader | ZZ Blocks QA › Event SOP |
+| Task description: plain-text editor kept (server merges into the block doc, unchanged lines keep formatting) | TaskDetailView | Edit one line of a rich description, check the web |
+| GIDEON: Ask GIDEON on project + task (new chat with context chip), stream events, steps line, Sources chips, cards, proposals Apply/Discard (alert), chats list with search/delete, X-Nexus-Client, uiLang, approvalMode review | Gideon.swift, GideonPanel.swift | Ask "ada task apa aja?" from Finance Management; ask it to change a due date → Apply |
+| Template gallery: 7 server templates (EN/ID from server), previews in the status palette, guarded Create | ProjectTemplates, TemplateGallery | New project → Content Plan |
+| iPad/Mac: sidebar ⌘1…⌘7, project ⌘[ ⌘] ⌘F ⌘N ⌘, ; board ⌘Z / ⌘↩; hover; 44 pt targets; task as centred sheet | AdaptiveRoot, ProjectBoardView | iPad with keyboard; Mac Catalyst |
+| Bulk Move to / Priority on the visible selection (+ Undo); Duplicate visible-only | TaskBatchDuplicate | Select 3, filter to 1, Duplicate → 1 copy |
+
+Not done (why):
+- Editing pages in the app: live editing is Yjs over sockets on the web; an app write would bypass it.
+- GIDEON @-mentions in the composer, Personalize, Save as doc, AI in the editor: web-only for now.
+- Board in-column reorder (needs custom drop geometry; house rule: no unproven layout tricks).
 
 ## Verify on device first
 
-_Filled in as phases land._
+1. Build: `git pull && xcodegen generate`, ⌘B. Every changed file passes `swiftc -parse`; nothing is
+   type-checked on Linux. Most likely compile issues: the long ViewBuilder expressions in
+   ProjectBoardView (split already), ViewFilterSheet, GideonPanel.answerExtras.
+2. Settings › Server → Dev, sign in, switch to Bahasa once (localization tables are built then — the
+   duplicate-key check passes, but confirm no launch crash).
+3. Finance Suwara board: colours, group labels, inline new card (A ⏎ B ⏎ C), drag a selected group of
+   cards → Undo; open a task (iPad: centred sheet) → Rupiah field 369000 → close at once → reopen.
+4. My Submissions: columns/filters/proof/reply.
+5. Finance Management › "Per kategori" view; Filter and sort… sheet.
+6. GIDEON from a project header; a proposal Apply.
+7. Pages tab of ZZ Blocks QA.
