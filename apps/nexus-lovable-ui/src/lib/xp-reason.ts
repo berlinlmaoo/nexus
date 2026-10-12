@@ -23,9 +23,9 @@ export function xpReasonInfo(reason: string, amount?: number, lateMinutes?: numb
   if (reason === "admin:adjust") return { label: t("Admin adjustment") };
   const map: Record<string, string> = {
     task_done: "Task done",
-    quest: "Goal done",
+    quest: "Quest done",
     streak: "Daily streak",
-    penalty: "Goal penalty",
+    penalty: "Quest penalty",
     goal_milestone: "Goal milestone",
   };
   return { label: map[reason] ? t(map[reason]) : reason };

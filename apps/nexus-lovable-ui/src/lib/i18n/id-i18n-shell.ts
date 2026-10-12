@@ -301,8 +301,6 @@ export const ID_I18N_SHELL: Record<string, string> = {
   "No results for “{query}”.": "Tidak ada hasil untuk “{query}”.",
   "{feature} is in the works": "{feature} sedang disiapkan",
   "{feature} isn't available for your role yet. It opens to everyone once it's ready.": "{feature} belum tersedia untuk role kamu. Nanti dibuka untuk semua begitu siap.",
-  "The dashboard is your day at a glance: tasks and notifications.": "Dashboard merangkum harimu: task dan notifikasi.",
-  "Earn XP from your work; attendance penalties take it away.": "XP didapat dari pekerjaanmu; penalti absensi menguranginya.",
   "Security": "Keamanan",
   "Claude (MCP)": "Claude (MCP)",
   "Claude app": "App Claude",

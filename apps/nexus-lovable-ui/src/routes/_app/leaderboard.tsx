@@ -80,7 +80,7 @@ function Leaderboard() {
 
           {!board.isLoading && !board.isError && ranked.length === 0 && (
             <EmptyState icon={Trophy} title={t("No XP yet this month")}
-              message={t("XP comes from goals the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.")} />
+              message={t("XP comes from quests the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.")} />
           )}
 
           {!board.isLoading && !board.isError && ranked.length > 0 && (

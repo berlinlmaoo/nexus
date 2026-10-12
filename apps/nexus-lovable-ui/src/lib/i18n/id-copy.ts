@@ -168,7 +168,7 @@ export const ID_COPY: Record<string, string> = {
   "Couldn't load the leaderboard": "Papan peringkat gagal dimuat",
   "Your session may have ended. Sign in again, then reload this page.": "Sesimu mungkin sudah berakhir. Masuk lagi, lalu muat ulang halaman ini.",
   "No XP yet this month": "Belum ada XP bulan ini",
-  "XP comes from goals the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.": "XP datang dari goal yang diberikan BoD dan terjaga kalau datang tepat waktu. Peringkat muncul begitu ada yang mendapat atau kehilangan XP.",
+  "XP comes from quests the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.": "XP datang dari quest yang diberikan BoD dan terjaga kalau datang tepat waktu. Peringkat muncul begitu ada yang mendapat atau kehilangan XP.",
   "XP ranking for everyone": "Peringkat XP semua orang",
   "XP log": "Log XP",
   "Every XP change, added or deducted, for everyone": "Setiap perubahan XP, ditambah atau dipotong, untuk semua orang",

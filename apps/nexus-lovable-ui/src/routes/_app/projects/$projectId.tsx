@@ -1008,7 +1008,7 @@ function QuestChip({ task, className }: { task: NexusTask; className?: string })
   const xp = quests.reduce((s, q) => s + (q.xpReward ?? 0), 0);
   return (
     <span
-      title={t("Goal: {titles} (+{xp} XP)", { titles: quests.map((q) => q.title).join(", "), xp })}
+      title={t("Quest: {titles} (+{xp} XP)", { titles: quests.map((q) => q.title).join(", "), xp })}
       className={cn("inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-[color:var(--accent-foreground)] bg-accent", className)}
     >
       +{xp} XP

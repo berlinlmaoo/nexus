@@ -367,14 +367,14 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       detail: <TasksDetail tasks={taskList} />,
     },
     {
-      value: questsDone, total: quests.length, label: "Goals", Icon: Sparkles,
+      value: questsDone, total: quests.length, label: "Quests", Icon: Sparkles,
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
       detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
     },
   ];
 
   // A quest_claimable notification lands on /dashboard?quest=<key>:<period>: open the Quest card.
-  const questCard = cards.findIndex((c) => c.label === "Goals");
+  const questCard = cards.findIndex((c) => c.label === "Quests");
   useEffect(() => {
     if (search.quest) setActive(questCard);
   }, [search.quest, questCard]);
@@ -555,14 +555,14 @@ function useClaimQuest() {
   const { t } = useLang();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't claim the goal.")),
+    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't claim the quest.")),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gamification", "me"] }),
   });
 }
 
 function QuestsDetail({ quests, claim, focusKey }: { quests: NexusQuest[]; claim: ReturnType<typeof useClaimQuest>; focusKey?: string }) {
   const { t, locale } = useLang();
-  if (quests.length === 0) return <StatDetailEmpty text={t("No active goals right now.")} />;
+  if (quests.length === 0) return <StatDetailEmpty text={t("No active quests right now.")} />;
   return (
     <div className="space-y-1.5">
       {quests.map((q) => {
