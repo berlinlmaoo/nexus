@@ -8,6 +8,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Pencil
 import { PageHeader } from "@/components/PageHeader";
 import { fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
 
 // `booking`: a room-booking notification (old links went through /master-calendar?booking=<id>) opens the
 // month that holds that booking, scrolls to it and highlights it for a moment.
@@ -34,6 +35,7 @@ function ini(name?: string | null) {
 }
 
 function RoomBooking() {
+  const { t, tn, locale } = useLang();
   const [viewMonth, setViewMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const [roomFilter, setRoomFilter] = useState<string>("");
   const [composer, setComposer] = useState<{ booking?: NexusRoomBooking; date?: string } | null>(null);
@@ -113,34 +115,34 @@ function RoomBooking() {
   return (
     <div>
       <PageHeader
-        title="Room Booking"
-        subtitle="Book a room — VIP, Meeting, Studio. Live agenda per workspace."
+        title={t("Room Booking")}
+        subtitle={t("Book a meeting room and see who has it when.")}
         actions={
           <>
             <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary">
-              <option value="">All rooms</option>
-              {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{roomLabel(r)}</option>)}
+              <option value="">{t("All rooms")}</option>
+              {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{t(roomLabel(r))}</option>)}
             </select>
-            <button onClick={() => setComposer({ date: todayKey })} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> New booking</button>
+            <button onClick={() => setComposer({ date: todayKey })} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New booking")}</button>
           </>
         }
       />
       <div className="p-4 md:p-8">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-xl font-bold tracking-tight">{viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2>
+          <h2 className="font-display text-xl font-bold tracking-tight">{viewMonth.toLocaleDateString(locale, { month: "long", year: "numeric" })}</h2>
           <div className="flex items-center gap-1">
-            <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
-            <button onClick={() => setViewMonth(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })} className="rounded-md border border-border px-3 py-1 text-xs font-semibold transition-colors hover:bg-accent">Today</button>
-            <button onClick={() => shiftMonth(1)} aria-label="Next month" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => shiftMonth(-1)} aria-label={t("Previous month")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronLeft className="h-4 w-4" /></button>
+            <button onClick={() => setViewMonth(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })} className="rounded-md border border-border px-3 py-1 text-xs font-semibold transition-colors hover:bg-accent">{t("Today")}</button>
+            <button onClick={() => shiftMonth(1)} aria-label={t("Next month")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95"><ChevronRight className="h-4 w-4" /></button>
           </div>
         </div>
 
         {bookingsQ.isLoading && <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-        {bookingsQ.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><div className="text-lg font-black">Bookings locked</div><p className="mt-2 text-sm text-muted-foreground">Login/session required. If the bookings table hasn't been pushed to the DB yet, run <code>npm run db:push</code> on the backend first.</p></div>}
+        {bookingsQ.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><div className="text-lg font-black">{t("Couldn't load bookings")}</div><p className="mt-2 text-sm text-muted-foreground">{t("Your session may have ended. Sign in again, then try again. If it keeps happening, tell your admin.")}</p></div>}
         {!bookingsQ.isLoading && !bookingsQ.isError && agenda.length === 0 && (
-          <EmptyState icon={CalendarDays} title={`Nothing booked in ${viewMonth.toLocaleDateString("en-US", { month: "long" })}`}
-            message="Meeting rooms are booked here so two teams never turn up for the same room. Pick a room, a date and a time, and everyone invited is told."
-            action={<EmptyAction onClick={() => setComposer({ date: todayKey })}>New booking</EmptyAction>} />
+          <EmptyState icon={CalendarDays} title={t("Nothing booked in {month}", { month: viewMonth.toLocaleDateString(locale, { month: "long" }) })}
+            message={t("Book meeting rooms here so two teams never turn up for the same room. Pick a room, a date and a time.")}
+            action={<EmptyAction onClick={() => setComposer({ date: todayKey })}>{t("New booking")}</EmptyAction>} />
         )}
 
         {agenda.length > 0 && (
@@ -152,15 +154,15 @@ function RoomBooking() {
                 <div key={k} className="flex gap-4">
                   <div className="w-12 shrink-0 text-center">
                     <div className={cn("flex flex-col items-center justify-center rounded-2xl py-2", isToday ? "bg-primary text-primary-foreground shadow-soft" : "bg-muted text-foreground")}>
-                      <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{d.toLocaleDateString("en-US", { weekday: "short" })}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{d.toLocaleDateString(locale, { weekday: "short" })}</span>
                       <span className="font-display text-xl font-bold leading-none">{d.getDate()}</span>
                     </div>
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex items-baseline gap-2 pt-1">
-                      <span className="text-sm font-bold">{d.toLocaleDateString("en-US", { weekday: "long" })}</span>
-                      {isToday && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">Today</span>}
-                      <span className="text-xs text-muted-foreground">· {items.length} booking{items.length === 1 ? "" : "s"}</span>
+                      <span className="text-sm font-bold">{d.toLocaleDateString(locale, { weekday: "long" })}</span>
+                      {isToday && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{t("Today")}</span>}
+                      <span className="text-xs text-muted-foreground">· {tn(items.length, "{n} booking", "{n} bookings")}</span>
                     </div>
                     {items.map((b) => {
                       const s = roomStyle(b.room);
@@ -174,8 +176,8 @@ function RoomBooking() {
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-semibold group-hover:text-primary">{b.title}</div>
                             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                              <span className={cn("inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-bold", s.chip)}><MapPin className="h-3 w-3" />{roomLabel(b.room)}</span>
-                              {b.createdBy?.name && <span>by {b.createdBy.name}</span>}
+                              <span className={cn("inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-bold", s.chip)}><MapPin className="h-3 w-3" />{t(roomLabel(b.room))}</span>
+                              {b.createdBy?.name && <span>{t("by {name}", { name: b.createdBy.name })}</span>}
                             </div>
                           </div>
                         </button>
@@ -204,6 +206,7 @@ function toLocalInputs(iso?: string) {
 }
 
 function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoomBooking; initialDate?: string; onClose: () => void }) {
+  const { t } = useLang();
   const qc = useQueryClient();
   const editing = !!booking;
   const startInit = toLocalInputs(booking?.startsAt);
@@ -236,13 +239,13 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const save = useMutation({
     mutationFn: () => editing ? nexusApi.updateRoomBooking(booking!.id, buildPayload()) : nexusApi.createRoomBooking(buildPayload()),
     onSuccess: () => { invalidate(); onClose(); },
-    onError: (e: unknown) => setErr(e instanceof Error ? e.message : "Couldn't save the booking."),
+    onError: (e: unknown) => setErr(e instanceof Error ? e.message : t("Couldn't save the booking.")),
   });
   const del = useMutation({
     mutationFn: () => nexusApi.deleteRoomBooking(booking!.id),
     onSuccess: () => { invalidate(); onClose(); },
     // Only the creator or a manager may delete; anyone else got a silent 403 and a dialog that stayed open.
-    onError: (e: unknown) => setErr(e instanceof Error ? e.message : "Couldn't delete the booking."),
+    onError: (e: unknown) => setErr(e instanceof Error ? e.message : t("Couldn't delete the booking.")),
   });
 
   const canSave = title.trim() && date && startTime && endTime && endTime > startTime && !save.isPending;
@@ -252,55 +255,55 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
     <div className="fixed inset-0 z-[70] grid place-items-center p-0 sm:p-4">
       <motion.div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
-        role="dialog" aria-modal="true"
+        role="dialog" aria-modal="true" aria-label={editing ? t("Edit booking") : t("New booking")}
         initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}
         className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col overflow-y-auto bg-card shadow-pop sm:max-h-[92dvh] sm:rounded-3xl sm:border sm:border-border"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur">
-          <h2 className="font-display text-lg font-bold tracking-tight">{editing ? "Edit booking" : "New booking"}</h2>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-lg font-bold tracking-tight">{editing ? t("Edit booking") : t("New booking")}</h2>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="space-y-3 p-5">
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Room</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Room")}</span>
             <select value={room} onChange={(e) => setRoom(e.target.value)} className={field}>
-              {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{roomLabel(r)}</option>)}
+              {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{t(roomLabel(r))}</option>)}
             </select>
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Diageo client meeting" className={field} />
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Title")}</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Client meeting")} className={field} />
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Date</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Date")}</span>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Start</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Start")}</span>
               <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">End</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("End")}</span>
               <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} />
             </label>
           </div>
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Notes (optional)</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Notes (optional)")}</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={cn(field, "resize-y")} />
           </label>
 
-          {endTime <= startTime && <p className="text-xs font-semibold text-destructive">End time has to be after the start time.</p>}
+          {endTime <= startTime && <p className="text-xs font-semibold text-destructive">{t("End time has to be after the start time.")}</p>}
           {err && <p className="text-xs font-semibold text-destructive">{err}</p>}
 
           <div className="flex items-center gap-2 pt-1">
             <button disabled={!canSave} onClick={() => { setErr(null); save.mutate(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50">
-              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing ? <><Pencil className="h-4 w-4" /> Update</> : "Book room"}
+              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing ? <><Pencil className="h-4 w-4" /> {t("Update")}</> : t("Book room")}
             </button>
             {editing && (
-              <button onClick={() => { if (confirm("Delete this booking?")) del.mutate(); }} disabled={del.isPending} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
+              <button onClick={() => { if (confirm(t("Delete this booking?"))) del.mutate(); }} disabled={del.isPending} aria-label={t("Delete booking")} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
                 <Trash2 className="h-4 w-4" />
               </button>
             )}

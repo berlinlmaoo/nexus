@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, Loader2, LogIn, Lock, Paperclip } from "lucide-rea
 import { ApiError, nexusApi, type NexusFormField } from "@/lib/nexus-api";
 import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
+import { t as tr, useDocumentLang, useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/f/$formId")({ component: PublicForm });
 
@@ -17,7 +18,7 @@ type Cond = {
 type FField = NexusFormField & { name?: string; showIf?: Cond | null; attachmentEnabled?: boolean; autofill?: "name" | "email"; numberFormat?: "currency-idr" };
 
 function fieldLabel(f: FField) {
-  return f.name || f.label || "Field";
+  return f.name || f.label || tr("Field");
 }
 function fieldOptions(f: FField): string[] {
   if (Array.isArray(f.options)) return f.options;
@@ -49,6 +50,9 @@ function isFilled(v: unknown) {
 }
 
 function PublicForm() {
+  // No sign-in shell here: the page follows the language stored on this browser ("nexus-lang"), like the app.
+  const { t, tn, lang } = useLang();
+  useDocumentLang(lang);
   const { formId } = useParams({ from: "/f/$formId" });
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [done, setDone] = useState(false);
@@ -111,7 +115,7 @@ function PublicForm() {
       const res = await fetch(`/api/forms/${formId}/submit`, { method: "POST", body: fd });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.error || "Failed to submit form");
+        throw new Error(body?.error || t("Couldn't send the form. Try again."));
       }
       return res.json().catch(() => ({}));
     },
@@ -125,7 +129,7 @@ function PublicForm() {
   const input = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
   return (
-    <div className="min-h-screen bg-background px-4 py-10 text-foreground">
+    <div lang={lang} className="min-h-screen bg-background px-4 py-10 text-foreground">
       <div className="mx-auto w-full max-w-xl">
         {form.isLoading && <div className="flex justify-center py-20 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
 
@@ -134,13 +138,13 @@ function PublicForm() {
             {scheduleMsg ? (
               <>
                 <Clock className="mx-auto mb-4 h-10 w-10 text-warning-foreground" />
-                <div className="text-lg font-bold">Form not open yet</div>
+                <div className="text-lg font-bold">{t("Form not open yet")}</div>
                 <p className="mt-2 text-sm text-muted-foreground">{scheduleMsg}</p>
               </>
             ) : (
               <>
-                <div className="text-lg font-bold">Form unavailable</div>
-                <p className="mt-2 text-sm text-muted-foreground">This form is private or no longer exists.</p>
+                <div className="text-lg font-bold">{t("Form unavailable")}</div>
+                <p className="mt-2 text-sm text-muted-foreground">{t("This form is private or no longer exists.")}</p>
               </>
             )}
           </div>
@@ -149,8 +153,8 @@ function PublicForm() {
         {f && done && (
           <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-soft">
             <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-success" />
-            <h1 className="font-display text-2xl font-bold tracking-tight">Submitted — thank you!</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Your response for “{f.name}” was received.</p>
+            <h1 className="font-display text-2xl font-bold tracking-tight">{t("Sent. Thank you!")}</h1>
+            <p className="mt-2 text-sm text-muted-foreground">{t("Your answer to “{name}” was received.", { name: f.name })}</p>
           </div>
         )}
 
@@ -158,12 +162,12 @@ function PublicForm() {
           <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-soft">
             <LogIn className="mx-auto mb-4 h-10 w-10 text-primary" />
             <h1 className="font-display text-2xl font-bold tracking-tight">{f.name}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">This form needs a NEXUS login before you submit, so you can track your request under “My Requests”.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t("Sign in to NEXUS before you send this form, so you can follow it in My Submissions.")}</p>
             <a
               href={`/login?callbackUrl=${encodeURIComponent(`/f/${formId}`)}`}
               className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99]"
             >
-              <LogIn className="h-4 w-4" /> Log in to submit
+              <LogIn className="h-4 w-4" /> {t("Sign in to send")}
             </a>
           </div>
         )}
@@ -179,10 +183,10 @@ function PublicForm() {
                   ? <img src={me.data.user.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
                   : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">{(me.data.user.name ?? me.data.user.email ?? "?").slice(0, 1).toUpperCase()}</span>}
                 <div className="min-w-0 flex-1 leading-tight">
-                  <div className="text-[11px] text-muted-foreground">Submitting as</div>
+                  <div className="text-[11px] text-muted-foreground">{t("Sending as")}</div>
                   <div className="truncate text-sm font-semibold">{me.data.user.name ?? me.data.user.email}{me.data.user.name && me.data.user.email ? <span className="font-normal text-muted-foreground"> · {me.data.user.email}</span> : null}</div>
                 </div>
-                <a href={`/login?callbackUrl=${encodeURIComponent(`/f/${formId}`)}`} className="shrink-0 text-xs font-semibold text-primary hover:underline">Switch account</a>
+                <a href={`/login?callbackUrl=${encodeURIComponent(`/f/${formId}`)}`} className="shrink-0 text-xs font-semibold text-primary hover:underline">{t("Switch account")}</a>
               </div>
             )}
 
@@ -200,7 +204,7 @@ function PublicForm() {
                       <textarea required={field.required} rows={3} placeholder={field.placeholder} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={`${input} resize-y`} />
                     ) : field.type === "dropdown" || field.type === "select" ? (
                       <select required={field.required} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={input}>
-                        <option value="">Choose…</option>
+                        <option value="">{t("Choose…")}</option>
                         {fieldOptions(field).map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
                     ) : field.type === "multi_select" ? (
@@ -226,7 +230,7 @@ function PublicForm() {
                     ) : field.type === "file" ? (
                       <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border bg-background px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary">
                         <Paperclip className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{Array.isArray(val) && val.length ? `${val.length} file dipilih` : val instanceof File ? val.name : "Pilih file (boleh lebih dari 1)…"}</span>
+                        <span className="truncate">{Array.isArray(val) && val.length ? tn(val.length, "{n} file selected", "{n} files selected") : val instanceof File ? val.name : t("Choose files (one or more)…")}</span>
                         <input type="file" multiple required={field.required} className="hidden" onChange={(e) => set(field.id, Array.from(e.target.files ?? []))} />
                       </label>
                     ) : field.type === "number" && field.numberFormat === "currency-idr" ? (
@@ -239,13 +243,13 @@ function PublicForm() {
                     ) : (
                       <input required={field.required} type={field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} placeholder={field.placeholder} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={input} />
                     )}
-                    {field.autofill && <p className="mt-1 text-[11px] text-muted-foreground">🔒 auto-filled from your logged-in account</p>}
+                    {field.autofill && <p className="mt-1 text-[11px] text-muted-foreground">{t("Filled in from your account")}</p>}
 
                     {/* optional extra attachment on non-file fields */}
                     {field.attachmentEnabled && field.type !== "file" && (
                       <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary">
                         <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{values[`attachment:${field.id}`] instanceof File ? (values[`attachment:${field.id}`] as File).name : "Attach a file (optional)"}</span>
+                        <span className="truncate">{values[`attachment:${field.id}`] instanceof File ? (values[`attachment:${field.id}`] as File).name : t("Attach a file (optional)")}</span>
                         <input type="file" className="hidden" onChange={(e) => set(`attachment:${field.id}`, e.target.files?.[0] ?? "")} />
                       </label>
                     )}
@@ -253,16 +257,16 @@ function PublicForm() {
                 );
               })}
               <button type="submit" disabled={!canSubmit || submit.isPending} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50">
-                {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Submit
+                {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {t("Send")}
               </button>
               {!canSubmit && missingRequired.length > 0 && (
-                <p className="text-center text-xs text-muted-foreground">Fill in the required ones first <span className="text-destructive">*</span>: <span className="font-semibold text-foreground">{missingRequired.join(", ")}</span></p>
+                <p className="text-center text-xs text-muted-foreground">{t("Fill in the required fields first")} <span className="text-destructive">*</span>: <span className="font-semibold text-foreground">{missingRequired.join(", ")}</span></p>
               )}
-              {submit.isError && <p className="text-center text-xs font-semibold text-destructive">{(submit.error as Error)?.message || "Submission failed. Try again."}</p>}
+              {submit.isError && <p className="text-center text-xs font-semibold text-destructive">{(submit.error as Error)?.message || t("Couldn't send the form. Try again.")}</p>}
             </form>
           </div>
         )}
-        <p className="mt-6 text-center text-xs text-muted-foreground">Powered by NEXUS Phaëthon</p>
+        <p className="mt-6 text-center text-xs text-muted-foreground">{t("Powered by NEXUS Phaëthon")}</p>
       </div>
     </div>
   );

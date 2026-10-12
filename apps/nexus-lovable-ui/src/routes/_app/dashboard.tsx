@@ -25,14 +25,14 @@ import {
 import learner from "@/assets/philearn/learner.png";
 import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
-import { activeNotifications, fmtDate, fmtDue, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
+import { activeNotifications, fmtTime, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { LEVELS, levelForXp } from "@/lib/levels";
 import { TierBadge } from "@/components/gamification/TierBadge";
@@ -48,6 +48,20 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: Dashboard,
   head: () => ({ meta: [{ title: "NEXUS Phaëthon — Dashboard" }] }),
 });
+
+// Short day ("5 Oct" / "5 Okt") in the interface language; with a time when the value carries one.
+function fmtDay(value: string | null | undefined, locale: string) {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+}
+function fmtDueDay(value: string | null | undefined, locale: string) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const hasTime = d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0;
+  return hasTime ? `${fmtDay(value, locale)}, ${fmtTime(value)}` : fmtDay(value, locale);
+}
 
 const fallbackDashboard: NexusDashboardResponse = {
   stats: { totalTasks: 10, inProgressTasks: 3, overdueTasks: 2, completedThisWeek: 5 },
@@ -113,6 +127,9 @@ function Dashboard() {
    right edge (in the main zone) lines up with the stat cards / Quest card,
    while search + notifications sit in the right-rail zone. */
 function TopBar({ userName, unread }: { userName: string; unread: number }) {
+  const { t } = useLang();
+  const hour = new Date().getHours();
+  const greeting = hour < 11 ? t("Good morning,") : hour < 18 ? t("Good afternoon,") : t("Good evening,");
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-6 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
       {/* main zone: greeting (left) + level chip (right, aligns with stat cards).
@@ -120,7 +137,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
           not 4); sm+ keeps the original side-by-side row — desktop unchanged. */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
-          <p className="text-xl font-medium text-foreground/80">Good Morning,</p>
+          <p className="text-xl font-medium text-foreground/80">{greeting}</p>
           <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">{userName}!</h1>
         </div>
         <LevelChip />
@@ -129,7 +146,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
       <div className="flex items-center gap-3">
         <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-card px-5 text-muted-foreground transition-shadow focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
           <Search className="h-4 w-4 shrink-0" />
-          <input placeholder="Search.." className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />
+          <input placeholder={t("Search…")} aria-label={t("Search")} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />
         </label>
         <NotificationsBell unread={unread} />
       </div>
@@ -140,6 +157,7 @@ function TopBar({ userName, unread }: { userName: string; unread: number }) {
 /* Notification bell → morphs into a detail modal (same expand pattern as the
    stat cards / level chip / messages card), instead of navigating to /inbox. */
 function NotificationsBell({ unread }: { unread: number }) {
+  const { t, tn } = useLang();
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
   const q = useQuery({ queryKey: ["notifications-unread"], queryFn: () => nexusApi.notifications(), retry: 1 });
@@ -152,7 +170,7 @@ function NotificationsBell({ unread }: { unread: number }) {
         type="button"
         layoutId={reduce ? undefined : "notif-bell"}
         onClick={() => setOpen(true)}
-        aria-label={`Notifications${count > 0 ? `, ${count} unread` : ""}. Open`}
+        aria-label={count > 0 ? tn(count, "Notifications, {n} unread. Open", "Notifications, {n} unread. Open") : t("Notifications. Open")}
         whileHover={reduce ? undefined : { y: -2 }}
         whileTap={reduce ? undefined : { scale: 0.96 }}
         className="relative grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -173,6 +191,7 @@ function notifTitle(n: NexusNotification) {
 }
 
 function NotificationsModal({ open, onClose, list, unread, loading, error }: { open: boolean; onClose: () => void; list: NexusNotification[]; unread: number; loading: boolean; error: boolean }) {
+  const { t, locale } = useLang();
   const reduce = useReducedMotion();
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["notifications-unread"] });
@@ -201,23 +220,23 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
             layoutId={reduce ? undefined : "notif-bell"}
             role="dialog"
             aria-modal="true"
-            aria-label="Notifications"
+            aria-label={t("Notifications")}
             initial={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             animate={reduce ? { opacity: 1, scale: 1 } : undefined}
             exit={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-border bg-card text-card-foreground shadow-2xl"
           >
-            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
+            <button onClick={onClose} aria-label={t("Close")} className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
             {/* header */}
             <div className="flex items-center gap-3 border-b border-border p-5 pr-12">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Bell className="h-6 w-6" /></span>
               <div className="min-w-0">
-                <div className="font-display text-xl font-bold tracking-tight">Notifications</div>
-                <div className="text-xs text-muted-foreground">{unread > 0 ? `${unread} unread` : "All caught up"}</div>
+                <div className="font-display text-xl font-bold tracking-tight">{t("Notifications")}</div>
+                <div className="text-xs text-muted-foreground">{unread > 0 ? t("{n} unread", { n: unread }) : t("All caught up")}</div>
               </div>
               {unread > 0 && (
                 <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">
-                  {markAll.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Mark all
+                  {markAll.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} {t("Mark all read")}
                 </button>
               )}
             </div>
@@ -228,15 +247,15 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
               transition={{ delay: reduce ? 0 : 0.15, duration: 0.25 }}
               className="min-h-0 flex-1 overflow-y-auto p-2"
             >
-              {loading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
-              {error && <p className="p-3 text-sm text-muted-foreground">You need to be logged in to open your inbox.</p>}
-              {!loading && !error && list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No notifications. Enjoy the silence.</p>}
+              {loading && <p className="p-3 text-sm text-muted-foreground">{t("Loading…")}</p>}
+              {error && <p className="p-3 text-sm text-muted-foreground">{t("Sign in to see your notifications.")}</p>}
+              {!loading && !error && list.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t("No notifications.")}</p>}
               {!loading && !error && list.length > 0 && (
                 <div className="px-1 pb-2">
                   <NotificationFilterTabs list={list} group={group} onChange={setGroup} layoutId="bell-filter-tab" compact />
                 </div>
               )}
-              {!loading && !error && list.length > 0 && shown.length === 0 && <p className="p-3 text-sm text-muted-foreground">Nothing of this kind.</p>}
+              {!loading && !error && list.length > 0 && shown.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t("Nothing of this kind.")}</p>}
               {shown.map((n) => (
                 <button
                   key={n.id}
@@ -247,7 +266,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{n.title || notifTitle(n)}</div>
                     <div className="line-clamp-2 text-xs text-muted-foreground">{n.message || t("New notification")}</div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">{fmtDate(n.createdAt)}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">{fmtDay(n.createdAt, locale)}</div>
                   </div>
                   {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />}
                 </button>
@@ -291,8 +310,9 @@ function Section({ title, action, className, children, morphId, contentHidden, d
   );
 }
 
-function SeeAll({ to, label = "See All" }: { to: string; label?: string }) {
-  return <Link to={to} className="rounded text-xs font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{label}</Link>;
+function SeeAll({ to, label }: { to: string; label?: string }) {
+  const { t } = useLang();
+  return <Link to={to} className="rounded text-xs font-medium text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">{label ?? t("See all")}</Link>;
 }
 
 /** Tasks assigned to the currently logged-in user (uses /api/tasks?assigneeId=me). */
@@ -354,19 +374,19 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       detail: <ProjectsDetail projects={projectList} />,
     },
     {
-      value: tasksDone, total: taskList.length, label: "Task", Icon: ListChecks,
+      value: tasksDone, total: taskList.length, label: "Tasks", Icon: ListChecks,
       from: "#6ee7b7", to: "#059669", glow: "#34d399",
       detail: <TasksDetail tasks={taskList} />,
     },
     {
-      value: questsDone, total: quests.length, label: "Quest", Icon: Sparkles,
+      value: questsDone, total: quests.length, label: "Goals", Icon: Sparkles,
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
       detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
     },
   ];
 
   // A quest_claimable notification lands on /dashboard?quest=<key>:<period>: open the Quest card.
-  const questCard = cards.findIndex((c) => c.label === "Quest");
+  const questCard = cards.findIndex((c) => c.label === "Goals");
   useEffect(() => {
     if (search.quest) setActive(questCard);
   }, [search.quest, questCard]);
@@ -390,6 +410,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
 
 /** Collapsed card in the grid. Shares a `layoutId` with the modal so it morphs open. */
 function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number; onOpen: () => void }) {
+  const { t } = useLang();
   const reduce = useReducedMotion();
   const { Icon } = card;
   return (
@@ -397,7 +418,7 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
       type="button"
       layoutId={reduce ? undefined : `stat-card-${index}`}
       onClick={onOpen}
-      aria-label={`${card.label}: ${card.value}${card.total != null ? ` of ${card.total}` : ""}. Open details`}
+      aria-label={card.total != null ? t("{label}: {n} of {total}. Open details", { label: t(card.label), n: card.value, total: card.total }) : t("{label}: {n}. Open details", { label: t(card.label), n: card.value })}
       initial={reduce ? false : { opacity: 0, y: 18, scale: 0.97 }}
       whileInView={reduce ? undefined : { opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-40px" }}
@@ -423,6 +444,7 @@ function StatCardButton({ card, index, onOpen }: { card: StatCard; index: number
 
 /** Expanded view — card morphs into a larger centered modal (shared layoutId). */
 function StatCardModal({ cards, active, onClose }: { cards: StatCard[]; active: number | null; onClose: () => void }) {
+  const { t } = useLang();
   const reduce = useReducedMotion();
   useEffect(() => {
     if (active == null) return;
@@ -459,7 +481,7 @@ function StatCardModal({ cards, active, onClose }: { cards: StatCard[]; active: 
             style={{ backgroundImage: `linear-gradient(150deg, ${card.from} 0%, ${card.to} 100%)` }}
           >
             <span className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
-            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+            <button onClick={onClose} aria-label={t("Close")} className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
               <X className="h-4 w-4" />
             </button>
             <div className="flex shrink-0 items-center gap-4 px-6 pb-4 pt-6">
@@ -503,7 +525,8 @@ function StatDetailEmpty({ text }: { text: string }) {
 }
 
 function ProjectsDetail({ projects }: { projects: NexusProject[] }) {
-  if (projects.length === 0) return <StatDetailEmpty text="No projects yet." />;
+  const { t } = useLang();
+  if (projects.length === 0) return <StatDetailEmpty text={t("No projects yet.")} />;
   return (
     <div className="space-y-1.5">
       {projects.map((p) => (
@@ -520,16 +543,17 @@ function ProjectsDetail({ projects }: { projects: NexusProject[] }) {
 }
 
 function TasksDetail({ tasks }: { tasks: NexusTask[] }) {
-  if (tasks.length === 0) return <StatDetailEmpty text="No tasks assigned to you." />;
+  const { t } = useLang();
+  if (tasks.length === 0) return <StatDetailEmpty text={t("No tasks assigned to you.")} />;
   return (
     <div className="space-y-1">
-      {tasks.map((t) => {
-        const done = (t.status ?? "").toUpperCase() === "DONE";
+      {tasks.map((task) => {
+        const done = (task.status ?? "").toUpperCase() === "DONE";
         return (
-          <Link key={t.id} to="/tasks/$taskId" params={{ taskId: t.id }} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          <Link key={task.id} to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <span className={cn("h-2 w-2 shrink-0 rounded-full", done ? "bg-white" : "bg-white/50")} />
-            <span className={cn("min-w-0 flex-1 truncate text-xs font-medium", done && "line-through opacity-70")}>{t.title}</span>
-            <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold">{statusLabel(t.status)}</span>
+            <span className={cn("min-w-0 flex-1 truncate text-xs font-medium", done && "line-through opacity-70")}>{task.title}</span>
+            <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold">{statusLabel(task.status)}</span>
           </Link>
         );
       })}
@@ -540,15 +564,17 @@ function TasksDetail({ tasks }: { tasks: NexusTask[] }) {
 /** Claiming quest XP. Quest XP is never auto-granted: this is the only way it gets paid out
  *  (POST /api/gamification/quests/claim), so the Quest card must keep offering it. */
 function useClaimQuest() {
+  const { t } = useLang();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't claim the quest."),
+    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't claim the goal.")),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gamification", "me"] }),
   });
 }
 
 function QuestsDetail({ quests, claim, focusKey }: { quests: NexusQuest[]; claim: ReturnType<typeof useClaimQuest>; focusKey?: string }) {
-  if (quests.length === 0) return <StatDetailEmpty text="No active quests right now." />;
+  const { t, locale } = useLang();
+  if (quests.length === 0) return <StatDetailEmpty text={t("No active goals right now.")} />;
   return (
     <div className="space-y-1.5">
       {quests.map((q) => {
@@ -568,16 +594,16 @@ function QuestsDetail({ quests, claim, focusKey }: { quests: NexusQuest[]; claim
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-[11px] text-white/80">
                 <span className="font-bold text-white">+{q.xpReward} XP</span>
-                {q.deadline && <> · until {fmtDate(q.deadline)}</>}
+                {q.deadline && <> · {t("until {date}", { date: fmtDay(q.deadline, locale) })}</>}
               </span>
               {q.claimed ? (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-[11px] font-bold"><Check className="h-3 w-3" /> Claimed</span>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-[11px] font-bold"><Check className="h-3 w-3" /> {t("Claimed")}</span>
               ) : q.claimable ? (
-                <button type="button" disabled={claim.isPending} onClick={() => claim.mutate(q.key)} className="shrink-0 cursor-pointer rounded-md bg-white px-2.5 py-1 text-[11px] font-bold text-orange-600 transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default disabled:opacity-60">{claimingThis ? "Claiming…" : "Claim"}</button>
+                <button type="button" disabled={claim.isPending} onClick={() => claim.mutate(q.key)} className="shrink-0 cursor-pointer rounded-md bg-white px-2.5 py-1 text-[11px] font-bold text-orange-600 transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default disabled:opacity-60">{claimingThis ? t("Claiming…") : t("Claim")}</button>
               ) : left === 0 && q.eligible === false ? (
-                <span className="shrink-0 text-[11px] text-white/70">Assignees only</span>
+                <span className="shrink-0 text-[11px] text-white/70">{t("Assignees only")}</span>
               ) : (
-                <span className="shrink-0 text-[11px] text-white/70">{left} more to go</span>
+                <span className="shrink-0 text-[11px] text-white/70">{t("{n} more to go", { n: left })}</span>
               )}
             </div>
           </div>
@@ -597,6 +623,7 @@ function useGamification() {
 /** Compact level indicator beside the greeting. Click → morphs into a detail modal
  *  showing the full tier ladder + current XP (same expand pattern as the stat cards). */
 function LevelChip() {
+  const { t, locale } = useLang();
   const g = useGamification();
   const totalXp = g.data?.xp?.totalXp ?? 0;
   const info = levelForXp(totalXp);
@@ -609,7 +636,7 @@ function LevelChip() {
         type="button"
         layoutId={reduce ? undefined : "level-chip"}
         onClick={() => setOpen(true)}
-        aria-label={`Your level: ${info.name}, level ${info.level}. Open details`}
+        aria-label={t("Your level: {name}, level {level}. Open details", { name: info.name, level: info.level })}
         whileHover={reduce ? undefined : { y: -2 }}
         whileTap={reduce ? undefined : { scale: 0.98 }}
         className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left shadow-soft transition-shadow hover:border-primary/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:w-auto"
@@ -626,7 +653,7 @@ function LevelChip() {
           <div className="mt-1 flex items-center gap-2">
             <AnimatedBar pct={info.pct} className="h-1.5 flex-1 rounded-full bg-muted sm:w-24 sm:flex-none" barClassName="h-full rounded-full bg-primary" />
             <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-              {totalXp.toLocaleString()} XP{info.isMax ? "" : ` / ${(info.nextFloor ?? 0).toLocaleString()}`}
+              {totalXp.toLocaleString(locale)} XP{info.isMax ? "" : ` / ${(info.nextFloor ?? 0).toLocaleString(locale)}`}
             </span>
           </div>
         </div>
@@ -637,6 +664,7 @@ function LevelChip() {
 }
 
 function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; onClose: () => void; info: ReturnType<typeof levelForXp>; totalXp: number; streak: number }) {
+  const { t, tn, locale } = useLang();
   const reduce = useReducedMotion();
   useEffect(() => {
     if (!open) return;
@@ -658,13 +686,13 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
             layoutId={reduce ? undefined : "level-chip"}
             role="dialog"
             aria-modal="true"
-            aria-label="Your level"
+            aria-label={t("Your level")}
             initial={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             animate={reduce ? { opacity: 1, scale: 1 } : undefined}
             exit={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-border bg-card text-card-foreground shadow-2xl"
           >
-            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+            <button onClick={onClose} aria-label={t("Close")} className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               <X className="h-4 w-4" />
             </button>
             {/* header */}
@@ -674,12 +702,12 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-xl font-bold tracking-tight">{info.name}</span>
                   <span className="text-xs font-semibold text-muted-foreground">Lv. {info.level}</span>
-                  {streak > 0 && <span className="ml-auto mr-8 inline-flex items-center gap-1 text-xs font-semibold text-warning-foreground"><Flame className="h-3.5 w-3.5" />{streak} day{streak === 1 ? "" : "s"}</span>}
+                  {streak > 0 && <span className="ml-auto mr-8 inline-flex items-center gap-1 text-xs font-semibold text-warning-foreground"><Flame className="h-3.5 w-3.5" />{tn(streak, "{n} day", "{n} days")}</span>}
                 </div>
                 <AnimatedBar pct={info.pct} className="mt-2 h-2 rounded-full bg-muted" barClassName="h-full rounded-full bg-primary" />
                 <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-                  <span>{totalXp.toLocaleString()} XP</span>
-                  <span>{info.isMax ? "Max tier" : `${(info.nextFloor ?? 0).toLocaleString()} XP → next`}</span>
+                  <span>{totalXp.toLocaleString(locale)} XP</span>
+                  <span>{info.isMax ? t("Top level") : t("{xp} XP to the next level", { xp: (info.nextFloor ?? 0).toLocaleString(locale) })}</span>
                 </div>
               </div>
             </div>
@@ -690,17 +718,17 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
               transition={{ delay: reduce ? 0 : 0.15, duration: 0.25 }}
               className="overflow-y-auto p-3"
             >
-              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">All levels</div>
-              {LEVELS.map((t) => {
-                const reached = totalXp >= t.floor;
-                const isCurrent = t.level === info.level;
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("All levels")}</div>
+              {LEVELS.map((lv) => {
+                const reached = totalXp >= lv.floor;
+                const isCurrent = lv.level === info.level;
                 return (
-                  <div key={t.level} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors", isCurrent ? "bg-primary/10" : "")}>
-                    <TierBadge level={t.level} size={28} rounded="rounded-lg" active={reached} className={isCurrent ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : undefined} />
-                    <span className={cn("flex-1 truncate text-sm", isCurrent ? "font-bold" : "font-medium", !reached && "text-muted-foreground")}>{t.name}</span>
-                    {isCurrent && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">Current</span>}
+                  <div key={lv.level} className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors", isCurrent ? "bg-primary/10" : "")}>
+                    <TierBadge level={lv.level} size={28} rounded="rounded-lg" active={reached} className={isCurrent ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : undefined} />
+                    <span className={cn("flex-1 truncate text-sm", isCurrent ? "font-bold" : "font-medium", !reached && "text-muted-foreground")}>{lv.name}</span>
+                    {isCurrent && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">{t("Current")}</span>}
                     {reached && !isCurrent && <Check className="h-4 w-4 shrink-0 text-success" />}
-                    <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{t.floor.toLocaleString()} XP</span>
+                    <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{lv.floor.toLocaleString(locale)} XP</span>
                   </div>
                 );
               })}
@@ -715,6 +743,7 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
 
 /* ---------- right rail: profile ---------- */
 function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: string | null }) {
+  const { t, locale } = useLang();
   const g = useGamification();
   const totalXp = g.data?.xp?.totalXp ?? 0;
   const info = levelForXp(totalXp);
@@ -722,19 +751,19 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
     <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
       <div className="flex items-center gap-4">
         {avatarUrl ? (
-          <img src={avatarUrl} alt="Your avatar" className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
+          <img src={avatarUrl} alt={t("Your avatar")} className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
         ) : (
           <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-success/10 dark:bg-success/15">
-            <img src={learner} alt="Your avatar" className="h-[68px] w-[68px] object-contain" />
+            <img src={learner} alt={t("Your avatar")} className="h-[68px] w-[68px] object-contain" />
           </div>
         )}
         <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">Level</span><span className="text-sm font-bold">{info.level} · {info.name}</span></div>
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">Period points</span><span className="text-sm font-bold tabular-nums">{totalXp.toLocaleString()}</span></div>
+          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Level")}</span><span className="text-sm font-bold">{info.level} · {info.name}</span></div>
+          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Period points")}</span><span className="text-sm font-bold tabular-nums">{totalXp.toLocaleString(locale)}</span></div>
         </div>
       </div>
       <Link to="/settings" className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/40 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-        <Pencil className="h-4 w-4" /> Edit Profile
+        <Pencil className="h-4 w-4" /> {t("Edit profile")}
       </Link>
       <p className="mt-2 text-center text-xs text-muted-foreground">{userName}</p>
     </section>
@@ -742,6 +771,7 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
 }
 
 function MessagesCard() {
+  const { t, tn } = useLang();
   const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false, staleTime: 30_000 });
   const rows = convos.data?.conversations ?? [];
   // Same count as the nav badge: the server's total when it sends one, muted rooms left out.
@@ -754,15 +784,15 @@ function MessagesCard() {
         type="button"
         layoutId={reduce ? undefined : "messages-card"}
         onClick={() => setOpen(true)}
-        aria-label={`Messages: ${rows.length} conversations${unread ? `, ${unread} unread` : ""}. Open details`}
+        aria-label={`${t("Messages")}: ${tn(rows.length, "{n} conversation", "{n} conversations")}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}. ${t("Open details")}`}
         whileHover={reduce ? undefined : { y: -2 }}
         whileTap={reduce ? undefined : { scale: 0.98 }}
         className="flex w-full cursor-pointer items-center gap-3 rounded-3xl border border-border bg-card p-4 text-left shadow-soft transition-shadow hover:border-primary/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><MessageCircle className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold">Messages</div>
-          <div className="truncate text-xs text-muted-foreground">{rows.length === 0 ? "No conversations yet" : `${rows.length} conversation${rows.length === 1 ? "" : "s"}`}</div>
+          <div className="font-semibold">{t("Messages")}</div>
+          <div className="truncate text-xs text-muted-foreground">{rows.length === 0 ? t("No conversations yet") : tn(rows.length, "{n} conversation", "{n} conversations")}</div>
         </div>
         {unread > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{unread}</span>}
         <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -772,14 +802,15 @@ function MessagesCard() {
   );
 }
 
-function convoLabel(c: NexusConversation, myId?: string) {
+function convoLabel(c: NexusConversation, t: (s: string) => string, myId?: string) {
   if (c.name) return c.name;
   const others = (c.members ?? []).map((m) => m.user).filter((u): u is NexusUser => !!u).filter((u) => u.id !== myId);
-  if (others.length) return others.map((u) => u.name ?? "Member").join(", ");
-  return c.type === "DM" ? "Direct message" : "Conversation";
+  if (others.length) return others.map((u) => u.name ?? t("Member")).join(", ");
+  return c.type === "DM" ? t("Direct message") : t("Conversation");
 }
 
 function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean; onClose: () => void; rows: NexusConversation[]; unread: number; loading: boolean }) {
+  const { t, tn } = useLang();
   const reduce = useReducedMotion();
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const myId = me.data?.user?.id;
@@ -801,19 +832,19 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
             layoutId={reduce ? undefined : "messages-card"}
             role="dialog"
             aria-modal="true"
-            aria-label="Messages"
+            aria-label={t("Messages")}
             initial={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             animate={reduce ? { opacity: 1, scale: 1 } : undefined}
             exit={reduce ? { opacity: 0, scale: 0.95 } : undefined}
             className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col rounded-3xl border border-border bg-card text-card-foreground shadow-2xl"
           >
-            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
+            <button onClick={onClose} aria-label={t("Close")} className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
             {/* header */}
             <div className="flex items-center gap-3 border-b border-border p-5">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><MessageCircle className="h-6 w-6" /></span>
               <div>
-                <div className="font-display text-xl font-bold tracking-tight">Messages</div>
-                <div className="text-xs text-muted-foreground">{rows.length} conversation{rows.length === 1 ? "" : "s"}{unread > 0 ? ` · ${unread} unread` : ""}</div>
+                <div className="font-display text-xl font-bold tracking-tight">{t("Messages")}</div>
+                <div className="text-xs text-muted-foreground">{tn(rows.length, "{n} conversation", "{n} conversations")}{unread > 0 ? ` · ${t("{n} unread", { n: unread })}` : ""}</div>
               </div>
             </div>
             {/* list */}
@@ -823,17 +854,17 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
               transition={{ delay: reduce ? 0 : 0.15, duration: 0.25 }}
               className="min-h-0 flex-1 overflow-y-auto p-2"
             >
-              {loading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
-              {!loading && rows.length === 0 && <p className="p-3 text-sm text-muted-foreground">No conversations yet.</p>}
+              {loading && <p className="p-3 text-sm text-muted-foreground">{t("Loading…")}</p>}
+              {!loading && rows.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t("No conversations yet.")}</p>}
               {rows.map((c) => {
-                const label = convoLabel(c, myId);
+                const label = convoLabel(c, t, myId);
                 const initials = label.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
                 return (
                   <Link key={c.id} to="/messages" onClick={onClose} className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{initials}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{label}</div>
-                      <div className="truncate text-xs text-muted-foreground">{c.lastMessage ? (isSystemMessage(c.lastMessage) ? systemSentence(c.lastMessage, myId) : c.lastMessage.content) : "No messages yet"}</div>
+                      <div className="truncate text-xs text-muted-foreground">{c.lastMessage ? (isSystemMessage(c.lastMessage) ? systemSentence(c.lastMessage, myId) : c.lastMessage.content) : t("No messages yet")}</div>
                     </div>
                     {(c.unreadCount ?? 0) > 0 && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{c.unreadCount}</span>}
                   </Link>
@@ -843,7 +874,7 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
             {/* footer */}
             <div className="border-t border-border p-3">
               <Link to="/messages" onClick={onClose} className="flex h-10 items-center justify-center gap-1 rounded-xl bg-primary text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                Open Messages <ChevronRight className="h-4 w-4" />
+                {t("Open messages")} <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
           </motion.div>
@@ -856,6 +887,7 @@ function MessagesModal({ open, onClose, rows, unread, loading }: { open: boolean
 
 /* ---------- right rail: leaderboard ---------- */
 function LeaderboardCard() {
+  const { t, locale } = useLang();
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const myId = me.data?.user?.id;
   const lb = useQuery({ queryKey: ["gamification", "leaderboard"], queryFn: () => nexusApi.leaderboard(), retry: false, staleTime: 60_000 });
@@ -873,7 +905,7 @@ function LeaderboardCard() {
     : i === 2 ? "bg-orange-400/20 text-orange-700 dark:text-orange-400"
     : "bg-muted text-muted-foreground";
   return (
-    <Section title="Leaderboard" action={<SeeAll to="/leaderboard" />}>
+    <Section title={t("Leaderboard")} action={<SeeAll to="/leaderboard" />}>
       {lb.isLoading && (
         <div className="space-y-1.5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -889,7 +921,7 @@ function LeaderboardCard() {
           ))}
         </div>
       )}
-      {!lb.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">No ranking yet.</p>}
+      {!lb.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No ranking yet.")}</p>}
       <div className="space-y-2">
         {rows.map((r, i) => (
           <motion.button layoutId={`xp-card-${r.userId}`} type="button" key={r.userId} onClick={() => openXp(r)} className={cn("flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left ring-1 ring-border transition-shadow hover:shadow-soft", r.userId === myId ? "bg-primary/10" : "bg-card")}>
@@ -907,10 +939,10 @@ function LeaderboardCard() {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{r.name ?? "Member"}{r.userId === myId ? " (you)" : ""}</div>
+                <div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div>
                 <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {r.levelName ?? `Lv. ${r.level}`}</div>
               </div>
-              <span className="shrink-0 text-xs font-bold">{r.totalXp.toLocaleString()} XP</span>
+              <span className="shrink-0 text-xs font-bold">{r.totalXp.toLocaleString(locale)} XP</span>
             </div>
           </motion.button>
         ))}
@@ -925,6 +957,7 @@ function LeaderboardCard() {
 /** "See All" → the leaderboard card "mekar": the modal genie-zooms open from the card's exact spot/size
  *  (origin + originScale) while the card fades out, then the full list pops in once it lands. */
 function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }: { origin?: MorphOrigin; originScale?: number; onClose: () => void; onSelect: (r: NexusLeaderboardRow) => void; myId?: string }) {
+  const { t, locale } = useLang();
   const reduce = useReducedMotion();
   const lb = useQuery({ queryKey: ["gamification", "leaderboard"], queryFn: () => nexusApi.leaderboard(), retry: false, staleTime: 60_000 });
   const rows = (lb.data?.rows ?? []).slice().sort((a, b) => b.totalXp - a.totalXp);
@@ -961,20 +994,20 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
       >
         <motion.div variants={{ hide: { opacity: 0, y: -6 }, show: { opacity: 1, y: 0 } }} className="flex items-center gap-3 border-b border-border bg-muted/30 px-5 py-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Crown className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">Leaderboard</div><div className="text-xs text-muted-foreground">Tap someone to see their XP log</div></div>
-          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">{t("Leaderboard")}</div><div className="text-xs text-muted-foreground">{t("Tap someone to see their XP history")}</div></div>
+          <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </motion.div>
         <motion.div className="min-h-0 flex-1 overflow-y-auto p-2" variants={{ hide: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.022 } } }}>
           {rows.map((r, i) => (
             <motion.button variants={{ hide: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} transition={{ duration: 0.24, ease: "easeOut" }} key={r.userId} onClick={() => onSelect(r)} className={cn("flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-accent active:scale-[0.99]", r.userId === myId && "bg-primary/10")}>
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-muted-foreground">{i === 0 ? <Crown className="mx-auto h-4 w-4 text-amber-500" /> : i + 1}</span>
               {r.avatar ? <img src={r.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-border">{(r.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
-              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{r.name ?? "Member"}{r.userId === myId ? " (you)" : ""}</div><div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {r.levelName ?? `Lv. ${r.level}`}</div></div>
-              <span className="shrink-0 text-xs font-bold tabular-nums">{r.totalXp.toLocaleString()} XP</span>
+              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{r.name ?? t("Member")}{r.userId === myId ? ` ${t("(you)")}` : ""}</div><div className="flex items-center gap-1 text-[11px] text-muted-foreground"><TierBadge level={r.level} size={14} rounded="rounded" /> {r.levelName ?? `Lv. ${r.level}`}</div></div>
+              <span className="shrink-0 text-xs font-bold tabular-nums">{r.totalXp.toLocaleString(locale)} XP</span>
             </motion.button>
           ))}
         </motion.div>
-        <motion.div variants={{ hide: { opacity: 0 }, show: { opacity: 1 } }} className="border-t border-border p-3"><Link to="/leaderboard" onClick={onClose} className="block w-full rounded-xl bg-primary py-2.5 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">Full page →</Link></motion.div>
+        <motion.div variants={{ hide: { opacity: 0 }, show: { opacity: 1 } }} className="border-t border-border p-3"><Link to="/leaderboard" onClick={onClose} className="block w-full rounded-xl bg-primary py-2.5 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">{t("Full page")} →</Link></motion.div>
       </motion.div>
     </MorphPanel>
   );
@@ -987,6 +1020,7 @@ const WIB_MS = 7 * 3600_000;
 const wibDay = (ms: number) => new Date(ms + WIB_MS).toISOString().slice(0, 10);
 
 function CalendarCard() {
+  const { t, locale } = useLang();
   const [anchor, setAnchor] = useState(() => wibDay(Date.now()));
   const tasks = useMyTasks();
   // Days that have at least one task due.
@@ -1003,17 +1037,18 @@ function CalendarCard() {
   const days = monthGrid(anchor);
   const todayKey = wibDay(Date.now());
   // The day strings are calendar dates, so format them in UTC to keep the month from shifting.
-  const monthLabel = new Date(`${anchor.slice(0, 8)}01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  const monthLabel = new Date(`${anchor.slice(0, 8)}01T00:00:00Z`).toLocaleDateString(locale, { month: "long", year: "numeric", timeZone: "UTC" });
 
   return (
-    <Section title="Calendar" action={<SeeAll to="/calendar" />}>
+    <Section title={t("Calendar")} action={<SeeAll to="/calendar" />}>
       <div className="mb-3 flex items-center justify-center gap-3 text-sm font-medium">
-        <button onClick={() => setAnchor((a) => shiftMonth(a, -1))} aria-label="Previous month" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronLeft className="h-4 w-4" /></button>
+        <button onClick={() => setAnchor((a) => shiftMonth(a, -1))} aria-label={t("Previous month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronLeft className="h-4 w-4" /></button>
         {monthLabel}
-        <button onClick={() => setAnchor((a) => shiftMonth(a, 1))} aria-label="Next month" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronRight className="h-4 w-4" /></button>
+        <button onClick={() => setAnchor((a) => shiftMonth(a, 1))} aria-label={t("Next month")} className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><ChevronRight className="h-4 w-4" /></button>
       </div>
       <div className="grid grid-cols-7 gap-y-1.5 text-center text-xs">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <span key={d} className="text-muted-foreground">{d.slice(0, 1)}</span>)}
+        {/* 5 Jan 2026 is a Monday: the weekday initials in the interface language. */}
+        {Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toLocaleDateString(locale, { weekday: "narrow", timeZone: "UTC" })).map((d, i) => <span key={i} className="text-muted-foreground">{d}</span>)}
         {days.map((key) => {
           const inMonth = sameMonth(key, anchor);
           const isToday = key === todayKey;
@@ -1032,6 +1067,7 @@ function CalendarCard() {
 
 /* ---------- right rail: schedule ---------- */
 function ScheduleCard() {
+  const { t, locale } = useLang();
   const tasks = useMyTasks();
   const items = useMemo(() => {
     return (tasks.data ?? [])
@@ -1040,7 +1076,7 @@ function ScheduleCard() {
       .slice(0, 6);
   }, [tasks.data]);
   return (
-    <Section title="Your Schedule" action={<SeeAll to="/my-tasks" />}>
+    <Section title={t("Your schedule")} action={<SeeAll to="/my-tasks" />}>
       {tasks.isLoading && (
         <div className="space-y-2.5">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -1055,16 +1091,16 @@ function ScheduleCard() {
           ))}
         </div>
       )}
-      {!tasks.isLoading && items.length === 0 && <p className="text-sm text-muted-foreground">No upcoming tasks with due dates.</p>}
+      {!tasks.isLoading && items.length === 0 && <p className="text-sm text-muted-foreground">{t("No upcoming tasks with a due date.")}</p>}
       <div className="space-y-2.5">
-        {items.map((t) => (
-          <Link key={t.id} to="/tasks/$taskId" params={{ taskId: t.id }} className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+        {items.map((task) => (
+          <Link key={task.id} to="/tasks/$taskId" params={{ taskId: task.id }} className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <span className="h-8 w-1 shrink-0 rounded-full bg-primary" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{t.title}</div>
-              <div className="truncate text-xs text-muted-foreground">{t.taskList?.name ?? "NEXUS"}</div>
+              <div className="truncate text-sm font-medium">{task.title}</div>
+              <div className="truncate text-xs text-muted-foreground">{task.taskList?.name ?? "NEXUS"}</div>
             </div>
-            <span className="shrink-0 text-xs font-medium text-muted-foreground">{fmtDue(t.dueDate)}</span>
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">{fmtDueDay(task.dueDate, locale)}</span>
           </Link>
         ))}
       </div>

@@ -5,16 +5,18 @@ import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import type { FeedImage } from "@/lib/nexus-api";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
+import { localeOf, t as tr, useLang } from "@/lib/lang";
 
 /** Compact relative time: "just now", "5m", "3h", "2d", then a date. */
 export function timeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  const s = Math.floor((Date.now() - t) / 1000);
-  if (s < 45) return "just now";
-  const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24); if (d < 7) return `${d}d`;
-  return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+  // Called while rendering, so the current language applies.
+  const ts = new Date(iso).getTime();
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 45) return tr("just now");
+  const m = Math.floor(s / 60); if (m < 60) return tr("{n}m", { n: m });
+  const h = Math.floor(m / 60); if (h < 24) return tr("{n}h", { n: h });
+  const d = Math.floor(h / 24); if (d < 7) return tr("{n}d", { n: d });
+  return new Date(iso).toLocaleDateString(localeOf(), { day: "numeric", month: "short" });
 }
 
 const MENTION_RE = /(@[\p{L}\p{N}._-]+)/gu;
@@ -89,6 +91,7 @@ export function ImageGrid({ images, onOpen }: { images: FeedImage[]; onOpen: (i:
 
 /** Fullscreen image viewer with keyboard nav. */
 export function Lightbox({ images, index, onClose }: { images: FeedImage[]; index: number; onClose: () => void }) {
+  const { t } = useLang();
   const [i, setI] = useState(index);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -107,7 +110,7 @@ export function Lightbox({ images, index, onClose }: { images: FeedImage[]; inde
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
       >
-        <button onClick={onClose} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><X className="h-5 w-5" /></button>
+        <button onClick={onClose} aria-label={t("Close")} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><X className="h-5 w-5" /></button>
         <motion.img
           key={images[i].id}
           src={images[i].url} alt=""
@@ -117,8 +120,8 @@ export function Lightbox({ images, index, onClose }: { images: FeedImage[]; inde
         />
         {images.length > 1 && (
           <>
-            <button onClick={(e) => { e.stopPropagation(); setI((x) => (x - 1 + images.length) % images.length); }} className="absolute left-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronLeft className="h-6 w-6" /></button>
-            <button onClick={(e) => { e.stopPropagation(); setI((x) => (x + 1) % images.length); }} className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronRight className="h-6 w-6" /></button>
+            <button onClick={(e) => { e.stopPropagation(); setI((x) => (x - 1 + images.length) % images.length); }} aria-label={t("Previous photo")} className="absolute left-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronLeft className="h-6 w-6" /></button>
+            <button onClick={(e) => { e.stopPropagation(); setI((x) => (x + 1) % images.length); }} aria-label={t("Next photo")} className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronRight className="h-6 w-6" /></button>
             <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">{i + 1} / {images.length}</div>
           </>
         )}

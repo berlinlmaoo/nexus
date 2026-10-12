@@ -7,7 +7,7 @@ import { AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
 import { ApiError, nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
-import { t } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { Composer, type ComposerPayload } from "@/components/feed/Composer";
 import { PostCard, type FeedPostUI } from "@/components/feed/PostCard";
@@ -40,6 +40,7 @@ const prependPost = (old: Inf | undefined, np: FeedPostUI): Inf | undefined =>
   old && old.pages.length ? { ...old, pages: old.pages.map((pg, i) => (i === 0 ? { ...pg, posts: [np, ...(pg.posts as FeedPostUI[])] } : pg)) } : { pages: [{ posts: [np], nextCursor: null, hasMore: false }], pageParams: [undefined] };
 
 function FeedPage() {
+  const { t, tn } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { post: focusId } = Route.useSearch();
@@ -129,7 +130,7 @@ function FeedPage() {
       id: tempId, _tempId: tempId, _pending: true,
       text: payload.text, createdAt: new Date().toISOString(), editedAt: null,
       likeCount: 0, commentCount: 0,
-      author: { id: me.id, name: me.name ?? "Me", avatar: me.avatar },
+      author: { id: me.id, name: me.name ?? t("Me"), avatar: me.avatar },
       images: payload.images.map((f, i) => ({ id: `t${i}`, url: URL.createObjectURL(f), width: payload.imageMeta[i]?.w ?? null, height: payload.imageMeta[i]?.h ?? null, position: i })),
       mentions: [], likedByMe: false, canDelete: true, canEdit: true,
     };
@@ -154,7 +155,7 @@ function FeedPage() {
     nexusApi.likePost(post.id)
       .then((res) => {
         patchPost(post.id, (p) => ({ ...p, likedByMe: res.liked, likeCount: res.likeCount }));
-        if (res.liked && [1, 10, 50, 100].includes(res.likeCount)) celebrate(res.likeCount === 1 ? "First like! ❤️" : `${res.likeCount} likes 🔥`);
+        if (res.liked && [1, 10, 50, 100].includes(res.likeCount)) celebrate(res.likeCount === 1 ? t("First like") : t("{n} likes", { n: res.likeCount }));
       })
       .catch(() => patchPost(post.id, (p) => ({ ...p, likedByMe: post.likedByMe, likeCount: post.likeCount })))
       .finally(() => { liking.current.delete(post.id); });
@@ -182,15 +183,15 @@ function FeedPage() {
     <div className="mx-auto min-h-screen w-full max-w-[600px] sm:border-x sm:border-border">
       {/* slim sticky header */}
       <div className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-background/80 py-3 backdrop-blur-md">
-        <h1 className="font-display text-lg font-black tracking-tight">Threads</h1>
+        <h1 className="font-display text-lg font-black tracking-tight">{t("Threads")}</h1>
       </div>
 
       {/* underline tabs */}
       <div className="sticky top-[49px] z-20 flex border-b border-border bg-background/80 backdrop-blur-md">
-        {([["all", "All"], ["mentions", "Mentions"]] as const).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} className="relative flex-1 py-3.5 text-sm font-bold transition hover:bg-muted/30">
-            <span className={cn(tab === t ? "text-foreground" : "text-muted-foreground")}>{label}</span>
-            {tab === t && <motion.span layoutId="wire-tab" className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
+        {([["all", "All"], ["mentions", "Mentions"]] as const).map(([tk, label]) => (
+          <button key={tk} onClick={() => setTab(tk)} className="relative flex-1 py-3.5 text-sm font-bold transition hover:bg-muted/30">
+            <span className={cn(tab === tk ? "text-foreground" : "text-muted-foreground")}>{t(label)}</span>
+            {tab === tk && <motion.span layoutId="wire-tab" className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
           </button>
         ))}
       </div>
@@ -225,7 +226,7 @@ function FeedPage() {
               className="pointer-events-auto mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 text-sm font-bold text-primary-foreground shadow-pop"
             >
               <ArrowUp className="h-3.5 w-3.5" />
-              {newPosts.length} new post{newPosts.length === 1 ? "" : "s"}
+              {tn(newPosts.length, "{n} new post", "{n} new posts")}
               <AvatarStack ids={newPosts.slice(0, 3).map((p) => p.author.id)} size={20} max={3} />
             </motion.button>
           )}
@@ -239,8 +240,8 @@ function FeedPage() {
         {empty && (
           <div className="px-6 py-16 text-center">
             <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><AtSign className="h-7 w-7" /></div>
-            <div className="text-base font-black">{tab === "mentions" ? "No one's mentioned you yet ✨" : "It's quiet here — start the conversation"}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{tab === "mentions" ? "When someone tags you, it'll show up here." : "Post the first thing about what you're working on today 🚀"}</p>
+            <div className="text-base font-black">{tab === "mentions" ? t("No mentions yet") : t("No posts yet")}</div>
+            <p className="mt-1 text-sm text-muted-foreground">{tab === "mentions" ? t("When someone tags you, it shows up here.") : t("Share what you're working on today.")}</p>
           </div>
         )}
 

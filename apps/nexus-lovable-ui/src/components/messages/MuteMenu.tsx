@@ -4,7 +4,7 @@ import { Bell, BellOff, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ApiError, nexusApi, type NexusConversation } from "@/lib/nexus-api";
 import { isMuted, isMutedForever } from "@/lib/chat-unread";
-import { localeOf, t } from "@/lib/lang";
+import { localeOf, t, useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
 type MuteChoice = "8h" | "1w" | "always" | "off";
@@ -33,6 +33,7 @@ type ConversationList = { conversations: NexusConversation[]; totalUnread?: numb
  * button (`labelled`), in the chat info panel.
  */
 export function MuteMenu({ conversation, labelled = false }: { conversation: NexusConversation; labelled?: boolean }) {
+  useLang(); // re-render when the language changes (the labels below use t())
   const qc = useQueryClient();
   const muted = isMuted(conversation);
   const mute = useMutation({
