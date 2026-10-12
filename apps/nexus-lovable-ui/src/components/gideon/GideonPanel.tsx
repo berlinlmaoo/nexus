@@ -45,6 +45,9 @@ import {
  * answer can be copied, inserted into the open page, or saved as a new doc.
  */
 
+/** What was typed in the composer and not sent, kept while the panel is closed and reopened (bughunt G-BUG-2). */
+let composerDraft = "";
+
 type ChatTurn = GideonTurn & { streaming?: boolean; steps?: GideonStep[]; sources?: GideonRef[]; cards?: GideonCard[]; proposals?: GideonProposal[]; failed?: boolean };
 
 function fromHistory(row: GideonTurn): ChatTurn {
@@ -82,7 +85,10 @@ export type GideonPanelVariant = "float" | "side" | "page";
 
 /** The page ref → what the chat route takes as `context` (project / task / doc it was opened from). */
 function contextOf(ref: GideonPageRef | null, explicit: GideonContext | null | undefined): GideonContext | null {
-  if (explicit) return explicit;
+  // The page on screen wins: after moving from project A to project B with the panel open, the chip (and
+  // what the next question is about) follows B, not the project "Ask GIDEON" was pressed on (bughunt G-BUG-1).
+  const fromPage = ref ? contextOf(ref, null) : null;
+  if (explicit) return fromPage && (fromPage.projectId !== explicit.projectId || fromPage.taskId || fromPage.docId) ? fromPage : explicit;
   if (!ref) return null;
   if (ref.kind === "project") return { projectId: ref.id, projectName: ref.title };
   if (ref.kind === "task" && ref.projectId) return { projectId: ref.projectId, projectName: ref.projectName ?? "", taskId: ref.id, taskTitle: ref.title };
@@ -123,7 +129,8 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   /** true = the next question starts a new conversation (New chat / ⌘O). */
   const [fresh, setFresh] = useState(startNew);
   const [view, setView] = useState<"chat" | "history">("chat");
-  const [input, setInput] = useState("");
+  const [input, setInputState] = useState(() => composerDraft);
+  const setInput = useCallback((v: string) => { composerDraft = v; setInputState(v); }, []);
   const [busy, setBusy] = useState(false);
   /** A data URL, held only until the next message is sent. */
   const [image, setImage] = useState<string | null>(null);
@@ -166,6 +173,11 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   const localUrls = useRef<string[]>([]);
 
   const pageContext = pageDismissed ? null : contextOf(page, context);
+  // A removed chip stays removed for this page only; another page brings its own chip back.
+  const pageKey = page ? `${page.kind}:${page.id}` : "";
+  const firstPageKey = useRef(pageKey);
+  useEffect(() => { if (pageKey !== firstPageKey.current) { firstPageKey.current = pageKey; setPageDismissed(false); } }, [pageKey]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns]);
   useEffect(() => () => {
@@ -497,7 +509,7 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
           )}
           <DropdownMenuSeparator />
           {chatId && !fresh && (
-            <DropdownMenuItem onSelect={() => { void deleteGideonChat(chatId).then(() => { qc.invalidateQueries({ queryKey: ["gideon-chats"] }); newChat(); }).catch(() => toast.error(t("Couldn't delete this chat."))); }}>
+            <DropdownMenuItem onSelect={() => setConfirmDelete(true)}>
               <Trash2 className="mr-2 h-4 w-4" />{t("Delete this chat")}
             </DropdownMenuItem>
           )}
@@ -671,7 +683,19 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
   ) : null;
 
   return (
-    <div lang={L.lang} className={root}>
+    <div
+      lang={L.lang}
+      className={root}
+      onKeyDown={(e) => {
+        // Esc closes the floating/side panel (Notion AI), unless something inside used it first (a menu, the @ picker).
+        if (e.key !== "Escape" || e.defaultPrevented || isPage || !onClose || mention) return;
+        // Menus and dialogs are portals: their keys bubble here through React but are not inside the panel.
+        if (!e.currentTarget.contains(e.target as Node)) return;
+        if (view === "history") { setView("chat"); e.preventDefault(); return; }
+        e.preventDefault();
+        onClose();
+      }}
+    >
       {header}
       {isPage ? (
         <div className="flex min-h-0 flex-1">
@@ -685,6 +709,22 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
       )}
 
       <PersonalizeDialog open={personalizeOpen} onOpenChange={setPersonalizeOpen} />
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Delete this chat?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { const id = chatId; if (id) void deleteGideonChat(id).then(() => { qc.invalidateQueries({ queryKey: ["gideon-chats"] }); newChat(); }).catch(() => toast.error(t("Couldn't delete this chat."))); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >{t("Delete")}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent>
@@ -713,10 +753,12 @@ function ContextChip({ icon: Icon, label, hint, onRemove }: { icon: typeof FileT
   );
 }
 
+type PickItem = GideonContextRef & { sub: string | null };
+
 /** Pages to attach with "@": projects, tasks and docs from the normal search (the person's own access). */
 function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: GideonContextRef) => void; onClose: () => void }) {
   const { t } = useLang();
-  const [items, setItems] = useState<GideonContextRef[]>([]);
+  const [items, setItems] = useState<PickItem[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -730,11 +772,17 @@ function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: 
     const timer = window.setTimeout(() => {
       nexusApi.search(q).then((res) => {
         if (!alive) return;
-        const next: GideonContextRef[] = [
-          ...(res.projects ?? []).slice(0, 4).map((p) => ({ kind: "project" as const, id: p.id, title: p.name })),
-          ...(res.docs ?? []).slice(0, 4).map((d) => ({ kind: "doc" as const, id: d.id, title: d.title })),
-          ...(res.tasks ?? []).slice(0, 6).map((x) => ({ kind: "task" as const, id: x.id, title: x.title })),
+        // Same-named tasks/docs are told apart by their project; the closest title match comes first and
+        // "Untitled" pages only show up when that is what was typed (bughunt G-BUG-4).
+        const lower = q.toLowerCase();
+        const untitled = (title: string) => !title || title === "Untitled";
+        const next: PickItem[] = [
+          ...(res.projects ?? []).slice(0, 4).map((p) => ({ kind: "project" as const, id: p.id, title: p.name, sub: null })),
+          ...(res.docs ?? []).filter((d) => !untitled(d.title) || "untitled".startsWith(lower)).slice(0, 4).map((d) => ({ kind: "doc" as const, id: d.id, title: d.title || t("Untitled"), sub: d.project?.name ?? null })),
+          ...(res.tasks ?? []).slice(0, 6).map((x) => ({ kind: "task" as const, id: x.id, title: x.title, sub: x.taskList?.project?.name ?? null })),
         ];
+        const score = (title: string) => { const s = title.toLowerCase(); return s === lower ? 3 : s.startsWith(lower) ? 2 : s.includes(lower) ? 1 : 0; };
+        next.sort((a, b) => score(b.title) - score(a.title));
         setItems(next);
         setIndex(0);
       }).catch(() => alive && setItems([])).finally(() => alive && setLoading(false));
@@ -747,7 +795,7 @@ function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: 
       if (key === "Escape") onClose();
       else if (key === "ArrowDown") setIndex((i) => (items.length ? (i + 1) % items.length : 0));
       else if (key === "ArrowUp") setIndex((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
-      else if ((key === "Enter" || key === "Tab") && items[index]) onPick(items[index]);
+      else if ((key === "Enter" || key === "Tab") && items[index]) onPick({ kind: items[index].kind, id: items[index].id, title: items[index].title });
       else if (key === "Enter" || key === "Tab") onClose();
     };
     window.addEventListener("gideon-mention-key", onKey);
@@ -762,8 +810,12 @@ function MentionPicker({ query, onPick, onClose }: { query: string; onPick: (r: 
       {items.map((r, i) => {
         const Icon = r.kind === "doc" ? FileText : r.kind === "task" ? ListChecks : FolderKanban;
         return (
-          <button key={`${r.kind}-${r.id}`} type="button" role="option" aria-selected={i === index} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(r)} className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", i === index ? "bg-muted" : "hover:bg-muted/60")}>
-            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{r.title}</span>
+          <button key={`${r.kind}-${r.id}`} type="button" role="option" aria-selected={i === index} onMouseEnter={() => setIndex(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick({ kind: r.kind, id: r.id, title: r.title })} className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", i === index ? "bg-muted" : "hover:bg-muted/60")}>
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{r.title}</span>
+              {r.sub && <span className="block truncate text-[11px] text-muted-foreground">{r.sub}</span>}
+            </span>
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{r.kind === "doc" ? t("Doc") : r.kind === "task" ? t("Task") : t("Project")}</span>
           </button>
         );
@@ -790,6 +842,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
   const [debounced, setDebounced] = useState("");
   const [rows, setRows] = useState<GideonChatRow[] | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState<GideonChatRow | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => { const h = window.setTimeout(() => setDebounced(q), 220); return () => window.clearTimeout(h); }, [q]);
   useEffect(() => {
@@ -836,7 +889,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
             {g.items.map((r) => (
               <div key={r.id} className={cn("group flex items-center gap-1 rounded-lg", r.id === activeId ? "bg-accent" : "hover:bg-accent/60")}>
                 {renaming?.id === r.id ? (
-                  <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") setRenaming(null); }} className="m-1 min-w-0 flex-1 rounded-md border border-primary/50 bg-background px-2 py-1 text-sm outline-none" />
+                  <input autoFocus value={renaming.title} onChange={(e) => setRenaming({ id: r.id, title: e.target.value })} onBlur={() => void saveRename()} onKeyDown={(e) => { if (e.key === "Enter") void saveRename(); if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} className="m-1 min-w-0 flex-1 rounded-md border border-primary/50 bg-background px-2 py-1 text-sm outline-none" />
                 ) : (
                   <button type="button" onClick={() => onPick(r.id)} className="min-w-0 flex-1 px-2 py-1.5 text-left">
                     <span className="block truncate text-sm">{r.title || t("Untitled chat")}</span>
@@ -846,7 +899,7 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
                 {renaming?.id !== r.id && (
                   <span className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                     <button type="button" onClick={() => setRenaming({ id: r.id, title: r.title ?? "" })} aria-label={t("Rename")} className="rounded-md p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => { void deleteGideonChat(r.id).then(() => { setTick((x) => x + 1); if (r.id === activeId) onNew(); }); }} aria-label={t("Delete this chat")} className="rounded-md p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => setDeleting(r)} aria-label={t("Delete this chat")} className="rounded-md p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </span>
                 )}
               </div>
@@ -854,6 +907,27 @@ export function ChatHistoryList({ activeId, onPick, onNew }: { activeId: string 
           </div>
         ))}
       </div>
+      <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Delete this chat?")}</AlertDialogTitle>
+            <AlertDialogDescription>{deleting?.title ? `“${deleting.title}”. ` : ""}{t("The conversation and its attached files are deleted for good. Tasks and docs GIDEON made stay.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const r = deleting;
+                setDeleting(null);
+                if (!r) return;
+                setRows((cur) => (cur ?? []).filter((x) => x.id !== r.id));
+                void deleteGideonChat(r.id).then(() => { setTick((x) => x + 1); if (r.id === activeId) onNew(); }).catch(() => { toast.error(t("Couldn't delete this chat.")); setTick((x) => x + 1); });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >{t("Delete")}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -917,6 +991,8 @@ function SaveAsDocButton({ markdown, question, projectId }: { markdown: string; 
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<Array<{ id: string; name: string }> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [find, setFind] = useState("");
+  const findRef = useRef<HTMLInputElement>(null);
   const title = (question.split("\n")[0] || t("GIDEON answer")).slice(0, 120);
   const save = async (pid: string) => {
     setSaving(true);
@@ -931,20 +1007,42 @@ function SaveAsDocButton({ markdown, question, projectId }: { markdown: string; 
     }
   };
   return (
-    <DropdownMenu open={open} onOpenChange={(v) => { setOpen(v); if (v && !projects) nexusApi.projects().then((p) => setProjects(p.map((x) => ({ id: x.id, name: x.name })))).catch(() => setProjects([])); }}>
+    <DropdownMenu open={open} onOpenChange={(v) => { setOpen(v); if (!v) setFind(""); else window.setTimeout(() => findRef.current?.focus(), 30); if (v && !projects) nexusApi.projects().then((p) => setProjects(p.map((x) => ({ id: x.id, name: x.name })))).catch(() => setProjects([])); }}>
       <DropdownMenuTrigger asChild>
         <button type="button" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground">
           {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <FilePlus2 className="h-3 w-3" />}{t("Save as doc")}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-y-auto">
-        <DropdownMenuLabel className="text-xs">{t("Save into project")}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {projectId && <DropdownMenuItem onSelect={() => void save(projectId)}><FolderKanban className="mr-2 h-4 w-4" />{t("This project")}</DropdownMenuItem>}
-        {projects === null && <div className="px-2 py-2 text-xs text-muted-foreground"><Loader2 className="inline h-3 w-3 animate-spin" /></div>}
-        {(projects ?? []).filter((p) => p.id !== projectId).slice(0, 40).map((p) => (
-          <DropdownMenuItem key={p.id} onSelect={() => void save(p.id)}><span className="truncate">{p.name}</span></DropdownMenuItem>
-        ))}
+      {/* Opens above the button (the answer stays readable) with a search box: people can be in 90+ projects (bughunt G-BUG-3). */}
+      <DropdownMenuContent align="start" side="top" collisionPadding={12} className="flex max-h-80 w-72 flex-col overflow-hidden p-0">
+        <div className="border-b border-border p-1.5">
+          <DropdownMenuLabel className="px-1.5 pb-1 pt-0.5 text-xs">{t("Save into project")}</DropdownMenuLabel>
+          <label className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 focus-within:border-primary/50">
+            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <input
+              ref={findRef}
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+              // The menu's type-ahead would steal the letters; arrows/Enter/Esc still drive the menu.
+              onKeyDown={(e) => { if (!["ArrowDown", "ArrowUp", "Escape", "Tab"].includes(e.key)) e.stopPropagation(); }}
+              placeholder={t("Search projects")}
+              aria-label={t("Search projects")}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+          {projectId && !find.trim() && <DropdownMenuItem onSelect={() => void save(projectId)}><FolderKanban className="mr-2 h-4 w-4" />{t("This project")}</DropdownMenuItem>}
+          {projects === null && <div className="px-2 py-2 text-xs text-muted-foreground"><Loader2 className="inline h-3 w-3 animate-spin" /></div>}
+          {(() => {
+            const q = find.trim().toLowerCase();
+            const list = (projects ?? []).filter((p) => (q ? p.name.toLowerCase().includes(q) : p.id !== projectId));
+            if (projects && q && list.length === 0) return <div className="px-2 py-3 text-center text-xs text-muted-foreground">{t("No project matches “{q}”.", { q: find.trim() })}</div>;
+            return list.slice(0, 60).map((p) => (
+              <DropdownMenuItem key={p.id} onSelect={() => void save(p.id)}><span className="truncate">{p.name}</span></DropdownMenuItem>
+            ));
+          })()}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
