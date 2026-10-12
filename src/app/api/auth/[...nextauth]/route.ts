@@ -1,3 +1,4 @@
+import { recordUserSession } from "@/lib/user-sessions"
 import { Auth, skipCSRFCheck } from "@auth/core"
 import { encode } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
@@ -123,6 +124,7 @@ function getCurrentSessionChunkCookieNames(cookieName: string) {
 async function applyDirectSessionCookies(
   response: NextResponse,
   user: VerifiedCredentialUser,
+  requestHeaders?: { get(name: string): string | null },
 ) {
   const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET
 
@@ -133,6 +135,7 @@ async function applyDirectSessionCookies(
   const cookieName = getSessionCookieName()
   const secureCookies = shouldUseSecureAuthCookies()
   const expires = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000)
+  const sid = newSessionId()
   const sessionToken = await encode({
     secret,
     salt: cookieName,
@@ -144,9 +147,10 @@ async function applyDirectSessionCookies(
       email: user.email,
       picture: user.image,
       sessionVersion: await currentSessionVersion(user.id),
-      sid: newSessionId(),
+      sid,
     },
   })
+  await recordUserSession({ userId: user.id, sid, headers: requestHeaders, expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000) })
 
   response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
   response.headers.set("Pragma", "no-cache")
@@ -229,7 +233,7 @@ async function handleLegacyCredentialsCallback(request: NextRequest) {
     ? NextResponse.json({ url: redirectUrl })
     : NextResponse.redirect(redirectUrl)
 
-  await applyDirectSessionCookies(response, result.user)
+  await applyDirectSessionCookies(response, result.user, request.headers)
   log.info("Issued direct session for legacy credentials callback", {
     userId: result.user.id,
     wantsJson,

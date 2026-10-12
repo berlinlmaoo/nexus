@@ -1,3 +1,4 @@
+import { recordUserSession } from "@/lib/user-sessions"
 import { encode } from 'next-auth/jwt'
 import { checkRateLimitByKey, trustedClientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
   const cookieName = getSessionCookieName()
   const secureCookies = shouldUseSecureAuthCookies()
   const expires = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000)
+  const sid = newSessionId()
   const sessionToken = await encode({
     secret,
     salt: cookieName,
@@ -149,9 +151,10 @@ export async function POST(request: NextRequest) {
       email: result.user.email,
       picture: result.user.image,
       sessionVersion: await currentSessionVersion(result.user.id),
-      sid: newSessionId(),
+      sid,
     },
   })
+  await recordUserSession({ userId: result.user.id, sid, headers: request.headers, expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000) })
 
   await logAudit({
     action: 'login',

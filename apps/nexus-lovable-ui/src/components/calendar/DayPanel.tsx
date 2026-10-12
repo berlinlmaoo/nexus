@@ -97,6 +97,8 @@ export const DayPanel = memo(function DayPanel({
   const sections: TreeNode[] = root ? root.children : [];
   const rootOwn = root && (root.items.length > 0 || root.people.length > 0) ? root : null;
   const placementsShown = root ? countPlacements(root) : 0;
+  const noDivision = tree.unplaced.map((p) => ({ ...p, items: p.items.filter((i) => i.placements.length === 0) })).filter((p) => p.items.length > 0);
+  const noDivisionCount = new Set(noDivision.flatMap((p) => p.items.map((i) => i.key))).size;
 
   // Why the day is empty, most specific first: filters, a month with nothing at all, Show narrowed to
   // the viewer ("Nobody has a task" would be wrong there), or simply nothing that day.
@@ -189,6 +191,14 @@ export const DayPanel = memo(function DayPanel({
               <div className="rounded-2xl border border-dashed border-border bg-card p-[8px]">
                 <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", CAPS)}>{t("Not in the chart yet · {n}", { n: tree.unplaced.length })}</Heading>
                 {viewerFirst(tree.unplaced, (p) => p.userId === meId).map((p) => <PersonBlock key={p.userId} row={p} unitId={null} level={4} common={common} />)}
+              </div>
+            )}
+            {/* "By division": a task whose PICs are all outside the chart has no division (never guessed,
+                owner 12 Oct 2026); this is where it is listed, by its PICs. */}
+            {lens === "division" && noDivision.length > 0 && (
+              <div className="rounded-2xl border border-dashed border-border bg-card p-[8px]">
+                <Heading level={3} className={cn("px-[8px] py-1 text-muted-foreground", CAPS)}>{t("No division · {n}", { n: noDivisionCount })}</Heading>
+                {viewerFirst(noDivision, (p) => p.userId === meId).map((p) => <PersonBlock key={p.userId} row={p} unitId={null} level={4} common={common} />)}
               </div>
             )}
             {placementsShown > tree.total && (

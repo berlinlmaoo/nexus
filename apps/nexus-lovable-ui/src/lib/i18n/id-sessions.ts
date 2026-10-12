@@ -1,0 +1,18 @@
+/** English → Indonesian for Settings → Security → Active sessions. Keys must be unique across all id-*.ts files. */
+export const ID_SESSIONS: Record<string, string> = {
+  "Devices signed in to your account. Sign out any you don't recognise.": "Perangkat yang sedang masuk ke akunmu. Keluarkan yang tidak kamu kenali.",
+  "Sign out other sessions": "Keluarkan sesi lain",
+  "Sign out of every other device? They will need to sign in again. This device stays signed in.": "Keluarkan semua perangkat lain? Perangkat itu harus masuk lagi. Perangkat ini tetap masuk.",
+  "Sign out “{name}”? That device will need to sign in again.": "Keluarkan “{name}”? Perangkat itu harus masuk lagi.",
+  "Sign out": "Keluarkan",
+  "This device": "Perangkat ini",
+  "Active now": "Aktif sekarang",
+  "Active {time}": "Aktif {time}",
+  "Signed in {date}": "Masuk {date}",
+  "NEXUS app for iOS": "Aplikasi NEXUS iOS",
+  "NEXUS app for Android": "Aplikasi NEXUS Android",
+  "build {n}": "build {n}",
+  "{browser} on {os}": "{browser} di {os}",
+  "Couldn't load your sessions. Reload the page to try again.": "Sesi tidak bisa dimuat. Muat ulang halaman untuk mencoba lagi.",
+  "Couldn't sign that out. Try again.": "Gagal mengeluarkan sesi itu. Coba lagi.",
+};

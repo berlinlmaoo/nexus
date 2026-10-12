@@ -61,11 +61,11 @@ for (const [file, value] of Object.entries(golden)) {
   test(`golden ${file}`, () => assert.equal(text, readFileSync(at, "utf8"), `${file} differs (UPDATE_GOLDEN=1 to accept)`))
 }
 
-test("A2 18 Sep, company: 8 tasks; dots FA 4, PATS 4, Suwara 1 in Bagan order", () => {
+test("A2 18 Sep, company: 5 tasks (the 3 without a PIC are gone, owner 12 Oct 2026); dots FA 4, PATS 1, Suwara 1 in Bagan order", () => {
   const g = golden["2026-09-18.bod.top.json"]
-  assert.equal(g.cell.count, 8)
-  assert.deepEqual(g.cell.dots.map((d) => [ix.byId.get(d.unitId).name, d.count]), [["Framework Agency", 4], ["PATS", 4], ["Suwara", 1]])
-  assert.equal(g.tree.total, 8)
+  assert.equal(g.cell.count, 5)
+  assert.deepEqual(g.cell.dots.map((d) => [ix.byId.get(d.unitId).name, d.count]), [["Framework Agency", 4], ["PATS", 1], ["Suwara", 1]])
+  assert.equal(g.tree.total, 5)
 })
 test("A2 18 Sep, zoomed into FA: Project Management 1, Creative (group) 1, Multimedia 3", () => {
   const g = golden["2026-09-18.bod.fa.json"]
@@ -90,10 +90,23 @@ test("People week: a PIC outside the chart beside charted PICs gets a row at the
   assert.ok(at > 0); assert.equal(g.week[at].count, g.tree.unplaced.length)
   assert.deepEqual(g.week.slice(at + 1).map((r) => r.userId), g.tree.unplaced.map((p) => p.userId))
 })
-test("no PIC → its project's division, listed without a person", () => {
+test("no PIC: the server sends nothing, so PATS Entertainment is empty on 18 Sep (owner 12 Oct 2026)", () => {
   const g = golden["2026-09-18.bod.pats.json"]
-  const ent = g.tree.root.children.find((c) => c.unit === "PATS Entertainment")
-  assert.equal(ent.loose.length, 3); assert.equal(ent.people.length, 0)
+  assert.equal((g.tree.root?.children ?? []).some((c) => c.unit === "PATS Entertainment"), false)
+})
+test("PICs all outside the chart: no division — an \"other\" dot at the top, listed under their PICs, never in My division", () => {
+  const base = sg("items-2026-09-18.bod.json")[0]
+  const it = { ...base, key: "k-out", id: "k-out", assigneeIds: ["outsider"], placements: [], placedBy: "pic", unplacedIds: ["outsider"] }
+  const top = ix.top.id
+  assert.deepEqual(core.dayCell(it.day, [it], ix, top, TODAY, NOW, WINDOW).dots.map((d) => d.unitId), ["other"])
+  const tree = core.dayTree([it], ix, top, TODAY, NOW, WINDOW)
+  assert.equal(tree.total, 1); assert.deepEqual(tree.unplaced.map((p) => p.userId), ["outsider"])
+  const week = core.weekRows([it], ix, top, core.mondayOf(it.day), TODAY, NOW, WINDOW)
+  assert.deepEqual(week.map((r) => r.kind), ["unplaced", "person"])
+  const deeper = structure.units.find((u) => u.parentId === top).id
+  assert.equal(core.dayTree([it], ix, deeper, TODAY, NOW, WINDOW).total, 0, "only at the top")
+  const myHomes = [deeper]
+  assert.equal(core.filterItems([it], { ...core.NO_FILTERS, scope: "division" }, { ix, meId: "me", myHomes, today: TODAY, nowMs: NOW, windowDays: WINDOW }).length, 0)
 })
 test("overdue: within the window red, older grey, done never", () => {
   const sep18 = sg("items-2026-09-18.bod.json")
@@ -111,10 +124,10 @@ test("filters: mine, my division, people, projects, priority, hide done", () => 
   const hary = person("Hary Ade Saputra").userId
   const ctx = { ix, meId: hary, myHomes: person("Hary Ade Saputra").homeUnitIds, today: TODAY, nowMs: NOW, windowDays: WINDOW }
   const f = (patch) => core.filterItems(items, { ...core.NO_FILTERS, ...patch }, ctx).length
-  assert.equal(f({}), 8)
+  assert.equal(f({}), 5)
   assert.equal(f({ scope: "me" }), 2)
   assert.equal(f({ scope: "division" }), 3, "Multimedia")
-  assert.equal(f({ units: [unit("PATS").id] }), 4)
+  assert.equal(f({ units: [unit("PATS").id] }), 1)
   assert.equal(f({ hideDone: true }), items.filter((i) => !i.done).length)
   assert.equal(core.activeFilterCount({ ...core.NO_FILTERS, scope: "me", units: ["x"], hideDone: true }), 3)
 })

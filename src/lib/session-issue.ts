@@ -2,6 +2,7 @@ import { encode } from "next-auth/jwt"
 import type { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getSessionCookieName, shouldUseSecureAuthCookies } from "@/lib/session-cookie"
+import { recordUserSession } from "@/lib/user-sessions"
 
 /** A fresh id for one session, carried as the JWT `sid` so that session alone can be revoked. */
 export function newSessionId(): string {
@@ -35,12 +36,14 @@ export async function reissueSessionCookie(
   response: NextResponse,
   user: { id: string; name: string | null; email: string | null; avatar: string | null },
   sessionVersion: number,
-): Promise<void> {
+  requestHeaders?: { get(name: string): string | null },
+): Promise<string> {
   const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET
   if (!secret) throw new Error("Missing AUTH_SECRET/NEXTAUTH_SECRET")
 
   const cookieName = getSessionCookieName()
   const secure = shouldUseSecureAuthCookies()
+  const sid = newSessionId()
   const token = await encode({
     secret,
     salt: cookieName,
@@ -52,9 +55,10 @@ export async function reissueSessionCookie(
       email: user.email,
       picture: user.avatar,
       sessionVersion,
-      sid: newSessionId(),
+      sid,
     },
   })
+  await recordUserSession({ userId: user.id, sid, headers: requestHeaders, expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000) })
 
   for (let index = 0; index < 10; index++) {
     response.cookies.set(`${cookieName}.${index}`, "", {
@@ -74,4 +78,5 @@ export async function reissueSessionCookie(
     sameSite: "lax",
     secure,
   })
+  return sid
 }

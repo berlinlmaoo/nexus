@@ -7,7 +7,8 @@ import { buildCalendarItems, calendarCaller, calendarJson, loadStructure, loadTa
  * GET /api/calendar/task?id=<taskId> — how the Calendar may open one task it has not loaded (a shared
  * link, a task outside the month on screen): `masked` (a private project the caller is not in — do not
  * open), `canEdit` + `editProjectId` (the full panel; else a read-only preview). Same rules as /items.
- * A task that is not in the company workspace, or is cancelled, answers found:false.
+ * A task that is not in the company workspace, is cancelled, or has no PIC (not on the calendar, owner
+ * 12 Oct 2026) answers found:false.
  */
 export async function GET(req: NextRequest) {
   try {

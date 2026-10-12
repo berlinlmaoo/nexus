@@ -1,13 +1,8 @@
 {
  "cell": {
   "day": "2026-09-18",
-  "count": 4,
+  "count": 1,
   "dots": [
-   {
-    "unitId": "ouda117084994807e15c72c9a",
-    "filled": true,
-    "count": 3
-   },
    {
     "unitId": "cmuo08aix000801p593ezxuzd",
     "filled": true,
@@ -18,16 +13,12 @@
  },
  "legend": [
   {
-   "unitId": "ouda117084994807e15c72c9a",
-   "count": 3
-  },
-  {
    "unitId": "cmuo08aix000801p593ezxuzd",
    "count": 1
   }
  ],
  "tree": {
-  "total": 4,
+  "total": 1,
   "people": 2,
   "unplaced": [
    {
@@ -39,27 +30,11 @@
   ],
   "root": {
    "unit": "PATS",
-   "count": 4,
+   "count": 1,
    "items": [],
    "loose": [],
    "people": [],
    "children": [
-    {
-     "unit": "PATS Entertainment",
-     "count": 3,
-     "items": [
-      "cmu1gl5ku0bb701keng4gtea0",
-      "cmu1gkltm0bat01ke34pjchj1",
-      "cmu1gk8420bak01ke2wmxsbxl"
-     ],
-     "loose": [
-      "cmu1gl5ku0bb701keng4gtea0",
-      "cmu1gkltm0bat01ke34pjchj1",
-      "cmu1gk8420bak01ke2wmxsbxl"
-     ],
-     "people": [],
-     "children": []
-    },
     {
      "unit": "PATS Archive",
      "count": 1,
@@ -85,32 +60,7 @@
    "kind": "unit",
    "unit": "PATS",
    "depth": 0,
-   "count": 4
-  },
-  {
-   "kind": "unit",
-   "unit": "PATS Entertainment",
-   "depth": 1,
-   "count": 3
-  },
-  {
-   "kind": "loose",
-   "unitId": "ouda117084994807e15c72c9a",
-   "userId": null,
-   "depth": 2,
-   "days": [
-    [],
-    [],
-    [],
-    [],
-    [
-     "cmu1gl5ku0bb701keng4gtea0",
-     "cmu1gkltm0bat01ke34pjchj1",
-     "cmu1gk8420bak01ke2wmxsbxl"
-    ],
-    [],
-    []
-   ]
+   "count": 1
   },
   {
    "kind": "unit",
@@ -160,10 +110,7 @@
  ],
  "overdue": {
   "cmspx6d97018i01t76z55z69c": "stale",
-  "cmu1gl5ku0bb701keng4gtea0": "stale",
-  "cmu1gkltm0bat01ke34pjchj1": "stale",
   "cmtlk52pz01cy01vulzspofmi": "none",
-  "cmu1gk8420bak01ke2wmxsbxl": "stale",
   "cmtliz7jv015701vump6zhitz": "none",
   "cmtx491h405g701ke61hoowmd": "none",
   "cmu17knaa0akc01ke87uc247i": "none"

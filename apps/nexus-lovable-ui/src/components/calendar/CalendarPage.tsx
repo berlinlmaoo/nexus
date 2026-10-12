@@ -625,7 +625,7 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
           )}
           {legendRows.map((l) => {
             const u = ix.byId.get(l.unitId);
-            const name = l.unitId === "other" ? t("Other") : (u?.name ?? "");
+            const name = l.unitId === "other" ? t("No division") : (u?.name ?? "");
             const canFocus = !!u && l.unitId !== focusId && (ix.children.get(l.unitId)?.length ?? 0) > 0;
             const on = filters.units.includes(l.unitId);
             return (

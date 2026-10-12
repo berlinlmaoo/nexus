@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
 import { isWebClientTag } from '@/lib/session-version'
 import { reissueSessionCookie } from '@/lib/session-issue'
+import { markSessionsEnded } from '@/lib/user-sessions'
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,7 +56,8 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ success: true, message: 'Password updated successfully' })
     if (fromWeb) {
       try {
-        await reissueSessionCookie(res, updated, updated.sessionVersion)
+        const keep = await reissueSessionCookie(res, updated, updated.sessionVersion, req.headers)
+        await markSessionsEnded(updated.id, keep)
       } catch (error) {
         // The password IS changed; at worst this browser signs in again with it.
         console.error('password change: session re-issue failed', error)

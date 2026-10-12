@@ -1,7 +1,7 @@
 {
  "cell": {
   "day": "2026-09-18",
-  "count": 8,
+  "count": 5,
   "dots": [
    {
     "unitId": "ou47f297a5be7b0f6fbbae754",
@@ -11,7 +11,7 @@
    {
     "unitId": "ou6cd7c41336011d50e8dcfd2",
     "filled": true,
-    "count": 4
+    "count": 1
    },
    {
     "unitId": "ou8f27050812d85e33c43cef9",
@@ -28,7 +28,7 @@
   },
   {
    "unitId": "ou6cd7c41336011d50e8dcfd2",
-   "count": 4
+   "count": 1
   },
   {
    "unitId": "ou8f27050812d85e33c43cef9",
@@ -36,7 +36,7 @@
   }
  ],
  "tree": {
-  "total": 8,
+  "total": 5,
   "people": 8,
   "unplaced": [
    {
@@ -48,7 +48,7 @@
   ],
   "root": {
    "unit": "PT. The Z Networks",
-   "count": 8,
+   "count": 5,
    "items": [],
    "loose": [],
    "people": [],
@@ -133,27 +133,11 @@
     },
     {
      "unit": "PATS",
-     "count": 4,
+     "count": 1,
      "items": [],
      "loose": [],
      "people": [],
      "children": [
-      {
-       "unit": "PATS Entertainment",
-       "count": 3,
-       "items": [
-        "cmu1gl5ku0bb701keng4gtea0",
-        "cmu1gkltm0bat01ke34pjchj1",
-        "cmu1gk8420bak01ke2wmxsbxl"
-       ],
-       "loose": [
-        "cmu1gl5ku0bb701keng4gtea0",
-        "cmu1gkltm0bat01ke34pjchj1",
-        "cmu1gk8420bak01ke2wmxsbxl"
-       ],
-       "people": [],
-       "children": []
-      },
       {
        "unit": "PATS Archive",
        "count": 1,
@@ -204,7 +188,7 @@
    "kind": "unit",
    "unit": "PT. The Z Networks",
    "depth": 0,
-   "count": 8
+   "count": 5
   },
   {
    "kind": "unit",
@@ -309,32 +293,7 @@
    "kind": "unit",
    "unit": "PATS",
    "depth": 1,
-   "count": 4
-  },
-  {
-   "kind": "unit",
-   "unit": "PATS Entertainment",
-   "depth": 2,
-   "count": 3
-  },
-  {
-   "kind": "loose",
-   "unitId": "ouda117084994807e15c72c9a",
-   "userId": null,
-   "depth": 3,
-   "days": [
-    [],
-    [],
-    [],
-    [],
-    [
-     "cmu1gl5ku0bb701keng4gtea0",
-     "cmu1gkltm0bat01ke34pjchj1",
-     "cmu1gk8420bak01ke2wmxsbxl"
-    ],
-    [],
-    []
-   ]
+   "count": 1
   },
   {
    "kind": "unit",
@@ -424,10 +383,7 @@
  ],
  "overdue": {
   "cmspx6d97018i01t76z55z69c": "stale",
-  "cmu1gl5ku0bb701keng4gtea0": "stale",
-  "cmu1gkltm0bat01ke34pjchj1": "stale",
   "cmtlk52pz01cy01vulzspofmi": "none",
-  "cmu1gk8420bak01ke2wmxsbxl": "stale",
   "cmtliz7jv015701vump6zhitz": "none",
   "cmtx491h405g701ke61hoowmd": "none",
   "cmu17knaa0akc01ke87uc247i": "none"

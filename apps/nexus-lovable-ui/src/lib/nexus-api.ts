@@ -1577,8 +1577,13 @@ export type NexusSession = {
   id: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  /** X-Nexus-Client of that device (ios/0.1.6/12, android/…, web/1). */
+  client?: string | null;
   createdAt?: string | null;
+  lastActiveAt?: string | null;
   expiresAt?: string | null;
+  /** The session making this request. */
+  current?: boolean;
 };
 
 /** A WebAuthn credential registered to this account. `label` is whatever the user typed when enrolling. */
@@ -1969,16 +1974,12 @@ export type CalendarSettings = {
   visibility: "all" | "all_except_private" | "masked_foreign" | "projects"
   privateProjectIds: string[]; notPrivateProjectIds: string[]; privateNamePrefixes: string[]
   overdueWindowDays: number; urgentDays: number
-  folderUnits: Record<string, string>; projectUnits: Record<string, string>
 };
 export type CalendarSettingsPayload = {
   settings: CalendarSettings
-  units: { id: string; name: string; depth: number }[]
-  folders: { id: string; name: string; parentFolderId: string | null; unitId: string | null }[]
   projects: {
     id: string; name: string; color: string; folderId: string | null
     private: boolean; privateBy: "list" | "prefix" | null
-    unitId: string | null; unitBy: "project" | "folder" | "folder-name" | "project-name" | "top" | null
   }[]
 };
 
@@ -2930,7 +2931,8 @@ export const nexusApi = {
 
   // --- Sessions ---
   userSessions: () => apiFetch<{ sessions: NexusSession[] }>("/api/user/sessions"),
-  revokeSession: (id: string) => apiFetch<{ success?: boolean }>(`/api/user/sessions/${id}`, { method: "DELETE" }),
+  revokeSession: (id: string) => apiFetch<{ success?: boolean; current?: boolean }>(`/api/user/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  revokeOtherSessions: () => apiFetch<{ revoked?: number }>("/api/user/sessions", { method: "DELETE" }),
 
   // --- Passkeys (WebAuthn credentials on this account) ---
   passkeys: () => apiFetch<{ passkeys: NexusPasskey[] }>("/api/auth/passkey"),
