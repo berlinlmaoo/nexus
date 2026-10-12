@@ -173,3 +173,18 @@ export async function isIosVersionLive(v: string): Promise<boolean> {
   const latest = await latestIosVersion()
   return latest !== null && compareVersions(latest, v) >= 0
 }
+
+
+/**
+ * The first app versions that open a non-member's calendar task through GET /api/calendar/task?detail=1
+ * (13 Oct 2026). Everything released before — iOS < 0.1.7 (incl. the header-less ≤ 0.1.5 builds) and
+ * Android < 0.1.7 — opens it with GET /api/tasks/:id, which became members-only; for those the task route
+ * still answers a read-only copy of a calendar-visible, non-private task (app/api/tasks/[taskId]/route.ts).
+ */
+export const CALENDAR_TASK_DETAIL_FROM = "0.1.7"
+
+export function needsLegacyCalendarTaskRead(xNexusClient: string | null | undefined, userAgent: string | null | undefined): boolean {
+  const tag = parseClientTag(xNexusClient)
+  if (tag) return (tag.platform === "ios" || tag.platform === "android") && compareVersions(tag.version, CALENDAR_TASK_DETAIL_FROM) < 0
+  return !!parseLegacyIosUserAgent(userAgent)
+}

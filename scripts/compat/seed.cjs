@@ -230,6 +230,12 @@ async function seedCalendar(prisma, { workspace, project, list, bod, manager, st
   const finance = await prisma.project.create({ data: { name: "Finance Compat", workspaceId: workspace.id } })
   for (const u of [bod, manager]) await prisma.projectMember.create({ data: { userId: u.id, projectId: finance.id } })
   const financeList = await prisma.taskList.create({ data: { name: "Ledger", projectId: finance.id } })
+  // A NON-private project only the BoD and the manager are in (13 Oct 2026): the calendar shows its task to
+  // every staff profile, unmasked; released apps open it with GET /api/tasks/:id (read-only copy), newer
+  // clients through /api/calendar/task?detail=1.
+  const other = await prisma.project.create({ data: { name: "Compat Other", workspaceId: workspace.id } })
+  for (const u of [bod, manager]) await prisma.projectMember.create({ data: { userId: u.id, projectId: other.id, role: "LEAD" } })
+  const otherList = await prisma.taskList.create({ data: { name: "Board", projectId: other.id } })
 
   // Due dates relative to today in WIB. 17:00:00Z is 00:00 WIB of the NEXT day (how 18 real tasks were
   // stored); 00:00:00Z is a date picked without a time (07:00 WIB the same day). Both are date-only.
@@ -239,6 +245,7 @@ async function seedCalendar(prisma, { workspace, project, list, bod, manager, st
     await dated("timed", "Compat cal 03:30Z (10:30 WIB)", list.id, `${jktDate(5)}T03:30:00.000Z`, manager.id),
     await dated("overdue", "Compat cal overdue (3 days ago)", list.id, `${jktDate(-3)}T00:00:00.000Z`, unitStaff.id),
     await dated("finance", "Compat finance secret payroll", financeList.id, `${jktDate(6)}T00:00:00.000Z`, manager.id),
+    await dated("other", "Compat other project task", otherList.id, `${jktDate(4)}T00:00:00.000Z`, manager.id),
   ])
 
   return {

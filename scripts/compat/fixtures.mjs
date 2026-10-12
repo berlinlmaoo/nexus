@@ -1207,6 +1207,44 @@ export function buildFixtures(profile, world, media) {
     }
   }
 
+  // ---- a calendar task of a project the staff member is NOT in (owner 13 Oct 2026). Project access is by
+  // membership now, so GET /api/tasks/:id is members-only — but released apps (iOS < 0.1.7 incl. the
+  // header-less builds, Android < 0.1.7) open Master Calendar tasks with it. For them a non-private,
+  // calendar-visible task still comes back as a read-only copy (`readOnly: true`, no activity, no e-mail
+  // of anyone who isn't a public user field). The web and newer apps use /api/calendar/task?detail=1 and
+  // get 403 here. A private project's task is refused for everyone, and writes stay refused.
+  if (!p.legacy) {
+    const ver = (v) => (v ?? "0.0.0").split(".").map(Number)
+    const below017 = (v) => { const [a, b, c] = ver(v); return a < 0 || (a === 0 && (b < 1 || (b === 1 && c < 7))) }
+    const legacyRead = isNative(p) && below017(p.version)
+    const noOther = () => (cal && CT.other ? null : "seed has no 'Compat Other' calendar task")
+    add({
+      id: "cal-task-other-get", title: `GET /api/tasks/<non-member, non-private calendar task> → ${legacyRead ? "200 read-only copy" : "403"}`, as: "a", kind: "compat",
+      needs: noOther,
+      request: () => ({ method: "GET", path: `/api/tasks/${CT.other?.id ?? "x"}` }),
+      expect: legacyRead
+        ? { status: 200, check: (j) => firstError(
+            need(j?.readOnly === true, "readOnly flag missing"),
+            need(j?.id === CT.other.id && j?.title === CT.other.title, "not the task"),
+            need(Array.isArray(j?.assignees) && Array.isArray(j?.comments) && Array.isArray(j?.subtasks), "task shape (assignees/comments/subtasks)"),
+            need((j?.activityLogs ?? []).length === 0, "activity leaked"),
+          ) }
+        : { status: 403 },
+    })
+    add({
+      id: "cal-task-other-patch", title: "PATCH /api/tasks/<non-member task> → 403 (writes stay members-only)", as: "a", kind: "compat",
+      needs: noOther,
+      request: () => ({ method: "PATCH", path: `/api/tasks/${CT.other?.id ?? "x"}`, json: { status: "DONE" } }),
+      expect: { status: 403 },
+    })
+    add({
+      id: "cal-task-finance-get", title: "GET /api/tasks/<private project task> → 403 for every client", as: "a", kind: "compat",
+      needs: () => (cal && CT.finance ? null : "seed has no Finance task"),
+      request: () => ({ method: "GET", path: `/api/tasks/${CT.finance?.id ?? "x"}` }),
+      expect: { status: 403 },
+    })
+  }
+
   // ---- chat (CHAT-CONTRACT 8 Oct 2026): what every released client does, plus the new routes ----
   if (!p.legacy) chatFixtures(p, world, add)
 

@@ -10,9 +10,11 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { emitTaskDeleted } from "@/lib/socket-emitter"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { applyTaskUpdate } from "@/lib/task-update"
+import { needsLegacyCalendarTaskRead } from "@/lib/client-version"
+import { buildCalendarItems, calendarCaller, loadStructure, loadTaskRowById } from "@/lib/calendar/server"
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
@@ -22,7 +24,16 @@ export async function GET(
 
     // Signed in is not enough (API.md E5) — see lib/read-access.ts for who may open a task.
     const readable = await canReadTask(session.user.id!, taskId)
-    if (readable !== "ok") return taskReadRefusal(readable)
+    // Compatibility (owner 13 Oct 2026): released iOS (< 0.1.7, incl. header-less builds) and Android
+    // (< 0.1.7) open a Master Calendar task with THIS route. The calendar shows every non-private project's
+    // tasks to everyone, so for those apps a non-member still gets a read-only copy of such a task — the
+    // same thing /api/calendar/task?detail=1 gives newer apps. Never a private project's task, never a
+    // write, and the copy carries no file URLs, no activity and only public user fields.
+    let legacyReadOnly = false
+    if (readable === "forbidden" && needsLegacyCalendarTaskRead(request.headers.get("x-nexus-client"), request.headers.get("user-agent"))) {
+      legacyReadOnly = await calendarShowsTask(taskId)
+    }
+    if (readable !== "ok" && !legacyReadOnly) return taskReadRefusal(readable)
 
     const [task, likeCount, userLike, taskProjects, questRows] = await Promise.all([
       prisma.task.findUnique({
@@ -81,6 +92,22 @@ export async function GET(
         done: await prisma.task.count({ where: { id: { in: q.taskIds }, status: "DONE" } }),
       }))
     )
+
+    if (legacyReadOnly) {
+      const pub = (u: { id: string; name: string | null; email: string; avatar: string | null } | null) => (u ? { id: u.id, name: u.name, email: u.email, avatar: u.avatar } : null)
+      return NextResponse.json({
+        ...task,
+        assignees: task.assignees.map((a) => ({ ...a, user: pub(a.user) })),
+        comments: task.comments.map((c) => ({ ...c, user: pub(c.user) })),
+        creator: pub(task.creator),
+        activityLogs: [],
+        likeCount,
+        liked: !!userLike,
+        taskProjects,
+        quests: [],
+        readOnly: true,
+      })
+    }
 
     return NextResponse.json({
       ...task,
@@ -191,5 +218,20 @@ export async function DELETE(
   } catch (error) {
     console.error("Error deleting task:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+
+/** Does the Master Calendar show this task to the caller, unmasked (lib/calendar: visible + not a private project)? */
+async function calendarShowsTask(taskId: string): Promise<boolean> {
+  try {
+    const caller = await calendarCaller()
+    if (caller instanceof NextResponse || caller.kind !== "ok") return false
+    const [row, s] = await Promise.all([loadTaskRowById(taskId), loadStructure()])
+    if (!row) return false
+    const item = (await buildCalendarItems([row], caller, s))[0]
+    return !!item && !item.masked
+  } catch {
+    return false
   }
 }
