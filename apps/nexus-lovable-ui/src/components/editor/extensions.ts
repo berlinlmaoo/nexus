@@ -109,6 +109,28 @@ const AskAiShortcut = Extension.create({
 });
 
 /**
+ * A ⌘/Ctrl shortcut pressed right after a keyboard selection (Shift+Home, then ⌘B at once) used to act on
+ * the OLD selection: ProseMirror reads a selection change on the next "selectionchange" tick, and the key
+ * got there first, so ⌘B set a stored mark instead of bolding the text (QA round 2, S-07). This runs before
+ * every keymap and syncs the DOM selection into the editor state first.
+ */
+const SyncSelectionBeforeShortcut = Extension.create({
+  name: "syncSelectionBeforeShortcut",
+  priority: 10000,
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: new PluginKey("nxSyncSelection"),
+      props: {
+        handleKeyDown: (view, event) => {
+          if (event.metaKey || event.ctrlKey) (view as unknown as { domObserver?: { flush?: () => void } }).domObserver?.flush?.();
+          return false;
+        },
+      },
+    })];
+  },
+});
+
+/**
  * ⌘/Ctrl+K adds a link to the selection (Notion, Google Docs; QA 13 Oct 2026 S-07: it opened the app's
  * search over the editor). With no selection it takes the link the caret is in, else the word under it.
  * The selection toolbar (Toolbars.tsx) registers `open`, which shows its link field.
@@ -350,6 +372,7 @@ export function buildExtensions(o: BuildOptions): AnyExtension[] {
     BlockShortcuts,
     AskAiShortcut,
     LinkShortcut,
+    SyncSelectionBeforeShortcut,
     BlockAttrs,
     TaskList,
     TaskItem.configure({ nested: true }),

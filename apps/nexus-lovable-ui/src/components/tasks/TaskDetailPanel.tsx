@@ -764,7 +764,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <span key={a.user?.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-xs font-semibold">
                       <MiniAvatar user={a.user} size={22} /> {a.user?.name}
                       {a.user?.deactivatedAt && <PersonLeftTag />}
-                      <button aria-label={tr("Remove {name}", { name: a.user?.name ?? tr("assignee") })} onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="tap-area rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                      <button aria-label={tr("Remove {name}", { name: a.user?.name ?? tr("assignee") })} onClick={() => a.user?.id && assignMut.mutate({ userId: a.user.id, add: false })} className="grid place-items-center rounded-full p-0.5 text-muted-foreground hover:text-destructive pointer-coarse:-m-3.5 pointer-coarse:size-11"><X className="h-3 w-3" /></button>
                     </span>
                   ))}
                   <div className="relative">

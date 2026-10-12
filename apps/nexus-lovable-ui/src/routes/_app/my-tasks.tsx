@@ -103,14 +103,18 @@ function TaskRow({ task, now, onOpen }: { task: NexusTask; now: number; onOpen: 
 
   return (
     <motion.div layoutId={`mytasks-taskcard-${task.id}`} data-morph-id={`mytasks-taskcard-${task.id}`} style={{ borderRadius: 12 }} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/40">
+      {/* On a touch screen the button is a 44 px square around the 20 px circle (negative margin keeps
+          the row as it was; QA S-12). */}
       <button
-        className={cn("tap-area grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary hover:text-primary")}
+        className="group/done grid shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 pointer-coarse:-m-3 pointer-coarse:size-11"
         disabled={update.isPending}
         onClick={() => update.mutate()}
         aria-label={nextStatus === "DONE" ? t("Mark done") : t("Reopen task")}
         title={nextStatus === "DONE" ? t("Mark done") : t("Reopen task")}
       >
-        {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        <span className={cn("grid h-5 w-5 place-items-center rounded-full border transition-colors", isDone(task.status) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent group-hover/done:border-primary group-hover/done:text-primary")}>
+          {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        </span>
       </button>
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="min-w-0 flex-1 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
         <div className="truncate text-sm font-semibold">{task.title}</div>
