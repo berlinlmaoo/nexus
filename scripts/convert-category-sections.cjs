@@ -532,13 +532,12 @@ async function applyPlan(db, p, d, backupEntry) {
 
 // ── follow-ups on a converted project (owner, 12 Oct 2026) ─────────────────────────────────────────
 // Run after the conversion in the same transaction, and on projects converted before these rules:
-//  - an option that is another option + "On Prog" / "OP" / "WIP" ("AI & Tech On Prog") merges into it, and
-//    its tasks that are not done become In progress (moved to the In-progress column, order kept);
+//  (No option merging and no status change: the owner reverted that on 12 Oct 2026 — finance keeps
+//   "AI & Tech On Prog" / "Management OP" as their own options. This script never writes Task.status.)
 //  - form answers mapped to the category field that are not options yet become options (with colours);
 //  - a "Category"/"Kategori" field left with ONE option is dropped with its "By category" view (values kept
 //    in the backup).
 
-const MERGE_SUFFIX = /^(.*\S)\s+(on prog|on progress|in progress|progress|op|wip)$/i
 
 async function planFollowups(db) {
   const views = (await db.query(`SELECT v.*, p.name AS "projectName" FROM "ProjectView" v JOIN "Project" p ON p.id = v."projectId" WHERE v.builtin = 'category' AND v."ownerId" IS NULL ORDER BY p.name`)).rows
@@ -547,8 +546,8 @@ async function planFollowups(db) {
     const fieldId = String((v.config || {}).groupBy || "").replace(/^cf:/, "")
     const field = (await db.query(`SELECT * FROM "CustomField" WHERE id = $1`, [fieldId])).rows[0]
     if (!field) continue
-    const f = { projectId: v.projectId, name: v.projectName, fieldId, fieldName: field.name, merges: [], statusMoves: [], addOptions: [], drop: false, viewId: v.id, forms: [] }
-    let options = choiceList(field.options)
+    const f = { projectId: v.projectId, name: v.projectName, fieldId, fieldName: field.name, addOptions: [], drop: false, viewId: v.id, forms: [] }
+    const options = choiceList(field.options)
     const colors = { ...((field.options && field.options.optionColors) || {}) }
     const sections = (await db.query(`SELECT id, name, position, "taskStatus"::text AS "taskStatus" FROM "TaskList" WHERE "projectId" = $1 ORDER BY position`, [v.projectId])).rows
     const forms = (await db.query(`SELECT id, name, fields FROM "Form" WHERE "projectId" = $1`, [v.projectId])).rows
@@ -564,26 +563,6 @@ async function planFollowups(db) {
       continue
     }
 
-    // merges
-    for (const o of options) {
-      const m = MERGE_SUFFIX.exec(o)
-      const base = m && options.find((x) => x.toLowerCase() === m[1].toLowerCase() && x !== o)
-      if (base) f.merges.push({ from: o, to: base })
-    }
-    if (f.merges.length) {
-      const ip = sections.find((s) => s.taskStatus === "IN_PROGRESS") || sections.find((s) => GROUP[s.taskStatus] === "in_progress")
-      const secIds = sections.map((s) => s.id)
-      let pos = ip ? (await db.query(`SELECT coalesce(max(position), -1) + 1 AS n FROM "Task" WHERE "taskListId" = $1`, [ip.id])).rows[0].n : 0
-      const rows = (await db.query(`SELECT t.id, t."taskListId", t.position, t.status::text AS status, x.value FROM "CustomFieldValue" x JOIN "Task" t ON t.id = x."taskId" JOIN "TaskList" tl ON tl.id = t."taskListId" WHERE x."customFieldId" = $1 AND x.value = ANY($2) AND t."taskListId" = ANY($3) ORDER BY tl.position, t.position`, [fieldId, f.merges.map((m) => m.from), secIds])).rows
-      for (const t of rows) {
-        if (t.status === "DONE" || t.status === "CANCELLED") continue
-        if (!ip) continue
-        if (t.status === "IN_PROGRESS" && t.taskListId === ip.id) continue
-        f.statusMoves.push({ taskId: t.id, from: t.taskListId, to: ip.id, toName: ip.name, position: pos++, status: t.status, value: t.value })
-      }
-      options = options.filter((o) => !f.merges.some((m) => m.from === o))
-      for (const m of f.merges) delete colors[m.from]
-    }
     // form answers that are not options yet
     for (const fm of forms) {
       for (const x of Array.isArray(fm.fields) ? fm.fields : []) {
@@ -601,7 +580,7 @@ async function planFollowups(db) {
       used.add(colors[o]); i++
     }
     f.newOptions = { ...(field.options || {}), options: [...options, ...f.addOptions], optionColors: colors }
-    if (f.merges.length || f.addOptions.length) out.push(f)
+    if (f.addOptions.length) out.push(f)
   }
   return out
 }
@@ -609,7 +588,7 @@ async function planFollowups(db) {
 async function snapshotFollowup(db, f) {
   const field = (await db.query(`SELECT * FROM "CustomField" WHERE id = $1`, [f.fieldId])).rows[0]
   const values = (await db.query(`SELECT * FROM "CustomFieldValue" WHERE "customFieldId" = $1`, [f.fieldId])).rows
-  const tasks = f.statusMoves.length ? (await db.query(`SELECT id, "taskListId", position, status::text AS status FROM "Task" WHERE id = ANY($1)`, [f.statusMoves.map((m) => m.taskId)])).rows : []
+  const tasks = []
   const views = f.drop ? (await db.query(`SELECT * FROM "ProjectView" WHERE id = $1`, [f.viewId])).rows : []
   return { kind: "followup", projectId: f.projectId, name: f.name, field, values, tasks, views, forms: f.forms.map((x) => ({ id: x.id, fields: x.before })) }
 }
@@ -622,8 +601,6 @@ async function applyFollowup(db, f) {
     await db.query(`DELETE FROM "CustomField" WHERE id = $1`, [f.fieldId])
     return
   }
-  for (const m of f.merges) await db.query(`UPDATE "CustomFieldValue" SET value = $3 WHERE "customFieldId" = $1 AND value = $2`, [f.fieldId, m.from, m.to])
-  for (const m of f.statusMoves) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = 'IN_PROGRESS' WHERE id = $1`, [m.taskId, m.to, m.position])
   await db.query(`UPDATE "CustomField" SET options = $2::jsonb WHERE id = $1`, [f.fieldId, JSON.stringify(f.newOptions)])
 }
 
@@ -649,8 +626,6 @@ function printFollowups(list) {
   for (const f of list) {
     console.log(`\n## ${f.name}  [follow-up, field "${f.fieldName}"]`)
     if (f.drop) { console.log(`  drop    field "${f.fieldName}" (one option) and its "By category" view; values kept in the backup`); for (const x of f.forms) console.log(`  form    ${x.name}: answer no longer mapped to "${f.fieldName}"`); continue }
-    for (const m of f.merges) console.log(`  merge   option "${m.from}" → "${m.to}"`)
-    if (f.statusMoves.length) console.log(`  status  ${f.statusMoves.length} not-done task(s) of the merged option(s) → In progress ("${f.statusMoves[0].toName}")`)
     if (f.addOptions.length) console.log(`  options + ${f.addOptions.join(" / ")} (form answers)`)
   }
 }
@@ -659,7 +634,7 @@ function printFollowups(list) {
 
 async function rollback(db, backup) {
   // Newest first: the follow-ups were written after the conversion of the same run.
-  for (const p of [...backup.projects].reverse()) {
+  for (const p of [...backup.projects].reverse().filter((x) => !ONLY.length || ONLY.includes(x.name))) {
     if (p.kind === "followup") { await rollbackFollowup(db, p); continue }
     console.log(`rollback ${p.name} [${p.cls}]`)
     const cols = (row) => Object.keys(row)
