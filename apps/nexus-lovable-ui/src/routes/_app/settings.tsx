@@ -24,13 +24,14 @@ function fmtDay(value: string | null | undefined, locale: string) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
+// Every tab here has controls. "Automation" was only a card saying automations live in each project
+// (a dead tab, owner 12 Oct 2026); it is gone, and anything that pointed at it lands on Profile.
 const sections = [
   { id: "profile", label: "Profile", icon: User },
   { id: "members", label: "Members", icon: Users },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Lock },
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "automation", label: "Automation", icon: Zap },
   { id: "mcp", label: "Claude (MCP)", icon: Plug },
 ];
 
@@ -58,9 +59,8 @@ function Settings() {
           {active === "notifications" && <NotificationsSection />}
           {active === "security" && <SecuritySection />}
           {active === "appearance" && <AppearanceSection />}
-          {active === "automation" && <AutomationSection />}
           {active === "mcp" && <McpTokensSection />}
-          {!["profile","members","notifications","security","appearance","automation","mcp"].includes(active) && (
+          {!["profile","members","notifications","security","appearance","mcp"].includes(active) && (
             <div className="rounded-xl border border-border bg-card p-8 shadow-soft text-center text-muted-foreground text-sm">
               {t("Coming soon.")}
             </div>
@@ -589,16 +589,6 @@ function NotificationsSection() {
 
 // Was a static mock with two made-up rules and a dead "+ New rule" button (fixed 12 Oct 2026). Automations
 // belong to a project; this points there.
-function AutomationSection() {
-  const { t } = useLang();
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
-      <h2 className="flex items-center gap-2 font-semibold"><Zap className="h-4 w-4 text-primary" /> {t("Automations")}</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{t("Automations live in each project. Open a project, then its Automations tab, to set up “When … do …” rules and see their run log. Project leads edit them.")}</p>
-    </div>
-  );
-}
-
 const MCP_URL = "https://nexus.patsgroup.id/api/mcp";
 
 function CopyBox({ label, value, mono = true }: { label?: string; value: string; mono?: boolean }) {
