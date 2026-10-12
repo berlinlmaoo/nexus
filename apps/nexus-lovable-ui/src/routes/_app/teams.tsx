@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -228,15 +229,16 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
       {canManage && (
         <div className="mt-3">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Division")}</span>
-          <select
+          <SelectPicker
+            variant="field"
+            size="sm"
             value={team.divisionId ?? ""}
-            onChange={(e) => setDivision.mutate(e.target.value || null)}
+            onChange={(v) => setDivision.mutate(v || null)}
             disabled={setDivision.isPending}
-            className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold outline-none focus:border-primary disabled:opacity-60"
-          >
-            <option value="">{tr("— No division —")}</option>
-            {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
+            ariaLabel={tr("Division")}
+            options={[{ value: "", label: tr("— No division —") }, ...divisions.map((d) => ({ value: d.id, label: d.name }))]}
+            className="mt-1 flex h-8 w-full px-2 font-semibold"
+          />
         </div>
       )}
 

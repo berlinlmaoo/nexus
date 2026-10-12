@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Outlet, useChildMatches, useNavigate } from "@tanstack/react-router";
+import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -79,6 +80,7 @@ function DocComposer({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState("");
   const [content, setContent] = useState("");
+  const [templateId, setTemplateId] = useState("");
   const projects = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
   const templates = useQuery({ queryKey: ["nexus", "doc-templates"], queryFn: () => nexusApi.docTemplates(), retry: false });
   const applyTemplate = (id: string) => {
@@ -120,15 +122,9 @@ function DocComposer({ onClose }: { onClose: () => void }) {
         </div>
         <div className="mt-5 space-y-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Page title")} className={field} />
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={field}>
-            <option value="">{t("Pick a project")}</option>
-            {(projects.data ?? []).map((p: NexusProject) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SelectPicker variant="field" value={projectId} onChange={setProjectId} placeholder={t("Pick a project")} ariaLabel={t("Project")} options={(projects.data ?? []).map((p: NexusProject) => ({ value: p.id, label: p.name }))} className={cn(field, "flex hover:border-primary/40")} />
           {(templates.data?.templates?.length ?? 0) > 0 && (
-            <select defaultValue="" onChange={(e) => { if (e.target.value) applyTemplate(e.target.value); }} className={field}>
-              <option value="">{t("Start from a template (optional)")}</option>
-              {(templates.data?.templates ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
+            <SelectPicker variant="field" value={templateId} onChange={(v) => { setTemplateId(v); if (v) applyTemplate(v); }} placeholder={t("Start from a template (optional)")} ariaLabel={t("Start from a template (optional)")} options={(templates.data?.templates ?? []).map((x) => ({ value: x.id, label: x.name }))} className={cn(field, "flex hover:border-primary/40")} />
           )}
           <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t("Write a note, an SOP or meeting notes…")} className={cn(field, "min-h-32")} />
           {create.isError && <p className="text-sm text-destructive">{t("Couldn't create the page. Check that you're a member of the project, then try again.")}</p>}

@@ -45,7 +45,8 @@ import {
   type ViewCtx,
   type ViewLayout,
 } from "@/lib/project-views";
-import { fieldCls, GroupEditor, menuItemCls, PropIcon, SortEditor, usePropLabel } from "./view-controls";
+import { fieldCls, GroupEditor, menuItemCls, pickerCls, PropIcon, SortEditor, usePropLabel } from "./view-controls";
+import { SelectPicker } from "@/components/SelectPicker";
 import type { SortRule } from "@/lib/project-views";
 
 export const LAYOUT_ICON: Record<ViewLayout, typeof List> = {
@@ -200,23 +201,15 @@ function ColorRulesEditor({ cfg, defs, onPatch }: { cfg: ViewConfig; defs: PropD
   return (
     <div className="space-y-2">
       <Row label={t("Colour cards by")}>
-        <select value={cfg.colorBy ?? ""} onChange={(e) => onPatch({ colorBy: e.target.value || null })} className={cn(fieldCls, "w-40")}>
-          <option value="">{t("None")}</option>
-          {usable.filter((d) => d.kind === "select").map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-        </select>
+        <SelectPicker variant="field" ariaLabel={t("Colour cards by")} value={cfg.colorBy ?? ""} onChange={(v) => onPatch({ colorBy: v || null })} options={[{ value: "", label: t("None") }, ...usable.filter((d) => d.kind === "select").map((d) => ({ value: d.key, label: label(d) }))]} className={cn(pickerCls, "w-40")} />
       </Row>
       {cfg.colorRules.map((r) => {
         const def = propDef(defs, r.prop);
         const opts = [...(def?.kind === "person" ? [{ value: ME, label: t("Me") }] : []), ...(def?.options ?? [])];
         return (
           <div key={r.id} className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/60 p-1.5">
-            <select aria-label={t("Property")} value={r.prop} onChange={(e) => set(cfg.colorRules.map((x) => (x.id === r.id ? { ...x, prop: e.target.value, value: "" } : x)))} className={cn(fieldCls, "w-28")}>
-              {usable.map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-            </select>
-            <select aria-label={t("Value")} value={r.value} onChange={(e) => set(cfg.colorRules.map((x) => (x.id === r.id ? { ...x, value: e.target.value } : x)))} className={cn(fieldCls, "min-w-0 flex-1")}>
-              <option value="">{t("Pick a value…")}</option>
-              {opts.map((o) => <option key={o.value} value={o.value}>{r.prop === "status" || r.prop === "priority" ? t(o.label) : o.label}</option>)}
-            </select>
+            <SelectPicker variant="field" ariaLabel={t("Property")} value={r.prop} onChange={(v) => set(cfg.colorRules.map((x) => (x.id === r.id ? { ...x, prop: v, value: "" } : x)))} options={usable.map((d) => ({ value: d.key, label: label(d) }))} className={cn(pickerCls, "w-28")} />
+            <SelectPicker variant="field" ariaLabel={t("Value")} value={r.value} onChange={(v) => set(cfg.colorRules.map((x) => (x.id === r.id ? { ...x, value: v } : x)))} placeholder={t("Pick a value…")} options={opts.map((o) => ({ value: o.value, label: r.prop === "status" || r.prop === "priority" ? t(o.label) : o.label }))} className={cn(pickerCls, "min-w-0 flex-1")} />
             <div className="flex items-center gap-0.5">
               {COLOR_KEYS.map((c) => (
                 <button key={c} type="button" onClick={() => set(cfg.colorRules.map((x) => (x.id === r.id ? { ...x, color: c } : x)))} aria-label={t(COLOR_PRESETS[c].label)} title={t(COLOR_PRESETS[c].label)}
@@ -297,23 +290,17 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
           {layout === "calendar" && (
             <Section title={t("Calendar")}>
               <Row label={t("Show tasks by")}>
-                <select value={cfg.dateProp} onChange={(e) => onPatch({ dateProp: e.target.value })} className={cn(fieldCls, "w-40")}>
-                  {dates.map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-                </select>
+                <SelectPicker variant="field" ariaLabel={t("Show tasks by")} value={cfg.dateProp} onChange={(v) => onPatch({ dateProp: v })} options={dates.map((d) => ({ value: d.key, label: label(d) }))} className={cn(pickerCls, "w-40")} />
               </Row>
             </Section>
           )}
           {layout === "timeline" && (
             <Section title={t("Timeline")}>
               <Row label={t("Bar starts at")}>
-                <select value={cfg.startProp} onChange={(e) => onPatch({ startProp: e.target.value })} className={cn(fieldCls, "w-40")}>
-                  {dates.map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-                </select>
+                <SelectPicker variant="field" ariaLabel={t("Bar starts at")} value={cfg.startProp} onChange={(v) => onPatch({ startProp: v })} options={dates.map((d) => ({ value: d.key, label: label(d) }))} className={cn(pickerCls, "w-40")} />
               </Row>
               <Row label={t("Bar ends at")}>
-                <select value={cfg.endProp} onChange={(e) => onPatch({ endProp: e.target.value })} className={cn(fieldCls, "w-40")}>
-                  {dates.map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-                </select>
+                <SelectPicker variant="field" ariaLabel={t("Bar ends at")} value={cfg.endProp} onChange={(v) => onPatch({ endProp: v })} options={dates.map((d) => ({ value: d.key, label: label(d) }))} className={cn(pickerCls, "w-40")} />
               </Row>
             </Section>
           )}
@@ -323,18 +310,11 @@ export function ViewSettingsPanel({ view, cfg, defs, ctx, canEdit, canShare, sor
           {(layout === "board" || layout === "gallery") && (
             <Section title={t("Cards")}>
               <Row label={t("Card size")}>
-                <select value={cfg.cardSize} onChange={(e) => onPatch({ cardSize: e.target.value as ViewConfig["cardSize"] })} className={cn(fieldCls, "w-32")}>
-                  <option value="small">{t("Small")}</option>
-                  <option value="medium">{t("Medium")}</option>
-                  <option value="large">{t("Large")}</option>
-                </select>
+                <SelectPicker variant="field" ariaLabel={t("Card size")} value={cfg.cardSize} onChange={(v) => onPatch({ cardSize: v as ViewConfig["cardSize"] })} options={[{ value: "small", label: t("Small") }, { value: "medium", label: t("Medium") }, { value: "large", label: t("Large") }]} className={cn(pickerCls, "w-32")} />
               </Row>
               {layout === "gallery" && (
                 <Row label={t("Cover")}>
-                  <select value={cfg.cardCover} onChange={(e) => onPatch({ cardCover: e.target.value === "none" ? "none" : "image" })} className={cn(fieldCls, "w-40")}>
-                    <option value="image">{t("First image attached")}</option>
-                    <option value="none">{t("No cover")}</option>
-                  </select>
+                  <SelectPicker variant="field" ariaLabel={t("Cover")} value={cfg.cardCover} onChange={(v) => onPatch({ cardCover: v === "none" ? "none" : "image" })} options={[{ value: "image", label: t("First image attached") }, { value: "none", label: t("No cover") }]} className={cn(pickerCls, "w-40")} />
                 </Row>
               )}
             </Section>

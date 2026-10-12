@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { optionColor } from "@/lib/project-views";
+import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -172,21 +174,13 @@ function TaskComposer({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Task title")}</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Finalize booth deck")} className={field} />
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Project")}</label>
-          <select value={projectId} onChange={(e) => { setProjectId(e.target.value); setTaskListId(""); }} className={field}>
-            <option value="">{t("Pick a project")}</option>
-            {(projects.data ?? []).map((p: NexusProject) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SelectPicker variant="field" value={projectId} onChange={(v) => { setProjectId(v); setTaskListId(""); }} placeholder={t("Pick a project")} ariaLabel={t("Project")} options={(projects.data ?? []).map((p: NexusProject) => ({ value: p.id, label: p.name }))} className={cn(field, "hover:border-primary/40")} />
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Section")}</label>
-          <select value={taskListId} onChange={(e) => setTaskListId(e.target.value)} disabled={!projectId || projectDetail.isLoading} className={cn(field, "disabled:opacity-50")}>
-            <option value="">{t("Pick a section")}</option>
-            {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
+          <SelectPicker variant="field" value={taskListId} onChange={setTaskListId} disabled={!projectId || projectDetail.isLoading} placeholder={t("Pick a section")} ariaLabel={t("Section")} options={lists.map((l) => ({ value: l.id, label: l.name }))} className={cn(field, "hover:border-primary/40 disabled:opacity-50")} />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Priority")}</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value as CreateTaskPayload["priority"])} className={cn(field, "mt-1")}>
-                {(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const).map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
-              </select>
+              <SelectPicker variant="field" value={priority} onChange={(v) => setPriority(v as CreateTaskPayload["priority"])} ariaLabel={t("Priority")} options={(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const).map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))} className={cn(field, "mt-1 hover:border-primary/40")} />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("Due date")}</label>

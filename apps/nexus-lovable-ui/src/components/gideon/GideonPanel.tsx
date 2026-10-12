@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
@@ -451,19 +452,22 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
         </button>
       )}
       <button type="button" onClick={newChat} title={t("New chat (⌘O)")} aria-label={t("New chat")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><SquarePen className="h-4 w-4" /></button>
-      <select
-        value={tier}
-        onChange={(e) => {
-          const next = e.target.value as GideonTier;
-          setTier(next);
-          try { localStorage.setItem("gideon-tier", next); } catch { /* private mode */ }
-        }}
-        title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}
-        aria-label={t("GIDEON tier")}
-        className="hidden rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground outline-none focus:border-primary sm:block"
-      >
-        {GIDEON_TIERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-      </select>
+      <span className="hidden sm:contents" title={GIDEON_TIERS.find((x) => x.id === tier)?.blurb}>
+        <SelectPicker
+          variant="field"
+          size="sm"
+          align="end"
+          value={tier}
+          onChange={(v) => {
+            const next = v as GideonTier;
+            setTier(next);
+            try { localStorage.setItem("gideon-tier", next); } catch { /* private mode */ }
+          }}
+          ariaLabel={t("GIDEON tier")}
+          options={GIDEON_TIERS.map((x) => ({ value: x.id, label: x.name }))}
+          className="h-7 px-2 text-[11px] font-semibold text-muted-foreground"
+        />
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button" aria-label={t("More")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>

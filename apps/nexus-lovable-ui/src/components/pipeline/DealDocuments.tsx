@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { SelectPicker } from "@/components/SelectPicker";
 import { isAbort } from "@/lib/nexus-api";
 import { humanSize } from "@/lib/vault-media";
 import { LINK_TYPES, summarize } from "@/lib/pipeline";
@@ -225,9 +226,7 @@ export function DealDocuments({
 
       {canEdit && (
         <form onSubmit={(e) => { e.preventDefault(); addLink(); }} className="grid gap-2 sm:grid-cols-[8.5rem_1fr]">
-          <select aria-label={t("Link type")} value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm pointer-coarse:min-h-[44px]">
-            {LINK_TYPES.map((k) => <option key={k} value={k}>{labels.link(k)}</option>)}
-          </select>
+          <SelectPicker variant="field" ariaLabel={t("Link type")} value={type} onChange={setType} options={LINK_TYPES.map((k) => ({ value: k, label: labels.link(k) }))} className="w-full rounded-lg px-2.5 py-1.5" />
           <div className="relative">
             <Link2 aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input aria-label={t("Link")} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("Paste a link (https://…)")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2.5 text-sm pointer-coarse:min-h-[44px]" />

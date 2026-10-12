@@ -5,6 +5,7 @@ import { AlignLeft, Calendar, Check, CheckSquare, ChevronDown, Copy, FileText, G
 import { nexusApi, ApiError, type NexusCustomField, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { SelectPicker } from "@/components/SelectPicker";
 import { fieldChoices } from "@/lib/project-views";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -166,6 +167,7 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
   const rules = field.routingRules ?? [];
   const mapping = field.mapping ?? { target: "none" };
   const sel = "rounded-lg border border-border bg-card px-2 py-1.5 text-xs outline-none focus:border-primary";
+  const pick = "h-auto min-h-[30px] rounded-lg bg-card px-2";
   const parent = showIf ? others.find((o) => o.id === showIf.fieldId) : undefined;
   const parentOpts = parent ? optionsOf(parent) : [];
   const ownOpts = optionsOf(field);
@@ -182,16 +184,11 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
           </label>
           {showIf && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <select value={showIf.fieldId} onChange={(e) => onChange({ showIf: { ...showIf, fieldId: e.target.value, value: "" } })} className={sel}>
-                {others.length === 0 && <option value="">{t("(no other fields)")}</option>}
-                {others.map((o) => <option key={o.id} value={o.id}>{fieldName(o, t)}</option>)}
-              </select>
-              <select value={showIf.operator} onChange={(e) => onChange({ showIf: { ...showIf, operator: e.target.value } })} className={sel}>
-                {OPERATORS.map((op) => <option key={op.value} value={op.value}>{t(op.label)}</option>)}
-              </select>
+              <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Field")} value={showIf.fieldId} onChange={(v) => onChange({ showIf: { ...showIf, fieldId: v, value: "" } })} placeholder={others.length === 0 ? t("(no other fields)") : undefined} options={others.map((o) => ({ value: o.id, label: fieldName(o, t) }))} />
+              <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Condition")} value={showIf.operator} onChange={(v) => onChange({ showIf: { ...showIf, operator: v } })} options={OPERATORS.map((op) => ({ value: op.value, label: t(op.label) }))} />
               {needsValue(showIf.operator) && (
                 parentOpts.length
-                  ? <select value={showIf.value} onChange={(e) => onChange({ showIf: { ...showIf, value: e.target.value } })} className={sel}><option value="">—</option>{parentOpts.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                  ? <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Value")} value={showIf.value} onChange={(v) => onChange({ showIf: { ...showIf, value: v } })} clearable="—" options={parentOpts.map((o) => ({ value: o, label: o }))} />
                   : <input value={showIf.value} onChange={(e) => onChange({ showIf: { ...showIf, value: e.target.value } })} placeholder={t("value")} className={sel} />
               )}
             </div>
@@ -211,10 +208,10 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-1.5">
                   <span className="text-[11px] text-muted-foreground">{t("if")}</span>
-                  <select value={r.operator} onChange={(e) => setRule({ operator: e.target.value })} className={sel}>{OPERATORS.map((op) => <option key={op.value} value={op.value}>{t(op.label)}</option>)}</select>
-                  {needsValue(r.operator) && (ownOpts.length ? <select value={r.value} onChange={(e) => setRule({ value: e.target.value })} className={sel}><option value="">—</option>{ownOpts.map((o) => <option key={o} value={o}>{o}</option>)}</select> : <input value={r.value} onChange={(e) => setRule({ value: e.target.value })} placeholder={t("value")} className={sel} />)}
+                  <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Condition")} value={r.operator} onChange={(v) => setRule({ operator: v })} options={OPERATORS.map((op) => ({ value: op.value, label: t(op.label) }))} />
+                  {needsValue(r.operator) && (ownOpts.length ? <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Value")} value={r.value} onChange={(v) => setRule({ value: v })} clearable="—" options={ownOpts.map((o) => ({ value: o, label: o }))} /> : <input value={r.value} onChange={(e) => setRule({ value: e.target.value })} placeholder={t("value")} className={sel} />)}
                   <span className="text-[11px] text-muted-foreground">→</span>
-                  <select value={r.action} onChange={(e) => setRule({ action: e.target.value })} className={sel}>{ROUTING_ACTIONS.map((a) => <option key={a.value} value={a.value}>{t(a.label)}</option>)}</select>
+                  <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Routing")} value={r.action} onChange={(v) => setRule({ action: v })} options={ROUTING_ACTIONS.map((a) => ({ value: a.value, label: t(a.label) }))} />
                   {r.action === "set_field" ? (() => {
                     // Sections are statuses now (12 Oct 2026); a category is a field, so routing sets it.
                     const settable = customFields.filter((c) => SETTABLE_FIELD_TYPES.includes((c.type ?? "").toUpperCase()));
@@ -222,16 +219,16 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
                     const choices = target ? fieldChoices(target) : [];
                     return (
                       <>
-                        <select aria-label={t("Field")} value={r.targetCustomFieldId ?? ""} onChange={(e) => setRule({ targetCustomFieldId: e.target.value || undefined, targetValue: undefined })} className={sel}><option value="">{t("choose field")}</option>{settable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                        <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Field")} value={r.targetCustomFieldId ?? ""} onChange={(v) => setRule({ targetCustomFieldId: v || undefined, targetValue: undefined })} placeholder={t("choose field")} options={settable.map((c) => ({ value: c.id, label: c.name }))} />
                         {target && (choices.length
-                          ? <select aria-label={t("Value")} value={r.targetValue ?? ""} onChange={(e) => setRule({ targetValue: e.target.value || undefined })} className={sel}><option value="">{t("choose value")}</option>{choices.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                          ? <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Value")} value={r.targetValue ?? ""} onChange={(v) => setRule({ targetValue: v || undefined })} placeholder={t("choose value")} options={choices.map((o) => ({ value: o, label: o }))} />
                           : <input aria-label={t("Value")} value={r.targetValue ?? ""} onChange={(e) => setRule({ targetValue: e.target.value })} placeholder={t("value")} className={sel} />)}
                       </>
                     );
                   })() : r.action === "set_task_list" ? (
-                    <select value={r.targetTaskListId ?? ""} onChange={(e) => setRule({ targetTaskListId: e.target.value })} className={sel}><option value="">{t("choose section")}</option>{taskLists.map((tl) => <option key={tl.id} value={tl.id}>{tl.name}</option>)}</select>
+                    <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Section")} value={r.targetTaskListId ?? ""} onChange={(v) => setRule({ targetTaskListId: v })} placeholder={t("choose section")} options={taskLists.map((tl) => ({ value: tl.id, label: tl.name }))} />
                   ) : (
-                    <select value={r.targetUserId ?? ""} onChange={(e) => setRule({ targetUserId: e.target.value })} className={sel}><option value="">{t("choose member")}</option>{members.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}</select>
+                    <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Person")} value={r.targetUserId ?? ""} onChange={(v) => setRule({ targetUserId: v })} placeholder={t("choose member")} options={members.map((m) => ({ value: m.userId, label: m.name }))} />
                   )}
                   <button type="button" onClick={() => onChange({ routingRules: rules.filter((_, xi) => xi !== i) })} aria-label={t("Delete rule")} className="ml-auto rounded p-1 text-muted-foreground transition-colors hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                 </div>
@@ -243,14 +240,9 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
         {/* mapping */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold">{t("Map answer to")}</span>
-          <select value={mapping.target ?? "none"} onChange={(e) => onChange({ mapping: { ...mapping, target: e.target.value } })} className={sel}>
-            {MAPPING_TARGETS.map((m) => <option key={m.value} value={m.value}>{t(m.label)}</option>)}
-          </select>
+          <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Map answer to")} value={mapping.target ?? "none"} onChange={(v) => onChange({ mapping: { ...mapping, target: v } })} options={MAPPING_TARGETS.map((m) => ({ value: m.value, label: t(m.label) }))} />
           {mapping.target === "custom_field" && (
-            <select value={mapping.customFieldId ?? ""} onChange={(e) => onChange({ mapping: { ...mapping, target: "custom_field", customFieldId: e.target.value } })} className={sel}>
-              <option value="">{t("choose custom field")}</option>
-              {customFields.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SelectPicker variant="field" size="sm" className={pick} ariaLabel={t("Field")} value={mapping.customFieldId ?? ""} onChange={(v) => onChange({ mapping: { ...mapping, target: "custom_field", customFieldId: v } })} placeholder={t("choose custom field")} options={customFields.map((c) => ({ value: c.id, label: c.name }))} />
           )}
         </div>
 
@@ -430,17 +422,18 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                   {/* type + required */}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <label className="text-[11px] font-semibold text-muted-foreground">{t("Type")}</label>
-                    <div className="relative">
-                      <TypeIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <select
-                        value={f.type}
-                        onChange={(e) => update(f.id, { type: e.target.value, ...(OPTION_TYPES.includes(e.target.value) && !f.options ? { options: [] } : {}) })}
-                        className="h-9 appearance-none rounded-lg border border-border bg-card pl-8 pr-8 text-sm font-semibold outline-none focus:border-primary"
-                      >
-                        {FIELD_TYPES.map((ft) => <option key={ft.value} value={ft.value}>{t(ft.label)}</option>)}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    </div>
+                    <SelectPicker
+                      variant="field"
+                      ariaLabel={t("Type")}
+                      value={f.type}
+                      onChange={(v) => update(f.id, { type: v, ...(OPTION_TYPES.includes(v) && !f.options ? { options: [] } : {}) })}
+                      // A legacy type (e.g. "select") not in the list still shows as itself.
+                      options={[
+                        ...FIELD_TYPES.map((ft) => ({ value: ft.value, label: t(ft.label), icon: <ft.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> })),
+                        ...(FIELD_TYPES.some((ft) => ft.value === f.type) ? [] : [{ value: f.type, label: f.type, icon: <TypeIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> }]),
+                      ]}
+                      className="h-9 rounded-lg bg-card px-2.5 font-semibold"
+                    />
                     <div className="ml-auto flex items-center gap-2">
                       <span className={cn("text-xs font-semibold", f.required ? "text-primary" : "text-muted-foreground")}>{f.required ? t("Required") : t("Optional")}</span>
                       <button
@@ -478,11 +471,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                   {(f.type === "text" || f.type === "email") && (
                     <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5" /> {t("Auto-fill from the signed-in account")}</span>
-                      <select value={f.autofill ?? ""} onChange={(e) => update(f.id, { autofill: (e.target.value || undefined) as RichField["autofill"] })} className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary">
-                        <option value="">{t("— none —")}</option>
-                        <option value="name">{t("User's name")}</option>
-                        <option value="email">{t("User's email")}</option>
-                      </select>
+                      <SelectPicker variant="field" size="sm" ariaLabel={t("Auto-fill from the signed-in account")} value={f.autofill ?? ""} onChange={(v) => update(f.id, { autofill: (v || undefined) as RichField["autofill"] })} options={[{ value: "", label: t("— none —") }, { value: "name", label: t("User's name") }, { value: "email", label: t("User's email") }]} className="px-2 text-foreground" />
                       {f.autofill && <span className="text-[10px] font-semibold text-primary">{t("filled in automatically and locked")}</span>}
                     </label>
                   )}
@@ -491,10 +480,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                   {f.type === "number" && (
                     <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> {t("Number format")}</span>
-                      <select value={f.numberFormat ?? "plain"} onChange={(e) => update(f.id, { numberFormat: e.target.value === "currency-idr" ? "currency-idr" : undefined } as Partial<RichField>)} className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary">
-                        <option value="plain">{t("Plain (9240943)")}</option>
-                        <option value="currency-idr">Rupiah (Rp 9.240.943)</option>
-                      </select>
+                      <SelectPicker variant="field" size="sm" ariaLabel={t("Number format")} value={f.numberFormat ?? "plain"} onChange={(v) => update(f.id, { numberFormat: v === "currency-idr" ? "currency-idr" : undefined } as Partial<RichField>)} options={[{ value: "plain", label: t("Plain (9240943)") }, { value: "currency-idr", label: "Rupiah (Rp 9.240.943)" }]} className="px-2 text-foreground" />
                     </label>
                   )}
 

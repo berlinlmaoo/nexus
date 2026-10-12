@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Link2, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useLang, type Lang } from "@/lib/lang";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -86,29 +87,20 @@ export function OutletReportForm({
         </div>
         <label className="text-xs font-medium text-muted-foreground">
           {t("Which event?")}
-          <select
+          <SelectPicker
+            variant="field"
+            ariaLabel={t("Which event?")}
             value={target.eventId ?? NEW}
-            onChange={(e) => choose(e.target.value)}
-            className="mt-1 h-10 w-full cursor-pointer rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors hover:border-control-border focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11"
-          >
-            <option value={NEW}>{t("New event")}</option>
-            {event && !known.some((e) => e.id === event.id) && <option value={event.id}>{optionLabel(event)}</option>}
-            {waiting.length > 0 && (
-              <optgroup label={t("Waiting for a report")}>
-                {waiting.map((e) => <option key={e.id} value={e.id}>{optionLabel(e)}</option>)}
-              </optgroup>
-            )}
-            {upcoming.length > 0 && (
-              <optgroup label={t("Upcoming")}>
-                {upcoming.map((e) => <option key={e.id} value={e.id}>{optionLabel(e)}</option>)}
-              </optgroup>
-            )}
-            {reported.length > 0 && (
-              <optgroup label={t("Reported")}>
-                {reported.map((e) => <option key={e.id} value={e.id}>{optionLabel(e)}</option>)}
-              </optgroup>
-            )}
-          </select>
+            onChange={choose}
+            options={[
+              { value: NEW, label: t("New event") },
+              ...(event && !known.some((e) => e.id === event.id) ? [{ value: event.id, label: optionLabel(event) }] : []),
+              ...waiting.map((e) => ({ value: e.id, label: optionLabel(e), group: t("Waiting for a report") })),
+              ...upcoming.map((e) => ({ value: e.id, label: optionLabel(e), group: t("Upcoming") })),
+              ...reported.map((e) => ({ value: e.id, label: optionLabel(e), group: t("Reported") })),
+            ]}
+            className="mt-1 h-10 w-full rounded-xl px-3 font-normal text-foreground pointer-coarse:h-11"
+          />
         </label>
       </header>
 

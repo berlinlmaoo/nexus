@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { createPortal } from "react-dom";
 import type { Editor, JSONContent } from "@tiptap/core";
 import {
@@ -354,15 +355,15 @@ export function AskAiLayer({ editor }: { editor: Editor }) {
                       </span>
                     </label>
                     {canTasks && (
-                      <select
+                      <SelectPicker
+                        variant="field"
+                        size="sm"
                         value={i.assigneeId ?? ""}
-                        onChange={(e) => setItems((cur) => cur!.map((x, k) => (k === n ? { ...x, assigneeId: e.target.value || null } : x)))}
-                        aria-label={t("Assignee")}
-                        className="ml-6 mt-1 max-w-[16rem] rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground outline-none focus:border-primary"
-                      >
-                        <option value="">{i.owner ? t("Unassigned (“{name}” in the description)", { name: i.owner }) : t("Unassigned")}</option>
-                        {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                      </select>
+                        onChange={(v) => setItems((cur) => cur!.map((x, k) => (k === n ? { ...x, assigneeId: v || null } : x)))}
+                        ariaLabel={t("Assignee")}
+                        options={[{ value: "", label: i.owner ? t("Unassigned (“{name}” in the description)", { name: i.owner }) : t("Unassigned") }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
+                        className="ml-6 mt-1 h-6 max-w-[16rem] rounded-md px-1.5 text-[11px] text-muted-foreground"
+                      />
                     )}
                   </li>
                 ))}

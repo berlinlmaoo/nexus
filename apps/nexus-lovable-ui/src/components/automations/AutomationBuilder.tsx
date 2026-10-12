@@ -5,6 +5,7 @@ import {
   AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, Copy, Filter, Loader2, Play, Plus, RefreshCw, Search, Trash2, X, Zap,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SelectPicker } from "@/components/SelectPicker";
 import { nexusApi, type NexusAutomation, type NexusAutomationRun } from "@/lib/nexus-api";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,7 @@ export type BuilderContext = {
 type Opt = { value: string; label: string; hint?: string; group?: string };
 
 const input = "h-9 rounded-lg border border-border bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary disabled:opacity-70";
-const select = cn(input, "pr-7");
+const picker = "h-9 rounded-lg px-2.5 text-sm";
 
 function errorText(e: unknown, fallback: string) {
   return e instanceof Error && e.message ? e.message : fallback;
@@ -74,20 +75,17 @@ function PickMenu({ trigger, options, onPick, placeholder, disabled }: { trigger
 
 function Sel({ value, onChange, options, disabled, label, className }: { value: string; onChange: (v: string) => void; options: Opt[]; disabled?: boolean; label: string; className?: string }) {
   const { t } = useLang();
-  // Options with a group render under it (the status options: To-do / In progress / Complete).
-  const blocks: Array<{ group: string; options: Opt[] }> = [];
-  for (const o of options) {
-    const g = o.group ?? "";
-    const last = blocks[blocks.length - 1];
-    if (last && last.group === g) last.options.push(o);
-    else blocks.push({ group: g, options: [o] });
-  }
+  // Options with a group render under its heading (the status options: To-do / In progress / Complete).
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={cn(select, className)}>
-      {blocks.map((b, i) => b.group
-        ? <optgroup key={`${b.group}-${i}`} label={t(b.group)}>{b.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>
-        : b.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>))}
-    </select>
+    <SelectPicker
+      variant="field"
+      ariaLabel={label}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      options={options.map((o) => ({ value: o.value, label: o.label, group: o.group ? t(o.group) : undefined }))}
+      className={cn(picker, className)}
+    />
   );
 }
 
@@ -722,10 +720,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
         <footer className="flex flex-wrap items-center gap-2 border-t border-border px-6 py-3">
           {automation && canEdit && (
             <div className="flex items-center gap-1.5">
-              <select aria-label={t("Task to run on")} value={runTaskId} onChange={(e) => setRunTaskId(e.target.value)} className={cn(select, "h-8 max-w-[11rem] text-xs")}>
-                <option value="">{t("No task")}</option>
-                {ctx.tasks.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
-              </select>
+              <SelectPicker variant="field" ariaLabel={t("Task to run on")} value={runTaskId} onChange={setRunTaskId} options={[{ value: "", label: t("No task") }, ...ctx.tasks.map((x) => ({ value: x.id, label: x.title }))]} className={cn(picker, "h-8 max-w-[11rem] text-xs")} />
               <button type="button" onClick={() => runNow.mutate()} disabled={runNow.isPending || dirty} title={dirty ? t("Save your changes first") : t("Run it once now")} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-semibold transition-colors hover:bg-accent disabled:opacity-50">
                 {runNow.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} {t("Run now")}
               </button>

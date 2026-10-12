@@ -1,5 +1,6 @@
 "use client"
 
+import { SelectPicker } from "@/components/SelectPicker";
 import * as React from "react"
 import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, Crown } from "lucide-react"
@@ -100,14 +101,15 @@ const LeaderboardRankings = React.forwardRef<HTMLDivElement, LeaderboardRankings
           <div className="flex items-center justify-between gap-3 px-1 text-sm">
             <label className="flex items-center gap-2 text-muted-foreground">
               Show
-              <select
-                aria-label="Rows per page"
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0) }}
-                className="bg-background text-foreground rounded-md border px-2 py-1"
-              >
-                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <SelectPicker
+                variant="field"
+                size="sm"
+                ariaLabel="Rows per page"
+                value={String(pageSize)}
+                onChange={(v) => { setPageSize(Number(v)); setPage(0) }}
+                options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
+                className="h-8 rounded-md px-2 text-sm text-foreground"
+              />
             </label>
             <div className="flex items-center gap-2">
               <button

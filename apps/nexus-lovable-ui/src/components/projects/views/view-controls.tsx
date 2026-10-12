@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import {
@@ -92,6 +93,8 @@ export function usePropLabel() {
 
 export const menuItemCls = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50";
 export const fieldCls = "h-8 rounded-md border border-border bg-card px-2 text-sm text-foreground outline-none transition-colors hover:border-foreground/20 focus:border-[color:var(--accent-foreground)] focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/20";
+/** A SelectPicker sized like `fieldCls` (the view popovers' h-8 fields). */
+export const pickerCls = "h-8 rounded-md bg-card px-2 text-sm";
 export const panelTitleCls = "px-2 pb-1 pt-1.5 text-xs font-medium text-muted-foreground";
 
 /** Searchable property list (Notion's "Filter by…" / "Sort by…" / "Group by…"). */
@@ -251,9 +254,7 @@ export function RuleRow({ rule, defs, onChange, onRemove, lead }: { rule: Filter
         </PopoverContent>
       </Popover>
       {def && (
-        <select aria-label={t("Condition")} value={rule.op} onChange={(e) => onChange({ ...rule, op: e.target.value, value: opsFor(def.kind).find((o) => o.op === e.target.value)?.needsValue ? rule.value : undefined })} className={cn(fieldCls, "max-w-44")}>
-          {opsFor(def.kind).map((o) => <option key={o.op} value={o.op}>{t(o.label)}</option>)}
-        </select>
+        <SelectPicker variant="field" ariaLabel={t("Condition")} value={rule.op} onChange={(v) => onChange({ ...rule, op: v, value: opsFor(def.kind).find((o) => o.op === v)?.needsValue ? rule.value : undefined })} options={opsFor(def.kind).map((o) => ({ value: o.op, label: t(o.label) }))} className={cn(pickerCls, "max-w-44")} />
       )}
       {def && <RuleValue rule={rule} def={def} onChange={(value) => onChange({ ...rule, value })} />}
       <button type="button" onClick={onRemove} aria-label={t("Remove rule")} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
@@ -277,10 +278,7 @@ export function FilterGroupEditor({ group, defs, depth, onChange, onRemove }: { 
   const lead = (i: number) => (
     <span className="w-14 shrink-0 text-right text-sm text-muted-foreground">
       {i === 0 ? t("Where") : i === 1 ? (
-        <select aria-label={t("Match")} value={group.mode} onChange={(e) => onChange({ ...group, mode: e.target.value === "or" ? "or" : "and" })} className="h-8 w-14 rounded-md border border-border bg-card px-1 text-sm">
-          <option value="and">{t("And")}</option>
-          <option value="or">{t("Or")}</option>
-        </select>
+        <SelectPicker variant="field" ariaLabel={t("Match")} value={group.mode} onChange={(v) => onChange({ ...group, mode: v === "or" ? "or" : "and" })} options={[{ value: "and", label: t("And") }, { value: "or", label: t("Or") }]} className={cn(pickerCls, "w-14 px-1")} />
       ) : t(group.mode === "or" ? "Or" : "And")}
     </span>
   );
@@ -437,13 +435,8 @@ export function SortEditor({ sort, defs, onChange }: { sort: SortRule[]; defs: P
       {sort.length === 0 && <p className="px-1 py-1 text-sm text-muted-foreground">{t("Tasks are in their manual order. Add a sort to order them by a property.")}</p>}
       {sort.map((s, i) => (
         <div key={`${s.prop}-${i}`} className="flex items-center gap-1.5">
-          <select aria-label={t("Sort by")} value={s.prop} onChange={(e) => onChange(sort.map((x, j) => (j === i ? { ...x, prop: e.target.value } : x)))} className={cn(fieldCls, "min-w-0 flex-1")}>
-            {usable.map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-          </select>
-          <select aria-label={t("Direction")} value={s.dir} onChange={(e) => onChange(sort.map((x, j) => (j === i ? { ...x, dir: e.target.value === "desc" ? "desc" : "asc" } : x)))} className={cn(fieldCls, "w-32")}>
-            <option value="asc">{t("Ascending")}</option>
-            <option value="desc">{t("Descending")}</option>
-          </select>
+          <SelectPicker variant="field" ariaLabel={t("Sort by")} value={s.prop} onChange={(v) => onChange(sort.map((x, j) => (j === i ? { ...x, prop: v } : x)))} options={usable.map((d) => ({ value: d.key, label: label(d) }))} className={cn(pickerCls, "min-w-0 flex-1")} />
+          <SelectPicker variant="field" ariaLabel={t("Direction")} value={s.dir} onChange={(v) => onChange(sort.map((x, j) => (j === i ? { ...x, dir: v === "desc" ? "desc" : "asc" } : x)))} options={[{ value: "asc", label: t("Ascending") }, { value: "desc", label: t("Descending") }]} className={cn(pickerCls, "w-32")} />
           <div className="flex shrink-0">
             <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("Move up")} className="grid h-8 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
             <button type="button" disabled={i === sort.length - 1} onClick={() => move(i, 1)} aria-label={t("Move down")} className="grid h-8 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
@@ -500,38 +493,35 @@ export function GroupEditor({ cfg, layout, defs, ctx, onPatch, readOnly }: { cfg
     <fieldset disabled={readOnly} className="w-[min(92vw,320px)] min-w-0 space-y-2 p-2 disabled:opacity-60">
       <label className="flex items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">{t("Group by")}</span>
-        <select value={cfg.groupBy ?? ""} onChange={(e) => onPatch({ groupBy: e.target.value || null, hiddenGroups: [], collapsedGroups: [] })} className={cn(fieldCls, "w-44")}>
-          <option value="">{t("None")}</option>
-          {groupable.map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-        </select>
+        <SelectPicker variant="field" ariaLabel={t("Group by")} value={cfg.groupBy ?? ""} onChange={(v) => onPatch({ groupBy: v || null, hiddenGroups: [], collapsedGroups: [] })} options={[{ value: "", label: t("None") }, ...groupable.map((d) => ({ value: d.key, label: label(d) }))]} className={cn(pickerCls, "w-44")} />
       </label>
       {canSubGroup && cfg.groupBy && (
         <label className="flex items-center justify-between gap-2 text-sm">
           <span className="text-muted-foreground">{layout === "board" ? t("Sub-group (rows)") : t("Sub-group")}</span>
-          <select value={cfg.subGroupBy ?? ""} onChange={(e) => onPatch({ subGroupBy: e.target.value || null })} className={cn(fieldCls, "w-44")}>
-            <option value="">{t("None")}</option>
-            {groupable.filter((d) => d.key !== cfg.groupBy).map((d) => <option key={d.key} value={d.key}>{label(d)}</option>)}
-          </select>
+          <SelectPicker variant="field" ariaLabel={layout === "board" ? t("Sub-group (rows)") : t("Sub-group")} value={cfg.subGroupBy ?? ""} onChange={(v) => onPatch({ subGroupBy: v || null })} options={[{ value: "", label: t("None") }, ...groupable.filter((d) => d.key !== cfg.groupBy).map((d) => ({ value: d.key, label: label(d) }))]} className={cn(pickerCls, "w-44")} />
         </label>
       )}
       {cfg.groupBy && (
         <>
           <label className="flex items-center justify-between gap-2 text-sm">
             <span className="text-muted-foreground">{t("Group header shows")}</span>
-            <select
+            <SelectPicker
+              variant="field"
+              ariaLabel={t("Group header shows")}
               value={calcValue}
-              onChange={(e) => {
-                const [kind, prop] = e.target.value.split(":");
+              onChange={(v) => {
+                const [kind, prop] = v.split(":");
                 onPatch({ groupCalc: { kind: kind as GroupCalc["kind"], ...(prop ? { prop } : {}) } });
               }}
-              className={cn(fieldCls, "w-44")}
-            >
-              <option value="count">{t("Count")}</option>
-              <option value="done">{t("Done / total")}</option>
-              <option value="percent_done">{t("Percent done")}</option>
-              {numberProps.map((d) => <option key={`sum-${d.key}`} value={`sum:${d.key}`}>{t("Sum of {name}", { name: label(d) })}</option>)}
-              {numberProps.map((d) => <option key={`avg-${d.key}`} value={`avg:${d.key}`}>{t("Average {name}", { name: label(d) })}</option>)}
-            </select>
+              options={[
+                { value: "count", label: t("Count") },
+                { value: "done", label: t("Done / total") },
+                { value: "percent_done", label: t("Percent done") },
+                ...numberProps.map((d) => ({ value: `sum:${d.key}`, label: t("Sum of {name}", { name: label(d) }) })),
+                ...numberProps.map((d) => ({ value: `avg:${d.key}`, label: t("Average {name}", { name: label(d) }) })),
+              ]}
+              className={cn(pickerCls, "w-44")}
+            />
           </label>
           <label className="flex items-center justify-between gap-2 py-0.5 text-sm">
             <span className="text-muted-foreground">{t("Hide empty groups")}</span>

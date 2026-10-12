@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { SelectPicker } from "@/components/SelectPicker";
 import { fmtTime, nexusApi, ROOM_BOOKING_ROOMS, roomLabel, type NexusRoomBooking } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
@@ -120,10 +121,14 @@ function RoomBooking() {
         subtitle={t("Book a meeting room and see who has it when.")}
         actions={
           <>
-            <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary">
-              <option value="">{t("All rooms")}</option>
-              {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{t(roomLabel(r))}</option>)}
-            </select>
+            <SelectPicker
+              variant="field"
+              value={roomFilter}
+              onChange={setRoomFilter}
+              ariaLabel={t("Room")}
+              options={[{ value: "", label: t("All rooms") }, ...ROOM_BOOKING_ROOMS.map((r) => ({ value: r, label: t(roomLabel(r)) }))]}
+              className="rounded-md px-3 font-semibold"
+            />
             <button onClick={() => setComposer({ date: todayKey })} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New booking")}</button>
           </>
         }
@@ -269,9 +274,7 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
         <div className="space-y-3 p-5">
           <label className="block space-y-1">
             <span className="text-xs font-medium text-muted-foreground">{t("Room")}</span>
-            <select value={room} onChange={(e) => setRoom(e.target.value)} className={field}>
-              {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{t(roomLabel(r))}</option>)}
-            </select>
+            <SelectPicker variant="field" value={room} onChange={setRoom} ariaLabel={t("Room")} options={ROOM_BOOKING_ROOMS.map((r) => ({ value: r, label: t(roomLabel(r)) }))} className={cn(field, "hover:border-primary/40")} />
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium text-muted-foreground">{t("Title")}</span>

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowUpToLine, Building2, Check, ChevronRight, Download, Focus, ImagePlus, LayoutGrid, Loader2, Maximize2, Minimize2, Plus, Scan, Search, Trash2, Users, Wand2, X, ZoomIn, ZoomOut } from "lucide-react";
@@ -1813,11 +1814,9 @@ function TitleRow({ person, unitId, leaders }: { person: OrgChartPerson; unitId:
         maxLength={40} placeholder={t("Job title")} disabled={saving} aria-label={t("{name}'s job title", { name: label(person) })}
         className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-cal-accent disabled:opacity-60" />
       {person.role !== "BOD" && person.role !== "ONE_ABOVE_ALL" && leaders.length > 0 && (
-        <select value={person.reportsTo?.[unitId] ?? ""} disabled={saving} onChange={(e) => saveReportsTo(e.target.value || null)} title={t("Under whom")} aria-label={t("{name}'s leader", { name: label(person) })}
-          className="w-28 rounded-lg border border-border bg-background px-1.5 py-1.5 text-xs outline-none focus:border-[#1e3a5f] disabled:opacity-60">
-          <option value="">{t("— under —")}</option>
-          {leaders.map((l) => <option key={l.userId} value={l.userId}>{label(l)}</option>)}
-        </select>
+        <SelectPicker variant="field" size="sm" align="end" value={person.reportsTo?.[unitId] ?? ""} disabled={saving} onChange={(v) => saveReportsTo(v || null)} ariaLabel={t("{name}'s leader", { name: label(person) })}
+          options={[{ value: "", label: t("— under —") }, ...leaders.map((l) => ({ value: l.userId, label: label(l) }))]}
+          className="h-8 w-28 px-1.5" />
       )}
     </div>
   );

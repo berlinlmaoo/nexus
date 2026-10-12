@@ -790,6 +790,18 @@ export function optionColor(prop: string, value: string, defs: PropDef[]): Color
   return palette[h % palette.length];
 }
 
+/** A select custom field's option colour, as the views draw it (own colour, else the rotating palette by position). */
+export function choiceColor(field: Pick<NexusCustomField, "options">, value: string, choices: string[]): ColorKey {
+  const own = normalizeColor(fieldOptionColors(field)[value]);
+  if (own) return own;
+  const palette = COLOR_KEYS.filter((k) => k !== "gray" && k !== "brown");
+  const i = choices.indexOf(value);
+  if (i >= 0) return palette[i % palette.length];
+  let h = 0;
+  for (const ch of value) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return palette[h % palette.length];
+}
+
 /** The colour a task card takes in this view: the first matching rule, else "colour by" a property. */
 export function taskColor(task: NexusTask, cfg: Pick<ViewConfig, "colorRules" | "colorBy">, defs: PropDef[], ctx: Pick<ViewCtx, "meId">): string | null {
   for (const r of cfg.colorRules) {

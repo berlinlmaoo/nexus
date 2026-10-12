@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip, Input } from "@heroui/react";
@@ -499,18 +500,15 @@ function ProjectsPage() {
               {workspaceOptions.length > 1 && (
                   <label className="block text-xs font-semibold text-muted-foreground">
                     {tr("Workspace")}
-                    <select
+                    <SelectPicker
+                      variant="field"
                       value={newProjectWorkspaceId}
-                      onChange={(e) => { setNewProjectWorkspaceId(e.target.value); setNewProjectMemberIds([]); }}
-                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">{tr("Select a workspace…")}</option>
-                      {workspaceOptions.map((workspace) => (
-                        <option key={workspace.id} value={workspace.id}>
-                          {workspace.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => { setNewProjectWorkspaceId(v); setNewProjectMemberIds([]); }}
+                      placeholder={tr("Select a workspace…")}
+                      ariaLabel={tr("Workspace")}
+                      options={workspaceOptions.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
+                      className="mt-1 flex w-full rounded-xl px-3 py-2 font-normal text-foreground"
+                    />
                   </label>
                 )}
 
@@ -605,26 +603,28 @@ function ProjectsPage() {
               <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                 <SlidersHorizontal className="h-3.5 w-3.5" /> {tr("Filters")}
               </span>
-              <select
+              <SelectPicker
+                variant="pill"
+                size="sm"
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                className="rounded-full border border-border bg-background px-3 py-1.5"
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {tr(option.label)}
-                  </option>
-                ))}
-              </select>
-              <select
+                onChange={setStatusFilter}
+                ariaLabel={tr("Filters")}
+                options={statusOptions.map((option) => ({ value: option.value, label: tr(option.label) }))}
+                className="bg-background"
+              />
+              <SelectPicker
+                variant="pill"
+                size="sm"
                 value={sortMode}
-                onChange={(event) => setSortMode(event.target.value as SortMode)}
-                className="rounded-full border border-border bg-background px-3 py-1.5"
-              >
-                <option value="energy">{tr("Sort by progress")}</option>
-                <option value="tasks">{tr("Sort by number of tasks")}</option>
-                <option value="name">{tr("Sort by name")}</option>
-              </select>
+                onChange={(v) => setSortMode(v as SortMode)}
+                ariaLabel={tr("Sort by")}
+                options={[
+                  { value: "energy", label: tr("Sort by progress") },
+                  { value: "tasks", label: tr("Sort by number of tasks") },
+                  { value: "name", label: tr("Sort by name") },
+                ]}
+                className="bg-background"
+              />
               {activeFilters > 0 && (
                 <button
                   onClick={() => {

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
+import { SelectPicker } from "@/components/SelectPicker";
 
 /**
  * The Pipeline Dashboard's edit-in-place controls (owner, 9 Oct 2026). Each one keeps its own draft while
@@ -136,7 +136,11 @@ export function NumberField({
   );
 }
 
-/** A plain <select>: native on every phone, and a keyboard user already knows it. Saves on pick. */
+/**
+ * A single-choice field: the app's picker (owner audit, 12 Oct 2026 — no browser-native lists). Touch rows
+ * are 44 px, arrow keys / Enter / type-ahead work, and the cell variant reads as text with its chevron on
+ * hover. Saves on pick.
+ */
 export function SelectField<T extends string | number>({
   value, options, onCommit, label, labelOf, disabled, className, cell = false,
 }: {
@@ -145,32 +149,19 @@ export function SelectField<T extends string | number>({
 }) {
   // A value the list does not know (a newer option, an import) still shows, as itself.
   const all = options.includes(value) ? options : [value, ...options];
-  const select = (
-    <select
-      aria-label={label}
+  return (
+    <SelectPicker
+      variant={cell ? "ghost" : "field"}
+      ariaLabel={label}
       value={String(value)}
       disabled={disabled}
-      onChange={(e) => {
-        const raw = e.target.value;
+      onChange={(raw) => {
         const picked = all.find((o) => String(o) === raw);
         if (picked !== undefined && picked !== value) onCommit(picked);
       }}
-      className={cn(cell ? CELL : FIELD, "cursor-pointer", cell ? "appearance-none pr-6" : "pr-7", className)}
-    >
-      {all.map((o) => (
-        <option key={String(o)} value={String(o)}>{labelOf ? labelOf(o) : String(o)}</option>
-      ))}
-    </select>
-  );
-  if (!cell) return select;
-  // A table cell reads as text; its arrow shows on hover or focus, not on all 40 rows at once.
-  return (
-    <div className="group/cell relative">
-      {select}
-      {!disabled && (
-        <ChevronDown aria-hidden className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover/cell:opacity-100 group-focus-within/cell:opacity-100" />
-      )}
-    </div>
+      options={all.map((o) => ({ value: String(o), label: labelOf ? labelOf(o) : String(o) }))}
+      className={cn("w-full", cell ? "rounded-md px-1.5" : "rounded-lg px-2.5 py-1.5", className)}
+    />
   );
 }
 
@@ -224,23 +215,24 @@ export function PersonField({
   const value = typing ? OTHER : userId ?? NOBODY;
   return (
     <div className="space-y-1.5">
-      <select
+      <SelectPicker
         id={id}
-        aria-label={label}
+        variant="field"
+        ariaLabel={label}
         value={value}
         disabled={disabled}
-        onChange={(e) => {
-          const v = e.target.value;
+        onChange={(v) => {
           if (v === OTHER) { setTyping(true); return; }
           setTyping(false);
           onCommit({ userId: v || null, name: null });
         }}
-        className={cn(FIELD, "cursor-pointer")}
-      >
-        <option value={NOBODY}>{t("Not assigned")}</option>
-        {[...known, ...people].map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        <option value={OTHER}>{t("Someone outside NEXUS…")}</option>
-      </select>
+        options={[
+          { value: NOBODY, label: t("Not assigned") },
+          ...[...known, ...people].map((p) => ({ value: p.id, label: p.name })),
+          { value: OTHER, label: t("Someone outside NEXUS…") },
+        ]}
+        className="w-full rounded-lg px-2.5 py-1.5"
+      />
       {typing && (
         <TextField
           label={t("{label} name", { label })}

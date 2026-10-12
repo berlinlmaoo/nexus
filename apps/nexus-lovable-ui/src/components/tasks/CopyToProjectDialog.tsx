@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Loader2, Search, X } from "lucide-react";
 import { ProjectMark } from "@/components/projects/ProjectIcon";
@@ -143,9 +144,7 @@ export function CopyToProjectDialog({ taskIds, sourceProjectId, onClose, onDone 
                 ) : lists.length === 0 ? (
                   <p className="mt-1 text-sm text-muted-foreground">{t("This project has no sections yet. Create one there first.")}</p>
                 ) : (
-                  <select value={targetList} onChange={(e) => setListId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-                    {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
+                  <SelectPicker variant="field" value={targetList} onChange={setListId} ariaLabel={t("Into section")} options={lists.map((l) => ({ value: l.id, label: l.name }))} className="mt-1 flex w-full rounded-xl px-3 py-2" />
                 )}
               </div>
             )}

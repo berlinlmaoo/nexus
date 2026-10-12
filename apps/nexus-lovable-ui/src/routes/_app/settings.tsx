@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
@@ -123,9 +124,7 @@ function WorkspaceMembersSection() {
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("someone@patsgroup.id")} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             </label>
             <label><span className="text-xs font-medium text-muted-foreground">{t("Role")}</span>
-              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as OrgRole)} className="mt-1 block rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60">
-                {[...myAssignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
-              </select>
+              <SelectPicker variant="field" value={inviteRole} onChange={(v) => setInviteRole(v as OrgRole)} ariaLabel={t("Role")} options={[...myAssignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="mt-1 flex px-3 py-2" />
             </label>
             <button disabled={!email.trim() || invite.isPending} onClick={() => invite.mutate()} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} {t("Invite")}</button>
           </div>
@@ -163,9 +162,7 @@ function WorkspaceMembersSection() {
                   </div>
                   <MemberPhoneEditor member={m} workspaceId={wsId} canEdit={canManage} />
                   {canEditTier(myRole, m.role) && !isSelf ? (
-                    <select value={m.role} onChange={(e) => changeRole.mutate({ memberId: m.id, role: e.target.value as OrgRole })} disabled={changeRole.isPending} className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold outline-none focus:border-primary">
-                      {[...myAssignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
-                    </select>
+                    <SelectPicker variant="field" size="sm" align="end" value={m.role} onChange={(v) => changeRole.mutate({ memberId: m.id, role: v as OrgRole })} disabled={changeRole.isPending} ariaLabel={t("Role")} options={[...myAssignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="h-8 px-2 font-semibold" />
                   ) : <RoleBadge role={m.role} />}
                   {isBodPlus && !isSelf && canEditTier(myRole, m.role) && <button onClick={() => setPwTarget({ memberId: m.id, name: m.name })} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground" aria-label={t("Reset password")} title={t("Reset password")}><KeyRound className="h-4 w-4" /></button>}
                   {canManage && !isSelf && <button onClick={() => { if (confirm(t("Remove {name} from the workspace?", { name: m.name }))) remove.mutate(m.id); }} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive" aria-label={t("Remove")}><Trash2 className="h-4 w-4" /></button>}
@@ -856,9 +853,7 @@ function McpTokensSection() {
         <h2 className="font-semibold">{t("Generate a token")}</h2>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Label (e.g. My laptop)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-          <select value={expiresInDays} onChange={(e) => setExpiresInDays(Number(e.target.value))} className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-            {[30, 90, 180, 365].map((d) => <option key={d} value={d}>{t("Expires in {n} days", { n: d })}</option>)}
-          </select>
+          <SelectPicker variant="field" value={String(expiresInDays)} onChange={(v) => setExpiresInDays(Number(v))} options={[30, 90, 180, 365].map((d) => ({ value: String(d), label: t("Expires in {n} days", { n: d }) }))} className="px-3 py-2 font-semibold" />
         </div>
         <button disabled={create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} {t("Generate token")}

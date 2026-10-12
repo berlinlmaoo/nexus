@@ -1,4 +1,5 @@
 import type React from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
 import { LocationTrail, LocationTrailDialog } from "@/components/attendance/LocationTrail";
 import { AndroidAppCheckInNote, IosAppCheckInCard, browserMayTakeAttendance, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
@@ -1171,10 +1172,7 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canPickPeople && (
-            <select value={userId ?? ""} onChange={(e) => { setUserId(e.target.value || undefined); setOpen(null); }} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-primary">
-              <option value="">{tr("Me")}</option>
-              {members.map((u) => <option key={u.id} value={u.id}>{u.name || u.email || u.id}</option>)}
-            </select>
+            <SelectPicker variant="field" size="sm" align="end" value={userId ?? ""} onChange={(v) => { setUserId(v || undefined); setOpen(null); }} ariaLabel={tr("Reflections")} options={[{ value: "", label: tr("Me") }, ...members.map((u) => ({ value: u.id, label: u.name || u.email || u.id }))]} className="h-8 px-2.5 font-semibold" />
           )}
           <div className="inline-flex items-center rounded-lg border border-border">
             <button type="button" onClick={() => shift(-1)} className="px-2 py-1.5 text-muted-foreground hover:text-foreground" aria-label={tr("Previous month")}><ChevronLeft className="h-4 w-4" /></button>
@@ -1881,10 +1879,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
         <div className="mt-4 space-y-3">
           {granting && (
             <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Grant to")}
-              <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-                <option value="">{tr("— Pick a person —")}</option>
-                {otherMembers.map((m) => <option key={m.userId} value={m.userId}>{m.name || m.email}</option>)}
-              </select>
+              <SelectPicker variant="field" value={targetUserId} onChange={setTargetUserId} placeholder={tr("— Pick a person —")} ariaLabel={tr("Grant to")} options={otherMembers.map((m) => ({ value: m.userId, label: m.name || m.email }))} className="mt-1 flex w-full rounded-xl px-3 py-2 font-semibold normal-case tracking-normal text-foreground" />
             </label>
           )}
           <div>

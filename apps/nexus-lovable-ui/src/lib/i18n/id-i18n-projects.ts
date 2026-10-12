@@ -143,4 +143,6 @@ export const ID_I18N_PROJECTS_EXTRA: Record<string, string> = {
   "every weekday at {time} WIB": "setiap hari kerja pukul {time} WIB",
   "every month at {time} WIB": "setiap bulan pukul {time} WIB",
   "every day at {time} WIB": "setiap hari pukul {time} WIB",
+  "Move tasks to": "Pindahkan task ke",
+  "Domain": "Domain",
 }
