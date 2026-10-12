@@ -11,7 +11,10 @@ export const Route = createFileRoute("/sso/agents/$state")({ component: SsoAgent
 function SsoAgents() {
   const { state } = useParams({ strict: false }) as { state?: string };
   useEffect(() => {
-    window.location.replace(`/api/sso/agents?state=${encodeURIComponent(state || "")}`);
+    // The office's sign-in page speaks the viewer's NEXUS language (EN/ID): it is passed along as `lang`.
+    let lang = "id";
+    try { lang = localStorage.getItem("nexus-lang") === "en" ? "en" : "id"; } catch { /* private mode: default */ }
+    window.location.replace(`/api/sso/agents?state=${encodeURIComponent(state || "")}&lang=${lang}`);
   }, [state]);
   return (
     <div className="flex min-h-screen items-center justify-center">

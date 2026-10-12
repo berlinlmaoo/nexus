@@ -25,6 +25,12 @@ const TICKET_SECONDS = 120
 
 const b64url = (buf: Buffer) => buf.toString("base64url")
 
+/** "id" | "en": the NEXUS interface language of the person (sent by the SPA bridge), for the office's
+ *  sign-in page and its error messages (QA 13 Oct 2026: they were English only). Unknown → "id", the app default. */
+function langOf(req: Request): "id" | "en" {
+  return new URL(req.url).searchParams.get("lang") === "en" ? "en" : "id"
+}
+
 function back(params: Record<string, string>) {
   const url = new URL(OFFICE_CALLBACK)
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
@@ -34,10 +40,11 @@ function back(params: Record<string, string>) {
 export async function GET(req: Request) {
   const raw = new URL(req.url).searchParams.get("state") || ""
   const state = /^[A-Za-z0-9_-]{16,64}$/.test(raw) ? raw : ""
-  if (!state) return back({ error: "failed" })
+  const lang = langOf(req)
+  if (!state) return back({ error: "failed", lang })
 
   const secret = process.env.STATUS_SSO_SECRET?.trim()
-  if (!secret || secret.length < 32) return back({ error: "unavailable", state })
+  if (!secret || secret.length < 32) return back({ error: "unavailable", state, lang })
 
   const session = await auth()
   const userId = session?.user?.id
@@ -51,7 +58,7 @@ export async function GET(req: Request) {
     where: { userId, workspace: { slug: WORKSPACE_SLUG } },
     select: { user: { select: { id: true, name: true } } },
   })
-  if (!member) return back({ error: "not_member", state })
+  if (!member) return back({ error: "not_member", state, lang })
 
   const now = Math.floor(Date.now() / 1000)
   const payload = b64url(
@@ -67,5 +74,5 @@ export async function GET(req: Request) {
     ),
   )
   const sig = b64url(createHmac("sha256", secret).update(payload).digest())
-  return back({ t: `${payload}.${sig}`, state })
+  return back({ t: `${payload}.${sig}`, state, lang })
 }

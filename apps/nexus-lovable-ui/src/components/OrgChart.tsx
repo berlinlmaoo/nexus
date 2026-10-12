@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { EscClose } from "@/hooks/use-escape";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -437,7 +438,7 @@ export function OrgChart() {
   };
   useEffect(() => {
     if (!full) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[aria-modal='true']")) setFull(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [full]);
@@ -1714,7 +1715,8 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
     .filter((c) => c.unit && c.leader);
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
+      <EscClose onClose={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={label(person)} className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <div className="text-sm font-bold">{label(person)}</div>
           <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
