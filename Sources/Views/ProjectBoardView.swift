@@ -310,6 +310,43 @@ struct ProjectDetailView: View {
     @State private var actionError: String?
 
     var body: some View {
+        redesignChrome(baseBody)
+    }
+
+    /// The redesign's sheets and alert, kept off `baseBody`'s long modifier chain so the type checker
+    /// has two shorter expressions instead of one very long one.
+    private func redesignChrome<Content: View>(_ content: Content) -> some View {
+        content
+            // iPad / Mac: a centred sheet (a form sheet on a wide screen), closed with its own button.
+            .sheet(item: $sheetTask, onDismiss: { Task { await reloadQuietly() } }) { ref in
+                NavigationStack {
+                    TaskDetailView(taskId: ref.id)
+                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { sheetTask = nil } } }
+                }
+            }
+            .sheet(item: $filterView) { v in filterSheet(v) }
+            .alert(boardAlert?.title ?? "", isPresented: Binding(get: { boardAlert != nil }, set: { if !$0 { boardAlert = nil } }), presenting: boardAlert) { a in
+                boardAlertActions(a)
+            } message: { a in Text(a.message) }
+            .background {
+                // Keyboard: ⌘N = new task (iPad keyboard, Mac).
+                Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms { prefillDue = nil; showCreate = true } }
+                    .keyboardShortcut("n", modifiers: .command)
+                    .opacity(0).accessibilityHidden(true)
+            }
+    }
+
+    private func filterSheet(_ v: ProjectViewFull) -> ViewFilterSheet {
+        ViewFilterSheet(view: v, lanes: lanes, fields: allFields, members: detail?.members ?? []) { patch in
+            do {
+                try await APIClient.shared.updateProjectView(projectId, viewId: v.id, patch: patch)
+                await reloadViews()
+                return nil
+            } catch { return (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the view.") }
+        }
+    }
+
+    private var baseBody: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: statusBarTop)   // clear the status bar only (NOT the reserved nav-bar height)
             projectHeader
@@ -365,12 +402,6 @@ struct ProjectDetailView: View {
         .realtimeRoom("project:\(projectId)")
         .liveRefresh(every: 60, on: [.nexusProjectTasksChanged, .nexusWorkspaceChanged],
                      kinds: [RealtimeKind.projects], projectId: projectId) { await reloadQuietly() }
-        .background {
-            // Keyboard: ⌘N = new task (iPad keyboard, Mac).
-            Button("") { if !isPipeline && !isOutlet && canCreate && tab != .forms { prefillDue = nil; showCreate = true } }
-                .keyboardShortcut("n", modifiers: .command)
-                .opacity(0).accessibilityHidden(true)
-        }
         .alert(T("Couldn't update the board"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: { Text(actionError ?? "") }
@@ -392,25 +423,7 @@ struct ProjectDetailView: View {
             if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon, color: detail?.color)) }
         }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
-        // iPad / Mac: a centred sheet (a form sheet on a wide screen), closed with its own button.
-        .sheet(item: $sheetTask, onDismiss: { Task { await reloadQuietly() } }) { ref in
-            NavigationStack {
-                TaskDetailView(taskId: ref.id)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { sheetTask = nil } } }
-            }
-        }
-        .sheet(item: $filterView) { v in
-            ViewFilterSheet(view: v, lanes: lanes, fields: allFields, members: detail?.members ?? []) { patch in
-                do {
-                    try await APIClient.shared.updateProjectView(projectId, viewId: v.id, patch: patch)
-                    await reloadViews()
-                    return nil
-                } catch { return (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the view.") }
-            }
-        }
-        .alert(boardAlert?.title ?? "", isPresented: Binding(get: { boardAlert != nil }, set: { if !$0 { boardAlert = nil } }), presenting: boardAlert) { a in
-            boardAlertActions(a)
-        } message: { a in Text(a.message) }
+
         .navigationDestination(isPresented: $newFormOpen) {
             FormBuilderView(projectId: projectId, projectName: displayName, formId: nil)
         }
