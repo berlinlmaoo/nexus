@@ -148,6 +148,11 @@ function classify(p, d) {
   if (/pipeline/i.test(p.name)) return { cls: "pipeline", secs }
   const cats = secs.filter((s) => !statusWord(s.name))
   if (cats.length === 0) return { cls: "status", secs }
+  // A stage board (stages already bound as status columns, e.g. after --unify-status: PLANNING / SHOOTING /
+  // … / POSTED): non-word sections sit in other groups than To-do and at most one is in To-do (the first
+  // stage). Category sections from the status migration are all on the To-do binding.
+  const todoCats = cats.filter((s) => !s.taskStatus || s.taskStatus === "TODO")
+  if (cats.some((s) => s.taskStatus && s.taskStatus !== "TODO") && todoCats.length <= 1) return { cls: "status", secs }
   const realStatus = secs.filter((s) => statusWord(s.name) && !isGenericDone(s.name))
   // One category beside real statuses (Social Media Nightlife's "OMAR TASK"): not worth a field (owner, 12 Oct).
   if (realStatus.length > 0) return cats.length === 1 ? { cls: "single", secs, cats } : { cls: "mixed", secs, cats }
@@ -673,32 +678,81 @@ const UNIFY_STATUS = (name) => {
 }
 const DEFAULT_COLUMN = /^(to do|in progress|done|belum mulai|sedang jalan|selesai)$/
 
+// Workflow-stage SELECT / MULTI_SELECT fields named Status / Progress (owner, 12 Oct 2026, "like Finance
+// Management"): PRIMARIA "STATUS" (PLANNING … POSTED), INTOO "STATUS KONTEN", Rosi "Status", PATS Archive
+// "Status". A field counts as a workflow when at least half its options read like stages; otherwise
+// (Legal "Status" = document types) it is NOT a status: it is renamed to what it is and gets a board view.
+const STAGE_WORD = /(done|posted|\bpost\b|approv|review|revis|progress|planning|ideation|\bidea|concept|shoot|edit|draft|lock|sampling|production|rollout|\blive\b|publish|upload|selesai|proses|ready)/i
+const STAGE_DONE = /(posted|\bdone\b|selesai|complete|published|live drop|\blive\b|archiv)/i
+const STAGE_REVIEW = /(review|revis|approv|\bacc\b)/i
+const DOC_WORD = /(invoice|kontrak|contract|\bspk\b|\bmou\b|surat|document|dokumen|nda)/i
+const isWorkflowField = (options) => options.length > 0 && options.filter((o) => STAGE_WORD.test(o)).length * 2 >= options.length
+/** Stage → status: first → To-do, the completion stage → Complete, review/approval → In review, the rest In progress. */
+function stageStatuses(options) {
+  let done = -1
+  for (let i = options.length - 1; i >= 1; i--) if (STAGE_DONE.test(options[i])) { done = i; break }
+  if (done < 0) done = options.length - 1
+  return options.map((o, i) => (i === 0 ? "TODO" : i === done ? "DONE" : STAGE_REVIEW.test(o) ? "IN_REVIEW" : "IN_PROGRESS"))
+}
+/** A stored select value: a MULTI_SELECT keeps its FURTHEST stage (by option order). */
+function stageValue(raw, type, options) {
+  const v = String(raw ?? "").trim()
+  if (type !== "MULTI_SELECT") return v
+  let list = []
+  try { const a = JSON.parse(v); if (Array.isArray(a)) list = a.map(String) } catch { list = v ? [v] : [] }
+  let best = -1
+  for (const x of list) { const i = options.findIndex((o) => o.toLowerCase() === x.trim().toLowerCase()); if (i > best) best = i }
+  return best >= 0 ? options[best] : ""
+}
+
 async function planUnify(db) {
-  const fields = (await db.query(`SELECT cf.*, p.name AS "projectName", p."tableColumns" FROM "CustomField" cf JOIN "Project" p ON p.id = cf."projectId" WHERE cf.type = 'STATUS' AND coalesce(p.type, 'TASK') NOT IN ('PIPELINE', 'OUTLET_SALES') ORDER BY p.name`)).rows
+  const fields = (await db.query(`SELECT cf.*, cf.type::text AS type, p.name AS "projectName", p."tableColumns" FROM "CustomField" cf JOIN "Project" p ON p.id = cf."projectId"
+    WHERE (cf.type = 'STATUS' OR (cf.type IN ('SELECT', 'MULTI_SELECT') AND cf.name ~* '^(status|progress)'))
+      AND coalesce(p.type, 'TASK') NOT IN ('PIPELINE', 'OUTLET_SALES') ORDER BY p.name, cf.position`)).rows
   const out = []
   for (const f of fields) {
     if (ONLY.length && !ONLY.includes(f.projectName)) continue
-    const u = { projectId: f.projectId, name: f.projectName, fieldId: f.id, fieldName: f.name, columns: [], renames: [], creates: [], moves: [], linkMoves: [], forms: [], autos: [], views: [], tableColumns: null, before: {} }
+    const stage = f.type !== "STATUS"
+    if (stage && !isWorkflowField(choiceList(f.options))) {
+      out.push(await planFieldRename(db, f))
+      continue
+    }
+    const u = { projectId: f.projectId, name: f.projectName, fieldId: f.id, fieldName: f.name, fieldType: f.type, stage, columns: [], renames: [], creates: [], moves: [], linkMoves: [], forms: [], autos: [], views: [], tableColumns: null, before: {} }
     const secs = (await db.query(`SELECT id, name, position, "taskStatus"::text AS "taskStatus", color FROM "TaskList" WHERE "projectId" = $1 ORDER BY position, "createdAt"`, [f.projectId])).rows
     const counts = new Map((await db.query(`SELECT "taskListId" AS id, count(*)::int AS n FROM "Task" WHERE "taskListId" = ANY($1) GROUP BY 1`, [secs.map((s) => s.id)])).rows.map((r) => [r.id, r.n]))
     const linkCounts = new Map((await db.query(`SELECT "taskListId" AS id, count(*)::int AS n FROM "TaskProject" WHERE "taskListId" = ANY($1) GROUP BY 1`, [secs.map((s) => s.id)])).rows.map((r) => [r.id, r.n]))
     const options = choiceList(f.options)
     const working = secs.map((s) => ({ ...s }))
     const optionCol = new Map()
-    for (const o of options) {
-      const st = UNIFY_STATUS(o)
+    const stageSt = stage ? stageStatuses(options) : null
+    const usedDefault = new Set()
+    for (const [oi, o] of options.entries()) {
+      const st = stage ? stageSt[oi] : UNIFY_STATUS(o)
+      const colour = stage ? PALETTE[oi % PALETTE.length] : TONE(o)
       let col = working.find((s) => s.name.toLowerCase() === o.toLowerCase())
+      // A stage field takes over the project's default columns: the first stage of each group renames
+      // that group's To Do / In Progress / Done (tasks with no value there read as that stage).
+      if (!col && stage) {
+        const grp = GROUP[st]
+        const def = working.find((s) => GROUP[s.taskStatus] === grp && DEFAULT_COLUMN.test(norm(s.name)) && !usedDefault.has(s.id))
+        if (def && !options.some((x) => x.toLowerCase() === def.name.toLowerCase())) {
+          usedDefault.add(def.id)
+          u.renames.push({ id: def.id, from: def.name, name: o, taskStatus: st, color: colour })
+          def.name = o; def.taskStatus = st; def.color = colour
+          col = def
+        }
+      }
       if (col) {
         if (!col.taskStatus) { col.taskStatus = st; u.renames.push({ id: col.id, from: col.name, name: col.name, taskStatus: st, color: col.color }) }
-      } else {
+      } else if (!col) {
         const grp = GROUP[st]
         const spare = working.find((s) => GROUP[s.taskStatus] === grp && DEFAULT_COLUMN.test(norm(s.name)) && !(counts.get(s.id) || 0) && !(linkCounts.get(s.id) || 0) && !options.some((x) => x.toLowerCase() === s.name.toLowerCase()) && ![...optionCol.values()].includes(s))
         if (spare) {
-          u.renames.push({ id: spare.id, from: spare.name, name: o, taskStatus: st, color: TONE(o) })
-          spare.name = o; spare.taskStatus = st; spare.color = TONE(o)
+          u.renames.push({ id: spare.id, from: spare.name, name: o, taskStatus: st, color: colour })
+          spare.name = o; spare.taskStatus = st; spare.color = colour
           col = spare
         } else {
-          col = { id: newId(), name: o, taskStatus: st, color: TONE(o), position: 0, created: true }
+          col = { id: newId(), name: o, taskStatus: st, color: colour, position: 0, created: true }
           u.creates.push(col)
           working.push(col)
         }
@@ -708,7 +762,9 @@ async function planUnify(db) {
     }
     // final order: To-do group, In progress, Complete; created columns at the end of their group
     const order = ["todo", "in_progress", "complete"]
-    const sorted = [...working].sort((a, b) => order.indexOf(GROUP[a.taskStatus] || "todo") - order.indexOf(GROUP[b.taskStatus] || "todo") || (a.created ? 1 : 0) - (b.created ? 1 : 0) || a.position - b.position)
+    const optIdx = (s) => { const i = options.findIndex((o) => o.toLowerCase() === s.name.toLowerCase()); return i < 0 ? -1 : i }
+    const sorted = [...working].sort((a, b) => order.indexOf(GROUP[a.taskStatus] || "todo") - order.indexOf(GROUP[b.taskStatus] || "todo")
+      || (stage ? optIdx(a) - optIdx(b) : 0) || (a.created ? 1 : 0) - (b.created ? 1 : 0) || a.position - b.position)
     u.order = sorted.map((s, i) => ({ id: s.id, name: s.name, position: i, created: !!s.created }))
     // tasks
     const vals = (await db.query(`SELECT x."taskId", x.value, t."taskListId", t.position, t.status::text AS status, t."completedAt", t."parentId", tl."projectId" = $2 AS home, tl.position AS "secPos"
@@ -719,14 +775,26 @@ async function planUnify(db) {
       if (!nextPos.has(key)) nextPos.set(key, working.find((s) => s.id === colId)?.created ? 0 : (await db.query(`SELECT coalesce(max(position), -1) + 1 AS n FROM "${table}" WHERE "taskListId" = $1`, [colId])).rows[0].n)
       const n = nextPos.get(key); nextPos.set(key, n + 1); return n
     }
+    const completionCol = stage ? optionCol.get(options[stageSt.indexOf("DONE")].toLowerCase()) : null
+    const doneMoved = new Set()
     for (const v of vals) {
-      const val = String(v.value || "").trim()
+      const val = stage ? stageValue(v.value, f.type, options) : String(v.value || "").trim()
       if (!val) continue
+      if (stage && f.type === "MULTI_SELECT" && String(v.value).includes(",")) u.multiPicked = (u.multiPicked || 0) + 1
       const col = optionCol.get(val.toLowerCase())
       if (!col) { u.unmatched = (u.unmatched || 0) + 1; continue }
       // The Done checkbox wins (owner, 12 Oct 2026: "prioritasin centang done"): a task that is done stays
-      // done in its column, whatever the custom value said; its value counts as Done.
-      if (v.status === "DONE" || v.completedAt) { if (GROUP[col.taskStatus] !== "complete") u.keptDone = (u.keptDone || 0) + 1; continue }
+      // done whatever the custom value said; its value counts as Done. For a stage field it sits in the
+      // completion column (moved there when it is in an earlier one); its completion stamp is kept.
+      if (v.status === "DONE" || v.completedAt) {
+        if (GROUP[col.taskStatus] !== "complete") u.keptDone = (u.keptDone || 0) + 1
+        const cur = working.find((s) => s.id === v.taskListId)
+        if (stage && v.home && completionCol && cur && GROUP[cur.taskStatus] !== "complete") {
+          doneMoved.add(v.taskId)
+          u.moves.push({ taskId: v.taskId, from: v.taskListId, to: completionCol.id, toName: completionCol.name, position: await posFor(completionCol.id, "Task"), fromStatus: v.status, toStatus: "DONE", value: val, keep: true })
+        }
+        continue
+      }
       // ...and the other way round (owner, 12 Oct 2026): the field says Done but the task is not checked
       // done → the task stays open; it goes to the column of its own status (first column with exactly that
       // status, else the first of its group), never to Done.
@@ -741,9 +809,20 @@ async function planUnify(db) {
         u.moves.push({ taskId: v.taskId, from: v.taskListId, to: col.id, toName: col.name, position: v.taskListId === col.id ? v.position : await posFor(col.id, "Task"), fromStatus: v.status, toStatus: col.taskStatus, value: val })
       }
     }
+    if (stage && completionCol) {
+      // Done tasks with no stage value, still in an earlier column, join the completion column too.
+      const loose = (await db.query(`SELECT t.id, t."taskListId", t.status::text AS status FROM "Task" t JOIN "TaskList" tl ON tl.id = t."taskListId"
+        WHERE tl."projectId" = $1 AND t."parentId" IS NULL AND (t.status = 'DONE' OR t."completedAt" IS NOT NULL) ORDER BY tl.position, t.position`, [f.projectId])).rows
+      for (const t of loose) {
+        if (doneMoved.has(t.id) || u.moves.some((m) => m.taskId === t.id)) continue
+        const cur = working.find((s) => s.id === t.taskListId)
+        if (!cur || GROUP[cur.taskStatus] === "complete" || t.status !== "DONE") continue
+        u.moves.push({ taskId: t.id, from: t.taskListId, to: completionCol.id, toName: completionCol.name, position: await posFor(completionCol.id, "Task"), fromStatus: t.status, toStatus: "DONE", value: "(none)", keep: true })
+      }
+    }
     const links = (await db.query(`SELECT tp.id, tp."taskListId", x.value FROM "TaskProject" tp JOIN "CustomFieldValue" x ON x."taskId" = tp."taskId" AND x."customFieldId" = $1 WHERE tp."projectId" = $2`, [f.id, f.projectId])).rows
     for (const l of links) {
-      const col = optionCol.get(String(l.value || "").trim().toLowerCase())
+      const col = optionCol.get((stage ? stageValue(l.value, f.type, options) : String(l.value || "").trim()).toLowerCase())
       if (col && l.taskListId !== col.id) u.linkMoves.push({ linkId: l.id, to: col.id, position: await posFor(col.id, "TaskProject") })
     }
     // references
@@ -786,19 +865,39 @@ async function planUnify(db) {
   return out
 }
 
+async function planFieldRename(db, f) {
+  const others = (await db.query(`SELECT name FROM "CustomField" WHERE "projectId" = $1 AND id <> $2`, [f.projectId, f.id])).rows.map((r) => r.name)
+  const forms = (await db.query(`SELECT name FROM "Form" WHERE "projectId" = $1`, [f.projectId])).rows.map((r) => r.name)
+  const id = [...others, ...forms].filter((n) => ID_WORDS.test(n)).length >= 2
+  const options = choiceList(f.options)
+  const docs = options.filter((o) => DOC_WORD.test(o)).length * 2 >= options.length
+  const candidates = docs ? (id ? ["Jenis dokumen", "Tipe dokumen", "Jenis dokumen 2"] : ["Document type", "Document kind", "Document type 2"]) : (id ? ["Jenis", "Tipe", "Jenis 2"] : ["Type", "Kind", "Type 2"])
+  const to = candidates.find((c) => !others.some((o) => o.toLowerCase() === c.toLowerCase())) || `${candidates[0]} (${f.name})`
+  const hasView = (await db.query(`SELECT 1 FROM "ProjectView" WHERE "projectId" = $1 AND builtin = 'bytype'`, [f.projectId])).rows.length > 0
+  const viewName = id ? `Per ${to.toLowerCase()}` : `By ${to.toLowerCase()}`
+  return { kind: "rename", projectId: f.projectId, name: f.projectName, fieldId: f.id, fieldName: f.name, to, view: hasView ? null : { id: newId(), name: viewName } }
+}
+
 async function listSelectStatusFields(db) {
   return (await db.query(`SELECT p.name AS project, cf.name, cf.type::text AS type, (SELECT count(*) FROM "CustomFieldValue" x WHERE x."customFieldId" = cf.id AND x.value NOT IN ('', '[]'))::int AS used FROM "CustomField" cf JOIN "Project" p ON p.id = cf."projectId" WHERE cf.type IN ('SELECT', 'MULTI_SELECT') AND cf.name ~* '^(status|progress)' ORDER BY 1`)).rows
 }
 
 function printUnify(list, selects) {
-  console.log(`\n# Status unify (--unify-status): ${list.length} project(s) with a custom STATUS field`)
+  console.log(`\n# Status unify (--unify-status): ${list.length} field(s)`)
   for (const u of list) {
-    console.log(`\n## ${u.name}  [unify "${u.fieldName}"]`)
+    if (u.kind === "rename") {
+      console.log(`\n## ${u.name}  [not a status: rename "${u.fieldName}"]`)
+      console.log(`  rename  field "${u.fieldName}" → "${u.to}" (values kept)`)
+      if (u.view) console.log(`  view    "${u.view.name}" (Board grouped by "${u.to}")`)
+      continue
+    }
+    console.log(`\n## ${u.name}  [unify "${u.fieldName}"${u.stage ? `, ${u.fieldType} workflow stages` : ""}]`)
+    if (u.multiPicked) console.log(`  note    ${u.multiPicked} task(s) had several stages ticked: the furthest one counts`)
     for (const c of u.columns) console.log(`  option  ${c.option} → column "${c.column}" (${c.taskStatus})`)
-    for (const r of u.renames) if (r.from !== r.name) console.log(`  rename  empty "${r.from}" → "${r.name}" (${r.color})`)
+    for (const r of u.renames) if (r.from !== r.name) console.log(`  rename  column "${r.from}" → "${r.name}" (${r.color})`)
     for (const c of u.creates) console.log(`  create  column "${c.name}" (${c.taskStatus}, ${c.color})`)
     const by = {}
-    for (const m of u.moves) { const k = `${m.fromStatus} → ${m.toName}`; by[k] = (by[k] || 0) + 1 }
+    for (const m of u.moves) { const k = `${m.keep ? "done " : ""}${m.fromStatus} → ${m.toName}`; by[k] = (by[k] || 0) + 1 }
     if (u.moves.length) console.log(`  tasks   ${u.moves.length}: ` + Object.entries(by).map(([k, v]) => `${k} ×${v}`).join("; "))
     if (u.keptDone) console.log(`  note    ${u.keptDone} task(s) are done but the field said otherwise: they stay Done (the checkbox wins)`)
     if (u.keptOpen) console.log(`  note    ${u.keptOpen.length} task(s) say Done in the field but are not checked done: they stay open, in their own status column (${u.keptOpen.map((k) => k.taskId).join(", ")})`)
@@ -813,7 +912,18 @@ function printUnify(list, selects) {
   if (selects.length) console.log(`\n  (not touched — SELECT fields named Status: ${selects.map((s) => `${s.project} "${s.name}" ${s.type} ${s.used} value(s)`).join("; ")})`)
 }
 
+async function applyFieldRename(db, u) {
+  const now = new Date()
+  await db.query(`UPDATE "CustomField" SET name = $2 WHERE id = $1`, [u.fieldId, u.to])
+  if (u.view) {
+    const pos = (await db.query(`SELECT coalesce(max(position), 4) + 1 AS n FROM "ProjectView" WHERE "projectId" = $1`, [u.projectId])).rows[0].n
+    await db.query(`INSERT INTO "ProjectView" (id, name, layout, builtin, position, config, "createdAt", "updatedAt", "projectId", "ownerId") VALUES ($1, $2, 'board', 'bytype', $3, $4::jsonb, $5, $5, $6, NULL) ON CONFLICT ("projectId", builtin) WHERE builtin IS NOT NULL DO NOTHING`,
+      [u.view.id, u.view.name, pos, JSON.stringify({ groupBy: `cf:${u.fieldId}`, showSubtasks: true }), now, u.projectId])
+  }
+}
+
 async function snapshotUnify(db, u) {
+  if (u.kind === "rename") return { kind: "unify-rename", projectId: u.projectId, name: u.name, fieldId: u.fieldId, fieldName: u.fieldName, viewId: u.view ? u.view.id : null }
   const field = (await db.query(`SELECT * FROM "CustomField" WHERE id = $1`, [u.fieldId])).rows[0]
   const values = (await db.query(`SELECT * FROM "CustomFieldValue" WHERE "customFieldId" = $1`, [u.fieldId])).rows
   const sections = (await db.query(`SELECT id, name, position, "taskStatus"::text AS "taskStatus", color FROM "TaskList" WHERE "projectId" = $1`, [u.projectId])).rows
@@ -824,11 +934,16 @@ async function snapshotUnify(db, u) {
 }
 
 async function applyUnify(db, u) {
+  if (u.kind === "rename") return applyFieldRename(db, u)
   const now = new Date()
   for (const r of u.renames) await db.query(`UPDATE "TaskList" SET name = $2, "taskStatus" = $3::"TaskStatus", color = $4, "updatedAt" = $5 WHERE id = $1`, [r.id, r.name, r.taskStatus, r.color, now])
   for (const c of u.creates) await db.query(`INSERT INTO "TaskList" (id, name, position, "projectId", "taskStatus", color, "createdAt", "updatedAt") VALUES ($1, $2, 0, $3, $4::"TaskStatus", $5, $6, $6)`, [c.id, c.name, u.projectId, c.taskStatus, c.color, now])
   for (const o of u.order) await db.query(`UPDATE "TaskList" SET position = $2 WHERE id = $1`, [o.id, o.position])
-  for (const m of u.moves) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1`, [m.taskId, m.to, m.position, m.toStatus])
+  // A done task only changes column: its status (and so its completion stamp) is left alone.
+  for (const m of u.moves) {
+    if (m.keep) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3 WHERE id = $1`, [m.taskId, m.to, m.position])
+    else await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1`, [m.taskId, m.to, m.position, m.toStatus])
+  }
   for (const l of u.linkMoves) await db.query(`UPDATE "TaskProject" SET "taskListId" = $2, position = $3 WHERE id = $1`, [l.linkId, l.to, l.position])
   for (const x of u.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb, "updatedAt" = $3 WHERE id = $1`, [x.id, JSON.stringify(x.after), now])
   for (const a of u.autos) await db.query(`UPDATE "Automation" SET trigger = $2::jsonb, action = $3::jsonb, actions = $4::jsonb, conditions = $5::jsonb, "updatedAt" = $6 WHERE id = $1`,
@@ -846,7 +961,10 @@ async function rollbackUnify(db, p) {
   }
   for (const v of p.values) await db.query(`INSERT INTO "CustomFieldValue" (id, value, "customFieldId", "taskId") VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [v.id, v.value, v.customFieldId, v.taskId])
   for (const s of p.sections) await db.query(`UPDATE "TaskList" SET name = $2, position = $3, "taskStatus" = $4::"TaskStatus", color = $5 WHERE id = $1`, [s.id, s.name, s.position, s.taskStatus, s.color])
-  for (const t of p.tasks) await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3, status = $4::"TaskStatus" WHERE id = $1`, [t.id, t.taskListId, t.position, t.status])
+  for (const t of p.tasks) {
+    await db.query(`UPDATE "Task" SET "taskListId" = $2, position = $3 WHERE id = $1`, [t.id, t.taskListId, t.position])
+    await db.query(`UPDATE "Task" SET status = $2::"TaskStatus" WHERE id = $1 AND status::text <> $2`, [t.id, t.status])
+  }
   for (const l of p.links) await db.query(`UPDATE "TaskProject" SET "taskListId" = $2, position = $3 WHERE id = $1`, [l.id, l.taskListId, l.position])
   for (const x of p.forms) await db.query(`UPDATE "Form" SET fields = $2::jsonb WHERE id = $1`, [x.id, JSON.stringify(x.fields)])
   for (const a of p.automations) await db.query(`UPDATE "Automation" SET trigger = $2::jsonb, action = $3::jsonb, actions = $4::jsonb, conditions = $5::jsonb WHERE id = $1`,
@@ -868,6 +986,12 @@ async function rollback(db, backup) {
   for (const p of [...backup.projects].reverse().filter((x) => !ONLY.length || ONLY.includes(x.name))) {
     if (p.kind === "followup") { await rollbackFollowup(db, p); continue }
     if (p.kind === "unify") { await rollbackUnify(db, p); continue }
+    if (p.kind === "unify-rename") {
+      console.log(`rollback rename ${p.name}`)
+      await db.query(`UPDATE "CustomField" SET name = $2 WHERE id = $1`, [p.fieldId, p.fieldName])
+      if (p.viewId) await db.query(`DELETE FROM "ProjectView" WHERE id = $1`, [p.viewId])
+      continue
+    }
     console.log(`rollback ${p.name} [${p.cls}]`)
     const cols = (row) => Object.keys(row)
     // sections back (re-created with their old ids when removed)
@@ -946,7 +1070,7 @@ async function main() {
     }
     if (UNIFY) {
       const unify = await planUnify(db)
-      printUnify(unify, await listSelectStatusFields(db))
+      printUnify(unify, [])
       for (const u of unify) {
         backup.projects.push(await snapshotUnify(db, u))
         await applyUnify(db, u)
