@@ -133,8 +133,8 @@ export async function POST(request: NextRequest) {
         type: "google_workspace_created",
         ...bi(
           ["Your work email is ready", `${created.email} is active. Its temporary password went to ${target.email} — check your personal email, then change the password at first sign-in.`],
-          ["Email kantor kamu sudah jadi", `${created.email} sudah aktif. Sandi sementaranya dikirim ke ${target.email} — cek email pribadimu, lalu ganti sandinya saat login pertama.`],
-        ),
+          ["Email kantor kamu sudah jadi", `${created.email} sudah aktif. Sandi sementaranya dikirim ke ${target.email} — cek email pribadimu, lalu ganti sandinya saat login pertama.`]
+),
         link: "/settings",
         // The password is NOT in this text (see above), so the push is safe on a lock screen.
         push: true,

@@ -85,6 +85,11 @@ export function setLang(l: Lang) {
   current = l;
   try { localStorage.setItem(KEY, l); } catch { /* ignore */ }
   listeners.forEach((f) => f());
+  // A chosen language: notifications and pushes follow it (server User.uiLanguage, 13 Oct 2026).
+  // Best effort; signed out = 401, ignored.
+  try {
+    void fetch("/api/user/profile", { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json", "X-Nexus-Client": "web/1" }, body: JSON.stringify({ uiLanguage: l }) }).catch(() => {});
+  } catch { /* no fetch */ }
 }
 
 function fill(s: string, vars?: Record<string, string | number>): string {

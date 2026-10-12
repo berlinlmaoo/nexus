@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { rememberUiLanguage } from "@/lib/notification-text"
+import { rememberUiLanguage, setUiLanguage } from "@/lib/notification-text"
 import { logAudit } from "@/lib/audit"
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true, uiLanguage: true },
     })
 
     if (!user) {
@@ -43,7 +43,18 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phoneNumber, dndUntil, markOnboarded } = body
+    const { name, phoneNumber, dndUntil, markOnboarded, uiLanguage } = body
+
+    // The language the person picked in the app or on the web (13 Oct 2026): notifications and pushes
+    // are written in it; English when never picked. "en" | "id" | null (null = back to the default).
+    let languageSet = false
+    if (uiLanguage !== undefined) {
+      if (uiLanguage !== null && uiLanguage !== "en" && uiLanguage !== "id") {
+        return NextResponse.json({ error: "uiLanguage must be \"en\", \"id\" or null", code: "BAD_LANGUAGE" }, { status: 400 })
+      }
+      await setUiLanguage(session.user.id, uiLanguage)
+      languageSet = true
+    }
 
     const data: { name?: string; phoneNumber?: string | null; dndUntil?: Date | null; onboardedAt?: Date } = {}
     if (typeof name === "string" && name.trim()) {
@@ -69,6 +80,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (Object.keys(data).length === 0) {
+      if (languageSet) return NextResponse.json({ ok: true, uiLanguage })
       return NextResponse.json(
         { error: "No valid fields to update" },
         { status: 400 }
@@ -84,7 +96,7 @@ export async function PATCH(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true, role: true, uiLanguage: true },
     })
 
     logAudit({

@@ -808,8 +808,8 @@ export async function POST(request: NextRequest) {
         type: "attendance_request_reviewed",
         ...bi(
           [`${context.user?.name ?? "The BoD"} recorded ${labelsEn[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} for you`, `${startEn === endEn ? startEn : `${startEn} – ${endEn}`} is approved already. If this is wrong, talk to your approver.`],
-          [`${context.user?.name ?? "BoD"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`, `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`],
-        ),
+          [`${context.user?.name ?? "BoD"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`, `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`]
+),
         link: `/attendance?request=${attendanceRequest.id}`,
         push: true,
       }).catch((e) => console.error("grant notify failed", e))

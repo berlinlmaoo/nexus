@@ -337,8 +337,8 @@ export async function PATCH(
         type: "google_workspace_linked",
         ...bi(
           ["Your Google Workspace account is linked", `${data.googleWorkspaceEmail} is now connected to your NEXUS account. Calendar, Meet and work email use this address.`],
-          ["Akun Google Workspace kamu ditautkan", `${data.googleWorkspaceEmail} sekarang tersambung ke akun NEXUS kamu. Kalender, Meet, dan email kantor memakai alamat ini.`],
-        ),
+          ["Akun Google Workspace kamu ditautkan", `${data.googleWorkspaceEmail} sekarang tersambung ke akun NEXUS kamu. Kalender, Meet, dan email kantor memakai alamat ini.`]
+),
         link: "/settings",
         push: true,
       }).catch(() => null)

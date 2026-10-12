@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
         type: "system_disk",
         ...bi(
           [level === "alarm" ? "Server disk almost full" : "Server disk filling up", `Storage is ${usedPct}% used, ${freeGb} GB left. ` + (level === "alarm" ? "When it runs out, uploads and attendance stop working." : "Not urgent yet, but keep an eye on it.")],
-          [title, message],
-        ),
+          [title, message]
+),
         link: "/admin",
         push: level === "alarm",
         dedupeWindowMs: 23 * 60 * 60 * 1000,

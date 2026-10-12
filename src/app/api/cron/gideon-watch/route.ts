@@ -107,8 +107,8 @@ export async function POST(req: NextRequest) {
         type: "system_gideon",
         ...bi(
           ["GIDEON Support isn't answering", `${waiting.length} ticket${waiting.length === 1 ? "" : "s"} waited for GIDEON for more than ${WAIT_MINUTES} minutes. Oldest: "${oldest.subject.slice(0, 60)}" (${oldestMin} min). GIDEON usually answers within half a minute, so the shim/Hermes chain is probably down or refusing.`],
-          ["GIDEON Support tidak menjawab", message],
-        ),
+          ["GIDEON Support tidak menjawab", message]
+),
         link: "/complaints",
         push: true,
         dedupeWindowMs: 23 * 60 * 60 * 1000,

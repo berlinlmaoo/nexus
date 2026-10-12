@@ -117,8 +117,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
         type: "attendance_invalid",
         ...bi(
           [`Attendance on ${labelEn} ruled invalid`, `The BoD reviewed your attendance on ${labelEn}: the location was faked (fake GPS), so that day counts as absent without notice (TK). Note: ${note}`],
-          [`Absen ${label} dinyatakan tidak sah`, `BoD meninjau absenmu tanggal ${label}: lokasinya terdeteksi palsu (fake GPS), jadi hari itu dihitung TK. Catatan: ${note}`],
-        ),
+          [`Absen ${label} dinyatakan tidak sah`, `BoD meninjau absenmu tanggal ${label}: lokasinya terdeteksi palsu (fake GPS), jadi hari itu dihitung TK. Catatan: ${note}`]
+),
         link: "/attendance",
         push: true,
       }).catch((e) => console.error("[suspects] notify failed", e))

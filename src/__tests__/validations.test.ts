@@ -213,7 +213,7 @@ describe('attendance schemas', () => {
   it('rejects invalid attendance history query payload', () => {
     const result = attendanceHistoryQuerySchema.safeParse({
       scope: 'workspace',
-      officeLocationId: 'not-a-cuid',
+      officeLocationId: 'not an id!',
     })
     expect(result.success).toBe(false)
   })
@@ -280,7 +280,7 @@ describe('createTaskSchema', () => {
   it('rejects invalid projectId format', () => {
     const result = createTaskSchema.safeParse({
       ...validTask,
-      projectId: 'not-a-cuid',
+      projectId: 'not an id!',
     })
     expect(result.success).toBe(false)
   })

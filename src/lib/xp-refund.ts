@@ -127,8 +127,8 @@ export function xpRefundTexts(refund: { reason: string; amount: number; refunded
   const id = xpRefundNotice(refund)
   return bi(
     [`XP deduction removed · +${refund.refunded} XP`, `The BoD removed the ${what[info.kind] ?? "XP"} deduction${info.dateKey ? ` for ${info.dateKey}` : ""} (${refund.amount} XP). The XP is back.`],
-    [id.title, id.message],
-  )
+    [id.title, id.message]
+)
 }
 
 /** The push/in-app copy for the person whose deduction was removed (Indonesian, like the other attendance pushes). */
