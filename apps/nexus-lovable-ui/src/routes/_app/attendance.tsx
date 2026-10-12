@@ -8,6 +8,7 @@ import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { DateField } from "@/components/DateField";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadError } from "@/components/LoadError";
 import { Segmented } from "@/components/PageLayout";
@@ -334,7 +335,14 @@ function Attendance() {
     const cell = box?.querySelector<HTMLElement>(`th[data-day="${todayKey}"]`);
     if (!box || !cell) return;
     const pinned = box.querySelector<HTMLElement>("th[data-member-col]")?.offsetWidth ?? 0;
-    box.scrollLeft = Math.max(0, cell.offsetLeft - pinned - cell.offsetWidth * 3);
+    // Snap to a column edge (QA S-25: day columns differ in width, so "3 × today's width" left the
+    // first visible day half under the pinned member column — "D )"). The first column in view starts
+    // exactly at the pinned column's edge; no scroll at all when today already fits.
+    const days = [...box.querySelectorAll<HTMLElement>("th[data-day]")];
+    const at = days.indexOf(cell);
+    const first = days[Math.max(0, at - 3)];
+    const fits = cell.offsetLeft + cell.offsetWidth <= box.clientWidth;
+    box.scrollLeft = fits || !first ? 0 : Math.max(0, first.offsetLeft - pinned);
     landedPeriod.current = monthKey;
   }, [viewMode, history.isLoading, monthKey, todayKey, periodDays.length]);
   // Cut-off aware: past the 27th we're already in NEXT month's payroll period, so the board's
@@ -365,7 +373,7 @@ function Attendance() {
     <div>
       <PageHeader
         title={tr("Attendance")}
-        subtitle={tr("Who's in, on leave or working from home, and everyone's attendance history.")}
+        subtitle={canSeeBoard ? tr("Who's in, on leave or working from home, and everyone's attendance history.") : tr("Check in, ask for leave or a permission, and see your attendance history.")}
         // The outage-refund and no-show-sweep buttons were removed (owner, 28 Sep 2026): outage days are
         // not compensated, and the sweep is what the nightly cron already runs. Both APIs stay for the cron.
       />
@@ -1959,12 +1967,12 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
             <div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("From")}
-                  <input type="date" value={leaveFrom} min={today} onChange={(e) => { setLeaveFrom(e.target.value); if (leaveTo && e.target.value > leaveTo) setLeaveTo(""); }}
-                    className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+                  <DateField value={leaveFrom || null} min={today} ariaLabel={tr("From")} placeholder={tr("Pick a date")} onChange={(v) => { const x = v ?? ""; setLeaveFrom(x); if (leaveTo && x > leaveTo) setLeaveTo(""); }}
+                    className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm normal-case tracking-normal text-foreground hover:bg-background" />
                 </label>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Until")}
-                  <input type="date" value={leaveTo} min={leaveFrom || today} onChange={(e) => setLeaveTo(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+                  <DateField value={leaveTo || null} min={leaveFrom || today} ariaLabel={tr("Until")} placeholder={tr("Pick a date")} onChange={(v) => setLeaveTo(v ?? "")}
+                    className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm normal-case tracking-normal text-foreground hover:bg-background" />
                 </label>
               </div>
               {leaveFrom && <p className="mt-1 text-[11px] font-semibold text-foreground">{fmtDate(leaveFrom)}{leaveTo && leaveTo > leaveFrom ? ` – ${fmtDate(leaveTo)}` : ""} · {tr(leaveDayCount === 1 ? "{n} day" : "{n} days", { n: leaveDayCount })}</p>}
@@ -1972,9 +1980,9 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
             </div>
           ) : (
           <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Date")}
-            <input type="date" value={date} min={!granting ? today : undefined}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+            <DateField value={date || null} min={!granting ? today : undefined} ariaLabel={tr("Date")} placeholder={tr("Pick a date")}
+              onChange={(v) => setDate(v ?? "")}
+              className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm normal-case tracking-normal text-foreground hover:bg-background" />
           </label>
           )}
           {!granting && remainingDays != null && (

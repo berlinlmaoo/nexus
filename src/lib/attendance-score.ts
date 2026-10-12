@@ -1,15 +1,15 @@
 import prisma from "@/lib/prisma"
 import { formatAttendanceDateKey } from "@/lib/attendance"
-import { attendanceStartKey } from "@/lib/former-member-days"
 import { DEFAULT_DAY_OFF_QUOTA } from "@/lib/day-off-usage"
 
 /**
  * The attendance Score's "out of" — ONE rule for the crew board (/api/attendance/history) and the
  * person record (/api/members/[id]/record), so the two never disagree (QA S-20, 13 Oct 2026).
  *
- * Someone who started during the period owes only the days from their first day: attendanceStartKey
- * (the day after joining, or an earlier first check-in — the same start the absence rules use), and the
- * day-off allowance shrinks in proportion. Everyone else owes the whole period with the full allowance.
+ * Someone who started during the period owes only the days from their first day: the WIB day they
+ * joined (or an earlier first check-in), and the day-off allowance shrinks in proportion. (QA N-06: this
+ * used attendanceStartKey, the day AFTER joining — the absence rule's grace — so joining 12 Oct read
+ * "from 13 Oct".) Everyone else owes the whole period with the full allowance.
  */
 export type AttendanceOwed = { days: number; allowance: number; from: string }
 
@@ -50,7 +50,9 @@ export async function attendanceOwedFor(opts: {
   const first = new Map(firsts.map((r) => [r.userId, r._min.attendanceDate ? formatAttendanceDateKey(r._min.attendanceDate) : null] as const))
   for (const id of ids) {
     const j = joined.get(id) ?? null
-    const start = j ? attendanceStartKey(formatAttendanceDateKey(j), first.get(id) ?? null) : null
+    const joinKey = j ? formatAttendanceDateKey(j) : null
+    const firstKey = first.get(id) ?? null
+    const start = joinKey ? (firstKey && firstKey < joinKey ? firstKey : joinKey) : null
     out.set(id, prorateForStart(opts.from, opts.to, opts.periodDays, opts.quotas.get(id) ?? DEFAULT_DAY_OFF_QUOTA, start))
   }
   return out
