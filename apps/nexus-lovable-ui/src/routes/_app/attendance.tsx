@@ -598,7 +598,7 @@ function Attendance() {
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
                         <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={tr("{name} — record for this period", { name: u.name ?? tr("Unnamed") })}
-                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-6 pointer-coarse:items-center">{tr("Record")}</Link>
+                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">{tr("Record")}</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
@@ -638,7 +638,7 @@ function Attendance() {
                                   void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
                                     .catch((err) => alert(err instanceof ApiError ? err.message : tr("Export failed. Try again.")));
                                 }}
-                                className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:min-h-6 pointer-coarse:min-w-8")}
+                                className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:min-w-11")}
                               >
                                 <Download className="inline h-3 w-3" />
                               </button>
@@ -658,10 +658,10 @@ function Attendance() {
                               <button
                                 onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
                                 title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent — no check-in. Tap to set a status (Present/Leave/Sick/Day off).")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
+                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
                               />
                             ) : tone === "absent" ? (
-                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6", sCls.absent)} />
+                              <span title={`${fmtDate(rec.attendanceDate)} · ${tr("Absent")}`} className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding", sCls.absent)} />
                             ) : tone === "leave" || tone === "permit" || tone === "sick" || tone === "dayoff" ? (
                               <motion.button
                                 whileHover={reduceMotion ? undefined : { scale: 1.3 }}
@@ -669,7 +669,7 @@ function Attendance() {
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setLeaveDetail(rec); }}
                                 title={`${fmtDate(rec.attendanceDate)} · ${tr(toneLabel[tone])}${rec.notes ? " — " + rec.notes : ""} — ${tr("tap for details")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
+                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             ) : (
                               <motion.button
@@ -678,17 +678,17 @@ function Attendance() {
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setCorrectRecord(rec); }}
                                 title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · ${tr("In {time}", { time: fmtTime(rec.checkInAt) })} / ${tr("Out {time}", { time: fmtTime(rec.checkOutAt) })}${rec.locationTrackingState === "denied" ? ` · ${tr("Location off")}` : rec.locationTrackingState === "web" ? ` · ${tr("Web check-in · location not tracked")}` : ""} — ${tr("tap to see location and selfie")}`}
-                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
+                                className={cn("inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             )
                           ) : canManage ? (
                             <button
                               onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
                               title={`${pd.key} — ${tr("empty. Tap to set a status (Present/Leave/Sick/Day off).")}`}
-                              className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
+                              className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
                             />
                           ) : (
-                            <span className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-6 bg-muted/30" />
+                            <span className="inline-block h-5 w-5 rounded-lg pointer-coarse:size-11 pointer-coarse:rounded-[18px] pointer-coarse:border-[10px] pointer-coarse:border-transparent pointer-coarse:bg-clip-padding bg-muted/30" />
                           )}
                           {rec?.locationTrackingState === "denied" && (
                             <span title={tr("Location off")} aria-label={tr("Location off")} className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border dark:text-slate-400"><MapPinOff className="h-2 w-2" /></span>
@@ -1624,7 +1624,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
               return (
                 <button key={f} type="button" onClick={() => setStatusFilter(f)}
                   className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
-                    on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                    on ? "bg-primary/10 text-primary ring-primary/40" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
                   {tr(REQUEST_FILTER_LABEL[f])}{f === "PENDING" && pendingTotal > 0 ? ` (${pendingTotal})` : ""}
                 </button>
               );
@@ -1641,8 +1641,8 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
             </div>
             {windowed && (
               <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label={tr("Date range")}>
-                <button type="button" onClick={() => setRange("recent")} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Last 3 days")}</button>
-                <button type="button" onClick={() => setRange("period")} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("This period")}</button>
+                <button type="button" onClick={() => setRange("recent")} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("Last 3 days")}</button>
+                <button type="button" onClick={() => setRange("period")} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("This period")}</button>
               </div>
             )}
           </div>
@@ -1904,8 +1904,8 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
         {!granting && <p className="mt-1 text-xs text-muted-foreground">{tr("One day per request (annual leave: a range of days). Only the types you can use are listed.")}</p>}
         {canGrant && (
           <div className="mt-3 inline-flex rounded-xl border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label={tr("Who is this for")}>
-            <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("For myself")}</button>
-            <button type="button" onClick={() => pickMode("grant")} className={cn("rounded-lg px-3 py-1.5 transition-colors", granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{tr("Grant to someone")}</button>
+            <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("For myself")}</button>
+            <button type="button" onClick={() => pickMode("grant")} className={cn("rounded-lg px-3 py-1.5 transition-colors", granting ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}>{tr("Grant to someone")}</button>
           </div>
         )}
         <div className="mt-4 space-y-3">
@@ -1923,7 +1923,7 @@ function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void
                 return (
                   <button key={t} type="button" onClick={() => pickType(t)}
                     className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
-                      on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                      on ? "bg-primary/10 text-primary ring-primary/40" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
                     <Icon className="h-3.5 w-3.5" />{REQ_LABEL[t] ? tr(REQ_LABEL[t]) : statusLabel(t)}
                   </button>
                 );

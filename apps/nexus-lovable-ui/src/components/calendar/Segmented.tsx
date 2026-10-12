@@ -43,7 +43,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
       aria-label={label}
       aria-disabled={disabled || undefined}
       className={cn(
-        "inline-grid max-w-full grid-flow-col auto-cols-auto gap-0.5 rounded-lg border border-border bg-background p-0.5 [&.w-full]:auto-cols-fr",
+        "inline-grid max-w-full grid-flow-col auto-cols-auto gap-0.5 rounded-lg border border-border bg-muted/60 p-0.5 [&.w-full]:auto-cols-fr",
         className,
       )}
     >
@@ -65,7 +65,8 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
               size === "md" ? "min-h-8 px-3 py-1.5" : "min-h-7 px-2.5 py-1",
               TOUCH_ROW,
               FOCUS_PILL,
-              on ? "bg-cal-accent text-cal-accent-foreground dark:bg-primary dark:text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              // Light pill on a soft track (QA B23: solid navy/black toggles were the heaviest thing in dialogs).
+              on ? "bg-card text-foreground shadow-sm ring-1 ring-border dark:bg-accent" : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
             )}
           >
             {o.icon}

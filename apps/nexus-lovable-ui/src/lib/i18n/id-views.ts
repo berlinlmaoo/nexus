@@ -5,7 +5,7 @@
  */
 export const ID_VIEWS: Record<string, string> = {
   // Toolbar and tabs
-  "Views": "View",
+  "Views": "Tampilan",
   "Add view": "Tambah view",
   "New view": "View baru",
   "View name": "Nama view",

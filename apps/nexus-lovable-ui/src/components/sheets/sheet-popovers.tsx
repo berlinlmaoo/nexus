@@ -351,7 +351,7 @@ export function LinkCard({ anchor, url, onCopy, onEdit, onRemove, onClose, onFol
     <Floating
       anchor={below(anchor)}
       role="dialog"
-      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); } }}
       className="flex w-[300px] items-center gap-2 rounded-xl border border-border bg-popover py-1.5 pl-3 pr-1.5 text-popover-foreground shadow-pop"
     >
       {internal ? <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />}

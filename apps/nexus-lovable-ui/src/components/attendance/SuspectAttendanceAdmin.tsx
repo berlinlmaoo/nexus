@@ -71,7 +71,7 @@ export function SuspectAttendanceAdmin() {
         </div>
         <div className="mt-3 flex flex-wrap gap-1">
           {([["fake", "Fake GPS", c?.fakeOpen], ["noface", "No face", c?.noFaceOpen], ["check", "Worth a look", c?.checkOpen], ["done", "Reviewed", c ? c.valid + c.invalid : undefined]] as const).map(([k, label, n]) => (
-            <button key={k} onClick={() => setTab(k)} className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition", tab === k ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:bg-accent")}>
+            <button key={k} onClick={() => setTab(k)} className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition", tab === k ? "bg-primary/10 text-primary ring-primary/40" : "bg-background text-muted-foreground ring-border hover:bg-accent")}>
               {t(label)}{n != null && <span className="ml-1 tabular-nums opacity-80">{n}</span>}
             </button>
           ))}

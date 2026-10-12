@@ -27,7 +27,7 @@ export function NotificationFilterTabs({ list, group, onChange, compact }: {
   return (
     <div className="overflow-x-auto">
       <PageTabs label={label} value={group} onChange={onChange} className={compact ? "gap-3 text-xs" : undefined}
-        tabs={tabs.map((t) => ({ key: t.id, label: t.label, count: t.count }))} />
+        tabs={tabs.map((tab) => ({ key: tab.id, label: t(tab.label), count: tab.count }))} />
     </div>
   );
 }

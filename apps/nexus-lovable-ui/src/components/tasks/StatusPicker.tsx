@@ -153,7 +153,7 @@ export function StatusPicker({ projectId, sections, value, onPick, canManage: ca
                     onKeyDown={(e) => {
                       const v = (e.target as HTMLInputElement).value.trim();
                       if (e.key === "Enter" && v) create.mutate({ name: v, group: g.key });
-                      if (e.key === "Escape") { e.stopPropagation(); setAdding(null); }
+                      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setAdding(null); }
                     }}
                     onBlur={(e) => { const v = e.target.value.trim(); if (v) create.mutate({ name: v, group: g.key }); else setAdding(null); }}
                     className="h-7 w-full rounded-md border border-[color:var(--accent-foreground)] bg-card px-2 text-sm outline-none"

@@ -158,7 +158,7 @@ export function SearchModal({ onClose, takeInitial }: { onClose: () => void; tak
         {!phone && (
           <div className="flex items-center gap-3 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
             <span><kbd className="rounded border border-border bg-muted px-1 font-mono">↑</kbd> <kbd className="rounded border border-border bg-muted px-1 font-mono">↓</kbd> {t("to move")}</span>
-            <span><kbd className="rounded border border-border bg-muted px-1 font-mono">Enter</kbd> {t("to open")}</span>
+            <span><kbd className="rounded border border-border bg-muted px-1 font-mono" aria-label="Enter">↵</kbd> {t("to open")}</span>
             <span><kbd className="rounded border border-border bg-muted px-1 font-mono">Esc</kbd> {t("to close")}</span>
           </div>
         )}

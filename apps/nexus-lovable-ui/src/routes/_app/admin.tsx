@@ -1,4 +1,5 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
+import { notificationTitle } from "@/lib/server-text";
 import { SelectPicker } from "@/components/SelectPicker";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -759,7 +760,7 @@ function UserRow(props: UserRowProps) {
                 <span className="font-semibold tabular-nums text-foreground">{shiftLabel ?? <span className="font-normal text-muted-foreground">{t("Office hours")}</span>}</span>
               )}
               {!orgInfo.flexi && overrideCount > 0 && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">{t("per day ×{n}", { n: overrideCount })}</span>}
-              {orgInfo.noGeofence && <span className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300"><Smartphone className="h-3 w-3" /> Mobile</span>}
+              {orgInfo.noGeofence && <span className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300"><Smartphone className="h-3 w-3" /> {t("Mobile")}</span>}
               {gwConfigured && user.googleWorkspaceEmail && <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground" title={user.googleWorkspaceEmail}><AtSign className="h-3 w-3" /> Google</span>}
             </div>
           )}
@@ -1480,7 +1481,7 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
             <div className="flex flex-wrap gap-1.5">
               {periods.map((p) => (
                 <button key={p.periodKey} type="button" onClick={() => setPeriodKey(p.periodKey)}
-                  className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition", periodKey === p.periodKey ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                  className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition", periodKey === p.periodKey ? "bg-primary/10 text-primary ring-primary/40" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
                   {p.periodLabel} · {p.periodKey === current ? t("current") : p.periodKey < (current ?? "") ? t("previous") : t("next")}
                 </button>
               ))}
@@ -2102,7 +2103,7 @@ function AnnouncementsAdmin() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Audience")}</span>
                 <div className="flex rounded-lg border border-border p-0.5">
                   {(["all", "some"] as const).map((a) => (
-                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? t("Everyone") : t("Selected people")}</button>
+                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? t("Everyone") : t("Selected people")}</button>
                   ))}
                 </div>
               </div>
@@ -2176,7 +2177,7 @@ function AnnouncementsAdmin() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Repeat")}</span>
                 <div className="flex rounded-lg border border-border p-0.5">
                   {[0, 2, 3, 5, 7].map((d) => (
-                    <button key={d} onClick={() => setRepeatDays(d)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", repeatDays === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{d === 0 ? t("Once") : t("{n} more days", { n: d })}</button>
+                    <button key={d} onClick={() => setRepeatDays(d)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", repeatDays === d ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent")}>{d === 0 ? t("Once") : t("{n} more days", { n: d })}</button>
                   ))}
                 </div>
                 {repeatDays > 0 && (
@@ -2221,7 +2222,7 @@ function AnnouncementsAdmin() {
                   <div className="flex flex-wrap items-center gap-2">
                     {a.kind === "sp" && <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>}
                     {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">{t("Warning")}</span>}
-                    <span className="text-sm font-bold">{a.title}</span>
+                    <span className="text-sm font-bold">{notificationTitle({ title: a.title })}</span>
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{a.active ? t("Active") : t("Inactive")}</span>
                     {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{t("Repeats daily {time} until {date}", { time: a.repeatAtTime ?? "", date: new Date(a.repeatUntil).toLocaleDateString(locale) })}</span>
@@ -2263,7 +2264,7 @@ function AnnouncementsAdmin() {
 function GideonAdmin() {
   const { t } = useLang();
   const [tab, setTab] = useState<"insights" | "people">("insights");
-  const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent");
+  const btn = (on: boolean) => cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent");
   return (
     <div className="space-y-4">
       <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-background p-0.5">

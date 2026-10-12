@@ -47,7 +47,7 @@ export function ShortcutsHelp({ open, onOpenChange }: { open: boolean; onOpenCha
                           <span key={combo} className="flex items-center gap-0.5">
                             {i > 0 && <span className="px-0.5 text-xs text-muted-foreground">/</span>}
                             {keyParts(combo).map((part, j) => (
-                              <kbd key={j} className="min-w-[1.5rem] rounded-md border border-border bg-muted px-1.5 py-0.5 text-center font-mono text-[11px] text-foreground">{t(part)}</kbd>
+                              <kbd key={j} className="min-w-[1.5rem] rounded-md border border-border bg-muted px-1.5 py-0.5 text-center font-mono text-[11px] text-foreground">{part === "Click" ? t("Click") : part}</kbd>
                             ))}
                           </span>
                         ))}

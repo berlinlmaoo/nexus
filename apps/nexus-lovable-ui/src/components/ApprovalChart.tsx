@@ -448,7 +448,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
             {p.flexi
               ? <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-amber-300/25 text-amber-100" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300")}><Zap className="h-2.5 w-2.5" /> Flexi</span>
               : <span>{p.shiftStart && p.shiftEnd ? `${to12(p.shiftStart, locale)}–${to12(p.shiftEnd, locale)}` : t("Office hours")}</span>}
-            {p.mobile && <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-sky-300/25 text-sky-100" : "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300")}><Smartphone className="h-2.5 w-2.5" /> Mobile</span>}
+            {p.mobile && <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-sky-300/25 text-sky-100" : "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300")}><Smartphone className="h-2.5 w-2.5" /> {t("Mobile")}</span>}
           </span>
         </span>
       </button>

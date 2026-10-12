@@ -1394,7 +1394,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); toggleDone.mutate(done ? "TODO" : "DONE"); }}
             disabled={draft}
-            className="tap-area mt-px shrink-0 rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90"
+            className="mt-px grid shrink-0 place-items-center rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:size-11"
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
           >
@@ -1586,7 +1586,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
         title={done ? t("Mark as not done") : t("Mark as done")}
         tabIndex={-1}
         onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || draft) return; e.preventDefault(); e.stopPropagation(); if (!toggleDone.isPending) toggleDone.mutate(done ? "TODO" : "DONE"); }}
-        className="tap-area -m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90"
+        className="-m-1 grid shrink-0 place-items-center rounded-full p-1 transition-transform hover:bg-muted active:scale-90 pointer-coarse:-m-3.5 pointer-coarse:p-3.5"
       >
         {toggleDone.isPending || draft ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 text-muted-foreground/60" />}
       </span>

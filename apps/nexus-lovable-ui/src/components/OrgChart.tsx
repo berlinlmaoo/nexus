@@ -913,7 +913,7 @@ function ViewChip({ active, onClick, title, children }: { active: boolean; onCli
   return (
     <button type="button" role="tab" aria-selected={active} onClick={onClick} title={title}
       className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition",
-        active ? "border-cal-accent bg-cal-accent text-cal-accent-foreground" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
+        active ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-[#1e3a5f]/40 hover:text-foreground")}>
       {children}
     </button>
   );
@@ -1378,7 +1378,7 @@ function ParentPicker({ units, value, excluded, onChange }: { units: OrgUnit[]; 
     <div className="overflow-hidden rounded-xl border border-cal-accent/40 bg-background">
       <div className="relative border-b border-border">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); setQ(""); } }}
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); setQ(""); } }}
           placeholder={t("Search IPs, divisions or groups…")} className="w-full bg-transparent py-2.5 pl-8 pr-16 text-sm outline-none" />
         <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-0.5 text-xs font-semibold text-muted-foreground hover:bg-accent">{t("Close")}</button>
       </div>
@@ -1529,6 +1529,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
   return (
     <>
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 dark:bg-scrim p-4" onClick={onClose}>
+      <EscClose onClose={onClose} />
       <div role="dialog" aria-modal="true" aria-labelledby="oc-unit-title" onClick={(e) => e.stopPropagation()}
         className="flex max-h-[min(92vh,780px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
         <div className="flex items-start gap-3 border-b border-border px-5 py-4">

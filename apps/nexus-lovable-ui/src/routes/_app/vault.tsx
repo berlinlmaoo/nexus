@@ -672,8 +672,9 @@ function VaultPage() {
         className={cn(
           "grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100",
           on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/50 bg-card",
-          // Touch has no hover: there the box only exists in Select mode (an invisible box left a gap).
-          !selecting && "opacity-0 group-hover:opacity-100 pointer-coarse:hidden",
+          // Touch has no hover: there the box is always shown, so one tap selects (QA B40).
+          !selecting && "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100",
+          "tap-area",
           overlay && "absolute left-2 top-2 z-10 shadow-sm",
         )}
       >

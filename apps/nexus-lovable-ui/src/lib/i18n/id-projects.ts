@@ -23,7 +23,7 @@ export const ID_PROJECTS: Record<string, string> = {
   "No members in this project yet — add some below first.": "Belum ada member di project ini — tambahkan dulu di bawah.",
   // New project: tabs and members chosen in the create dialog (11 Oct 2026)
   "The tabs this project starts with. You can change them later in Project settings.": "Tab yang tampil saat project dibuat. Bisa diubah nanti di Pengaturan project.",
-  "Members": "Member",
+  "Members": "Anggota",
   "Optional. You lead the project; the people you pick join as members.": "Opsional. Kamu jadi lead project; orang yang kamu pilih masuk sebagai member.",
   "No one else in this workspace yet.": "Belum ada orang lain di workspace ini.",
   "Someone you picked isn't in this workspace any more. Refresh and pick again.": "Ada orang yang kamu pilih sudah tidak di workspace ini. Muat ulang lalu pilih lagi.",

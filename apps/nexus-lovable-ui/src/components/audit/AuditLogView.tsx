@@ -256,7 +256,7 @@ export function AuditLogView() {
                 return (
                   <button key={c.value || "all"} type="button" onClick={() => setAction(c.value)} aria-pressed={on}
                     className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
-                      on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                      on ? "bg-primary/10 text-primary ring-primary/40" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
                     {c.value ? actionLabel(c.value, t) : t(c.label)}
                   </button>
                 );

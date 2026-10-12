@@ -18,6 +18,7 @@ import { useLang } from "@/lib/lang";
 import { globalModShortcut, isEditableTarget, modalOpen } from "@/lib/keyboard";
 import { ShortcutsHelp, OPEN_SHORTCUTS_EVENT } from "@/components/ShortcutsHelp";
 import { OPEN_SEARCH_EVENT } from "@/lib/search-event";
+import { useModalFocusTrap } from "@/hooks/use-modal-focus-trap";
 
 const SearchModal = lazy(() => import("@/components/SearchModal").then((m) => ({ default: m.SearchModal })));
 
@@ -156,6 +157,8 @@ function AppLayout() {
 }
 
 function GlobalSearch() {
+  // Tab stays inside whichever modal dialog is on top (one listener for the app).
+  useModalFocusTrap();
   const [open, setOpen] = useState(false);
   const [help, setHelp] = useState(false);
   // Keys typed right after ⌘K, before the search box exists, are kept and handed to it (QA round 2,
