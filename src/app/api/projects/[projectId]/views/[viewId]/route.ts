@@ -15,7 +15,7 @@ async function load(userId: string, projectId: string, viewId: string) {
   if (!access.read) return { status: 403 as const }
   const view = await prisma.projectView.findUnique({ where: { id: viewId } })
   if (!view || view.projectId !== projectId || (view.ownerId !== null && view.ownerId !== userId)) return { status: 404 as const }
-  const canEdit = view.ownerId === null ? access.editShared : true
+  const canEdit = view.ownerId === null ? access.editShared : access.editPersonal
   return { status: 200 as const, view, access, canEdit }
 }
 

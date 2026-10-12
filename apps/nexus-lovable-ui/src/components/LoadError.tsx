@@ -32,10 +32,11 @@ export function loadErrorKind(error: unknown): LoadErrorKind {
   return "server";
 }
 
-/** React Query `retry`: never retry a 4xx (the answer won't change), at most twice otherwise. */
+/** React Query `retry`: never retry a 4xx (the answer won't change); one quick retry otherwise, so an error
+ *  shows in about a second instead of three (QA R2 Manager B19). */
 export function retryTransient(failureCount: number, error: unknown): boolean {
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
-  return failureCount < 2;
+  return failureCount < 1;
 }
 
 /** True when the error is a real "no access" answer (403), not a failure to get any answer. */

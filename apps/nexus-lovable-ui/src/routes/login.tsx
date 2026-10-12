@@ -40,6 +40,17 @@ function LoginPage() {
     setPasskeyReady(passkeysSupported());
   }, []);
 
+  // Already signed in (QA R2 Manager B29: /login showed the form): go where they were heading. A plain fetch,
+  // not the shared query cache, so a stale cached 401 can't send them back here.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/user/profile", { credentials: "include", headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { id?: string } } | null) => { if (alive && j?.user?.id) { queryClient.clear(); void navigate({ to: callbackUrl, replace: true }); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Shared landing for both sign-in paths. Drop every cached query before leaving /login: the
   // QueryClient outlives this route, so the 401 that bounced the user here is still cached, and
   // navigating back in would hand `_app` that stale error and it would redirect straight to /login

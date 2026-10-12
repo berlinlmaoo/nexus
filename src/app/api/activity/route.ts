@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser, hasProjectWideAccess } from "@/lib/rbac"
 import { canReadTask, taskReadRefusal, workspaceIdsOf } from "@/lib/read-access"
 
 export async function GET(request: NextRequest) {
@@ -40,7 +40,11 @@ export async function GET(request: NextRequest) {
       where.taskId = taskId
     }
     if (onlyWorkspaceIds) {
-      where.project = { workspaceId: { in: onlyWorkspaceIds } }
+      // Unfiltered feed: projects the caller can open — every project of a workspace where they are BoD / One
+      // Above All, otherwise only their member projects (membership-only access, owner 13 Oct 2026).
+      const wideWs = (await prisma.workspaceMember.findMany({ where: { userId: session.user.id!, workspaceId: { in: onlyWorkspaceIds } }, select: { workspaceId: true, role: true } }))
+        .filter((m) => hasProjectWideAccess(m.role)).map((m) => m.workspaceId)
+      where.project = { workspaceId: { in: onlyWorkspaceIds }, OR: [{ workspaceId: { in: wideWs.length ? wideWs : ["__none__"] } }, { members: { some: { userId: session.user.id! } } }] }
     }
 
     const activityLogs = await prisma.activityLog.findMany({

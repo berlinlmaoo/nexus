@@ -314,7 +314,14 @@ export async function POST(request: NextRequest) {
     }
 
     const modernClient = clientCanObeyRequestPolicy(request)
-    const formData = await request.formData()
+    // multipart/form-data (what every client sends: the request can carry a document). A JSON body used to
+    // crash formData() into a 500 (QA R2 Manager N6): answer 400 with what to send instead.
+    const contentType = request.headers.get("content-type") ?? ""
+    if (!/multipart\/form-data|application\/x-www-form-urlencoded/i.test(contentType)) {
+      return NextResponse.json({ error: "Send the request as multipart/form-data (fields: type, startDate, endDate, reason, …).", code: "FORM_DATA_REQUIRED" }, { status: 400 })
+    }
+    const formData = await request.formData().catch(() => null)
+    if (!formData) return NextResponse.json({ error: "The form data couldn't be read.", code: "BAD_FORM_DATA" }, { status: 400 })
     const type = String(formData.get("type") ?? "")
     const startDate = String(formData.get("startDate") ?? "")
     const endDate = String(formData.get("endDate") ?? "")

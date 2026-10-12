@@ -52,6 +52,11 @@ export function friendlyError(e: unknown): string | undefined {
   if (/failed to fetch|networkerror|network request failed|load failed|err_internet|fetch failed/i.test(msg) || (typeof navigator !== "undefined" && navigator.onLine === false)) {
     return t("No connection. Check your internet and try again.");
   }
+  // A server failure is not something to show raw ("Internal server error", QA R2 Manager B31).
+  const status = (e as { status?: number } | null)?.status;
+  if ((typeof status === "number" && status >= 500) || /^(internal server error|request failed|bad gateway|service unavailable)/i.test(msg)) {
+    return t("Something went wrong on our side. Try again in a moment.");
+  }
   // Access-level refusals (Notion levels, 13 Oct 2026), and the old role wording older servers still send.
   const code = (e as { payload?: { code?: string } } | null)?.payload?.code;
   if (code === "NEEDS_EDIT_ACCESS" || /Can edit access|MEMBER role/i.test(msg)) return t("You can view this project but not change it. Ask its Project Owner for Can edit access.");

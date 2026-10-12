@@ -434,7 +434,8 @@ function ProjectDetail() {
     else activeView = visibleViews.find((v) => v.builtin === template.defaultTab) ?? null;
   }
   if (!activeModule && !activeView) activeView = visibleViews[0] ?? null;
-  const canEditView = (v: NexusProjectView) => !v.id.startsWith("fallback:") && (v.shared ? pv.canEditShared : true);
+  // Can view / Can comment: no saved or personal views (Notion: filter and sort on screen only, QA R2 N3).
+  const canEditView = (v: NexusProjectView) => canEditProject && !v.id.startsWith("fallback:") && (v.shared ? pv.canEditShared : true);
   const canEdit = activeView ? canEditView(activeView) : false;
   const select = (key: string) => {
     setViewSettingsOpen(false);
@@ -639,7 +640,7 @@ function ProjectDetail() {
           onDelete={deleteView}
           onHide={(v) => isBuiltinTab(v) && hideBuiltin.mutate(v.builtin!)}
           divideAfter={lastViewKey}
-          addView={<AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} />}
+          addView={canEditProject ? <AddViewButton canShare={pv.canEditShared} busy={pv.create.isPending} onCreate={createView} /> : undefined}
         />
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:hidden">

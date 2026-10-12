@@ -35,7 +35,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
   onCopyLink: (v: NexusProjectView) => void;
   onDelete: (v: NexusProjectView) => void;
   onHide: (v: NexusProjectView) => void;
-  addView: ReactNode;
+  addView?: ReactNode;
   /** Draw a hairline before this tab key (between the views and the project's other tabs). */
   divideAfter?: string | null;
 }) {
