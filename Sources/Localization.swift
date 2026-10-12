@@ -1187,7 +1187,7 @@ final class AppLanguage {
         // IN_REVIEW — that one means a director took the ticket on. ("Open" is carried above, with
         // the generic states.)
         "Awaiting decision": "Menunggu keputusan",
-        "In review": "Sedang ditinjau",
+        "In review": "Ditinjau",
         "Resolved": "Selesai",
         "Closed": "Ditutup",
         // The row markers. Shorter than the status chip they sit under, and deliberately worded
@@ -3100,7 +3100,7 @@ final class AppLanguage {
         "Archive task": "Arsipkan task",
         "Assign to": "Tugaskan ke",
         "Assignee changed": "Penanggung jawab berubah",
-        "Assignees": "Penanggung jawab",
+        "Assignees": "Assignee",
         "Automation": "Otomasi",
         "Automation notifications": "Notifikasi otomasi",
         "Blank project": "Project kosong",

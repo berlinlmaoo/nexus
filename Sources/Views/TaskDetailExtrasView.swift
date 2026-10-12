@@ -240,10 +240,15 @@ struct TaskAttachmentsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                taskCardHeader(items.isEmpty ? "Attachments" : "Attachments · \(items.count)", "paperclip")
+                taskCardHeader(items.isEmpty ? T("Attachments") : "\(T("Attachments")) · \(items.count)", "paperclip")
                 Spacer()
                 if busy { ProgressView().scaleEffect(0.8) }
-                Button { showImporter = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText) }.disabled(busy)
+                Button { showImporter = true } label: {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel(T("Add files"))
+                .disabled(busy)
             }
             if uploadProgress.isActive { meter(T("Uploading"), uploadProgress) }
             if fetchProgress.isActive { meter(T("Downloading"), fetchProgress) }
@@ -251,7 +256,7 @@ struct TaskAttachmentsCard: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
-                Text(T("No files yet. Tap + to upload.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No files yet. Tap + to add receipts, proofs or documents.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(items) { a in row(a) }
             }
@@ -259,9 +264,10 @@ struct TaskAttachmentsCard: View {
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         .task { await load() }
         .sheet(isPresented: $showImporter) {
-            DocumentPicker(types: [.item], multiple: false) { urls in
-                let result: Result<[URL], Error> = .success(urls)
-                if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
+            // Several files in one pick, uploaded one after another (bughunt C-BUG-31).
+            DocumentPicker(types: [.item], multiple: true) { urls in
+                guard !urls.isEmpty else { return }
+                Task { for url in urls { await upload(url) } }
             }
             .ignoresSafeArea()
         }
@@ -350,7 +356,17 @@ struct TaskAttachmentsCard: View {
             Image(systemName: kind?.glyph ?? "doc.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
                 .frame(width: 32, height: 32).background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(a.name ?? "file").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(a.name ?? "file").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    // A proof from an older app or the old Payout proof section keeps a small tag so
+                    // finance can tell it apart (web, 12 Oct 2026).
+                    if a.isPayoutProof {
+                        Text(T("Payout proof")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.success)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(NX.success.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .fixedSize()
+                    }
+                }
                 Text(sub(a)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer()
@@ -499,131 +515,8 @@ struct TaskAttachmentsCard: View {
     }
 }
 
-// MARK: - Dependencies (blocked-by + blocking)
-
-struct TaskDependenciesCard: View {
-    let taskId: String
-    let projectId: String?
-    /// Hands the hop back to TaskDetailView, which owns the stack's destination binding — one
-    /// push target for parent, subtasks and dependencies alike.
-    let onOpen: (String) -> Void
-    @State private var blockedBy: [TaskDependency] = []   // this task depends on these (removable)
-    @State private var blocking: [TaskDependency] = []    // these depend on this task (read-only)
-    @State private var loading = true
-    @State private var showPicker = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                taskCardHeader("Dependencies", "arrow.triangle.branch")
-                Spacer()
-                if projectId != nil {
-                    Button { showPicker = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText) }
-                }
-            }
-            if loading {
-                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
-            } else if blockedBy.isEmpty && blocking.isEmpty {
-                Text(T("No dependencies yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            } else {
-                if !blockedBy.isEmpty {
-                    group("BLOCKED BY", blockedBy.compactMap { d in d.dependsOnTask.map { ($0, d.id) } }, removable: true)
-                }
-                if !blocking.isEmpty {
-                    group("BLOCKING", blocking.compactMap { d in d.task.map { ($0, d.id) } }, removable: false)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
-        .task { await load() }
-        .sheet(isPresented: $showPicker) {
-            if let pid = projectId {
-                DependencyPicker(projectId: pid, excludeId: taskId, existing: Set(blockedBy.compactMap { $0.dependsOnTask?.id })) { pickedId in
-                    try? await APIClient.shared.addDependency(taskId: taskId, dependsOnTaskId: pickedId)
-                    await load()
-                }
-            }
-        }
-    }
-
-    private func group(_ label: String, _ rows: [(TaskDependency.TaskRef, String)], removable: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-            ForEach(rows, id: \.1) { ref, depId in
-                HStack(spacing: 10) {
-                    Button { onOpen(ref.id) } label: {
-                        HStack(spacing: 10) {
-                            Circle().fill((ref.status ?? "").uppercased() == "DONE" ? NX.success : NX.mutedFg.opacity(0.4)).frame(width: 8, height: 8)
-                            Text(ref.title).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    if removable {
-                        Button { Task { try? await APIClient.shared.removeDependency(taskId: taskId, id: depId); await load() } } label: {
-                            Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg.opacity(0.6))
-                        }.buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-        }
-    }
-
-    private func load() async {
-        let r = try? await APIClient.shared.taskDependencies(taskId)
-        blockedBy = r?.dependencies ?? []
-        blocking = r?.dependedOnBy ?? []
-        loading = false
-    }
-}
-
-// MARK: - Time tracking
-
-struct TaskTimeCard: View {
-    let taskId: String
-    @State private var entries: [TimeEntry] = []
-    @State private var loading = true
-    @State private var minutes = ""
-    @State private var busy = false
-    private var total: Int { entries.reduce(0) { $0 + ($1.duration ?? 0) } }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            taskCardHeader(total > 0 ? "Time tracked · \(fmtDur(total))" : "Time tracked", "clock")
-            HStack(spacing: 8) {
-                TextField("Menit", text: $minutes).keyboardType(.numberPad).font(NXFont.text(14)).padding(10)
-                    .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).frame(width: 110)
-                Button { Task { await log() } } label: {
-                    HStack(spacing: 4) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text("Log time") }
-                        .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).padding(.vertical, 9).background(NX.violet, in: Capsule())
-                }.buttonStyle(.plain).disabled(busy || (Int(minutes) ?? 0) <= 0)
-                Spacer()
-            }
-            if !loading && !entries.isEmpty {
-                ForEach(entries.prefix(6)) { e in
-                    HStack(spacing: 8) {
-                        Text("\(e.duration ?? 0)m").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
-                        Text(e.description ?? e.user?.name ?? "").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                        Spacer()
-                        Text(ProjDate.parse(e.startTime).map { ProjDate.dayLabel($0) } ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard().task { await load() }
-    }
-    private func fmtDur(_ m: Int) -> String { m >= 60 ? "\(m / 60)j \(m % 60)m" : "\(m)m" }
-    private func log() async {
-        let m = Int(minutes) ?? 0; guard m > 0 else { return }
-        busy = true; defer { busy = false }; minutes = ""
-        try? await APIClient.shared.logTime(taskId: taskId, duration: m)
-        await load()
-    }
-    private func load() async { entries = (try? await APIClient.shared.timeEntries(taskId)) ?? []; loading = false }
-}
+// Dependencies ("Blocked by") and Time tracked were removed from the task (owner, 12 Oct 2026), as on
+// the web. The server keeps the data and its endpoints for the released apps.
 
 // MARK: - Activity (read-only; comes with the task)
 
@@ -632,64 +525,18 @@ struct TaskActivityCard: View {
     var body: some View {
         if !logs.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                taskCardHeader("Activity", "waveform.path.ecg")
+                taskCardHeader(T("Activity"), "waveform.path.ecg")
                 ForEach(logs.prefix(12)) { a in
                     HStack(alignment: .top, spacing: 8) {
                         Text(SystemUsers.name(a.user?.name, avatar: a.user?.avatar, fallback: "Someone")).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
-                        Text(humanizeEnum(a.action ?? "") + (a.details.map { " — \($0)" } ?? "")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        // In the app's language, without the action repeated before it (web activityText).
+                        Text(ServerText.activity(a.details, fallback: humanizeEnum(a.action ?? ""))).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                         Spacer(minLength: 6)
                         Text(ProjDate.parse(a.createdAt).map { ProjDate.dayLabel($0) } ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.8))
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
-        }
-    }
-}
-
-/// Pick a task in the same project to depend on.
-struct DependencyPicker: View {
-    let projectId: String
-    let excludeId: String
-    let existing: Set<String>
-    let onPick: (String) async -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var tasks: [BoardTask] = []
-    @State private var loading = true
-    @State private var query = ""
-
-    private var filtered: [BoardTask] {
-        tasks.filter { $0.id != excludeId && !existing.contains($0.id) && (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) }
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                if loading { ProgressView().tint(NX.violetText) }
-                else {
-                    List {
-                        ForEach(filtered) { t in
-                            Button { Task { await onPick(t.id); dismiss() } } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle").foregroundStyle(t.isDone ? NX.success : NX.mutedFg.opacity(0.5))
-                                    Text(t.title).font(NXFont.text(15)).foregroundStyle(NX.foreground).lineLimit(2)
-                                }
-                            }.buttonStyle(.plain)
-                        }
-                        if filtered.isEmpty { Text(T("No other tasks.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
-                    }
-                    .scrollContentBackground(.hidden)
-                    .searchable(text: $query, prompt: T("Search tasks…"))
-                }
-            }
-            .navigationTitle(T("Add dependency"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
-            .task {
-                tasks = (try? await APIClient.shared.project(projectId).taskLists?.flatMap { $0.tasks ?? [] }) ?? []
-                loading = false
-            }
         }
     }
 }

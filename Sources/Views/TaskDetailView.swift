@@ -28,15 +28,20 @@ struct TaskDetailView: View {
     /// An action the server refused. Separate from `error` (which replaces the whole screen while
     /// the task itself cannot load): a comment that failed to post must not blank the task.
     @State private var actionError: String?
+    /// The project's status options (= its sections, Notion logic, 12 Oct 2026). Empty until loaded, and
+    /// for a project whose sections have no status: then the five plain statuses are offered.
+    @State private var options: [ProjectDetail.Lane] = []
+    /// One write of each kind at a time (bughunt double-submit family: a double tap posted twice).
+    @State private var postingComment = false
+    @State private var addingSubtask = false
+    /// Bumped when the task changed elsewhere, so the fields card re-reads its values.
+    @State private var fieldsRefresh = 0
+    @FocusState private var titleFocused: Bool
+    @FocusState private var descFocused: Bool
 
-    private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
-    private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
-    private func statusLabel(_ s: String?) -> String {
-        switch (s ?? "TODO").uppercased() {
-        case "IN_PROGRESS": return "In Progress"; case "IN_REVIEW": return "In Review"
-        case "DONE": return "Done"; case "CANCELLED": return "Cancelled"; default: return "To Do"
-        }
-    }
+    private let statuses = TaskStatusName.all
+    private let priorities = TaskPriorityName.all
+    private func statusLabel(_ s: String?) -> String { TaskStatusName.label((s ?? "TODO").uppercased()) }
 
     var body: some View {
         ZStack {
@@ -50,12 +55,12 @@ struct TaskDetailView: View {
                         header(task)
                         questBanner(task)
                         metaRow(task)
-                        if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil) }
+                        if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id, creatorLeft: task.creator?.deactivatedAt != nil, refreshToken: fieldsRefresh) }
                         descriptionCard(task)
                         subtasksCard(task)
+                        // Payout proofs are ordinary attachments since 12 Oct 2026 (owner); Blocked by and
+                        // Time tracked are gone from the task, as on the web.
                         TaskAttachmentsCard(taskId: task.id)
-                        TaskDependenciesCard(taskId: task.id, projectId: task.projectId) { openTaskId = $0 }
-                        TaskTimeCard(taskId: task.id)
                         commentsCard(task)
                         TaskActivityCard(logs: task.activityLogs ?? [])
                     }
@@ -86,6 +91,9 @@ struct TaskDetailView: View {
             if let task { QuestComposerSheet(taskId: task.id, taskTitle: task.title) { await load() } }
         }
         .task { await load() }
+        // Closing the task saves what was typed (bughunt C-BUG-1 / Notion): the title and the
+        // description, when they differ from what the server has.
+        .onDisappear { flushEdits() }
         // Live (owner, 8 Oct 2026): a comment, a status or assignee change, a new subtask made on
         // another device shows here without a reload. Task events go only to the project's room, so
         // the screen holds it once the task has said which project it lives in.
@@ -150,28 +158,34 @@ struct TaskDetailView: View {
                 }
                 .buttonStyle(.plain)
             }
-            // editable title (commits on submit / when focus leaves)
+            // Editable title: saved on Return, when focus leaves it and when the task closes. A vertical
+            // TextField turns Return into a newline (bughunt C-BUG-25), so a newline ends the edit instead.
             TextField(T("Task title"), text: $editTitle, axis: .vertical)
                 .font(NXFont.display(26, .bold)).foregroundStyle(NX.foreground)
+                .focused($titleFocused)
+                .submitLabel(.done)
                 .onSubmit { commitTitle(t) }
+                .onChange(of: editTitle) { _, v in
+                    if v.contains("\n") {
+                        editTitle = v.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+                        titleFocused = false
+                    }
+                }
+                .onChange(of: titleFocused) { _, focused in if !focused { commitTitle(t) } }
 
             // controls: status menu · priority menu · due
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    Menu {
-                        ForEach(statuses, id: \.self) { s in
-                            Button(statusLabel(s)) { Task { await update(t, ["status": s]) } }
-                        }
-                    } label: { controlChip(statusLabel(t.status), system: "circle.dashed", tone: t.isDone ? .success : .info) }
+                    statusControl(t)
 
                     Menu {
                         ForEach(priorities, id: \.self) { p in
-                            Button(p.capitalized) { Task { await update(t, ["priority": p]) } }
+                            Button(TaskPriorityName.label(p)) { Task { await update(t, ["priority": p]) } }
                         }
-                    } label: { controlChip((t.priority ?? "NONE").capitalized, system: "flag.fill", tone: prioTone(t.priority ?? "NONE")) }
+                    } label: { controlChip(TaskPriorityName.label(t.priority), system: "flag.fill", tone: prioTone(t.priority ?? "NONE")) }
 
                     Button { startValue = parsedDue(t.startDate); showStartPicker = true } label: {
-                        controlChip(t.startDate == nil ? "Start —" : "Start \(dueText(t.startDate))", system: "calendar.badge.clock", tone: .neutral)
+                        controlChip(t.startDate == nil ? T("Start date") : String(format: T("Starts %@"), dueText(t.startDate)), system: "calendar.badge.clock", tone: .neutral)
                     }.buttonStyle(.plain)
 
                     Button { dueValue = parsedDue(t.dueDate); showDuePicker = true } label: {
@@ -181,10 +195,10 @@ struct TaskDetailView: View {
             }
         }
         .sheet(isPresented: $showDuePicker) {
-            datePickerSheet("Due date", $dueValue, onSave: { await update(t, ["dueDate": isoDay(dueValue)]) }, onClear: { await update(t, ["dueDate": NSNull()]) }, close: { showDuePicker = false })
+            datePickerSheet(T("Due date"), $dueValue, onSave: { await update(t, ["dueDate": isoDay(dueValue)]) }, onClear: { await update(t, ["dueDate": NSNull()]) }, close: { showDuePicker = false })
         }
         .sheet(isPresented: $showStartPicker) {
-            datePickerSheet("Start date", $startValue, onSave: { await update(t, ["startDate": isoDay(startValue)]) }, onClear: { await update(t, ["startDate": NSNull()]) }, close: { showStartPicker = false })
+            datePickerSheet(T("Start date"), $startValue, onSave: { await update(t, ["startDate": isoDay(startValue)]) }, onClear: { await update(t, ["startDate": NSNull()]) }, close: { showStartPicker = false })
         }
     }
 
@@ -194,10 +208,48 @@ struct TaskDetailView: View {
                 .datePickerStyle(.graphical).padding()
                 .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) { Button(T("Delete")) { Task { await onClear(); close() } } }
+                    ToolbarItem(placement: .topBarLeading) { Button(T("Clear")) { Task { await onClear(); close() } } }
                     ToolbarItem(placement: .topBarTrailing) { Button(T("Save")) { Task { await onSave(); close() } }.bold() }
                 }
         }.presentationDetents([.medium])
+    }
+
+    /// Status: the project's options grouped To-do / In progress / Complete, the current one as a coloured
+    /// pill (web StatusPicker). Picking an option moves the task to that column and the server gives it the
+    /// column's status. A project without status options gets the five plain statuses, as before.
+    @ViewBuilder private func statusControl(_ t: TaskDetail) -> some View {
+        if StatusOptions.inUse(options) {
+            let current = options.first { $0.id == t.taskListId }
+            Menu {
+                ForEach(StatusGroup.allCases) { g in
+                    let inGroup = options.filter { $0.group == g }
+                    if !inGroup.isEmpty {
+                        Section(g.label) {
+                            ForEach(inGroup) { o in
+                                Button { Task { await update(t, ["taskListId": o.id]) } } label: {
+                                    if o.id == t.taskListId { Label(o.name, systemImage: "checkmark") } else { Text(o.name) }
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    StatusPill(name: current?.name ?? statusLabel(t.status),
+                               colorKey: current?.colorKey ?? (StatusColor.forStatus[(t.status ?? "TODO").uppercased()] ?? "gray"))
+                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel(T("Status"))
+        } else {
+            Menu {
+                ForEach(statuses, id: \.self) { s in
+                    Button(statusLabel(s)) { Task { await update(t, ["status": s]) } }
+                }
+            } label: { controlChip(statusLabel(t.status), system: "circle.dashed", tone: t.isDone ? .success : .info) }
+        }
     }
 
     private func controlChip(_ text: String, system: String, tone: ChipTone) -> some View {
@@ -216,7 +268,7 @@ struct TaskDetailView: View {
                 Button { showAssignee = true } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 4) {
-                            Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                            Text(T("Assignees")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
                             Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
                         }
                         if let people = t.assignees?.compactMap({ $0.user }).filter({ $0.name != nil }), !people.isEmpty {
@@ -234,7 +286,7 @@ struct TaskDetailView: View {
                     }
                 }.buttonStyle(.plain)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("DUE").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                    Text(T("Due date")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
                     Text(dueText(t.dueDate)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 }
                 Spacer()
@@ -295,9 +347,10 @@ struct TaskDetailView: View {
     private func descriptionCard(_ t: TaskDetail) -> some View {
         let dirty = descDraft != descOriginal
         return VStack(alignment: .leading, spacing: 8) {
-            Text("DESCRIPTION").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            Text(T("Description")).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
             TextField(T("Add a description…"), text: $descDraft, axis: .vertical)
                 .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(2...12)
+                .focused($descFocused)
                 .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             if dirty {
                 HStack {
@@ -318,7 +371,7 @@ struct TaskDetailView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "checklist").foregroundStyle(NX.mutedFg)
-                Text(subs.isEmpty ? "Subtasks" : "Subtasks · \(done)/\(subs.count)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text(subs.isEmpty ? T("Subtasks") : "\(T("Subtasks")) · \(done)/\(subs.count)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             if subs.isEmpty {
                 Text(T("No subtasks yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -333,7 +386,7 @@ struct TaskDetailView: View {
                         // separate button so ticking one off never navigates away.
                         Button { openTaskId = st.id } label: {
                             HStack(spacing: 0) {
-                                Text(st.title ?? "Untitled").font(NXFont.text(14))
+                                Text(st.title ?? T("Untitled")).font(NXFont.text(14))
                                     .foregroundStyle(st.isDone ? NX.mutedFg : NX.foreground)
                                     .strikethrough(st.isDone).lineLimit(2).multilineTextAlignment(.leading)
                                 Spacer(minLength: 0)
@@ -352,7 +405,10 @@ struct TaskDetailView: View {
                 Button { addSubtask(t) } label: {
                     Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 36, height: 36).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }.disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel(T("Add subtask"))
+                .disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty || addingSubtask)
             }
             .padding(.top, 4)
         }
@@ -364,7 +420,7 @@ struct TaskDetailView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(NX.mutedFg)
-                Text("Comments · \(comments.count)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text("\(T("Comments")) · \(comments.count)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             if comments.isEmpty {
                 Text(T("No comments yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -394,9 +450,15 @@ struct TaskDetailView: View {
                     .font(NXFont.text(14)).lineLimit(1...3).onSubmit { addComment(t) }
                     .padding(10).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Button { addComment(t) } label: {
-                    Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 36, height: 36).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }.disabled(newComment.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Group {
+                        if postingComment { ProgressView().tint(.white).scaleEffect(0.7) }
+                        else { Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) }
+                    }
+                    .frame(width: 36, height: 36).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel(T("Send"))
+                .disabled(newComment.trimmingCharacters(in: .whitespaces).isEmpty || postingComment)
             }
             .padding(.top, 4)
         }
@@ -413,6 +475,7 @@ struct TaskDetailView: View {
             editTitle = t.title
             descDraft = blockText(t.description)
             descOriginal = descDraft
+            await loadOptions(t.projectId)
             if !isBod, let role = (try? await APIClient.shared.workspaceInfo())?.role {
                 isBod = role == "BOD" || role == "ONE_ABOVE_ALL"
             }
@@ -440,8 +503,10 @@ struct TaskDetailView: View {
     private func reloadQuietly() async {
         guard task != nil, !loading else { return }
         guard let t = try? await APIClient.shared.taskDetail(taskId) else { return }
-        let titleUntouched = editTitle == (task?.title ?? "")
-        let descriptionUntouched = descDraft == descOriginal
+        // Someone else's rename shows here unless this person is editing the title right now
+        // (bughunt C-BUG-3: the popup kept the old title and wrote it back).
+        let titleUntouched = editTitle == (task?.title ?? "") && !titleFocused
+        let descriptionUntouched = descDraft == descOriginal && !descFocused
         task = t
         if titleUntouched { editTitle = t.title }
         if descriptionUntouched {
@@ -449,13 +514,47 @@ struct TaskDetailView: View {
             descOriginal = descDraft
         }
         cachedFrom = nil
+        fieldsRefresh += 1
+        await loadOptions(t.projectId)
     }
+
+    /// The project's status options for the status picker: the light sections call, else (a viewer, an
+    /// older server) the project payload. Empty = plain statuses.
+    private func loadOptions(_ projectId: String?) async {
+        guard let projectId else { options = []; return }
+        if let rows = try? await APIClient.shared.statusOptions(projectId: projectId) {
+            options = StatusOptions.ordered(rows.map {
+                ProjectDetail.Lane(id: $0.id, name: $0.name, tasks: nil, taskStatus: $0.taskStatus, color: $0.color, position: $0.position)
+            })
+        } else if options.isEmpty, let lanes = try? await APIClient.shared.project(projectId).taskLists {
+            options = StatusOptions.ordered(lanes.map { $0.with(tasks: []) })
+        }
+    }
+
+    /// The title and description as typed, when they differ from what the server has. Runs as the task
+    /// closes, so it does not wait for the answers.
+    private func flushEdits() {
+        guard let t = task else { return }
+        var fields: [String: Any] = [:]
+        let title = editTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty, title != t.title { fields["title"] = title }
+        if descDraft != descOriginal { fields["description"] = descDraft }
+        guard !fields.isEmpty else { return }
+        let id = t.id
+        Task { try? await APIClient.shared.updateTask(id, fields) }
+    }
+    /// One field change. A refusal is said out loud (it used to vanish behind try?) and the screen goes
+    /// back to what the server has.
     private func update(_ t: TaskDetail, _ fields: [String: Any]) async {
-        try? await APIClient.shared.updateTask(t.id, fields); await load()
+        do { try await APIClient.shared.updateTask(t.id, fields) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the change.") }
+        if fields["description"] != nil { descOriginal = descDraft }
+        await reloadQuietly()
     }
     private func commitTitle(_ t: TaskDetail) {
-        let v = editTitle.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty, v != t.title else { return }
+        let v = editTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty else { editTitle = task?.title ?? t.title; return }
+        guard v != (task?.title ?? t.title) else { return }
         Task { await update(t, ["title": v]) }
     }
     private func toggleSub(_ st: TaskDetail.SubDetail) async {
@@ -469,19 +568,33 @@ struct TaskDetailView: View {
         catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the task.") }
     }
     // The draft is cleared AFTER the post succeeds; on failure it is still in the box.
+    // One comment in flight at a time (a double tap posted it twice). The box is cleared only after the
+    // server has it — and only of the text that was sent — so a failed comment is never lost (C-BUG-7).
     private func addComment(_ t: TaskDetail) {
-        let v = newComment.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty else { return }
+        let v = newComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty, !postingComment else { return }
+        postingComment = true
         Task {
-            do { _ = try await APIClient.shared.addComment(taskId: t.id, content: v); newComment = ""; await load() }
+            defer { postingComment = false }
+            do {
+                _ = try await APIClient.shared.addComment(taskId: t.id, content: v)
+                if newComment.trimmingCharacters(in: .whitespacesAndNewlines) == v { newComment = "" }
+                await reloadQuietly()
+            }
             catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post the comment. It's still in the box.") }
         }
     }
     private func addSubtask(_ t: TaskDetail) {
         let v = newSubtask.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty, let pid = t.projectId, let lid = t.taskListId else { return }
+        guard !v.isEmpty, !addingSubtask, let pid = t.projectId, let lid = t.taskListId else { return }
+        addingSubtask = true
         Task {
-            do { _ = try await APIClient.shared.createTask(projectId: pid, taskListId: lid, title: v, parentId: t.id); newSubtask = ""; await load() }
+            defer { addingSubtask = false }
+            do {
+                _ = try await APIClient.shared.createTask(projectId: pid, taskListId: lid, title: v, parentId: t.id)
+                if newSubtask.trimmingCharacters(in: .whitespaces) == v { newSubtask = "" }
+                await reloadQuietly()
+            }
             catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't add the subtask. It's still in the box.") }
         }
     }
@@ -498,11 +611,11 @@ struct TaskDetailView: View {
         switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .danger; case "MEDIUM": return .info; default: return .neutral }
     }
     private func dueText(_ iso: String?) -> String {
-        guard let iso else { return "—" }
+        guard let iso else { return T("No due date") }
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
         guard let d else { return "—" }
-        let f = DateFormatter(); f.dateFormat = "d MMM yyyy"; f.locale = Locale(identifier: "id_ID"); return f.string(from: d)
+        let f = DateFormatter(); f.dateFormat = "d MMM yyyy"; f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB"); return f.string(from: d)
     }
     private func dateText(_ iso: String?) -> String {
         guard let iso else { return "" }
@@ -552,7 +665,7 @@ struct AssigneePicker: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle("Assign ke")
+            .navigationTitle(T("Assignees"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } }
@@ -604,15 +717,15 @@ struct QuestComposerSheet: View {
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
 
-                    SectionLabel("XP reward")
+                    SectionLabel(T("XP reward"))
                     Stepper(value: $xp, in: 1...50) {
-                        HStack { Text("Reward").font(NXFont.text(14)).foregroundStyle(NX.foreground); Spacer(); QuestXPChip(xp: xp) }
+                        HStack { Text(T("Reward")).font(NXFont.text(14)).foregroundStyle(NX.foreground); Spacer(); QuestXPChip(xp: xp) }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
 
-                    Text(T("The quest completes when this task is DONE. XP goes to the assignee, and the quest is visible to every project member. Max 50 XP."))
+                    Text(T("The quest completes when this task is done. XP goes to the assignee, and the quest is visible to every project member. Max 50 XP."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
 
                     if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
