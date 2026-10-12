@@ -113,7 +113,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // Notify only the NEWLY added mentions.
     const myName = session.user.name || "Seseorang"
-    void Promise.all(added.map((u) => notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, postId: id, snippet: text }).catch(() => {})))
+    void Promise.all(added.map((u) => notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, actorId: me, postId: id, snippet: text }).catch(() => {})))
 
     // The viewer's own like, read back: an empty set here turned the heart grey after every edit.
     const liked = await prisma.postLike.findUnique({ where: { postId_userId: { postId: id, userId: me } }, select: { id: true } })

@@ -4,7 +4,7 @@ import { classifyAttendanceDays, type ClassifiedAttendanceDay } from "@/lib/atte
 import { isAutoDeduction } from "@/lib/attendance-absence"
 import { dayOffUsageKey, dayOffUsedByPeriod, effectiveDayOffQuota } from "@/lib/day-off-usage"
 import { addDaysToKey, makeReportWindow, type ReportWindow } from "@/lib/people-reports"
-import { attendanceStartKey } from "@/lib/former-member-days"
+import { attendanceOwedFor } from "@/lib/attendance-score"
 import { describeXpReason, type XpReasonKind } from "@/lib/xp-reason"
 
 /**
@@ -112,18 +112,8 @@ export function recordScore(periodDays: number, allowance: number, counts: Pick<
   return { worked: Math.min(worked, working), working, surplus: Math.max(0, worked - working), totalWorked: worked }
 }
 
-/**
- * Someone who joined during the period owes only the days from their first day (QA S-20, 13 Oct 2026):
- * the period's days are counted from `startKey` (attendanceStartKey: the day after joining, or an earlier
- * first check-in) and the day-off allowance shrinks in proportion. Before, a person who joined on the
- * 12th started the period at "0/26". Pure.
- */
-export function prorateForStart(from: string, to: string, periodDays: number, quota: number, startKey: string | null) {
-  if (!startKey || startKey <= from) return { days: periodDays, allowance: quota, from }
-  if (startKey > to) return { days: 0, allowance: 0, from: startKey }
-  const days = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${startKey}T00:00:00Z`)) / 86_400_000) + 1
-  return { days, allowance: Math.round((quota * days) / periodDays), from: startKey }
-}
+/** Moved to lib/attendance-score.ts (one rule with the crew board); re-exported for old imports. */
+export { prorateForStart } from "@/lib/attendance-score"
 
 export type RecordXpEntry = {
   id: string
@@ -264,7 +254,7 @@ export async function buildMemberRecord(opts: {
   const isSelf = opts.viewerId === userId
   const todayKey = formatAttendanceDateKey()
 
-  const [classified, allowance, usedMap, requests, penaltyRows, xp, joined] = await Promise.all([
+  const [classified, allowance, usedMap, requests, penaltyRows, xp] = await Promise.all([
     classifyAttendanceDays({ workspaceId, userIds: [userId], start: w.fromDate, end: w.toDate }),
     effectiveDayOffQuota(workspaceId, userId, periodKey),
     dayOffUsedByPeriod([{ userId, periodKey }]),
@@ -284,9 +274,6 @@ export async function buildMemberRecord(opts: {
       select: { reason: true, amount: true },
     }),
     buildRecordXp({ workspaceId, userId, window: w, canRemove: opts.canManage && !isSelf }),
-    prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId } }, select: { joinedAt: true, user: { select: { createdAt: true } } } })
-      .then((m) => m ?? prisma.formerMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId } }, select: { joinedAt: true, user: { select: { createdAt: true } } } }))
-      .catch(() => null),
   ])
 
   const days = classified.get(userId) ?? []
@@ -299,9 +286,8 @@ export async function buildMemberRecord(opts: {
   }
 
   const counts = countDays(days)
-  const joinAt = joined?.joinedAt ?? joined?.user?.createdAt ?? null
-  const firstPresent = days.filter((d) => d.dayType === "PRESENT").map((d) => d.dateKey).sort()[0] ?? null
-  const owed = prorateForStart(w.from, w.to, w.days, allowance.quota, joinAt ? attendanceStartKey(formatAttendanceDateKey(joinAt), firstPresent) : null)
+  // The same rule as the crew board's Score column (lib/attendance-score.ts).
+  const owed = (await attendanceOwedFor({ workspaceId, userIds: [userId], from: w.from, to: w.to, periodDays: w.days, quotas: new Map([[userId, allowance.quota]]) })).get(userId)!
   // `days`/`allowance`/`from` are additive: the days the score is out of, when that is not the whole period.
   const score = { ...recordScore(owed.days, owed.allowance, counts), days: owed.days, allowance: owed.allowance, from: owed.from }
   const usedRaw = usedMap.get(dayOffUsageKey(userId, periodKey)) ?? 0

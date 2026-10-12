@@ -176,6 +176,8 @@ export async function createInAppNotification(data: {
   pushThreadId?: string
   /** Absolute picture URL for the expanded notification (apns.ts PushPayload.image). Push only. */
   pushImage?: string | null
+  /** Who caused it (a person), for the sender's avatar on the row (13 Oct 2026). Null = system. */
+  actorId?: string | null
 }) {
   if (await isDeactivatedRecipient(data.userId)) {
     log.info("notification skipped: recipient offboarded", { userId: data.userId, type: data.type })
@@ -209,6 +211,7 @@ export async function createInAppNotification(data: {
       taskId: data.taskId || null,
       projectId: data.projectId || null,
       link: data.link || null,
+      ...(data.actorId ? { actorId: data.actorId } : {}),
     },
   })
 
@@ -465,6 +468,7 @@ export async function notifyTaskAssigned(data: {
 
   // In-app notification
   await createInAppNotification({
+    actorId: data.actorId,
     userId: data.assigneeId,
     type: "task_assigned",
     // The lock screen shows the title and little else; "Task Assigned" said nothing 1,193 times.
@@ -503,6 +507,8 @@ export async function notifyTaskAssigned(data: {
 export async function notifyMention(data: {
   mentionedUserId: string
   mentionedByName: string
+  /** Who did it (for the row's avatar). */
+  actorId?: string | null
   taskId: string
   taskTitle: string
   commentSnippet: string
@@ -520,6 +526,7 @@ export async function notifyMention(data: {
   const prefs = await getUserPrefs(data.mentionedUserId)
 
   await createInAppNotification({
+    actorId: data.actorId,
     userId: data.mentionedUserId,
     type: "comment_mention",
     title: `${data.mentionedByName} mentioned you on: ${data.taskTitle}`,
@@ -617,6 +624,8 @@ export function feedPushBody(text: string, hasPhoto: boolean, max = FEED_BODY_MA
 export async function notifyFeedMention(data: {
   mentionedUserId: string
   mentionedByName: string
+  /** Who did it (for the row's avatar). */
+  actorId?: string | null
   postId: string
   snippet: string
   /** The post's first PostImage id: its photo rides on the push like a new-post push's does. */
@@ -630,6 +639,7 @@ export async function notifyFeedMention(data: {
   const link = `/threads?post=${data.postId}`
 
   await createInAppNotification({
+    actorId: data.actorId,
     userId: data.mentionedUserId,
     type: "feed_mention",
     title: "Mentioned on Threads",
@@ -691,7 +701,7 @@ export async function notifyFeedPost(data: {
   for (let i = 0; i < recipients.length; i += CHUNK) {
     const ids = recipients.slice(i, i + CHUNK)
     const rows = await prisma.notification.createManyAndReturn({
-      data: ids.map((userId) => ({ userId, type: "feed_post", title, message, link })),
+      data: ids.map((userId) => ({ userId, type: "feed_post", title, message, link, actorId: data.authorId })),
     })
     for (const row of rows) emitNotification(row.userId, JSON.parse(JSON.stringify(row)))
 
@@ -744,6 +754,7 @@ export async function notifyFeedLike(data: {
   const dnd = await isUserDnd(data.authorId)
   const prefs = await getUserPrefs(data.authorId)
   await createInAppNotification({
+    actorId: data.likerId,
     userId: data.authorId,
     type: "feed_like",
     title,
@@ -758,6 +769,8 @@ export async function notifyFeedLike(data: {
 export async function notifyFeedComment(data: {
   recipientUserId: string
   commenterName: string
+  /** Who did it (for the row's avatar). */
+  actorId?: string | null
   postId: string
   snippet: string
   reason: "author" | "mention"
@@ -770,6 +783,7 @@ export async function notifyFeedComment(data: {
   const link = `/threads?post=${data.postId}`
 
   await createInAppNotification({
+    actorId: data.actorId,
     userId: data.recipientUserId,
     type: "feed_comment",
     title: data.reason === "author" ? `${data.commenterName} commented on your post` : `${data.commenterName} mentioned you`,
@@ -891,6 +905,8 @@ export async function notifyProjectInvite(data: {
   projectId: string
   projectName: string
   invitedByName: string
+  /** Who did it (for the row's avatar). */
+  actorId?: string | null
   role: string
 }) {
   // Skip if user has DND active
@@ -905,6 +921,7 @@ export async function notifyProjectInvite(data: {
   const prefs = await getUserPrefs(data.userId)
 
   await createInAppNotification({
+    actorId: data.actorId,
     userId: data.userId,
     type: "project_invite",
     title: `${data.invitedByName} invited you to ${data.projectName}`,
@@ -1159,6 +1176,7 @@ export async function notifyTaskCompleted(data: {
     if (dndSet.has(userId)) continue
 
     await createInAppNotification({
+      actorId: data.completedById,
       userId,
       type: "task_completed",
       title: `${data.completedByName} completed: ${data.taskTitle}`,
@@ -1226,6 +1244,7 @@ export async function notifyCommentAdded(data: {
     if (dndSet.has(userId)) continue
 
     await createInAppNotification({
+      actorId: data.commentById,
       userId,
       type: "comment_added",
       title: `${data.commentByName} commented on: ${data.taskTitle}`,
@@ -1336,6 +1355,7 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
     // in-app bell and nowhere else, so an answered ticket looked identical to an ignored one on a
     // phone in a pocket.
     await createInAppNotification({
+      actorId: data.byGideon ? null : data.replierId,
       userId: data.reporterId,
       type: "complaint_reply",
       title: `${replier} membalas tiket kamu`,
@@ -1354,6 +1374,7 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
     await Promise.allSettled(
       bod.map((b) =>
         createInAppNotification({
+          actorId: data.byGideon ? null : data.replierId,
           userId: b.userId,
           type: "complaint_reply",
           title: `${head?.reporter ?? "Pelapor"} membalas tiket`,

@@ -186,6 +186,7 @@ export async function POST(
       notifyMention({
         mentionedUserId: uid,
         mentionedByName: session.user.name || "Someone",
+        actorId: session.user.id,
         taskId: taskIdResolved,
         taskTitle: task.title,
         commentSnippet: content.slice(0, 200),

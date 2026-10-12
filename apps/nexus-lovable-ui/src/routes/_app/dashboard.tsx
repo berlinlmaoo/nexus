@@ -30,6 +30,7 @@ import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
 import { competitionRank } from "@/lib/competition-rank";
 import { useLang } from "@/lib/lang";
+import { Avatar } from "@/components/Avatar";
 import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { chatUnreadTotal } from "@/lib/chat-unread";
 import { isSystemMessage, systemSentence } from "@/lib/chat-system";
@@ -260,7 +261,9 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
                   onClick={() => { if (!n.read) markRead.mutate(n.id); }}
                   className={cn("flex w-full items-start gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", !n.read && "bg-primary/[0.04]")}
                 >
-                  <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Bell className="h-4 w-4" /></span>
+                  {n.actor?.id
+                    ? <Avatar userId={n.actor.id} name={n.actor.name} avatar={n.actor.avatar} size={36} className="mt-0.5 shrink-0" />
+                    : <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Bell className="h-4 w-4" /></span>}
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{notificationTitle(n)}</div>
                     <div className="line-clamp-2 text-xs text-muted-foreground">{notificationMessage(n) || t("New notification")}</div>

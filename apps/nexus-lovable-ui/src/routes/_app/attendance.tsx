@@ -354,7 +354,12 @@ function Attendance() {
   // on the board too) or WFH. Out of the period's WORKING days: its calendar days minus the person's
   // weekly-rest quota (default 4), so a 31-day period has 27 and a 30-day period 26 (owner, 28 Sep 2026).
   const presentCount = (uid: string) => rows.filter((r) => { if (r.user?.id !== uid) return false; const t = recTone(r); return t === "present" || t === "permit" || t === "wfh"; }).length;
-  const workDaysOf = (uid: string) => { const q = dayOffOf(uid)?.quota ?? (rows.find((r) => r.user?.id === uid)?.user as { dayOffQuota?: number } | undefined)?.dayOffQuota ?? 4; return Math.max(0, periodDays.length - q); };
+  // What the Score is out of comes from the server (`owed`, lib/attendance-score.ts on the server — the same
+  // rule as the person record): someone who joined mid-period owes only the days from their start, with a
+  // prorated allowance (QA S-20). Older servers: the whole period minus the quota.
+  const owedOf = (uid: string) => (allMembers.find((m) => m?.id === uid) as { owed?: { days: number; allowance: number; from: string } } | undefined)?.owed;
+  const daysOf = (uid: string) => owedOf(uid)?.days ?? periodDays.length;
+  const workDaysOf = (uid: string) => { const o = owedOf(uid); if (o) return Math.max(0, o.days - o.allowance); const q = dayOffOf(uid)?.quota ?? (rows.find((r) => r.user?.id === uid)?.user as { dayOffQuota?: number } | undefined)?.dayOffQuota ?? 4; return Math.max(0, periodDays.length - q); };
 
   return (
     <div>
@@ -689,7 +694,7 @@ function Attendance() {
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={tr("Days worked (present, permit or WFH) out of this period's working days: {days} days − {quota} day-off quota = {target}", { days: periodDays.length, quota: periodDays.length - workDaysOf(u.id), target: workDaysOf(u.id) })}>{(() => {
+                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={tr("Days worked (present, permit or WFH) out of this period's working days: {days} days − {quota} day-off quota = {target}", { days: daysOf(u.id), quota: daysOf(u.id) - workDaysOf(u.id), target: workDaysOf(u.id) })} data-score-user={u.id}>{(() => {
                       // Capped at the working days, the surplus shown beside it (owner, 28 Sep 2026): a day
                       // cut from the quota for being >120 min late is still a day worked, so someone can
                       // work more days than "period − quota" — 22/22 +3 reads right, 25/22 does not.

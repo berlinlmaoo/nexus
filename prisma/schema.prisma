@@ -1102,6 +1102,9 @@ model Notification {
   read      Boolean  @default(false)
   link      String?
   createdAt DateTime @default(now())
+  /// Who caused it (a person), for the sender avatar on the row. Null = system, or a row from before 13 Oct 2026.
+  /// No foreign key: a deleted person just loses the avatar.
+  actorId   String?
 
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)

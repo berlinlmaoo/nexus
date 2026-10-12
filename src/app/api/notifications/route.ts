@@ -30,7 +30,16 @@ export async function GET(req: NextRequest) {
       take: 50,
     })
     const unreadCount = await prisma.notification.count({ where: { userId: session.user.id, read: false } })
-    return NextResponse.json({ notifications: notifications.map(withoutRetiredLink), unreadCount })
+    // The sender, for the row's avatar (13 Oct 2026). Additive `actor` (null for system rows and rows
+    // written before actorId existed); older clients ignore it.
+    const actorIds = [...new Set(notifications.map((n) => n.actorId).filter((x): x is string => !!x))]
+    const actors = actorIds.length
+      ? new Map((await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, avatar: true } })).map((u) => [u.id, u]))
+      : new Map<string, { id: string; name: string | null; avatar: string | null }>()
+    return NextResponse.json({
+      notifications: notifications.map((n) => ({ ...withoutRetiredLink(n), actor: (n.actorId && actors.get(n.actorId)) || null })),
+      unreadCount,
+    })
   } catch (error) {
     console.error('Error fetching notifications:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

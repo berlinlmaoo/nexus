@@ -67,12 +67,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const notified = new Set<string>()
     if (post.authorId !== me) {
       notified.add(post.authorId)
-      void notifyFeedComment({ recipientUserId: post.authorId, commenterName: myName, postId: id, snippet: text, reason: "author" }).catch(() => {})
+      void notifyFeedComment({ recipientUserId: post.authorId, commenterName: myName, actorId: me, postId: id, snippet: text, reason: "author" }).catch(() => {})
     }
     for (const u of validMentions) {
       if (u.id === me || notified.has(u.id)) continue
       notified.add(u.id)
-      void notifyFeedComment({ recipientUserId: u.id, commenterName: myName, postId: id, snippet: text, reason: "mention" }).catch(() => {})
+      void notifyFeedComment({ recipientUserId: u.id, commenterName: myName, actorId: me, postId: id, snippet: text, reason: "mention" }).catch(() => {})
     }
 
     return NextResponse.json(comment, { status: 201 })

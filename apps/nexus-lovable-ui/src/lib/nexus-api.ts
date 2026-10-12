@@ -1123,6 +1123,8 @@ export type NexusNotification = {
   link?: string | null;
   taskId?: string | null;
   projectId?: string | null;
+  /** Who caused it (servers since 13 Oct 2026); null = system or an older row. */
+  actor?: { id: string; name: string | null; avatar: string | null } | null;
 };
 
 /** Hide notifications that have been READ for more than `maxAgeDays` (default 7);
