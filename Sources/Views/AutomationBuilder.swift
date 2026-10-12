@@ -357,7 +357,8 @@ struct AutomationBuilder: View {
     // MARK: save
 
     private func save() async {
-        guard let trigger, problem == nil else { return }
+        // One save in flight: a double tap on "Turn on" made two identical automations (bughunt A-BUG-1).
+        guard let trigger, problem == nil, !saving else { return }
         saving = true; error = nil; defer { saving = false }
         let rules = conditions.map(\.rule).filter { !$0.field.isEmpty }
         var body: [String: Any] = [

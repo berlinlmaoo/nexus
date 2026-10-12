@@ -322,6 +322,8 @@ struct TaskDuplicateSheet: View {
     }
 
     private func run() async {
+        // A double tap duplicated every task twice (bughunt C-BUG-8).
+        guard !working else { return }
         working = true
         problem = nil
         let day = dueDay

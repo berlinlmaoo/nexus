@@ -776,6 +776,8 @@ struct CreateTaskSheet: View {
     private static func ymdParse(_ s: String) -> Date? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.date(from: s) }
 
     private func create() async {
+        // A second tap before the first answer would make a second task (bughunt double-submit family).
+        guard !busy else { return }
         busy = true; err = nil; defer { busy = false }
         let iso = ISO8601DateFormatter().string(from: ProjDate.cal.startOfDay(for: due))
         do {

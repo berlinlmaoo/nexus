@@ -893,6 +893,8 @@ struct CreateFolderSheet: View {
     }
 
     private func create() async {
+        // A second tap before the first answer made a second project (bughunt N-BUG-1).
+        guard !busy else { return }
         busy = true; err = nil; defer { busy = false }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         do {
@@ -1072,6 +1074,8 @@ struct CreateProjectSheet: View {
     }
 
     private func create() async {
+        // A second tap before the first answer made a second project (bughunt N-BUG-1).
+        guard !busy else { return }
         busy = true; err = nil; defer { busy = false }
         do {
             let trimmed = name.trimmingCharacters(in: .whitespaces)
