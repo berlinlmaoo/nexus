@@ -63,7 +63,9 @@ const rt = { sent: 0, got: 0, missed: [], covered: [], reconnects: 0, downSince:
 const pending = new Map()
 let ws = null
 let connected = false
-function connect() {
+async function connect() {
+  // Like the web/iOS/Android clients: bootstrap the socket server first, then open the websocket.
+  await fetch(BASE + "/api/realtime-init", { headers: { Cookie: cookie }, signal: AbortSignal.timeout(5000) }).catch(() => {})
   const url = BASE.replace(/^http/, "ws") + "/api/socket/?EIO=4&transport=websocket"
   ws = new WebSocket(url, { headers: { Cookie: cookie } })
   ws.onmessage = (ev) => {
@@ -90,11 +92,11 @@ function connect() {
     rt.reconnects++
     rt.downSince ??= Date.now()
     log("realtime connection closed — reconnecting")
-    setTimeout(connect, 300 + Math.random() * 700)
+    setTimeout(() => { void connect() }, 300 + Math.random() * 700)
   }
   ws.onerror = () => {}
 }
-connect()
+await connect()
 const created = await fetch(BASE + "/api/tasks", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ title: "bg-switch-test", taskListId: TASKLIST, projectId: PROJECT }) }).then((r) => r.json())
 const taskId = created.id || created.task?.id
 if (!taskId) { console.log("cannot create test task", JSON.stringify(created).slice(0, 200)); process.exit(2) }

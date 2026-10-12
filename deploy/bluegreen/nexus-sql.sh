@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NEXUS schema SQL under blue-green: ledger + expand/contract guard (deploy/bluegreen/README.md).
 #
-#   nexus-sql.sh dev|prod status                 every prisma/sql file: applied / PENDING / contract
+#   nexus-sql.sh dev|prod|vps status                 every prisma/sql file: applied / PENDING / contract
 #   nexus-sql.sh dev|prod pending                exit 1 if an expand file is not applied (the deploy gate)
 #   nexus-sql.sh dev|prod apply FILE [--contract-ok]
 #   nexus-sql.sh dev|prod record FILE --yes      it was applied by hand: write it in the ledger only
@@ -24,6 +24,9 @@ case "$PROFILE" in
   dev)  PG=nexus-dev-postgres; PGU=nexus_dev; PGD=nexus_dev; REPO="$HOME/nexus-dev"; SLOT_PREFIX=nexus-dev-app- ;;
   prod) PG=nexus-postgres; PGU=nexus_user; PGD=nexus_db; REPO="$HOME/nexus"; SLOT_PREFIX=nexus-app-
         [ -e /var/lib/nexus-fence/tripped ] && { echo "PAGAR AKTIF: NEXUS dilayani VPS — jangan ubah database kantor."; exit 1; } ;;
+  vps)  PG=nexus-standby; PGU=nexus_user; PGD=nexus_db; REPO=/srv/nexus-src; SLOT_PREFIX=nexus-app-
+        [ "$(docker exec nexus-standby psql -U nexus_user -d nexus_db -tAc 'select pg_is_in_recovery()' 2>/dev/null | tr -d '[:space:]')" = f ] \
+          || { [ "${1:-}" = status ] || [ "${1:-}" = check ] || { echo "VPS database is a standby: SQL is applied at the office"; exit 1; }; } ;;
   *) sed -n '2,9p' "$0"; exit 2 ;;
 esac
 HERE="$(cd "$(dirname "$0")" && pwd)"

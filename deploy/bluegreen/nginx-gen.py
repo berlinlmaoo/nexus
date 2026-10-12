@@ -15,12 +15,12 @@ Routing stays IDENTICAL to phaethon.conf; only these things change:
     routing before any user sees it;
   * a RAW listener on --raw-port proxying everything to the live slot (host-side cron/health callers keep
     one stable address whatever the slot: prod 127.0.0.1:3002, dev 127.0.0.1:3102).
-Dev profile additionally applies the dev rewrites (LAN/redirect blocks dropped, dev origin, no HSTS).
+VPS profile drops the LAN 443 block. Dev profile additionally applies the dev rewrites (LAN/redirect blocks dropped, dev origin, no HSTS).
 """
 import argparse, re, sys
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--profile", choices=["dev", "prod"], required=True)
+ap.add_argument("--profile", choices=["dev", "prod", "vps"], required=True)
 ap.add_argument("src"); ap.add_argument("dst")
 ap.add_argument("--dev-host"); ap.add_argument("--dev-port")
 ap.add_argument("--raw-port", type=int, required=True)
@@ -55,6 +55,10 @@ def rebuild(text, fn):
     out.append(text[i:])
     return "".join(out)
 
+if a.profile == "vps":
+    # The VPS standby has no LAN certificate: drop the 443 block (what ~/vps-sync.sh always did).
+    s = rebuild(s, lambda b: "# (LAN 443 block removed on the VPS)\n" if "listen 443" in b else b)
+
 if a.profile == "dev":
     s = rebuild(s, lambda b: "# (prod-only server block removed for dev)\n" if ("listen 443" in b or "return 302" in b) else b)
     s = s.replace('X-Nexus-Origin "proxmox"', 'X-Nexus-Origin "%s"' % (a.origin_tag or "dev"))
@@ -73,7 +77,7 @@ n_root = s.count("root /usr/share/nginx/html;")
 assert n_root >= 1
 s = s.replace("root /usr/share/nginx/html;", "root $nexus_live_root;")
 
-origin = 'add_header X-Nexus-Origin "%s" always;' % ("proxmox" if a.profile == "prod" else (a.origin_tag or "dev"))
+origin = 'add_header X-Nexus-Origin "%s" always;' % ("proxmox" if a.profile in ("prod", "vps") else (a.origin_tag or "dev"))
 ARCHIVE = """
     # Blue-green: a hashed asset that is not in the live build (a tab opened before the last switch asks
     # for its old lazy chunk) comes from the archive of every recent build. 404 only if it is truly gone.

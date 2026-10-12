@@ -96,6 +96,9 @@ bg_wait_served_by() {
 # The switch itself. Caller holds $BG_LOCK and has verified $new healthy.
 bg_switch() {  # new [reason] [old]
   local new="$1" old="${3:-$(bg_other "$1")}"
+  # The Socket.IO server attaches on the first /api/realtime-init; a slot that was (re)started without one
+  # (cold rollback) would leave reconnecting websockets unanswered. Idempotent, so always.
+  docker exec "$(bg_c "$new")" node -e 'fetch("http://127.0.0.1:3000/api/realtime-init").catch(()=>{})' >/dev/null 2>&1
   local t0; t0=$(bg_ms)
   bg_write_upstreams "$new" "$old" || return 1
   printf '%s\n' "$new" > "$BG_STATE/shared/live.tmp" && mv -f "$BG_STATE/shared/live.tmp" "$BG_STATE/shared/live"

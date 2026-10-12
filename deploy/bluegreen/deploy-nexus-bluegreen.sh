@@ -21,8 +21,8 @@
 # /run/secrets/apns.p8, all upload dirs incl. chat, Android dir read-only, realtime-init after the health
 # gate, chown uploads to 1001, .well-known never published by a build, build-cache/image cleanup that keeps
 # prod/beta/blue/green/candidate and every image a container uses, final check from the internet.
-# New: nexus-app:prod is re-tagged to the LIVE image after every switch, so ~/vps-image-sync.sh keeps
-# shipping exactly what the office runs to the VPS standby.
+# New: nexus-app:prod is re-tagged to the LIVE image after every switch, and the VPS warm standby is moved
+# to the SAME version right after the switch (image + SPA staged before it; vps-bluegreen.sh follow on the VPS).
 set -uo pipefail
 
 SELF="$(readlink -f "$0")"
@@ -50,12 +50,39 @@ SMOKE_EMAIL="${NEXUS_SMOKE_EMAIL:-}"      # optional prod smoke account (owner d
 SMOKE_PW_FILE="$HOME/.secrets/nexus-smoke-password"
 DEPLOY_LOCK=/tmp/nexus-prod-deploy.lock
 OVERRIDABLE="NEXUS_ANDROID_CERT_SHA256 NEXUS_ANDROID_MIN_VERSION NEXUS_ANDROID_LATEST_VERSION NEXUS_ANDROID_LATEST_RELEASED_AT NEXUS_ANDROID_STORE_URL NEXUS_FCM_SERVICE_ACCOUNT_JSON"
+# VPS warm standby follows every switch (RUNBOOK.md part C). NEXUS_VPS_FOLLOW=0 skips it (then the skew
+# marker below is written and ~/vps-sync.sh keeps retrying).
+VPS_BG=/srv/nexus-app/bluegreen/bin/vps-bluegreen.sh
+VPS_INCOMING=/srv/nexus-app/web/html/incoming
+SKEW="$HOME/nexus-data/bluegreen/vps-skew"
+TG_ENV="$HOME/.secrets/telegram.env"
 BAGIAN="${1:-semua}"
 
 merah() { printf '\033[31m%s\033[0m\n' "$*"; }
 hijau() { printf '\033[32m%s\033[0m\n' "$*"; }
 red() { merah "$@"; }
 say() { printf '\033[1m== %s\033[0m\n' "$*"; }
+
+tg() { [ -r "$TG_ENV" ] || return 0
+  ( . "$TG_ENV"; curl -s -m 10 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" -d chat_id="$TG_CHAT" --data-urlencode text="$1" ) >/dev/null 2>&1; }
+vps_ok() { [ "${NEXUS_VPS_FOLLOW:-1}" = 1 ] && ssh -o BatchMode=yes -o ConnectTimeout=8 vps "test -x $VPS_BG" 2>/dev/null; }
+# Image + SPA onto the VPS BEFORE the switch (minutes over the WAN), so following afterwards takes seconds.
+vps_stage() {  # image slot
+  local id; id=$(docker image inspect -f '{{.Id}}' "$1") || return 1
+  if ! ssh vps "docker image inspect $id >/dev/null 2>&1"; then
+    docker save "$1" | gzip -1 | ssh vps 'gunzip | docker load' >/dev/null || return 1
+  fi
+  ssh vps "docker tag $id nexus-app:vps-incoming" && rsync -a --delete --timeout=300 "$WEBROOT/$2/" "vps:$VPS_INCOMING/"
+}
+vps_follow() {  # image slot commit   (stage if needed, then the standby switches to the same version)
+  if ! vps_ok; then echo "$(date '+%F %T') $3 VPS unreachable or not migrated" > "$SKEW"; return 1; fi
+  if vps_stage "$1" "$2" && ssh vps "$VPS_BG follow nexus-app:vps-incoming $3"; then
+    rm -f "$SKEW"; echo "   VPS standby now runs $3"; return 0
+  fi
+  echo "$(date '+%F %T') $3 follow failed" > "$SKEW"
+  tg "⚠️ NEXUS standby (VPS) did NOT follow release $3 — office and VPS run different versions until ~/vps-sync.sh retries succeed. A failover now would serve the old version."
+  return 1
+}
 
 bg_lock() { exec 8>"$BG_LOCK"; flock -w 60 8 || { merah "switch lock busy ($BG_LOCK)"; exit 1; }; }
 bg_unlock() { flock -u 8 2>/dev/null; exec 8>&-; }
@@ -68,8 +95,18 @@ load_lib() {
 case "$BAGIAN" in
   status)   load_lib; bg_status; exit 0 ;;
   rollback) load_lib; say "rollback"; bg_lock; bg_rollback; rc=$?; bg_unlock
-            [ $rc = 0 ] && docker tag "$(docker inspect -f '{{.Image}}' "$(bg_c "$(bg_live)")")" "$IMG_REPO:prod"
+            if [ $rc = 0 ]; then
+              L="$(bg_live)"; docker tag "$(docker inspect -f '{{.Image}}' "$(bg_c "$L")")" "$IMG_REPO:prod"
+              # The standby follows the rollback in the background (the rollback itself stays instant).
+              setsid nohup "$SELF" vps-follow </dev/null >> "$BG_STATE/vps-follow.log" 2>&1 9>&- 8>&- &
+              echo "   VPS standby follows in the background (log: $BG_STATE/vps-follow.log)"
+            fi
             exit $rc ;;
+  vps-follow) # make the VPS standby run what the office runs now (after rollback, or retried by vps-sync)
+            load_lib; L="$(bg_live)"; [ -n "$L" ] || exit 1
+            exec 7>/tmp/nexus-vps-follow-office.lock; flock -n 7 || exit 0
+            vps_follow "$(docker inspect -f '{{.Image}}' "$(bg_c "$L")")" "$L" "$(docker inspect -f '{{index .Config.Labels "nexus.bluegreen.commit"}}' "$(bg_c "$L")")"
+            exit $? ;;
   finish)   load_lib; bg_lock; bg_finish "${2:?epoch}" "${3:?slot}"; rc=$?; bg_unlock; exit $rc ;;
   sql)      shift; exec "$BGBIN/nexus-sql.sh" prod "$@" ;;
   semua|backend|frontend|env) ;;
@@ -140,6 +177,16 @@ else
   echo "   SPA dibawa dari html/$LIVE"
 fi
 [ -f "$WEBROOT/$LIVE/.well-known/apple-app-site-association" ] && { [ -f "$WEBROOT/$IDLE/.well-known/apple-app-site-association" ] || { merah "BATAL: AASA hilang di html/$IDLE"; exit 1; }; }
+
+# ============================ VPS: stage in the background ============================
+STAGE_PID=""
+if vps_ok; then
+  ( vps_stage "$IMG_REPO:$IDLE" "$IDLE" ) > "$BG_STATE/vps-stage.log" 2>&1 &
+  STAGE_PID=$!
+  echo "   VPS: image + SPA staging in the background (log $BG_STATE/vps-stage.log)"
+else
+  echo "   VPS: not reachable / not migrated — it will NOT follow this release (skew marker written after the switch)"
+fi
 
 # ============================ SQL gates ============================
 say "database gates (expand/contract)"
@@ -238,6 +285,10 @@ echo "   publik $PUBLIC/api/health -> slot $pub"
 bg_schedule_finish "$SWITCH_EPOCH" "$LIVE"
 hijau "rilis $COMMIT live di $IDLE"
 
+say "VPS standby ikut versi ini"
+[ -n "$STAGE_PID" ] && { wait "$STAGE_PID" || echo "   staging failed — retrying inside follow"; }
+vps_follow "$IMG_REPO:$IDLE" "$IDLE" "$COMMIT" || merah "   VPS TIDAK ikut (lihat $SKEW) — ~/vps-sync.sh mencoba lagi tiap 5 menit"
+
 # ============================ CLEANUP ============================
 say "bersihkan sampah build"
 bg_archive_prune
@@ -257,7 +308,8 @@ df -h / | tail -1
 
 say "checklist"
 echo "   [x] compat harness  [x] APNs key  [x] SQL ledger: tidak ada expand yang tertunda  [x] schema versi baru"
-echo "   [x] smoke via preview  [x] switch + cek publik  [x] nexus-app:prod -> $IDLE (VPS image sync 03:30)"
+echo "   [x] smoke via preview  [x] switch + cek publik  [x] nexus-app:prod -> $IDLE"
+[ -e "$SKEW" ] && echo "   [ ] VPS standby BELUM ikut: $(cat "$SKEW")" || echo "   [x] VPS standby menjalankan $COMMIT"
 "$BGBIN/nexus-sql.sh" prod status | grep -E 'contract|CHANGED' | sed 's/^/   [ ] /' || true
 echo "   rollback instan sampai $(cut -d' ' -f1-2 "$BG_STATE/finish-at" 2>/dev/null || echo '?'):  $SELF rollback"
 
