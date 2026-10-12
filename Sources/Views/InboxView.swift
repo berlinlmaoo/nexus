@@ -252,30 +252,10 @@ struct NotificationFilterBar: View {
 
     var body: some View {
         // "All" plus a single bucket is not a choice — every row is in that bucket either way.
+        // Light underline tabs with counts (web UI sweep, 12 Oct 2026), the app's one filter look.
         if tabs.count > 2 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(tabs) { t in
-                        let on = group == t.group
-                        Button { group = t.group } label: {
-                            HStack(spacing: 5) {
-                                Text(t.group.label).font(NXFont.text(compact ? 11 : 12, .semibold))
-                                Text("\(t.count)").font(NXFont.text(compact ? 9 : 10, .bold))
-                                    .padding(.horizontal, 5).padding(.vertical, 1)
-                                    .background(on ? Color.white.opacity(0.25) : NX.muted, in: Capsule())
-                            }
-                            .foregroundStyle(on ? Color.white : NX.mutedFg)
-                            .padding(.horizontal, compact ? 10 : 13)
-                            .padding(.vertical, compact ? 6 : 7)
-                            .background(on ? NX.violet : NX.card, in: Capsule())
-                            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(t.group.label), \(t.count)")
-                    }
-                }
-                .padding(.vertical, 2)
-            }
+            NXUnderlineTabs(items: tabs.map { NXTabItem(id: $0.group, label: $0.group.label, count: $0.count) },
+                            selection: $group, accessibilityName: T("Notifications"))
         }
     }
 }

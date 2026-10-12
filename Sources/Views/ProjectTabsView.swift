@@ -708,7 +708,7 @@ struct CreateTaskSheet: View {
                                 ForEach(customFields) { f in cfField(f) }
                             }
                             .padding(14)
-                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border, lineWidth: 1))
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {

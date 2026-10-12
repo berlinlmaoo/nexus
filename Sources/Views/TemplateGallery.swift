@@ -157,9 +157,8 @@ struct TemplateGallery: View {
                     Button { category = c } label: {
                         Text(c == "all" ? T("All") : Self.categoryLabel(c))
                             .font(NXFont.text(12, .semibold))
-                            .foregroundStyle(category == c ? Color.white : NX.mutedFg)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(category == c ? NX.violet : NX.muted, in: Capsule())
+                            .nxChoiceChip(on: category == c)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(category == c ? .isSelected : [])
@@ -380,7 +379,7 @@ private struct BlankPreview: View {
                 }
                 .padding(4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3])))
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
             }
         }
     }

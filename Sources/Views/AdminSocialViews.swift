@@ -87,7 +87,7 @@ struct NoticeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(color.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5])))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(color.opacity(0.3), lineWidth: 1))
     }
 }
 
@@ -135,41 +135,41 @@ struct EmptyState: View {
     let icon: String
     let title: String
     var subtitle: String = ""
+    /// Kept for the callers that pass one; the calm style (web UI sweep, 12 Oct 2026) draws the icon muted.
     var tint: Color = NX.violet
     var actionTitle: String? = nil
     var actionIcon: String? = "plus"
     var action: (() -> Void)? = nil
     var compact: Bool = false
 
+    /// The web's calm empty state after the UI sweep: one muted icon in a soft circle, the title, why it
+    /// is empty and where things come from, and the next step as a quiet button. No illustration stack.
     var body: some View {
         VStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.08))
-                    .frame(width: 78, height: 78).rotationEffect(.degrees(-9)).offset(x: -12, y: 6)
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.13))
-                    .frame(width: 78, height: 78).rotationEffect(.degrees(7)).offset(x: 10, y: 3)
-                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(tint.opacity(0.18))
-                    .frame(width: 78, height: 78)
-                Image(systemName: icon).font(.system(size: 30, weight: .semibold)).foregroundStyle(tint)
-            }
-            .padding(.bottom, 8)
-            .accessibilityHidden(true)
-            Text(title).font(NXFont.display(compact ? 15 : 17, .bold)).foregroundStyle(NX.foreground).multilineTextAlignment(.center)
+            Image(systemName: icon)
+                .font(.system(size: compact ? 18 : 22, weight: .regular))
+                .foregroundStyle(NX.mutedFg)
+                .frame(width: compact ? 44 : 56, height: compact ? 44 : 56)
+                .background(NX.muted, in: Circle())
+                .padding(.bottom, 4)
+                .accessibilityHidden(true)
+            Text(title).font(NXFont.text(compact ? 15 : 16, .semibold)).foregroundStyle(NX.foreground).multilineTextAlignment(.center)
             if !subtitle.isEmpty {
                 Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 380)
             }
             if let actionTitle, let action {
-                // A compact pill, not the full-size primary button: the empty state is a hint, and the
-                // page's own header already carries the big button.
                 Button { action() } label: {
                     Group { if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) } }
-                        .font(NXFont.text(13, .bold)).foregroundStyle(Color.white)
-                        .padding(.horizontal, 16).padding(.vertical, 9).background(actionFill, in: Capsule())
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(NX.card, in: Capsule())
+                        .overlay(Capsule().strokeBorder(NX.border))
                         // The pill stays compact; the place a finger can hit is the full 44 pt.
                         .frame(minHeight: 44).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).padding(.top, 6)
+                .buttonStyle(.plain).padding(.top, 4)
+                .hoverEffect(.highlight)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity)

@@ -244,9 +244,8 @@ struct AdminExtraDayOffSection: View {
                         } label: {
                             Text("\(p.periodLabel ?? p.periodKey) · \(periodTag(p.periodKey))")
                                 .font(NXFont.text(12, on ? .bold : .semibold))
-                                .foregroundStyle(on ? Color.white : NX.mutedFg)
                                 .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(on ? NX.violet : NX.muted.opacity(0.6), in: Capsule())
+                                .nxChoiceChip(on: on)
                         }
                         .buttonStyle(.plain)
                     }

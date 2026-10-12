@@ -238,8 +238,21 @@ struct TicketsView: View {
     /// The ticket a notification pointed at (`AppRouter.focus`): opened as soon as the list is in.
     @Environment(AppRouter.self) private var router
     @State private var focusMissing = false
+    @State private var viewer = Viewer.shared
+    /// The BoD lands once on the first queue with something in it (web, owner 12 Oct 2026).
+    @State private var landed = false
 
-    private let filters = ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"]
+    private var isBod: Bool { viewer.isBoD }
+    /// BoD: the queues (Inbox → In review → All). Everyone else: their tickets by status.
+    private var filters: [String] { isBod ? ["OPEN", "IN_REVIEW", "ALL"] : ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"] }
+    private func count(_ f: String) -> Int {
+        switch f {
+        case "ALL": return items.count
+        case "OPEN": return items.filter { $0.statusKey == "OPEN" }.count
+        case "IN_REVIEW": return items.filter { $0.statusKey == "IN_REVIEW" || $0.statusKey == "AWAITING_DECISION" }.count
+        default: return items.filter { $0.statusKey == f }.count
+        }
+    }
 
     /// "All" first, so the ticket is also in the list under the sheet whatever its status now is.
     private func claimFocus() {
@@ -249,7 +262,7 @@ struct TicketsView: View {
     }
     private func filterLabel(_ f: String) -> String {
         switch f {
-        case "OPEN": return T("Open")
+        case "OPEN": return isBod ? T("Inbox") : T("Open")
         case "IN_REVIEW": return T("In review")
         case "RESOLVED": return T("Resolved")
         case "CLOSED": return T("Closed")
@@ -274,7 +287,7 @@ struct TicketsView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .navigationTitle(T("Ticket"))
+        .navigationTitle(T("Tickets"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -305,6 +318,10 @@ struct TicketsView: View {
                         EmptyState(icon: "ticket", title: T("No tickets yet"),
                                    subtitle: T("A ticket is how you raise something with BoD — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, BoD decides, and it stays between you and them."),
                                    actionTitle: T("New ticket"), actionIcon: "square.and.pencil") { showCreate = true }
+                    } else if isBod && filter == "OPEN" {
+                        EmptyState(icon: "tray", title: T("Inbox is clear"),
+                                   subtitle: T("Every new ticket has been picked up. New ones from staff land here first."),
+                                   actionTitle: count("ALL") > 0 ? T("Show all tickets") : nil, actionIcon: nil) { filter = "ALL" }
                     } else {
                         EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("No tickets in this filter"),
                                    subtitle: T("Only tickets with this status are shown here. The rest are still under All."),
@@ -327,23 +344,9 @@ struct TicketsView: View {
     }
 
     private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(filters, id: \.self) { f in
-                    let on = filter == f
-                    Button { filter = f } label: {
-                        Text(filterLabel(f)).font(NXFont.text(12, .semibold))
-                            .foregroundStyle(on ? Color.white : NX.mutedFg)
-                            .padding(.horizontal, 13).padding(.vertical, 7)
-                            .background(on ? NX.violet : NX.card, in: Capsule())
-                            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.vertical, 10)
+        NXUnderlineTabs(items: filters.map { NXTabItem(id: $0, label: filterLabel($0), count: count($0), attention: $0 == "OPEN") },
+                        selection: $filter, accessibilityName: T("Ticket queues"))
+            .padding(.top, 4)
     }
 
     private func row(_ t: Complaint) -> some View {
@@ -428,6 +431,11 @@ struct TicketsView: View {
         do {
             let fetched = try await APIClient.shared.complaints()
             items = Self.decisionsFirst(fetched)
+            await viewer.loadIfNeeded()
+            if isBod && !landed && router.focus == nil {
+                landed = true
+                filter = count("OPEN") > 0 ? "OPEN" : (count("IN_REVIEW") > 0 ? "IN_REVIEW" : "ALL")
+            }
         }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load tickets.") }
@@ -914,7 +922,7 @@ struct AttendanceCorrectionCard: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 11)
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                            .strokeBorder(NX.border, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
@@ -1408,8 +1416,7 @@ struct NewTicketSheet: View {
                     Button { category = key } label: {
                         Text(categoryLabel(key)).font(NXFont.text(13, .semibold))
                             .padding(.horizontal, 14).padding(.vertical, 9)
-                            .foregroundStyle(category == key ? .white : NX.mutedFg)
-                            .background(category == key ? NX.violet : NX.card, in: Capsule())
+                            .nxChoiceChip(on: category == key)
                             .overlay(Capsule().strokeBorder(category == key ? .clear : NX.border))
                     }
                     .buttonStyle(.plain)
@@ -1479,7 +1486,7 @@ struct NewTicketSheet: View {
             .padding(.vertical, 11)
             .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                .strokeBorder(NX.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

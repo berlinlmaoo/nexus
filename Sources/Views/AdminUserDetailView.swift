@@ -263,9 +263,8 @@ struct AdminUserDetailView: View {
                     } label: {
                         Text(orgRoleLabel(r))
                             .font(NXFont.text(12, on ? .bold : .semibold))
-                            .foregroundStyle(on ? Color.white : NX.mutedFg)
                             .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(on ? NX.violet : NX.muted.opacity(0.7), in: Capsule())
+                            .nxChoiceChip(on: on)
                     }
                     .buttonStyle(.plain)
                     .disabled(busy)
@@ -514,7 +513,7 @@ struct AdminUserDetailView: View {
         }
         .foregroundStyle(NX.mutedFg)
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
     }
 
     /// Offboard: rare and heavy, so near the end, and only for those who may. Its sheet hangs off this

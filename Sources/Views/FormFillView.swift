@@ -390,7 +390,7 @@ struct FormFillView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(filled ? NX.violet.opacity(0.5) : NX.border,
-                              style: StrokeStyle(lineWidth: 1, dash: [5]))
+                              lineWidth: 1)
         }
     }
 

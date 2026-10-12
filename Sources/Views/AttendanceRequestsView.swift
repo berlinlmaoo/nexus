@@ -539,10 +539,8 @@ struct AttendanceRequestsCard: View {
                     let on = activeFilter == f
                     Button { filter = f } label: {
                         Text(filterLabel(f)).font(NXFont.text(12, .semibold))
-                            .foregroundStyle(on ? Color.white : NX.mutedFg)
                             .padding(.horizontal, 13).padding(.vertical, 7)
-                            .background(on ? NX.violet : NX.card, in: Capsule())
-                            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+                            .nxChoiceChip(on: on)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1350,8 +1348,7 @@ struct RequestComposerSheet: View {
                                                     Text(reqLabel(t)).font(NXFont.text(13, .semibold))
                                                 }
                                                 .padding(.horizontal, 14).padding(.vertical, 9)
-                                                .foregroundStyle(type == t ? .white : NX.mutedFg)
-                                                .background(type == t ? NX.violet : NX.card, in: Capsule())
+                                                .nxChoiceChip(on: type == t)
                                                 .overlay(Capsule().strokeBorder(type == t ? .clear : NX.border))
                                             }.buttonStyle(.plain)
                                         }
@@ -1478,7 +1475,7 @@ struct RequestComposerSheet: View {
                                         if attach != nil { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
                                     }
                                     .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(attach == nil ? NX.border : NX.violet.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5])))
+                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(attach == nil ? NX.border : NX.violet.opacity(0.5), lineWidth: 1))
                                 }.buttonStyle(.plain)
                             }
                         }

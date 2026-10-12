@@ -1123,7 +1123,7 @@ struct CalendarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, action == nil ? 10 : 2)
         .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, lineWidth: 1))
     }
 
     private func bannerButton(_ action: (String, () -> Void)) -> some View {

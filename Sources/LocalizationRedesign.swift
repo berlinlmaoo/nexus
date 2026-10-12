@@ -276,6 +276,10 @@ extension AppLanguage {
         "Saved as a doc": "Tersimpan sebagai dokumen",
         "GIDEON answer": "Jawaban GIDEON",
         "Open page": "Buka halaman",
+        "Ticket queues": "Antrean tiket",
+        "Inbox is clear": "Kotak masuk bersih",
+        "Every new ticket has been picked up. New ones from staff land here first.": "Semua tiket baru sudah ditangani. Tiket baru dari staff masuk ke sini dulu.",
+        "Show all tickets": "Tampilkan semua tiket",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]

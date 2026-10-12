@@ -552,10 +552,8 @@ struct PipelineTab: View {
                 Text(key.isEmpty ? T("All") : PipelineText.health(key)).font(NXFont.text(12, .semibold))
                 Text("\(count)").font(NXFont.text(11, .semibold)).monospacedDigit().opacity(on ? 0.85 : 0.6)
             }
-            .foregroundStyle(on ? Color.white : NX.mutedFg)
             .padding(.horizontal, 11).frame(height: 30)
-            .background(on ? NX.violetFill : NX.card, in: Capsule())
-            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+            .nxChoiceChip(on: on)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

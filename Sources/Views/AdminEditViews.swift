@@ -154,11 +154,9 @@ struct AdminView: View {
                         } label: {
                             Text(tabs[i].title)
                                 .font(NXFont.text(13, selected ? .bold : .semibold))
-                                .foregroundStyle(selected ? Color.white : NX.mutedFg)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(selected ? NX.violet : NX.muted.opacity(0.6),
-                                            in: Capsule())
+                                .nxChoiceChip(on: selected)
                         }
                         .buttonStyle(.plain)
                         .id(i)
@@ -781,8 +779,7 @@ struct CreateAnnouncementSheet: View {
                                                 Text(d == 0 ? T("Once") : "+\(d) \(T("days"))")
                                                     .font(NXFont.text(13, .semibold))
                                                     .padding(.horizontal, 14).padding(.vertical, 8)
-                                                    .foregroundStyle(repeatDays == d ? .white : NX.mutedFg)
-                                                    .background(repeatDays == d ? NX.violet : NX.card, in: Capsule())
+                                                    .nxChoiceChip(on: repeatDays == d)
                                                     .overlay(Capsule().strokeBorder(repeatDays == d ? .clear : NX.border))
                                             }.buttonStyle(.plain)
                                         }
@@ -834,8 +831,7 @@ struct CreateAnnouncementSheet: View {
                 ForEach([(true, T("Everyone")), (false, T("Selected people"))], id: \.0) { opt in
                     Button { everyone = opt.0 } label: {
                         Text(opt.1).font(NXFont.text(13, .semibold)).padding(.horizontal, 14).padding(.vertical, 8)
-                            .foregroundStyle(everyone == opt.0 ? .white : NX.mutedFg)
-                            .background(everyone == opt.0 ? NX.violet : NX.card, in: Capsule())
+                            .nxChoiceChip(on: everyone == opt.0)
                             .overlay(Capsule().strokeBorder(everyone == opt.0 ? .clear : NX.border))
                     }.buttonStyle(.plain)
                 }

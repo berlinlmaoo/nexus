@@ -121,10 +121,8 @@ struct AdminAuditSection: View {
                         let on = action == f.value
                         Button { action = f.value } label: {
                             Text(T(f.label)).font(NXFont.text(12, .semibold))
-                                .foregroundStyle(on ? Color.white : NX.mutedFg)
                                 .padding(.horizontal, 13).padding(.vertical, 7)
-                                .background(on ? NX.violet : NX.card, in: Capsule())
-                                .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+                                .nxChoiceChip(on: on)
                         }.buttonStyle(.plain)
                     }
                 }

@@ -2331,7 +2331,7 @@ struct RecordActionsSheet: View {
         }
         .padding(12)
         .background(NX.violet.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.violet.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.violet.opacity(0.3), lineWidth: 1))
         // Its own view for the dialog: the sheet's stack already carries the delete confirmation.
         .alert(pendingOverride.map { overrideTitle($0) } ?? "",
                             isPresented: Binding(get: { pendingOverride != nil }, set: { if !$0 { pendingOverride = nil } }), presenting: pendingOverride) { action in

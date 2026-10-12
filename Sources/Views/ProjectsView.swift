@@ -572,7 +572,7 @@ struct UnfiledDropZone: View {
         .background(targeted ? NX.violet.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(targeted ? NX.violet : NX.border, style: StrokeStyle(lineWidth: targeted ? 2 : 1, dash: [5]))
+                .strokeBorder(targeted ? NX.violet : NX.border, lineWidth: targeted ? 2 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .dropDestination(for: String.self) { items, _ in
@@ -823,7 +823,7 @@ struct CreateFolderSheet: View {
                                         }
                                     }
                                     .frame(width: 44, height: 44)
-                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4])))
+                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.4), lineWidth: 1))
                                 }.buttonStyle(.plain)
                                 ForEach(icons, id: \.self) { ic in
                                     Text(ic).font(.system(size: 20)).frame(width: 40, height: 40)
