@@ -1664,21 +1664,18 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDates, can
     if (!src) return;
     const prev = dateOf(src);
     if (prev && dayKey(prev) === dayKey(day)) return; // same day = no write
-    // A dragged chip that is part of the selection takes the whole selection along (C-BUG-5), each task
-    // shifted by the same number of days (an undated one lands on the drop day).
-    const group = bulk.isSelected(src.id) && bulk.selectedIds.length > 1
+    // A dragged chip that is part of the selection takes the whole selection along to the drop day
+    // (C-BUG-5), like a multi-drag onto a Board column.
+    const group = (bulk.isSelected(src.id) && bulk.selectedIds.length > 1
       ? [src, ...tasks.filter((x) => x.id !== src.id && bulk.isSelected(x.id))]
-      : [src];
-    const shift = prev ? Math.round((startOfDay(day).getTime() - startOfDay(prev).getTime()) / DAY_MS) : 0;
+      : [src]).filter((task) => { const d = dateOf(task); return !d || dayKey(d) !== dayKey(day); });
     // Moving a task keeps its CLOCK TIME — these calendars hold timed events ("10:00 PM"), and sending a
     // bare date would silently reset them to midnight. Undated tasks land on the plain date.
     const target = (task: NexusTask) => {
       const d = dateOf(task);
-      if (!d || !prev) return d ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), d.getHours(), d.getMinutes()).toISOString() : ymd(day);
-      const n = new Date(d); n.setDate(n.getDate() + shift);
-      return n.toISOString();
+      return d ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), d.getHours(), d.getMinutes()).toISOString() : ymd(day);
     };
-    onSetDates(group.map((task) => ({ task, iso: target(task) })));
+    if (group.length) onSetDates(group.map((task) => ({ task, iso: target(task) })));
   };
   const startChipDrag = (e: React.DragEvent, task: NexusTask) => {
     setDragTaskId(task.id);
@@ -1911,6 +1908,8 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const dragRef = useRef(drag);
   dragRef.current = drag;
   const [ghost, setGhost] = useState<{ id: string; day: number } | null>(null);
+  // The click that ends a drag must not open the task.
+  const justDragged = useRef(0);
 
   if (taskCount === 0) {
     return <div className="px-4 py-10 md:px-8"><EmptyState icon={GanttChart} tone="muted" title={t("Nothing on the timeline")} message={t("Tasks show here as bars from their start date to their due date.")} /></div>;
@@ -1950,6 +1949,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
   const endBarDrag = (task: NexusTask, win: { start: Date; end: Date }) => {
     const d = dragRef.current;
     setDrag(null);
+    if (d?.moved) justDragged.current = Date.now();
     if (!d || d.id !== task.id || !d.moved || d.days === 0) return;
     const changes: Record<string, string | null> = {};
     const hasStart = !!taskValues(task, cfg.startProp)[0];
@@ -2107,7 +2107,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                           <button
                             data-morph-id={`timeline-taskcard-${task.id}`}
                             {...cp}
-                            onClickCapture={(e) => { if (drag?.moved) { e.preventDefault(); e.stopPropagation(); } }}
+                            onClickCapture={(e) => { if (drag?.moved || Date.now() - justDragged.current < 400) { e.preventDefault(); e.stopPropagation(); } }}
                             onPointerDown={canMove ? (e) => beginBarDrag(e, task, "move") : undefined}
                             onPointerMove={canMove ? moveBarDrag : undefined}
                             onPointerUp={canMove ? () => endBarDrag(task, saved!) : undefined}

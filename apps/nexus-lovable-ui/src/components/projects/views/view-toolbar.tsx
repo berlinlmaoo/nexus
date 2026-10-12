@@ -106,7 +106,7 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
             >
               <tab.icon className="h-3.5 w-3.5 shrink-0" />
               {v && renaming === v.id ? (
-                <RenameInput initial={tab.label} onDone={(name) => { setRenaming(null); if (name !== null && name !== tab.label) onRename(v, name || null); }} />
+                <RenameInput initial={tab.label} onDone={(name) => { setRenaming(null); if (name !== null && name.trim() && name.trim() !== tab.label) onRename(v, name.trim()); }} />
               ) : (
                 <span className={cn("max-w-48 truncate", tab.compact && !active && "sr-only")}>{tab.label}</span>
               )}

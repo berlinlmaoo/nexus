@@ -379,6 +379,8 @@ export function TaskBulkProvider({ projectId, visibleIds, children }: {
   return (
     <Ctx.Provider value={value}>
       {children}
+      {/* Room under the last card while the selection bar floats over the bottom of the page. */}
+      {selecting && <div aria-hidden className="h-24" />}
       <BulkLayer
         menu={menu}
         menuIds={menuIds}
