@@ -10,7 +10,7 @@ import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { checkProjectAccess } from '@/lib/rbac'
 import { notifyCommentAdded, notifyComplaintStatus, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
-import { normalizeCustomFieldNumberInput, normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
+import { normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
 import { FLEXI_WINDOW_END, parseDateOnlyToUtc, resolveEffectiveAttendanceShift } from '@/lib/attendance'
 import {
   findCoveringAttendanceRequests, getOutageRecord, hasAttendanceWaiver, isAutoDeduction, isOutageDay,
@@ -997,15 +997,13 @@ async function resolveCustomFieldUpdates(actor: User, projectId: string, input: 
     const normalizedType = normalizeCustomFieldType(field.type)
     if (!normalizedType) throw new Error(`Unsupported custom field type for ${field.name}: ${field.type}`)
 
+    // NUMBER: "Rp 1,5 jt" / "369.000" / 369000 -> what the field's format stores (Rupiah = digits).
     const options = normalizeCustomFieldOptions(normalizedType, field.options)
-    const rawValue = normalizedType === 'NUMBER'
-      ? normalizeCustomFieldNumberInput(String(request.value ?? ''), options)
-      : request.value
 
     return {
       customFieldId: field.id,
       name: field.name,
-      value: serializeCustomFieldValue(normalizedType, rawValue),
+      value: serializeCustomFieldValue(normalizedType, request.value, undefined, options),
     }
   })
 }

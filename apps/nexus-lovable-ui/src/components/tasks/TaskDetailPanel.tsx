@@ -46,6 +46,7 @@ import {
   type NexusCustomFieldOptions,
   type NexusUser,
 } from "@/lib/nexus-api";
+import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
 import { pushGideonPage } from "@/lib/gideon-ai";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
@@ -1217,18 +1218,7 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
     body = <FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} />;
   } else if (type === "NUMBER" && field.options && typeof field.options === "object" && !Array.isArray(field.options) && (field.options as { format?: string }).format === "currency-idr") {
     // Rupiah-formatted number: show "Rp 9.240.943" (id-ID separators), store the raw digits.
-    body = (
-      <div className="relative">
-        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">Rp</span>
-        <input
-          inputMode="numeric"
-          value={local ? new Intl.NumberFormat("id-ID").format(Number(String(local).replace(/[^\d]/g, "")) || 0) : ""}
-          onChange={(e) => setLocal(e.target.value.replace(/[^\d]/g, ""))}
-          onBlur={() => { if (local !== strVal) onSet(local); }}
-          className={cn(cls, "pl-8")}
-        />
-      </div>
-    );
+    body = <RupiahInput value={local} onChange={setLocal} onBlur={() => { if (local !== strVal) onSet(local); }} className={cls} ariaLabel={field.name} />;
   } else {
     body = (
       <input

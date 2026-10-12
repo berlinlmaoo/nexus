@@ -14,6 +14,7 @@
  */
 import type { NexusCustomField, NexusProjectView, NexusTask } from "./nexus-api";
 import { groupIndex, orderedOptions, usesStatusOptions } from "./status-options.ts";
+import { normalizeNumberFieldValue, numberFieldFormat } from "./custom-field-number.ts";
 
 export type ViewLayout = NexusProjectView["layout"];
 export const VIEW_LAYOUTS: ViewLayout[] = ["board", "list", "table", "calendar", "timeline", "gallery"];
@@ -239,12 +240,17 @@ export function taskValues(task: NexusTask, key: string): string[] {
   if (key.startsWith("cf:")) {
     const raw = cfRaw(task, key.slice(3)).trim();
     if (!raw) return [];
-    const type = ((task.customFieldValues ?? []).find((c) => c.customFieldId === key.slice(3))?.customField?.type ?? "").toUpperCase();
+    const cfv = (task.customFieldValues ?? []).find((c) => c.customFieldId === key.slice(3));
+    const type = (cfv?.customField?.type ?? "").toUpperCase();
     if (type === "MULTI_SELECT" || type === "PEOPLE" || type === "FILE") return parseList(raw);
     if (type === "PLACE") {
       try { const p = JSON.parse(raw) as { label?: string }; return p?.label ? [p.label] : []; } catch { return [raw]; }
     }
-    if (type === "NUMBER") { const n = raw.replace(/[^\d.-]+/g, ""); return n ? [n] : []; }
+    if (type === "NUMBER") {
+      // Rupiah: a legacy "369.000" is Rp 369.000, not 369 (lib/custom-field-number.ts).
+      if (numberFieldFormat(cfv?.customField?.options) === "currency-idr") { const n = normalizeNumberFieldValue(raw, "currency-idr"); return n ? [n] : []; }
+      const n = raw.replace(/[^\d.-]+/g, ""); return n ? [n] : [];
+    }
     return [raw];
   }
   return [];

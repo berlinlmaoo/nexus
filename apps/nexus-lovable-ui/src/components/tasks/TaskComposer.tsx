@@ -10,6 +10,8 @@ import { useEditorCtx } from "@/components/editor/useEditorCtx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { nexusApi, type CreateTaskPayload, type NexusCustomField, type NexusProject } from "@/lib/nexus-api";
 import { useLang } from "@/lib/lang";
+import { numberFieldFormat } from "@/lib/custom-field-number";
+import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
 import { defaultOption, usesStatusOptions } from "@/lib/status-options";
 import { StatusPicker, StatusPill } from "./StatusPicker";
@@ -163,7 +165,8 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
               const set = (v: string | string[]) => setCf((p) => ({ ...p, [f.id]: v }));
               const input = "h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border focus:outline-none";
               let control: React.ReactNode;
-              if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Empty")} />;
+              if (type === "NUMBER" && numberFieldFormat(f.options) === "currency-idr") control = <RupiahInput value={typeof val === "string" ? val : ""} onChange={set} className={input} wrapperClassName="min-w-0 flex-1" placeholder={t("Empty")} ariaLabel={f.name} />;
+              else if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Empty")} />;
               else if (type === "DATE") control = <input type="date" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} />;
               else if ((type === "SELECT" || type === "STATUS" || type === "DROPDOWN") && opts.length) control = (
                 <select value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input}>

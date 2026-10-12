@@ -1,3 +1,5 @@
+import { normalizeNumberFieldValue } from "./custom-field-number"
+
 export const SUPPORTED_CUSTOM_FIELD_TYPES = [
   "TEXT",
   "URL",
@@ -175,13 +177,23 @@ export function getDefaultCustomFieldValue(
   return ""
 }
 
+/**
+ * The text stored in CustomFieldValue.value. Pass the field's `options` for NUMBER fields: a Rupiah
+ * field stores integer digits ("Rp 369.000" / "369.000" -> "369000"), a plain one a JS-readable number
+ * (lib/custom-field-number.ts). Without options a NUMBER is normalised as a plain number.
+ */
 export function serializeCustomFieldValue(
   type: SupportedCustomFieldType,
   value: unknown,
-  taskCreatedAt?: Date | string | null
+  taskCreatedAt?: Date | string | null,
+  options?: unknown
 ): string {
   const fallback = getDefaultCustomFieldValue(type, taskCreatedAt)
   const nextValue = value === undefined ? fallback : value
+
+  if (type === "NUMBER") {
+    return normalizeNumberFieldValue(nextValue, options)
+  }
 
   if (type === "MULTI_SELECT") {
     return JSON.stringify(Array.isArray(nextValue) ? nextValue : [])
@@ -337,7 +349,7 @@ export function normalizeCustomFieldNumberInput(
   const raw = String(value ?? "")
 
   if (getNumberCustomFieldFormat(options) === "currency-idr") {
-    return raw.replace(/\D+/g, "")
+    return normalizeNumberFieldValue(raw, options).replace("-", "")
   }
 
   return raw

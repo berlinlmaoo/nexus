@@ -576,7 +576,7 @@ async function setField(action: Rule, ctx: ActionCtx): Promise<ActionOutcome> {
   }
   if (field.startsWith("cf:")) {
     const fieldId = field.slice(3)
-    const cf = await prisma.customField.findFirst({ where: { id: fieldId, projectId: ctx.row.projectId }, select: { id: true, type: true, name: true } })
+    const cf = await prisma.customField.findFirst({ where: { id: fieldId, projectId: ctx.row.projectId }, select: { id: true, type: true, name: true, options: true } })
     if (!cf) return { message: "Skipped: the field no longer exists in this project", skipped: true }
     const type = normalizeCustomFieldType(cf.type)
     if (!type || type === "CREATED" || type === "FILE") return { message: `Skipped: ${cf.name} cannot be set by an automation`, skipped: true }
@@ -588,7 +588,7 @@ async function setField(action: Rule, ctx: ActionCtx): Promise<ActionOutcome> {
       if (d === "invalid") return { message: `Skipped: "${action.value}" is not a date`, skipped: true }
       raw = d ? d.toISOString().slice(0, 10) : ""
     }
-    const value = serializeCustomFieldValue(type, raw, task?.createdAt)
+    const value = serializeCustomFieldValue(type, raw, task?.createdAt, cf.options)
     await prisma.customFieldValue.upsert({
       where: { customFieldId_taskId: { customFieldId: cf.id, taskId } },
       update: { value },
