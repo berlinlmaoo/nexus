@@ -168,13 +168,24 @@ export function safeAttendanceTimezone(timeZone: string | null | undefined) {
   return timeZone?.trim() || ATTENDANCE_TIMEZONE
 }
 
+// Intl.DateTimeFormat objects are expensive to build (tens to hundreds of µs each) and these helpers run
+// per member × per day in the attendance and report builders — building one per call made Reports → Team take
+// ~1.5–3 s (QA BoD R2 B32). One formatter per (kind, time zone), reused.
+const formatterCache = new Map<string, Intl.DateTimeFormat>()
+function cachedFormatter(kind: string, timeZone: string, make: () => Intl.DateTimeFormat) {
+  const k = `${kind}|${timeZone}`
+  let f = formatterCache.get(k)
+  if (!f) { f = make(); formatterCache.set(k, f) }
+  return f
+}
+
 function getDateParts(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
+  const formatter = cachedFormatter("date", timeZone, () => new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  })
+  }))
 
   const parts = formatter.formatToParts(date)
   const year = parts.find((part) => part.type === "year")?.value ?? "1970"
@@ -190,7 +201,7 @@ function getDateParts(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
 }
 
 function getDateTimeParts(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  const formatter = cachedFormatter("datetime", timeZone, () => new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour12: false,
     year: "numeric",
@@ -199,7 +210,7 @@ function getDateTimeParts(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  })
+  }))
 
   const parts = formatter.formatToParts(date)
   const read = (type: Intl.DateTimeFormatPartTypes, fallback: string) =>
@@ -239,10 +250,10 @@ function formatHmInZone(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
 }
 
 function getWeekdayInTimezone(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
-  const weekday = new Intl.DateTimeFormat("en-US", {
+  const weekday = cachedFormatter("weekday", timeZone, () => new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "short",
-  }).format(date)
+  })).format(date)
 
   const map: Record<string, number> = {
     Mon: 1,
