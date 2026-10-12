@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtDate, fmtTime, nexusApi } from "@/lib/nexus-api";
 import { xpReasonInfo } from "@/lib/xp-reason";
-import { t as tr } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 
 type Sign = "all" | "pos" | "neg";
 type Scope = "period" | "all";
@@ -35,6 +35,7 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
 }
 
 export function XpAuditLog() {
+  const { t: tr } = useLang();
   const [open, setOpen] = useState(false);
   const [sign, setSign] = useState<Sign>("all");
   const [scope, setScope] = useState<Scope>("period");
@@ -78,24 +79,24 @@ export function XpAuditLog() {
               value={sign}
               onChange={setSign}
               options={[
-                { value: "all", label: "All" },
-                { value: "pos", label: "Added (+)" },
-                { value: "neg", label: "Deducted (−)" },
+                { value: "all", label: tr("All") },
+                { value: "pos", label: tr("Added (+)") },
+                { value: "neg", label: tr("Deducted (−)") },
               ]}
             />
             <Segmented<Scope>
               value={scope}
               onChange={setScope}
               options={[
-                { value: "period", label: "This period" },
-                { value: "all", label: "All time" },
+                { value: "period", label: tr("This period") },
+                { value: "all", label: tr("All time") },
               ]}
             />
             <button
               onClick={() => setAdjustOpen(true)}
               className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-bold shadow-soft transition-colors hover:bg-accent"
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Adjust XP
+              <SlidersHorizontal className="h-3.5 w-3.5" /> {tr("Adjust XP")}
             </button>
           </div>
           {adjustOpen && <XpAdjustModal onClose={() => setAdjustOpen(false)} />}
@@ -108,13 +109,13 @@ export function XpAuditLog() {
 
           {log.isError && (
             <div className="px-4 pb-5 pt-1 text-center text-sm text-muted-foreground">
-              Couldn't load the log — needs BoD access or higher.
+              {tr("Couldn't load the log. It needs BoD access or higher.")}
             </div>
           )}
 
           {!log.isLoading && !log.isError && rows.length === 0 && (
             <div className="px-4 pb-6 pt-1 text-center text-sm text-muted-foreground">
-              No XP changes yet {scope === "period" ? "this period" : ""}.
+              {scope === "period" ? tr("No XP changes yet this period.") : tr("No XP changes yet.")}
             </div>
           )}
 
@@ -149,7 +150,7 @@ export function XpAuditLog() {
                 disabled={log.isFetchingNextPage}
                 className="w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
               >
-                {log.isFetchingNextPage ? "Loading…" : "Load more"}
+                {log.isFetchingNextPage ? tr("Loading…") : tr("Load more")}
               </button>
             </div>
           )}
@@ -162,6 +163,7 @@ export function XpAuditLog() {
 /** BoD-only modal: add or reduce a crew member's XP, logged as an admin adjustment. */
 function XpAdjustModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
+  const { t: tr } = useLang();
   const lb = useQuery({ queryKey: ["leaderboard"], queryFn: nexusApi.leaderboard, staleTime: 60_000, retry: 1 });
   const users = useMemo(() => (lb.data?.rows ?? []).slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")), [lb.data]);
 
@@ -201,7 +203,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
             <h2 className="font-display text-lg font-bold tracking-tight">{tr("Adjust XP")}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">{tr("Add or deduct XP by hand. It's recorded in the audit log.")}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={tr("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="space-y-3 p-5">
@@ -212,7 +214,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
               <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2">
                 <Avatar userId={selected.userId} name={selected.name} avatar={selected.avatar} size={28} />
                 <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{selected.name ?? "—"}</div><div className="text-[11px] text-muted-foreground tabular-nums">{selected.totalXp} XP · Lv.{selected.level}</div></div>
-                <button onClick={() => { setUserId(""); setSearch(""); }} className="text-xs font-semibold text-primary hover:underline">Change</button>
+                <button onClick={() => { setUserId(""); setSearch(""); }} className="text-xs font-semibold text-primary hover:underline">{tr("Change")}</button>
               </div>
             ) : (
               <div className="rounded-xl border border-border">
@@ -221,8 +223,8 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
                   <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("Search by name…")} className="w-full bg-transparent py-2 pl-8 pr-3 text-sm outline-none" autoFocus />
                 </div>
                 <div className="max-h-44 overflow-y-auto">
-                  {lb.isLoading && <div className="px-3 py-3 text-center text-xs text-muted-foreground">Loading…</div>}
-                  {!lb.isLoading && filtered.length === 0 && <div className="px-3 py-3 text-center text-xs text-muted-foreground">No matches.</div>}
+                  {lb.isLoading && <div className="px-3 py-3 text-center text-xs text-muted-foreground">{tr("Loading…")}</div>}
+                  {!lb.isLoading && filtered.length === 0 && <div className="px-3 py-3 text-center text-xs text-muted-foreground">{tr("No matches.")}</div>}
                   {filtered.slice(0, 50).map((u) => (
                     <button key={u.userId} onClick={() => setUserId(u.userId)} className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/40">
                       <Avatar userId={u.userId} name={u.name} avatar={u.avatar} size={24} />
@@ -237,32 +239,32 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
 
           {/* add / reduce */}
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Action & amount</label>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Action and amount")}</label>
             <div className="flex gap-2">
               <div className="inline-flex shrink-0 rounded-xl border border-border p-0.5">
-                <button onClick={() => setSign(-1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === -1 ? "bg-rose-500 text-white" : "text-muted-foreground hover:text-foreground")}><Minus className="h-3.5 w-3.5" /> Deduct</button>
-                <button onClick={() => setSign(1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === 1 ? "bg-emerald-500 text-white" : "text-muted-foreground hover:text-foreground")}><Plus className="h-3.5 w-3.5" /> Add</button>
+                <button onClick={() => setSign(-1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === -1 ? "bg-rose-500 text-white" : "text-muted-foreground hover:text-foreground")}><Minus className="h-3.5 w-3.5" /> {tr("Deduct")}</button>
+                <button onClick={() => setSign(1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === 1 ? "bg-emerald-500 text-white" : "text-muted-foreground hover:text-foreground")}><Plus className="h-3.5 w-3.5" /> {tr("Add")}</button>
               </div>
-              <input value={magnitude} onChange={(e) => setMagnitude(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" placeholder="XP amount" className={fieldCls} />
+              <input value={magnitude} onChange={(e) => setMagnitude(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" placeholder={tr("XP amount")} className={fieldCls} />
             </div>
-            {mag > 1000 && <p className="mt-1 text-xs text-destructive">Max ±1000 XP per adjustment.</p>}
+            {mag > 1000 && <p className="mt-1 text-xs text-destructive">{tr("Max ±1000 XP per adjustment.")}</p>}
           </div>
 
           {/* note */}
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Reason <span className="font-normal normal-case text-muted-foreground/70">(optional, shown in the user's popup)</span></label>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="e.g. late to meeting / initiative bonus" className={fieldCls} />
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Reason")} <span className="font-normal normal-case text-muted-foreground/70">{tr("(optional, shown in their pop-up)")}</span></label>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder={tr("e.g. late to a meeting / initiative bonus")} className={fieldCls} />
           </div>
 
           {amount !== 0 && selected && (
             <div className={cn("rounded-xl px-3 py-2 text-sm font-semibold", sign > 0 ? "bg-emerald-500/10 text-emerald-700" : "bg-rose-500/10 text-rose-700")}>
-              {selected.name}: {sign > 0 ? "+" : ""}{amount} XP → now {selected.totalXp + amount} XP
+              {selected.name}: {sign > 0 ? "+" : ""}{amount} XP → {tr("now {n} XP", { n: selected.totalXp + amount })}
             </div>
           )}
-          {adjust.isError && <p className="text-sm text-destructive">{adjust.error instanceof ApiError ? adjust.error.message : "Something went wrong — check your permissions / connection."}</p>}
+          {adjust.isError && <p className="text-sm text-destructive">{adjust.error instanceof ApiError ? adjust.error.message : tr("Something went wrong. Check your access and connection.")}</p>}
 
           <button disabled={!canSubmit || adjust.isPending} onClick={() => adjust.mutate()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] disabled:cursor-default disabled:opacity-50">
-            {adjust.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sign > 0 ? "Add" : "Deduct"} XP
+            {adjust.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sign > 0 ? tr("Add XP") : tr("Deduct XP")}
           </button>
         </div>
       </div>

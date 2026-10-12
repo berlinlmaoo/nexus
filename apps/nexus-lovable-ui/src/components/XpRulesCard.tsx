@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, TrendingDown, TrendingUp, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { t as tr } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 
 const PENALTIES = [
   { xp: "-1 XP/min", rule: "Late check-in", note: "Max 120 min. >120 → docks a day off", auto: true },
@@ -14,13 +14,14 @@ const PENALTIES = [
 // No automatic bonus and no end-of-period tiers: both were retired on the server
 // (src/lib/period-rewards.ts — "XP is now 100% quest-only, assigned by BoD").
 const BONUSES = [
-  { xp: "+30 XP", rule: "Finish a quest from your Head", note: "Head's call", auto: false },
+  { xp: "+30 XP", rule: "Finish a goal from your Head", note: "Head's call", auto: false },
   { xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false },
   { xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false },
 ];
 const TIERS: { range: string; label: string; reward: string; box: string }[] = [];
 
 function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: string; auto: boolean; tone: "red" | "green" }) {
+  const { t: tr } = useLang();
   return (
     <div className="flex items-start gap-3 py-1.5">
       <span className={cn("w-24 shrink-0 text-sm font-black tabular-nums", tone === "red" ? "text-rose-600" : "text-emerald-600")}>{xp}</span>
@@ -34,6 +35,7 @@ function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: s
 }
 
 export function XpRulesCard() {
+  const { t: tr } = useLang();
   const [open, setOpen] = useState(false);
   const reduce = useReducedMotion();
   return (
@@ -69,7 +71,7 @@ export function XpRulesCard() {
           </div>
           <div>
             {TIERS.length > 0 && (
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tier rewards (end of period)</div>
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Tier rewards (end of period)")}</div>
             )}
             <div className="space-y-1.5">
               {TIERS.map((t) => (

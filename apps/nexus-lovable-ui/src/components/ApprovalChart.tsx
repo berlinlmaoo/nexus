@@ -6,6 +6,7 @@ import { toPng } from "html-to-image";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
+import { useLang } from "@/lib/lang";
 
 /**
  * Bagan Approval — siapa menyetujui absensi siapa. Rantai bebas, digambar sebagai bagan organisasi.
@@ -24,6 +25,7 @@ import { Avatar } from "@/components/Avatar";
  */
 export function ApprovalChart() {
   const qc = useQueryClient();
+  const { t, tn } = useLang();
   const chart = useQuery({ queryKey: ["nexus", "approval-chart"], queryFn: nexusApi.approvalChart, retry: false });
   const [picker, setPicker] = useState<ApprovalChartPerson | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -36,9 +38,10 @@ export function ApprovalChart() {
       qc.invalidateQueries({ queryKey: ["nexus", "approval-chart"] });
       qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] });
       const to = v.approverId ? chart.data?.people.find((p) => p.userId === v.approverId)?.name : null;
-      toast.success(to ? `${v.person.name ?? "Orang"} → ${to}` : `${v.person.name ?? "Orang"} dilepas — request-nya ke BoD`);
+      const who = v.person.name ?? t("Someone");
+      toast.success(to ? `${who} → ${to}` : t("{name} removed from the chart. Their requests go to the BoD.", { name: who }));
     },
-    onError: (e: unknown) => toast.error("Gagal memindahkan", { description: e instanceof ApiError ? e.message : "Coba lagi." }),
+    onError: (e: unknown) => toast.error(t("Couldn't move"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const move = (person: ApprovalChartPerson, approverId: string | null) => { setPicker(null); setApprover.mutate({ person, approverId }); };
 
@@ -187,7 +190,7 @@ export function ApprovalChart() {
       a.click();
     } catch (e) {
       console.error(e);
-      toast.error("Gagal membuat PNG", { description: "Coba lagi. Kalau terus gagal, ada foto profil yang tidak bisa dimuat." });
+      toast.error(t("Couldn't create the PNG"), { description: t("Try again. If it keeps failing, a profile photo couldn't be loaded.") });
     } finally {
       setExporting(false);
     }
@@ -201,7 +204,7 @@ export function ApprovalChart() {
   }, [full]);
 
   if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Bagan tidak bisa dimuat — butuh akses BoD.</div>;
+  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("The chart couldn't be loaded — it needs BoD access.")}</div>;
 
   const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
   const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
@@ -247,10 +250,10 @@ export function ApprovalChart() {
 
       {/* Ringkasan — satu baris, tiga angka, tanpa kalimat panjang. */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-card px-4 py-2.5 text-xs shadow-soft">
-        <Stat n={chart.data.stats.withApprover} of={chart.data.stats.total} label="punya atasan" />
-        <Stat n={trees.length} label="pohon" />
-        <Stat n={unplacedCount} label="belum ditaruh" tone={unplacedCount > 0 ? "warn" : "ok"} />
-        <span className="ml-auto text-muted-foreground">Seret kartu ke kartu atasannya, atau klik kartunya.</span>
+        <Stat n={chart.data.stats.withApprover} of={chart.data.stats.total} label={t("have an approver")} />
+        <Stat n={trees.length} label={tn(trees.length, "tree", "trees")} />
+        <Stat n={unplacedCount} label={t("not placed yet")} tone={unplacedCount > 0 ? "warn" : "ok"} />
+        <span className="ml-auto text-muted-foreground">{t("Drag a card onto their approver's card, or click it.")}</span>
       </div>
 
       <div className="rounded-2xl border border-border bg-card shadow-soft" style={{ ["--oc-line" as string]: "#c7cfdb" }}>
@@ -260,18 +263,18 @@ export function ApprovalChart() {
         <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border")}>
           <div className={cn("flex items-center gap-2 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
             <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              {full ? "Bagan Approval" : "Rantai approval"} <span className="normal-case tracking-normal text-muted-foreground/70">· scroll/pinch = zoom · seret area kosong = geser · klik dua kali = pas layar</span>
+              {full ? t("Approval chart") : t("Approval chain")} <span className="normal-case tracking-normal text-muted-foreground/70">{t("· scroll/pinch = zoom · drag empty space = move · double-click = fit to screen")}</span>
             </div>
             <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perkecil"><ZoomOut className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label={t("Zoom out")}><ZoomOut className="h-3.5 w-3.5" /></button>
               <span className="w-10 text-center tabular-nums">{zoomLabel}%</span>
-              <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perbesar"><ZoomIn className="h-3.5 w-3.5" /></button>
-              <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> Pas layar</button>
-              <button type="button" onClick={exportPng} disabled={exporting} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title="Unduh bagan sebagai PNG tajam (2x), apa pun zoom di layar">
+              <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label={t("Zoom in")}><ZoomIn className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> {t("Fit to screen")}</button>
+              <button type="button" onClick={exportPng} disabled={exporting} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title={t("Download the chart as a sharp PNG (2x), whatever the zoom on screen")}>
                 {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PNG
               </button>
               <button type="button" onClick={() => setFull((f) => !f)} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent">
-                {full ? <><Minimize2 className="h-3.5 w-3.5" /> Tutup</> : <><Maximize2 className="h-3.5 w-3.5" /> Layar penuh</>}
+                {full ? <><Minimize2 className="h-3.5 w-3.5" /> {t("Close")}</> : <><Maximize2 className="h-3.5 w-3.5" /> {t("Full screen")}</>}
               </button>
             </div>
           </div>
@@ -289,19 +292,19 @@ export function ApprovalChart() {
                 {trees.map((p) => <TreeNode key={p.userId} p={p} childrenMap={children} cardProps={cardProps} />)}
               </div>
             </div>
-            {trees.length === 0 && <div className="absolute inset-x-0 top-24 text-center text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
+            {trees.length === 0 && <div className="absolute inset-x-0 top-24 text-center text-xs text-muted-foreground">{t("No one is placed under anyone yet.")}</div>}
           </div>
         </section>
 
         {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
         <section {...dropProps(null)} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__none__" ? "bg-rose-50" : "bg-muted/20")}>
           <div className="flex items-baseline justify-between gap-3">
-            <Eyebrow>Belum ditaruh <span className="normal-case tracking-normal text-muted-foreground/70">· {alone.length} orang · request-nya ke semua BoD</span></Eyebrow>
-            {dragged && <span className="text-[11px] font-semibold text-rose-700">Jatuhkan di sini untuk melepas dari bagan</span>}
+            <Eyebrow>{t("Not placed yet")} <span className="normal-case tracking-normal text-muted-foreground/70">· {tn(alone.length, "{n} person", "{n} people")} · {t("their requests go to every BoD")}</span></Eyebrow>
+            {dragged && <span className="text-[11px] font-semibold text-rose-700">{t("Drop here to remove from the chart")}</span>}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {alone.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
-            {alone.length === 0 && <span className="text-xs text-emerald-700">Kosong — semua orang sudah ada di suatu pohon.</span>}
+            {alone.length === 0 && <span className="text-xs text-emerald-700">{t("Empty. Everyone is in a tree.")}</span>}
           </div>
         </section>
       </div>
@@ -332,6 +335,7 @@ const tier = (r: string) => ({ ONE_ABOVE_ALL: 0, BOD: 1, MANAGER: 2, STAFF: 3 }[
  * induknya render — itu yang membuat bagan ini pernah tersendat di setiap gerakan.
  */
 function TreeNode({ p, childrenMap, cardProps }: { p: ApprovalChartPerson; childrenMap: Map<string, ApprovalChartPerson[]>; cardProps: (p: ApprovalChartPerson) => CardProps }) {
+  const { t } = useLang();
   const kids = childrenMap.get(p.userId) ?? [];
   // Hanya STAFF tanpa bawahan yang ditumpuk. Manager/BoD tanpa bawahan dapat kolom sendiri —
   // kalau ikut ditumpuk di atas staff, dia terbaca seperti atasan mereka, padahal bukan.
@@ -349,7 +353,7 @@ function TreeNode({ p, childrenMap, cardProps }: { p: ApprovalChartPerson; child
               {/* Kotak grup, bukan rantai: satu stub dari palang ke kotak, di dalamnya kartu-kartu
                   sejajar. Rel tegak yang menembus kartu (versi lama) terbaca seperti hierarki. */}
               <div className="oc-leaves">
-                <div className="oc-leaves-label">{leaves.length} staff</div>
+                <div className="oc-leaves-label">{t("{n} staff", { n: leaves.length })}</div>
                 {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
               </div>
             </div>
@@ -359,8 +363,14 @@ function TreeNode({ p, childrenMap, cardProps }: { p: ApprovalChartPerson; child
     </div>
   );
 }
-/** "09:00" → "9:00 AM" — ringkas, tanpa detik, tanpa nol depan; kartunya cuma 144px. */
-const to12 = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); if (Number.isNaN(h)) return hhmm; const ap = h >= 12 ? "PM" : "AM"; return `${((h + 11) % 12) + 1}:${String(m ?? 0).padStart(2, "0")} ${ap}`; };
+/** "09:00" → "9:00 AM" — ringkas, tanpa detik, tanpa nol depan; kartunya cuma 144px. Indonesian: "09.00". */
+const to12 = (hhmm: string, locale: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h)) return hhmm;
+  if (locale.startsWith("id")) return `${String(h).padStart(2, "0")}.${String(m ?? 0).padStart(2, "0")}`;
+  const ap = h >= 12 ? "PM" : "AM";
+  return `${((h + 11) % 12) + 1}:${String(m ?? 0).padStart(2, "0")} ${ap}`;
+};
 const label = (p: ApprovalChartPerson) => p.name ?? p.email;
 const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
 
@@ -391,6 +401,7 @@ type CardProps = {
  * ada yang diseret dan kartu ini sah jadi tujuannya.
  */
 function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, compact, wide, onDragStart, onDragEnd, onClick, drop }: CardProps) {
+  const { t, locale } = useLang();
   const senior = p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
   const manager = p.role === "MANAGER";
   const filled = senior || manager;
@@ -403,7 +414,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         onDragEnd={onDragEnd}
         onClick={onClick}
         disabled={busy}
-        title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
+        title={t("Click to pick their approver, or drag onto the approver's card")}
         className={cn(
           "flex cursor-grab items-center gap-2 rounded-lg text-left transition active:cursor-grabbing disabled:opacity-50",
           compact ? "w-[140px] px-2 py-1.5" : "w-[156px] px-2 py-2",
@@ -426,14 +437,14 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
           <span className={cn("mt-0.5 flex items-center gap-1 text-[9.5px] leading-tight tabular-nums", filled ? "opacity-80" : "text-muted-foreground")}>
             {p.flexi
               ? <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-amber-300/25 text-amber-100" : "bg-amber-50 text-amber-700")}><Zap className="h-2.5 w-2.5" /> Flexi</span>
-              : <span>{p.shiftStart && p.shiftEnd ? `${to12(p.shiftStart)}–${to12(p.shiftEnd)}` : "jam kantor"}</span>}
+              : <span>{p.shiftStart && p.shiftEnd ? `${to12(p.shiftStart, locale)}–${to12(p.shiftEnd, locale)}` : t("Office hours")}</span>}
             {p.mobile && <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-sky-300/25 text-sky-100" : "bg-sky-50 text-sky-700")}><Smartphone className="h-2.5 w-2.5" /> Mobile</span>}
           </span>
         </span>
       </button>
       {/* Akar yang bukan BoD: pohonnya sah, tapi puncaknya sendiri masih jatuh ke kelompok BoD. */}
       {rootless && !compact && (
-        <span className="absolute -top-2 right-2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">tanpa atasan</span>
+        <span className="absolute -top-2 right-2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">{t("no approver")}</span>
       )}
     </div>
   );
@@ -442,6 +453,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
 /** Pemilih atasan — semua orang di workspace kecuali dirinya dan keturunannya (itu lingkaran).
  *  Dikelompokkan per peran supaya "cari BoD-nya" tidak perlu mengeja nama. */
 function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPick, onClose }: { person: ApprovalChartPerson; candidates: ApprovalChartPerson[]; reportsOf: (id: string) => number; currentApproverId: string | null; onPick: (approverId: string | null) => void; onClose: () => void }) {
+  const { t } = useLang();
   const [q, setQ] = useState("");
   const rows = candidates.filter((m) => !q.trim() || label(m).toLowerCase().includes(q.toLowerCase()));
   const groups: Array<[string, ApprovalChartPerson[]]> = (["ONE_ABOVE_ALL", "BOD", "MANAGER", "STAFF"] as const)
@@ -451,13 +463,13 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <div className="text-sm font-bold">Atasan untuk {label(person)}</div>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <div className="text-sm font-bold">{t("Approver for {name}", { name: label(person) })}</div>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-3 text-[11px] text-muted-foreground">Request absensinya akan masuk ke orang ini saja. BoD tetap bisa override.</p>
+        <p className="mb-3 text-[11px] text-muted-foreground">{t("Their attendance requests go to this person only. The BoD can still override.")}</p>
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search names…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
         </div>
         <div className="max-h-80 space-y-2 overflow-y-auto">
           {groups.map(([role, list]) => (
@@ -467,16 +479,16 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
                 <button key={m.userId} type="button" onClick={() => onPick(m.userId)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-accent", m.userId === currentApproverId && "bg-primary/10 font-semibold text-primary")}>
                   <Avatar userId={m.userId} name={m.name} avatar={m.avatar} size={24} className="shrink-0 ring-0" />
                   <span className="min-w-0 flex-1 truncate">{label(m)}</span>
-                  {reportsOf(m.userId) > 0 && <span className="shrink-0 text-[11px] text-muted-foreground">{reportsOf(m.userId)} bawahan</span>}
+                  {reportsOf(m.userId) > 0 && <span className="shrink-0 text-[11px] text-muted-foreground">{t("{n} reports", { n: reportsOf(m.userId) })}</span>}
                 </button>
               ))}
             </div>
           ))}
-          {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Nggak ada yang cocok.</div>}
+          {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">{t("Nothing matches.")}</div>}
         </div>
         {currentApproverId && (
           <button type="button" onClick={() => onPick(null)} className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
-            Lepas dari bagan — request-nya ke semua BoD
+            {t("Remove from the chart. Their requests go to every BoD.")}
           </button>
         )}
       </div>

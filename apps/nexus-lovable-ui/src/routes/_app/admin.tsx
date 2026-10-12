@@ -34,6 +34,7 @@ function initialsOf(name?: string | null) {
 function Admin() {
   const qc = useQueryClient();
   const lang = useLang();
+  const { t, tn } = lang;
   const [view, setView] = useState<"users" | "approval" | "org" | "extra-dayoff" | "suspects" | "audit" | "quests" | "announcements" | "gideon" | "app" | "calendar">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
@@ -88,8 +89,8 @@ function Admin() {
       // request mereka sekarang jatuh ke BoD, dan diam di sini berarti BoD menemukannya sendiri
       // lewat notifikasi yang tiba-tiba bertambah.
       if (r.orphaned && r.orphaned.length > 0) {
-        toast.warning(`${r.orphaned.length} orang kehilangan approver`, {
-          description: r.orphaned.map((o) => o.name ?? "?").join(", ") + " — taruh ulang di tab Bagan Approval.",
+        toast.warning(tn(r.orphaned.length, "{n} person lost their approver", "{n} people lost their approver"), {
+          description: t("{names} — place them again in the Approval chart tab.", { names: r.orphaned.map((o) => o.name ?? "?").join(", ") }),
           duration: 12_000,
         });
       }
@@ -149,12 +150,12 @@ function Admin() {
   const addToProject = useMutation({
     mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) => nexusApi.addProjectMember(projectId, userId),
     onSuccess: refreshMemberships,
-    onError: (e: unknown) => toast.error("Gagal menambahkan ke project", { description: e instanceof ApiError ? e.message : "Butuh akses LEAD di project itu." }),
+    onError: (e: unknown) => toast.error(t("Couldn't add them to the project"), { description: e instanceof ApiError ? e.message : t("You need LEAD access in that project.") }),
   });
   const removeFromProject = useMutation({
     mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) => nexusApi.removeProjectMember(projectId, userId),
     onSuccess: refreshMemberships,
-    onError: (e: unknown) => toast.error("Gagal melepas dari project", { description: e instanceof ApiError ? e.message : "Butuh akses LEAD di project itu." }),
+    onError: (e: unknown) => toast.error(t("Couldn't remove them from the project"), { description: e instanceof ApiError ? e.message : t("You need LEAD access in that project.") }),
   });
   const addToTeam = useMutation({
     mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) => nexusApi.addTeamMember(teamId, userId),
@@ -177,12 +178,12 @@ function Admin() {
       qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] });
       qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] });
       qc.invalidateQueries({ queryKey: ["nexus", "approval-chart"] });
-      const moved = r.absorbed?.length ? ` · workspace pribadi "${r.absorbed[0]}" dihapus` : "";
-      toast.success(`${r.member?.name ?? "Akun"} masuk sebagai Staff${moved}`, { description: "Taruh di bawah manager-nya di Bagan Approval." });
-      if (r.kept?.length) toast.warning("Masih punya workspace lain yang tidak kosong", { description: r.kept.join(", ") + " — dibiarkan. Dia bisa mendarat di sana, bukan di sini." });
-      if (r.emailSent === false) toast.warning("Email pemberitahuan tidak terkirim", { description: "Dia sudah masuk workspace, tapi belum tahu. Kabari sendiri." });
+      const moved = r.absorbed?.length ? t(" · personal workspace \"{name}\" deleted", { name: r.absorbed[0] }) : "";
+      toast.success(t("{name} joined as Staff", { name: r.member?.name ?? t("The account") }) + moved, { description: t("Place them under their manager in the Approval chart.") });
+      if (r.kept?.length) toast.warning(t("They still have another workspace that isn't empty"), { description: t("{names} — left as it is. They may land there instead of here.", { names: r.kept.join(", ") }) });
+      if (r.emailSent === false) toast.warning(t("The notification email wasn't sent"), { description: t("They're in the workspace but don't know it yet. Tell them yourself.") });
     },
-    onError: (e: unknown) => toast.error("Gagal memasukkan", { description: e instanceof ApiError ? e.message : "Coba lagi." }),
+    onError: (e: unknown) => toast.error(t("Couldn't add them"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const workspaceName = wsm.data?.workspaceName ?? "Z Networks";
 
@@ -204,20 +205,20 @@ function Admin() {
 
   return (
     <div>
-      <PageHeader title="Control Room" subtitle="Everyone + manage org roles (One Above All › BoD › Manager › Staff)." />
+      <PageHeader title={t("Control Room")} subtitle={t("Everyone in the workspace and their roles.")} />
       <div className="p-4 md:p-8 space-y-5">
         <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
-          <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
-          {canAnnounce && <button onClick={() => setView("approval")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "approval" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GitBranch className="h-3.5 w-3.5" /> Bagan Approval</button>}
-          {canAnnounce && <button onClick={() => setView("org")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "org" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Network className="h-3.5 w-3.5" /> Bagan IP &amp; Divisi</button>}
-          {canAnnounce && <button onClick={() => setView("calendar")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarDays className="h-3.5 w-3.5" /> {lang.t("Calendar")}</button>}
-          {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> Extra day off</button>}
-          {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> Absen Monitor</button>}
-          <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
-          <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
-          {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
+          <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> {t("Users")}</button>
+          {canAnnounce && <button onClick={() => setView("approval")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "approval" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GitBranch className="h-3.5 w-3.5" /> {t("Approval chart")}</button>}
+          {canAnnounce && <button onClick={() => setView("org")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "org" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Network className="h-3.5 w-3.5" /> {t("IP & Division Chart")}</button>}
+          {canAnnounce && <button onClick={() => setView("calendar")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarDays className="h-3.5 w-3.5" /> {t("Calendar")}</button>}
+          {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> {t("Extra day off")}</button>}
+          {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> {t("Attendance monitor")}</button>}
+          <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> {t("Audit log")}</button>
+          <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> {t("Goals")}</button>
+          {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> {t("Announcements")}</button>}
           {canAnnounce && <button onClick={() => setView("gideon")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "gideon" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GideonMark className="h-3.5 w-3.5" /> GIDEON</button>}
-          {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> Aplikasi</button>}
+          {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> {t("App")}</button>}
         </div>
 
         {view === "approval" && canAnnounce && <ApprovalChart />}
@@ -231,12 +232,12 @@ function Admin() {
         {view === "gideon" && canAnnounce && <GideonAdmin />}
         {view === "app" && canAnnounce && <AppInstalls />}
 
-        {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">You need the system-admin role to view user management.</p></div>}
+        {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{t("Admin access required")}</div><p className="mt-2 text-sm text-muted-foreground">{t("You need the system admin role to manage users.")}</p></div>}
 
         {view === "users" && !users.isError && (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <Stat label="Total users" value={totalUsers} active={roleFilter === "ALL"} onClick={() => setRoleFilter("ALL")} />
+              <Stat label={t("Total users")} value={totalUsers} active={roleFilter === "ALL"} onClick={() => setRoleFilter("ALL")} />
               <Stat label="One Above All" value={orgCount("ONE_ABOVE_ALL")} active={roleFilter === "ONE_ABOVE_ALL"} onClick={() => toggleRole("ONE_ABOVE_ALL")} />
               <Stat label="BoD" value={orgCount("BOD")} active={roleFilter === "BOD"} onClick={() => toggleRole("BOD")} />
               <Stat label="Manager" value={orgCount("MANAGER")} active={roleFilter === "MANAGER"} onClick={() => toggleRole("MANAGER")} />
@@ -244,14 +245,14 @@ function Admin() {
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span>Role hierarchy: <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. You can only assign roles below your own level.</span>
-              <Link to="/settings" className="ml-auto font-semibold text-primary hover:underline">Also open in Members →</Link>
+              <span>{t("Role hierarchy:")} <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. {t("You can only give roles below your own level.")}</span>
+              <Link to="/settings" className="ml-auto font-semibold text-primary hover:underline">{t("Also in Settings › Members →")}</Link>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative max-w-sm flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email…" className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
               </div>
               {roleFilter !== "ALL" && (
                 <button onClick={() => setRoleFilter("ALL")} className="inline-flex items-center gap-1.5 rounded-xl border border-primary bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
@@ -261,7 +262,7 @@ function Admin() {
               )}
               {canManageShift && (
                 <button onClick={() => setRedDateOpen(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100">
-                  <CalendarX2 className="h-3.5 w-3.5" /> Holiday Quota
+                  <CalendarX2 className="h-3.5 w-3.5" /> {t("Public holiday quota")}
                 </button>
               )}
             </div>
@@ -271,20 +272,20 @@ function Admin() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-2.5">User</th>
-                    <th className="hidden px-4 py-2.5 md:table-cell">Joined</th>
-                    <th className="px-4 py-2.5">Absensi</th>
-                    <th className="px-4 py-2.5 text-right">Role</th>
+                    <th className="px-4 py-2.5">{t("User")}</th>
+                    <th className="hidden px-4 py-2.5 md:table-cell">{t("Joined")}</th>
+                    <th className="px-4 py-2.5">{t("Work hours")}</th>
+                    <th className="px-4 py-2.5 text-right">{t("Role")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "", deactivated: !!u.deactivatedAt })} canOffboard={canOffboard && !!info && u.id !== me?.id && (isSystemAdmin || canEditTier(viewerRole, info.role))} onOffboard={() => setOffboardTarget(u)} canReinstate={canOffboard && u.id !== me?.id} onReinstate={() => setReinstateTarget(u)} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || t("Unnamed"), email: u.email ?? "", deactivated: !!u.deactivatedAt })} canOffboard={canOffboard && !!info && u.id !== me?.id && (isSystemAdmin || canEditTier(viewerRole, info.role))} onOffboard={() => setOffboardTarget(u)} canReinstate={canOffboard && u.id !== me?.id} onReinstate={() => setReinstateTarget(u)} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
                   })}
                 </tbody>
               </table>
-              {!users.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">No users found.</div>}
+              {!users.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{t("No users found.")}</div>}
             </div>
           </>
         )}
@@ -301,9 +302,9 @@ function Admin() {
               <>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setDivisionsOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-soft transition hover:bg-accent">
-                    <FolderKanban className="h-3.5 w-3.5" /> Kelola divisi
+                    <FolderKanban className="h-3.5 w-3.5" /> {t("Manage divisions")}
                   </button>
-                  <button onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }} className="ml-auto rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-soft transition hover:bg-accent">Tutup</button>
+                  <button onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }} className="ml-auto rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-soft transition hover:bg-accent">{t("Close")}</button>
                 </div>
                 {divisionsOpen && <DivisionManager divisions={divisionsQ.data ?? []} teams={teamsQ.data ?? []} />}
                 <TeamCard
@@ -319,8 +320,8 @@ function Admin() {
               // Tim yang baru saja dihapus dari dalam kartunya sendiri: daftarnya sudah dimuat
               // ulang dan barisnya hilang. Menutup sendiri lebih baik daripada kotak kosong.
               <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-soft">
-                Tim ini sudah tidak ada.
-                <button onClick={() => setTeamSettingsId(null)} className="ml-2 font-semibold text-primary hover:underline">Tutup</button>
+                {t("This team no longer exists.")}
+                <button onClick={() => setTeamSettingsId(null)} className="ml-2 font-semibold text-primary hover:underline">{t("Close")}</button>
               </div>
             )}
           </div>
@@ -329,25 +330,25 @@ function Admin() {
       {teamExit && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setTeamExit(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-soft" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-bold">Keluarkan dari {teamExit.teamName}?</div>
-            <p className="mt-2 text-sm text-muted-foreground"><b className="text-foreground">{teamExit.userName}</b> keluar dari tim ini.</p>
+            <div className="text-lg font-bold">{t("Remove from {team}?", { team: teamExit.teamName })}</div>
+            <p className="mt-2 text-sm text-muted-foreground"><b className="text-foreground">{teamExit.userName}</b> {t("leaves this team.")}</p>
             {teamExit.losing.length > 0 ? (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <div className="text-xs font-bold text-amber-800">Ikut hilang: akses ke {teamExit.losing.length} project</div>
+                <div className="text-xs font-bold text-amber-800">{tn(teamExit.losing.length, "They also lose access to {n} project", "They also lose access to {n} projects")}</div>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {teamExit.losing.map((n) => <span key={n} className="rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">{n}</span>)}
                 </div>
-                <div className="mt-2 text-[11px] text-amber-700">Akses yang ditambahkan langsung ke project tidak ikut terhapus.</div>
+                <div className="mt-2 text-[11px] text-amber-700">{t("Access added directly to a project stays.")}</div>
               </div>
             ) : (
-              <p className="mt-3 text-xs text-muted-foreground">Tim ini tidak menautkan project, jadi tidak ada akses yang hilang.</p>
+              <p className="mt-3 text-xs text-muted-foreground">{t("This team isn't linked to any project, so no access is lost.")}</p>
             )}
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setTeamExit(null)} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+              <button onClick={() => setTeamExit(null)} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">{t("Cancel")}</button>
               <button
                 onClick={() => { removeFromTeam.mutate({ teamId: teamExit.teamId, userId: teamExit.userId }); setTeamExit(null); }}
                 className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-rose-700">
-                Keluarkan
+                {t("Remove from team")}
               </button>
             </div>
           </div>
@@ -361,8 +362,9 @@ function Admin() {
 // so staff can't request tanggal merah until BoD inputs the month's jatah.
 function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
+  const { t, locale } = useLang();
   const monthKey = new Date().toISOString().slice(0, 7);
-  const monthLabel = new Date(`${monthKey}-01T00:00:00`).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  const monthLabel = new Date(`${monthKey}-01T00:00:00`).toLocaleDateString(locale, { month: "long", year: "numeric" });
   const q = useQuery({ queryKey: ["nexus", "red-date-quota", monthKey], queryFn: () => nexusApi.redDateQuota(monthKey), retry: false });
   const [val, setVal] = useState("");
   useEffect(() => { if (q.data) setVal(String(q.data.quota)); }, [q.data]);
@@ -378,23 +380,23 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold tracking-tight">Holiday Quota — {monthLabel}</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-base font-bold tracking-tight">{t("Public holiday quota — {month}", { month: monthLabel })}</h2>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-4 text-xs text-muted-foreground">Per-staff <b className="text-foreground">public holiday</b> quota for this month — applies equally to all staff. Set it each month. Staff request their own via "New request" in Attendance.</p>
+        <p className="mb-4 text-xs text-muted-foreground">{t("Public holiday quota per staff member for this month, the same for everyone. Set it every month. Staff request their own through \"New request\" in Attendance.")}</p>
 
         {q.isLoading ? (
           <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
             <input type="number" inputMode="numeric" min={0} max={31} value={val} onChange={(e) => setVal(e.target.value)} placeholder="0" className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-            <span className="text-xs text-muted-foreground">days / staff this month</span>
+            <span className="text-xs text-muted-foreground">{t("days per staff member this month")}</span>
             <button type="button" disabled={!dirty || m.isPending} onClick={() => m.mutate(n)} className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-              {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+              {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Save")}
             </button>
           </div>
         )}
-        {q.data && q.data.quota === 0 && <p className="mt-2 text-[11px] text-amber-600">Quota is still 0 — staff can't request public holidays this month until it's set.</p>}
+        {q.data && q.data.quota === 0 && <p className="mt-2 text-[11px] text-amber-600">{t("The quota is still 0, so staff can't request public holidays this month until you set it.")}</p>}
       </div>
     </div>
   );
@@ -416,6 +418,7 @@ const WEEKDAYS: Array<[string, string]> = [["1", "Mon"], ["2", "Tue"], ["3", "We
  */
 function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user: NexusAdminUser; accounts: GoogleWorkspaceAccount[]; domains: string[]; configured: boolean; canEdit: boolean }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
@@ -443,7 +446,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] });
       qc.invalidateQueries({ queryKey: ["nexus", "google-workspace-accounts"] });
     },
-    onError: (e: unknown) => setProblem(e instanceof ApiError ? e.message : "Gagal membuat akun"),
+    onError: (e: unknown) => setProblem(e instanceof ApiError ? e.message : t("Couldn't create the account")),
   });
 
   const link = useMutation({
@@ -456,7 +459,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       // akun yang barusan dipakai masih tampak bebas di baris orang lain.
       qc.invalidateQueries({ queryKey: ["nexus", "google-workspace-accounts"] });
     },
-    onError: (e: unknown) => setProblem(e instanceof ApiError ? e.message : "Gagal menautkan"),
+    onError: (e: unknown) => setProblem(e instanceof ApiError ? e.message : t("Couldn't link the account")),
   });
 
   if (!configured) return null;
@@ -466,24 +469,24 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
   if (madePassword) {
     return (
       <span className="inline-flex max-w-[280px] flex-col gap-1 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-[11px] text-emerald-900">
-        <span className="font-semibold">{madePassword.email} dibuat</span>
-        <span>Sandi sementara — salin sekarang, tidak bisa dilihat lagi:</span>
+        <span className="font-semibold">{t("{email} created", { email: madePassword.email })}</span>
+        <span>{t("Temporary password. Copy it now, it can't be shown again:")}</span>
         <code className="select-all rounded bg-white px-1.5 py-1 font-mono text-[11px] tracking-tight">{madePassword.password}</code>
-        <span className="text-emerald-700">Dia wajib menggantinya saat login pertama.</span>
+        <span className="text-emerald-700">{t("They must change it the first time they sign in.")}</span>
         {madePassword.notified?.email ? (
           <span className="text-emerald-700">
-            Sandi sudah dikirim ke {madePassword.notified.emailTo}. Kamu tidak perlu meneruskannya.
+            {t("The password was sent to {email}. You don't need to pass it on.", { email: madePassword.notified.emailTo ?? "" })}
           </span>
         ) : (
           // Kegagalan email HARUS terlihat sekarang, selagi sandinya masih di layar. Ditemukan
           // nanti lewat orang yang bingung kenapa tidak dapat apa-apa berarti sandinya sudah hilang.
           <span className="font-semibold text-destructive">
-            Email GAGAL terkirim — sampaikan sandi ini sendiri, dan jangan lewat chat grup.
+            {t("The email was NOT sent. Give them this password yourself, and not in a group chat.")}
           </span>
         )}
         {problem && <span className="text-destructive">{problem}</span>}
         <button type="button" onClick={() => { setMadePassword(null); setOpen(false); }} className="self-start rounded border border-emerald-300 px-1.5 py-0.5 font-semibold hover:bg-emerald-100">
-          Sudah disalin
+          {t("I've copied it")}
         </button>
       </span>
     );
@@ -501,21 +504,21 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
         {current ? (
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800"><AtSign className="h-3.5 w-3.5" /> {current}</span>
         ) : (
-          <span className="text-sm text-muted-foreground">Belum ditautkan.</span>
+          <span className="text-sm text-muted-foreground">{t("Not linked.")}</span>
         )}
         {canEdit && (
           <>
             <button type="button" onClick={() => { setProblem(null); setQ(""); setOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
-              <Link2 className="h-3.5 w-3.5" /> {current ? "Ganti akun" : "Pilih akun"}
+              <Link2 className="h-3.5 w-3.5" /> {current ? t("Change account") : t("Choose account")}
             </button>
             {!current && domains.length > 0 && (
               <button type="button" onClick={() => { setProblem(null); setMaking(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
-                <Plus className="h-3.5 w-3.5" /> Buat email kantor
+                <Plus className="h-3.5 w-3.5" /> {t("Create work email")}
               </button>
             )}
             {current && (
               <button type="button" disabled={link.isPending} onClick={() => link.mutate(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-50">
-                {link.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />} Lepas
+                {link.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />} {t("Unlink")}
               </button>
             )}
           </>
@@ -529,19 +532,19 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
-              <div className="text-sm font-bold">Akun Google Workspace untuk {user.name || "orang ini"}</div>
-              <button onClick={() => setOpen(false)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+              <div className="text-sm font-bold">{user.name ? t("Google Workspace account for {name}", { name: user.name }) : t("Google Workspace account for this person")}</div>
+              <button onClick={() => setOpen(false)} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
-            <p className="mb-3 text-[11px] text-muted-foreground">Server memastikan alamatnya benar-benar ada di Google sebelum disimpan.</p>
+            <p className="mb-3 text-[11px] text-muted-foreground">{t("The server checks that the address really exists in Google before saving it.")}</p>
             <div className="relative mb-2">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari alamat atau nama…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search address or name…")} className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
             </div>
             <div className="max-h-80 space-y-0.5 overflow-y-auto">
               {current && !accounts.some((a) => a.email === current) && (
                 // Akun yang baru dibuat BELUM tentu ada di daftar: Google menerbitkan user secara
                 // asinkron dan pembacaan tepat setelah insert bisa menjawab 404 (terbukti saat uji).
-                <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-2 py-1.5 text-sm font-semibold text-primary"><AtSign className="h-3.5 w-3.5" /> {current} <span className="text-[11px] font-normal">(baru dibuat)</span></div>
+                <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-2 py-1.5 text-sm font-semibold text-primary"><AtSign className="h-3.5 w-3.5" /> {current} <span className="text-[11px] font-normal">{t("(just created)")}</span></div>
               )}
               {rows.map((a) => {
                 const taken = takenBy(a);
@@ -552,17 +555,17 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
                     <span className="min-w-0 flex-1">
                       <span className={cn("block truncate text-sm font-semibold", isCurrent && "text-primary")}>{a.email}</span>
                       <span className="block truncate text-[11px] text-muted-foreground">
-                        {a.fullName || "—"}{a.suspended && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">suspended</span>}{taken && <span className="ml-1">· dipakai {taken}</span>}
+                        {a.fullName || "—"}{a.suspended && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">{t("suspended")}</span>}{taken && <span className="ml-1">{t("· used by {name}", { name: taken })}</span>}
                       </span>
                     </span>
                     {isCurrent && <span className="text-xs font-bold text-primary">✓</span>}
                   </button>
                 );
               })}
-              {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Nggak ada yang cocok.</div>}
+              {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">{t("Nothing matches.")}</div>}
             </div>
             {problem && <div className="mt-2 text-xs text-destructive">{problem}</div>}
-            {link.isPending && <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menautkan…</div>}
+            {link.isPending && <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("Linking…")}</div>}
           </div>
         </div>
       )}
@@ -573,30 +576,30 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={() => setMaking(false)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
-              <div className="text-sm font-bold">Buat email kantor untuk {user.name || "orang ini"}</div>
-              <button onClick={() => setMaking(false)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+              <div className="text-sm font-bold">{user.name ? t("Create a work email for {name}", { name: user.name }) : t("Create a work email for this person")}</div>
+              <button onClick={() => setMaking(false)} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
-            <p className="mb-3 text-[11px] text-muted-foreground">Akun baru mengisi satu seat lisensi Workspace. Sandi sementaranya cuma bisa dilihat sekali, dan dikirim ke email pribadinya.</p>
+            <p className="mb-3 text-[11px] text-muted-foreground">{t("A new account takes one paid Workspace license seat. Its temporary password is shown only once, and is sent to their personal email.")}</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              <div><div className="mb-1 text-[11px] font-semibold text-muted-foreground">Nama depan</div><input value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputCls} /></div>
-              <div><div className="mb-1 text-[11px] font-semibold text-muted-foreground">Nama belakang</div><input value={familyName} onChange={(e) => setFamilyName(e.target.value)} className={inputCls} /></div>
+              <div><div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("First name")}</div><input value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputCls} /></div>
+              <div><div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("Last name")}</div><input value={familyName} onChange={(e) => setFamilyName(e.target.value)} className={inputCls} /></div>
             </div>
             <div className="mt-2">
-              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Alamat</div>
+              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("Address")}</div>
               <div className="flex items-center gap-1.5">
-                <input value={localPart} onChange={(e) => setLocalPart(e.target.value.toLowerCase())} placeholder="nama.alamat" className={cn(inputCls, "font-mono")} />
+                <input value={localPart} onChange={(e) => setLocalPart(e.target.value.toLowerCase())} placeholder={t("first.last")} className={cn(inputCls, "font-mono")} />
                 <span className="text-muted-foreground">@</span>
                 <select value={domain} onChange={(e) => setDomain(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-2 text-sm font-semibold outline-none focus:border-primary">
                   {domains.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-              {localPart && domain && <div className="mt-1 text-[11px] text-muted-foreground">Akan dibuat: <b className="font-mono text-foreground">{localPart}@{domain}</b></div>}
+              {localPart && domain && <div className="mt-1 text-[11px] text-muted-foreground">{t("Will be created:")} <b className="font-mono text-foreground">{localPart}@{domain}</b></div>}
             </div>
             {problem && <div className="mt-2 text-xs text-destructive">{problem}</div>}
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => { setMaking(false); setProblem(null); }} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+              <button type="button" onClick={() => { setMaking(false); setProblem(null); }} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">{t("Cancel")}</button>
               <button type="button" disabled={create.isPending || !localPart || !domain || !givenName || !familyName} onClick={() => { setProblem(null); create.mutate(); }} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-                {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {create.isPending ? "Membuat…" : "Buat & tautkan"}
+                {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {create.isPending ? t("Creating…") : t("Create and link")}
               </button>
             </div>
           </div>
@@ -639,7 +642,7 @@ type UserRowProps = {
 function UserRow(props: UserRowProps) {
   const { user, orgInfo, isMember, canDelete, canJoin, joinPending, onJoin, onDelete, workspaceName, memberships, membershipsLoading, gwConfigured, canReinstate, onReinstate } = props;
   const [open, setOpen] = useState(false);
-  const { t } = useLang();
+  const { t, tn, locale } = useLang();
   // Offboarded: no membership left, so this row would otherwise read "not in a workspace yet" and offer
   // to add them back as Staff. It says when they left instead, and offers Reinstate.
   const deactivated = !!user.deactivatedAt;
@@ -647,7 +650,7 @@ function UserRow(props: UserRowProps) {
   const projectCount = memberships?.projects.length ?? 0;
   const teamCount = memberships?.teams.length ?? 0;
   const overrideCount = Object.keys(orgInfo?.shiftByDay ?? {}).length;
-  const shiftLabel = orgInfo?.shiftStart && orgInfo?.shiftEnd ? `${to12h(orgInfo.shiftStart)}–${to12h(orgInfo.shiftEnd)}` : null;
+  const shiftLabel = orgInfo?.shiftStart && orgInfo?.shiftEnd ? `${fmtClock(orgInfo.shiftStart, locale)}–${fmtClock(orgInfo.shiftEnd, locale)}` : null;
 
   return (
     <>
@@ -660,20 +663,20 @@ function UserRow(props: UserRowProps) {
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
             )}
             <div className="min-w-0">
-              <div className="truncate font-semibold">{user.name || "Unnamed"}</div>
+              <div className="truncate font-semibold">{user.name || t("Unnamed")}</div>
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
               {/* Approver absensi — hanya untuk STAFF. "Belum ditaruh" berwarna peringatan karena
                   request orang ini masih jatuh ke BoD; bukan galat, tapi pekerjaan yang belum selesai. */}
               {orgInfo && (
                 orgInfo.approverName
-                  ? <div className="truncate text-[11px] text-muted-foreground">Approver: <b className="text-foreground">{orgInfo.approverName}</b></div>
+                  ? <div className="truncate text-[11px] text-muted-foreground">{t("Approver:")} <b className="text-foreground">{orgInfo.approverName}</b></div>
                   : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
-                    ? <div className="text-[11px] font-semibold text-amber-700">Belum ditaruh di Bagan Approval</div>
-                    : <div className="text-[11px] text-muted-foreground">Approver: BoD lain</div>
+                    ? <div className="text-[11px] font-semibold text-amber-700">{t("Not placed in the Approval chart yet")}</div>
+                    : <div className="text-[11px] text-muted-foreground">{t("Approver: another BoD")}</div>
               )}
               {isMember && (
                 <div className="mt-0.5 text-[11px] text-muted-foreground">
-                  {membershipsLoading ? "…" : `${projectCount} project${projectCount === 1 ? "" : "s"}${teamCount > 0 ? ` · ${teamCount} team${teamCount === 1 ? "" : "s"}` : ""}`}
+                  {membershipsLoading ? "…" : tn(projectCount, "{n} project", "{n} projects") + (teamCount > 0 ? " · " + tn(teamCount, "{n} team", "{n} teams") : "")}
                 </div>
               )}
             </div>
@@ -690,9 +693,9 @@ function UserRow(props: UserRowProps) {
               {orgInfo.flexi ? (
                 <span className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700"><Zap className="h-3 w-3 fill-amber-400" /> Flexi 12:00–15:00</span>
               ) : (
-                <span className="font-semibold tabular-nums text-foreground">{shiftLabel ?? <span className="font-normal text-muted-foreground">jam kantor</span>}</span>
+                <span className="font-semibold tabular-nums text-foreground">{shiftLabel ?? <span className="font-normal text-muted-foreground">{t("Office hours")}</span>}</span>
               )}
-              {!orgInfo.flexi && overrideCount > 0 && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">per-hari ×{overrideCount}</span>}
+              {!orgInfo.flexi && overrideCount > 0 && <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">{t("per day ×{n}", { n: overrideCount })}</span>}
               {orgInfo.noGeofence && <span className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700"><Smartphone className="h-3 w-3" /> Mobile</span>}
               {gwConfigured && user.googleWorkspaceEmail && <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground" title={user.googleWorkspaceEmail}><AtSign className="h-3 w-3" /> Google</span>}
             </div>
@@ -707,7 +710,7 @@ function UserRow(props: UserRowProps) {
                 ? <LeftTag leftAt={leftAt} className="px-2 text-[11px] font-bold" />
                 : <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{t("Left")}</span>
             ) : (
-              <span className="text-xs text-muted-foreground/60">belum masuk workspace</span>
+              <span className="text-xs text-muted-foreground/60">{t("not in the workspace yet")}</span>
             )}
             {/* Akun yang mendaftar sendiri tanpa kode workspace berhenti di sini — terdaftar,
                 tapi tidak di mana pun. Satu tombol, langsung jadi Staff; perannya bisa diubah
@@ -719,17 +722,17 @@ function UserRow(props: UserRowProps) {
             )}
             {!isMember && !deactivated && canJoin && (
               <button type="button" onClick={onJoin} disabled={joinPending} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50">
-                {joinPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Masukkan ke {workspaceName}
+                {joinPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {t("Add to {workspace}", { workspace: workspaceName })}
               </button>
             )}
             {canDelete && !isMember && (
-              <button type="button" onClick={onDelete} title="Delete account permanently" className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
+              <button type="button" onClick={onDelete} title={t("Delete account permanently")} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             )}
             {isMember && (
               <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
-                <Settings2 className="h-3.5 w-3.5" /> Detail
+                <Settings2 className="h-3.5 w-3.5" /> {t("Details")}
               </button>
             )}
           </div>
@@ -759,7 +762,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
   };
   const projectCount = memberships?.projects.length ?? 0;
   const teamCount = memberships?.teams.length ?? 0;
-  const { t } = useLang();
+  const { t, tn } = useLang();
 
   // Esc menutup — kartu ini dibuka berkali-kali berturut-turut, dan mengejar tombol × 49 kali
   // adalah cara membuat orang berhenti memakainya.
@@ -804,18 +807,18 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
           )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-bold tracking-tight">{user.name || "Unnamed"}</h2>
+              <h2 className="truncate text-lg font-bold tracking-tight">{user.name || t("Unnamed")}</h2>
               <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             </div>
             <div className="truncate text-sm text-muted-foreground">{user.email}</div>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
-              {user.joinedAt && <span>Gabung {fmtDate(user.joinedAt)}</span>}
+              {user.joinedAt && <span>{t("Joined {date}", { date: fmtDate(user.joinedAt) })}</span>}
               {user.googleWorkspaceEmail && <span className="inline-flex items-center gap-1"><AtSign className="h-3 w-3" /> {user.googleWorkspaceEmail}</span>}
-              <span>{teamCount} tim · {projectCount} project</span>
+              <span>{tn(teamCount, "{n} team", "{n} teams")} · {tn(projectCount, "{n} project", "{n} projects")}</span>
             </div>
           </div>
-          <Link to="/people/$userId" params={{ userId: user.id }} title="Absensi, log XP dan request orang ini per periode" className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">Rekap →</Link>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent"><X className="h-5 w-5" /></button>
+          <Link to="/people/$userId" params={{ userId: user.id }} title={t("This person's attendance, XP log and requests per period")} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">{t("Recap →")}</Link>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent"><X className="h-5 w-5" /></button>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-4 md:p-6">
@@ -823,63 +826,63 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
             {/* ── kiri ── */}
             <div className="space-y-4">
               {canDelete && <AccountCard user={user} memberId={orgInfo.memberId} Card={Card} />}
-              <Card title="Peran">
+              <Card title={t("Role")}>
                 {canEdit ? (
                   <select value={orgInfo.role} disabled={pending} onChange={(e) => onOrgRole(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary disabled:opacity-50">
                     {[...assignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
                   </select>
                 ) : (
-                  <span className="text-sm text-muted-foreground">Peran orang ini di atas atau setara kamu — tidak bisa diubah dari sini.</span>
+                  <span className="text-sm text-muted-foreground">{t("This person's role is at or above yours, so you can't change it here.")}</span>
                 )}
               </Card>
 
-              <Card title="Approver absensi" hint="Request cuti/izin/sakit orang ini masuk ke atasan yang ditaruh di Bagan Approval — siapa pun perannya.">
+              <Card title={t("Attendance approver")} hint={t("This person's leave, permit and sick requests go to the person above them in the Approval chart, whatever their role.")}>
                   <div className="flex items-center justify-between gap-3">
                     {orgInfo.approverName
                       ? <span className="text-sm font-semibold">{orgInfo.approverName}</span>
                       : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
-                        ? <span className="text-sm font-semibold text-amber-700">Belum ditaruh — masih masuk ke semua BoD</span>
-                        : <span className="text-sm text-muted-foreground">Tidak ditaruh — masuk ke BoD lain</span>}
-                    <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">Buka Bagan Approval →</button>
+                        ? <span className="text-sm font-semibold text-amber-700">{t("Not placed yet, so requests still go to every BoD")}</span>
+                        : <span className="text-sm text-muted-foreground">{t("Not placed, so requests go to the other BoD")}</span>}
+                    <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">{t("Open Approval chart →")}</button>
                   </div>
                 </Card>
 
-              <Card title="Mode absensi">
+              <Card title={t("Attendance mode")}>
                 <div className="space-y-2">
-                  <ToggleRow on={orgInfo.flexi} pending={flexiPending} onToggle={onToggleFlexi} icon={<Zap className={cn("h-4 w-4", orgInfo.flexi && "fill-amber-400")} />} title="Flexi Time" desc="Masuk kapan saja 12:00–15:00 tanpa penalti telat; pulang = masuk + 9 jam." tone="amber" />
-                  <ToggleRow on={orgInfo.noGeofence} pending={geofencePending} onToggle={onToggleGeofence} icon={<Smartphone className="h-4 w-4" />} title="Mode Mobile" desc="Absen dari mana saja — geofence mati, checkout luar kantor tanpa approval." tone="sky" />
+                  <ToggleRow on={orgInfo.flexi} pending={flexiPending} onToggle={onToggleFlexi} icon={<Zap className={cn("h-4 w-4", orgInfo.flexi && "fill-amber-400")} />} title="Flexi Time" desc={t("Check in any time 12:00–15:00 with no late penalty; check-out = check-in + 9 hours.")} tone="amber" />
+                  <ToggleRow on={orgInfo.noGeofence} pending={geofencePending} onToggle={onToggleGeofence} icon={<Smartphone className="h-4 w-4" />} title={t("Mobile mode")} desc={t("Check in from anywhere: no geofence, and check-out outside the office needs no approval.")} tone="sky" />
                 </div>
               </Card>
 
               {canManageShift && (
-                <Card title="Jatah day off">
+                <Card title={t("Day-off quota")}>
                   <button type="button" onClick={onDayoff} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary">
-                    <CalendarDays className="h-4 w-4" /> Kelola jatah & riwayat day off
+                    <CalendarDays className="h-4 w-4" /> {t("Manage day-off quota and history")}
                   </button>
                 </Card>
               )}
 
               {gwConfigured && (
-                <Card title="Google Workspace" hint="Email kantor yang ditautkan ke profil ini.">
+                <Card title="Google Workspace" hint={t("The work email linked to this profile.")}>
                   <GoogleLinkCell user={user} accounts={gwAccounts} domains={gwDomains} configured={gwConfigured} canEdit={canLinkGoogle} />
                 </Card>
               )}
             </div>
 
             {/* ── kanan ── */}
-            <Card title="Jam kerja" hint={orgInfo.flexi ? "Flexi Time menyala — jam tetap di bawah ini diabaikan." : "Kosongkan = ikut jam kantor/tim. Per-hari hanya untuk hari yang diisi."} className="self-start">
+            <Card title={t("Work hours")} hint={orgInfo.flexi ? t("Flexi Time is on, so the fixed hours below are ignored.") : t("Leave empty to follow office or team hours. Per-day hours apply only to the days filled in.")} className="self-start">
               <div className={cn("space-y-4", orgInfo.flexi && "pointer-events-none opacity-40")}>
                 <div>
-                  <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Default</div>
+                  <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{t("Default")}</div>
                   <ShiftCell start={orgInfo.shiftStart} end={orgInfo.shiftEnd} canEdit={canManageShift && !orgInfo.flexi} pending={shiftPending} onSave={onSaveShift} />
                 </div>
                 {canManageShift && (
                   <div>
-                    <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Per-hari <span className="font-normal text-muted-foreground/70">— hanya hari yang beda dari default</span></div>
+                    <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{t("Per day")} <span className="font-normal text-muted-foreground/70">{t("— only the days that differ from the default")}</span></div>
                     <div className="space-y-1.5">
                       {WEEKDAYS.map(([wd, label]) => (
                         <div key={wd} className={cn("flex items-center gap-3 rounded-lg px-2 py-1", byDay[wd] && "bg-primary/5")}>
-                          <span className={cn("w-9 shrink-0 text-xs font-bold", byDay[wd] ? "text-primary" : "text-muted-foreground")}>{label}</span>
+                          <span className={cn("w-9 shrink-0 text-xs font-bold", byDay[wd] ? "text-primary" : "text-muted-foreground")}>{t(label)}</span>
                           <ShiftCell start={byDay[wd]?.start ?? null} end={byDay[wd]?.end ?? null} canEdit={canManageShift} pending={shiftByDayPending} onSave={(s, e) => saveDay(wd, s, e)} />
                         </div>
                       ))}
@@ -890,11 +893,11 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
             </Card>
 
             {/* ── bawah, melebar ── */}
-            <Card title="Tim & project" hint={canManageTeams ? "Tim sudah diganti Bagan IP & Divisi (tab Bagan). Akses project diatur per orang di sini." : undefined} className="md:col-span-2">
+            <Card title={t("Teams and projects")} hint={canManageTeams ? t("Teams were replaced by the IP & Division Chart. Project access is set per person here.") : undefined} className="md:col-span-2">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><UsersIcon className="h-3.5 w-3.5" /> Tim · {teamCount}</div>
-                  {!membershipsLoading && teamCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Tim sudah diganti Bagan IP &amp; Divisi.</div>}
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><UsersIcon className="h-3.5 w-3.5" /> {t("Teams · {n}", { n: teamCount })}</div>
+                  {!membershipsLoading && teamCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">{t("Teams were replaced by the IP & Division Chart.")}</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(memberships?.teams ?? []).map((tm) => {
                       // Project yang orang ini dapat GARA-GARA tim ini — dipakai untuk memberi tahu
@@ -904,11 +907,11 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                         <span key={tm.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
                           <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tm.color ?? "#7B2FBE" }} />
                           {canManageTeams ? (
-                            <button type="button" onClick={() => onTeamOpen(tm.id)} title="Atur tim ini (nama, divisi, jam shift, project)" className="font-semibold underline-offset-2 transition hover:text-primary hover:underline">{tm.name}</button>
+                            <button type="button" onClick={() => onTeamOpen(tm.id)} title={t("Set up this team (name, division, shift hours, projects)")} className="font-semibold underline-offset-2 transition hover:text-primary hover:underline">{tm.name}</button>
                           ) : tm.name}
                           {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
                           {canManageTeams && (
-                            <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title="Keluarkan dari tim ini" className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40">
+                            <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title={t("Remove from this team")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40">
                               <X className="h-3 w-3" />
                             </button>
                           )}
@@ -919,9 +922,9 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                   </div>
                 </div>
                 <div>
-                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> Project · {projectCount}</div>
-                  {membershipsLoading && <div className="text-xs text-muted-foreground/70">Loading…</div>}
-                  {!membershipsLoading && projectCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Belum masuk project mana pun.</div>}
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> {t("Projects · {n}", { n: projectCount })}</div>
+                  {membershipsLoading && <div className="text-xs text-muted-foreground/70">{t("Loading…")}</div>}
+                  {!membershipsLoading && projectCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">{t("Not in any project yet.")}</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(memberships?.projects ?? []).map((pr) => (
                       <span key={pr.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
@@ -929,10 +932,10 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                         <Link to="/projects/$projectId" params={{ projectId: pr.id }} className="underline-offset-2 hover:text-primary hover:underline">{pr.name}</Link>
                         {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
                             sinkronisasi tim menuliskannya lagi. Sebut timnya, dan jangan beri tombol lepas. */}
-                        {pr.viaTeam && <span className="font-normal text-muted-foreground">· via {pr.viaTeam}</span>}
+                        {pr.viaTeam && <span className="font-normal text-muted-foreground">{t("· via {team}", { team: pr.viaTeam })}</span>}
                         {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
                         {canManageTeams && !pr.viaTeam ? (
-                          <button type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title="Lepas dari project ini" className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40"><X className="h-3 w-3" /></button>
+                          <button type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title={t("Remove from this project")} className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40"><X className="h-3 w-3" /></button>
                         ) : <span className="w-1" />}
                       </span>
                     ))}
@@ -973,6 +976,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
  */
 function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId: string; Card: (p: { title: string; hint?: string; children: React.ReactNode; className?: string }) => React.ReactElement }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const [name, setName] = useState(user.name ?? "");
   const [email, setEmail] = useState(user.email ?? "");
   const [password, setPassword] = useState("");
@@ -982,19 +986,19 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
     onSuccess: (_r, body) => {
       refresh();
       setPassword("");
-      toast.success(body.password ? "Sandi diganti" : "Akun disimpan", { description: body.password ? "Sampaikan sandi barunya langsung ke orangnya, jangan lewat chat grup." : undefined });
+      toast.success(body.password ? t("Password changed") : t("Account saved"), { description: body.password ? t("Give the new password to them directly, not in a group chat.") : undefined });
     },
-    onError: (e: unknown) => toast.error("Gagal menyimpan", { description: e instanceof ApiError ? e.message : "Coba lagi." }),
+    onError: (e: unknown) => toast.error(t("Couldn't save."), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const photo = useMutation({
     mutationFn: (file: File) => nexusApi.uploadMemberAvatar(memberId, file),
-    onSuccess: () => { refresh(); toast.success("Foto profil diganti"); },
-    onError: (e: unknown) => toast.error("Gagal mengunggah foto", { description: e instanceof ApiError ? e.message : "PNG/JPG/WEBP, maksimal 5 MB." }),
+    onSuccess: () => { refresh(); toast.success(t("Profile photo changed")); },
+    onError: (e: unknown) => toast.error(t("Couldn't upload the photo"), { description: e instanceof ApiError ? e.message : t("PNG/JPG/WEBP, up to 5 MB.") }),
   });
   const dirtyIdentity = name.trim() !== (user.name ?? "") || email.trim().toLowerCase() !== (user.email ?? "");
   const inputCls = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary";
   return (
-    <Card title="Akun" hint="Foto, nama, email login, dan sandi. Hanya BoD yang melihat kartu ini.">
+    <Card title={t("Account")} hint={t("Photo, name, sign-in email and password. Only BoD see this card.")}>
       <div className="space-y-3">
         <label className="flex cursor-pointer items-center gap-3">
           {user.avatar ? (
@@ -1003,29 +1007,29 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
           )}
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
-            {photo.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Ganti foto
+            {photo.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} {t("Change photo")}
           </span>
           <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={photo.isPending} onChange={(e) => { const f = e.target.files?.[0]; if (f) photo.mutate(f); e.target.value = ""; }} />
         </label>
         <div className="grid gap-2 sm:grid-cols-2">
           <div>
-            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Nama</div>
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("Name")}</div>
             <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Email login</div>
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("Sign-in email")}</div>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
           </div>
         </div>
         <button type="button" disabled={!dirtyIdentity || save.isPending} onClick={() => save.mutate({ ...(name.trim() !== (user.name ?? "") ? { name: name.trim() } : {}), ...(email.trim().toLowerCase() !== (user.email ?? "") ? { email: email.trim() } : {}) })} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-          {save.isPending && !password ? "Menyimpan…" : "Simpan nama & email"}
+          {save.isPending && !password ? t("Saving…") : t("Save name and email")}
         </button>
         <div className="border-t border-border pt-3">
-          <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Sandi baru <span className="font-normal text-muted-foreground/70">— minimal 8 karakter, terlihat saat diketik</span></div>
+          <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{t("New password")} <span className="font-normal text-muted-foreground/70">{t("— at least 8 characters, visible as you type")}</span></div>
           <div className="flex gap-2">
-            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Ketik sandi baru…" autoComplete="off" spellCheck={false} className={cn(inputCls, "font-mono")} />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("Type a new password…")} autoComplete="off" spellCheck={false} className={cn(inputCls, "font-mono")} />
             <button type="button" disabled={password.length < 8 || save.isPending} onClick={() => save.mutate({ password })} className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-40">
-              Ganti sandi
+              {t("Change password")}
             </button>
           </div>
         </div>
@@ -1037,24 +1041,25 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
 /** "+ project" — sama polanya dengan "+ tim": daftar pendek yang bisa dicari. Menambahkan langsung
  *  (source "direct"), jadi tidak bergantung pada tim mana pun. */
 function ProjectAddPicker({ projects, already, pending, onPick }: { projects: Array<{ id: string; name: string; color?: string | null; status?: string | null }>; already: Set<string>; pending: boolean; onPick: (projectId: string) => void }) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const options = projects.filter((p) => !already.has(p.id)).filter((p) => !q.trim() || p.name.toLowerCase().includes(q.toLowerCase()));
   if (!open) {
     return (
       <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-40">
-        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} project
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {t("project")}
       </button>
     );
   }
   return (
     <div className="w-full rounded-lg border border-primary/40 bg-background p-2">
       <div className="mb-1.5 flex items-center gap-2">
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari project…" className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
-        <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Tutup</button>
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search projects…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
+        <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">{t("Close")}</button>
       </div>
       <div className="max-h-44 space-y-0.5 overflow-y-auto">
-        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">Nggak ada yang cocok.</div>}
+        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{t("Nothing matches.")}</div>}
         {options.map((p) => (
           <button key={p.id} type="button" disabled={pending} onClick={() => { onPick(p.id); setOpen(false); setQ(""); }} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold transition hover:bg-accent disabled:opacity-50">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.color ?? "#94A3B8" }} />
@@ -1073,6 +1078,8 @@ function ProjectAddPicker({ projects, already, pending, onPick }: { projects: Ar
  * tanpa pencarian adalah cara paling gampang memasukkan orang ke tim yang salah.
  */
 function TeamAddPicker({ teams, already, pending, onPick, onCreated }: { teams: NexusTeam[]; already: Set<string>; pending: boolean; onPick: (teamId: string) => void; onCreated: (teamId: string) => void }) {
+  // `t` is the team in the callbacks below, so the translator goes by another name here.
+  const { t: tl } = useLang();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   // Bikin tim baru dari sini, karena tidak ada halaman Teams lagi yang punya tombolnya.
@@ -1085,21 +1092,21 @@ function TeamAddPicker({ teams, already, pending, onPick, onCreated }: { teams: 
   if (!open) {
     return (
       <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-40">
-        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} tim
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {tl("team")}
       </button>
     );
   }
   return (
     <div className="w-full rounded-lg border border-primary/40 bg-background p-2">
       <div className="mb-1.5 flex items-center gap-2">
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari tim…" className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
-        <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Tutup</button>
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tl("Search teams…")} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
+        <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">{tl("Close")}</button>
       </div>
       <div className="max-h-44 space-y-0.5 overflow-y-auto">
-        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{teams.length === 0 ? "Belum ada tim." : "Nggak ada yang cocok."}</div>}
+        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{teams.length === 0 ? tl("No teams yet.") : tl("Nothing matches.")}</div>}
         {q.trim().length > 1 && !teams.some((t) => t.name.toLowerCase() === q.trim().toLowerCase()) && (
           <button type="button" disabled={create.isPending} onClick={() => create.mutate(q.trim())} className="mt-0.5 flex w-full items-center gap-1.5 rounded-md border border-dashed border-border px-1.5 py-1.5 text-left text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
-            {create.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Bikin tim &ldquo;{q.trim()}&rdquo;
+            {create.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} {tl("Create team “{name}”", { name: q.trim() })}
           </button>
         )}
         {options.map((t) => (
@@ -1123,6 +1130,14 @@ function to12h(hhmm: string | null | undefined): string {
   const ap = h >= 12 ? "PM" : "AM";
   h = h % 12; if (h === 0) h = 12;
   return `${h}:${(ms ?? "00").padStart(2, "0")} ${ap}`;
+}
+// Display only (not the typed inputs): "h:mm AM/PM" in English, "19.00" in Indonesian.
+function fmtClock(hhmm: string | null | undefined, locale: string): string {
+  if (!hhmm) return "";
+  if (!locale.startsWith("id")) return to12h(hhmm);
+  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10));
+  if (Number.isNaN(h)) return "";
+  return new Date(2000, 0, 1, h, m || 0).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 // Typed text -> 24h "HH:MM" | null (empty) | "invalid". Accepts "9", "9:00", "9am", "9:00 AM",
 // "09:00am", "2.30 pm", and 24h like "14:30"/"18".
@@ -1149,14 +1164,15 @@ function parse12h(raw: string): string | null | "invalid" {
 // Per-person shift editor — typed input, shown as 12h with AM/PM. Both empty = inherit team/office
 // shift. Both set = personal shift wins (effectiveShiftSource "USER"). Stored as 24h "HH:MM".
 function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | null; end: string | null; canEdit: boolean; pending: boolean; onSave: (start: string | null, end: string | null) => void }) {
+  const { t, locale } = useLang();
   const [s, setS] = useState(() => to12h(start));
   const [e, setE] = useState(() => to12h(end));
   useEffect(() => { setS(to12h(start)); setE(to12h(end)); }, [start, end]);
 
   if (!canEdit) {
     return start && end
-      ? <span className="text-xs font-semibold tabular-nums">{to12h(start)} – {to12h(end)}</span>
-      : <span className="text-xs text-muted-foreground/50">default</span>;
+      ? <span className="text-xs font-semibold tabular-nums">{fmtClock(start, locale)} – {fmtClock(end, locale)}</span>
+      : <span className="text-xs text-muted-foreground/50">{t("default")}</span>;
   }
 
   const ps = parse12h(s);
@@ -1179,19 +1195,19 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
       <input type="text" inputMode="text" placeholder="09:00 AM" value={s} disabled={pending} onChange={(evt) => setS(evt.target.value)} onBlur={() => snap(s, setS)} className={inputCls(ps === "invalid")} />
       <span className="text-muted-foreground">–</span>
       <input type="text" inputMode="text" placeholder="06:00 PM" value={e} disabled={pending} onChange={(evt) => setE(evt.target.value)} onBlur={() => snap(e, setE)} className={inputCls(pe === "invalid")} />
-      {overnight && <span title="Overnight — clock-out is the next day" role="img" aria-label="overnight shift" className="ml-0.5 text-sm">🌙</span>}
+      {overnight && <span title={t("Overnight: check-out is the next day")} role="img" aria-label={t("overnight shift")} className="ml-0.5 text-sm">🌙</span>}
       {dirty ? (
         <button
           type="button"
           disabled={pending || invalid}
           onClick={() => onSave(startVal, endVal)}
-          title={badFmt ? "Time format isn't right (e.g. 09:00 AM)" : partial ? "Fill in both clock-in & clock-out" : sameTime ? "Clock-in & clock-out can't be the same" : overnight ? "Save shift (overnight)" : "Save shift"}
+          title={badFmt ? t("The time format isn't right (e.g. 09:00 AM)") : partial ? t("Fill in both check-in and check-out") : sameTime ? t("Check-in and check-out can't be the same") : overnight ? t("Save shift (overnight)") : t("Save shift")}
           className="ml-0.5 rounded-md bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40"
         >
-          {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+          {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("Save")}
         </button>
       ) : hasShift ? (
-        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title="Clear shift (back to default)" className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600">×</button>
+        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title={t("Clear shift (back to default)")} className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600">×</button>
       ) : null}
     </div>
   );
@@ -1200,6 +1216,7 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
 // Editable monthly day-off quota per person (override the workspace default of 4).
 function QuotaEditor({ userId, quota, override, defaultQuota }: { userId: string; quota: number; override: number | null; defaultQuota: number }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const [val, setVal] = useState(String(quota));
   useEffect(() => { setVal(String(quota)); }, [quota]);
   const m = useMutation({
@@ -1212,16 +1229,16 @@ function QuotaEditor({ userId, quota, override, defaultQuota }: { userId: string
 
   return (
     <div className="mb-4 rounded-xl border border-border bg-muted/20 p-3">
-      <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Day-off quota / month</div>
+      <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Day-off quota per month")}</div>
       <div className="flex flex-wrap items-center gap-2">
         <input type="number" min={0} max={366} value={val} onChange={(e) => setVal(e.target.value)} className="w-20 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-primary" />
-        <span className="text-xs text-muted-foreground">days / month</span>
+        <span className="text-xs text-muted-foreground">{t("days per month")}</span>
         <button type="button" disabled={!dirty || m.isPending} onClick={() => m.mutate(n)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-          {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+          {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("Save")}
         </button>
-        {override !== null && <button type="button" disabled={m.isPending} onClick={() => m.mutate(null)} className="text-xs font-semibold text-muted-foreground transition hover:text-foreground hover:underline">Reset to default ({defaultQuota})</button>}
+        {override !== null && <button type="button" disabled={m.isPending} onClick={() => m.mutate(null)} className="text-xs font-semibold text-muted-foreground transition hover:text-foreground hover:underline">{t("Reset to default ({n})", { n: defaultQuota })}</button>}
       </div>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">{override === null ? `Using workspace default (${defaultQuota} days).` : `Custom: ${override} days (default ${defaultQuota}).`}</p>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{override === null ? t("Using the workspace default ({n} days).", { n: defaultQuota }) : t("Custom: {n} days (default {d}).", { n: override, d: defaultQuota })}</p>
     </div>
   );
 }
@@ -1235,13 +1252,14 @@ const REST_WEEKDAYS: { d: number; label: string }[] = [
 ];
 function RestDaysEditor({ userId, canEdit }: { userId: string; canEdit: boolean }) {
   const qc = useQueryClient();
+  const { t } = useLang();
   const membersQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const me = membersQ.data?.members?.find((m) => m.userId === userId);
   const current = me?.restDays ?? [];
   const m = useMutation({
     mutationFn: (days: number[]) => nexusApi.updateWorkspaceMember({ memberId: me!.id, restDays: days }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
-    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't save rest days."),
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : t("Couldn't save the rest days.")),
   });
   if (!me) return null;
   const toggle = (d: number) => m.mutate(current.includes(d) ? current.filter((x) => x !== d) : [...current, d].sort((a, b) => a - b));
@@ -1249,7 +1267,7 @@ function RestDaysEditor({ userId, canEdit }: { userId: string; canEdit: boolean 
   return (
     <div className="mb-3 rounded-xl border border-border bg-muted/30 p-3">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Rest days</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Rest days")}</span>
         {m.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -1258,26 +1276,27 @@ function RestDaysEditor({ userId, canEdit }: { userId: string; canEdit: boolean 
           return (
             <button key={w.d} type="button" disabled={!canEdit || m.isPending} onClick={() => toggle(w.d)}
               className={cn("rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition", on ? "bg-violet-600 text-white ring-violet-600" : "bg-background text-muted-foreground ring-border hover:text-foreground", !canEdit && "opacity-70")}>
-              {w.label}
+              {t(w.label)}
             </button>
           );
         })}
       </div>
       {canEdit && (
         <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-          <button type="button" onClick={() => preset([7])} className="text-primary hover:underline">Sunday off</button>
-          <button type="button" onClick={() => preset([6, 7])} className="text-primary hover:underline">Sat + Sun off</button>
-          <button type="button" onClick={() => preset([])} className="text-muted-foreground hover:underline">Works every day</button>
+          <button type="button" onClick={() => preset([7])} className="text-primary hover:underline">{t("Sunday off")}</button>
+          <button type="button" onClick={() => preset([6, 7])} className="text-primary hover:underline">{t("Sat + Sun off")}</button>
+          <button type="button" onClick={() => preset([])} className="text-muted-foreground hover:underline">{t("Works every day")}</button>
         </div>
       )}
       <p className="mt-1.5 text-[11px] text-muted-foreground">
-        {current.length ? "No reminder, lateness or absence on these days — no day-off request needed." : "Works every office day; a day off must be requested."}
+        {current.length ? t("No reminders, lateness or absence on these days. No day-off request needed.") : t("Works every office day; a day off must be requested.")}
       </p>
     </div>
   );
 }
 
 function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: string }; canEdit: boolean; onClose: () => void }) {
+  const { t } = useLang();
   const q = useQuery({ queryKey: ["nexus", "dayoffs", user.id], queryFn: () => nexusApi.userDayoffs(user.id), retry: false });
   const data = q.data;
 
@@ -1285,8 +1304,8 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold tracking-tight">Day off — {user.name}</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-base font-bold tracking-tight">{t("Day off — {name}", { name: user.name })}</h2>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         {q.isLoading && <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
@@ -1297,9 +1316,9 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
 
         {data && (
           <p className="text-xs text-muted-foreground">
-            Used this period: <b className="text-foreground">{data.used} / {data.quota}</b>
-            {(data.bonusDays ?? 0) > 0 && <span className="ml-1">({data.baseQuota} + {data.bonusDays} extra{data.bonusGrants?.length ? `: ${data.bonusGrants.map((g) => g.reason).join(", ")}` : ""})</span>}
-            {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600">(over quota)</span>}
+            {t("Used this period:")} <b className="text-foreground">{data.used} / {data.quota}</b>
+            {(data.bonusDays ?? 0) > 0 && <span className="ml-1">({t("{base} + {n} extra", { base: data.baseQuota ?? "", n: data.bonusDays ?? 0 })}{data.bonusGrants?.length ? `: ${data.bonusGrants.map((g) => g.reason).join(", ")}` : ""})</span>}
+            {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600">{t("(over quota)")}</span>}
           </p>
         )}
       </div>
@@ -1314,6 +1333,8 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
  */
 function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: string; email: string; avatar: string | null; role: string }> }) {
   const qc = useQueryClient();
+  const { t, tn } = useLang();
+  const extraDays = (d: number) => tn(d, "{n} extra day off", "{n} extra days off");
   const [periodKey, setPeriodKey] = useState<string | null>(null);
   const list = useQuery({
     queryKey: ["nexus", "day-off-bonus", periodKey ?? "current"],
@@ -1353,22 +1374,22 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
     mutationFn: () => nexusApi.grantDayOffBonus({ userIds: [...selected], periodKey: periodKey!, days: n, reason: reason.trim() }),
     onSuccess: (r) => {
       refreshAll();
-      toast.success(`${r.grants.length} ${r.grants.length === 1 ? "person" : "people"} got ${r.days} extra day${r.days === 1 ? "" : "s"} off`, {
-        description: `Period ${r.periodLabel}. ${r.notified < r.grants.length ? `${r.notified} of ${r.grants.length} notified.` : r.grants.length === 1 ? "They were notified." : `All ${r.grants.length} were notified.`}`,
+      toast.success(t("{people} got {days}", { people: tn(r.grants.length, "{n} person", "{n} people"), days: extraDays(r.days) }), {
+        description: t("Period {period}.", { period: r.periodLabel }) + " " + (r.notified < r.grants.length ? t("{a} of {b} notified.", { a: r.notified, b: r.grants.length }) : r.grants.length === 1 ? t("They were notified.") : t("All {n} were notified.", { n: r.grants.length })),
       });
       setSelected(new Set()); setReason(""); setDays("1");
     },
-    onError: (e: unknown) => toast.error("Couldn't give extra day off", { description: e instanceof ApiError ? e.message : "Try again." }),
+    onError: (e: unknown) => toast.error(t("Couldn't give extra day off"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => nexusApi.revokeDayOffBonus(id),
-    onSuccess: (r) => { refreshAll(); toast.success(r.alreadyRevoked ? "Already revoked" : `Revoked ${r.grant.user?.name ?? "the grant"}’s extra day off`); },
-    onError: (e: unknown) => toast.error("Couldn't revoke", { description: e instanceof ApiError ? e.message : "Try again." }),
+    onSuccess: (r) => { refreshAll(); toast.success(r.alreadyRevoked ? t("Already revoked") : r.grant.user?.name ? t("Revoked {name}’s extra day off", { name: r.grant.user.name }) : t("Extra day off revoked")); },
+    onError: (e: unknown) => toast.error(t("Couldn't revoke"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const submit = () => {
     if (!canSubmit) return;
-    const who = selected.size === 1 ? (members.find((m) => selected.has(m.userId))?.name ?? "1 person") : `${selected.size} people`;
-    if (!window.confirm(`Give ${who} ${n} extra day${n === 1 ? "" : "s"} off for the period ${periodLabelOf(periodKey)}?\n\nReason: ${reason.trim()}\n\nEach person gets a notification. Unused days expire when the period ends.`)) return;
+    const who = selected.size === 1 ? (members.find((m) => selected.has(m.userId))?.name ?? tn(1, "{n} person", "{n} people")) : tn(selected.size, "{n} person", "{n} people");
+    if (!window.confirm(t("Give {who} {days} for the period {period}?\n\nReason: {reason}\n\nEach person gets a notification. Unused days expire when the period ends.", { who, days: extraDays(n), period: periodLabelOf(periodKey), reason: reason.trim() }))) return;
     grant.mutate();
   };
   const grants = list.data?.grants ?? [];
@@ -1379,49 +1400,49 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5">
         <div>
-          <h2 className="font-display text-base font-bold tracking-tight">Give extra day off</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Adds day-off days for <b className="text-foreground">one attendance period</b> (28th → 27th) on top of each person’s quota — e.g. after working an event. Unused days expire when the period ends. Missed check-ins are still deducted as usual.</p>
+          <h2 className="font-display text-base font-bold tracking-tight">{t("Give extra day off")}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t("Adds day-off days for one attendance period (28th → 27th) on top of each person’s quota, for example after working an event. Unused days expire when the period ends. Missed check-ins are still deducted as usual.")}</p>
         </div>
 
         <div>
-          <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Period</div>
+          <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Attendance period")}</div>
           {list.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : (
             <div className="flex flex-wrap gap-1.5">
               {periods.map((p) => (
                 <button key={p.periodKey} type="button" onClick={() => setPeriodKey(p.periodKey)}
                   className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition", periodKey === p.periodKey ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
-                  {p.periodLabel}{p.periodKey === current ? " · current" : p.periodKey < (current ?? "") ? " · previous" : " · next"}
+                  {p.periodLabel} · {p.periodKey === current ? t("current") : p.periodKey < (current ?? "") ? t("previous") : t("next")}
                 </button>
               ))}
             </div>
           )}
-          {list.isError && <p className="mt-1 text-xs text-rose-600">{list.error instanceof ApiError ? list.error.message : "Couldn't load grants."}</p>}
+          {list.isError && <p className="mt-1 text-xs text-rose-600">{list.error instanceof ApiError ? list.error.message : t("Couldn't load the extra day off list.")}</p>}
         </div>
 
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">People · {selected.size} selected</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("People · {n} selected", { n: selected.size })}</span>
             <span className="flex gap-2 text-[11px]">
-              <button type="button" onClick={() => setSelected((cur) => new Set([...cur, ...shown.map((m) => m.userId)]))} className="font-semibold text-primary hover:underline">Select shown</button>
-              <button type="button" onClick={() => setSelected(new Set())} className="text-muted-foreground hover:underline">Clear</button>
+              <button type="button" onClick={() => setSelected((cur) => new Set([...cur, ...shown.map((m) => m.userId)]))} className="font-semibold text-primary hover:underline">{t("Select shown")}</button>
+              <button type="button" onClick={() => setSelected(new Set())} className="text-muted-foreground hover:underline">{t("Clear")}</button>
             </span>
           </div>
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or email…" className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search name or email…")} className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
           </div>
           {selected.size > 0 && (
             <div className="mb-2 flex flex-wrap gap-1">
               {sorted.filter((m) => selected.has(m.userId)).map((m) => (
                 <span key={m.userId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
                   {m.name || m.email}
-                  <button type="button" aria-label={`Remove ${m.name}`} onClick={() => toggle(m.userId)}><X className="h-3 w-3" /></button>
+                  <button type="button" aria-label={t("Remove {name}", { name: m.name })} onClick={() => toggle(m.userId)}><X className="h-3 w-3" /></button>
                 </span>
               ))}
             </div>
           )}
           <div className="max-h-64 overflow-y-auto rounded-xl border border-border">
-            {shown.length === 0 && <div className="py-6 text-center text-xs text-muted-foreground">No one matches “{search}”.</div>}
+            {shown.length === 0 && <div className="py-6 text-center text-xs text-muted-foreground">{t("No one matches “{q}”.", { q: search })}</div>}
             {shown.map((m) => (
               <label key={m.userId} className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-1.5 text-sm last:border-b-0 hover:bg-accent/50">
                 <input type="checkbox" checked={selected.has(m.userId)} onChange={() => toggle(m.userId)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
@@ -1435,38 +1456,38 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
 
         <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
           <label className="block">
-            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Days</span>
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Days")}</span>
             <input type="number" inputMode="numeric" min={1} max={31} value={days} onChange={(e) => setDays(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Reason (required)</span>
-            <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Worked the 3-day Jakarta event" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Reason (required)")}</span>
+            <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder={t("e.g. Worked the 3-day Jakarta event")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           </label>
         </div>
-        {!daysValid && days !== "" && <p className="text-[11px] text-rose-600">Days must be a whole number from 1 to 31.</p>}
+        {!daysValid && days !== "" && <p className="text-[11px] text-rose-600">{t("Days must be a whole number from 1 to 31.")}</p>}
 
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
           <span className="text-sm">
-            <b>{selected.size}</b> {selected.size === 1 ? "person" : "people"} × <b>{daysValid ? n : "?"}</b> {n === 1 ? "day" : "days"}
+            <b>{selected.size}</b> {selected.size === 1 ? t("person") : t("people")} × <b>{daysValid ? n : "?"}</b> {n === 1 ? t("day") : t("days")}
             {periodKey && <span className="text-muted-foreground"> · {periodLabelOf(periodKey)}</span>}
           </span>
           <button type="button" disabled={!canSubmit || grant.isPending} onClick={submit} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-            {grant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />} Give extra day off
+            {grant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />} {t("Give extra day off")}
           </button>
         </div>
       </div>
 
       <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="font-display text-base font-bold tracking-tight">Grants · {periodLabelOf(periodKey)}</h2>
-          <span className="text-xs text-muted-foreground">{active.length} active{revoked.length ? ` · ${revoked.length} revoked` : ""}</span>
+          <h2 className="font-display text-base font-bold tracking-tight">{t("Given · {period}", { period: periodLabelOf(periodKey) })}</h2>
+          <span className="text-xs text-muted-foreground">{t("{n} active", { n: active.length })}{revoked.length ? " · " + t("{n} revoked", { n: revoked.length }) : ""}</span>
         </div>
         {list.isLoading && <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
         {!list.isLoading && grants.length === 0 && (
           <div className="rounded-xl border border-dashed border-border p-6 text-center">
             <CalendarPlus className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
-            <div className="text-sm font-semibold">No extra day off in this period yet</div>
-            <p className="mt-1 text-xs text-muted-foreground">Pick people on the left, set the days and a reason, and they’ll see it in their day-off quota right away.</p>
+            <div className="text-sm font-semibold">{t("No extra day off in this period yet")}</div>
+            <p className="mt-1 text-xs text-muted-foreground">{t("Pick people on the left, set the days and a reason, and they’ll see it in their day-off quota right away.")}</p>
           </div>
         )}
         <ul className="divide-y divide-border">
@@ -1475,21 +1496,21 @@ function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: 
               <Avatar userId={g.userId} name={g.user?.name ?? null} avatar={g.user?.avatar ?? null} size={26} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="truncate text-sm font-semibold">{g.user?.name ?? g.user?.email ?? "Unknown"}</span>
+                  <span className="truncate text-sm font-semibold">{g.user?.name ?? g.user?.email ?? t("Unknown")}</span>
                   <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">+{g.days} DO</span>
                 </div>
                 <div className="truncate text-xs text-muted-foreground" title={g.reason}>{g.reason}</div>
                 <div className="text-[10px] text-muted-foreground">
                   {g.active
-                    ? `by ${g.grantedBy?.name ?? "—"} · ${fmtDate(g.createdAt)}`
-                    : `revoked by ${g.revokedBy?.name ?? "—"} · ${g.revokedAt ? fmtDate(g.revokedAt) : ""}`}
+                    ? t("by {name} · {date}", { name: g.grantedBy?.name ?? "—", date: fmtDate(g.createdAt) })
+                    : t("revoked by {name} · {date}", { name: g.revokedBy?.name ?? "—", date: g.revokedAt ? fmtDate(g.revokedAt) : "" })}
                 </div>
               </div>
               {g.active && (
                 <button type="button" disabled={revoke.isPending}
-                  onClick={() => { if (window.confirm(`Revoke ${g.user?.name ?? "this person"}’s ${g.days} extra day${g.days === 1 ? "" : "s"} off (${g.reason})?\n\nDays already taken are not undone.`)) revoke.mutate(g.id); }}
+                  onClick={() => { if (window.confirm(t("Revoke {name}’s {days} ({reason})?\n\nDays already taken are not undone.", { name: g.user?.name ?? t("this person"), days: extraDays(g.days), reason: g.reason }))) revoke.mutate(g.id); }}
                   className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-40">
-                  Revoke
+                  {t("Revoke")}
                 </button>
               )}
             </li>
@@ -1687,7 +1708,7 @@ function ReinstateUserModal({ user, onClose }: { user: NexusAdminUser; onClose: 
 // acting admin, purges personal/ephemeral rows, then deletes. Requires typing HAPUS to confirm.
 function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; email: string; deactivated?: boolean }; onClose: () => void }) {
   const qc = useQueryClient();
-  const { t } = useLang();
+  const { t, tn } = useLang();
   const [confirmTxt, setConfirmTxt] = useState("");
   const m = useMutation({
     mutationFn: () => nexusApi.deleteUser(user.id),
@@ -1702,28 +1723,28 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold tracking-tight text-rose-700">Delete account permanently</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-base font-bold tracking-tight text-rose-700">{t("Delete account permanently")}</h2>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         {result ? (
           <div className="space-y-3">
-            <p className="text-sm">✅ Account <b>{result.deletedUser.name}</b> <span className="text-muted-foreground">({result.deletedUser.email})</span> has been permanently deleted.</p>
-            {reassignedTotal > 0 && <p className="text-xs text-muted-foreground">{reassignedTotal} item{reassignedTotal === 1 ? "" : "s"} (task/file/quest/portfolio) they created were reassigned to your account so nothing is lost.</p>}
-            <button onClick={onClose} className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">Done</button>
+            <p className="text-sm">{t("The account {name} ({email}) has been permanently deleted.", { name: result.deletedUser.name, email: result.deletedUser.email })}</p>
+            {reassignedTotal > 0 && <p className="text-xs text-muted-foreground">{tn(reassignedTotal, "{n} item they created (task, file, goal, portfolio) was moved to your account, so nothing is lost.", "{n} items they created (tasks, files, goals, portfolios) were moved to your account, so nothing is lost.")}</p>}
+            <button onClick={onClose} className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">{t("Done")}</button>
           </div>
         ) : (
           <>
             <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-              <p>You're about to <b>permanently delete</b> the account:</p>
+              <p>{t("You're about to permanently delete this account:")}</p>
               <p className="mt-1 font-bold">{user.name} <span className="font-normal">· {user.email}</span></p>
               <ul className="mt-2 list-disc space-y-0.5 pl-4">
-                <li>Tasks, files, quests, portfolios, goals, docs & schedules they created are <b>reassigned to you</b> (not lost).</li>
-                <li>Their status updates, pending invites & audit trail are deleted. Their comments are removed too.</li>
-                <li>This action <b>can't be undone</b>.</li>
+                <li>{t("Tasks, files, goals, portfolios, docs and schedules they created move to you, so they aren't lost.")}</li>
+                <li>{t("Their status updates, pending invites and audit trail are deleted. Their comments are removed too.")}</li>
+                <li><b>{t("This can't be undone.")}</b></li>
               </ul>
             </div>
-            <label className="block text-xs font-semibold text-muted-foreground">Type <b className="text-rose-700">DELETE</b> to confirm
+            <label className="block text-xs font-semibold text-muted-foreground">{t("Type DELETE to confirm")}
               <input autoFocus value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} placeholder="DELETE" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-rose-400" />
             </label>
             {err && (
@@ -1739,9 +1760,9 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
               )
             )}
             <div className="mt-4 flex items-center justify-end gap-2">
-              <button onClick={onClose} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">Cancel</button>
+              <button onClick={onClose} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">{t("Cancel")}</button>
               <button disabled={!ready || m.isPending} onClick={() => m.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">
-                {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete permanently
+                {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} {t("Delete permanently")}
               </button>
             </div>
           </>
@@ -1765,7 +1786,8 @@ const REQ_TYPES = [
 ];
 
 function AdminQuests() {
-  const { t: tq } = useLang();
+  // `t` is a task or a team in the callbacks below, so the translator goes by another name here.
+  const { t: tq, tn } = useLang();
   const qc = useQueryClient();
   const projects = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
   const workspaceId = (projects.data ?? []).find((p) => p.workspaceId)?.workspaceId ?? "";
@@ -1808,36 +1830,36 @@ function AdminQuests() {
 
   return (
     <div className="space-y-4">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">BoD access required</div><p className="mt-2 text-sm text-muted-foreground">You need the BoD/Manager role to manage quests.</p></div>}
+      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{tq("BoD access required")}</div><p className="mt-2 text-sm text-muted-foreground">{tq("You need the BoD or Manager role to manage goals.")}</p></div>}
       {!list.isError && (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h2 className="mb-1 font-display text-base font-bold tracking-tight">Assign a new quest</h2>
-            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a quest: finish tasks against a target and a deadline, for an XP reward (max 50).")}</p>
+            <h2 className="mb-1 font-display text-base font-bold tracking-tight">{tq("Assign a new goal")}</h2>
+            <p className="mb-3 text-xs text-muted-foreground">{tq("Create a goal: finish tasks against a target and a due date, for an XP reward (max 50).")}</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quest title (e.g. Finish 5 tasks this week)" className={cn(inputCls, "sm:col-span-2")} />
-              <label className="text-xs font-semibold text-muted-foreground">Type
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tq("Goal title (e.g. Finish 5 tasks this week)")} className={cn(inputCls, "sm:col-span-2")} />
+              <label className="text-xs font-semibold text-muted-foreground">{tq("Type")}
                 <select value={requirementType} onChange={(e) => setRequirementType(e.target.value)} className={cn(inputCls, "mt-1 w-full font-normal")}>
-                  {REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  {REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => <option key={r.value} value={r.value}>{tq(r.label)}</option>)}
                 </select>
               </label>
               {!isTasks && (
-                <label className="text-xs font-semibold text-muted-foreground">Target (number of tasks)
+                <label className="text-xs font-semibold text-muted-foreground">{tq("Target (number of tasks)")}
                   <input value={requiredCount} onChange={(e) => setRequiredCount(e.target.value.replace(/[^0-9]/g, ""))} className={cn(inputCls, "mt-1 w-full")} />
                 </label>
               )}
-              <label className="text-xs font-semibold text-muted-foreground">Deadline (time limit)
+              <label className="text-xs font-semibold text-muted-foreground">{tq("Deadline")}
                 <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={cn(inputCls, "mt-1 w-full")} />
               </label>
-              <label className="text-xs font-semibold text-muted-foreground">XP reward (max 50)
+              <label className="text-xs font-semibold text-muted-foreground">{tq("XP reward (max 50)")}
                 <input type="number" min={0} max={50} value={xpReward} onChange={(e) => setXpReward(String(Math.min(50, Math.max(0, parseInt(e.target.value, 10) || 0))))} className={cn(inputCls, "mt-1 w-full")} />
               </label>
             </div>
             {isTasks ? (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">Tasks for this quest <span className="font-normal">{tq("(complete when all are done · XP goes to whoever does them · visible to members of the task's project)")}</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">{tq("Tasks for this goal")} <span className="font-normal">{tq("(complete when all are done · XP goes to whoever does them · visible to members of the task's project)")}</span></span>
                 <div className="mt-1.5 space-y-1">
-                  {questTasks.length === 0 && <p className="text-xs text-muted-foreground">No tasks picked yet. Search below.</p>}
+                  {questTasks.length === 0 && <p className="text-xs text-muted-foreground">{tq("No tasks picked yet. Search below.")}</p>}
                   {questTasks.map((t) => (
                     <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
@@ -1847,7 +1869,7 @@ function AdminQuests() {
                 </div>
                 <div className="relative mt-1.5">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks to add (min 2 letters)…" className={cn(inputCls, "w-full border-dashed pl-8")} />
+                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder={tq("Search tasks to add (at least 2 letters)…")} className={cn(inputCls, "w-full border-dashed pl-8")} />
                 </div>
                 {taskResults.length > 0 && (
                   <div className="mt-1 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-1">
@@ -1862,9 +1884,9 @@ function AdminQuests() {
               </div>
             ) : (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">Assign to team <span className="font-normal">{tq("(pick one or more · empty = everyone)")}</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">{tq("Assign to team")} <span className="font-normal">{tq("(pick one or more · empty = everyone)")}</span></span>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {teams.length === 0 && <span className="text-xs text-muted-foreground">No teams yet.</span>}
+                  {teams.length === 0 && <span className="text-xs text-muted-foreground">{tq("No teams yet.")}</span>}
                   {teams.map((t) => {
                     const on = selectedTeams.has(t.id);
                     return <button key={t.id} type="button" onClick={() => toggleTeam(t.id)} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}><span className="h-2 w-2 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />{t.name}</button>;
@@ -1872,8 +1894,8 @@ function AdminQuests() {
                 </div>
               </div>
             )}
-            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? "Create quest" : "Assign quest"}</button>
-            {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Failed — check your access.</span>}
+            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? tq("Create goal") : tq("Assign goal")}</button>
+            {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{tq("Couldn't save. Check your access.")}</span>}
           </div>
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
             {list.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
@@ -1884,19 +1906,19 @@ function AdminQuests() {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{q.title}</div>
                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                      <span>{REQ_TYPES.find((r) => r.value === q.requirementType)?.label ?? q.requirementType}{q.requirementType === "specific_tasks" ? ` · ${q.requiredCount} task${q.requiredCount === 1 ? "" : "s"}` : ` · target ${q.requiredCount}`}</span>
+                      <span>{(() => { const lbl = REQ_TYPES.find((r) => r.value === q.requirementType)?.label; return lbl ? tq(lbl) : q.requirementType; })()} · {q.requirementType === "specific_tasks" ? tn(q.requiredCount, "{n} task", "{n} tasks") : tq("target {n}", { n: q.requiredCount })}</span>
                       <span className="font-bold text-success">+{q.xpReward} XP</span>
-                      {q.deadline && <span>· ⏰ until {fmtDate(q.deadline)}</span>}
+                      {q.deadline && <span>· ⏰ {tq("until {date}", { date: fmtDate(q.deadline) })}</span>}
                       {q.requirementType === "specific_tasks"
-                        ? <span>· members of the task's project</span>
+                        ? <span>· {tq("members of the task's project")}</span>
                         : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : tq("Everyone")}</span>}
                     </div>
                   </div>
-                  <button onClick={() => { if (confirm("Delete this quest?")) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => { if (confirm(tq("Delete this goal?"))) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
-            {!list.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">No quests yet. Create one above.</div>}
+            {!list.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{tq("No goals yet. Create one above.")}</div>}
           </div>
         </>
       )}
@@ -1925,6 +1947,7 @@ function Stat({ label, value, active, onClick }: { label: string; value: number;
 
 function AnnouncementsAdmin() {
   const qc = useQueryClient();
+  const { t, tn, locale } = useLang();
   const list = useQuery({ queryKey: ["nexus", "announcements"], queryFn: () => nexusApi.announcements(), retry: false });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -1942,7 +1965,7 @@ function AnnouncementsAdmin() {
   const upload = useMutation({
     mutationFn: (file: File) => nexusApi.uploadAnnouncementAttachment(file),
     onSuccess: (r) => setAttachment(r),
-    onError: (e: unknown) => toast.error("Couldn't attach the PDF", { description: e instanceof ApiError ? e.message : "Try again." }),
+    onError: (e: unknown) => toast.error(t("Couldn't attach the PDF"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, staleTime: 300_000 });
   const members = useMemo(() => { const raw = membersQ.data; return (Array.isArray(raw) ? raw : raw?.members ?? []); }, [membersQ.data]);
@@ -1954,8 +1977,8 @@ function AnnouncementsAdmin() {
       title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [], repeatDays, repeatAtTime,
       ...(spOn && attachment ? { kind: "sp" as const, attachmentUrl: attachment.url, attachmentName: attachment.name } : {}),
     }),
-    onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); setSpOn(false); setAttachment(null); invalidate(); toast.success("Posted"); },
-    onError: (e: unknown) => toast.error("Couldn't post", { description: e instanceof ApiError ? e.message : "Try again." }),
+    onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); setSpOn(false); setAttachment(null); invalidate(); toast.success(t("Posted")); },
+    onError: (e: unknown) => toast.error(t("Couldn't post"), { description: e instanceof ApiError ? e.message : t("Try again.") }),
   });
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: invalidate });
@@ -1963,21 +1986,21 @@ function AnnouncementsAdmin() {
 
   return (
     <div className="space-y-5">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Megaphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">BoD access required</div><p className="mt-2 text-sm text-muted-foreground">You need the BoD role or above to manage announcements.</p></div>}
+      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Megaphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">{t("BoD access required")}</div><p className="mt-2 text-sm text-muted-foreground">{t("You need the BoD role or above to manage announcements.")}</p></div>}
       {!list.isError && (
         <>
           <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
-            <div className="text-sm font-bold">Create a pop-up announcement</div>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Announcement body… (multiple lines OK)" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <div className="text-sm font-bold">{t("Create a pop-up announcement")}</div>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Announcement title")} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder={t("Announcement text… (several lines are fine)")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
 
             {/* Audience: everyone, or specific people */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Audience</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Audience")}</span>
                 <div className="flex rounded-lg border border-border p-0.5">
                   {(["all", "some"] as const).map((a) => (
-                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? "Everyone" : "Selected people"}</button>
+                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? t("Everyone") : t("Selected people")}</button>
                   ))}
                 </div>
               </div>
@@ -1987,14 +2010,14 @@ function AnnouncementsAdmin() {
                     <div className="flex flex-wrap gap-1.5">
                       {targetIds.map((id) => { const u = members.find((m) => m.id === id); return (
                         <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                          {u?.name ?? "user"} <button onClick={() => toggleTarget(id)} aria-label="Remove"><X className="h-3 w-3" /></button>
+                          {u?.name ?? t("user")} <button onClick={() => toggleTarget(id)} aria-label={t("Remove")}><X className="h-3 w-3" /></button>
                         </span>
                       ); })}
                     </div>
                   )}
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Search a name to add…" className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-primary" />
+                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder={t("Search a name to add…")} className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-primary" />
                   </div>
                   {memberSearch && (
                     <div className="max-h-40 space-y-0.5 overflow-y-auto">
@@ -2014,7 +2037,7 @@ function AnnouncementsAdmin() {
             <div className="space-y-2">
               <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold">
                 <input type="checkbox" checked={spOn} onChange={(e) => { setSpOn(e.target.checked); if (!e.target.checked) setAttachment(null); }} className="h-4 w-4 accent-rose-600" />
-                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> Attach PDF (SP)
+                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> {t("Attach PDF (SP)")}
               </label>
               {spOn && (
                 <div className="flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/50 p-2.5 dark:border-rose-900 dark:bg-rose-950/20">
@@ -2023,22 +2046,22 @@ function AnnouncementsAdmin() {
                       <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>
                       <a href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-foreground hover:underline"><FileText className="h-4 w-4 shrink-0 text-rose-600" />{attachment.name}</a>
                       <span className="text-xs text-muted-foreground">{(attachment.size / 1024 / 1024).toFixed(2)} MB</span>
-                      <button onClick={() => setAttachment(null)} aria-label="Remove PDF" className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => setAttachment(null)} aria-label={t("Remove PDF")} className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
                     </>
                   ) : (
                     <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent", upload.isPending && "pointer-events-none opacity-60")}>
                       {upload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-                      {upload.isPending ? "Uploading…" : "Choose PDF (max 10 MB)"}
+                      {upload.isPending ? t("Uploading…") : t("Choose PDF (max 10 MB)")}
                       <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => {
                         const f = e.target.files?.[0];
                         e.target.value = "";
                         if (!f) return;
-                        if (f.size > 10 * 1024 * 1024) { toast.error("PDF is larger than 10 MB"); return; }
+                        if (f.size > 10 * 1024 * 1024) { toast.error(t("The PDF is larger than 10 MB")); return; }
                         upload.mutate(f);
                       }} />
                     </label>
                   )}
-                  <span className="w-full text-xs text-muted-foreground">Shown with a red SP badge and an Open PDF button in the pop-up.{audience === "all" ? " This goes to everyone — pick Selected people for a personal SP." : ""}</span>
+                  <span className="w-full text-xs text-muted-foreground">{t("Shown with a red SP badge and an Open PDF button in the pop-up.")}{audience === "all" ? " " + t("This goes to everyone. Pick Selected people for a personal SP.") : ""}</span>
                 </div>
               )}
             </div>
@@ -2048,15 +2071,15 @@ function AnnouncementsAdmin() {
                 is how it stops being said at all. */}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Repeat</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Repeat")}</span>
                 <div className="flex rounded-lg border border-border p-0.5">
                   {[0, 2, 3, 5, 7].map((d) => (
-                    <button key={d} onClick={() => setRepeatDays(d)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", repeatDays === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{d === 0 ? "Once" : `${d} more days`}</button>
+                    <button key={d} onClick={() => setRepeatDays(d)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", repeatDays === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{d === 0 ? t("Once") : t("{n} more days", { n: d })}</button>
                   ))}
                 </div>
                 {repeatDays > 0 && (
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                    at
+                    {t("at")}
                     <input type="time" value={repeatAtTime} onChange={(e) => setRepeatAtTime(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
                     WIB
                   </label>
@@ -2064,21 +2087,21 @@ function AnnouncementsAdmin() {
               </div>
               {repeatDays > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Goes out now, then again each day for {repeatDays} more {repeatDays === 1 ? "day" : "days"} at about {repeatAtTime} — pop-up and push both. It reappears for everyone each time, including people who already dismissed it.
+                  {tn(repeatDays, "Goes out now, then again each day for {n} more day at about {time}, as a pop-up and a push. It shows again for everyone each time, including people who already closed it.", "Goes out now, then again each day for {n} more days at about {time}, as a pop-up and a push. It shows again for everyone each time, including people who already closed it.", { time: repeatAtTime })}
                 </p>
               )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-                <option value="info">Info (blue)</option>
-                <option value="success">Success (green)</option>
-                <option value="warning">Warning (yellow)</option>
+                <option value="info">{t("Info (blue)")}</option>
+                <option value="success">{t("Success (green)")}</option>
+                <option value="warning">{t("Warning (yellow)")}</option>
               </select>
               <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending || (audience === "some" && targetIds.length === 0) || (spOn && !attachment)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
-                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} Post
+                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} {t("Post")}
               </button>
-              <span className="text-xs text-muted-foreground">{audience === "some" ? `Shows only to the ${targetIds.length} selected ${targetIds.length === 1 ? "person" : "people"}.` : "Shows once to every user."}</span>
+              <span className="text-xs text-muted-foreground">{audience === "some" ? tn(targetIds.length, "Shows only to the {n} selected person.", "Shows only to the {n} selected people.") : t("Shows once to everyone.")}</span>
             </div>
           </div>
 
@@ -2089,11 +2112,11 @@ function AnnouncementsAdmin() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     {a.kind === "sp" && <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>}
-                    {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">Warning</span>}
+                    {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">{t("Warning")}</span>}
                     <span className="text-sm font-bold">{a.title}</span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? "Active" : "Inactive"}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? t("Active") : t("Inactive")}</span>
                     {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">Repeats daily {a.repeatAtTime} until {new Date(a.repeatUntil).toLocaleDateString()}</span>
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{t("Repeats daily {time} until {date}", { time: a.repeatAtTime ?? "", date: new Date(a.repeatUntil).toLocaleDateString(locale) })}</span>
                     )}
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{a.tone}</span>
                   </div>
@@ -2103,17 +2126,17 @@ function AnnouncementsAdmin() {
                   )}
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
                     {fmtDate(a.createdAt)} · {a.targetCount
-                      ? `to ${a.targets?.length ? a.targets.slice(0, 4).map((t) => t.name ?? "?").join(", ") + (a.targets.length > 4 ? ` +${a.targets.length - 4}` : "") : `${a.targetCount} ${a.targetCount === 1 ? "person" : "people"}`}`
-                      : "to everyone"} · {a.seenCount} read
+                      ? t("to {who}", { who: a.targets?.length ? a.targets.slice(0, 4).map((x) => x.name ?? "?").join(", ") + (a.targets.length > 4 ? ` +${a.targets.length - 4}` : "") : tn(a.targetCount, "{n} person", "{n} people") })
+                      : t("to everyone")} · {t("{n} read", { n: a.seenCount })}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? "Deactivate" : "Activate"}</button>
-                  <button onClick={() => del.mutate(a.id)} aria-label="Delete" className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? t("Deactivate") : t("Activate")}</button>
+                  <button onClick={() => del.mutate(a.id)} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
-            {!list.isLoading && rows.length === 0 && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">No announcements yet.</div>}
+            {!list.isLoading && rows.length === 0 && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">{t("No announcements yet.")}</div>}
           </div>
         </>
       )}
@@ -2145,41 +2168,42 @@ function GideonAdmin() {
 }
 
 function GideonUsage() {
+  const { t, locale } = useLang();
   const q = useQuery({ queryKey: ["nexus", "gideon-usage"], queryFn: nexusApi.gideonUsage, retry: false });
   const users = q.data?.users ?? [];
   const totals = q.data?.totals;
 
   const when = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—";
+    iso ? new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Memuat…</div>;
-  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Nggak bisa memuat pemakaian GIDEON.</div>;
+  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Loading…")}</div>;
+  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Couldn't load GIDEON usage.")}</div>;
 
   return (
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-3 gap-3">
-          <Stat label="Pemakai" value={totals.people} />
-          <Stat label="Pertanyaan" value={totals.asked} />
-          <Stat label="Tool dipakai" value={totals.toolCalls} />
+          <Stat label={t("Users")} value={totals.people} />
+          <Stat label={t("Questions")} value={totals.asked} />
+          <Stat label={t("Tools used")} value={totals.toolCalls} />
         </div>
       )}
 
       {users.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
           <GideonMark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-          <div className="text-lg font-bold">Belum ada yang pakai GIDEON</div>
+          <div className="text-lg font-bold">{t("No one has used GIDEON yet")}</div>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Orang</th>
-                <th className="px-4 py-3 text-right font-semibold">Tanya</th>
-                <th className="px-4 py-3 text-right font-semibold">Tool</th>
-                <th className="px-4 py-3 font-semibold">Pertama</th>
-                <th className="px-4 py-3 font-semibold">Terakhir</th>
+                <th className="px-4 py-3 font-semibold">{t("Person")}</th>
+                <th className="px-4 py-3 text-right font-semibold">{t("Questions")}</th>
+                <th className="px-4 py-3 text-right font-semibold">{t("Tool calls")}</th>
+                <th className="px-4 py-3 font-semibold">{t("First")}</th>
+                <th className="px-4 py-3 font-semibold">{t("Last")}</th>
               </tr>
             </thead>
             <tbody>
@@ -2211,23 +2235,24 @@ function GideonUsage() {
  * newer than most installs, and a guess would be worse than a blank.
  */
 function AppInstalls() {
+  const { t, locale } = useLang();
   const q = useQuery({ queryKey: ["nexus", "app-installs"], queryFn: nexusApi.appInstalls, retry: false });
   const installs = q.data?.installs ?? [];
   const notInstalled = q.data?.notInstalled ?? [];
   const totals = q.data?.totals;
 
-  const when = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const when = (iso: string) => new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short" });
 
-  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Loading…</div>;
-  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Couldn't load the app list.</div>;
+  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Loading…")}</div>;
+  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">{t("Couldn't load the app list.")}</div>;
 
   return (
     <div className="space-y-4">
       {totals && (
         <div className="grid grid-cols-3 gap-3">
-          <Stat label="Using the app" value={totals.people} />
-          <Stat label="Not using it" value={totals.notInstalled ?? notInstalled.length} />
-          <Stat label="Devices" value={totals.devices} />
+          <Stat label={t("Using the app")} value={totals.people} />
+          <Stat label={t("Not using it")} value={totals.notInstalled ?? notInstalled.length} />
+          <Stat label={t("Devices")} value={totals.devices} />
         </div>
       )}
 
@@ -2235,7 +2260,7 @@ function AppInstalls() {
         <div className="flex flex-wrap gap-2">
           {totals.versions.map((v) => (
             <span key={v.version} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold">
-              {v.version === "unknown" ? "Not reported" : v.version} · {v.count}
+              {v.version === "unknown" ? t("Not reported") : v.version} · {v.count}
             </span>
           ))}
         </div>
@@ -2244,17 +2269,17 @@ function AppInstalls() {
       {installs.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
           <Smartphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-          <div className="text-lg font-bold">Nobody has installed the app yet</div>
+          <div className="text-lg font-bold">{t("Nobody has installed the app yet")}</div>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Person</th>
-                <th className="px-4 py-3 font-semibold">Version</th>
-                <th className="px-4 py-3 font-semibold">Device</th>
-                <th className="px-4 py-3 font-semibold">Last seen</th>
+                <th className="px-4 py-3 font-semibold">{t("Person")}</th>
+                <th className="px-4 py-3 font-semibold">{t("Version")}</th>
+                <th className="px-4 py-3 font-semibold">{t("Device")}</th>
+                <th className="px-4 py-3 font-semibold">{t("Last seen")}</th>
               </tr>
             </thead>
             <tbody>
@@ -2272,7 +2297,7 @@ function AppInstalls() {
                           {d.appVersion ? (
                             <span className="font-semibold">{d.appVersion}{d.buildNumber ? ` (${d.buildNumber})` : ""}</span>
                           ) : (
-                            <span className="text-muted-foreground">Not reported</span>
+                            <span className="text-muted-foreground">{t("Not reported")}</span>
                           )}
                         </div>
                       ))}
@@ -2301,7 +2326,7 @@ function AppInstalls() {
 
       {notInstalled.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Not using the app · {notInstalled.length}</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("Not using the app · {n}", { n: notInstalled.length })}</div>
           <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
             <table className="w-full text-sm">
               <tbody>
@@ -2312,7 +2337,7 @@ function AppInstalls() {
                       {m.email && <div className="text-xs text-muted-foreground">{m.email}</div>}
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground">
-                      {m.lastActiveAt ? `Web only · last active ${when(m.lastActiveAt)}` : "Never signed in"}
+                      {m.lastActiveAt ? t("Web only · last active {date}", { date: when(m.lastActiveAt) }) : t("Never signed in")}
                     </td>
                   </tr>
                 ))}

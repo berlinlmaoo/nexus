@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { fmtDate, fmtTime, nexusApi } from "@/lib/nexus-api";
 import { xpReasonInfo } from "@/lib/xp-reason";
 import { MorphPanel } from "@/components/motion/MorphPanel";
+import { useLang } from "@/lib/lang";
 
 type Scope = "period" | "all";
 type XpUser = { id: string; name?: string | null; avatar?: string | null };
@@ -16,6 +17,7 @@ type XpUser = { id: string; name?: string | null; avatar?: string | null };
  *  contents scale together (no per-element flying); the header mirrors the row (avatar + name, same
  *  bg) so the box morph is seamless, then the log body fades in. Render inside a parent <AnimatePresence>. */
 export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layoutId?: string; onClose: () => void }) {
+  const { t } = useLang();
   const [scope, setScope] = useState<Scope>("period");
   const log = useInfiniteQuery({
     queryKey: ["user-xp-log", user.id, scope],
@@ -39,24 +41,24 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
         <Avatar userId={user.id} name={user.name ?? undefined} avatar={user.avatar ?? undefined} size={36} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-base font-semibold">{user.name ?? "—"}</div>
-          <div className="text-[11px] text-muted-foreground">XP log — every gain & loss{canOpenRecord && <> · <Link to="/people/$userId" params={{ userId: user.id }} className="font-semibold text-primary hover:underline">Full record →</Link></>}</div>
+          <div className="text-[11px] text-muted-foreground">{t("XP log: every gain and loss")}{canOpenRecord && <> · <Link to="/people/$userId" params={{ userId: user.id }} className="font-semibold text-primary hover:underline">{t("Full record →")}</Link></>}</div>
         </div>
-        <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col border-t border-border">
         <div className="flex items-center gap-2 px-5 py-3">
           <div className="inline-flex rounded-xl border border-border bg-muted/40 p-0.5">
             {([["period", "This period"], ["all", "All time"]] as [Scope, string][]).map(([v, label]) => (
-              <button key={v} onClick={() => setScope(v)} className={cn("rounded-lg px-3 py-1 text-xs font-semibold transition-colors", scope === v ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}>{label}</button>
+              <button key={v} onClick={() => setScope(v)} className={cn("rounded-lg px-3 py-1 text-xs font-semibold transition-colors", scope === v ? "bg-card text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground")}>{t(label)}</button>
             ))}
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {log.isLoading && <div className="space-y-2 px-5 pb-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>}
-          {log.isError && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Couldn't load the XP log.</p>}
-          {!log.isLoading && !log.isError && rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">No XP changes yet{scope === "period" ? " this period" : ""}.</p>}
+          {log.isError && <p className="px-5 py-10 text-center text-sm text-muted-foreground">{t("Couldn't load the XP log.")}</p>}
+          {!log.isLoading && !log.isError && rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">{scope === "period" ? t("No XP changes yet this period.") : t("No XP changes yet.")}</p>}
           {!log.isLoading && rows.length > 0 && (
             <div className="divide-y divide-border">
               {rows.map((r) => {
@@ -73,7 +75,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
                   </div>
                 );
               })}
-              {log.hasNextPage && <div className="px-5 py-3"><button onClick={() => log.fetchNextPage()} disabled={log.isFetchingNextPage} className="w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold transition-colors hover:bg-muted disabled:opacity-60">{log.isFetchingNextPage ? "Loading…" : "Load more"}</button></div>}
+              {log.hasNextPage && <div className="px-5 py-3"><button onClick={() => log.fetchNextPage()} disabled={log.isFetchingNextPage} className="w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold transition-colors hover:bg-muted disabled:opacity-60">{log.isFetchingNextPage ? t("Loading…") : t("Load more")}</button></div>}
             </div>
           )}
         </div>

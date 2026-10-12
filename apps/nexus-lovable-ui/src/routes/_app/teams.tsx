@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { nexusApi, statusLabel, type NexusTeam, type NexusDivision } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
-import { t as tr } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 import { Avatar } from "@/components/Avatar";
 
 // Halaman ini sudah tidak ada. Isinya dipecah ke tempat yang memang memilikinya:
@@ -29,6 +29,8 @@ const UNGROUPED = "__ungrouped__";
 
 export function DivisionManager({ divisions, teams }: { divisions: NexusDivision[]; teams: NexusTeam[] }) {
   const qc = useQueryClient();
+  // `t` is a team in the loop below, so the translator goes by another name in this file.
+  const { t: tr } = useLang();
   const [name, setName] = useState("");
   const refresh = () => { qc.invalidateQueries({ queryKey: ["nexus", "divisions"] }); qc.invalidateQueries({ queryKey: ["nexus", "teams"] }); };
   const create = useMutation({ mutationFn: () => nexusApi.createDivision(name.trim()), onSuccess: () => { setName(""); refresh(); } });
@@ -39,16 +41,16 @@ export function DivisionManager({ divisions, teams }: { divisions: NexusDivision
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-soft space-y-4">
       <div>
-        <h3 className="font-semibold">Divisions / Companies</h3>
-        <p className="text-xs text-muted-foreground">A layer above teams. Set the name & color, then move teams into their division using the dropdown on each card.</p>
+        <h3 className="font-semibold">{tr("Divisions / Companies")}</h3>
+        <p className="text-xs text-muted-foreground">{tr("A layer above teams. Set the name and color, then move teams into their division with the dropdown on each card.")}</p>
       </div>
       <div className="flex items-center gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} placeholder="New division name…" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-        <button onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add</button>
+        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} placeholder={tr("New division name…")} className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        <button onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {tr("Add")}</button>
       </div>
-      {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn't create division."}</p>}
+      {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? tr("Couldn't create the division.")}</p>}
       <div className="space-y-1.5">
-        {divisions.length === 0 && <p className="text-xs text-muted-foreground">No divisions yet. Add one above.</p>}
+        {divisions.length === 0 && <p className="text-xs text-muted-foreground">{tr("No divisions yet. Add one above.")}</p>}
         {divisions.map((d) => <DivisionRow key={d.id} division={d} count={countByDiv.get(d.id) ?? 0} onChange={refresh} />)}
       </div>
     </div>
@@ -56,6 +58,7 @@ export function DivisionManager({ divisions, teams }: { divisions: NexusDivision
 }
 
 function DivisionRow({ division, count, onChange }: { division: NexusDivision; count: number; onChange: () => void }) {
+  const { t: tr, tn } = useLang();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(division.name);
   const [color, setColor] = useState(division.color ?? "#64748B");
@@ -64,25 +67,26 @@ function DivisionRow({ division, count, onChange }: { division: NexusDivision; c
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} onBlur={() => { if (color !== (division.color ?? "#64748B")) update.mutate({ color }); }} className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0" title="Division color" />
+      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} onBlur={() => { if (color !== (division.color ?? "#64748B")) update.mutate({ color }); }} className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0" title={tr("Division color")} />
       {editing ? (
         <input value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) update.mutate({ name: name.trim() }); if (e.key === "Escape") { setName(division.name); setEditing(false); } }} className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
       ) : (
         <span className="flex-1 truncate text-sm font-semibold">{division.name}</span>
       )}
-      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">{count} team{count === 1 ? "" : "s"}</span>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">{tn(count, "{n} team", "{n} teams")}</span>
       {editing ? (
-        <button onClick={() => name.trim() && update.mutate({ name: name.trim() })} disabled={update.isPending} className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50" aria-label="Save">{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
+        <button onClick={() => name.trim() && update.mutate({ name: name.trim() })} disabled={update.isPending} className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50" aria-label={tr("Save")}>{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
       ) : (
-        <button onClick={() => setEditing(true)} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent" aria-label="Rename"><Pencil className="h-3.5 w-3.5" /></button>
+        <button onClick={() => setEditing(true)} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent" aria-label={tr("Rename")}><Pencil className="h-3.5 w-3.5" /></button>
       )}
-      <button onClick={() => { if (window.confirm(`Delete division "${division.name}"? Its teams stick around, they just won't belong to a division anymore.`)) del.mutate(); }} disabled={del.isPending} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label="Delete division">{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}</button>
+      <button onClick={() => { if (window.confirm(tr("Delete the division \"{name}\"? Its teams stay, they just won't belong to a division anymore.", { name: division.name }))) del.mutate(); }} disabled={del.isPending} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label={tr("Delete division")}>{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}</button>
     </div>
   );
 }
 
 function TeamShiftControl({ team }: { team: NexusTeam }) {
   const qc = useQueryClient();
+  const { t: tr } = useLang();
   const baseStart = team.attendanceShiftStartTime ?? "09:00";
   const baseEnd = team.attendanceShiftEndTime ?? "18:00";
   const [enabled, setEnabled] = useState(!!team.attendanceShiftOverrideEnabled);
@@ -95,21 +99,21 @@ function TeamShiftControl({ team }: { team: NexusTeam }) {
   const dirty = enabled !== !!team.attendanceShiftOverrideEnabled || (enabled && (start !== baseStart || end !== baseEnd));
   return (
     <div className="mt-4">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Team work hours</span>
+      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Team work hours")}</span>
       <label className="mt-1.5 flex items-center gap-2 text-xs font-semibold">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-3.5 w-3.5 accent-primary" />
-        Use a custom shift just for this team
+        {tr("Use a custom shift just for this team")}
       </label>
       {enabled ? (
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Clock in<input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Clock out<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Check-in")}<input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Check-out")}<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
         </div>
       ) : (
-        <p className="mt-1 text-[11px] text-muted-foreground">Follows the workspace default hours.</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{tr("Follows the workspace default hours.")}</p>
       )}
-      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save hours</button>}
-      {save.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">Couldn't save — check the time format.</p>}
+      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {tr("Save hours")}</button>}
+      {save.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">{tr("Couldn't save. Check the time format.")}</p>}
     </div>
   );
 }
@@ -125,6 +129,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
   onMoveRight?: () => void;
   reordering?: boolean;
 }) {
+  const { t: tr, tn } = useLang();
   const members = team.members ?? [];
   const projects = (team.projects ?? []).map((p) => p.project).filter(Boolean);
   const memberIds = new Set(members.map((m) => m.userId || m.user?.id));
@@ -145,7 +150,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
   const rename = useMutation({
     mutationFn: (name: string) => nexusApi.renameTeam(team.id, name),
     onSuccess: () => { setEditingName(false); onChange(); },
-    onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t rename this team."),
+    onError: (e) => alert(e instanceof Error ? e.message : tr("Couldn’t rename this team.")),
   });
   const commitRename = () => {
     const next = nameDraft.trim();
@@ -201,35 +206,35 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
             <>
               <div className="flex items-start gap-1">
                 <h3 className="min-w-0 break-words font-semibold leading-snug tracking-tight">{team.name}</h3>
-                {canManage && <button onClick={() => { setNameDraft(team.name); setEditingName(true); }} className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/60 transition hover:bg-accent hover:text-foreground" aria-label="Rename team"><Pencil className="h-3.5 w-3.5" /></button>}
+                {canManage && <button onClick={() => { setNameDraft(team.name); setEditingName(true); }} className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/60 transition hover:bg-accent hover:text-foreground" aria-label={tr("Rename team")}><Pencil className="h-3.5 w-3.5" /></button>}
               </div>
               {/* Member count + reorder sit directly under the name (same column), so removing the old
                   "PATS Group" subtitle didn't leave a gap the height of the icon. */}
               <div className="mt-1.5 flex items-center gap-2">
-                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">{members.length} member{members.length === 1 ? "" : "s"}</span>
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">{tn(members.length, "{n} member", "{n} members")}</span>
                 {canManage && (onMoveLeft || onMoveRight) && (
                   <div className="ml-auto flex items-center">
-                    <button onClick={onMoveLeft} disabled={!onMoveLeft || reordering} title="Geser ke kiri" aria-label="Geser ke kiri" className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground/60 transition hover:bg-accent hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent"><ChevronLeft className="h-4 w-4" /></button>
-                    <button onClick={onMoveRight} disabled={!onMoveRight || reordering} title="Geser ke kanan" aria-label="Geser ke kanan" className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground/60 transition hover:bg-accent hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent"><ChevronRight className="h-4 w-4" /></button>
+                    <button onClick={onMoveLeft} disabled={!onMoveLeft || reordering} title={tr("Move left")} aria-label={tr("Move left")} className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground/60 transition hover:bg-accent hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent"><ChevronLeft className="h-4 w-4" /></button>
+                    <button onClick={onMoveRight} disabled={!onMoveRight || reordering} title={tr("Move right")} aria-label={tr("Move right")} className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground/60 transition hover:bg-accent hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent"><ChevronRight className="h-4 w-4" /></button>
                   </div>
                 )}
               </div>
             </>
           )}
         </div>
-        {canManage && <button onClick={() => { if (window.confirm(`Delete team "${team.name}"?`)) del.mutate(); }} disabled={del.isPending} className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label="Delete team">{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
+        {canManage && <button onClick={() => { if (window.confirm(tr("Delete the team \"{name}\"?", { name: team.name }))) del.mutate(); }} disabled={del.isPending} className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label={tr("Delete team")}>{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
       </div>
 
       {canManage && (
         <div className="mt-3">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Division</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Division")}</span>
           <select
             value={team.divisionId ?? ""}
             onChange={(e) => setDivision.mutate(e.target.value || null)}
             disabled={setDivision.isPending}
             className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold outline-none focus:border-primary disabled:opacity-60"
           >
-            <option value="">— No division —</option>
+            <option value="">{tr("— No division —")}</option>
             {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
@@ -238,7 +243,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
       <div className="mt-4">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Members")}</span>
-          {canManageAtt && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Star className="h-3 w-3 text-amber-500" /> = primary attendance team</span>}
+          {canManageAtt && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Star className="h-3 w-3 text-amber-500" /> {tr("= primary attendance team")}</span>}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {sortedMembers.map((m) => {
@@ -250,13 +255,13 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                 <span className="max-w-[120px] truncate font-semibold" title={m.user?.name ?? ""}>{m.user?.name ?? "—"}</span>
                 {/* Lead tim dihapus: approval absensi sekarang diatur di Control Room > Bagan Approval. */}
                 {canManageAtt ? (
-                  <button onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? "Their primary attendance team (click to unset)" : "Make this their primary attendance team"} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
+                  <button onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? tr("Their primary attendance team (click to unset)") : tr("Make this their primary attendance team")} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
                 ) : isPrimary ? <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" /> : null}
-                {canManage && <button onClick={() => removeMember.mutate(uid)} className="shrink-0 text-muted-foreground/50 transition hover:text-destructive" aria-label="Remove"><X className="h-3 w-3" /></button>}
+                {canManage && <button onClick={() => removeMember.mutate(uid)} className="shrink-0 text-muted-foreground/50 transition hover:text-destructive" aria-label={tr("Remove")}><X className="h-3 w-3" /></button>}
               </span>
             );
           })}
-          {members.length === 0 && <span className="text-xs text-muted-foreground">No members yet</span>}
+          {members.length === 0 && <span className="text-xs text-muted-foreground">{tr("No members yet")}</span>}
         </div>
         {canManage && addableMembers.length > 0 && (
           <div className="relative mt-2">
@@ -269,7 +274,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                 // Delay so a click on an option registers before the list unmounts.
                 onBlur={() => setTimeout(() => setMemberOpen(false), 120)}
                 disabled={addMember.isPending}
-                placeholder="Cari &amp; tambah member…"
+                placeholder={tr("Search and add members…")}
                 className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs font-semibold outline-none focus:border-primary"
               />
               {addMember.isPending && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />}
@@ -277,7 +282,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
             {memberOpen && (
               <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-pop">
                 {memberMatches.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">Nggak ada yang cocok.</div>
+                  <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Nothing matches.")}</div>
                 ) : (
                   memberMatches.map((m) => (
                     <button
@@ -302,16 +307,16 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
       {canManageAtt && <TeamShiftControl team={team} />}
 
       <div className="mt-4">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Projects · {projects.length}</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Projects · {n}", { n: projects.length })}</span>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {projects.map((p) => (
             <span key={p!.id} className="group inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
               <span className="h-2 w-2 rounded-full" style={{ background: p!.color ?? "#7b68ee" }} /> {p!.name}
               {p!.status && <span className="text-muted-foreground/70">· {statusLabel(p!.status)}</span>}
-              {canManage && <button onClick={() => unlinkProject.mutate(p!.id)} className="ml-0.5 hidden text-muted-foreground hover:text-destructive group-hover:inline" aria-label="Unlink"><X className="h-3 w-3" /></button>}
+              {canManage && <button onClick={() => unlinkProject.mutate(p!.id)} className="ml-0.5 hidden text-muted-foreground hover:text-destructive group-hover:inline" aria-label={tr("Unlink")}><X className="h-3 w-3" /></button>}
             </span>
           ))}
-          {projects.length === 0 && <span className="text-xs text-muted-foreground">No projects yet</span>}
+          {projects.length === 0 && <span className="text-xs text-muted-foreground">{tr("No projects yet")}</span>}
         </div>
         {canManage && linkableProjects.length > 0 && (
           <div className="relative mt-2">
@@ -323,7 +328,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
                 onFocus={() => setProjectOpen(true)}
                 onBlur={() => setTimeout(() => setProjectOpen(false), 120)}
                 disabled={linkProject.isPending}
-                placeholder="Cari &amp; link project…"
+                placeholder={tr("Search and link projects…")}
                 className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs font-semibold outline-none focus:border-primary"
               />
               {linkProject.isPending && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />}
@@ -331,7 +336,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
             {projectOpen && (
               <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-pop">
                 {projectMatches.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">Nggak ada yang cocok.</div>
+                  <div className="px-3 py-2 text-xs text-muted-foreground">{tr("Nothing matches.")}</div>
                 ) : (
                   projectMatches.map((p) => (
                     <button
@@ -353,7 +358,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
       </div>
 
       {(addMember.isError || removeMember.isError || linkProject.isError || unlinkProject.isError || setDivision.isError || del.isError) && (
-        <p className="mt-3 text-xs font-semibold text-destructive">Something didn't go through — check your access/connection.</p>
+        <p className="mt-3 text-xs font-semibold text-destructive">{tr("Something didn't go through. Check your access and connection.")}</p>
       )}
     </div>
   );
