@@ -440,7 +440,7 @@ private struct WCalSectionHeader: View {
     var body: some View {
         HStack(spacing: 5) {
             WCalDotMark(color: section.unit.map { wcalUnitColor($0.id, ix) } ?? wcalNeutral, filled: true, size: 7)
-            Text(section.unit?.name ?? wt("Other", "Lainnya"))
+            Text(section.unit?.name ?? wt("No division", "Tanpa divisi"))
                 .lineLimit(1)
             Spacer(minLength: 4)
             Text(verbatim: "\(section.count)")

@@ -9,7 +9,8 @@ import Foundation
 // web and Android. Change the rules in all three together.
 //
 // Owner's rules (plan "Rencana Kalender NEXUS", section 10): a task sits under the Bagan cards of its
-// PICs; without a PIC in the Bagan, under its project's division (placedBy "project"); counts are
+// PICs. A task with no PIC is not sent at all (server, 12 Oct 2026); one whose PICs are all outside the
+// Bagan has no placements: a neutral "No division" dot, listed under "Not in the chart yet"; counts are
 // unique tasks; overdue ≤ window days is overdue, older stays on its date in grey until done (10.17);
 // tasks of status-less projects are never overdue; order everywhere = Bagan rank.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -600,7 +601,10 @@ extension CalendarCore {
                 }
                 at[p.unitId] = s
             }
-            if !inside { continue }
+            // No placement at all (none of its PICs is in the Bagan, owner 12 Oct 2026): listed only at the
+            // top, where its neutral "No division" dot is.
+            let nowhere = i.placements.isEmpty && ix.top?.id == focusId
+            if !inside && !nowhere { continue }
             shown.insert(i.key)
             if i.placedBy == "pic" {
                 for u in i.unplacedIds {
@@ -666,7 +670,7 @@ extension CalendarCore {
             for k in n.children { walk(k, depth + 1) }
         }
         if let root = tree.root { walk(root, 0) }
-        if tree.root != nil, !tree.unplaced.isEmpty {
+        if !tree.unplaced.isEmpty {
             out.append(.unplaced(depth: 0, count: tree.unplaced.count))
             for p in tree.unplaced { out.append(.person(unitId: nil, userId: p.userId, depth: 1, days: split(p.items))) }
         }

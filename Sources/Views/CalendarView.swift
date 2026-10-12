@@ -807,7 +807,7 @@ struct CalendarView: View {
     private func legendChip(_ e: CalLegendEntry, on: Bool) -> some View {
         let unit = ix.byId[e.unitId]
         let focusable = unit != nil && e.unitId != focus && !(ix.children[e.unitId] ?? []).isEmpty
-        let name = e.unitId == "other" ? T("Other") : (unit?.name ?? "")
+        let name = e.unitId == "other" ? T("No division") : (unit?.name ?? "")
         let count = CalFormat.tasks(e.count)
         let spoken = focusable ? "\(String(format: T("Focus on %@"), name)), \(count)" : "\(name), \(count)"
         let hint = focusable ? "" : String(format: T("Filter by %@"), name)

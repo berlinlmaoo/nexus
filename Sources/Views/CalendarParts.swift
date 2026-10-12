@@ -675,7 +675,7 @@ private struct CalMonthGridBody: View {
         let holiday = g.holidays[day]
         let dots = cell?.dots ?? []
         let info = inMonth ? (g.lines[day] ?? .empty) : .empty
-        let unitName: (CalDot) -> String = { dot in dot.unitId == "other" ? T("Other") : (g.ix.byId[dot.unitId]?.name ?? "") }
+        let unitName: (CalDot) -> String = { dot in dot.unitId == "other" ? T("No division") : (g.ix.byId[dot.unitId]?.name ?? "") }
         return Button {
             Haptics.tap()
             g.onSelect(day)

@@ -113,6 +113,7 @@ extension AppLanguage {
         "Your Google Workspace account, in Settings": "Akun Google Workspace-mu, di Pengaturan",
         "Incomplete": "Belum lengkap",
         "Project settings": "Pengaturan project",
+        "No division": "Tanpa divisi",
         // ── marker: entries are appended above this line by tooling; keep it last ──
         "__redesign_end__": "__redesign_end__",
     ]
