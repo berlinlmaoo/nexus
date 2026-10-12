@@ -28,7 +28,7 @@ function LoginPage() {
   const [passkeyReady, setPasskeyReady] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(search.error ? "Access denied. Double-check your email/password." : null);
+  const [error, setError] = useState<string | null>(search.error ? lang.t("Access denied. Check your email and password.") : null);
   const callbackUrl = getSafeCallbackUrl(search.callbackUrl);
 
   useEffect(() => {
@@ -122,7 +122,7 @@ function LoginPage() {
         <div className="relative">
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-primary/30 blur-3xl" />
           <div style={{ transformStyle: "preserve-3d", willChange: "transform, opacity, filter", animation: "logoIntro 900ms cubic-bezier(0.22, 1, 0.36, 1) both" }}>
-            <img src={nexusLogo} alt="Nexus" className="relative block w-40 h-40 object-contain drop-shadow-[0_20px_40px_rgba(79,70,229,0.4)]" />
+            <img src={nexusLogo} alt="NEXUS" className="relative block w-40 h-40 object-contain drop-shadow-[0_20px_40px_rgba(79,70,229,0.4)]" />
           </div>
         </div>
       </div>
@@ -138,7 +138,7 @@ function LoginPage() {
         }}
       >
         <div className="mb-6 flex justify-center">
-          <img src={nexusLogo} alt="Nexus" className="block h-20 w-20 object-contain drop-shadow-[0_12px_24px_rgba(79,70,229,0.35)]" />
+          <img src={nexusLogo} alt="NEXUS" className="block h-20 w-20 object-contain drop-shadow-[0_12px_24px_rgba(79,70,229,0.35)]" />
         </div>
 
         <div className="mb-8 text-center">
@@ -242,7 +242,7 @@ function LoginPage() {
         )}
 
         <div className="mt-10 text-center">
-          <p className="text-sm text-muted-foreground">New operative? <a href="/register" className="text-primary font-bold hover:underline underline-offset-4 decoration-2 decoration-primary/30 transition-all ml-1">Request access</a></p>
+          <p className="text-sm text-muted-foreground">{lang.t("New here?")} <a href="/register" className="text-primary font-bold hover:underline underline-offset-4 decoration-2 decoration-primary/30 transition-all ml-1">{lang.t("Request access")}</a></p>
         </div>
 
         <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-[#FF7F50] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg border-2 border-white">{lang.t("Secure sign-in")}</div>

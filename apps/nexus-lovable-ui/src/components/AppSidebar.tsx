@@ -118,8 +118,8 @@ export function AppSidebar() {
           </Link>
           <button
             onClick={toggleSidebar}
-            aria-label="Collapse sidebar"
-            title="Collapse (⌘B)"
+            aria-label={t("Collapse sidebar")}
+            title={t("Collapse (⌘B)")}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
           >
             <PanelLeftClose className="h-4 w-4" />
@@ -130,7 +130,7 @@ export function AppSidebar() {
           className="mx-2 my-1 flex items-center gap-2 overflow-hidden rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden"
         >
           <Search className="h-3.5 w-3.5 shrink-0" />
-          <span className="flex-1 truncate text-left">Search…</span>
+          <span className="flex-1 truncate text-left">{t("Search…")}</span>
           <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
         </button>
       </SidebarHeader>
@@ -196,8 +196,8 @@ export function AppSidebar() {
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            aria-label="Log out"
-            title="Log out"
+            aria-label={t("Log out")}
+            title={t("Log out")}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:opacity-50 group-data-[collapsible=icon]:hidden"
           >
             {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}

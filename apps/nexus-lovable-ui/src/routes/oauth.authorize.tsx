@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ShieldCheck, Check, X, Loader2, ListChecks, Eye, AlertTriangle } from "lucide-react";
 import nexusLogo from "@/assets/nexus-logo.png";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/oauth/authorize")({ component: OAuthAuthorizePage });
 
@@ -24,12 +25,13 @@ const TRUSTED_HOSTS = ["claude.ai", "claude.com", "anthropic.com", "localhost", 
 function isTrustedHost(host?: string) {
   if (!host) return false;
   const h = host.split(":")[0].toLowerCase();
-  return TRUSTED_HOSTS.some((t) => h === t || h.endsWith("." + t));
+  return TRUSTED_HOSTS.some((d) => h === d || h.endsWith("." + d));
 }
 type Phase = "loading" | "login" | "consent" | "submitting" | "error";
 
 function OAuthAuthorizePage() {
   const s = useSearch({ strict: false }) as Search;
+  const { t } = useLang();
   const [phase, setPhase] = useState<Phase>("loading");
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +54,7 @@ function OAuthAuthorizePage() {
       if (err instanceof ApiError && err.status === 401) {
         setPhase("login");
       } else {
-        setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : "Couldn't load the connection request.");
+        setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : t("Couldn't load the connection request."));
         setPhase("error");
       }
     }
@@ -60,7 +62,7 @@ function OAuthAuthorizePage() {
 
   useEffect(() => {
     if (missing) {
-      setError("This connection request is incomplete (missing OAuth parameters). Try starting over from the Claude app.");
+      setError(t("This connection request is incomplete (missing OAuth parameters). Try starting over from the Claude app."));
       setPhase("error");
       return;
     }
@@ -72,7 +74,7 @@ function OAuthAuthorizePage() {
     e.preventDefault();
     setLoginErr(null);
     if (!email.trim() || !password) {
-      setLoginErr("Enter your email and password first.");
+      setLoginErr(t("Enter your email and password first."));
       return;
     }
     setLoggingIn(true);
@@ -83,8 +85,8 @@ function OAuthAuthorizePage() {
       setPhase("loading");
       await loadInfo();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setLoginErr("Email or password doesn't match.");
-      else setLoginErr("Login failed. Try again.");
+      if (err instanceof ApiError && err.status === 401) setLoginErr(t("Wrong email or password. Check them and try again."));
+      else setLoginErr(t("Couldn't sign in. Check your connection and try again."));
     } finally {
       setLoggingIn(false);
     }
@@ -106,7 +108,7 @@ function OAuthAuthorizePage() {
       // Hard-navigate back to the client (Claude). redirectTo is server-built from the *registered* uri.
       window.location.href = res.redirectTo;
     } catch (err) {
-      setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : "Couldn't process your decision.");
+      setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : t("Couldn't process your decision."));
       setPhase("error");
     }
   };
@@ -118,7 +120,7 @@ function OAuthAuthorizePage() {
 
       <div className="relative w-full max-w-md bg-white/50 backdrop-blur-2xl border border-white/60 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] rounded-[2rem] p-8 md:p-10">
         <div className="mb-6 flex items-center justify-center gap-3">
-          <img src={nexusLogo} alt="Nexus" className="block h-12 w-12 object-contain" />
+          <img src={nexusLogo} alt="NEXUS" className="block h-12 w-12 object-contain" />
           <div className="h-8 w-px bg-border" />
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10"><ShieldCheck className="h-6 w-6 text-primary" /></div>
         </div>
@@ -126,14 +128,14 @@ function OAuthAuthorizePage() {
         {phase === "loading" && (
           <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-sm">Loading connection request…</p>
+            <p className="text-sm">{t("Loading connection request…")}</p>
           </div>
         )}
 
         {phase === "error" && (
           <div className="space-y-4 text-center">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-red-50"><AlertTriangle className="h-6 w-6 text-red-500" /></div>
-            <h1 className="text-lg font-bold">Can't continue</h1>
+            <h1 className="text-lg font-bold">{t("Can't continue")}</h1>
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         )}
@@ -141,17 +143,17 @@ function OAuthAuthorizePage() {
         {phase === "login" && (
           <div className="space-y-5">
             <div className="text-center">
-              <h1 className="text-lg font-bold">Sign in to NEXUS</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Log in first to connect your account to Claude.</p>
+              <h1 className="text-lg font-bold">{t("Sign in to NEXUS")}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{t("Sign in first to connect your account to Claude.")}</p>
             </div>
             <form className="space-y-3" onSubmit={onLogin}>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" autoComplete="username"
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("Email")} autoComplete="username"
                 className="w-full rounded-xl border border-border bg-white/70 px-4 py-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20" />
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password"
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("Password")} autoComplete="current-password"
                 className="w-full rounded-xl border border-border bg-white/70 px-4 py-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20" />
               {loginErr && <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{loginErr}</p>}
               <button type="submit" disabled={loggingIn} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] disabled:opacity-60">
-                {loggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Sign in
+                {loggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {t("Sign in")}
               </button>
             </form>
           </div>
@@ -160,39 +162,39 @@ function OAuthAuthorizePage() {
         {(phase === "consent" || phase === "submitting") && info && (
           <div className="space-y-5">
             <div className="text-center">
-              <h1 className="text-lg font-bold"><span className="text-primary">{info.clientName}</span> wants to connect to NEXUS</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Signed in as <span className="font-semibold text-foreground">{info.user.email ?? info.user.name ?? "you"}</span></p>
+              <h1 className="text-lg font-bold"><span className="text-primary">{info.clientName}</span> {t("wants to connect to NEXUS")}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{t("Signed in as")} <span className="font-semibold text-foreground">{info.user.email ?? info.user.name ?? t("you")}</span></p>
             </div>
 
             <div className="rounded-2xl border border-border bg-white/60 p-4">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">It'll be allowed to:</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("It will be allowed to:")}</p>
               <ul className="space-y-2 text-sm">
-                <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> View the projects &amp; tasks you have access to</li>
-                <li className="flex items-start gap-2"><ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> Create &amp; edit tasks (move section, status, assignee, etc.)</li>
+                <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t("View the projects and tasks you have access to")}</li>
+                <li className="flex items-start gap-2"><ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t("Create and edit tasks (move section, status, assignee and so on)")}</li>
               </ul>
-              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Claude acts <span className="font-semibold">as you</span> — exactly the same access you have. It <span className="font-semibold">can't</span> touch XP, day-off, attendance, or admin settings.</p>
+              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{t("Claude acts as you, with exactly the same access you have. It can't touch XP, day off, attendance or admin settings.")}</p>
             </div>
 
             {info.redirectHost && (
               <div className={`rounded-xl border px-3 py-2 text-xs ${isTrustedHost(info.redirectHost) ? "border-border bg-white/60 text-muted-foreground" : "border-amber-300 bg-amber-50 text-amber-800"}`}>
-                {!isTrustedHost(info.redirectHost) && <span className="mb-0.5 flex items-center gap-1 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> This app isn't verified by NEXUS</span>}
-                Authorization code sent to: <span className="font-mono font-semibold">{info.redirectHost}</span>
-                {!isTrustedHost(info.redirectHost) && <span className="mt-0.5 block">If you don't recognize this host, don't allow it.</span>}
+                {!isTrustedHost(info.redirectHost) && <span className="mb-0.5 flex items-center gap-1 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> {t("This app isn't verified by NEXUS")}</span>}
+                {t("Authorization code sent to:")} <span className="font-mono font-semibold">{info.redirectHost}</span>
+                {!isTrustedHost(info.redirectHost) && <span className="mt-0.5 block">{t("If you don't recognize this host, don't allow it.")}</span>}
               </div>
             )}
 
             <div className="flex gap-2">
               <button onClick={() => decide(false)} disabled={phase === "submitting"} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-white/70 py-3 text-sm font-semibold transition hover:bg-accent active:scale-[0.98] disabled:opacity-60">
-                <X className="h-4 w-4" /> Deny
+                <X className="h-4 w-4" /> {t("Deny")}
               </button>
               <button onClick={() => decide(true)} disabled={phase === "submitting"} className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] disabled:opacity-60">
-                {phase === "submitting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Allow
+                {phase === "submitting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {t("Allow")}
               </button>
             </div>
           </div>
         )}
 
-        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-2 border-white bg-[#FF7F50] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white shadow-lg">Secure connect</div>
+        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-2 border-white bg-[#FF7F50] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white shadow-lg">{t("Secure connection")}</div>
       </div>
     </div>
   );

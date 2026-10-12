@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/room-display/$room")({ component: RoomDisplay });
 
@@ -20,21 +21,23 @@ type RawBooking = { id: string; title: string; startsAt: string; endsAt: string 
 type Booking = { id: string; title: string; start: Date; end: Date };
 
 const TZ = "Asia/Jakarta";
-const fmtTime = (d: Date) => d.toLocaleTimeString("id-ID", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
-const fmtDayLong = (d: Date) => d.toLocaleDateString("id-ID", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" });
-const fmtClock = (d: Date) => d.toLocaleTimeString("id-ID", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
-const fmtDateTop = (d: Date) => d.toLocaleDateString("id-ID", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" });
+// Times stay 24-hour in both languages (a wall display, read from across the room).
+const fmtTime = (d: Date, locale: string) => d.toLocaleTimeString(locale, { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+const fmtDayLong = (d: Date, locale: string) => d.toLocaleDateString(locale, { timeZone: TZ, weekday: "long", day: "numeric", month: "long" });
+const fmtClock = fmtTime;
+const fmtDateTop = (d: Date, locale: string) => d.toLocaleDateString(locale, { timeZone: TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const dayKey = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: TZ });
 const relMins = (from: Date, to: Date) => Math.round((to.getTime() - from.getTime()) / 60000);
 
 function RoomChooser() {
+  const { t } = useLang();
   return (
     <div style={{ minHeight: "100vh" }} className="flex flex-col items-center justify-center gap-6 bg-background p-8 text-foreground">
-      <div className="text-2xl font-bold text-muted-foreground">Pick a room to show on the TV</div>
+      <div className="text-2xl font-bold text-muted-foreground">{t("Pick a room to show on the TV")}</div>
       <div className="flex flex-wrap items-center justify-center gap-4">
         {ROOMS.map((r) => (
           <Link key={r.name} to="/room-display/$room" params={{ room: r.slugs[0] }} className="rounded-2xl border border-border bg-card px-8 py-6 text-2xl font-black text-foreground shadow-soft transition hover:bg-accent hover:scale-[1.03]">
-            {r.short}
+            {t(r.short)}
           </Link>
         ))}
       </div>
@@ -45,6 +48,7 @@ function RoomChooser() {
 
 function RoomDisplay() {
   const { room: roomParam } = Route.useParams();
+  const { t, locale } = useLang();
   const matched = resolveRoom(roomParam);
 
   const [raw, setRaw] = useState<RawBooking[]>([]);
@@ -103,11 +107,11 @@ function RoomDisplay() {
       {/* header */}
       <header className="flex items-start justify-between gap-6 px-10 pt-8">
         <div>
-          <div className="font-black leading-none tracking-tight" style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}>{matched.short}</div>
+          <div className="font-black leading-none tracking-tight" style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}>{t(matched.short)}</div>
         </div>
         <div className="text-right">
-          <div className="font-black tabular-nums leading-none" style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}>{fmtClock(now)}</div>
-          <div className="mt-1 text-lg font-semibold text-muted-foreground">{fmtDateTop(now)}</div>
+          <div className="font-black tabular-nums leading-none" style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}>{fmtClock(now, locale)}</div>
+          <div className="mt-1 text-lg font-semibold text-muted-foreground">{fmtDateTop(now, locale)}</div>
         </div>
       </header>
 
@@ -117,21 +121,21 @@ function RoomDisplay() {
           {occupied && current ? (
             <>
               <div className="flex items-center gap-3 text-lg font-black uppercase tracking-widest text-destructive">
-                <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-destructive" /> In use
+                <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-destructive" /> {t("In use")}
               </div>
               <div className="mt-3 font-black leading-tight text-foreground" style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}>{current.title}</div>
-              <div className="mt-2 text-2xl font-semibold text-muted-foreground">{fmtTime(current.start)} – {fmtTime(current.end)} · ends in {Math.max(0, relMins(now, current.end))} min</div>
+              <div className="mt-2 text-2xl font-semibold text-muted-foreground">{t("{start} – {end} · ends in {n} min", { start: fmtTime(current.start, locale), end: fmtTime(current.end, locale), n: Math.max(0, relMins(now, current.end)) })}</div>
             </>
           ) : (
             <>
               <div className="flex items-center gap-3 text-lg font-black uppercase tracking-widest text-success">
-                <span className="inline-block h-3 w-3 rounded-full bg-success" /> Available
+                <span className="inline-block h-3 w-3 rounded-full bg-success" /> {t("Available")}
               </div>
               <div className="mt-3 font-black leading-tight text-foreground" style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}>
-                {next && dayKey(next.start) === todayK ? <>Free until {fmtTime(next.start)}</> : <>Free to use</>}
+                {next && dayKey(next.start) === todayK ? t("Free until {time}", { time: fmtTime(next.start, locale) }) : t("Free to use")}
               </div>
               <div className="mt-2 text-2xl font-semibold text-muted-foreground">
-                {next ? (dayKey(next.start) === todayK ? <>Up next: {next.title} · starts in {Math.max(0, relMins(now, next.start))} min</> : <>Next booking {fmtDayLong(next.start)}, {fmtTime(next.start)}</>) : <>No bookings coming up</>}
+                {next ? (dayKey(next.start) === todayK ? t("Up next: {title} · starts in {n} min", { title: next.title, n: Math.max(0, relMins(now, next.start)) }) : t("Next booking {day}, {time}", { day: fmtDayLong(next.start, locale), time: fmtTime(next.start, locale) })) : t("No bookings coming up")}
               </div>
             </>
           )}
@@ -140,20 +144,20 @@ function RoomDisplay() {
 
       {/* upcoming agenda */}
       <section className="flex-1 overflow-hidden px-10 pb-6">
-        <div className="mb-3 text-sm font-black uppercase tracking-[0.3em] text-primary">Up next</div>
+        <div className="mb-3 text-sm font-black uppercase tracking-[0.3em] text-primary">{t("Up next")}</div>
         {!loaded ? (
-          <div className="text-2xl font-semibold text-muted-foreground">Loading…</div>
+          <div className="text-2xl font-semibold text-muted-foreground">{t("Loading…")}</div>
         ) : days.length === 0 ? (
-          <div className="text-2xl font-semibold text-muted-foreground">No upcoming bookings yet.</div>
+          <div className="text-2xl font-semibold text-muted-foreground">{t("No upcoming bookings yet.")}</div>
         ) : (
           <div className="space-y-5">
             {days.map(([k, items]) => (
               <div key={k}>
-                <div className="mb-2 text-lg font-bold text-muted-foreground">{k === todayK ? "Today" : fmtDayLong(items[0].start)}</div>
+                <div className="mb-2 text-lg font-bold text-muted-foreground">{k === todayK ? t("Today") : fmtDayLong(items[0].start, locale)}</div>
                 <div className="space-y-2">
                   {items.map((b) => (
                     <div key={b.id} className="flex items-center gap-5 rounded-2xl border border-border bg-card px-6 py-4 shadow-soft">
-                      <div className="w-44 shrink-0 text-2xl font-black tabular-nums text-primary">{fmtTime(b.start)}<span className="text-muted-foreground"> – {fmtTime(b.end)}</span></div>
+                      <div className="w-44 shrink-0 text-2xl font-black tabular-nums text-primary">{fmtTime(b.start, locale)}<span className="text-muted-foreground"> – {fmtTime(b.end, locale)}</span></div>
                       <div className="truncate text-2xl font-semibold text-foreground">{b.title}</div>
                     </div>
                   ))}
@@ -166,8 +170,8 @@ function RoomDisplay() {
 
       {/* footer */}
       <footer className="flex items-center justify-between border-t border-border px-10 py-3 text-sm text-muted-foreground">
-        <span>{error ? "⚠️ connection lost — showing last data" : updatedAt ? `Updated ${fmtClock(updatedAt)} · auto-refresh every 30s` : "connecting…"}</span>
-        <span className="flex gap-4">{ROOMS.map((r) => <Link key={r.name} to="/room-display/$room" params={{ room: r.slugs[0] }} className={r.name === roomName ? "font-bold text-primary" : "hover:text-foreground"}>{r.short}</Link>)}</span>
+        <span>{error ? t("Connection lost. Showing the last data.") : updatedAt ? t("Updated {time} · refreshes every 30s", { time: fmtClock(updatedAt, locale) }) : t("Connecting…")}</span>
+        <span className="flex gap-4">{ROOMS.map((r) => <Link key={r.name} to="/room-display/$room" params={{ room: r.slugs[0] }} className={r.name === roomName ? "font-bold text-primary" : "hover:text-foreground"}>{t(r.short)}</Link>)}</span>
       </footer>
     </div>
   );

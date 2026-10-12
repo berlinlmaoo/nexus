@@ -16,13 +16,14 @@ import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
 import { ChatUnreadTitle } from "@/lib/chat-unread";
 import { VaultUploadPanel } from "@/components/vault/VaultUploadPanel";
-import { t } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
+  const { t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
   const isPublicAuthRoute = location.pathname === "/login" || location.pathname.startsWith("/register") || location.pathname.startsWith("/forgot-password");

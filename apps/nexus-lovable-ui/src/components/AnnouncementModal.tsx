@@ -6,6 +6,7 @@ import { useSearch } from "@tanstack/react-router";
 import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Info, Megaphone, X } from "lucide-react";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
 
 const TONE: Record<string, { icon: typeof Info; head: string; accent: string }> = {
   info: { icon: Info, head: "from-accent via-card to-secondary", accent: "text-primary" },
@@ -21,6 +22,7 @@ const SP_TONE = { icon: FileText, head: "from-rose-100 via-card to-rose-50", acc
  * kind "warning" (Absen Monitor) → amber, with the selfie it is about.
  */
 export function AnnouncementModal() {
+  const { t } = useLang();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["announcements-active"], queryFn: () => nexusApi.activeAnnouncements(), retry: 1, staleTime: 30_000 });
   // `?announcement=<id>` on any route (a tapped notification): that one is shown first, even when it
@@ -52,7 +54,7 @@ export function AnnouncementModal() {
   const kind = current.kind ?? "announcement";
   const tone = kind === "sp" ? SP_TONE : kind === "warning" ? TONE.warning : (TONE[current.tone] ?? TONE.info);
   const Icon = tone.icon;
-  const eyebrow = kind === "sp" ? "Warning letter" : kind === "warning" ? "Warning" : "Announcement";
+  const eyebrow = kind === "sp" ? t("Warning letter") : kind === "warning" ? t("Warning") : t("Announcement");
   const pdf = current.attachmentUrl ?? null;
 
   return createPortal(
@@ -71,7 +73,7 @@ export function AnnouncementModal() {
                 {kind === "announcement" ? <Megaphone className={cn("h-4 w-4", tone.accent)} /> : <AlertTriangle className={cn("h-4 w-4", tone.accent)} />}
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">{eyebrow}</p>
               </div>
-              <button onClick={() => dismiss.mutate(current.id)} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={() => dismiss.mutate(current.id)} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3 p-5">
@@ -95,9 +97,9 @@ export function AnnouncementModal() {
                       onClick={() => setPdfOpen((o) => !o)}
                       className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
                     >
-                      <FileText className="h-4 w-4" /> {pdfOpen ? "Hide PDF" : "Open PDF"}
+                      <FileText className="h-4 w-4" /> {pdfOpen ? t("Hide PDF") : t("Open PDF")}
                     </button>
-                    <a href={pdf} target="_blank" rel="noreferrer" aria-label="Open PDF in a new tab" className="grid w-11 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-accent"><ExternalLink className="h-4 w-4" /></a>
+                    <a href={pdf} target="_blank" rel="noreferrer" aria-label={t("Open PDF in a new tab")} className="grid w-11 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-accent"><ExternalLink className="h-4 w-4" /></a>
                   </div>
                   {current.attachmentName && <p className="truncate text-center text-[11px] text-muted-foreground">{current.attachmentName}</p>}
                   {pdfOpen && <iframe src={pdf} title={current.attachmentName ?? "PDF"} className="h-[60vh] w-full rounded-xl border border-border bg-muted" />}
@@ -108,9 +110,9 @@ export function AnnouncementModal() {
                 disabled={dismiss.isPending}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50"
               >
-                Got it
+                {t("Got it")}
               </button>
-              {list.length > 1 && <p className="text-center text-[11px] text-muted-foreground">+{list.length - 1} more after this</p>}
+              {list.length > 1 && <p className="text-center text-[11px] text-muted-foreground">{t("+{n} more after this", { n: list.length - 1 })}</p>}
             </div>
           </motion.div>
         </div>

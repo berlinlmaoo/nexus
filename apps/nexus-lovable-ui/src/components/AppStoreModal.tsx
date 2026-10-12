@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Apple, X } from "lucide-react";
+import { useLang } from "@/lib/lang";
 
 const KEY = "nexus-appstore-never";
 const URL = "https://apps.apple.com/id/app/id6807031457";
@@ -17,6 +18,7 @@ const URL = "https://apps.apple.com/id/app/id6807031457";
  * generic apps.apple.com/app/id… URL returns 404 and would have been a broken link for everyone.
  */
 export function AppStoreModal() {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export function AppStoreModal() {
             onClick={later}
           />
           <motion.div
-            role="dialog" aria-modal="true" aria-label="NEXUS on the App Store"
+            role="dialog" aria-modal="true" aria-label={t("NEXUS on the App Store")}
             initial={{ opacity: 0, scale: 0.96, y: 14 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 14 }}
@@ -61,19 +63,18 @@ export function AppStoreModal() {
             <div className="flex items-center justify-between gap-3 border-b border-border bg-gradient-to-br from-accent via-card to-secondary px-5 py-3.5">
               <div className="flex items-center gap-2">
                 <Apple className="h-4 w-4 text-primary" />
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">Now on the App Store</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">{t("Now on the App Store")}</p>
               </div>
-              <button onClick={later} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent">
+              <button onClick={later} aria-label={t("Close")} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-4 p-5">
               <div>
-                <h2 className="font-display text-lg font-bold tracking-tight">Get NEXUS on your phone</h2>
+                <h2 className="font-display text-lg font-bold tracking-tight">{t("Get NEXUS on your phone")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  One app for iPhone, iPad and Mac. Clock in with your camera, get your mentions as
-                  notifications, and read your threads without opening a browser.
+                  {t("One app for iPhone, iPad and Mac. Check in with your camera, get your mentions as notifications, and read your chats without opening a browser.")}
                 </p>
               </div>
 
@@ -85,14 +86,14 @@ export function AppStoreModal() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]"
               >
                 <Apple className="h-4 w-4" />
-                Open in the App Store
+                {t("Open in the App Store")}
               </a>
 
               <button
                 onClick={never}
                 className="w-full rounded-xl px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
-                Don&rsquo;t remind me again
+                {t("Don't remind me again")}
               </button>
             </div>
           </motion.div>
