@@ -49,7 +49,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (id === myId || seesRecords) { await navigate({ to: "/people/$userId", params: { userId: id } }); return; }
     try {
       const res = await nexusApi.createConversation({ type: "DM", userIds: [id] });
-      await navigate({ to: "/messages/$conversationId", params: { conversationId: res.conversation.id } });
+      await navigate({ to: "/messages", search: { c: res.conversation.id } });
     } catch {
       toast.error(t("Couldn't start the chat."));
     }
