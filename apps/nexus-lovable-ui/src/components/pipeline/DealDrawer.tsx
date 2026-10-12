@@ -102,7 +102,7 @@ export function DealDrawer({
                 autoGrow
                 disabled={!canEdit}
                 onCommit={(v) => onPatch(deal.id, { name: v })}
-                className="-mx-2.5 mt-1.5 w-[calc(100%+1.25rem)] border-transparent bg-transparent text-xl font-semibold leading-snug hover:border-border"
+                className="-mx-2.5 mt-1.5 min-h-0 w-[calc(100%+1.25rem)] border-transparent bg-transparent py-1 text-xl font-semibold leading-snug hover:border-border pointer-coarse:min-h-0"
               />
               <ExecutionProject deal={deal} projectId={projectId} canEdit={canEdit} />
               <div role="tablist" aria-label={t("Deal")} className="mt-3 inline-flex gap-0.5 rounded-lg bg-muted p-0.5">
