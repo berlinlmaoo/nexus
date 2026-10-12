@@ -38,6 +38,24 @@ func runGridTextTests() {
     eq(X.autoRowHeight([(style: ["fp": 24], text: "")], defaultHeight: 32), 50, "big empty cell: 32px × 1.3 + 8")
     eq(X.autoRowHeight([(style: ["fp": 36], text: "Judul")], defaultHeight: 32), 70, "big font, one line")
     eq(X.autoRowHeight([(style: ["rt": "v"], text: String(repeating: "x", count: 100))], defaultHeight: 32), 400, "capped at 400")
+    // wrapped text (web autoHeights: lines × px × 1.3 + 8, measured in the column width − 12)
+    let seven: SheetGridText.Measure = { run, _, _ in Double(run.count) * 7 }
+    func wrapped(_ text: String, width: Double, style: [String: Any] = ["wr": "w"]) -> Double? {
+        X.autoRowHeight([SheetGridText.AutoCell(style: style, text: text, width: width)], defaultHeight: 32, measure: seven)
+    }
+    eq(X.wrappedLines("aaa bbb ccc", avail: 48, measure: { Double($0.count) * 7 }), 3, "three words, one per line")
+    eq(X.wrappedLines("aaa bbb ccc", avail: 98, measure: { Double($0.count) * 7 }), 1, "fits on one line")
+    eq(X.wrappedLines(String(repeating: "x", count: 30), avail: 48, measure: { Double($0.count) * 7 }), 5, "a long word breaks over lines")
+    eq(X.wrappedLines("a\nb\n", avail: 48, measure: { Double($0.count) * 7 }), 3, "every paragraph is a line")
+    eq(X.wrappedLines("aaa   bbb", avail: 48, measure: { Double($0.count) * 7 }), 2, "spaces hang at the line end")
+    eq(wrapped("aaa bbb ccc", width: 60), 59, "3 lines: 3 × 16.9 + 8")
+    eq(wrapped("aaa bbb ccc", width: 110), nil, "one line: default height")
+    eq(wrapped("a\nb", width: 110), 42, "two paragraphs")
+    eq(wrapped("a\nb", width: 110, style: ["wr": "o"]), nil, "overflow text is one line")
+    eq(wrapped("a\nb", width: 110, style: ["w": 1]), 42, "legacy w: 1 wraps")
+    eq(wrapped("", width: 60), nil, "empty wrapped cell")
+    eq(wrapped(String(repeating: "word ", count: 200), width: 60), 400, "wrapped height capped at 400")
+    eq(X.autoRowHeight([(style: ["wr": "w"], text: "aaa bbb ccc")], defaultHeight: 32), nil, "no width known: one line")
 
     // chart anchors
     let P = SheetChartPlace.self

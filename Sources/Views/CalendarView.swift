@@ -471,7 +471,7 @@ struct CalendarView: View {
             case .filters:
                 CalFilterSheet(filters: filtersBinding, ix: ix, items: items?.items ?? [], people: people, myHomes: myHomes)
             case let .preview(id, project, notMember, masked):
-                CalTaskPreview(taskId: id, projectName: project, notMember: notMember, masked: masked)
+                CalTaskReadOnly(taskId: id, projectName: project, notMember: notMember, masked: masked)
             }
         }
         .navigationDestination(item: $pushedTask) { push in
@@ -480,7 +480,7 @@ struct CalendarView: View {
                 case .edit(let id):
                     TaskDetailView(taskId: id).id(id)
                 case let .read(id, project):
-                    CalTaskPreview(taskId: id, projectName: project, notMember: true, masked: false, pushed: true).id(id)
+                    CalTaskReadOnly(taskId: id, projectName: project, notMember: true, masked: false, pushed: true).id(id)
                 }
             }
             // Gone some other way than Back (a tab switch, a deeper push): links stop landing here.
@@ -1985,10 +1985,10 @@ struct CalendarMenuCommands: Commands {
             }
             Section {
                 Button(T("By division")) { calendar?.lens(false) }
-                    .calendarShortcut("1", .command, bound: keys)
+                    .calendarShortcut("1", [.command, .option], bound: keys)
                     .disabled(!on)
                 Button(T("By person")) { calendar?.lens(true) }
-                    .calendarShortcut("2", .command, bound: keys)
+                    .calendarShortcut("2", [.command, .option], bound: keys)
                     .disabled(!on)
             }
             Section {

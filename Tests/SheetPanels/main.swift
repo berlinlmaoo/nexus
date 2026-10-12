@@ -543,7 +543,36 @@ func rangesTests() {
     eq(described.json["desc"] as? String, "Harga", "description trimmed")
 }
 
+// MARK: - chart editor save (merged into the chart as it is now)
+
+func chartMergeTests() {
+    var initial = SPChartSpec(id: "c1", type: "column", ranges: ["{a!r1}:{b!r5}"], at: ["r": "r1", "c": "c", "dx": 16, "dy": 0], w: 600, h: 371)
+    initial.title = "Old"
+    // Meanwhile the chart was dragged and resized on the grid (and someone set a subtitle on the web).
+    var current = initial.json
+    current["at"] = ["r": "r9", "c": "e", "dx": 4, "dy": 2] as [String: Any]
+    current["w"] = 420.0
+    current["h"] = 300.0
+    current["subtitle"] = "Web"
+    var edited = initial
+    edited.title = "New"
+    edited.type = "line"
+    edited.legend = "bottom"
+    let out = SPChartSpec.mergeEdits(edited, initial: initial, into: current)
+    eq(out["title"] as? String, "New", "edited title saved")
+    eq(out["type"] as? String, "line", "edited type saved")
+    eq(out["legend"] as? String, "bottom", "edited legend saved")
+    eq((out["at"] as? [String: Any])?["r"] as? String, "r9", "position from the grid kept")
+    eq((out["w"] as? NSNumber)?.doubleValue, 420, "width from the grid kept")
+    eq((out["h"] as? NSNumber)?.doubleValue, 300, "height from the grid kept")
+    eq(out["subtitle"] as? String, "Web", "a field the editor didn't touch keeps the newer value")
+    var cleared = initial
+    cleared.title = nil
+    eq(SPChartSpec.mergeEdits(cleared, initial: initial, into: initial.json)["title"] == nil, true, "a cleared title is removed")
+}
+
 chartTests()
+chartMergeTests()
 pivotTests()
 versionTests()
 findTests()

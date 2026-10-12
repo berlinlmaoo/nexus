@@ -141,7 +141,7 @@ struct UnitTreeSheet: View {
                     checkRow(T("Everyone"), on: selection.isEmpty, depth: 0, bold: false) { selection.removeAll() }
                 }
                 ForEach(rows) { r in row(r) }
-                if rows.isEmpty {
+                if rows.isEmpty && !query.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(String(format: T("No division matches “%@”."), query))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                         .listRowSeparator(.hidden)

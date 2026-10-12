@@ -27,13 +27,15 @@ struct SPChartView: View {
     let spec: SPChartSpec
     let data: SheetData
     let engine: SheetEngine
+    /// Drawn into an image (ImageRenderer draws no scroll views): the table chart lays out flat.
+    var forExport = false
 
     var body: some View {
         let cd = SPChart.chartData(spec, data: data, engine: engine)
         VStack(alignment: .leading, spacing: 4) {
             if let t = spec.title, !t.isEmpty { Text(t).font(NXFont.text(15, .medium)).lineLimit(1) }
             if let s = spec.subtitle, !s.isEmpty { Text(s).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1) }
-            SPChartBody(spec: spec, cd: cd, data: data, engine: engine)
+            SPChartBody(spec: spec, cd: cd, data: data, engine: engine, forExport: forExport)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(10)
@@ -46,6 +48,7 @@ private struct SPChartBody: View {
     let cd: SPChart.ChartData
     let data: SheetData
     let engine: SheetEngine
+    let forExport: Bool
 
     var body: some View {
         if spec.type == "scorecard" {
@@ -53,7 +56,7 @@ private struct SPChartBody: View {
         } else if cd.empty {
             placeholder
         } else if spec.type == "table" {
-            SPTableChart(cd: cd)
+            SPTableChart(cd: cd, scrolls: !forExport)
         } else if spec.type == "radar" {
             SPRadarChart(cd: cd, colors: colors, grid: spec.gridlines != false)
         } else {
@@ -101,27 +104,34 @@ private struct SPScorecard: View {
 
 private struct SPTableChart: View {
     let cd: SPChart.ChartData
+    let scrolls: Bool
 
     var body: some View {
-        ScrollView([.vertical, .horizontal]) {
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 4) {
+        if scrolls {
+            ScrollView([.vertical, .horizontal]) { table }
+        } else {
+            table.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).clipped()
+        }
+    }
+
+    private var table: some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 4) {
+            GridRow {
+                if cd.labels { Text(cd.xName.isEmpty ? T("Label") : cd.xName).fontWeight(.semibold) }
+                ForEach(cd.series.indices, id: \.self) { j in Text(cd.series[j].name).fontWeight(.semibold).gridColumnAlignment(.trailing) }
+            }
+            Divider()
+            ForEach(cd.categories.prefix(500).indices, id: \.self) { i in
                 GridRow {
-                    if cd.labels { Text(cd.xName.isEmpty ? T("Label") : cd.xName).fontWeight(.semibold) }
-                    ForEach(cd.series.indices, id: \.self) { j in Text(cd.series[j].name).fontWeight(.semibold).gridColumnAlignment(.trailing) }
-                }
-                Divider()
-                ForEach(cd.categories.prefix(500).indices, id: \.self) { i in
-                    GridRow {
-                        if cd.labels { Text(cd.categories[i]) }
-                        ForEach(cd.series.indices, id: \.self) { j in
-                            Text(cd.series[j].values[i].map(SPChartFmt.num) ?? "").monospacedDigit()
-                        }
+                    if cd.labels { Text(cd.categories[i]) }
+                    ForEach(cd.series.indices, id: \.self) { j in
+                        Text(cd.series[j].values[i].map(SPChartFmt.num) ?? "").monospacedDigit()
                     }
                 }
             }
-            .font(NXFont.text(12))
-            .padding(4)
         }
+        .font(NXFont.text(12))
+        .padding(4)
     }
 }
 
@@ -664,6 +674,7 @@ private struct SheetChartDetail: View {
     let onEdit: (SPChartSpec) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var deleting = false
+    @State private var anchor = SPAnchorRef()
 
     private var store: SheetStore { ctx.store }
     private var spec: SPChartSpec? { store.panelList("charts").compactMap { SPChartSpec(json: $0) }.first { $0.id == chartId } }
@@ -673,6 +684,7 @@ private struct SheetChartDetail: View {
             if let spec, let snap = store.snapshot {
                 SPChartView(spec: spec, data: snap.engine.data, engine: snap.engine)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(SPAnchorView(ref: anchor))
                     .padding(12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -683,12 +695,17 @@ private struct SheetChartDetail: View {
         .navigationTitle(spec.map { ($0.title ?? "").isEmpty ? T(SPChart.typeLabel($0.type)) : $0.title! } ?? T("Charts"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if store.canEdit, let spec {
+            if let spec {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button { onEdit(spec) } label: { Label(T("Edit chart"), systemImage: "pencil") }
-                        Button { duplicate(spec) } label: { Label(T("Duplicate"), systemImage: "plus.square.on.square") }
-                        Button(role: .destructive) { deleting = true } label: { Label(T("Delete chart"), systemImage: "trash") }
+                        if store.canEdit {
+                            Button { onEdit(spec) } label: { Label(T("Edit chart"), systemImage: "pencil") }
+                            Button { duplicate(spec) } label: { Label(T("Duplicate"), systemImage: "plus.square.on.square") }
+                        }
+                        Button { download(spec) } label: { Label(T("Download as PNG image"), systemImage: "arrow.down.circle") }
+                        if store.canEdit {
+                            Button(role: .destructive) { deleting = true } label: { Label(T("Delete chart"), systemImage: "trash") }
+                        }
                     } label: { Image(systemName: "ellipsis.circle") }
                     .accessibilityLabel(T("More"))
                 }
@@ -698,6 +715,11 @@ private struct SheetChartDetail: View {
             Button(T("Delete"), role: .destructive) { Task { await delete() } }
             Button(T("Cancel"), role: .cancel) {}
         } message: { Text(T("The data stays in the sheet; only the chart goes.")) }
+    }
+
+    private func download(_ spec: SPChartSpec) {
+        guard let snap = store.snapshot else { return }
+        SPChartExport.download(spec: spec, data: snap.engine.data, engine: snap.engine, anchor: anchor.view)
     }
 
     private func duplicate(_ spec: SPChartSpec) {
@@ -726,15 +748,20 @@ private struct SheetChartDetail: View {
 struct SheetChartEditor: View {
     let ctx: SheetPanelContext
     @State var spec: SPChartSpec
+    /// The chart as the editor opened it: Done saves only what differs from it.
+    private let initial: SPChartSpec
     @Environment(\.dismiss) private var dismiss
     @State private var tab = 0
     @State private var rangeText = ""
     @State private var rangeInvalid = false
     @State private var yMinText = ""
     @State private var yMaxText = ""
+    /// The preview, for the iPad share popover of Download.
+    @State private var anchor = SPAnchorRef()
 
     init(ctx: SheetPanelContext, initial: SPChartSpec) {
         self.ctx = ctx
+        self.initial = initial
         _spec = State(initialValue: initial)
     }
 
@@ -748,6 +775,8 @@ struct SheetChartEditor: View {
                     SPChartView(spec: spec, data: snap.engine.data, engine: snap.engine)
                         .frame(height: 200)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(SPAnchorView(ref: anchor))
+                        .overlay(alignment: .bottomTrailing) { SPChartDownloadButton { download(snap) } }
                         .padding(.horizontal, 12).padding(.top, 8)
                 }
                 Picker("", selection: $tab) {
@@ -893,6 +922,11 @@ struct SheetChartEditor: View {
         }
     }
 
+    /// Download ▸ PNG of the chart as edited so far.
+    private func download(_ snap: SheetBridge.Snapshot) {
+        SPChartExport.download(spec: spec, data: snap.engine.data, engine: snap.engine, anchor: anchor.view)
+    }
+
     private func setSeriesColor(_ i: Int, _ c: String?) {
         var list = spec.colors ?? []
         while list.count <= i { list.append("") }
@@ -913,9 +947,33 @@ struct SheetChartEditor: View {
     private func save() async {
         applyRange()
         if rangeInvalid { tab = 0; return }
+        // Read the charts fresh: the chart may have been moved / resized on the grid while this was open.
         var list = store.panelList("charts")
-        if let i = list.firstIndex(where: { ($0["id"] as? String) == spec.id }) { list[i] = spec.json } else { list.append(spec.json) }
+        if let i = list.firstIndex(where: { ($0["id"] as? String) == spec.id }) {
+            list[i] = SPChartSpec.mergeEdits(spec, initial: initial, into: list[i])
+        } else {
+            list.append(spec.json)
+        }
         await store.panelSaveSettings(["charts": list], label: T("edit chart"), pushUndo: ctx.pushUndo)
         dismiss()
+    }
+}
+
+/// The editor preview's Download button (a small round button in its corner).
+private struct SPChartDownloadButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.down.circle")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(NX.foreground)
+                .frame(width: 32, height: 32)
+                .background(.regularMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(6)
+        .accessibilityLabel(T("Download as PNG image"))
+        .help(T("Download as PNG image"))
     }
 }

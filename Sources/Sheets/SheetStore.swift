@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// One step of undo history: how to reverse a user action and how to do it again (web use-sheet-undo.ts).
 struct SheetUndoEntry {
@@ -60,9 +63,11 @@ final class SheetStore {
     }
     /// Hidden rows / columns (settings.hiddenRows / hiddenCols) just before a visible index (unhide arrows).
     private(set) var rowGaps: [Int: [Int]] = [:]
-    /// Automatic heights (model row → points) of rows without a height of their own: rotated text and
-    /// large fonts grow the row, like the web's autoHeights.
+    /// Automatic heights (model row → points) of rows without a height of their own: wrapped text (in
+    /// the column width), rotated text and large fonts grow the row, like the web's autoHeights.
     private(set) var autoHeights: [Int: CGFloat] = [:]
+    /// Per row id: the signature of what decided its automatic height, and that height (nil = default).
+    @ObservationIgnored private var autoHeightCache: [String: (sig: Int, h: CGFloat?)] = [:]
     /// A "Show a warning" protected range is about to be edited: the screen asks first (centred alert).
     var protectPrompt: SheetProtectPrompt?
     /// "Don't show this again for 5 minutes" (web protectMuteUntil).
@@ -125,22 +130,71 @@ final class SheetStore {
         return CGFloat(min(max(h, 20), 400))
     }
 
-    /// Rows that grow on their own (no height set): rotated text and large fonts.
-    private static func autoHeights(_ rows: [SheetRowModel], _ columns: [SheetJSON], _ snap: SheetBridge.Snapshot) -> [Int: CGFloat] {
+    /// Rows that grow on their own (no height set): wrapped text (measured in each cell's font and its
+    /// column's width), rotated text and large fonts. Cheap on every rebuild: a row is measured again only
+    /// when what decides its height changed (its sized cells' text, style or column width).
+    private func computeAutoHeights(_ snap: SheetBridge.Snapshot) -> [Int: CGFloat] {
         var colIndex: [String: Int] = [:]
-        for (i, c) in columns.enumerated() { if let id = c["id"] as? String { colIndex[id] = i } }
+        var colWidth: [String: Double] = [:]
+        for (i, c) in columns.enumerated() {
+            guard let id = c["id"] as? String else { continue }
+            colIndex[id] = i
+            let w = (c["width"] as? NSNumber)?.doubleValue ?? 0
+            colWidth[id] = w > 0 ? min(max(w, 30), 600) : 110
+        }
         var out: [Int: CGFloat] = [:]
+        var seen = Set<String>()
         for (r, row) in rows.enumerated() where row.height == nil && !row.styles.isEmpty {
-            var cells: [(style: [String: Any], text: String)] = []
+            var cells: [SheetGridText.AutoCell] = []
+            var sig = 0
             for (cid, st) in row.styles {
-                let big = (SheetGridStyle.fontPx(st) ?? 13) > 14
-                guard big || st["rt"] != nil, let c = colIndex[cid] else { continue }
-                cells.append((style: st, text: snap.display(row: r, col: c).text))
+                let px = SheetGridStyle.fontPx(st) ?? 13
+                let wrap = SheetGridStyle.wrapMode(st) == "w"
+                guard px > 14 || wrap || st["rt"] != nil, let c = colIndex[cid] else { continue }
+                let text = snap.display(row: r, col: c).text
+                let width = colWidth[cid] ?? 110
+                cells.append(SheetGridText.AutoCell(style: st, text: text, width: width))
+                var hs = Hasher()
+                hs.combine(cid)
+                hs.combine(text)
+                hs.combine(width)
+                hs.combine(px)
+                hs.combine(wrap)
+                hs.combine(SheetFormula.jsTruthy(st["b"]))
+                hs.combine(SheetFormula.jsTruthy(st["i"]))
+                hs.combine(st["ff"] as? String ?? "")
+                hs.combine(st["rt"].map { "\($0)" } ?? "")
+                // Order-free: the cells of a dictionary come in any order.
+                sig = sig &+ hs.finalize()
             }
             if cells.isEmpty { continue }
-            if let h = SheetGridText.autoRowHeight(cells, defaultHeight: 32) { out[r] = CGFloat(h) }
+            seen.insert(row.id)
+            if let hit = autoHeightCache[row.id], hit.sig == sig {
+                if let h = hit.h { out[r] = h }
+                continue
+            }
+            let h = SheetGridText.autoRowHeight(cells, defaultHeight: 32, measure: Self.textMeasure).map { CGFloat($0) }
+            autoHeightCache[row.id] = (sig, h)
+            if let h { out[r] = h }
         }
+        if autoHeightCache.count > seen.count { autoHeightCache = autoHeightCache.filter { seen.contains($0.key) } }
         return out
+    }
+
+    /// The width of a run of text in the cell's font, as the grid draws it (nil off UIKit: estimated).
+    private static var textMeasure: SheetGridText.Measure? {
+        #if canImport(UIKit)
+        return { text, st, px in
+            // Measured during rebuild(), which runs on the main actor (SheetGridFonts caches there).
+            MainActor.assumeIsolated {
+                let font = SheetGridFonts.font(size: CGFloat(min(max(px, 8), 96)), bold: SheetFormula.jsTruthy(st["b"]),
+                                               italic: SheetFormula.jsTruthy(st["i"]), family: SheetGridText.family(st))
+                return Double((text as NSString).size(withAttributes: [.font: font]).width)
+            }
+        }
+        #else
+        return nil
+        #endif
     }
 
     var canUndo: Bool { !(past[sheetId ?? ""] ?? []).isEmpty }
@@ -162,7 +216,7 @@ final class SheetStore {
         let groupCols = Self.collapsedGroups(settings["colGroups"], ids: colIds)
         let snap = SheetBridge.snapshot(columns: columns, rows: rows, settings: settings, previous: snapshot)
         snapshot = snap
-        autoHeights = Self.autoHeights(rows, columns, snap)
+        autoHeights = computeAutoHeights(snap)
 
         // The filter (and slicers) hide body rows; the header row of the range always stays.
         var filtered = Set<String>()

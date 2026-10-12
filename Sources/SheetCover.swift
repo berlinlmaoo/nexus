@@ -45,6 +45,8 @@ final class SheetCover {
         var container: UIViewController = owner
         while let p = container.parent { container = p }
         guard let presented = container.presentedViewController else { return false }
+        // An active search field is presented too, but it is part of the screen, not over it.
+        if presented is UISearchController { return false }
         return !presented.isBeingDismissed
     }
 

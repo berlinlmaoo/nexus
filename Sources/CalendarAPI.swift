@@ -32,6 +32,13 @@ extension APIClient {
         return try await calRun("/api/calendar/task?id=\(safe)", as: CalTaskAccess.self, cache: nil)
     }
 
+    /// The task itself, read-only, for a calendar viewer outside its project (`&detail=1`, web 80a286c,
+    /// 13 Oct 2026). The task routes stay members-only; this answers no file URL. Not cached.
+    func calendarTaskDetail(id: String) async throws -> CalTaskDetailResponse {
+        let safe = id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id
+        return try await calRun("/api/calendar/task?id=\(safe)&detail=1", as: CalTaskDetailResponse.self, cache: nil)
+    }
+
     /// One scope's widget snapshot (CalendarWidgetPresence saves it into the App Group). Not cached
     /// here: the App Group copy is the offline copy.
     func calendarGlance(scope: GlanceScope) async throws -> GlanceSnapshot {

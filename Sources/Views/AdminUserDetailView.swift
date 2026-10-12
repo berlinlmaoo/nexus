@@ -158,7 +158,8 @@ struct AdminUserDetailView: View {
                     : "\(T("Also lost: access to")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
             } ?? "")
         }
-        .alert(
+        // On its own background: this view already presents two alerts (one presentation per view).
+        .background { Color.clear.alert(
             projectLeave.map { String(format: T("Remove %@ from “%@”? They lose access right away."), member.displayName, $0.projectName) } ?? "",
             isPresented: Binding(get: { projectLeave != nil }, set: { if !$0 { projectLeave = nil } })
         ) {
@@ -170,7 +171,7 @@ struct AdminUserDetailView: View {
                 }
             }
             Button(T("Cancel"), role: .cancel) { projectLeave = nil }
-        }
+        } }
         .alert("\(T("Delete account")) \"\(member.displayName)\"?", isPresented: $confirmDelete) {
             Button(T("Delete permanently"), role: .destructive) {
                 Task {

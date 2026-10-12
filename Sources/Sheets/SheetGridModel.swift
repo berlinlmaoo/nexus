@@ -497,22 +497,96 @@ enum SheetGridText {
         return (w * cos(a) + h * sin(a), w * sin(a) + h * cos(a))
     }
 
-    /// Automatic row height of a row without a height of its own (web autoHeights, without measuring
-    /// wrapped text): rotated text and large fonts grow the row. `cells` = (style, shown text) of the row's
-    /// styled cells. nil = the default height.
+    /// One styled cell of a row for the automatic height: its style, shown text and column width (points).
+    struct AutoCell {
+        var style: [String: Any]
+        var text: String
+        var width: Double
+    }
+
+    /// Width of a run of text in a cell's font: (text, style, font px) → points.
+    typealias Measure = (String, [String: Any], Double) -> Double
+
+    /// Automatic row height (no wrapped text measured: every cell is one line). Kept for the callers that
+    /// have no column widths.
     static func autoRowHeight(_ cells: [(style: [String: Any], text: String)], defaultHeight: Double, maxHeight: Double = 400) -> Double? {
+        autoRowHeight(cells.map { AutoCell(style: $0.style, text: $0.text, width: .infinity) }, defaultHeight: defaultHeight,
+                      maxHeight: maxHeight, measure: nil)
+    }
+
+    /// Automatic row height of a row without a height of its own (web SheetGrid autoHeights): wrapped text
+    /// grows the row to its line count in the column's width, rotated text and large fonts grow it too.
+    /// `measure` = the width of a run in the cell's font (nil = ≈ 0.55em per character). nil = the default.
+    static func autoRowHeight(_ cells: [AutoCell], defaultHeight: Double, maxHeight: Double = 400, measure: Measure?) -> Double? {
         var h = 0.0
-        for (st, text) in cells {
+        for cell in cells {
+            let st = cell.style, text = cell.text
             let px = SheetGridStyle.fontPx(st) ?? 13
             let big = px > 14
+            let wrap = SheetGridStyle.wrapMode(st) == "w"
             let rot = rotation(st)
-            if !big && rot.isNone { continue }
+            if !big && !wrap && rot.isNone { continue }
             if text.isEmpty { if big { h = max(h, (px * 1.3 + 8).rounded()) }; continue }
             if !rot.isNone { h = max(h, (rotatedBox(text, rot, px: px).h + 8).rounded()); continue }
-            // Wrapped text is not measured here: one line is the floor (web measures the lines).
-            h = max(h, (px * 1.3 + 8).rounded())
+            var lines = 1
+            if wrap {
+                // The cell's text box is the column less its padding (web: width − 12).
+                let avail = max(10, cell.width - 12)
+                let m: (String) -> Double = { run in measure?(run, st, px) ?? Double(run.utf16.count) * px * 0.55 }
+                lines = wrappedLines(text, avail: avail, measure: m)
+            }
+            h = max(h, (Double(lines) * px * 1.3 + 8).rounded())
         }
         return h > defaultHeight ? min(maxHeight, h) : nil
+    }
+
+    /// Lines a text takes when word-wrapped into `avail` points (web: greedy over words and the spaces
+    /// between them; a word longer than the line breaks over as many lines as it needs, as UILabel does).
+    static func wrappedLines(_ text: String, avail: Double, measure: (String) -> Double) -> Int {
+        guard avail.isFinite, avail > 0 else { return max(1, text.components(separatedBy: "\n").count) }
+        var lines = 0
+        for para in text.components(separatedBy: "\n") {
+            var line = 0.0
+            for run in runs(para) {
+                let w = measure(run.text)
+                if run.space {
+                    // Spaces at the end of a line hang over the edge; at the start of a new one they count.
+                    line += w
+                    continue
+                }
+                if line + w > avail && line > 0 {
+                    lines += 1
+                    line = 0
+                }
+                if w > avail {
+                    let extra = Int((w / avail).rounded(.up)) - 1
+                    lines += extra
+                    line = w - Double(extra) * avail
+                } else {
+                    line += w
+                }
+            }
+            lines += 1
+        }
+        return max(1, lines)
+    }
+
+    /// A paragraph split into words and the whitespace between them (web split(/(\s+)/)).
+    private static func runs(_ s: String) -> [(text: String, space: Bool)] {
+        var out: [(text: String, space: Bool)] = []
+        var cur = ""
+        var curSpace = false
+        for ch in s {
+            let sp = ch.isWhitespace
+            if !cur.isEmpty && sp != curSpace {
+                out.append((cur, curSpace))
+                cur = ""
+            }
+            cur.append(ch)
+            curSpace = sp
+        }
+        if !cur.isEmpty { out.append((cur, curSpace)) }
+        return out
     }
 }
 

@@ -106,6 +106,33 @@ struct SPChartSpec: Identifiable {
         put("baseline", baseline)
         return o
     }
+
+    /// The chart editor's save: only the fields the editor changed (`edited` against what it opened with,
+    /// `initial`) go onto the chart as it is NOW in the sheet (`current`, read at save time), so a move /
+    /// resize on the grid, or someone else's edit, made while the editor was open is kept.
+    static func mergeEdits(_ edited: SPChartSpec, initial: SPChartSpec, into current: [String: Any]) -> [String: Any] {
+        guard var out = SPChartSpec(json: current) else { return edited.json }
+        if edited.type != initial.type { out.type = edited.type }
+        if edited.ranges != initial.ranges { out.ranges = edited.ranges }
+        if edited.title != initial.title { out.title = edited.title }
+        if edited.subtitle != initial.subtitle { out.subtitle = edited.subtitle }
+        if edited.headers != initial.headers { out.headers = edited.headers }
+        if edited.labels != initial.labels { out.labels = edited.labels }
+        if edited.transpose != initial.transpose { out.transpose = edited.transpose }
+        if edited.aggregate != initial.aggregate { out.aggregate = edited.aggregate }
+        if edited.colors != initial.colors { out.colors = edited.colors }
+        if edited.bg != initial.bg { out.bg = edited.bg }
+        if edited.legend != initial.legend { out.legend = edited.legend }
+        if edited.xTitle != initial.xTitle { out.xTitle = edited.xTitle }
+        if edited.yTitle != initial.yTitle { out.yTitle = edited.yTitle }
+        if edited.dataLabels != initial.dataLabels { out.dataLabels = edited.dataLabels }
+        if edited.gridlines != initial.gridlines { out.gridlines = edited.gridlines }
+        if edited.yMin != initial.yMin { out.yMin = edited.yMin }
+        if edited.yMax != initial.yMax { out.yMax = edited.yMax }
+        if edited.key != initial.key { out.key = edited.key }
+        if edited.baseline != initial.baseline { out.baseline = edited.baseline }
+        return out.json
+    }
 }
 
 enum SPChart {

@@ -1178,7 +1178,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
                 v = have
                 v.setContent(content)
             } else {
-                v = makeChartView(ch.id, content)
+                v = makeChartView(ch.id, content, pill: ch.slicer)
             }
             v.canEdit = input.canEdit
             v.selected = ch.id == selectedChart
@@ -1186,8 +1186,8 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         layoutCharts()
     }
 
-    private func makeChartView(_ id: String, _ content: AnyView) -> SheetChartObjectView {
-        let v = SheetChartObjectView(id: id, content: content)
+    private func makeChartView(_ id: String, _ content: AnyView, pill: Bool) -> SheetChartObjectView {
+        let v = SheetChartObjectView(id: id, content: content, pill: pill)
         v.onSelect = { [weak self] id in self?.selectChart(id) }
         v.onOpen = { [weak self] id in self?.delegate?.gridOpenChart(id) }
         v.onDrag = { [weak self] id, frame, done, resized in self?.chartDragged(id, frame, done: done, resized: resized) }
@@ -1210,6 +1210,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         guard ch.row >= 0, ch.row < layout.rows, layout.cols > 0 else { return nil }
         let x = ch.col < layout.cols ? layout.colX[max(0, ch.col)] : (layout.colX.last ?? 0)
         let y = layout.rowY[ch.row]
+        if ch.slicer { return CGRect(x: x + ch.dx, y: y + ch.dy, width: max(80, ch.w), height: ch.h) }
         let w = max(CGFloat(SheetChartPlace.minWidth), ch.w), h = max(CGFloat(SheetChartPlace.minHeight), ch.h)
         return CGRect(x: x + ch.dx, y: y + ch.dy, width: w, height: h)
     }
@@ -1221,6 +1222,9 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         chartDrag = nil
         layoutCharts()
     }
+
+    /// The view of a chart / slicer on the grid (a popover points at it).
+    func objectView(_ id: String) -> UIView? { chartViews[id] }
 
     private func layoutCharts() {
         for ch in input.charts {
@@ -1246,7 +1250,7 @@ final class SheetGridHost: UIView, UICollectionViewDataSource, UICollectionViewD
         let list = chartViews.values.filter { !$0.isHidden }.sorted { $0.layer.zPosition > $1.layer.zPosition }
         for v in list {
             if overFrozen && !v.frozenAnchor { continue }
-            guard v.frame.contains(p) else { continue }
+            guard v.touchFrame.contains(p) else { continue }
             return v.hitTest(collection.convert(p, to: v), with: event) ?? v
         }
         return nil
@@ -1593,7 +1597,7 @@ struct SheetGridView: UIViewRepresentable {
         i.canEdit = store.canEdit
         i.rowMarkers = Set(store.rowGaps.keys)
         i.colMarkers = Set(store.colGaps.keys)
-        i.charts = charts(store)
+        i.charts = charts(store) + slicers(store)
         return i
     }
 
@@ -1616,6 +1620,27 @@ struct SheetGridView: UIViewRepresentable {
             let dy = (spec.at["dy"] as? NSNumber)?.doubleValue ?? 0
             out.append(SheetGridChart(id: spec.id, row: vr, col: vc, dx: CGFloat(dx), dy: CGFloat(dy),
                                       w: CGFloat(spec.w), h: CGFloat(spec.h)))
+        }
+        return out
+    }
+
+    /// settings.slicers placed the same way (web: the chip at its anchor, 200 wide unless `w`).
+    @MainActor
+    private static func slicers(_ store: SheetStore) -> [SheetGridChart] {
+        let specs = store.slicerSpecs
+        guard !specs.isEmpty else { return [] }
+        var rowAt: [String: Int] = [:]
+        for (v, m) in store.visRows.enumerated() { rowAt[store.rows[m].id] = v }
+        var colAt: [String: Int] = [:]
+        for (i, c) in store.columns.enumerated() { if let id = c["id"] as? String { colAt[id] = i } }
+        var out: [SheetGridChart] = []
+        for sl in specs {
+            guard let r = sl.at["r"] as? String, let c = sl.at["c"] as? String, let vr = rowAt[r], let mc = colAt[c] else { continue }
+            let vc = SheetChartPlace.visibleColumn(model: mc, visCols: store.visCols)
+            let dx = (sl.at["dx"] as? NSNumber)?.doubleValue ?? 0
+            let dy = (sl.at["dy"] as? NSNumber)?.doubleValue ?? 0
+            out.append(SheetGridChart(id: sl.id, row: vr, col: vc, dx: CGFloat(dx), dy: CGFloat(dy),
+                                      w: CGFloat(sl.width), h: CGFloat(SheetSlicerSpec.height), slicer: true))
         }
         return out
     }
@@ -1690,16 +1715,48 @@ struct SheetGridView: UIViewRepresentable {
         }
 
         func gridChartContent(_ id: String) -> AnyView? {
+            if let sl = store.slicer(id) {
+                let counts = store.slicerCounts(sl)
+                return AnyView(SheetSlicerChip(title: sl.title ?? "", label: store.slicerLabel(sl), bg: sl.bg,
+                                               active: SheetFilter.critActive(sl.crit), shown: counts?.shown, total: counts?.total))
+            }
             guard let snap = store.snapshot, let spec = store.chartSpecs.first(where: { $0.id == id }) else { return nil }
             return AnyView(SPChartView(spec: spec, data: snap.engine.data, engine: snap.engine))
         }
 
-        func gridOpenChart(_ id: String) { actions.openChart(id) }
+        func gridOpenChart(_ id: String) {
+            if store.slicer(id) != nil { actions.openSlicer(id) } else { actions.openChart(id) }
+        }
+
+        /// A slicer's ⋯: its value list, its editor, delete.
+        private func slicerMenu(_ id: String) -> UIMenu {
+            let s = store
+            var items: [UIMenuElement] = [
+                UIAction(title: T("Filter by values"), image: UIImage(systemName: "line.3.horizontal.decrease.circle")) { [weak self] _ in
+                    self?.actions.openSlicer(id)
+                },
+            ]
+            if s.canEdit {
+                items.append(UIAction(title: T("Edit slicer"), image: UIImage(systemName: "pencil")) { [weak self] _ in self?.actions.editSlicer(id) })
+                items.append(UIAction(title: T("Delete slicer"), image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                    Task { await s.deleteSlicer(id) }
+                })
+            }
+            return UIMenu(children: items)
+        }
+
+        /// Download ▸ PNG of a chart on the grid; the iPad popover points at the chart.
+        private func downloadChart(_ id: String) {
+            guard let snap = store.snapshot, let spec = store.chartSpecs.first(where: { $0.id == id }) else { return }
+            SPChartExport.download(spec: spec, data: snap.engine.data, engine: snap.engine, anchor: host?.objectView(id))
+        }
 
         func gridChartMenu(_ id: String) -> UIMenu? {
+            if store.slicer(id) != nil { return slicerMenu(id) }
             let s = store
             var items: [UIMenuElement] = [
                 UIAction(title: T("Edit chart"), image: UIImage(systemName: "pencil")) { [weak self] _ in self?.actions.openChart(id) },
+                UIAction(title: T("Download as PNG image"), image: UIImage(systemName: "arrow.down.circle")) { [weak self] _ in self?.downloadChart(id) },
             ]
             if s.canEdit {
                 items.append(UIAction(title: T("Duplicate"), image: UIImage(systemName: "plus.square.on.square")) { _ in
@@ -1719,6 +1776,10 @@ struct SheetGridView: UIViewRepresentable {
                 host?.cancelChartDrag()
                 return
             }
+            if s.slicer(id) != nil {
+                Task { await s.placeSlicer(id, rowId: rid, colId: cid, dx: Double(dx), dy: Double(dy)) }
+                return
+            }
             let label = resized ? T("resize chart") : T("move chart")
             Task { await s.placeChart(id, rowId: rid, colId: cid, dx: Double(dx), dy: Double(dy), w: Double(size.width), h: Double(size.height), label: label) }
         }
@@ -1726,6 +1787,10 @@ struct SheetGridView: UIViewRepresentable {
         func gridDeleteChart(_ id: String) {
             let s = store
             guard s.canEdit else { return }
+            if s.slicer(id) != nil {
+                Task { await s.deleteSlicer(id) }
+                return
+            }
             Task { await s.deleteChart(id) }
         }
 
@@ -1774,6 +1839,10 @@ struct SheetGridActions {
     var commentCount: (SheetPos) -> Int = { _ in 0 }
     /// A chart on the grid tapped again / its Edit: the chart editor.
     var openChart: (String) -> Void = { _ in }
+    /// A slicer chip tapped again / Filter by values: its value list.
+    var openSlicer: (String) -> Void = { _ in }
+    /// A slicer's Edit slicer: the slicer editor.
+    var editSlicer: (String) -> Void = { _ in }
 }
 
 #if !targetEnvironment(macCatalyst)

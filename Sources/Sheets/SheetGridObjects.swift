@@ -7,6 +7,8 @@ import UIKit
 //   same Swift Charts view as the Charts panel inside a UIHostingController, scrolled with the cells; tap
 //   selects, tap again opens the chart editor; drag moves it (pointer at once, a finger after a short hold),
 //   the corner handle resizes it; saved to settings.charts,
+// - slicers (settings.slicers) the same way, drawn as the web's pill chip: tap selects, tap again opens its
+//   value list, ⋯ beside it has Filter by values / Edit / Delete; drag moves it; no resize,
 // - the corner above the row numbers with the two freeze handles (drag them to freeze rows / columns),
 // - the collection view subclass that lets the charts take touches before the cells under them.
 
@@ -79,10 +81,14 @@ struct SheetGridChart: Equatable {
     var dy: CGFloat
     var w: CGFloat
     var h: CGFloat
+    /// A slicer chip (settings.slicers), not a chart.
+    var slicer = false
 }
 
 final class SheetChartObjectView: UIView, UIGestureRecognizerDelegate {
     let chartId: String
+    /// A slicer chip: round ends, no frame of its own, ⋯ beside it, no resize handle.
+    let pill: Bool
     private let hosting: UIHostingController<AnyView>
     private let handle = UIView()
     private let more = UIButton(type: .system)
@@ -102,12 +108,13 @@ final class SheetChartObjectView: UIView, UIGestureRecognizerDelegate {
     private var startPoint: CGPoint = .zero
     private var dragging = false
 
-    init(id: String, content: AnyView) {
+    init(id: String, content: AnyView, pill: Bool = false) {
         chartId = id
+        self.pill = pill
         hosting = UIHostingController(rootView: content)
         super.init(frame: .zero)
         clipsToBounds = false
-        backgroundColor = UIColor(NX.card)
+        backgroundColor = pill ? .clear : UIColor(NX.card)
         layer.cornerRadius = 6
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.12
@@ -133,7 +140,7 @@ final class SheetChartObjectView: UIView, UIGestureRecognizerDelegate {
         more.setImage(UIImage(systemName: "ellipsis.circle.fill"), for: .normal)
         more.tintColor = UIColor(NX.violet)
         more.showsMenuAsPrimaryAction = true
-        more.accessibilityLabel = T("Chart options")
+        more.accessibilityLabel = pill ? T("Slicer options") : T("Chart options")
         addSubview(more)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
@@ -171,9 +178,9 @@ final class SheetChartObjectView: UIView, UIGestureRecognizerDelegate {
     func setContent(_ content: AnyView) { hosting.rootView = content }
 
     private func updateChrome() {
-        layer.borderWidth = selected ? 2 : 1
+        layer.borderWidth = selected ? 2 : (pill ? 0 : 1)
         layer.borderColor = (selected ? UIColor(NX.violet) : UIColor(NX.border)).cgColor
-        handle.isHidden = !(selected && canEdit)
+        handle.isHidden = pill || !(selected && canEdit)
         more.isHidden = !selected
         more.menu = selected ? menu?(chartId) : nil
         setNeedsLayout()
@@ -183,7 +190,26 @@ final class SheetChartObjectView: UIView, UIGestureRecognizerDelegate {
         super.layoutSubviews()
         let s: CGFloat = traitCollection.userInterfaceIdiom == .mac ? 12 : 18
         handle.frame = CGRect(x: bounds.width - s - 2, y: bounds.height - s - 2, width: s, height: s)
-        more.frame = CGRect(x: bounds.width - 36, y: 4, width: 32, height: 32)
+        if pill {
+            // Round ends; ⋯ sits just right of the chip (the chip is too small to hold it).
+            let r = bounds.height / 2
+            layer.cornerRadius = r
+            hosting.view.layer.cornerRadius = r
+            more.frame = CGRect(x: bounds.width + 4, y: (bounds.height - 32) / 2, width: 32, height: 32)
+        } else {
+            more.frame = CGRect(x: bounds.width - 36, y: 4, width: 32, height: 32)
+        }
+    }
+
+    /// The area that takes touches in the grid's coordinates (a selected chip's ⋯ is outside its bounds).
+    var touchFrame: CGRect {
+        guard pill, selected else { return frame }
+        return CGRect(x: frame.minX, y: frame.minY, width: frame.width + 40, height: frame.height)
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if pill, selected, !more.isHidden, more.frame.contains(point) { return true }
+        return super.point(inside: point, with: event)
     }
 
     override func traitCollectionDidChange(_ previous: UITraitCollection?) {

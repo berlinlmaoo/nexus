@@ -40,6 +40,8 @@ private struct SheetScreen: View {
     @State private var nameText = ""
     /// The column whose filter menu is open (the funnel on the filter's header row).
     @State private var filterColumn: Int?
+    /// The slicer whose value list is open (its chip on the grid tapped again).
+    @State private var slicerMenu: String?
     /// iPhone: the Format sheet.
     @State private var formatting = false
     /// The open panel (find, comments, versions, validation, conditional formats, charts, pivot): ONE
@@ -79,6 +81,7 @@ private struct SheetScreen: View {
         // One .sheet per host view (two on the same view leave buttons dead): each on its own background.
         .background { Color.clear.sheet(isPresented: $picking) { dropdownSheet } }
         .background { Color.clear.sheet(isPresented: Binding(get: { filterColumn != nil }, set: { if !$0 { filterColumn = nil } })) { filterSheet } }
+        .background { Color.clear.sheet(isPresented: Binding(get: { slicerMenu != nil }, set: { if !$0 { slicerMenu = nil } })) { slicerSheet } }
         .background { Color.clear.sheet(isPresented: $formatting) { SheetGridFormatSheet(store: store) } }
         .background { Color.clear.sheet(item: $panel) { kind in SheetPanelHost(kind: kind, ctx: panelContext) } }
         .task(id: store.sheetId) { await comments.load(store.sheetId) }
@@ -163,12 +166,25 @@ private struct SheetScreen: View {
                 guard let r = store.rowId(p.r), let c = store.columnId(p.c) else { return 0 }
                 return comments.count(rowId: r, columnId: c)
             },
-            openChart: { id in openPanel(.chart(id)) }
+            openChart: { id in openPanel(.chart(id)) },
+            openSlicer: { id in
+                if store.editing { store.commitEdit(move: nil) }
+                slicerMenu = id
+            },
+            editSlicer: { id in openPanel(.slicer(id)) }
         )
     }
 
     private var panelContext: SheetPanelContext {
         SheetPanelContext(store: store, comments: comments, pushUndo: { entry in store.push(entry) })
+    }
+
+    /// Data ▸ Add a slicer: placed beside the data, its editor opened (web addSlicer).
+    private func addSlicer() {
+        if store.editing { store.commitEdit(move: nil) }
+        Task {
+            if let id = await store.addSlicer() { openPanel(.slicer(id)) }
+        }
     }
 
     private func openPanel(_ k: SheetPanelKind) {
@@ -553,6 +569,8 @@ private struct SheetScreen: View {
             Button { Task { await store.createFilterView() } } label: { Label(T("Create new filter view"), systemImage: "plus") }
                 .disabled(!store.canEdit)
         }
+        Button { addSlicer() } label: { Label(T("Add a slicer"), systemImage: "slider.horizontal.below.rectangle") }
+            .disabled(!store.canEdit)
         Divider()
         let col = SheetA1.letters(store.activeColNumber - 1)
         Button { let c = store.selection.active.c; Task { await store.sortRange(byColumn: c, ascending: true) } } label: {
@@ -710,6 +728,15 @@ private struct SheetScreen: View {
             SheetFilterMenu(data: data, canEdit: store.canEdit,
                             onSort: { asc in Task { await store.sortFilter(column: c, ascending: asc) } },
                             onApply: { crit in Task { await store.setFilterCriteria(column: data.columnId, crit) } })
+        }
+    }
+
+    /// A slicer's value list: the filter menu over its column; OK saves the slicer's criteria.
+    @ViewBuilder private var slicerSheet: some View {
+        if let id = slicerMenu, let data = store.slicerMenuData(id) {
+            SheetFilterMenu(data: data, canEdit: store.canEdit,
+                            onSort: { asc in Task { await store.sortSlicer(id, ascending: asc) } },
+                            onApply: { crit in Task { await store.setSlicerCriteria(id, crit) } })
         }
     }
 

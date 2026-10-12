@@ -143,12 +143,14 @@ struct MessagesView: View {
         }
         .navigationTitle(T("Messages"))
         .navigationBarTitleDisplayMode(.inline)
+        // Where the ⌘N guard learns what is presented over this screen (a toolbar label may be a native
+        // bar button, which never builds a SwiftUI background).
+        .background(SheetCover.Anchor(cover: cover))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { if !cover.isCovered { showNewChat = true } } label: {
                     Image(systemName: "square.and.pencil").font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(NX.violetText)
-                        .background(SheetCover.Anchor(cover: cover))
                 }
                 // The split layout draws its own compose button; these two never coexist, so the
                 // shortcut is never registered twice.

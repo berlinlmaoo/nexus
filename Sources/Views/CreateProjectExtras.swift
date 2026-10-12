@@ -357,7 +357,7 @@ struct NewProjectMembersPicker: View {
                         }
                         .padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
                         .background(NX.violet.opacity(0.12), in: Capsule())
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                        .touchTarget44(drawn: 44, drawnHeight: 26)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(format: T("Remove %@"), m.displayName))

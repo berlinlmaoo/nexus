@@ -138,9 +138,13 @@ web; the old grid of tasks is the tab **Table** (key `table`), matching the web'
 | **Freeze handles**: the grey bars on the select-all corner drag to freeze rows (≤ 20) / columns (≤ 10) up to where they are dropped (violet preview line), like the web; refused across a merged block | SheetGridObjects.swift (SheetCornerView), SheetGrid.swift |
 | **Text rotation** (`rt`): tilt up / down, rotate up / down, stacked, custom angle (−90…90); drawn turned counter-clockwise inside the cell and placed by its alignment; rows without a height of their own grow for rotated and large text (web autoHeights) | SheetGrid.swift (cell), SheetGridModel.swift, SheetStore.swift |
 | Tests on Linux: Tests/SheetModel **132 checks, 0 fails** (adds fonts, rotation, auto row height, chart anchors); Tests/SheetPanels **239 checks, 0 fails** (adds every case of sheet-stats.test.mjs + named-range / protection rules) | Tests/SheetModel, Tests/SheetPanels |
+| **Wrapped-text auto row height**: rows without a height of their own grow to fit wrapped text (`wr: "w"` / legacy `w`), measured with each cell's font (size, bold, italic, family) in its column width − 12, lines × px × 1.3 + 8, capped at 400 — the web's autoHeights; a manual height always wins. Recomputed on every rebuild (edit, realtime, resize, format) but a row is measured again only when the signature of its sized cells (text, style, column width) changed | SheetGridModel.swift (SheetGridText.autoRowHeight / wrappedLines), SheetStore.computeAutoHeights |
+| **Chart download as PNG**: chart ⋯ on the grid, the Charts panel's chart ⋯ and the chart editor's preview button draw the chart (same Swift Charts view, at its sheet size, light, 2×) with ImageRenderer into "<title>.png"; iPhone / iPad: share sheet (iPad popover points at the chart), Mac: Save panel. SVG stays web only | SheetChartExport.swift, SheetPanelCharts.swift, SheetGrid.swift |
+| **Slicers**: Data › Add a slicer (over the filter's range, else the data block around the selection; first column; placed right of the block — web addSlicer) opens the Slicer editor (Data: range + column; Customise: title + background colour; Delete slicer, which the web has no button for). Each slicer floats on the grid as the web's pill chip at its `at` anchor (filter icon, title or header, "N of M", caret; own colour with readable text): tap selects, tap again opens its value list (the filter menu: values, condition, colour, sort A→Z / Z→A of its range), ⋯ beside it = Filter by values / Edit slicer / Delete slicer; press-and-hold (or pointer) drags it; Delete key removes a selected one. Saved to settings.slicers; filtering keeps going through SheetStore.rebuild | SheetSlicer.swift, SheetPanelSlicer.swift, SheetGridObjects.swift (pill), SheetGrid.swift, SheetViews.swift |
+| **Chart editor save fix**: Done merges only the fields the editor changed (vs what it opened with) into the chart as it is in settings at save time — a move / resize on the grid while the editor was open is no longer reset (same merge for the slicer editor) | SPChartSpec.mergeEdits, SheetSlicerSpec.mergeEdits |
+| Tests on Linux: Tests/SheetModel **145 checks, 0 fails** (adds wrapped lines / heights); Tests/SheetPanels **247 checks, 0 fails** (adds the editor merge); SheetStore + SheetSlicer type-checked and smoke-run on Linux (slicer hides rows, N of M, value list, merge, auto height shrinks after widening) | Tests/SheetModel, Tests/SheetPanels |
 
-Still web only: slicer panels (their filtering applies), renaming / deleting filter views, sort by colour,
-wrapped-text auto row height (rows grow for rotated / large text only), the chart's PNG / SVG download.
+Still web only: renaming / deleting filter views, sort by colour, SVG chart download.
 
 ## Notification language (13 Oct 2026)
 
@@ -328,6 +332,34 @@ Web bb2d8f9 (BoD R2) + 33f3080 / 0275d91 (keyboard/touch R2).
   `SheetCover.isCovered(self)`.
 - ID strings in `indonesianAccessR2`.
 
+## Calendar: read-only task for non-members (13 Oct)
+
+Web 80a286c (owner, 13 Oct 2026): the Master Calendar shows every project's tasks to everyone (private
+projects stay masked); /api/tasks/:id and the other task routes stay members-only (403 for a non-member).
+
+- `Views/CalendarTaskReadOnly.swift` — `CalTaskReadOnly` replaces `CalTaskPreview` (deleted from
+  CalendarParts.swift; it read /api/tasks/:id and so failed with 403 for every non-member). It reads
+  `GET /api/calendar/task?id=<id>&detail=1` (`APIClient.calendarTaskDetail`, CalendarAPI.swift; model
+  `CalTaskDetailResponse` / `CalReadOnlyTask`, decode checked against dev). Banner "You're not in this
+  project — view only"; title, parent, status, start + due (WIB), priority, project (+ linked), people,
+  description as text (the column's docToText, like the web), subtasks, attachment names/sizes (no URL, not
+  tappable), comments (author, Jakarta time, text). No actions. `found:false` → "This task no longer
+  exists"; 403 / 404 / offline → `LoadErrorView`.
+- Who gets what is unchanged (CalendarView.openItem / claimRouterTask, same rule as the web's CalendarPage):
+  canEdit through the home project → `TaskDetailView` (its level rights); otherwise the read-only page;
+  masked → "Internal task" sheet, never fetched (the server never sends `task` for a masked one either).
+- `CalAvatar` is no longer `private` (used by the new file). ID string in `indonesianAccessR2`.
+
+## Realtime catch-up (13 Oct, blue-green slot switch)
+
+Events sent during the ~1 s gap of a server slot switch are lost on every client. The app already refetches:
+every socket (re)connect — including the one after coming back to the foreground, since the socket closes in
+the background — runs `RealtimeClient.catchUp()`, which posts workspace / project tasks / inbox / pipeline /
+outlet / automations / pages / sheet-structure / chat notifications with no ids, so EVERY open screen
+reloads (project board and tabs, task detail, page, spreadsheet, chat list + open thread, notifications,
+badges), and flushes the spreadsheet save queue. Screens on `.liveRefresh` also reload on returning to the
+front even when the socket can't connect. Verified by reading the paths; no code change needed.
+
 ## Server pieces that must ship to production WITH the app
 
 All of these exist on the dev server only (branch `dev` of the NEXUS repo). The app calls them; on today's
@@ -349,6 +381,7 @@ production they answer 404 or behave the old way, so they go out in the same rel
 | `GET /api/user/sessions` with `client` + `current`; `DELETE /api/user/sessions/:id` answering `{ current }` (prod has the routes but neither field: no "This device" badge there) | Settings › Security › Active sessions |
 | Sheets: `X-Nexus-Tab` → `originTab` on sheet-cells / sheet-structure events, rows POST with `positions` + `styles`, column-delete range shrinking, the 25 sheet fixes of 13 Oct | Spreadsheet tab |
 | `User.uiLanguage`, `PATCH /api/user/profile { uiLanguage }`, `X-Nexus-Lang`, `Notification.texts` | notification / push language |
+| `GET /api/calendar/task?id=…&detail=1` (the `task` payload; prod answers without it, so the app says "This task no longer exists") and the calendar showing every non-private project's tasks to everyone (80a286c) | Calendar read-only task for non-members |
 
 ## Residual risks
 

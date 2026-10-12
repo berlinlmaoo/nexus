@@ -16,6 +16,8 @@ enum SheetPanelKind: Identifiable, Equatable {
     case charts
     /// One chart's editor (tapping a chart on the grid).
     case chart(String)
+    /// One slicer's editor (Data ▸ Add a slicer, or Edit slicer on its chip).
+    case slicer(String)
     case pivot
     /// Data ▸ Column stats for a model column.
     case columnStats(Int)
@@ -37,6 +39,7 @@ enum SheetPanelKind: Identifiable, Equatable {
         case .alternatingColors: return "alt"
         case .charts: return "charts"
         case .chart(let id): return "chart:\(id)"
+        case .slicer(let id): return "slicer:\(id)"
         case .pivot: return "pivot"
         case .columnStats: return "stats"
         case .namedRanges: return "named"
@@ -63,6 +66,7 @@ struct SheetPanelHost: View {
         case .alternatingColors: SheetAlternatingColorsPanel(ctx: ctx)
         case .charts: SheetChartsPanel(ctx: ctx)
         case .chart(let id): SheetChartEditorHost(ctx: ctx, chartId: id)
+        case .slicer(let id): SheetSlicerEditorHost(ctx: ctx, slicerId: id)
         case .pivot: SheetPivotPanel(ctx: ctx)
         case .columnStats(let c): SheetStatsPanel(ctx: ctx, column: c)
         case .namedRanges: SheetNamedRangesPanel(ctx: ctx)
