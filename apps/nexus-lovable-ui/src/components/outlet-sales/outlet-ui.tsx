@@ -10,15 +10,16 @@ import type { Bilingual, OutletEvent, OutletForm, OutletStatus } from "@/lib/out
  * switcher, and the event's detail as Ryan listed it. Labels of the form come from the server (`form`).
  */
 
-const nf = (lang: Lang) => new Intl.NumberFormat(lang === "en" ? "en-GB" : "id-ID", { maximumFractionDigits: 0 });
+// id-ID grouping in both languages (12 Oct 2026: "Rp100,000,000" in English read like dollars).
+const nf = (_lang: Lang) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 
-/** "Rp8.000.000" (id) / "Rp8,000,000" (en). "—" for nothing filled. */
+/** "Rp8.000.000", in both languages. "—" for nothing filled. */
 export function rupiah(n: number | null | undefined, lang: Lang): string {
   if (n === null || n === undefined) return "—";
   return `Rp${nf(lang).format(Math.round(n))}`;
 }
 
-/** "3.000" (id) / "3,000" (en). "—" for nothing filled. */
+/** "3.000". "—" for nothing filled. */
 export function count(n: number | null | undefined, lang: Lang): string {
   if (n === null || n === undefined) return "—";
   return nf(lang).format(n);
@@ -158,7 +159,7 @@ export function Meter({ pct, label }: { pct: number | null; label: string }) {
 function Row({ label, children, strong }: { label: string; children: ReactNode; strong?: boolean }) {
   return (
     <div className="grid grid-cols-[minmax(7.5rem,40%)_1fr] gap-x-3 py-1.5 text-sm">
-      <dt className={cn("text-muted-foreground", strong && "font-semibold uppercase tracking-wide text-foreground text-xs pt-0.5")}>{label}</dt>
+      <dt className={cn("text-muted-foreground", strong && "font-medium text-foreground")}>{label}</dt>
       <dd className={cn("min-w-0 break-words tabular-nums", strong && "font-semibold")}>{children}</dd>
     </div>
   );
@@ -200,7 +201,7 @@ export function EventDetail({ event, form, today, onEdit }: { event: OutletEvent
     if (!s) return null;
     return (
       <div className="border-t border-border/70 py-1">
-        <p className="pt-1.5 text-xs font-semibold uppercase tracking-wide">{pick(s.title, lang)}</p>
+        <p className="pt-1.5 text-sm font-medium">{pick(s.title, lang)}</p>
         <dl className="pl-3">
           {s.fields.map((f) => <Row key={f.key} label={pick(f.label, lang)}><Answer text={String(event[f.key] ?? "")} /></Row>)}
         </dl>
@@ -209,7 +210,7 @@ export function EventDetail({ event, form, today, onEdit }: { event: OutletEvent
   };
   const who = event.reportedBy ?? event.updatedBy;
   return (
-    <article className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+    <article className="rounded-xl border border-border bg-card p-4">
       <header className="mb-1 flex items-start justify-between gap-3">
         <StatusPill status={event.status} />
         {onEdit && (
@@ -217,8 +218,8 @@ export function EventDetail({ event, form, today, onEdit }: { event: OutletEvent
             type="button"
             onClick={onEdit}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold transition-[opacity,transform] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]",
-              event.status === "REPORTED" ? "border border-border bg-background hover:bg-muted" : "bg-primary text-primary-foreground shadow-soft hover:opacity-90",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-[opacity,transform] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-[44px]",
+              event.status === "REPORTED" ? "border border-border bg-background hover:bg-muted" : "bg-primary text-primary-foreground hover:opacity-90",
             )}
           >
             <PencilLine aria-hidden className="h-4 w-4" />
