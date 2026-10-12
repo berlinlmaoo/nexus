@@ -333,7 +333,7 @@ export function DragHandle({ onDragStart, onDragEnd, className }: { onDragStart:
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
       title={t("Drag to move")}
       aria-hidden
-      className={cn("grid h-6 w-4 shrink-0 cursor-grab place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground active:cursor-grabbing pointer-coarse:opacity-60", className)}
+      className={cn("grid h-6 w-4 shrink-0 cursor-grab place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground active:cursor-grabbing pointer-coarse:h-9 pointer-coarse:w-7 pointer-coarse:opacity-60 pointer-coarse:[-webkit-touch-callout:none] pointer-coarse:select-none", className)}
     >
       <GripVertical className="h-3.5 w-3.5" />
     </span>

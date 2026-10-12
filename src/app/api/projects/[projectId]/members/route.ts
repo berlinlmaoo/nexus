@@ -135,6 +135,7 @@ export async function POST(
           projectId,
           projectName: project?.name || "Unknown Project",
           invitedByName: session.user.name || "Someone",
+          actorId: session.user.id,
           role,
         }).catch((err) => console.error("Project invite notification error:", err))
       }

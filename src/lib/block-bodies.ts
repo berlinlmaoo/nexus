@@ -121,7 +121,7 @@ async function notifyNewMentions(body: LoadedBody, prev: BlockDoc, next: BlockDo
     const snippet = mentionSnippet(next, u.id)
     const send = body.kind === "doc"
       ? notifyDocMention({ mentionedUserId: u.id, mentionedByName: byName, docId: body.id, docTitle: body.title, snippet, projectId: body.projectId })
-      : notifyMention({ mentionedUserId: u.id, mentionedByName: byName, taskId: body.id, taskTitle: body.title, commentSnippet: snippet, projectId: body.projectId })
+      : notifyMention({ mentionedUserId: u.id, mentionedByName: byName, actorId, taskId: body.id, taskTitle: body.title, commentSnippet: snippet, projectId: body.projectId })
     send.catch((error) => log.warn("mention notification failed", { error: String(error) }))
   }
 }

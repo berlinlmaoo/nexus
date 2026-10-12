@@ -18,6 +18,7 @@ import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/lang";
 import { toast } from "sonner";
+import { Avatar } from "@/components/Avatar";
 import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { toastFailure } from "@/lib/failure";
 import { LoadError } from "@/components/LoadError";
@@ -161,9 +162,20 @@ function NotificationRow({ notification }: { notification: NexusNotification }) 
       onKeyDown={target ? (e) => { if (e.key === "Enter") open(); } : undefined}
       className={`flex items-start gap-3 p-4 transition ${target ? "cursor-pointer hover:bg-accent/60 active:scale-[0.995]" : "hover:bg-accent/40"} ${!notification.read ? "bg-primary/[0.03]" : ""}`}
     >
-      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`} data-notification-mark={notification.type ?? ""} aria-hidden>
-        <Icon className="h-4 w-4" />
-      </div>
+      {/* The sender's avatar with the kind as a small badge; system rows (and rows from before the server
+          kept the sender) show the kind's icon instead. */}
+      {notification.actor?.id ? (
+        <div className="relative shrink-0" data-notification-actor={notification.actor.id} aria-hidden>
+          <Avatar userId={notification.actor.id} name={notification.actor.name} avatar={notification.actor.avatar} size={36} />
+          <span className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border-2 border-card bg-card">
+            <span className={`grid h-full w-full place-items-center rounded-full ${tone}`}><Icon className="h-2.5 w-2.5" /></span>
+          </span>
+        </div>
+      ) : (
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`} data-notification-mark={notification.type ?? ""} aria-hidden>
+          <Icon className="h-4 w-4" />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <p className="line-clamp-2 break-words text-sm font-semibold">{notificationTitle(notification)}</p>
         <p className="line-clamp-3 max-w-3xl break-words text-sm text-muted-foreground mt-0.5">{notificationMessage(notification) || t("New notification")}</p>

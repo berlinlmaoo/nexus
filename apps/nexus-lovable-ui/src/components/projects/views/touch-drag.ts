@@ -116,10 +116,12 @@ function begin() {
   s.dragging = true;
   s.dt = makeDT();
   fire(s.el, "dragstart", s);
-  const r = s.el.getBoundingClientRect();
+  // A small grip (List/Table rows) drags its whole row: the ghost shows the row, not the grip.
+  const look = s.el.offsetWidth < 48 ? (s.el.closest<HTMLElement>("[data-bulk-task]") ?? s.el) : s.el;
+  const r = look.getBoundingClientRect();
   s.dx = s.x0 - r.left;
   s.dy = s.y0 - r.top;
-  const g = s.el.cloneNode(true) as HTMLElement;
+  const g = look.cloneNode(true) as HTMLElement;
   g.setAttribute("aria-hidden", "true");
   g.removeAttribute("id");
   g.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));

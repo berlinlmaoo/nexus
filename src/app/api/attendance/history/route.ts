@@ -10,6 +10,7 @@ import { getHolidayKeys } from "@/lib/holidays"
 import { placeLabel } from "@/lib/attendance-place"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffQuotaByUser } from "@/lib/day-off-usage"
+import { attendanceOwedFor } from "@/lib/attendance-score"
 import { leftKeyOf } from "@/lib/former-members"
 import { attendanceStartKey, owesAttendanceOn, withLeftNote } from "@/lib/former-member-days"
 import { formerMembersOf, isExemptRole } from "@/lib/former-recaps"
@@ -1029,16 +1030,21 @@ export async function GET(request: NextRequest) {
     // Each person's weekly-rest quota rides on their rows, so every client computes the Score column
     // (days worked / period days minus quota) the same way — 4 for most people, 9 for some, plus any
     // extra day off granted for the requested period.
-    const quotaByUserId = await dayOffQuotaByUser(
-      context.workspace.id,
-      [...new Set([...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)])],
-      quotaPeriodKey,
-    )
+    const scoreUserIds = [...new Set([...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)])]
+    const quotaByUserId = await dayOffQuotaByUser(context.workspace.id, scoreUserIds, quotaPeriodKey)
+    // What each Score is out of — the person record's rule (lib/attendance-score.ts): someone who joined
+    // mid-period owes the days from their start and a prorated allowance. Additive `owed` on the user.
+    const periodFrom = formatAttendanceDateKey(range.start), periodTo = formatAttendanceDateKey(range.end)
+    const owedByUser = await attendanceOwedFor({
+      workspaceId: context.workspace.id, userIds: scoreUserIds, from: periodFrom, to: periodTo,
+      periodDays: enumerateAttendanceDates(range.start, range.end).length, quotas: quotaByUserId,
+    })
+    const owedField = (userId: string) => { const o = owedByUser.get(userId); return o ? { owed: o } : {} }
     return NextResponse.json({
       scope,
-      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(r.user.id) } })),
+      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(r.user.id), ...owedField(r.user.id) } })),
       roster: rosterMembers
-        .map((m) => ({ ...m.user, dayOffQuota: quotaByUserId.get(m.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(m.user.id) }))
+        .map((m) => ({ ...m.user, dayOffQuota: quotaByUserId.get(m.user.id) ?? DEFAULT_DAY_OFF_QUOTA, ...leftAtField(m.user.id), ...owedField(m.user.id) }))
         .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     })
   } catch (error) {

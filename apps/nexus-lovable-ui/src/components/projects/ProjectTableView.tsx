@@ -32,6 +32,7 @@ import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
 import { FilterHint, useFilteredOut } from "@/components/projects/views/filter-hint";
 import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
 import { canDragTask, DragHandle, useGroupMove } from "@/components/projects/views/group-move";
+import { useTouchDrag } from "@/components/projects/views/touch-drag";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
@@ -144,6 +145,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const sub = groupBy && subGroupBy && subGroupBy !== groupBy ? subGroupBy : null;
   const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
   const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
+  // Phone/iPad: hold the row's grip, then drag (views/touch-drag.ts), like Board and List.
+  useTouchDrag();
   const dropRing = "ring-2 ring-inset ring-[color:var(--accent-foreground)]/40";
 
   const gridTemplate = `minmax(240px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
@@ -171,8 +174,8 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   );
 
   return (
-    <div className="px-4 py-3 md:px-8">
-      <div className="overflow-x-auto rounded-lg border border-border">
+    <div data-touch-drag-root="" className="px-4 py-3 md:px-8">
+      <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border">
         {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
             row that loaded wider content widened every column and the header jumped. */}
         <div className="w-full" style={{ minWidth: 240 + 140 * columns.length + 40 }}>

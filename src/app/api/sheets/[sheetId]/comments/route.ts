@@ -114,6 +114,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       notifyMention({
         mentionedUserId: uid,
         mentionedByName: session.user.name || "Seseorang",
+        actorId: session.user.id,
         // The notification links to the project; the sheet has no route of its own yet.
         taskId: project?.project.id ?? "",
         taskTitle: `Spreadsheet ${project?.name ?? ""} · ${project?.project.name ?? ""}`.trim(),

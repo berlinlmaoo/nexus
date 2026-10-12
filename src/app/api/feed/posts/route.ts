@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     // The first photo goes on the push (long-press preview on iOS, data `image` on Android).
     const firstImageId = post.images[0]?.id ?? null
     void Promise.all(validMentions.map((u) =>
-      notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, postId: post.id, snippet: text, imageId: firstImageId }).catch(() => {})
+      notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, actorId: me, postId: post.id, snippet: text, imageId: firstImageId }).catch(() => {})
     ))
     // Everyone else in the company hears about the post itself (owner, 9 Oct 2026). The people tagged
     // above are left out here so a mention is one notification, not two.

@@ -393,6 +393,7 @@ export async function POST(request: NextRequest) {
         projectId: project.id,
         projectName: name,
         invitedByName: session.user.name || "Someone",
+        actorId: session.user.id,
         role: member.role,
       }).catch((err) => console.error("Project invite notification error:", err))
       logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || member.userId, userId, request, metadata: { projectId: project.id, role: member.role } })
