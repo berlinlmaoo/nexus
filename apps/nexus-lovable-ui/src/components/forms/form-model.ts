@@ -153,7 +153,66 @@ export type FormDraft = {
   settings: Record<string, unknown> | null;
 };
 
-/** The fields as saved: option rows trimmed, blank rows dropped (the editor keeps one for typing). */
+/** A "Show only when…" the author hasn't finished ("is" with no value yet): not live, not saved. */
+export const condIncomplete = (c: FCond | null | undefined) => !!c && needsValue(c.operator) && !String(c.value ?? "").trim();
+
+/**
+ * The fields as saved: option rows trimmed, blank rows dropped (the editor keeps one for typing), and an
+ * unfinished condition left out, so switching on "Show only when…" never hides a question from the live
+ * form before a value is picked (it used to save "is ''", which hides it as soon as the parent is answered).
+ */
 export function cleanFields(fields: RichField[]): RichField[] {
-  return fields.map((f) => (Array.isArray(f.options) ? { ...f, options: (f.options as unknown[]).map(String).map((s) => s.trim()).filter(Boolean) } : f));
+  return fields.map((f) => {
+    let out = f;
+    if (Array.isArray(f.options)) out = { ...out, options: (f.options as unknown[]).map(String).map((s) => s.trim()).filter(Boolean) };
+    if (condIncomplete(f.showIf)) out = { ...out, showIf: null };
+    return out;
+  });
+}
+
+/**
+ * The questions `self` may depend on ("Show only when…"): every other question except those already shown
+ * only because of `self`, directly or down a chain. Picking one of those would make a loop where neither
+ * question can ever show.
+ */
+export function logicParents(fields: RichField[], selfId: string): RichField[] {
+  const byId = new Map(fields.map((f) => [f.id, f]));
+  const leadsTo = (startId: string) => {
+    const seen = new Set<string>();
+    let cur = byId.get(startId);
+    while (cur?.showIf?.fieldId && !seen.has(cur.id)) {
+      if (cur.showIf.fieldId === selfId) return true;
+      seen.add(cur.id);
+      cur = byId.get(cur.showIf.fieldId);
+    }
+    return false;
+  };
+  return fields.filter((f) => f.id !== selfId && !leadsTo(f.id));
+}
+
+/** A condition or routing value that no longer matches any option of the question it reads. */
+export function staleOption(source: RichField | null | undefined, op: string | undefined, value: string | undefined): boolean {
+  if (!source || !hasOptions(source) || !op || !needsValue(op) || op === "contains") return false;
+  const v = String(value ?? "").trim();
+  if (!v) return false;
+  const opts = optionsOf(source).map((o) => o.trim()).filter(Boolean);
+  return opts.length > 0 && !opts.includes(v);
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Mirrors submit/route.ts: a link needs a host with a dot ("company.com", "https://x.co/a"), no spaces. */
+export function looksLikeUrl(v: string) {
+  if (/\s/.test(v)) return false;
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`);
+    return (u.protocol === "http:" || u.protocol === "https:") && /\.[a-z]{2,}$/i.test(u.hostname);
+  } catch { return false; }
+}
+/** Why a filled-in answer can't be right ("email" / "url"), or null. Empty answers are the required check's job. */
+export function answerProblem(field: Pick<RichField, "type" | "autofill">, value: unknown): "email" | "url" | null {
+  if (field.autofill || typeof value !== "string" || !value.trim()) return null;
+  const v = value.trim();
+  if (field.type === "email" && !EMAIL_RE.test(v)) return "email";
+  if (field.type === "url" && !looksLikeUrl(v)) return "url";
+  return null;
 }

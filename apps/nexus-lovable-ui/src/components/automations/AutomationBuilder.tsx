@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectPicker } from "@/components/SelectPicker";
+import { DateField } from "@/components/DateField";
 import { nexusApi, type NexusAutomation, type NexusAutomationRun } from "@/lib/nexus-api";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
@@ -290,7 +291,8 @@ function TriggerConfig({ trigger, set, ctx, automation, disabled }: { trigger: R
             {freq === "monthly" && (
               <>
                 <span className="text-muted-foreground">{t("on day")}</span>
-                <input type="number" min={1} max={28} disabled={disabled} value={String(cfg.dayOfMonth ?? 1)} onChange={(e) => setCfg({ dayOfMonth: Number(e.target.value) })} aria-label={t("Day of month")} className={cn(input, "w-16")} />
+                {/* Cleared while retyping = "" (the footer asks for a day); never saved as day 0. */}
+                <input type="number" min={1} max={28} disabled={disabled} value={String(cfg.dayOfMonth ?? 1)} onChange={(e) => setCfg({ dayOfMonth: e.target.value.trim() === "" ? "" : Math.floor(Number(e.target.value)) })} aria-label={t("Day of month")} className={cn(input, "w-16")} />
               </>
             )}
           </div>
@@ -327,7 +329,7 @@ function ConditionRow({ rule, set, remove, ctx, disabled }: { rule: ConditionRul
       <Sel label={t("Operator")} disabled={disabled} value={op.op} onChange={(v) => set({ ...rule, op: v })} options={ops.map((o) => ({ value: o.op, label: t(o.label) }))} />
       {!op.noValue && (op.op === "within_days"
         ? <input type="number" min={0} disabled={disabled} value={rule.value ?? ""} onChange={(e) => set({ ...rule, value: e.target.value })} aria-label={t("Days")} className={cn(input, "w-20")} />
-        : kind === "date" ? <input type="date" disabled={disabled} value={rule.value ?? ""} onChange={(e) => set({ ...rule, value: e.target.value })} aria-label={t("Date")} className={input} />
+        : kind === "date" ? <DateField disabled={disabled} value={rule.value || null} onChange={(v) => set({ ...rule, value: v ?? "" })} ariaLabel={t("Date")} placeholder={t("Pick a date")} className={cn(input, "w-auto min-w-[9rem]")} />
         : <ValueInput field={rule.field} value={rule.value ?? ""} onChange={(v) => set({ ...rule, value: v })} ctx={ctx} disabled={disabled} />)}
       {!disabled && <button type="button" onClick={remove} aria-label={t("Remove condition")} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>}
     </div>
@@ -532,12 +534,18 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
   const [actions, setActions] = useState<Rule[]>(initialActions(automation));
   const [runTaskId, setRunTaskId] = useState("");
   const readOnly = !canEdit;
+  // Esc / the backdrop / Cancel with edits ask first ("Discard changes?") instead of throwing them away.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const requestCloseRef = useRef<() => void>(onClose);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("[data-radix-popper-content-wrapper]")) onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      requestCloseRef.current();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   const triggerDef = TRIGGERS.find((d) => d.type === trigger?.type);
   const noTask = trigger?.type === "SCHEDULED" && conditions.rules.length === 0;
@@ -550,15 +558,30 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
     if (trigger.type === "WEBHOOK_RECEIVED") return t("Pick a trigger");
     if (trigger.type === "FIELD_CHANGED" && !trigger.field) return t("Pick the field to watch");
     if (trigger.type === "SCHEDULED" && trigger.config?.frequency === "weekly" && arr(trigger.config?.days).length === 0) return t("Pick at least one day");
+    if (trigger.type === "SCHEDULED" && trigger.config?.frequency === "monthly") {
+      const dom = Number(trigger.config?.dayOfMonth ?? 1);
+      if (trigger.config?.dayOfMonth === "" || !Number.isInteger(dom) || dom < 1 || dom > 28) return t("Pick a day of the month from 1 to 28");
+    }
+    if (trigger.type === "DUE_DATE_APPROACHING") {
+      const h = Number(trigger.value ?? "24");
+      if (!String(trigger.value ?? "24").trim() || !Number.isInteger(h) || h < 1 || h > 720) return t("Hours before due must be between 1 and 720");
+    }
+    for (const r of conditions.rules) {
+      if (!r.field) continue;
+      const ops = OPS[kindOf(r.field, ctx)];
+      const op = ops.find((o) => o.op === r.op) ?? ops[0];
+      if (op && !op.noValue && !String(r.value ?? "").trim()) return t("Finish the condition: it has no value");
+    }
     if (actions.length === 0) return t("Add at least one action");
     for (const a of actions) {
       if ((a.type === "SET_STATUS" || a.type === "SET_PRIORITY" || a.type === "MOVE_TO_SECTION") && !a.value) return t("Finish the “{action}” step", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
       if ((a.type === "ASSIGN_TO" || a.type === "UNASSIGN") && !a.value) return t("Pick who in “{action}”", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
       if ((a.type === "ADD_TAG" || a.type === "REMOVE_TAG" || a.type === "ADD_COMMENT") && !a.value?.trim()) return t("Finish the “{action}” step", { action: t(ACTIONS.find((d) => d.type === a.type)?.label ?? a.type) });
       if (a.type === "SET_FIELD" && !a.field) return t("Pick the field to set");
+      if (a.type === "CREATE_TASK" && trigger.type !== "WEBHOOK_RECEIVED" && !a.value?.trim()) return t("Give the new task a title");
     }
     return null;
-  }, [name, trigger, actions, t]);
+  }, [name, trigger, actions, conditions, ctx, t]);
 
   const payload = () => ({
     name: name.trim(),
@@ -567,7 +590,10 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
     conditions: conditions.rules.length ? { match: conditions.match, rules: conditions.rules.filter((r) => r.field) } : null,
   });
 
+  // One save per press: the ref blocks a double click before isPending has re-rendered (it made 2 automations).
+  const saving = useRef(false);
   const save = useMutation({
+    onSettled: () => { saving.current = false; },
     mutationFn: () => automation
       ? nexusApi.updateAutomation({ id: automation.id, ...payload() })
       : nexusApi.createAutomation({ projectId: ctx.projectId, enabled: true, ...payload() }),
@@ -589,10 +615,30 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
   const triggerOptions: Opt[] = TRIGGERS.map((d) => ({ value: d.type, label: t(d.label), hint: t(d.hint), group: d.group === "Task" ? "Task events" : d.group === "Time" ? "Time" : "Other" }));
   const actionOptions: Opt[] = ACTIONS.map((d) => ({ value: d.type, label: t(d.label), group: d.group === "Edit" ? "Edit the task" : d.group === "Create" ? "Create" : "Tell someone" }));
   const dirty = !automation || JSON.stringify(payload()) !== JSON.stringify({ name: automation.name, trigger: automation.trigger, actions: initialActions(automation), conditions: automation.conditions ?? null });
+  // Something would be lost by closing: edits to a saved one, or anything entered in a new one.
+  const hasEdits = canEdit && (automation ? dirty : !!(name.trim() || trigger || actions.length || conditions.rules.length));
+  const requestClose = () => {
+    if (confirmDiscard) { setConfirmDiscard(false); return; }
+    if (hasEdits && !save.isPending) { setConfirmDiscard(true); return; }
+    onClose();
+  };
+  requestCloseRef.current = requestClose;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="automation-builder-title" className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 dark:bg-scrim p-4 backdrop-blur-sm" onClick={requestClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="automation-builder-title" className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
+        {confirmDiscard && (
+          <div className="absolute inset-0 z-20 grid place-items-center bg-card/80 p-6 backdrop-blur-[2px]">
+            <div role="alertdialog" aria-modal="true" aria-labelledby="automation-discard-title" className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-pop">
+              <h3 id="automation-discard-title" className="font-display text-base font-bold">{automation ? t("Discard your changes?") : t("Discard this automation?")}</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">{automation ? t("The automation keeps working as it was saved.") : t("Nothing has been turned on yet.")}</p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" autoFocus onClick={() => setConfirmDiscard(false)} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{t("Keep editing")}</button>
+                <button type="button" onClick={onClose} className="rounded-xl bg-destructive px-3.5 py-2 text-sm font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90">{t("Discard")}</button>
+              </div>
+            </div>
+          </div>
+        )}
         <header className="border-b border-border px-6 pb-3 pt-5">
           <div className="flex items-start gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Zap className="h-4 w-4" /></div>
@@ -601,7 +647,7 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
               <input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} placeholder={t("Name this automation")} aria-label={t("Automation name")} className="w-full bg-transparent font-display text-lg font-bold tracking-tight outline-none placeholder:text-muted-foreground/60 disabled:opacity-100" />
               <p className="text-xs text-muted-foreground">{t("For every task in this project")}{readOnly ? ` · ${t("View only: project leads edit automations")}` : ""}</p>
             </div>
-            <button type="button" onClick={onClose} aria-label={t("Close")} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={requestClose} aria-label={t("Close")} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
           </div>
           {automation && (
             <div role="tablist" className="mt-3 flex gap-1">
@@ -706,9 +752,10 @@ export function AutomationBuilder({ automation, ctx, canEdit, onClose, initialTa
           )}
           <span className="flex-1" />
           {canEdit && problem && tab === "rule" && <span className="text-xs text-muted-foreground">{problem}</span>}
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{canEdit ? t("Cancel") : t("Close")}</button>
-          {canEdit && (
-            <button type="button" disabled={!!problem || save.isPending || !dirty} onClick={() => save.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
+          {/* The run log edits nothing: only Close there. */}
+          <button type="button" onClick={requestClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">{canEdit && tab === "rule" ? t("Cancel") : t("Close")}</button>
+          {canEdit && tab === "rule" && (
+            <button type="button" disabled={!!problem || save.isPending || !dirty} onClick={() => { if (saving.current || problem || !dirty) return; saving.current = true; save.mutate(); }} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {automation ? t("Save") : t("Turn on")}
             </button>
           )}

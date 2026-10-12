@@ -19,8 +19,8 @@ import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import { FormHead, FormRenderer, QuestionControl } from "./FormRenderer";
 import {
-  cleanFields, COVER_PRESETS, fieldTitle, hasOptions, ICON_CHOICES, kindMeta, kindOf, MAPPING_TARGETS, needsValue, newFieldId, newQuestion,
-  OPERATORS, optionsOf, QUESTION_KINDS, ROUTING_ACTIONS, withKind, type FormDraft, type FRule, type QuestionKind, type RichField,
+  cleanFields, condIncomplete, COVER_PRESETS, fieldTitle, hasOptions, ICON_CHOICES, kindMeta, kindOf, logicParents, MAPPING_TARGETS, needsValue, newFieldId, newQuestion,
+  OPERATORS, optionsOf, QUESTION_KINDS, ROUTING_ACTIONS, staleOption, withKind, type FormDraft, type FRule, type QuestionKind, type RichField,
 } from "./form-model";
 
 /**
@@ -72,8 +72,10 @@ function initialDraft(form: NexusForm | undefined, t: (s: string) => string): Fo
 
 /* ------------------------------------------------------------------ small pieces */
 
-function AutoTextarea({ value, onChange, placeholder, className, onKeyDown, autoFocus, ariaLabel, inputRef }: {
+function AutoTextarea({ value, onChange, placeholder, className, onKeyDown, autoFocus, ariaLabel, inputRef, keepFont }: {
   value: string; onChange: (v: string) => void; placeholder?: string; className?: string; onKeyDown?: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => void; autoFocus?: boolean; ariaLabel?: string; inputRef?: (el: HTMLTextAreaElement | null) => void;
+  /** Over 16px already: phones keep this size (styles.css forces other fields to 16px against iOS zoom). */
+  keepFont?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
@@ -89,6 +91,7 @@ function AutoTextarea({ value, onChange, placeholder, className, onKeyDown, auto
       value={value}
       autoFocus={autoFocus}
       aria-label={ariaLabel}
+      data-keep-font={keepFont ? "" : undefined}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
@@ -144,7 +147,15 @@ function Modal({ open, onClose, children, label }: { open: boolean; onClose: () 
 function useKindList(query: string) {
   const { t } = useLang();
   const q = query.trim().toLowerCase();
-  return QUESTION_KINDS.filter((k) => !q || t(k.label).toLowerCase().includes(q) || k.label.toLowerCase().includes(q) || k.keywords.includes(q));
+  const list = QUESTION_KINDS.filter((k) => !q || t(k.label).toLowerCase().includes(q) || k.label.toLowerCase().includes(q) || k.keywords.includes(q));
+  if (!q) return list;
+  // The type whose name is what was typed comes first ("Checkbox" + Enter = Checkbox, not Multiple choice,
+  // whose keywords mention checkboxes); then names that start with it; then the rest, in menu order.
+  const rank = (k: (typeof QUESTION_KINDS)[number]) => {
+    const names = [t(k.label).toLowerCase(), k.label.toLowerCase()];
+    return names.includes(q) ? 0 : names.some((n) => n.startsWith(q)) ? 1 : 2;
+  };
+  return list.map((k, i) => ({ k, i, r: rank(k) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.k);
 }
 
 function TypeList({ query, active, onPick, onHover }: { query: string; active: number; onPick: (k: QuestionKind) => void; onHover: (i: number) => void }) {
@@ -259,8 +270,8 @@ function OptionsEditor({ field, onChange, disabled }: { field: RichField; onChan
   );
 }
 
-function Chip({ icon, children, tone = "muted" }: { icon?: ReactNode; children: ReactNode; tone?: "muted" | "accent" }) {
-  return <span className={cn("inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", tone === "accent" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{icon}<span className="truncate">{children}</span></span>;
+function Chip({ icon, children, tone = "muted" }: { icon?: ReactNode; children: ReactNode; tone?: "muted" | "accent" | "warn" }) {
+  return <span className={cn("inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", tone === "accent" ? "bg-accent text-accent-foreground" : tone === "warn" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground")}>{icon}<span className="truncate">{children}</span></span>;
 }
 
 function QuestionCard({ field, index, total, selected, others, customFields, taskLists, onSelect, onChange, onDuplicate, onDelete, onOpenPanel, dragProps, slashFor, setSlashFor }: {
@@ -292,6 +303,10 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
   const parent = field.showIf ? others.find((o) => o.id === field.showIf?.fieldId) : null;
   const opLabel = field.showIf ? t(OPERATORS.find((o) => o.value === field.showIf?.operator)?.label ?? "") : "";
   const rules = field.routingRules?.length ?? 0;
+  // Logic that can't work as it stands: no value picked yet, or the value is an option that was renamed away / deleted.
+  const condUnfinished = !!parent && condIncomplete(field.showIf);
+  const condStale = !!parent && staleOption(parent, field.showIf?.operator, field.showIf?.value);
+  const staleRules = (field.routingRules ?? []).filter((r) => staleOption(field, r.operator, r.value)).length;
   const syncedSections = mapping?.target === "task_list" && hasOptions(field);
 
   return (
@@ -306,7 +321,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
       {/* Drag handle: in the left gutter on wide screens, Move up/down in the panel on a phone. */}
       <span
         draggable
-        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; dragProps.onGripDragStart(); }}
+        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", field.id); /* Firefox starts no drag without data */ dragProps.onGripDragStart(); }}
         onDragEnd={dragProps.onGripDragEnd}
         title={t("Drag to reorder")}
         aria-hidden
@@ -315,7 +330,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
         <GripVertical className="h-4 w-4" />
       </span>
 
-      <div className={cn("absolute right-2 top-2 flex items-center gap-0.5 rounded-lg bg-card transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover/q:opacity-100 pointer-coarse:opacity-100")}>
+      <div className={cn("absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg bg-card transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover/q:opacity-100 pointer-coarse:opacity-100")}>
         <span className="mr-1 hidden items-center gap-1 text-[11px] text-muted-foreground @md:inline-flex"><meta.icon className="h-3 w-3" /> {t(meta.label)}</span>
         <button type="button" onClick={(e) => { e.stopPropagation(); onOpenPanel(); }} aria-label={t("Question settings")} title={t("Question settings")} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"><Settings2 className="h-3.5 w-3.5" /></button>
         <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(); }} aria-label={t("Duplicate question")} title={t("Duplicate question")} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><Copy className="h-3.5 w-3.5" /></button>
@@ -327,7 +342,7 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
             sits under the textarea and carries the star. */}
         <div className="relative min-w-0">
           {field.required && (
-            <div aria-hidden className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words p-0 text-[15px] font-semibold leading-6">
+            <div aria-hidden className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words p-0 text-[15px] font-semibold leading-6 max-md:text-[16px]">
               <span className="invisible">{title || t("Question, or type / for a type")}</span><span className="ml-0.5 text-destructive">*</span>
             </div>
           )}
@@ -376,8 +391,14 @@ function QuestionCard({ field, index, total, selected, others, customFields, tas
       {(mappingLabel || parent || rules > 0 || field.autofill) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {mappingLabel && <Chip tone="accent" icon={<ArrowRight className="h-3 w-3 shrink-0" />}>{mappingLabel}</Chip>}
-          {parent && <Chip icon={<GitBranch className="h-3 w-3 shrink-0" />}>{t("Shown when “{q}” {op} {value}", { q: fieldTitle(parent) || t("Question"), op: opLabel, value: needsValue(field.showIf?.operator ?? "") ? `“${field.showIf?.value ?? ""}”` : "" }).trim()}</Chip>}
-          {rules > 0 && <Chip icon={<RouteIcon className="h-3 w-3 shrink-0" />}>{rules === 1 ? t("1 routing rule") : t("{n} routing rules", { n: rules })}</Chip>}
+          {parent && (condUnfinished
+            ? <Chip tone="warn" icon={<GitBranch className="h-3 w-3 shrink-0" />}>{t("Logic not set yet: pick a value. Until then it always shows.")}</Chip>
+            : <Chip tone={condStale ? "warn" : "muted"} icon={condStale ? <CircleAlert className="h-3 w-3 shrink-0" /> : <GitBranch className="h-3 w-3 shrink-0" />}>
+                {condStale
+                  ? t("“{value}” is no longer an option of “{q}”, so this question never shows", { value: field.showIf?.value ?? "", q: fieldTitle(parent) || t("Question") })
+                  : t("Shown when “{q}” {op} {value}", { q: fieldTitle(parent) || t("Question"), op: opLabel, value: needsValue(field.showIf?.operator ?? "") ? `“${field.showIf?.value ?? ""}”` : "" }).trim()}
+              </Chip>)}
+          {rules > 0 && <Chip tone={staleRules ? "warn" : "muted"} icon={staleRules ? <CircleAlert className="h-3 w-3 shrink-0" /> : <RouteIcon className="h-3 w-3 shrink-0" />}>{staleRules ? t("A routing rule reads an option that no longer exists") : rules === 1 ? t("1 routing rule") : t("{n} routing rules", { n: rules })}</Chip>}
           {field.autofill && <Chip icon={<User className="h-3 w-3 shrink-0" />}>{field.autofill === "email" ? t("Auto-filled: email") : t("Auto-filled: name")}</Chip>}
         </div>
       )}
@@ -398,6 +419,11 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
   const input = "h-8 min-w-0 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-foreground/40";
   const showIf = field.showIf ?? null;
   const parent = showIf ? others.find((o) => o.id === showIf.fieldId) : undefined;
+  // Questions this one may depend on: not those already shown only because of it (that loop hides both).
+  const parents = logicParents([field, ...others], field.id);
+  // Default parent: the closest question above with options (what "Show only when" is mostly for), else the one above.
+  const above = parents.filter((o) => others.indexOf(o) < index);
+  const defaultParent = [...above].reverse().find((o) => hasOptions(o)) ?? above[above.length - 1] ?? parents[0];
   const parentOpts = parent ? optionsOf(parent).filter(Boolean) : [];
   const ownOpts = optionsOf(field).filter(Boolean);
   const mapping = field.mapping ?? { target: "none" };
@@ -437,16 +463,19 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
       </PanelSection>
 
       <PanelSection title={t("Logic")}>
-        <Toggle label={t("Show only when…")} hint={others.length ? undefined : t("Add another question first.")} checked={!!showIf} onChange={(v) => others.length && onChange({ showIf: v ? { fieldId: others[0].id, operator: "equals", value: "" } : null })} />
+        <Toggle label={t("Show only when…")} hint={parents.length ? undefined : t("Add another question first.")} checked={!!showIf} onChange={(v) => { if (!v) onChange({ showIf: null }); else if (defaultParent) onChange({ showIf: { fieldId: defaultParent.id, operator: "equals", value: "" } }); }} />
         {showIf && (
           <div className="mt-1 space-y-1.5 rounded-lg bg-muted/40 p-2">
-            <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Question")} value={showIf.fieldId} onChange={(v) => onChange({ showIf: { ...showIf, fieldId: v, value: "" } })} options={others.map((o) => ({ value: o.id, label: titleOf(o) }))} />
+            <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Question")} value={showIf.fieldId} onChange={(v) => onChange({ showIf: { ...showIf, fieldId: v, value: "" } })} options={[...parents, ...(parent && !parents.includes(parent) ? [parent] : [])].map((o) => ({ value: o.id, label: titleOf(o) }))} />
             <div className="flex gap-1.5">
               <SelectPicker variant="field" size="sm" className={cn(pick, "shrink-0")} ariaLabel={t("Condition")} value={showIf.operator} onChange={(v) => onChange({ showIf: { ...showIf, operator: v } })} options={OPERATORS.map((op) => ({ value: op.value, label: t(op.label) }))} />
               {needsValue(showIf.operator) && (parentOpts.length
                 ? <SelectPicker variant="field" size="sm" className={cn(pick, "min-w-0 flex-1")} ariaLabel={t("Value")} value={showIf.value} onChange={(v) => onChange({ showIf: { ...showIf, value: v } })} placeholder={t("choose value")} options={parentOpts.map((o) => ({ value: o, label: o }))} />
                 : <input value={showIf.value} onChange={(e) => onChange({ showIf: { ...showIf, value: e.target.value } })} placeholder={t("value")} aria-label={t("Value")} className={cn(input, "flex-1")} />)}
             </div>
+            {condIncomplete(showIf) && <p className="px-0.5 text-[11px] text-muted-foreground">{t("Pick a value. Until then the question always shows.")}</p>}
+            {staleOption(parent, showIf.operator, showIf.value) && <p className="flex items-start gap-1 px-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"><CircleAlert className="mt-px h-3 w-3 shrink-0" /> {t("“{value}” is no longer an option, so this question never shows. Pick a value again.", { value: showIf.value })}</p>}
+            {parent && !parents.includes(parent) && <p className="flex items-start gap-1 px-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"><CircleAlert className="mt-px h-3 w-3 shrink-0" /> {t("“{q}” is itself shown only after this question, so neither can ever show. Pick another question.", { q: titleOf(parent) })}</p>}
           </div>
         )}
       </PanelSection>
@@ -490,6 +519,7 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
                 {needsValue(r.operator) && (ownOpts.length
                   ? <SelectPicker variant="field" size="sm" className={cn(pick, "w-full")} ariaLabel={t("Value")} value={r.value} onChange={(v) => setRule({ value: v })} placeholder={t("choose value")} options={ownOpts.map((o) => ({ value: o, label: o }))} />
                   : <input value={r.value} onChange={(e) => setRule({ value: e.target.value })} placeholder={t("value")} aria-label={t("Value")} className={cn(input, "w-full")} />)}
+                {staleOption(field, r.operator, r.value) && <p className="flex items-start gap-1 px-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"><CircleAlert className="mt-px h-3 w-3 shrink-0" /> {t("“{value}” is no longer an option, so this rule never runs. Pick a value again.", { value: r.value })}</p>}
                 <div className="flex flex-wrap items-center gap-1.5">
                   <SelectPicker variant="field" size="sm" className={cn(pick, "shrink-0")} ariaLabel={t("Routing")} value={r.action} onChange={(v) => setRule({ action: v })} options={ROUTING_ACTIONS.map((a) => ({ value: a.value, label: t(a.label) }))} />
                   {r.action === "set_field" ? (
@@ -524,6 +554,26 @@ function QuestionPanel({ field, index, total, others, customFields, taskLists, m
 }
 
 /* ------------------------------------------------------------------ settings tab */
+
+/**
+ * The response limit. Clearing it to type a new number keeps the limit on: the empty box is a draft (only
+ * a whole number above 0 is saved), and leaving it empty puts the saved number back.
+ */
+function LimitInput({ value, onChange, className }: { value: number; onChange: (n: number) => void; className?: string }) {
+  const { t } = useLang();
+  const [draft, setDraft] = useState(String(value));
+  const focused = useRef(false);
+  useEffect(() => { if (!focused.current) setDraft(String(value)); }, [value]);
+  return (
+    <input
+      type="number" min={1} inputMode="numeric" aria-label={t("Maximum responses")} value={draft}
+      onFocus={() => { focused.current = true; }}
+      onChange={(e) => { setDraft(e.target.value); const n = Math.floor(Number(e.target.value)); if (e.target.value.trim() && n > 0) onChange(n); }}
+      onBlur={() => { focused.current = false; setDraft(String(value)); }}
+      className={className}
+    />
+  );
+}
 
 function SettingsCard({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -625,7 +675,7 @@ function SettingsTab({ draft, change, projectName, members, responseCount }: {
         <Toggle label={t("Limit the number of responses")} hint={t("{n} so far", { n: responseCount })} checked={!!settings.responseLimit} onChange={(v) => setSettings({ responseLimit: v ? Math.max(responseCount + 10, 50) : undefined })} />
         {!!settings.responseLimit && (
           <div className="mt-1 flex items-center gap-2 px-2">
-            <input type="number" min={1} inputMode="numeric" aria-label={t("Maximum responses")} value={settings.responseLimit} onChange={(e) => { const n = Math.floor(Number(e.target.value)); setSettings({ responseLimit: n > 0 ? n : undefined }); }} className={cn(field, "w-32 tabular-nums")} />
+            <LimitInput value={settings.responseLimit} onChange={(n) => setSettings({ responseLimit: n })} className={cn(field, "w-32 tabular-nums")} />
             <span className="text-xs text-muted-foreground">{t("then the form closes by itself")}</span>
           </div>
         )}
@@ -745,9 +795,12 @@ function ShareTab({ url, saved, isPublic, onGoSettings }: { url: string | null; 
 
 const STATUS_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled" };
 
-function ResponsesTab({ formId, onOpenProject }: { formId: string | null; onOpenProject: () => void }) {
+function ResponsesTab({ formId, onOpenProject, onTaskOpen }: { formId: string | null; onOpenProject: () => void; onTaskOpen: (open: boolean) => void }) {
   const { t, locale } = useLang();
   const [openTask, setOpenTask] = useState<string | null>(null);
+  // The task popup (z-50, portalled) must sit over the builder (z-[70]): the builder steps down while it's open.
+  useEffect(() => { onTaskOpen(!!openTask); }, [openTask, onTaskOpen]);
+  useEffect(() => () => onTaskOpen(false), [onTaskOpen]);
   const q = useQuery({ queryKey: ["nexus", "form-responses", formId], queryFn: () => nexusApi.formResponses(formId!), enabled: !!formId, retry: false });
   const rows = q.data?.responses ?? [];
   const fmt = useMemo(() => new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), [locale]);
@@ -851,6 +904,9 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dupOpen, setDupOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  /** New responses found when Delete was pressed (the count shown in the dialog was older). */
+  const [newSinceOpen, setNewSinceOpen] = useState(0);
 
   // Project context: sections + members power routing; custom fields power mapping; the name labels things.
   const projectQ = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), enabled: !!projectId, retry: false });
@@ -918,6 +974,12 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
     return () => clearTimeout(h);
   }, [rev, flush]);
 
+  // Leaving the builder any other way (browser Back, a link, the route changing) saves what was typed
+  // inside the 700 ms debounce instead of dropping it.
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => () => { if (dirty.current) void flushRef.current(); }, []);
+
   // Leaving with unsaved edits: the browser asks first.
   useEffect(() => {
     const onBefore = (e: BeforeUnloadEvent) => { if (dirty.current || inflight.current) { e.preventDefault(); e.returnValue = ""; } };
@@ -930,27 +992,67 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
     dirty.current = true;
     setRev((r) => r + 1);
   }, []);
+  const closeRef = useRef<() => void>(() => {});
   const close = async () => {
     if (dirty.current || inflight.current) await flush();
     onClose();
   };
+  closeRef.current = () => { void close(); };
 
-  // Esc closes the builder (unless something on top of it handles Esc first).
+  // Esc closes the builder (unless something on top of it handles Esc first). Like Notion: the first Esc
+  // while typing only leaves the field, the next one closes (saving first).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      if (taskOpen || confirmDelete || dupOpen) return;
       if (preview) { setPreview(null); return; }
       if (panelSheet) { setPanelSheet(false); return; }
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.matches("input, textarea, select, [contenteditable='true']"))) { el.blur(); return; }
+      closeRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [preview, panelSheet]);
+  }, [preview, panelSheet, taskOpen, confirmDelete, dupOpen]);
 
   /* ---------- question operations ---------- */
   const fields = draft.fields;
+  // Renaming an option carries over to the logic that reads it (other questions' "Show only when" and this
+  // question's routing rules), so "Yes" → "Yes please" keeps working. Cleared-then-retyped counts as a
+  // rename too: the last text of each option row is remembered while the row is empty.
+  const optionMemo = useRef(new Map<string, string>());
+  const optionRename = (f: RichField, nextRaw: string[]): [string, string] | null => {
+    const prev = Array.isArray(f.options) ? (f.options as unknown[]).map(String) : optionsOf(f);
+    if (prev.length !== nextRaw.length) { for (const k of [...optionMemo.current.keys()]) if (k.startsWith(`${f.id}:`)) optionMemo.current.delete(k); return null; }
+    let found: [string, string] | null = null;
+    nextRaw.forEach((raw, i) => {
+      if (raw === prev[i]) return;
+      const key = `${f.id}:${i}`;
+      const before = prev[i].trim() || optionMemo.current.get(key) || "";
+      const after = raw.trim();
+      if (!after) { if (before) optionMemo.current.set(key, before); return; }
+      optionMemo.current.delete(key);
+      if (before && before !== after && !prev.some((o, j) => j !== i && o.trim() === before)) found = [before, after];
+    });
+    return found;
+  };
   const updateField = (id: string, patch: Partial<RichField> | ((f: RichField) => RichField)) =>
-    change((d) => ({ ...d, fields: d.fields.map((f) => (f.id === id ? (typeof patch === "function" ? patch(f) : { ...f, ...patch }) : f)) }));
+    change((d) => {
+      const src = d.fields.find((f) => f.id === id);
+      const renamed = src && typeof patch !== "function" && Array.isArray(patch.options) && hasOptions(src) ? optionRename(src, patch.options as string[]) : null;
+      return {
+        ...d,
+        fields: d.fields.map((f) => {
+          let out = f.id === id ? (typeof patch === "function" ? patch(f) : { ...f, ...patch }) : f;
+          if (!renamed) return out;
+          const [from, to] = renamed;
+          if (out.showIf?.fieldId === id && out.showIf.value === from) out = { ...out, showIf: { ...out.showIf, value: to } };
+          if (f.id === id && out.routingRules?.some((r) => r.value === from)) out = { ...out, routingRules: out.routingRules.map((r) => (r.value === from ? { ...r, value: to } : r)) };
+          return out;
+        }),
+      };
+    });
   const insertAt = (index: number, kind: QuestionKind) => {
     const q = newQuestion(kind);
     change((d) => { const next = [...d.fields]; next.splice(index, 0, q); return { ...d, fields: next }; });
@@ -1024,13 +1126,21 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
   });
 
   const url = meta.id ? `${window.location.origin}/f/${meta.slug || meta.id}` : null;
+  // Delete asks the server to stop if more responses came in than the dialog showed (the count is from
+  // when the builder opened): then the dialog shows the new count and asks again. It never deletes
+  // responses nobody saw.
+  const deleting = useRef(false);
   const del = useMutation({
     mutationFn: async () => {
       if (!meta.id) return;
-      try { await nexusApi.deleteForm(meta.id, meta.count > 0); }
-      catch (e) { if (e instanceof ApiError && e.status === 409) await nexusApi.deleteForm(meta.id, true); else throw e; }
+      await nexusApi.deleteForm(meta.id, meta.count > 0, meta.count);
     },
+    onSettled: () => { deleting.current = false; },
     onSuccess: () => { dirty.current = false; qc.invalidateQueries({ queryKey: ["nexus", "forms"] }); toast(t("Form deleted"), { description: t("Control Room → Audit can restore it.") }); onClose(); },
+    onError: (e) => {
+      const n = e instanceof ApiError && e.status === 409 ? Number((e.payload as { submissionCount?: unknown } | null)?.submissionCount) : NaN;
+      if (Number.isFinite(n)) { setNewSinceOpen(Math.max(1, n - meta.count)); setMeta((m) => ({ ...m, count: n })); }
+    },
   });
 
   // Duplicate the form's STRUCTURE into another project (no submissions/tasks). Project-specific bits
@@ -1096,7 +1206,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
   );
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-background text-foreground" role="dialog" aria-modal="true" aria-label={draft.name || t("Untitled form")}>
+    <div className={cn("fixed inset-0 flex flex-col bg-background text-foreground", taskOpen ? "z-40" : "z-[70]")} role="dialog" aria-modal={!taskOpen} aria-label={draft.name || t("Untitled form")}>
       {/* ---------- top bar ---------- */}
       <header className="shrink-0 border-b border-border bg-background">
         <div className="flex h-12 items-center gap-2 px-2 sm:px-3">
@@ -1187,7 +1297,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                   )}
                 </div>
                 <div onClick={(e) => e.stopPropagation()}>
-                  <AutoTextarea value={draft.name} onChange={(v) => change((d) => ({ ...d, name: v.replace(/\n/g, " ") }))} placeholder={t("Untitled form")} ariaLabel={t("Form title")} autoFocus={!form}
+                  <AutoTextarea value={draft.name} onChange={(v) => change((d) => ({ ...d, name: v.replace(/\n/g, " ") }))} placeholder={t("Untitled form")} ariaLabel={t("Form title")} autoFocus={!form} keepFont
                     className="mt-2 font-display text-[28px] font-bold leading-tight tracking-tight @lg:text-[34px]" />
                   <AutoTextarea value={draft.description} onChange={(v) => change((d) => ({ ...d, description: v }))} placeholder={t("Add a description")} ariaLabel={t("Form description")}
                     className="mt-2 text-[15px] text-muted-foreground" />
@@ -1268,22 +1378,27 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         <div className="@container min-h-0 flex-1 overflow-y-auto bg-muted/20">
           {tab === "settings" && <SettingsTab draft={draft} change={change} projectName={projectName} members={members} responseCount={responseCount} />}
           {tab === "share" && <ShareTab url={url} saved={!!meta.id} isPublic={draft.isPublic} onGoSettings={() => setTab("settings")} />}
-          {tab === "responses" && <ResponsesTab formId={meta.id} onOpenProject={() => { void close(); navigate({ to: "/projects/$projectId", params: { projectId } }); }} />}
+          {tab === "responses" && <ResponsesTab formId={meta.id} onTaskOpen={setTaskOpen} onOpenProject={() => { void close(); navigate({ to: "/projects/$projectId", params: { projectId } }); }} />}
         </div>
       )}
 
       {/* ---------- dialogs ---------- */}
-      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} label={t("Delete this form?")}>
+      <Modal open={confirmDelete} onClose={() => { setConfirmDelete(false); setNewSinceOpen(0); }} label={t("Delete this form?")}>
         <h3 className="font-display text-base font-bold">{t("Delete this form?")}</h3>
+        {newSinceOpen > 0 && (
+          <p role="alert" className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+            <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0" /> {tn(newSinceOpen, "{n} new response came in while you were here.", "{n} new responses came in while you were here.")}
+          </p>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">
           {meta.count > 0
-            ? `${tn(meta.count, "This form has {n} submission.", "This form has {n} submissions.")} ${t("Deleting it permanently removes them and their My Submissions history. This can't be undone.")}`
+            ? `${tn(meta.count, "This form has {n} submission.", "This form has {n} submissions.")} ${t("Their tasks stay on the board, but the responses leave their senders' My Submissions. The link stops working. Control Room → Audit can restore the form with its responses.")}`
             : t("The link stops working. Control Room → Audit can restore it.")}
         </p>
-        {del.isError && <p className="mt-2 text-xs font-semibold text-destructive">{t("Couldn't delete the form.")}</p>}
+        {del.isError && !(del.error instanceof ApiError && del.error.status === 409) && <p className="mt-2 text-xs font-semibold text-destructive">{t("Couldn't delete the form.")}</p>}
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-lg border border-border px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-muted">{t("Cancel")}</button>
-          <button type="button" disabled={del.isPending} onClick={() => del.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3.5 py-2 text-sm font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60">{del.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Delete form")}</button>
+          <button type="button" onClick={() => { setConfirmDelete(false); setNewSinceOpen(0); }} className="rounded-lg border border-border px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-muted">{t("Cancel")}</button>
+          <button type="button" disabled={del.isPending} onClick={() => { if (deleting.current) return; deleting.current = true; del.mutate(); }} className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3.5 py-2 text-sm font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60">{del.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Delete form")}</button>
         </div>
       </Modal>
 

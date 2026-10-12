@@ -311,6 +311,11 @@
   textarea {
     font-size: 16px;
   }
+  /* A field that is already bigger than 16px (the form builder's title) keeps its own size: back to the
+     utility class's value, not shrunk to body size. */
+  textarea[data-keep-font] {
+    font-size: revert-layer;
+  }
 }
 
 /* Overlays under "reduce motion": tooltips, popovers, dialogs and sheets fade, but no longer zoom or

@@ -1763,6 +1763,12 @@ model FormSubmission {
   task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   submitterId String?
+
+  /// The sender's attempt id (web "Idempotency-Key", 12 Oct 2026): a repeat of the same attempt (double
+  /// click, retry after a lost reply) returns the first response instead of making a second task.
+  idempotencyKey String?
+
+  @@unique([formId, idempotencyKey])
 }
 
 // --- Legal document requests (invoice / contract) ---

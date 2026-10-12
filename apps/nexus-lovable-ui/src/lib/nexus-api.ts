@@ -2985,7 +2985,8 @@ export const nexusApi = {
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   /** The builder's Responses tab: submissions newest first with the task each one created (12 Oct 2026). */
   formResponses: (formId: string) => apiFetch<{ total: number; projectId: string; responses: NexusFormResponse[] }>(`/api/forms/${formId}/responses`),
-  deleteForm: (formId: string, force?: boolean) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}${force ? "?force=1" : ""}`, { method: "DELETE" }),
+  // expectCount: the response count the person saw; with force the server refuses (409) if more arrived since.
+  deleteForm: (formId: string, force?: boolean, expectCount?: number) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}${force ? `?force=1${typeof expectCount === "number" ? `&expect=${expectCount}` : ""}` : ""}`, { method: "DELETE" }),
   publicForm: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}/public`),
   mySubmissions: () => apiFetch<{ submissions: NexusMySubmission[]; statusColumns?: string[]; columns?: NexusSubmissionColumn[] }>(`/api/forms/my-submissions`),
   replyToSubmission: (id: string, content: string) => apiFetch<{ comment: NexusSubmissionComment }>(`/api/forms/my-submissions/${id}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
