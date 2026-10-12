@@ -182,6 +182,7 @@ export function BookmarkView(props: NodeViewProps) {
 }
 
 export function CalloutView(props: NodeViewProps) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const editable = props.editor.isEditable;
   const emoji = (props.node.attrs.emoji as string) || "💡";
@@ -189,7 +190,7 @@ export function CalloutView(props: NodeViewProps) {
     <NodeViewWrapper className="nx-callout" data-color={props.node.attrs.blockColor ?? undefined}>
       <Popover open={open && editable} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button type="button" contentEditable={false} className="nx-callout-emoji" aria-label="Callout icon" disabled={!editable}>{emoji}</button>
+          <button type="button" contentEditable={false} className="nx-callout-emoji" aria-label={t("Callout icon")} disabled={!editable}>{emoji}</button>
         </PopoverTrigger>
         <PopoverContent className="z-[120] w-72 p-2" align="start">
           <EmojiGrid onPick={(e) => { props.updateAttributes({ emoji: e }); setOpen(false); }} />

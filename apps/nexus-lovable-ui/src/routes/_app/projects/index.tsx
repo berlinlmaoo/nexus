@@ -124,7 +124,7 @@ function ProjectsPage() {
   const [newProjectPick, setNewProjectPick] = useState<GalleryPick | null>(null);
   const [newProjectStarter, setNewProjectStarter] = useState(true);
   const newProjectTemplate = newProjectPick?.kind === "template" ? newProjectPick.template : null;
-  const { t: tr, lang } = useLang();
+  const { t: tr, tn, lang } = useLang();
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1 });
   const projects: NexusProject[] = projectsQuery.data?.length
@@ -207,10 +207,10 @@ function ProjectsPage() {
   const workspaceOptions = useMemo(() => {
     const map = new Map<string, string>();
     projects.forEach((project) => {
-      if (project.workspaceId) map.set(project.workspaceId, `${project.name} workspace`);
+      if (project.workspaceId) map.set(project.workspaceId, tr("{name} workspace", { name: project.name ?? "" }));
     });
     return Array.from(map, ([id, label]) => ({ id, label }));
-  }, [projects]);
+  }, [projects, tr]);
 
   // One company pipeline (owner/GM, 9 Oct 2026): who may see it, and the board itself once it exists.
   const pipelineInfo = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data;
@@ -591,7 +591,7 @@ function ProjectsPage() {
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <Sparkles className="h-3.5 w-3.5" /> {tr("{shown}/{n} projects visible", { shown: visibleProjects.length, n: computedProjects.length })}
+                <Sparkles className="h-3.5 w-3.5" /> {tn(computedProjects.length, "{shown} of {n} project", "{shown} of {n} projects", { shown: visibleProjects.length })}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {tr("Open a project to see its board, pages, calendar and timeline.")}

@@ -450,7 +450,7 @@ export function FolderFormModal({ form, saving, canSave, onChange, onCancel, onS
                 <Trash2 className="h-3.5 w-3.5" />{t("Back to emoji")}
               </button>
             )}
-            <span className="text-[10px] text-muted-foreground">PNG/JPG/SVG/WEBP, max 5MB</span>
+            <span className="text-[10px] text-muted-foreground">{t("PNG/JPG/SVG/WEBP, max 5MB")}</span>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange({ iconFile: f }); }} />
           </div>
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("Colour")}>
