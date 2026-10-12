@@ -3,6 +3,7 @@
 // percentages rounded to whole points, and a ratio with no denominator shown as "—" rather than 0%.
 import { ApiError, type ReportRatio } from "@/lib/nexus-api";
 import { localeOf, t } from "@/lib/lang";
+import { failureText } from "@/lib/failure";
 
 export const REPORT_TIMEZONE = "Asia/Jakarta";
 const CUTOFF_DAY = 27; // attendance period = 28th of the previous month → 27th of the key's month
@@ -161,5 +162,6 @@ export function errorMessage(e: unknown): string {
   if (status === 401) return t("Your session has ended. Sign in again to see reports.");
   if (status === 400) return t("That period isn't valid. Pick another one from the list.");
   if (status === 404) return t("We couldn't find that person in this workspace.");
-  return e instanceof Error && e.message ? e.message : t("Something went wrong. Try again in a moment.");
+  // Never the server's raw text ("boom", "Internal server error"): the shared wording (QA B19).
+  return failureText(e);
 }

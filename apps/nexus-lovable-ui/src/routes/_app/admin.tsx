@@ -29,6 +29,7 @@ import { SuspectAttendanceAdmin } from "@/components/attendance/SuspectAttendanc
 import { CalendarSettingsAdmin } from "@/components/calendar/CalendarSettingsAdmin";
 import { useLang } from "@/lib/lang";
 import { LeftTag } from "@/components/LeftTag";
+import { HScroll } from "@/components/HScroll";
 
 // The section is in the URL (?tab=audit), like Reports' ?tab=team: a reload, Back or a shared link lands
 // on the same section (QA 13 Oct 2026; it was memory-only and always reset to Users).
@@ -322,7 +323,7 @@ function Admin() {
             {/* iPad portrait (≈700px of content) cut the Role and Details columns off with no way to reach
                 them (QA 13 Oct 2026): Joined shows from xl, Work hours from sm (it's in Details too), the role
                 chip never wraps, and anything still too wide scrolls inside the card instead of being clipped. */}
-            <div className="overflow-x-auto overscroll-x-contain rounded-2xl border border-border bg-card shadow-soft">
+            <HScroll className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
               {users.isLoading && <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
               <table className="w-full text-sm">
                 <thead>
@@ -341,7 +342,7 @@ function Admin() {
                 </tbody>
               </table>
               {!users.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">{t("No users found.")}</div>}
-            </div>
+            </HScroll>
           </>
         )}
       </div>
@@ -2277,7 +2278,7 @@ function GideonUsage() {
       {users.length === 0 ? (
         <EmptyState icon={GideonMark} tone="muted" title={t("No one has used GIDEON yet")} />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+        <HScroll className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -2303,7 +2304,7 @@ function GideonUsage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </HScroll>
       )}
     </div>
   );

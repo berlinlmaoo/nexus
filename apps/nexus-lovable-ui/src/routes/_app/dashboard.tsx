@@ -28,6 +28,7 @@ import {
 import learner from "@/assets/philearn/learner.png";
 import sophia from "@/assets/philearn/sophia.png";
 import { cn } from "@/lib/utils";
+import { competitionRank } from "@/lib/competition-rank";
 import { useLang } from "@/lib/lang";
 import { notificationMessage, notificationTitle } from "@/lib/server-text";
 import { chatUnreadTotal } from "@/lib/chat-unread";
@@ -908,7 +909,8 @@ function LeaderboardCard() {
   const lb = useQuery({ queryKey: ["gamification", "leaderboard"], queryFn: () => nexusApi.leaderboard(), retry: false, staleTime: 60_000 });
   // See All → go straight to the full leaderboard page for now. The "card mekar" expand modal
   // (LeaderboardExpandModal, parked below) is on hold until the open animation feels right.
-  const rows = (lb.data?.rows ?? []).slice(0, 5);
+  // Same ranking as the Leaderboard page: ties share a rank (lib/competition-rank.ts).
+  const rows = competitionRank(lb.data?.rows ?? [], (r) => r.totalXp, (r) => r.name ?? "").slice(0, 5);
   const [xpUser, setXpUser] = useState<{ id: string; name?: string | null; avatar?: string | null } | null>(null);
   // Keep the source row's content hidden through BOTH the open and close morph (cleared only after
   // the modal's exit animation completes) so it never crossfades into/out of the morph.
@@ -943,8 +945,8 @@ function LeaderboardCard() {
             {/* Hide the row's content while IT is the one expanding so its avatar/name/XP don't
                 crossfade ("kebawa") through the morph — only the card box morphs. */}
             <div className={cn("flex w-full items-center gap-3", morphingId === r.userId && "opacity-0")}>
-              <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums", rankTone(i))}>
-                {i === 0 ? <Crown className="h-3.5 w-3.5" /> : i + 1}
+              <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums", rankTone(r.rank - 1))}>
+                {r.rank === 1 ? <Crown className="h-3.5 w-3.5" /> : r.rank}
               </span>
               <div className="shrink-0">
                 {r.avatar ? (

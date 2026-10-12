@@ -163,18 +163,23 @@ function WorkspaceMembersSection() {
             {members.map((m: NexusWorkspaceMember) => {
               const isSelf = m.userId === me?.id;
               return (
-                <div key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                // Phone: who on the first line (full width), the controls on a second line under the name. In one
+                // squeezed row the name fell to one letter, the phone field overflowed and the bin wrapped (QA B11).
+                <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
                   {m.avatar ? <img src={thumbUrl(m.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{(m.name ?? m.email ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3rem)]">
                     <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">{t("(you)")}</span>}</div>
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                   </div>
+                  <div className="flex items-center gap-2 max-sm:w-full max-sm:pl-12">
                   <MemberPhoneEditor member={m} workspaceId={wsId} canEdit={canManage} />
+                  <span className="flex-1 sm:hidden" />
                   {canEditTier(myRole, m.role) && !isSelf ? (
                     <SelectPicker variant="field" size="sm" align="end" value={m.role} onChange={(v) => changeRole.mutate({ memberId: m.id, role: v as OrgRole })} disabled={changeRole.isPending} ariaLabel={t("Role")} options={[...myAssignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="h-8 px-2 font-semibold" />
                   ) : <RoleBadge role={m.role} />}
                   {isBodPlus && !isSelf && canEditTier(myRole, m.role) && <button onClick={() => setPwTarget({ memberId: m.id, name: m.name })} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground" aria-label={t("Reset password")} title={t("Reset password")}><KeyRound className="h-4 w-4" /></button>}
                   {canManage && !isSelf && <button onClick={() => { if (confirm(t("Remove {name} from the workspace?", { name: m.name }))) remove.mutate(m.id); }} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive" aria-label={t("Remove")}><Trash2 className="h-4 w-4" /></button>}
+                  </div>
                 </div>
               );
             })}

@@ -81,4 +81,11 @@ export const ID_QAFIX_PERM: Record<string, string> = {
   "{label}: couldn't load. Try again": "{label}: gagal dimuat. Coba lagi",
   "{n} deleted team": "{n} tim sudah dihapus",
   "{n} deleted teams": "{n} tim sudah dihapus",
+  "Back to your report": "Kembali ke laporanmu",
+  "this conversation": "Percakapan ini",
+  "This conversation doesn't exist any more": "Percakapan ini sudah tidak ada",
+  "It was deleted, or the link is wrong. Start a new chat below.": "Sudah dihapus, atau tautannya salah. Mulai chat baru di bawah.",
+  "the vault": "Vault",
+  "The task is deleted. A manager or the BoD can restore it for 90 days if you need it back.": "Task dihapus. Manager atau BoD bisa memulihkannya selama 90 hari kalau kamu perlu.",
+  "A manager or the BoD can restore it for 90 days.": "Manager atau BoD bisa memulihkannya selama 90 hari.",
 };

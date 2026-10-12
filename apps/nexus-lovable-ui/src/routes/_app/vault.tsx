@@ -33,6 +33,7 @@ import { fillsTile, humanSize, isPdf, mediaKind } from "@/lib/vault-media";
 import { VAULT_ITEM_MIME, canMoveInto, dragKind, dropKey, filesOfDrop, type DraggedVaultItem } from "@/lib/vault-dnd";
 import { vaultUploads } from "@/lib/vault-uploads";
 import { failureList, runBulk, type BulkResult } from "@/lib/vault-bulk";
+import { LoadError, retryTransient } from "@/components/LoadError";
 
 /**
  * The vault's address (9 Oct 2026): `?folder=<id>` is the folder on screen, so refresh, Back and a
@@ -155,6 +156,7 @@ function VaultPage() {
   const listing = useQuery({
     queryKey: key,
     queryFn: () => nexusApi.vaultList({ parentId, trash, q: search || undefined }),
+    retry: retryTransient,
   });
 
   const refresh = useCallback(() => { void qc.invalidateQueries({ queryKey: ["vault"] }); }, [qc]);
@@ -1024,20 +1026,10 @@ function VaultPage() {
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : listing.isError && !data ? (
-          // A failed load is not an empty folder (it used to say "This folder is empty.").
-          <div role="alert" className="flex flex-col items-center justify-center py-20 text-center">
-            <HardDrive className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="text-sm font-medium">
-              {(listing.error as ApiError)?.status === 404 ? t("This folder doesn't exist any more.") : t("Couldn't load the vault.")}
-            </p>
-            <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-              {(listing.error as ApiError)?.status === 403 ? t("It's locked to certain roles.") : t("Check your connection and try again.")}
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => void listing.refetch()}>{t("Try again")}</Button>
-              {(parentId || trash) && <Button variant="ghost" size="sm" onClick={() => setParentId(null)}>{t("Go to the top of the vault")}</Button>}
-            </div>
-          </div>
+          // A failed load is not an empty folder (it used to say "This folder is empty."). The shared error state.
+          <LoadError error={listing.error} what={t("the vault")} onRetry={() => void listing.refetch()}
+            notFoundTitle={t("This folder doesn't exist any more.")} forbiddenMessage={t("It's locked to certain roles.")}
+            action={(parentId || trash) ? <Button variant="ghost" size="sm" onClick={() => setParentId(null)}>{t("Go to the top of the vault")}</Button> : undefined} />
         ) : !items.length ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <HardDrive className="h-10 w-10 text-muted-foreground/40 mb-3" />

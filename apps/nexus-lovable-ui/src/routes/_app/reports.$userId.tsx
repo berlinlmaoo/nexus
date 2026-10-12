@@ -32,7 +32,11 @@ function PersonReportPage() {
 
   const code = reportErrorCode(report.error);
   const blocked = code === "REPORT_OUT_OF_SCOPE" || code === "REPORT_SELF_ONLY";
-  const backSearch: ReportsSearch = { period, tab: code === "REPORT_SELF_ONLY" ? undefined : "team" };
+  // Only a viewer with a Team tab goes "back to team": Staff have none, and an out-of-scope report sent them
+  // to a tab they can't open (QA S-30, 13 Oct 2026).
+  const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
+  const hasTeamTab = ["MANAGER", "BOD", "ONE_ABOVE_ALL"].includes(wsm.data?.role ?? "");
+  const backSearch: ReportsSearch = { period, tab: code === "REPORT_SELF_ONLY" || !hasTeamTab ? undefined : "team" };
 
   return (
     <div>
@@ -43,7 +47,7 @@ function PersonReportPage() {
       />
       <div className="max-w-7xl p-4 md:p-8">
         <Link to="/reports" search={backSearch} className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> {backSearch.tab === "team" ? t("Back to team") : t("Back to reports")}
+          <ArrowLeft className="h-4 w-4" /> {backSearch.tab === "team" ? t("Back to team") : t("Back to your report")}
         </Link>
         {report.isLoading ? <PersonReportSkeleton /> :
           blocked ? (

@@ -1162,6 +1162,39 @@ function buildTitleId(row: AuditRowLike, names?: AuditNames): string {
   return entityName ? `${actor} melakukan “${act}” pada ${noun} ${quote(entityName)}` : `${actor} melakukan “${act}” pada ${noun}`
 }
 
+/** Field labels and the fixed value words of the detail view, in Indonesian (QA 13 Oct 2026: the sentence was
+ *  Indonesian, the fields under it stayed English). Keyed by the English label; anything else stays as it is. */
+const LABELS_ID: Record<string, string> = {
+  Title: "Judul", Description: "Deskripsi", Status: "Status", Priority: "Prioritas", "Due date": "Tenggat",
+  "Start date": "Tanggal mulai", "End date": "Tanggal selesai", Tags: "Tag", List: "Seksi", Position: "Posisi",
+  Assignees: "Penanggung jawab", Recurring: "Berulang", "Repeat pattern": "Pola ulang", "Task type": "Jenis task",
+  Role: "Peran", "Attendance role": "Peran absensi", "Shift start": "Mulai shift", "Shift end": "Akhir shift",
+  "Shift per weekday": "Shift per hari", "Flexi time": "Flexi time", "No-geofence mode": "Mode tanpa geofence",
+  "Rest days": "Hari libur", Approver: "Approver", "Phone number": "Nomor HP", "Day-off quota": "Jatah day off",
+  "Employment start date": "Tanggal mulai kerja", Name: "Nama", "Do not disturb until": "Jangan ganggu sampai",
+  Onboarded: "Onboarding selesai", Task: "Task", "Target task": "Task tujuan", "Depends on task": "Bergantung pada task",
+  Project: "Project", Projects: "Project", "Custom field": "Custom field", Office: "Kantor", Form: "Form",
+  Workspace: "Workspace", Team: "Tim", User: "Pengguna", Person: "Orang", Assignee: "Penanggung jawab",
+  "Removed assignee": "Penanggung jawab yang dilepas", "Reported user": "Orang yang dilaporkan", Recipient: "Penerima",
+  Member: "Anggota", "Reports left without approver": "Bawahan tanpa approver", "XP refunded": "XP dikembalikan",
+  "Reviewed as": "Ditinjau sebagai", "Distance from office": "Jarak dari kantor", "Away from office": "Di luar kantor",
+  "Checked in at": "Check-in di", "File type": "Jenis file", Size: "Ukuran", Via: "Lewat", "Sign-in method": "Cara masuk",
+  App: "Aplikasi", Type: "Jenis", Reason: "Alasan", "Correction reason": "Alasan koreksi",
+  "Off-site check-out": "Check-out di luar kantor", "Granted by admin": "Diberikan admin", Date: "Tanggal", Quota: "Jatah",
+  "Marked all as read": "Tandai semua sudah dibaca", Metadata: "Metadata",
+}
+const VALUES_ID: Record<string, string> = { Yes: "Ya", No: "Tidak", None: "Tidak ada", Empty: "Kosong", "[redacted]": "[disembunyikan]", "Unreadable metadata": "Metadata tidak terbaca" }
+
+function localiseDescription(d: AuditDescription, lang: AuditLang): AuditDescription {
+  if (lang !== "id") return d
+  const v = (x: string | null) => (x === null ? x : VALUES_ID[x] ?? x)
+  return {
+    ...d,
+    changes: d.changes.map((c) => ({ ...c, label: LABELS_ID[c.label] ?? c.label, from: v(c.from), to: v(c.to) })),
+    details: d.details.map((x) => ({ ...x, label: LABELS_ID[x.label] ?? x.label, value: v(x.value) ?? x.value })),
+  }
+}
+
 /** The row's sentence in the given language. Never throws. */
 export function auditTitleIn(row: AuditRowLike, lang: AuditLang, names?: AuditNames): string {
   if (lang !== "id") return auditTitle(row, names)
@@ -1195,5 +1228,5 @@ export function describeAuditEntry(row: AuditRowLike, names?: AuditNames, lang: 
   } catch {
     details = [{ label: "Metadata", value: "Unreadable metadata" }]
   }
-  return { title: auditTitleIn(row, lang, names), changes, details }
+  return localiseDescription({ title: auditTitleIn(row, lang, names), changes, details }, lang)
 }

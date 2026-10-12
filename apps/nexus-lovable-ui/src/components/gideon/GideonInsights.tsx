@@ -6,6 +6,7 @@ import { GideonMark } from "./GideonMark";
 import { gideonRunDetail, gideonRuns, type GideonRunRow } from "@/lib/gideon";
 import { useLang, type LangApi } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+import { HScroll } from "@/components/HScroll";
 
 /**
  * GIDEON "Insights" (12 Oct 2026, after Notion's agent Insights): every run — chat, @mention, scheduled
@@ -81,7 +82,7 @@ export function GideonRunList({ runs, compact }: { runs: GideonRunRow[]; compact
     );
   }
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+    <HScroll className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-[11px] font-semibold text-muted-foreground">
@@ -112,7 +113,7 @@ export function GideonRunList({ runs, compact }: { runs: GideonRunRow[]; compact
         </tbody>
       </table>
       {openId && <RunDetail id={openId} onClose={() => setOpenId(null)} />}
-    </div>
+    </HScroll>
   );
 }
 

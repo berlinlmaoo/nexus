@@ -307,6 +307,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   // BoD-only "Jadiin quest" action: bundle this (and more) task(s) into a specific_tasks quest.
   const wsMembers = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), staleTime: 300_000, retry: false });
   const canMakeQuest = wsMembers.data?.role === "BOD" || wsMembers.data?.role === "ONE_ABOVE_ALL";
+  // Control Room → Audit (where a delete is undone) is Manager and up; Staff are told who can do it (QA S-19).
+  const canOpenAudit = ["MANAGER", "BOD", "ONE_ABOVE_ALL"].includes(wsMembers.data?.role ?? "");
   const [questOpen, setQuestOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const projectId = task.data?.taskList?.project?.id || task.data?.taskList?.projectId;
@@ -624,7 +626,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
             <AlertDialogHeader>
               <AlertDialogTitle>{tr("Delete this task?")}</AlertDialogTitle>
-              <AlertDialogDescription>{tr("The task is deleted and can be restored from Control Room → Audit for 90 days.")}</AlertDialogDescription>
+              <AlertDialogDescription>{canOpenAudit ? tr("The task is deleted and can be restored from Control Room → Audit for 90 days.") : tr("The task is deleted. A manager or the BoD can restore it for 90 days if you need it back.")}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{tr("Cancel")}</AlertDialogCancel>
@@ -640,7 +642,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <AlertDialogDescription>
                 {tr("“{name}” is removed from the task.", { name: confirmAtt?.name || tr("(unnamed)") })}{" "}
                 {confirmAtt?.kind === "PROOF" ? tr("Finance uses it as evidence of the payment.") + " " : ""}
-                {tr("Control Room → Audit can restore it for 90 days.")}
+                {canOpenAudit ? tr("Control Room → Audit can restore it for 90 days.") : tr("A manager or the BoD can restore it for 90 days.")}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
