@@ -281,7 +281,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
                         {checked ? <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
                         <MiniAvatar user={m.user} size={22} />
                         <span className="flex-1 truncate text-sm font-medium">{m.user?.name ?? m.user?.email ?? id}</span>
-                        {m.role && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{m.role}</span>}
+                        {m.role && <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{m.role === "LEAD" ? t("Lead") : m.role === "MEMBER" ? t("Member") : m.role}</span>}
                       </button>
                     );
                   })}

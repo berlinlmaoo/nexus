@@ -1577,7 +1577,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                 <div key={g.list.id}>
                   {/* GROUP ROW */}
                   {!single && <div className="flex border-b border-border bg-muted/40">
-                    <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted/40" style={{ width: GANTT_LEFT_W }}>
+                    <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border bg-muted" style={{ width: GANTT_LEFT_W }}>
                       <button onClick={() => toggle(g.list.id)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
                         <span className="truncate font-bold tracking-tight">{g.list.name}</span>

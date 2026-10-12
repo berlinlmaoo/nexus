@@ -81,8 +81,8 @@ function Forms() {
           <EmptyState icon={FileText} title={t("No forms yet")}
             message={t("A form is a page people fill in, like a request, a reimbursement or a report. Each answer becomes a task. Make the first one and it shows up here for everyone to fill in.")} />
         )}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full"><FormCard form={f} projectName={projectName(f.projectId)} onEdit={() => setBuilder({ form: f, projectId: f.projectId ?? builderProjectId })} /></Reveal>)}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full min-w-0"><FormCard form={f} projectName={projectName(f.projectId)} onEdit={() => setBuilder({ form: f, projectId: f.projectId ?? builderProjectId })} /></Reveal>)}
         </div>
       </div>
       {builder && <FormBuilder projectId={builder.projectId} form={builder.form} onClose={() => setBuilder(null)} />}

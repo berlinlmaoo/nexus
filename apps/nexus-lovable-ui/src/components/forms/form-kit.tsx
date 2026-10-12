@@ -590,7 +590,7 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
           <h2 className="font-display text-lg font-bold tracking-tight">{t("Forms")}</h2>
           <p className="text-sm text-muted-foreground">{t("Each time someone submits a form, it creates a task in this project.")}</p>
         </div>
-        <button onClick={() => setBuilder({})} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
+        <button onClick={() => setBuilder({})} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
       </div>
       {forms.isLoading && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

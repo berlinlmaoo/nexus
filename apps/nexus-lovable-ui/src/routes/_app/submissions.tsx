@@ -164,7 +164,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
                     {answers.map((a) => (
                       <div key={a.id} className="grid gap-1 px-3 py-2 sm:grid-cols-[40%_1fr]">
                         <dt className="text-xs text-muted-foreground">{a.label}</dt>
-                        <dd className="whitespace-pre-wrap break-words text-sm">{fmtVal(a.value, t("Yes"), t("No"))}</dd>
+                        <dd className="whitespace-pre-wrap break-words text-sm">{/(harga|nominal|amount|biaya|total|jumlah)/i.test(String(a.label)) && /^-?\d+$/.test(String(a.value ?? "").trim()) ? idr.format(Number(a.value)) : fmtVal(a.value, t("Yes"), t("No"))}</dd>
                       </div>
                     ))}
                   </dl>
