@@ -514,6 +514,7 @@ export async function notifyMention(data: {
   commentSnippet: string
   projectId?: string
 }) {
+  if (data.actorId && data.actorId === data.mentionedUserId) return // nobody is notified about their own action
   // Skip if user has DND active
   if (await isUserDnd(data.mentionedUserId)) return
 
@@ -631,6 +632,7 @@ export async function notifyFeedMention(data: {
   /** The post's first PostImage id: its photo rides on the push like a new-post push's does. */
   imageId?: string | null
 }) {
+  if (data.actorId && data.actorId === data.mentionedUserId) return // nobody is notified about their own action
   if (await isUserDnd(data.mentionedUserId)) return
   const user = await prisma.user.findUnique({ where: { id: data.mentionedUserId }, select: { name: true } })
   if (!user) return
@@ -775,6 +777,7 @@ export async function notifyFeedComment(data: {
   snippet: string
   reason: "author" | "mention"
 }) {
+  if (data.actorId && data.actorId === data.recipientUserId) return // nobody is notified about their own action
   if (await isUserDnd(data.recipientUserId)) return
   const user = await prisma.user.findUnique({ where: { id: data.recipientUserId }, select: { name: true } })
   if (!user) return
@@ -909,6 +912,7 @@ export async function notifyProjectInvite(data: {
   actorId?: string | null
   role: string
 }) {
+  if (data.actorId && data.actorId === data.userId) return // nobody is notified about their own action
   // Skip if user has DND active
   if (await isUserDnd(data.userId)) return
 
