@@ -10,7 +10,7 @@ import {
   MAX_COLUMNS, coerceCellValue, normalizeColumns, resolveSheetAccess, safeUrl,
   type SheetColumn, type LinkCell,
 } from "@/lib/project-sheets"
-import { emitSheetStructure } from "@/lib/socket-emitter"
+import { emitSheetStructure, originTabOf } from "@/lib/socket-emitter"
 import { restorableDelete } from "@/lib/deletion-snapshot"
 
 // POST /api/sheets/[sheetId]/import — multipart { file, mode?: "append" | "replace" }
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ she
       metadata: { imported: data.length, mode, file: file.name, columns: finalColumns.length },
     })
 
-    emitSheetStructure(sheetId, session.user.id)
+    emitSheetStructure(sheetId, session.user.id, originTabOf(req))
     return NextResponse.json({
       imported: data.length, columns: finalColumns.length, mode,
       dropdowns: selectOptions.size, links: linkCols.size,

@@ -13,7 +13,12 @@ import {
 } from "./sheet-types";
 
 /** Where the cursor goes after a commit. */
-export type Next = "down" | "up" | "right" | "left" | null;
+/**
+ * Where the cursor goes after a commit. Tab is told apart from ArrowRight on purpose: only a run of
+ * Tabs makes the next Enter return to the column the run started in (Sheets). An arrow commit must
+ * not (bughunt S-BUG-12).
+ */
+export type Next = "down" | "up" | "right" | "left" | "tab" | "shiftTab" | null;
 
 /**
  * The picker for a multi-select cell.
@@ -529,7 +534,7 @@ function FormulaInput({ inputRef, col, initial, seeded, onFinish, onCancel, onDr
             if (e.key === "Escape") { e.preventDefault(); setText(`${text} `); return; } // close list, keep editing
           }
           if (e.key === "Enter") { e.preventDefault(); onFinish(e.shiftKey ? "up" : "down"); }
-          else if (e.key === "Tab") { e.preventDefault(); onFinish(e.shiftKey ? "left" : "right"); }
+          else if (e.key === "Tab") { e.preventDefault(); onFinish(e.shiftKey ? "shiftTab" : "tab"); }
           else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
           else if (seeded && !text.startsWith("=") && !e.shiftKey && !e.metaKey && !e.ctrlKey &&
             (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {

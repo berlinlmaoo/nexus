@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import type { SplitSep } from "@/lib/sheet-datatools";
 import { Floating } from "./sheet-float";
+import { SelectPicker } from "@/components/SelectPicker";
 import { FieldLabel, SheetDialog, inputClass, primaryBtn, secondaryBtn, selectClass } from "./sheet-shell";
 
 export type DataColumn = { index: number; letter: string; header: string };
@@ -48,10 +49,9 @@ export function SortRangeDialog({ columns, defaultHeader, onSort, onClose }: {
         {keys.map((k, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
             <span className="w-24 shrink-0 text-xs text-muted-foreground">{i === 0 ? t("Sort by") : t("then by")}</span>
-            <select value={k.col} aria-label={t("Sort column")} className={cn(selectClass, "w-40")}
-              onChange={(e) => setKeys(keys.map((x, j) => (j === i ? { ...x, col: Number(e.target.value) } : x)))}>
-              {columns.map((c) => <option key={c.index} value={c.index}>{colName(c, header, t)}</option>)}
-            </select>
+            <SelectPicker value={String(k.col)} ariaLabel={t("Sort column")} variant="field" size="sm" className="w-40"
+              onChange={(v) => setKeys(keys.map((x, j) => (j === i ? { ...x, col: Number(v) } : x)))}
+              options={columns.map((c) => ({ value: String(c.index), label: colName(c, header, t) }))} />
             <div className="flex items-center gap-3 text-xs" role="radiogroup">
               {([["asc", "A → Z"], ["desc", "Z → A"]] as const).map(([d, l]) => (
                 <label key={d} className="flex items-center gap-1.5">
@@ -188,11 +188,13 @@ export function FindReplaceDialog({ canEdit, hasSelection, onFind, onReplace, on
         <label htmlFor="fr-replace">{t("Replace with")}</label>
         <input id="fr-replace" value={o.replace} disabled={!canEdit} onChange={(e) => set({ replace: e.target.value })} className={inputClass} />
         <label htmlFor="fr-scope">{t("Search")}</label>
-        <select id="fr-scope" value={o.scope} onChange={(e) => set({ scope: e.target.value as FindOpts["scope"] })} className={cn(selectClass, "w-44")}>
-          <option value="all">{t("All sheets")}</option>
-          <option value="sheet">{t("This sheet")}</option>
-          <option value="range" disabled={!hasSelection}>{t("Specific range")}</option>
-        </select>
+        <SelectPicker id="fr-scope" value={o.scope} onChange={(v) => set({ scope: v as FindOpts["scope"] })} variant="field" size="sm" searchable={false} className="w-44"
+          ariaLabel={t("Search")}
+          options={[
+            { value: "all", label: t("All sheets") },
+            { value: "sheet", label: t("This sheet") },
+            { value: "range", label: t("Specific range"), disabled: !hasSelection },
+          ]} />
         <span />
         <div className="space-y-2 pt-1">
           {opts.map(([k, l]) => (
@@ -240,15 +242,14 @@ export function SplitSeparatorChip({ anchor, value, onChange, onClose }: {
     <Floating anchor={{ rect: anchor }} role="dialog"
       className="flex items-center gap-1.5 rounded-lg border border-border bg-popover px-2 py-1.5 text-xs text-popover-foreground shadow-pop">
       <label htmlFor="split-sep" className="text-muted-foreground">{t("Separator:")}</label>
-      <select id="split-sep" value={key} className={cn(selectClass, "h-7 w-auto")}
-        onChange={(e) => {
-          const s = SEPARATORS.find((x) => x.key === e.target.value);
+      <SelectPicker id="split-sep" value={key} variant="field" size="sm" searchable={false} ariaLabel={t("Separator:")}
+        onChange={(v) => {
+          const s = SEPARATORS.find((x) => x.key === v);
           if (!s) return;
           if (typeof s.value === "object") { if (custom) onChange({ custom }); else onChange({ custom: "" }); }
           else onChange(s.value);
-        }}>
-        {SEPARATORS.map((s) => <option key={s.key} value={s.key}>{t(s.label)}</option>)}
-      </select>
+        }}
+        options={SEPARATORS.map((s) => ({ value: s.key, label: t(s.label) }))} />
       {key === "custom" && (
         <input value={custom} autoFocus aria-label={t("Custom separator")} placeholder="|" maxLength={10}
           onChange={(e) => { setCustom(e.target.value); onChange({ custom: e.target.value }); }}

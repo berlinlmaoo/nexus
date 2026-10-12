@@ -6,7 +6,6 @@ import {
   type NexusSheetSettings,
 } from "@/lib/nexus-api";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { celebrate } from "@/components/Celebration";
 import { Avatar } from "@/components/Avatar";
 import { CellCommentThread } from "./CellComments";
 import { useSheetRealtime } from "./use-sheet-realtime";
@@ -17,12 +16,16 @@ import { useSheetUndo } from "./use-sheet-undo";
 import { useLang } from "@/lib/lang";
 import { PivotEditor } from "./PivotEditor";
 import { computePivot, distinctFieldValues, pivotFields, pivotSuggestions } from "@/lib/sheet-pivot";
-import { buildSheetData, displayCell } from "./sheet-types";
+import { buildSheetData, displayCell, sameCell } from "./sheet-types";
+import { SheetAskHost, askText, isNetworkError, notify, notifyError } from "./sheet-ask";
+import { SheetDialog, primaryBtn, secondaryBtn } from "./sheet-shell";
 import { engineFor } from "@/lib/sheet-formula";
 import { rangeFromA1, rangeRect, rangeToA1 } from "@/lib/sheet-validation";
 import type { PivotSpec } from "@/lib/sheet-model";
 
 type SettingsPatch = { [K in keyof NexusSheetSettings]?: NexusSheetSettings[K] | null };
+/** Mirrors MAX_COLUMNS in src/lib/project-sheets.ts (the server refuses more). */
+const MAX_SHEET_COLUMNS = 50;
 
 /**
  * The Spreadsheet tab. Free-form rows that belong to nothing — unlike the Table view, whose rows are
@@ -33,8 +36,13 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   const { t } = useLang();
   const isMobile = useIsMobile();
   const [editingCell, setEditingCell] = useState(false);
+  /** Cells waiting to be saved (all sheets), and whether the last try failed for lack of network. */
+  const [unsaved, setUnsaved] = useState<{ cells: number; offline: boolean }>({ cells: 0, offline: false });
   const refreshList = () => qc.invalidateQueries({ queryKey: ["nexus", "project-sheets", projectId] });
+  /** A second click on "Add sheet" while the first is still on its way is ignored (bughunt S-BUG-17). */
+  const addingSheet = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [importAsk, setImportAsk] = useState<{ file: File; mode: "append" | "replace" } | null>(null);
   const importFile = useMutation({
     mutationFn: ({ file, mode }: { file: File; mode: "append" | "replace" }) =>
       nexusApi.importSheet(sheetId as string, file, mode),
@@ -49,20 +57,22 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
           res.dropdowns ? t("{n} columns became dropdowns", { n: res.dropdowns }) : "",
           res.links ? t("{n} columns became links", { n: res.links }) : "",
         ].filter(Boolean).join(", ");
-        alert(t("{rows} rows imported. The sheet now has {cols} columns.", { rows: res.imported, cols: res.columns }) + (extra ? ` ${extra}.` : ""));
+        notify(t("{rows} rows imported. The sheet now has {cols} columns.", { rows: res.imported, cols: res.columns }) + (extra ? ` ${extra}.` : ""));
       }
     },
-    onError: (e) => alert(e instanceof Error ? e.message : t("Import failed.")),
+    onError: (e) => notifyError(e, t("Import failed.")),
   });
   const addSheet = useMutation({
     mutationFn: (name: string) => nexusApi.createSheet(projectId, name),
+    onMutate: () => { addingSheet.current = true; },
+    onSettled: () => { addingSheet.current = false; },
     onSuccess: (created) => { setActiveId(created.id); refreshList(); },
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't create the sheet.")),
+    onError: (e) => notifyError(e, t("Couldn't create the sheet.")),
   });
   const removeSheet = useMutation({
     mutationFn: (id: string) => nexusApi.deleteSheet(id),
     onSuccess: () => { setActiveId(null); refreshList(); },
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't delete the sheet.")),
+    onError: (e) => notifyError(e, t("Couldn't delete the sheet.")),
   });
 
   // Tasks for the "task" column type. Reuses the project's existing task query key, so opening the
@@ -108,8 +118,9 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     queryFn: () => nexusApi.sheet(sheetId as string),
     enabled: Boolean(sheetId),
     // A refetch landing mid-typing is what unmounts the editing cell, so pause polling while editing.
-    refetchInterval: editingCell ? false : 20_000,
-    refetchOnWindowFocus: !editingCell,
+    // Nor while edits wait to be saved (offline): a poll would show the older server copy meanwhile.
+    refetchInterval: editingCell || unsaved.cells > 0 ? false : 20_000,
+    refetchOnWindowFocus: !editingCell && unsaved.cells === 0,
   });
   const sheet = sheetQ.data;
   const sheetRef = useRef(sheet);
@@ -149,7 +160,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         return { ...prev, rows: prev.rows.map((r) => (by.has(r.id) ? { ...r, height: by.get(r.id)! } : r)) };
       });
     },
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't change the row height.")),
+    onError: (e) => notifyError(e, t("Couldn't change the row height.")),
   });
   const resizeRow = (rowId: string, height: number | null) => {
     const before = sheetRef.current?.rows.find((r) => r.id === rowId)?.height ?? null;
@@ -202,7 +213,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     mutationFn: (body: string) =>
       nexusApi.addSheetComment(sheetId as string, { rowId: thread!.rowId, columnId: thread!.columnId, body }),
     onSuccess: refreshComments,
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't send the comment.")),
+    onError: (e) => notifyError(e, t("Couldn't send the comment.")),
   });
   const patchComment = useMutation({
     mutationFn: (payload: { commentId: string; resolved?: boolean; body?: string }) =>
@@ -238,46 +249,177 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     });
   };
 
-  const undo = useSheetUndo();
-  const say = (msg: string) => celebrate(msg);
+  // One history per tab (bughunt S-BUG-25): an entry only ever runs on the sheet it was made in.
+  const undo = useSheetUndo(sheetId);
+  // A quiet note, like a status line — not a confetti burst on every Ctrl+Z.
+  const say = (msg: string) => notify(msg, { duration: 1800 });
+  const undoNow = async () => { const l = await undo.undo(); if (l) say(t("Undone: {what}", { what: l })); };
+  const redoNow = async () => { const l = await undo.redo(); if (l) say(t("Redone: {what}", { what: l })); };
+  // Ctrl/⌘+Z also works when nothing has focus (after a menu or a toast took it): before, it only
+  // worked with the keyboard inside the grid (bughunt S-BUG-9).
+  const undoKeys = useRef({ undoNow, redoNow });
+  undoKeys.current = { undoNow, redoNow };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== "z" && k !== "y") return;
+      const a = document.activeElement;
+      if (a && a !== document.body) return;
+      if (document.querySelector("[role=dialog]")) return;
+      e.preventDefault();
+      void (k === "y" || e.shiftKey ? undoKeys.current.redoNow() : undoKeys.current.undoNow());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // --- Saving cells -----------------------------------------------------------
   // Edits land on screen at once (optimistic) and are sent in ONE request per burst: everything
   // queued within ~120 ms (a fill, a paste, quick typing across cells, undo) is merged per row.
   // The server answer then replaces the optimistic rows — unless something newer arrived meanwhile.
+  //
+  // The queue belongs to the SHEET the edit was made in, not to "whatever sheet is open now": typing
+  // in a cell and then clicking another tab used to send the edit nowhere (bughunt S-BUG-4).
+  //
+  // A network failure (offline, a blip, the server restarting) keeps the edits queued, on screen, and
+  // retries with backoff and as soon as the browser is back online; the header says so (S-BUG-5).
+  // Only a real refusal from the server (validation, protection, no access) drops them.
   type Edit = { rowId: string; values: Record<string, unknown> };
-  const pending = useRef(new Map<string, Record<string, unknown>>());
-  const waiters = useRef<{ resolve: () => void; reject: (e: unknown) => void }[]>([]);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  type Waiter = { resolve: () => void; reject: (e: unknown) => void };
+  type Queue = {
+    pending: Map<string, Record<string, unknown>>;
+    waiters: Waiter[];
+    timer: ReturnType<typeof setTimeout> | null;
+    inflight: Edit[] | null;
+    failures: number;
+  };
+  const queues = useRef(new Map<string, Queue>());
+  const queueOf = (id: string) => {
+    let q = queues.current.get(id);
+    if (!q) { q = { pending: new Map(), waiters: [], timer: null, inflight: null, failures: 0 }; queues.current.set(id, q); }
+    return q;
+  };
   const [saving, setSaving] = useState(0);
-  const flush = useCallback(async () => {
-    timer.current = null;
-    const id = sheetRef.current?.id;
-    const batch = [...pending.current.entries()].map(([rowId, values]) => ({ rowId, values }));
-    const done = waiters.current;
-    pending.current = new Map();
-    waiters.current = [];
-    if (!id || !batch.length) { done.forEach((w) => w.resolve()); return; }
+  const recount = useCallback(() => {
+    let cells = 0, offline = false;
+    for (const q of queues.current.values()) {
+      for (const v of q.pending.values()) cells += Object.keys(v).length;
+      for (const e of q.inflight ?? []) cells += Object.keys(e.values).length;
+      if (q.failures > 0) offline = true;
+    }
+    setUnsaved((u) => (u.cells === cells && u.offline === offline ? u : { cells, offline }));
+  }, []);
+  /** Server rows win over the cache, per row, unless the cache already holds something newer. */
+  const patchRowsOf = useCallback((id: string, rows: { id: string; cells: NexusSheetRow["cells"]; updatedAt: string }[]) => {
+    qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => {
+      if (!old) return old;
+      const q = queues.current.get(id);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      return {
+        ...old,
+        rows: old.rows.map((r) => {
+          const inc = byId.get(r.id);
+          if (!inc) return r;
+          if (Date.parse(inc.updatedAt) < Date.parse(r.updatedAt)) return r;
+          // Edits still queued for this row stay on screen over the server's (older) copy.
+          const queued = q?.pending.get(r.id);
+          if (!queued) return { ...r, ...inc };
+          const cells = { ...inc.cells } as Record<string, unknown>;
+          for (const [k, v] of Object.entries(queued)) { if (v === null || v === undefined || v === "") delete cells[k]; else cells[k] = v; }
+          return { ...r, ...inc, cells: cells as NexusSheetRow["cells"] };
+        }),
+      };
+    });
+  }, [qc]);
+  const flushSheet = useCallback(async (id: string): Promise<void> => {
+    const q = queueOf(id);
+    if (q.timer) { clearTimeout(q.timer); q.timer = null; }
+    if (q.inflight) return; // the running request picks the rest up when it finishes
+    const batch = [...q.pending.entries()].map(([rowId, values]) => ({ rowId, values }));
+    const done = q.waiters;
+    q.pending = new Map();
+    q.waiters = [];
+    if (!batch.length) { done.forEach((w) => w.resolve()); recount(); return; }
+    q.inflight = batch;
+    recount();
     setSaving((n) => n + 1);
+    let retryIn = 0;
     try {
       const res = await nexusApi.setSheetCells(id, batch);
-      patchRows(res.rows);
+      q.failures = 0;
+      q.inflight = null;
+      patchRowsOf(id, res.rows);
       done.forEach((w) => w.resolve());
     } catch (e) {
-      alert(e instanceof Error ? e.message : t("Couldn't save."));
-      // The optimistic values may be wrong now — take the server's truth.
-      qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
-      done.forEach((w) => w.reject(e));
+      q.inflight = null;
+      if (isNetworkError(e)) {
+        // Back into the queue UNDER anything typed since (newer values win), and try again later.
+        for (const { rowId, values } of batch) q.pending.set(rowId, { ...values, ...(q.pending.get(rowId) ?? {}) });
+        q.waiters = [...done, ...q.waiters];
+        q.failures += 1;
+        retryIn = Math.min(30_000, 1000 * 2 ** Math.min(5, q.failures - 1));
+      } else {
+        q.failures = 0;
+        notifyError(e, t("Couldn't save."));
+        // The optimistic values may be wrong now — take the server's truth.
+        qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
+        done.forEach((w) => w.reject(e));
+      }
     } finally {
       setSaving((n) => n - 1);
     }
+    if (retryIn) q.timer = setTimeout(() => void flushSheet(id), retryIn);
+    else if (q.pending.size && !q.timer) q.timer = setTimeout(() => void flushSheet(id), 120);
+    recount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qc]);
-  // Leaving the sheet must not drop a queued edit.
-  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); void flush(); } }, [sheetId, flush]);
+  }, [qc, patchRowsOf, recount]);
+  // Leaving a sheet (another tab, another page) sends what it still has queued — for THAT sheet.
+  useEffect(() => {
+    const id = sheetId;
+    return () => { if (id) { const q = queues.current.get(id); if (q && (q.pending.size || q.timer)) void flushSheet(id); } };
+  }, [sheetId, flushSheet]);
+  // Back online: retry at once instead of waiting out the backoff.
+  useEffect(() => {
+    const retryAll = () => { for (const [id, q] of queues.current) if (q.pending.size) void flushSheet(id); };
+    window.addEventListener("online", retryAll);
+    return () => window.removeEventListener("online", retryAll);
+  }, [flushSheet]);
+  // Closing the tab with edits that never reached the server asks first.
+  useEffect(() => {
+    if (!unsaved.cells) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved.cells]);
+  // A refetch while edits wait (a structure change, the window regaining focus) must not take them
+  // off the screen: put them back over whatever the server sent.
+  useEffect(() => {
+    if (!sheetId || !sheetQ.data) return;
+    const q = queues.current.get(sheetId);
+    if (!q || (!q.pending.size && !q.inflight)) return;
+    const overlay = new Map<string, Record<string, unknown>>();
+    for (const e of q.inflight ?? []) overlay.set(e.rowId, { ...e.values });
+    for (const [rowId, v] of q.pending) overlay.set(rowId, { ...(overlay.get(rowId) ?? {}), ...v });
+    let changed = false;
+    const rows = sheetQ.data.rows.map((r) => {
+      const v = overlay.get(r.id);
+      if (!v) return r;
+      const cells = { ...r.cells } as Record<string, unknown>;
+      for (const [k, x] of Object.entries(v)) {
+        if (sameCell(cells[k], x === "" ? null : x)) continue;
+        changed = true;
+        if (x === null || x === undefined || x === "") delete cells[k]; else cells[k] = x;
+      }
+      return { ...r, cells: cells as NexusSheetRow["cells"] };
+    });
+    if (changed) qc.setQueryData<NexusSheet>(["nexus", "sheet", sheetId], { ...sheetQ.data, rows });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetQ.dataUpdatedAt]);
   const queueCells = (edits: Edit[]): Promise<void> => {
-    if (!edits.length) return Promise.resolve();
-    qc.setQueryData<NexusSheet>(key, (old) => {
+    const id = sheetRef.current?.id;
+    if (!edits.length || !id) return Promise.resolve();
+    qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => {
       if (!old) return old;
       const byId = new Map(edits.map((e) => [e.rowId, e.values]));
       return {
@@ -291,10 +433,15 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         }),
       };
     });
-    for (const e of edits) pending.current.set(e.rowId, { ...(pending.current.get(e.rowId) ?? {}), ...e.values });
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void flush(), 120);
-    return new Promise<void>((resolve, reject) => waiters.current.push({ resolve, reject }));
+    const q = queueOf(id);
+    for (const e of edits) q.pending.set(e.rowId, { ...(q.pending.get(e.rowId) ?? {}), ...e.values });
+    // While a retry is waiting out its backoff, new edits join it rather than hammering the network.
+    if (!q.failures) {
+      if (q.timer) clearTimeout(q.timer);
+      q.timer = setTimeout(() => void flushSheet(id), 120);
+    }
+    recount();
+    return new Promise<void>((resolve, reject) => q.waiters.push({ resolve, reject }));
   };
   const setCells = {
     mutate: (edits: Edit[]) => { queueCells(edits).catch(() => {}); },
@@ -338,7 +485,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       nexusApi.reorderSheetRow(sheetId as string, rowId, afterRowId),
     // The server computes the midpoint, so the new order only exists once it answers.
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't move the row.")),
+    onError: (e) => notifyError(e, t("Couldn't move the row.")),
   });
   const delRows = useMutation({
     mutationFn: (rowIds: string[]) => nexusApi.deleteSheetRows(sheetId as string, rowIds),
@@ -391,7 +538,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   const saveColumns = useMutation({
     mutationFn: (columns: NexusSheetColumn[]) => nexusApi.updateSheet(sheetId as string, { columns }),
     onSuccess: (res) => qc.setQueryData<NexusSheet>(key, (old) => (old ? { ...old, columns: res.columns } : old)),
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't save the column.")),
+    onError: (e) => notifyError(e, t("Couldn't save the column.")),
   });
 
   /**
@@ -433,47 +580,108 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
   const delColumn = useMutation({
     mutationFn: (columnId: string) => nexusApi.deleteSheetColumn(sheetId as string, columnId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => alert(e instanceof Error ? e.message : t("Couldn't delete the column.")),
+    onError: (e) => notifyError(e, t("Couldn't delete the column.")),
   });
 
   /**
-   * Delete a column, remembering its definition AND every value in it.
+   * Delete columns (one undo step), remembering everything needed to put them back EXACTLY: the
+   * definition, every value, every format, and every formula elsewhere in the sheet that the server
+   * rewrote to #REF! (or shrank) because it pointed at them (bughunt S-BUG-6: undo left #REF!).
    *
-   * Undo can't reuse the old column id (the server mints a fresh one), so it recreates the column and
-   * then writes the values back into it by position.
+   * Undo re-creates each column with its OLD id. Nothing still holds that id as a cell key (the
+   * delete wiped it from every row), and everything that referenced it — formulas, rules, conditional
+   * formats, charts, hidden/frozen settings — points at it again, as in Sheets.
    */
-  const removeColumn = (columnId: string) => {
+  const removeColumns = (columnIds: string[]) => {
     const cols = sheetRef.current?.columns ?? [];
-    const col = cols.find((c) => c.id === columnId);
-    if (!col) return;
-    const index = cols.indexOf(col);
-    const values = (sheetRef.current?.rows ?? [])
-      .map((r) => ({ rowId: r.id, value: r.cells[columnId] }))
-      .filter((v) => v.value !== undefined);
+    const rowsNow = sheetRef.current?.rows ?? [];
+    const gone = cols.map((c, index) => ({ col: c, index })).filter((x) => columnIds.includes(x.col.id));
+    if (!gone.length) return;
+    // Every formula cell outside the deleted columns, as it reads now.
+    const formulas = new Map<string, Record<string, unknown>>();
+    for (const r of rowsNow) {
+      for (const [cid, v] of Object.entries(r.cells as Record<string, unknown>)) {
+        if (columnIds.includes(cid) || !v || typeof v !== "object" || !("f" in (v as object))) continue;
+        formulas.set(r.id, { ...(formulas.get(r.id) ?? {}), [cid]: v });
+      }
+    }
+    const values = rowsNow.map((r) => ({
+      rowId: r.id,
+      values: Object.fromEntries(columnIds.map((cid) => [cid, (r.cells as Record<string, unknown>)[cid]]).filter(([, v]) => v !== undefined)),
+      styles: Object.fromEntries(columnIds.map((cid) => [cid, r.styles?.[cid]]).filter(([, v]) => v)),
+    }));
+    const validations = sheetRef.current?.settings?.validations ?? null;
+    const label = gone.length === 1
+      ? t("delete column {name}", { name: gone[0].col.name || t("(untitled)") })
+      : t("delete {n} columns", { n: gone.length });
 
-    delColumn.mutate(columnId);
+    const doDelete = async () => {
+      for (const g of gone) await delColumn.mutateAsync(g.col.id);
+    };
+    void doDelete().catch(() => {});
     undo.push({
-      label: t("delete column {name}", { name: col.name || t("(untitled)") }),
+      label,
       undo: async () => {
-        const now = sheetRef.current?.columns ?? [];
-        const restored = [...now];
-        // The WHOLE definition comes back — choices, chip colours, header colour, rules — only the id
-        // is new (the server mints it).
-        const { id: _oldId, ...definition } = col;
-        restored.splice(Math.min(index, restored.length), 0, definition as NexusSheetColumn);
-        const saved = await saveColumns.mutateAsync(restored);
-        const newId = saved.columns[Math.min(index, saved.columns.length - 1)]?.id;
-        if (newId && values.length) {
-          await setCells.mutateAsync(values.map((v) => ({ rowId: v.rowId, values: { [newId]: v.value } })));
+        const restored = [...(sheetRef.current?.columns ?? [])];
+        for (const g of [...gone].sort((x, y) => x.index - y.index)) {
+          if (restored.some((c) => c.id === g.col.id)) continue;
+          restored.splice(Math.min(g.index, restored.length), 0, g.col);
+        }
+        await saveColumns.mutateAsync(restored);
+        const id = sheetRef.current?.id;
+        if (!id) return;
+        // Values of the restored columns, plus the formulas the delete rewrote, back as they were.
+        const now = qc.getQueryData<NexusSheet>(["nexus", "sheet", id])?.rows ?? [];
+        const byRow = new Map(now.map((r) => [r.id, r]));
+        const edits: Edit[] = [];
+        for (const v of values) {
+          const row = byRow.get(v.rowId);
+          if (!row) continue;
+          const put: Record<string, unknown> = { ...v.values };
+          for (const [cid, f] of Object.entries(formulas.get(v.rowId) ?? {})) {
+            if (!sameCell((row.cells as Record<string, unknown>)[cid], f)) put[cid] = f;
+          }
+          if (Object.keys(put).length) edits.push({ rowId: v.rowId, values: put });
+        }
+        if (edits.length) await setCells.mutateAsync(edits);
+        const styleEdits = values.filter((v) => Object.keys(v.styles).length && byRow.has(v.rowId))
+          .map((v) => ({ rowId: v.rowId, values: v.styles as Record<string, NexusSheetCellStyle> }));
+        if (styleEdits.length) await sendStyles(styleEdits);
+        // Data-validation ranges the delete shrank or dropped.
+        if (validations && JSON.stringify(validations) !== JSON.stringify(sheetRef.current?.settings?.validations ?? null)) {
+          await sendSettings({ validations });
         }
       },
       redo: async () => {
-        const now = sheetRef.current?.columns ?? [];
-        const target = now[index];
-        if (target) await nexusApi.deleteSheetColumn(sheetId as string, target.id);
-        qc.invalidateQueries({ queryKey: key });
+        for (const g of gone) {
+          if ((sheetRef.current?.columns ?? []).some((c) => c.id === g.col.id)) await delColumn.mutateAsync(g.col.id);
+        }
       },
     });
+  };
+  const removeColumn = (columnId: string) => removeColumns([columnId]);
+
+  /**
+   * Append `count` blank columns and resolve with them (a paste wider than the sheet). The undo entry
+   * deletes them; redo brings them back with the SAME ids, so a redone paste lands in them again.
+   */
+  const appendColumns = async (count: number): Promise<NexusSheetColumn[]> => {
+    const before = sheetRef.current?.columns ?? [];
+    const room = Math.max(0, Math.min(count, MAX_SHEET_COLUMNS - before.length));
+    if (room < count) notify(t("A sheet can have up to {n} columns. The rest of the paste didn't fit.", { n: MAX_SHEET_COLUMNS }));
+    if (!room) return [];
+    const next = [...before, ...Array.from({ length: room }, () => ({ name: "", type: "text" } as NexusSheetColumn))];
+    const res = await saveColumns.mutateAsync(next);
+    const created = res.columns.filter((c) => !before.some((b) => b.id === c.id));
+    undo.push({
+      label: t("add column"),
+      undo: async () => { for (const c of created) await delColumn.mutateAsync(c.id); },
+      redo: async () => {
+        const now = sheetRef.current?.columns ?? [];
+        await saveColumns.mutateAsync([...now, ...created.filter((c) => !now.some((x) => x.id === c.id))]);
+      },
+    });
+    return created;
   };
 
   // --- Formatting -------------------------------------------------------------
@@ -502,7 +710,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         patchRows(res.rows);
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : t("Couldn't save."));
+      notifyError(e, t("Couldn't save."));
       qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
     } finally {
       setSaving((n) => n - 1);
@@ -534,7 +742,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       const res = await nexusApi.updateSheet(id, { settings: patch });
       qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => (old ? { ...old, settings: res.settings } : old));
     } catch (e) {
-      alert(e instanceof Error ? e.message : t("Couldn't save."));
+      notifyError(e, t("Couldn't save."));
       qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] });
     }
   };
@@ -551,14 +759,14 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       await nexusApi.updateSheet(id, { name });
       qc.setQueryData<NexusSheet>(["nexus", "sheet", id], (old) => (old ? { ...old, name } : old));
       refreshList();
-    } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't save.")); }
+    } catch (e) { notifyError(e, t("Couldn't save.")); }
   };
   const duplicateSheet = async (id: string) => {
     try {
       const created = await nexusApi.duplicateSheet(projectId, id);
       setActiveId(created.id);
       refreshList();
-    } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't duplicate the sheet.")); }
+    } catch (e) { notifyError(e, t("Couldn't duplicate the sheet.")); }
   };
   const hideSheet = async (id: string, hidden: boolean) => {
     await sendSettings({ hidden: hidden ? true : null }, id);
@@ -578,7 +786,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         const pos = new Map(o.map((rid, i) => [rid, slots[i]]));
         return { ...old, rows: old.rows.map((r) => (pos.has(r.id) ? { ...r, position: pos.get(r.id)! } : r)).sort((a, b) => a.position - b.position) };
       });
-      try { await nexusApi.reorderSheetRows(id, o); } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't save.")); qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] }); }
+      try { await nexusApi.reorderSheetRows(id, o); } catch (e) { notifyError(e, t("Couldn't save.")); qc.invalidateQueries({ queryKey: ["nexus", "sheet", id] }); }
     };
     await apply(order);
     undo.push({ label, undo: () => apply(before), redo: () => apply(order) });
@@ -592,7 +800,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       await nexusApi.updateSheet(created.id, { settings: { pivot: { source: sourceId, range, rows: [], cols: [], values: [], filters: [] } } });
       setActiveId(created.id);
       refreshList();
-    } catch (e) { alert(e instanceof Error ? e.message : t("Couldn't create the sheet.")); }
+    } catch (e) { notifyError(e, t("Couldn't create the sheet.")); }
   };
   /** File › Settings: locale, time zone and calculation are the spreadsheet's (every tab of the project). */
   const saveSpreadsheetSettings = async (patch: SettingsPatch) => {
@@ -613,7 +821,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     if (i < 0 || j < 0 || j >= order.length) return;
     [order[i], order[j]] = [order[j], order[i]];
     try { await nexusApi.reorderSheets(projectId, order); refreshList(); }
-    catch (e) { alert(e instanceof Error ? e.message : t("Couldn't move the sheet.")); }
+    catch (e) { notifyError(e, t("Couldn't move the sheet.")); }
   };
 
   // --- Pivot sheets ("Pivot Table N") ------------------------------------------------------------
@@ -704,6 +912,26 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
     return <p className="py-16 text-center text-sm text-muted-foreground">{t("This spreadsheet can't be opened yet.")}</p>;
   }
 
+  /** "Sheet N": the first free number, in the seeded sheet's own style ("Sheet 1"). */
+  function newSheet() {
+    if (addingSheet.current) return;
+    const used = new Set(sheets.map((x) => x.name.trim().toLowerCase()));
+    let n = sheets.length + 1;
+    while (used.has(`sheet ${n}`) || used.has(`sheet${n}`)) n += 1;
+    addSheet.mutate(`Sheet ${n}`);
+  }
+
+  // Never "All changes saved" while something is still only on this screen.
+  const saveStatus = unsaved.offline && unsaved.cells > 0 ? (
+    <span role="status" aria-live="polite" title={t("Your edits are kept on this screen and saved automatically as soon as the connection is back.")}
+      className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:text-amber-300">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+      {t("Offline: {n} unsaved changes, retrying…", { n: unsaved.cells })}
+    </span>
+  ) : (
+    <span className="text-2xs text-muted-foreground" aria-live="polite">{saving > 0 || unsaved.cells > 0 ? t("Saving…") : t("All changes saved")}</span>
+  );
+
   const tabs = (
     <SheetTabs
       sheets={sheets}
@@ -711,13 +939,11 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
       canEdit={sheet.canEdit}
       canManage={sheet.canManage}
       onSelect={(id) => setActiveId(id)}
-      onAdd={() => addSheet.mutate(`Sheet${sheets.length + 1}`)}
+      onAdd={newSheet}
       onRename={(id, name) => void renameSheet(id, name)}
       onDuplicate={(id) => void duplicateSheet(id)}
-      onDelete={(id) => {
-        const s = sheets.find((x) => x.id === id);
-        if (window.confirm(t("Delete sheet \"{name}\"? All of its rows go too (it can be restored from Audit).", { name: s?.name ?? "" }))) removeSheet.mutate(id);
-      }}
+      // SheetTabs has already asked ("Are you sure…?") in its own dialog.
+      onDelete={(id) => removeSheet.mutate(id)}
       onColor={(id, c) => void colorSheet(id, c)}
       onMove={(id, dir) => void moveSheet(id, dir)}
       onHide={(id, hidden) => void hideSheet(id, hidden)}
@@ -749,9 +975,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         )}
         {connected && otherPeers.length > 0 && <span className="text-2xs font-medium text-success">{t("live")}</span>}
         {!sheet.canEdit && <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">{t("view only")}</span>}
-        {sheet.canEdit && !isMobile && (
-          <span className="text-2xs text-muted-foreground" aria-live="polite">{setCells.isPending || saving > 0 ? t("Saving…") : t("All changes saved")}</span>
-        )}
+        {sheet.canEdit && !isMobile && saveStatus}
         <div className="ml-auto flex items-center gap-1">
           {sheet.canEdit && (
             <>
@@ -762,8 +986,8 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
                   const file = e.target.files?.[0];
                   e.target.value = ""; // so picking the same file twice still fires
                   if (!file) return;
-                  const replace = window.confirm(t("Import \"{file}\".\n\nOK = REPLACE everything in this sheet.\nCancel = ADD below the existing rows.", { file: file.name }));
-                  importFile.mutate({ file, mode: replace ? "replace" : "append" });
+                  // Sheets' import dialog: the choice is explicit, and the safe one is preselected (S-BUG-15).
+                  setImportAsk({ file, mode: "append" });
                 }}
               />
               {importFile.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
@@ -778,6 +1002,11 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
           onSetCells={(edits) => editCells(edits)}
           footer={tabs}
           saving={setCells.isPending}
+          status={sheet.canEdit && (unsaved.offline || saving > 0) ? saveStatus : undefined}
+          canUndo={undo.canUndo}
+          canRedo={undo.canRedo}
+          onUndo={() => void undoNow()}
+          onRedo={() => void redoNow()}
         />
       ) : (
         <div
@@ -790,9 +1019,7 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             // While a cell editor is open, Ctrl+Z belongs to the text field, not the sheet.
             if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
             e.preventDefault();
-            const redo = k === "y" || e.shiftKey;
-            const label = redo ? await undo.redo() : await undo.undo();
-            if (label) say(redo ? t("Redone: {what}", { what: label }) : t("Undone: {what}", { what: label }));
+            await (k === "y" || e.shiftKey ? redoNow() : undoNow());
           }}
         >
           <SheetGrid
@@ -818,11 +1045,10 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
             }}
             onDeleteRows={(ids) => removeRows(ids)}
             onReorderRow={(rowId, afterRowId) => reorderRow(rowId, afterRowId)}
+            // No "are you sure?": like Sheets, a delete is one Ctrl+Z away (and the toast offers Undo).
             onDeleteColumn={(columnId) => {
-              const col = sheet.columns.find((c) => c.id === columnId);
-              if (window.confirm(t("Delete column \"{name}\"?\n\nEverything in it goes too, but Ctrl+Z brings it back.", { name: col?.name || t("(untitled)") }))) {
-                removeColumn(columnId);
-              }
+              removeColumn(columnId);
+              notify(t("Column deleted."), { action: { label: t("Undo"), run: () => void undoNow() } });
             }}
             onEditColumn={(columnId, patch) =>
               editColumns(sheet.columns.map((c) => (c.id === columnId ? { ...c, ...patch } : c)), t("edit column"))}
@@ -845,23 +1071,28 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
               meId,
               members,
               importFile: () => fileRef.current?.click(),
-              download: (f) => { void nexusApi.exportSheet(sheet.id, f, `${sheet.name}.${f}`).catch((e) => alert(e instanceof Error ? e.message : t("Export failed."))); },
-              renameSheet: () => { const name = window.prompt(t("Rename"), sheet.name); if (name?.trim()) void renameSheet(sheet.id, name.trim()); },
-              insertSheet: () => addSheet.mutate(`Sheet${sheets.length + 1}`),
+              download: (f) => { void nexusApi.exportSheet(sheet.id, f, `${sheet.name}.${f}`).catch((e) => notifyError(e, t("Export failed."))); },
+              renameSheet: () => {
+                void askText({ title: t("Rename sheet"), initial: sheet.name, ok: t("Rename") })
+                  .then((name) => { if (name?.trim() && name.trim() !== sheet.name) void renameSheet(sheet.id, name.trim()); });
+              },
+              insertSheet: newSheet,
               setSheetHidden: (id, hidden) => void hideSheet(id, hidden),
               reorderRows,
               reorderColumns: (ids) => editColumns(ids.map((cid) => sheet.columns.find((c) => c.id === cid)!).filter(Boolean), t("move columns")),
               createPivot: (range) => void createPivot(sheet.id, range),
               saveSpreadsheetSettings: (patch) => void saveSpreadsheetSettings(patch as SettingsPatch),
               deleteColumns: (ids) => {
-                if (!window.confirm(t("Delete {n} columns?\n\nEverything in them goes too, but Ctrl+Z brings each back.", { n: ids.length }))) return;
-                ids.forEach((id) => removeColumn(id));
+                removeColumns(ids);
+                notify(t("{n} columns deleted.", { n: ids.length }), { action: { label: t("Undo"), run: () => void undoNow() } });
               },
             }}
             canUndo={undo.canUndo}
             canRedo={undo.canRedo}
-            onUndo={async () => { const l = await undo.undo(); if (l) say(t("Undone: {what}", { what: l })); }}
-            onRedo={async () => { const l = await undo.redo(); if (l) say(t("Redone: {what}", { what: l })); }}
+            onUndo={() => void undoNow()}
+            onRedo={() => void redoNow()}
+            onAppendColumns={appendColumns}
+            onUndoGroup={undo.group}
             footerLeft={tabs}
             aside={pivot && pivotSrc && pivotEditorOpen ? (
               <PivotEditor
@@ -884,6 +1115,35 @@ export function ProjectSheetView({ projectId, onOpenTask }: { projectId: string;
         </div>
       )}
 
+      <SheetAskHost />
+      {importAsk && (
+        <SheetDialog
+          title={t("Import file")}
+          onClose={() => setImportAsk(null)}
+          width={440}
+          footer={<>
+            <button className={secondaryBtn} onClick={() => setImportAsk(null)}>{t("Cancel")}</button>
+            <button className={primaryBtn} onClick={() => { const a = importAsk; setImportAsk(null); importFile.mutate({ file: a.file, mode: a.mode }); }}>{t("Import data")}</button>
+          </>}
+        >
+          <p className="mb-3 truncate text-xs text-muted-foreground" title={importAsk.file.name}>{importAsk.file.name}</p>
+          <fieldset className="space-y-2">
+            <legend className="mb-1.5 text-xs font-semibold">{t("Import location")}</legend>
+            {([
+              ["append", t("Append to current sheet"), t("The file's rows go below the rows already here.")],
+              ["replace", t("Replace current sheet"), t("Everything in this sheet is replaced by the file. Ctrl+Z can't bring it back; Audit can.")],
+            ] as const).map(([mode, label, hint]) => (
+              <label key={mode} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/60 has-[:checked]:border-primary/60 has-[:checked]:bg-primary/5">
+                <input type="radio" name="sheet-import-mode" checked={importAsk.mode === mode} onChange={() => setImportAsk({ ...importAsk, mode })} className="mt-0.5 accent-primary" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{label}</span>
+                  <span className="block text-xs text-muted-foreground">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        </SheetDialog>
+      )}
       {thread && (
         <CellCommentThread
           anchor={thread.at}

@@ -261,7 +261,7 @@ export const ID_SHEETS: Record<string, string> = {
   "view only": "cuma bisa lihat",
   "Import \"{file}\".\n\nOK = REPLACE everything in this sheet.\nCancel = ADD below the existing rows.": "Import \"{file}\".\n\nOK = GANTI semua isi sheet ini.\nCancel = TAMBAH di bawah baris yang ada.",
   "Import from CSV or Excel (.xlsx)": "Import dari CSV atau Excel (.xlsx)",
-  "Import": "Import",
+  "Import": "Impor",
   "Download as {f}": "Unduh sebagai {f}",
   "Export failed.": "Gagal export.",
   "Delete column \"{name}\"?\n\nEverything in it goes too, but Ctrl+Z brings it back.": "Hapus kolom \"{name}\"?\n\nSemua isinya ikut hilang, tapi bisa dibalikin pakai Ctrl+Z.",

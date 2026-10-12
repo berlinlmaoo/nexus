@@ -1998,6 +1998,12 @@ export type CalendarSettingsPayload = {
   }[]
 };
 
+/**
+ * This browser tab, for realtime echo suppression: sheet events carry the tab that wrote them, so only
+ * that tab skips its own echo and the same person's OTHER tabs update live (12 Oct 2026).
+ */
+export const TAB_ID = `t${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -2010,6 +2016,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       // Who is calling. The attendance-request route reads it to decide which rules this caller
       // can actually obey — see clientCanObeyRequestPolicy.
       "X-Nexus-Client": "web/1",
+      "X-Nexus-Tab": TAB_ID,
       ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...(init?.headers || {}),
     },

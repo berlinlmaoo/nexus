@@ -67,6 +67,8 @@ export function GideonLauncher() {
       {!open && !hideButton && (
         <button
           type="button"
+          // Sheet sidebars hide this while open (sheet-shell HideGideonButton): it sat on their Done button.
+          data-gideon-launcher=""
           onClick={() => openGideon(null)}
           onPointerEnter={() => void loadPanel()}
           onFocus={() => void loadPanel()}
