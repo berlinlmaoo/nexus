@@ -205,8 +205,8 @@ struct BlockDocView: View {
                     case "bold": intent.insert(.stronglyEmphasized)
                     case "italic": intent.insert(.emphasized)
                     case "code": intent.insert(.code)
-                    case "strike": a.strikethroughStyle = .single
-                    case "underline": a.underlineStyle = .single
+                    case "strike": a.strikethroughStyle = Text.LineStyle.single
+                    case "underline": a.underlineStyle = Text.LineStyle.single
                     case "link": if let href = m.attrs?["href"]?.text, let url = URL(string: href) { a.link = url }
                     case "highlight": a.backgroundColor = NX.warning.opacity(0.25)
                     default: break

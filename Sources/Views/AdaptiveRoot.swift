@@ -127,7 +127,8 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     var ownsNavigationStack: Bool {
         switch self {
         // Messages builds its own stacks in the split layout — one per pane.
-        case .dashboard, .tasks, .inbox, .projects, .messages, .gideon: return true
+        // GIDEON's page brings no stack of its own (GideonPanel(embedded:)), so it works pushed too.
+        case .dashboard, .tasks, .inbox, .projects, .messages: return true
         default: return false
         }
     }

@@ -387,7 +387,7 @@ struct ProjectDetailView: View {
                         MoveUndoBar(undo: c.bar, onUndo: { let a = c.action; customUndo = nil; Task { await a(); await reloadQuietly() } },
                                     onDismiss: { if customUndo?.bar.id == c.bar.id { customUndo = nil } })
                     } else if let r = reorderUndo {
-                        MoveUndoBar(undo: MoveUndo(count: r.count, groups: []), onUndo: { Task { await undoReorder(r) } }, onDismiss: { if reorderUndo?.id == r.id { reorderUndo = nil } })
+                        MoveUndoBar(undo: MoveUndo(id: r.id, count: r.count, groups: []), onUndo: { Task { await undoReorder(r) } }, onDismiss: { if reorderUndo?.id == r.id { reorderUndo = nil } })
                     }
                 }
                 // On `content` rather than the root, which already carries two sheets.

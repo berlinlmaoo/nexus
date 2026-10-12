@@ -75,7 +75,7 @@ extension APIClient {
         if let taskStatus { body["taskStatus"] = taskStatus }
         if let color { body["color"] = color }
         let req = try redesignJSON("/api/projects/\(Self.redesignEnc(projectId))/sections", method: "PATCH", body: body)
-        _ = try await redesignRun(req, as: Whatever.self)
+        _ = try await redesignRaw(req)
     }
 
     /// Deletes an option; its tasks move to `moveTo` first (restorable from Audit, like every delete).
@@ -83,7 +83,7 @@ extension APIClient {
         var body: [String: Any] = ["id": id]
         if let moveTo { body["moveTo"] = moveTo }
         let req = try redesignJSON("/api/projects/\(Self.redesignEnc(projectId))/sections", method: "DELETE", body: body)
-        _ = try await redesignRun(req, as: Whatever.self)
+        _ = try await redesignRaw(req)
     }
 
     // MARK: batch move
@@ -107,7 +107,7 @@ extension APIClient {
         var body: [String: Any] = ["taskListId": taskListId, "orderedIds": orderedIds]
         if let movedId { body["movedId"] = movedId }
         let req = try redesignJSON("/api/tasks/reorder", method: "POST", body: body)
-        _ = try await redesignRun(req, as: Whatever.self)
+        _ = try await redesignRaw(req)
     }
 
     // MARK: delete with undo, assignees
@@ -149,12 +149,12 @@ extension APIClient {
     /// A reply to the team that handles a submission (a comment on the task it created).
     func replyToSubmission(_ submissionId: String, content: String) async throws {
         let req = try redesignJSON("/api/forms/my-submissions/\(Self.redesignEnc(submissionId))/comments", method: "POST", body: ["content": content])
-        _ = try await redesignRun(req, as: Whatever.self)
+        _ = try await redesignRaw(req)
     }
 
     /// Deletes a submission and the task it created in the project.
     func deleteSubmission(_ submissionId: String) async throws {
-        _ = try await redesignRun(makeRequest("/api/forms/my-submissions/\(Self.redesignEnc(submissionId))", method: "DELETE"), as: Whatever.self)
+        _ = try await redesignRaw(makeRequest("/api/forms/my-submissions/\(Self.redesignEnc(submissionId))", method: "DELETE"))
     }
 }
 

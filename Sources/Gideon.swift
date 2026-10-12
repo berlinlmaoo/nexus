@@ -55,7 +55,7 @@ struct GideonLoose: Decodable, Sendable, Equatable {
         let c = try decoder.singleValueContainer()
         if c.decodeNil() { text = nil }
         else if let s = try? c.decode(String.self) { text = s }
-        else if let d = try? c.decode(Double.self) { text = d == d.rounded() ? String(Int64(d)) : String(d) }
+        else if let d = try? c.decode(Double.self) { text = (d == d.rounded() && abs(d) < 9e15) ? String(Int64(d)) : String(d) }
         else if let b = try? c.decode(Bool.self) { text = b ? "true" : "false" }
         else { text = nil }
     }

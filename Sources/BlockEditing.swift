@@ -360,10 +360,11 @@ final class BlockEditOutbox {
         for (_, p) in items {
             guard let base = (try? JSONSerialization.jsonObject(with: p.base)) as? RawJSON,
                   let doc = (try? JSONSerialization.jsonObject(with: p.doc)) as? RawJSON else { drop(p.ref); continue }
-            if let outcome = try? await APIClient.shared.applyBlockEdit(p.ref, base: base, doc: doc, keepBoth: false),
-               case .saved = outcome {
-                drop(p.ref)
-            }
+            do {
+                if case .saved = try await APIClient.shared.applyBlockEdit(p.ref, base: base, doc: doc, keepBoth: false) { drop(p.ref) }
+            } catch APIError.http(let code, _) where (400..<500).contains(code) {
+                drop(p.ref)   // refused for good: never retried
+            } catch {}
         }
     }
 }
@@ -418,7 +419,9 @@ final class BlockEditorModel {
     private func set(_ doc: RawJSON) {
         base = doc
         rows = BlockConvert.rows(from: blocks(of: doc))
-        if rows.isEmpty { rows = [BlockRow.new(.paragraph)] }
+        // An empty page gets one empty line that counts as unchanged (sent back as the empty paragraph it
+        // stands for), so opening it is not an edit.
+        if rows.isEmpty { rows = [BlockRow(kind: .paragraph, text: "", originalKind: .paragraph, originalText: "", raw: ["type": "paragraph"])] }
         loaded = true
     }
 
@@ -448,6 +451,11 @@ final class BlockEditorModel {
                 note = m
                 return false
             }
+        } catch APIError.http(let code, let message) where (400..<500).contains(code) && code != 409 {
+            // Refused for good (no edit right, the page is gone): not kept, said instead.
+            BlockEditOutbox.shared.drop(ref)
+            note = message ?? T("You can't edit this page.")
+            return false
         } catch let failure as APIError where failure.nobodyAnswered {
             BlockEditOutbox.shared.keep(ref, base: base, doc: doc)
             note = T("Offline: your changes are kept on this phone and sent when you are back online.")

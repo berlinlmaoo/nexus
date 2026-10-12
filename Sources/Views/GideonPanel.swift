@@ -136,8 +136,14 @@ struct GideonPanel: View {
         chat.context.refs.append(ref)
     }
 
+    /// Its own NavigationStack as a sheet; as a page (sidebar, or pushed inside More on a phone) it lives in
+    /// the stack it is shown in — a stack inside a stack loses the back button.
+    @ViewBuilder private func stackIfNeeded<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if embedded { content() } else { NavigationStack { content() } }
+    }
+
     var body: some View {
-        NavigationStack {
+        stackIfNeeded {
             ZStack {
                 NX.background.ignoresSafeArea()
                 VStack(spacing: 0) {

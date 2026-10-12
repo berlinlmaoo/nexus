@@ -122,7 +122,7 @@ struct InlineDraftCard: View {
 
 /// Where the moved tasks were, to put them back: one batch per original column + status (+ priority).
 struct MoveUndo: Identifiable, Equatable {
-    let id = UUID()
+    var id = UUID()
     let count: Int
     let groups: [Group]
     /// The bar's words when it is not a move ("Task deleted", "Assigned 3 tasks").

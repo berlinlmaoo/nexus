@@ -287,7 +287,7 @@ struct GideonWriteSheet: View {
                         items = found
                     }
                 }
-                if text.isEmpty && items.isEmpty { failure = T("GIDEON couldn't write that. Try again.") }
+                if !Task.isCancelled && text.isEmpty && items.isEmpty { failure = T("GIDEON couldn't write that. Try again.") }
             } catch is CancellationError {
             } catch {
                 failure = (error as? LocalizedError)?.errorDescription ?? T("GIDEON couldn't write that. Try again.")

@@ -659,6 +659,9 @@ struct FormFillView: View {
             submitKey = nil
             done = true
         } catch {
+            // Keep the key only when nothing answered (the first try may have landed); a refusal means
+            // the next try is a new submission, possibly with different answers.
+            if !((error as? APIError)?.nobodyAnswered ?? false) { submitKey = nil }
             actionError = (error as? LocalizedError)?.errorDescription ?? T("Submission failed. Try again.")
         }
     }
