@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
@@ -267,31 +268,31 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
 
         <div className="space-y-3 p-5">
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Room")}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("Room")}</span>
             <select value={room} onChange={(e) => setRoom(e.target.value)} className={field}>
               {ROOM_BOOKING_ROOMS.map((r) => <option key={r} value={r}>{t(roomLabel(r))}</option>)}
             </select>
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Title")}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("Title")}</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Client meeting")} className={field} />
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Date")}</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+            <span className="text-xs font-medium text-muted-foreground">{t("Date")}</span>
+            <DateField value={date || null} onChange={(v) => v && setDate(v)} ariaLabel={t("Date")} className={cn(field, "h-auto hover:bg-background")} />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Start")}</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("Start")}</span>
               <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("End")}</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("End")}</span>
               <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} />
             </label>
           </div>
           <label className="block space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{t("Notes (optional)")}</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("Notes (optional)")}</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={cn(field, "resize-y")} />
           </label>
 

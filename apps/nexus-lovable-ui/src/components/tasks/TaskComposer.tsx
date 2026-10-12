@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/core";
@@ -38,7 +39,7 @@ const draftKey = (projectId: string) => `nexus:task-draft:${projectId}`;
  * the next Add task picks it up; nothing is created until "Create task".
  */
 export function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { project: NexusProject; selectedListId: string; initialDueDate?: string; onClose: () => void }) {
-  const { t, locale } = useLang();
+  const { t } = useLang();
   const qc = useQueryClient();
   const sections = useMemo(() => [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [project.taskLists]);
   const statusOptions = usesStatusOptions(sections);
@@ -150,24 +151,24 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
             </div>
             <div className={row}>
               <span className={labelCls}><Flag className="h-4 w-4" />{t("Priority")}</span>
-              <select value={priority} onChange={(e) => setPriority(e.target.value as CreateTaskPayload["priority"])} aria-label={t("Priority")} className="h-8 rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border">
+              <select value={priority} onChange={(e) => setPriority(e.target.value as CreateTaskPayload["priority"])} aria-label={t("Priority")} className="h-8 appearance-none rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border">
                 {PRIORITIES.map((p) => <option key={p} value={p}>{t(PRIORITY_TEXT[p])}</option>)}
               </select>
             </div>
             <div className={row}>
               <span className={labelCls}><Calendar className="h-4 w-4" />{t("Due date")}</span>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} aria-label={t("Due date")} lang={locale} className="h-8 rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border" />
+              <span className="min-w-0 flex-1"><DateField value={dueDate || null} onChange={(v) => setDueDate(v ?? "")} ariaLabel={t("Due date")} placeholder={t("Not set")} className="w-auto" /></span>
             </div>
             {fields.map((f) => {
               const type = (f.type || "").toUpperCase();
               const opts = choices(f);
               const val = cf[f.id];
               const set = (v: string | string[]) => setCf((p) => ({ ...p, [f.id]: v }));
-              const input = "h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border focus:outline-none";
+              const input = "h-8 min-w-0 flex-1 appearance-none rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border focus:outline-none";
               let control: React.ReactNode;
               if (type === "NUMBER" && numberFieldFormat(f.options) === "currency-idr") control = <RupiahInput value={typeof val === "string" ? val : ""} onChange={set} className={input} wrapperClassName="min-w-0 flex-1" placeholder={t("Not set")} ariaLabel={f.name} />;
               else if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Not set")} />;
-              else if (type === "DATE") control = <input type="date" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} />;
+              else if (type === "DATE") control = <span className="min-w-0 flex-1"><DateField value={typeof val === "string" && val ? val : null} onChange={(v) => set(v ?? "")} ariaLabel={f.name} placeholder={t("Not set")} className="w-auto" /></span>;
               else if ((type === "SELECT" || type === "STATUS" || type === "DROPDOWN") && opts.length) control = (
                 <select value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input}>
                   <option value="">{t("Not set")}</option>
