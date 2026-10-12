@@ -17,6 +17,8 @@ import { MCP_ISSUER } from "@/lib/mcp-oauth"
 
 // Full access to every project: BoD / One Above All only (owner 13 Oct 2026, lib/rbac.ts PROJECT_WIDE_ROLES).
 const MGR_ROLES: string[] = ["ONE_ABOVE_ALL", "BOD"]
+// MCP follows the web's project levels (lib/rbac.ts): read tools = Can view, task writes = Can edit
+// (checkProjectAccess MEMBER), nothing here changes project settings (those would need Full / LEAD).
 const ok = (data: unknown) => ({ content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] })
 const forbidden = (msg = "Forbidden: kamu gak punya akses ke project ini.") => ({ content: [{ type: "text" as const, text: msg }], isError: true })
 const hasScope = (extra: { authInfo?: AuthInfo }, scope: string) => (extra.authInfo?.scopes ?? []).includes(scope)
@@ -67,7 +69,7 @@ const handler = createMcpHandler(
       { projectId: z.string() },
       async ({ projectId }: { projectId: string }, extra: { authInfo?: AuthInfo }) => {
         const userId = mcpUserId(extra)
-        const { allowed } = await checkProjectAccess(userId, projectId, ["MEMBER"])
+        const { allowed } = await checkProjectAccess(userId, projectId, ["VIEWER"])
         if (!allowed) return forbidden()
         const sections = await prisma.taskList.findMany({ where: { projectId }, select: { id: true, name: true, position: true }, orderBy: { position: "asc" } })
         return ok(sections)
@@ -87,7 +89,7 @@ const handler = createMcpHandler(
       async (args: { projectId?: string; taskListId?: string; status?: string; search?: string; limit?: number }, extra: { authInfo?: AuthInfo }) => {
         const userId = mcpUserId(extra)
         if (args.projectId) {
-          const { allowed } = await checkProjectAccess(userId, args.projectId, ["MEMBER"])
+          const { allowed } = await checkProjectAccess(userId, args.projectId, ["VIEWER"])
           if (!allowed) return forbidden()
         }
         // Authoritative read scope: STAFF only see tasks in projects they're a member of; the optional
@@ -131,7 +133,7 @@ const handler = createMcpHandler(
           },
         })
         if (!task) return ok("Task not found.")
-        const { allowed } = await checkProjectAccess(userId, task.taskList.projectId, ["MEMBER"])
+        const { allowed } = await checkProjectAccess(userId, task.taskList.projectId, ["VIEWER"])
         if (!allowed) return forbidden("Forbidden: gak punya akses ke project task ini.")
         return ok(task)
       },
