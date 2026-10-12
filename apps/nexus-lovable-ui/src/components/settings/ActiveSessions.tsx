@@ -113,7 +113,7 @@ export function ActiveSessions() {
                     <span className="truncate text-sm font-medium" title={s.userAgent ?? undefined}>{name}</span>
                     {s.current && <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">{t("This device")}</span>}
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">{meta}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">{meta}</div>
                 </div>
                 {!s.current && (
                   <button
