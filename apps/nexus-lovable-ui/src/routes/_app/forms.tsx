@@ -42,10 +42,19 @@ function Forms() {
     enabled: projectList.length > 0,
     retry: false,
     queryFn: async () => {
-      const lists = await Promise.all(
-        projectList.map((p) => nexusApi.forms(p.id).then((fs) => fs.map((f) => ({ ...f, projectId: f.projectId ?? p.id }))).catch(() => [] as NexusForm[])),
-      );
-      return lists.flat();
+      // One request per 300 projects (perf pass, 12 Oct 2026) instead of one per project; a server without
+      // `projectIds` answers 400 for the missing projectId, and then the old fan-out runs.
+      const ids = projectList.map((p) => p.id);
+      try {
+        const chunks: string[][] = [];
+        for (let i = 0; i < ids.length; i += 300) chunks.push(ids.slice(i, i + 300));
+        return (await Promise.all(chunks.map((c) => nexusApi.formsMany(c)))).flat();
+      } catch {
+        const lists = await Promise.all(
+          projectList.map((p) => nexusApi.forms(p.id).then((fs) => fs.map((f) => ({ ...f, projectId: f.projectId ?? p.id }))).catch(() => [] as NexusForm[])),
+        );
+        return lists.flat();
+      }
     },
   });
   const allRows = forms.data ?? [];

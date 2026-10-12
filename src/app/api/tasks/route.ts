@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
@@ -105,6 +106,12 @@ export async function GET(request: NextRequest) {
     if (taskListId) {
       where.taskListId = taskListId
     }
+    // `?subtasksOnly=1` (web board/list, perf pass 12 Oct 2026): only tasks that have a parent. The project
+    // payload already carries the top-level tasks, so the board needs just these to show subtask cards.
+    // Servers without it return every task, which the web handles the same way.
+    if (searchParams.get("subtasksOnly") === "1") {
+      where.parentId = { not: null }
+    }
     if (status) {
       const statuses = status
         .split(",")
@@ -148,8 +155,8 @@ export async function GET(request: NextRequest) {
     const tasks = await prisma.task.findMany({
       where,
       include: {
-        assignees: { include: { user: true } },
-        creator: true,
+        assignees: { include: { user: { select: USER_CARD_SELECT } } },
+        creator: { select: USER_CARD_SELECT },
         taskList: true,
         _count: {
           select: {

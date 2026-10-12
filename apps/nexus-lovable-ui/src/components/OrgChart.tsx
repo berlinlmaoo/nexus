@@ -17,6 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { thumbUrl } from "@/lib/thumb";
 
 /**
  * Bagan IP & Divisi — IP, divisi dan team perusahaan sebagai satu pohon bebas bertingkat, masing-masing
@@ -1220,7 +1221,7 @@ function UnitCard({ u, busy, tone, meta, faces = [], dragging, onKeyOpen }: { u:
           {faces.length > 0 && (
             <span className="mt-1.5 flex items-center">
               {faces.slice(0, 4).map((p, i) => (p.avatar
-                ? <img key={p.userId} src={p.avatar} alt="" title={label(p)} className={cn("h-5 w-5 shrink-0 rounded-full object-cover ring-2", FACE_RING[tone], i > 0 && "-ml-1.5")} />
+                ? <img key={p.userId} src={thumbUrl(p.avatar, 40)} loading="lazy" decoding="async" alt="" title={label(p)} className={cn("h-5 w-5 shrink-0 rounded-full object-cover ring-2", FACE_RING[tone], i > 0 && "-ml-1.5")} />
                 : <span key={p.userId} title={label(p)} className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-bold ring-2", onDark ? "bg-white/20" : "bg-cal-accent/10 text-cal-accent", FACE_RING[tone], i > 0 && "-ml-1.5")}>{initialsOf(p.name)}</span>))}
               {faces.length > 4 && <span className={cn("ml-1 text-[10px] font-semibold", onDark ? "text-white/70" : "text-[#5a6b83]")}>+{faces.length - 4}</span>}
             </span>
@@ -1251,7 +1252,7 @@ function PersonChip({ p, busy, dragging, onDragStart, onDragEnd, onClick, onRemo
         dragging && "opacity-40")}
     >
       {p.avatar
-        ? <img src={p.avatar} alt="" className={cn("shrink-0 rounded-full object-cover", row ? "h-[26px] w-[26px]" : "h-7 w-7")} />
+        ? <img src={thumbUrl(p.avatar, 40)} loading="lazy" decoding="async" alt="" className={cn("shrink-0 rounded-full object-cover", row ? "h-[26px] w-[26px]" : "h-7 w-7")} />
         : <span className={cn("grid shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary", row ? "h-[26px] w-[26px]" : "h-7 w-7")}>{initialsOf(p.name)}</span>}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[12px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
@@ -1604,7 +1605,7 @@ function UnitDialog({ unit, units, excluded, initial, people = [], members = 0, 
                 {leadCandidates.map((p) => (
                   <LeadChip key={p.userId} on={leadUserId === p.userId} onClick={() => setLeadUserId(p.userId)}>
                     {p.avatar
-                      ? <img src={p.avatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                      ? <img src={thumbUrl(p.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
                       : <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[8px] font-bold text-primary">{initialsOf(p.name)}</span>}
                     <span className="font-semibold">{label(p)}</span>
                     <span className="text-muted-foreground">{leadTitle(p)}</span>
@@ -1734,7 +1735,7 @@ function UnitPicker({ person, units, people, busy, onToggle, onPlaceUnder, onRel
                     <button key={`${r.p.userId}:${r.unitId}`} type="button" disabled={busy || on} onClick={() => onPlaceUnder(person, r.p.userId, r.unitId)}
                       className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent disabled:cursor-default", on && "bg-primary/10", busy && "opacity-60")}>
                       {r.p.avatar
-                        ? <img src={r.p.avatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                        ? <img src={thumbUrl(r.p.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
                         : <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">{initialsOf(r.p.name)}</span>}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{label(r.p)}{r.title ? <span className="font-normal text-muted-foreground"> — {r.title}</span> : null}</span>
@@ -1804,7 +1805,7 @@ function TitleRow({ person, unitId, leaders }: { person: OrgChartPerson; unitId:
   return (
     <div className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-muted/50">
       {person.avatar
-        ? <img src={person.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+        ? <img src={thumbUrl(person.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
         : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(person.name)}</span>}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium leading-tight">{label(person)}</span>

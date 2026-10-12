@@ -1,0 +1,22 @@
+--- a/office-fence.sh
++++ b/office-fence.sh
+@@ -25,7 +25,9 @@
+ VPS_PG=${VPS_PG:-100.118.86.80}
+ PUBLIC_URL=${PUBLIC_URL:-https://nexus.znetworks.id/api/health}
+ DRY_RUN=${DRY_RUN:-0}
+-CONTAINERS="nexus-znet-cloudflared nexus-app-beta nexus-web"
++# Blue-green (deploy/bluegreen/RUNBOOK.md): both slots + the pre-migration name; stop_all skips what is not running.
++CONTAINERS="nexus-znet-cloudflared nexus-app-blue nexus-app-green nexus-app-beta nexus-web"
++live_app(){ l=$(cat /home/debian/nexus-data/bluegreen/live 2>/dev/null); [ -n "$l" ] && echo "nexus-app-$l" || echo nexus-app-beta; }
+ CONNECTOR=nexus-znet-cloudflared
+ COUNT_FILE=$STATE/count
+ 
+@@ -58,7 +60,7 @@
+   fi
+   notify_pending; }
+ reopen(){ rm -f "$MARK" "$STATE/kind" "$STATE/notify-pending" "$STATE/closed-at" "$STATE/failback-stable" "$STATE/failback-blocked-told"; echo 0 > "$COUNT_FILE"
+-  for c in nexus-app-beta nexus-web $CONNECTOR; do docker start "$c" >/dev/null 2>&1 || true; done; }
++  for c in $(live_app) nexus-web $CONNECTOR; do docker start "$c" >/dev/null 2>&1 || true; done; }
+ 
+ # Failback otomatis (2 Oct 2026): VPS primary + kantor sehat (VPS terjangkau, internet, database kantor siap)
+ # FAILBACK_STABLE_MIN menit berturut-turut → /home/debian/failback-auto.sh (sebagai debian; flock di dalamnya).

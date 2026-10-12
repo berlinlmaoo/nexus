@@ -12,6 +12,8 @@ export function PageHeader({
 }: {
   title: string;
   subtitle?: string;
+  /** Only for an identity mark (a project or folder icon). Pages get no decorative glyph: one header style
+   *  everywhere (audit 12 Oct 2026). */
   icon?: ReactNode;
   actions?: ReactNode;
   tabs?: ReactNode;
@@ -32,7 +34,9 @@ export function PageHeader({
             {subtitle && <p className={cn("text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-2", compact && "max-sm:hidden")}>{subtitle}</p>}
           </div>
         </div>
-        {actions && <div className={cn("flex items-center gap-2 sm:flex-nowrap sm:shrink-0", compact ? "shrink-0 flex-nowrap max-sm:gap-1.5" : "flex-wrap")}>{actions}</div>}
+        {/* Touch: every control in the actions row is one height (44px), so a picker never stands taller than the
+            button beside it (audit 12 Oct 2026). The compact (project) header keeps its icon-sized buttons. */}
+        {actions && <div className={cn("flex items-center gap-2 sm:flex-nowrap sm:shrink-0", compact ? "shrink-0 flex-nowrap max-sm:gap-1.5" : "flex-wrap pointer-coarse:[&>a]:min-h-11 pointer-coarse:[&>button]:min-h-11")}>{actions}</div>}
       </div>
       {tabs && <div className="relative px-4 md:px-8 overflow-x-auto">{tabs}</div>}
     </div>

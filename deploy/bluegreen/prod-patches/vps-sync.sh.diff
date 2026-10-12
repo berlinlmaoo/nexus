@@ -1,0 +1,33 @@
+--- a/vps-sync.sh
++++ b/vps-sync.sh
+@@ -11,8 +11,16 @@
+ t0=$(date +%s)
+ rsync -a --partial --timeout=120 var/uploads/attendance/ vps:/srv/nexus-app/uploads/attendance/ ; r1=$?
+ rsync -a --partial --timeout=300 --exclude attendance var/uploads/ vps:/srv/nexus-app/uploads/ ; r2=$?
+-rsync -a --delete --timeout=120 apps/nexus-lovable-ui/dist/ vps:/srv/nexus-app/dist/ ; r3=$?
++# Blue-green: the SPA travels with each release (deploy-nexus-bluegreen.sh -> vps-bluegreen.sh follow). Here only
++# the retry: while a release has not reached the standby (marker vps-skew), try again every 5 minutes.
++r3=0; [ -e $HOME/nexus-data/bluegreen/vps-skew ] && { $HOME/deploy-nexus-bluegreen.sh vps-follow >> $HOME/nexus-data/bluegreen/vps-follow.log 2>&1; r3=$?; }
+ # conf: blok 443 (TLS LAN) dibuang di sisi VPS — sertifikatnya memang tidak ada di sana
++# Blue-green: the VPS nginx conf is GENERATED like the office one (nginx-gen.py --profile vps: no LAN 443 block), then
++# tested inside the VPS nexus-web before it replaces the live file.
++python3 $HOME/nexus-data/bluegreen/bin/nginx-gen.py --profile vps maintenance/phaethon.conf /tmp/vps-default.conf --raw-port 3002 --preview-port 3012 >/dev/null \
++  && rsync -a /tmp/vps-default.conf vps:/srv/nexus-app/web/conf.d/default.conf.new \
++  && ssh vps 'cd /srv/nexus-app/web/conf.d && if cmp -s default.conf.new default.conf; then rm -f default.conf.new; else cp -f default.conf default.conf.bak; mv -f default.conf.new default.conf; if docker exec nexus-web nginx -t >/dev/null 2>&1; then docker exec nexus-web nginx -s reload; echo "conf berubah"; else mv -f default.conf.bak default.conf; echo "conf baru DITOLAK nginx -t"; fi; fi' ; r4=$?
++: <<'OLD_CONF_SYNC'
+ rsync -a maintenance/phaethon.conf vps:/srv/nexus-app/phaethon.conf.src && ssh vps 'python3 - <<"PY"
+ s=open("/srv/nexus-app/phaethon.conf.src").read(); out=[]; i=0
+ while True:
+@@ -29,8 +37,10 @@
+ new="".join(out); p="/srv/nexus-app/phaethon.conf"
+ if open(p).read()!=new: open(p,"w").write(new); print("conf berubah")
+ PY' ; r4=$?
+-docker inspect nexus-app-beta --format '{{range .Config.Env}}{{println .}}{{end}}' \
+-  | grep -vE '^(PATH|HOSTNAME|NODE_VERSION|YARN_VERSION|CF_TUNNEL_[A-Z_]+)=' \
++OLD_CONF_SYNC
++LIVE_APP=nexus-app-$(cat $HOME/nexus-data/bluegreen/live 2>/dev/null || echo beta); [ "$LIVE_APP" = nexus-app-beta ] || docker inspect "$LIVE_APP" >/dev/null 2>&1 || LIVE_APP=nexus-app-beta
++docker inspect "$LIVE_APP" --format '{{range .Config.Env}}{{println .}}{{end}}' \
++  | grep -vE '^(PATH|HOSTNAME|NODE_VERSION|YARN_VERSION|CF_TUNNEL_[A-Z_]+|NEXUS_SLOT|NEXUS_CHUNK_DIR|NEXUS_BLUEGREEN_LIVE_FILE)=' \
+   | sed -E 's#^(DATABASE_URL=postgres(ql)?://[^@]+@)[^/]+/#\1nexus-standby:5432/#' \
+   | ssh vps 'umask 077; cat > /srv/nexus-app/.env.new && if ! cmp -s /srv/nexus-app/.env.new /srv/nexus-app/.env; then mv /srv/nexus-app/.env.new /srv/nexus-app/.env; echo "env berubah"; else rm -f /srv/nexus-app/.env.new; fi' ; r5=$?
+ echo "$(date '+%F %T') rc=$r1/$r2/$r3/$r4/$r5 ${SECONDS}s" >> "$LOG"

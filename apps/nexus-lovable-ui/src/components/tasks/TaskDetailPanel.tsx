@@ -1,6 +1,6 @@
 import { activityText } from "@/lib/server-text";
 import { DateField } from "@/components/DateField";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { animate as fmAnimate, motion, useMotionValue, useReducedMotion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,6 +46,7 @@ import {
   type NexusComment,
   type NexusCustomField,
   type NexusCustomFieldOptions,
+  type NexusTask,
   type NexusUser,
 } from "@/lib/nexus-api";
 import { RupiahInput } from "@/components/RupiahInput";
@@ -67,7 +68,13 @@ import { displayName } from "@/lib/system-users";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
 import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
-import { TaskBodyEditor } from "@/components/editor/TaskBodyEditor";
+import { patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+
+// The description's block editor (TipTap + Yjs) is the heaviest part of the popup; it loads beside the popup
+// rather than in front of it, so the title, status and fields show first (perf pass, 12 Oct 2026).
+const loadBody = () => import("@/components/editor/TaskBodyEditor");
+const TaskBodyEditor = lazy(() => loadBody().then((m) => ({ default: m.TaskBodyEditor })));
+export const preloadTaskBody = () => void loadBody();
 
 // On every pointer-down we record both the tap point AND the rect of the tapped card (the element with a
 // `data-morph-id`). The panel uses that rect to do a MANUAL FLIP morph — it starts the box exactly on the
@@ -267,6 +274,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, []);
 
+  useEffect(() => { void loadBody(); }, []);
   const task = useQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId) });
   const comments = useQuery({ queryKey: ["task-comments", taskId], queryFn: () => nexusApi.taskComments(taskId) });
   const attachments = useQuery({ queryKey: ["task-attachments", taskId], queryFn: () => nexusApi.taskAttachments(taskId) });
@@ -309,17 +317,24 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     if (t) setTitle(t.title ?? "");
   }, [t?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // After a write: this task, its activity, and the project on screen refetch; other task lists are only
+  // marked stale (they refetch when opened) — perf pass, 12 Oct 2026.
   const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: ["task", taskId] });
     qc.invalidateQueries({ queryKey: ["task-comments", taskId] });
-    qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).some((k) => k.includes("task") || k.includes("dashboard") || k.includes("project")) });
+    settleTaskWrite(qc, projectId, taskId);
   };
 
   const update = useMutation({
     mutationFn: (payload: Parameters<typeof nexusApi.updateTask>[1]) => nexusApi.updateTask(taskId, payload),
+    // Optimistic: status, priority, title, dates and tags show at once, here and on the board behind.
+    onMutate: (payload) => {
+      const { title, status, priority, dueDate, tags } = payload as Partial<NexusTask>;
+      const patch = Object.fromEntries(Object.entries({ title, status, priority, dueDate, tags, startDate: (payload as { startDate?: string | null }).startDate }).filter(([, v]) => v !== undefined));
+      return { rollback: Object.keys(patch).length ? patchTaskInCaches(qc, taskId, patch) : null };
+    },
     onSuccess: invalidateAll,
     // Surfaces the "wajib lampiran sebelum Done" gate (and any other reject) instead of failing silently.
-    onError: (e: unknown) => { invalidateAll(); toast.error(e instanceof Error ? e.message : tr("Couldn't update the task.")); },
+    onError: (e: unknown, _v, c) => { c?.rollback?.(); invalidateAll(); toast.error(e instanceof Error ? e.message : tr("Couldn't update the task.")); },
   });
   // --- subtasks (Asana-style: full tasks linked via parentId; hidden from board, live here) ---
   const [openSub, setOpenSub] = useState<string | null>(null);
@@ -450,12 +465,15 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
       {/* Centered modal that MORPHS out of the clicked card (manual FLIP, no layoutId). The box (mx/my +
           scaleX/scaleY) is mapped from the card's rect with transform-origin top-left; content fades in
           just after the box starts so the stretch isn't visible. */}
+      {/* A fixed height on desktop (perf pass, 12 Oct 2026): the box no longer grows and re-centres while the task,
+          its fields and comments load in, so nothing jumps (it was the page's biggest layout shift) and the
+          morph's measured rect stays true. */}
       <motion.aside
         ref={asideRef}
         role="dialog"
         aria-modal="true"
         style={{ x: mx, y: my, scaleX: msx, scaleY: msy, opacity: asideO, transformOrigin: "top left", pointerEvents: closing ? "none" : undefined, ...(morph ? { borderRadius: 24 } : null) }}
-        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-auto sm:max-h-[92dvh] sm:rounded-3xl sm:border"
+        className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden border-border bg-card shadow-pop sm:h-[min(92dvh,880px)] sm:max-h-[92dvh] sm:rounded-3xl sm:border"
       >
             {/* inner scroll region — separate from the animated shell so the transform never breaks scrolling on iOS.
                 During the morph the content fades in just after the box starts so it doesn't look stretched. */}
@@ -795,7 +813,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
             {/* description: a block document (slash menu, @mentions, live with everyone who has it open) */}
             <SecCard icon={AlignLeft} label={tr("Description")}>
-              <TaskBodyEditor taskId={t.id} projectId={projectId ?? null} onOpenTask={setOpenSub} />
+              <Suspense fallback={<div className="min-h-[72px] animate-pulse rounded-md bg-muted/40" aria-busy />}>
+                <TaskBodyEditor taskId={t.id} projectId={projectId ?? null} onOpenTask={setOpenSub} />
+              </Suspense>
             </SecCard>
 
             {/* subtasks — Asana-style: each is a full task (own assignee/due/comments), hidden

@@ -3,6 +3,7 @@
 // named icon ("folder", "rocket", ...). We map names → emoji.
 import { useLogoTone } from "@/lib/calendar/tone";
 import { cn } from "@/lib/utils";
+import { thumbUrl } from "@/lib/thumb";
 
 const EMOJI_MAP: Record<string, string> = {
   folder: "📁", rocket: "🚀", star: "⭐", zap: "⚡", target: "🎯",
@@ -40,8 +41,11 @@ export function ProjectIcon({ icon, className }: { icon?: string | null; classNa
  * An opaque photo covers the tile; light mode is unchanged.
  */
 function UploadedMark({ src, className }: { src: string; className?: string }) {
-  const tone = useLogoTone(src);
-  return <img src={src} alt="" className={cn(className ?? "h-full w-full rounded-md object-cover", tone === "dark" && "dark:bg-white")} />;
+  // The tone is read from the same small thumbnail the tile shows (one request, same CORS mode), not from
+  // the full upload — that was a second, 1–2 MB download per icon (perf pass, 12 Oct 2026).
+  const shown = thumbUrl(src, 64);
+  const tone = useLogoTone(shown);
+  return <img src={shown} crossOrigin={shown.startsWith("/") ? "anonymous" : undefined} alt="" loading="lazy" decoding="async" className={cn(className ?? "h-full w-full rounded-md object-cover", tone === "dark" && "dark:bg-white")} />;
 }
 
 /**

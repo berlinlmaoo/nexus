@@ -117,7 +117,6 @@ function ComplaintsPage() {
       <PageHeader
         title={t("Tickets")}
         subtitle={t("A direct line to the BoD for work or HR issues. Only the BoD can read it.")}
-        icon={<Ticket className="h-6 w-6 text-primary" />}
         actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New ticket")}</button>}
       />
 

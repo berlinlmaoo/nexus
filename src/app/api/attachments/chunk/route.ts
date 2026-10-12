@@ -46,7 +46,9 @@ const MAX_SIZE = 1024 * 1024 * 1024 // 1GB final-file cap (chunks stay <100MB so
 const MAX_CHUNK = 100 * 1024 * 1024 // per-chunk hard ceiling (CF lets <100MB through)
 const MAX_CHUNKS = 64 // bounds a session
 const MAX_SESSIONS_PER_USER = 4 // caps concurrent in-flight uploads per user (disk-DoS guard)
-const CHUNK_ROOT = path.join(tmpdir(), "nexus-chunk-uploads")
+// NEXUS_CHUNK_DIR: a directory shared by both blue-green slots, so an upload that straddles a switch
+// finishes on the new slot instead of losing its parts with the old container's /tmp.
+const CHUNK_ROOT = process.env.NEXUS_CHUNK_DIR || path.join(tmpdir(), "nexus-chunk-uploads")
 const SWEEP_AGE_MS = 60 * 60 * 1000 // reap sessions idle >1h
 const UPLOAD_ID_RE = /^[A-Za-z0-9_-]{8,64}$/
 

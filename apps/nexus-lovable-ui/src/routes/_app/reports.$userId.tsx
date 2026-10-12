@@ -39,10 +39,9 @@ function PersonReportPage() {
       <PageHeader
         title={report.data ? report.data.person.name : t("Report")}
         subtitle={report.data ? (report.data.person.isSelf ? t("Your work, attendance and XP for the period.") : t("Work, attendance and XP for the period.")) : undefined}
-        icon={<BarChart3 className="h-6 w-6 text-primary" />}
         actions={<PeriodSelect value={period} onChange={(p) => navigate({ search: (prev: ReportsSearch) => ({ ...prev, period: p }), replace: true })} />}
       />
-      <div className="mx-auto max-w-7xl p-4 md:p-8">
+      <div className="max-w-7xl p-4 md:p-8">
         <Link to="/reports" search={backSearch} className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> {backSearch.tab === "team" ? t("Back to team") : t("Back to reports")}
         </Link>

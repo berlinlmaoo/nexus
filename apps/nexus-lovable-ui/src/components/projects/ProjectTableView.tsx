@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
 import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
+import { Incremental } from "@/components/projects/views/incremental";
+import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
@@ -103,8 +105,13 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const available = defs.filter((d) => d.key !== "title" && !d.hidden && !columns.includes(d.key));
 
   // task edit helpers (invalidate on success — the table refetches the project)
+  // Optimistic (perf pass, 12 Oct 2026): the cell shows the new value at once; an error puts the old one back.
   const patchTask = async (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => {
-    try { await nexusApi.updateTask(taskId, payload); invalidate(); } catch (e) { toast.error(t("Couldn't save the change"), { description: e instanceof Error ? e.message : undefined }); }
+    await holdProject(qc, projectId);
+    const { title, status, priority, dueDate, tags } = payload as Partial<NexusTask>;
+    const patch = Object.fromEntries(Object.entries({ title, status, priority, dueDate, tags, startDate: (payload as { startDate?: string | null }).startDate }).filter(([, v]) => v !== undefined));
+    const rollback = Object.keys(patch).length ? patchTaskInCaches(qc, taskId, patch, { moveToListId: payload.taskListId }) : null;
+    try { await nexusApi.updateTask(taskId, payload); invalidate(); } catch (e) { rollback?.(); toast.error(t("Couldn't save the change"), { description: e instanceof Error ? e.message : undefined }); }
   };
   const toggleAssignee = async (taskId: string, userId: string, has: boolean) => {
     try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error(t("Couldn't save the change")); }
@@ -121,7 +128,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
 
   const gridTemplate = `minmax(240px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
   const row = (task: NexusTask) => (
-    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
+    <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40 [contain-intrinsic-size:auto_37px] [content-visibility:auto]", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
       <NameCell key={task.title} task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
@@ -143,7 +150,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   return (
     <div className="px-4 py-3 md:px-8">
       <div className="overflow-x-auto rounded-lg border border-border">
-        <div className="min-w-max">
+        {/* Width from the columns' minimums, never from cell contents (perf pass, 12 Oct 2026): with min-w-max a
+            row that loaded wider content widened every column and the header jumped. */}
+        <div className="w-full" style={{ minWidth: 240 + 140 * columns.length + 40 }}>
           {/* Header row */}
           <div className="sticky top-0 z-[1] grid items-stretch border-b border-border bg-card text-xs text-muted-foreground" style={{ gridTemplateColumns: gridTemplate }}>
             <div className="flex items-center gap-1.5 px-3 py-2"><PropIcon def={propDef(defs, "title")} />{t("Name")}</div>
@@ -177,7 +186,7 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           </div>
 
           {groups.map((g) => {
-            if (!groupBy) return <div key={g.key}>{g.tasks.map(row)}</div>;
+            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} /></div>;
             const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
             return (
               <div key={g.key}>
@@ -185,9 +194,9 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
                 {!collapsed.has(g.key) && (subs
                   ? subs.map((s) => {
                     const k = `${g.key}/${s.key}`;
-                    return <div key={k}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && s.tasks.map(row)}</div>;
+                    return <div key={k}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} />}</div>;
                   })
-                  : g.tasks.length ? g.tasks.map(row) : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
+                  : g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} /> : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
               </div>
             );
           })}

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyAction, EmptyState } from "@/components/EmptyState";
@@ -10,28 +10,19 @@ import { ProjectMark } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { fmtDate, nexusApi, statusLabel, type CreateTaskPayload, type NexusCustomField, type NexusDoc, type NexusProject, type NexusProjectView, type NexusTask, type NexusTaskStatus } from "@/lib/nexus-api";
-import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
-import { TaskComposer } from "@/components/tasks/TaskComposer";
 import { TaskBulkProvider, useTaskBulk } from "@/components/tasks/task-bulk";
-import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/ProjectSettingsDrawer";
-import { AddProjectMembersDialog } from "@/components/projects/AddProjectMembersDialog";
-import { AutomationsView } from "@/components/automations/AutomationsView";
 import { GideonMark } from "@/components/gideon/GideonMark";
-import { GideonProjectCard } from "@/components/gideon/GideonProjectCard";
 import { openGideon } from "@/lib/gideon";
 import { pushGideonPage } from "@/lib/gideon-ai";
-import { AutofillPanel } from "@/components/gideon/AutofillPanel";
-import { ChatThread } from "@/components/messages/ChatThread";
-import { ProjectFormsView } from "@/components/forms/form-kit";
-import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
-import { ProjectTableView } from "@/components/projects/ProjectTableView";
-import { PipelineView } from "@/components/pipeline/PipelineView";
-import { OutletSalesView, type OutletView } from "@/components/outlet-sales/OutletSalesView";
-import { hiddenTabsOf, projectSettingsErrorText } from "@/components/projects/project-tabs";
-import { ProjectOverview, type OverviewDrill } from "@/components/projects/ProjectOverview";
+import type { OutletView } from "@/components/outlet-sales/OutletSalesView";
+import { hiddenTabsOf, projectSettingsErrorText, TUNE_MORPH_ID } from "@/components/projects/project-tabs";
+import type { OverviewDrill } from "@/components/projects/ProjectOverview";
 import { useProjectViews } from "@/components/projects/views/use-project-views";
 import { FilterButton, FilterChips, GroupButton, SortButton, ToolbarButton, sortSummary, usePropLabel } from "@/components/projects/views/view-controls";
 import { AddViewButton, LAYOUT_ICON, ViewSettingsPanel } from "@/components/projects/views/view-settings";
+import { Incremental } from "@/components/projects/views/incremental";
+import { holdProject, insertDraftTask, patchTaskInCaches, settleTaskWrite } from "@/lib/task-cache";
+import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
@@ -110,8 +101,58 @@ import {
   Sheet as SheetIcon,
 } from "lucide-react";
 
+// Heavy tabs and dialogs load when first used, not with every project (perf pass, 12 Oct 2026). The task popup
+// and the composer are fetched in the background once the board is up (preloadProjectExtras), so opening a
+// card never waits for code.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function named<M extends Record<K, ComponentType<any>>, K extends keyof M>(load: () => Promise<M>, name: K) {
+  return lazy(() => load().then((m) => ({ default: m[name] })));
+}
+const loadTaskPanel = () => import("@/components/tasks/TaskDetailPanel");
+const loadComposer = () => import("@/components/tasks/TaskComposer");
+const TaskDetailPanel = named(loadTaskPanel, "TaskDetailPanel");
+const TaskComposer = named(loadComposer, "TaskComposer");
+const ProjectSettingsDrawer = named(() => import("@/components/projects/ProjectSettingsDrawer"), "ProjectSettingsDrawer");
+const AddProjectMembersDialog = named(() => import("@/components/projects/AddProjectMembersDialog"), "AddProjectMembersDialog");
+const AutomationsView = named(() => import("@/components/automations/AutomationsView"), "AutomationsView");
+const GideonProjectCard = named(() => import("@/components/gideon/GideonProjectCard"), "GideonProjectCard");
+const AutofillPanel = named(() => import("@/components/gideon/AutofillPanel"), "AutofillPanel");
+const ChatThread = named(() => import("@/components/messages/ChatThread"), "ChatThread");
+const ProjectFormsView = named(() => import("@/components/forms/form-kit"), "ProjectFormsView");
+const ProjectSheetView = named(() => import("@/components/sheets/ProjectSheetView"), "ProjectSheetView");
+const PipelineView = named(() => import("@/components/pipeline/PipelineView"), "PipelineView");
+const OutletSalesView = named(() => import("@/components/outlet-sales/OutletSalesView"), "OutletSalesView");
+const loadTable = () => import("@/components/projects/ProjectTableView");
+const ProjectTableView = named(loadTable, "ProjectTableView");
+const ProjectOverview = named(() => import("@/components/projects/ProjectOverview"), "ProjectOverview");
+let extrasPreloaded = false;
+/** The popup's and composer's code (and the block editor behind them), fetched while the browser is idle. */
+function preloadProjectExtras() {
+  if (extrasPreloaded || typeof window === "undefined") return;
+  extrasPreloaded = true;
+  const go = () => { void loadTaskPanel().then((m) => m.preloadTaskBody()); void loadComposer(); void loadTable(); };
+  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
+  if (ric) ric(go, { timeout: 2500 }); else setTimeout(go, 1200);
+}
+
+/** A lazy piece's placeholder: the same box the skeletons use, so nothing jumps when it arrives. */
+function Pending({ children, rows = 3 }: { children: ReactNode; rows?: number }) {
+  return <Suspense fallback={<div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{Array.from({ length: rows }, (_, i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}>{children}</Suspense>;
+}
+
 export const Route = createFileRoute("/_app/projects/$projectId")({
   component: ProjectDetail,
+  // Start the project's data with the navigation — and on hover/focus of any link to it (router preload
+  // "intent") — instead of after the page's code has loaded and rendered (perf pass, 12 Oct 2026). Not
+  // awaited: the page renders at once and the queries below pick these requests up in flight.
+  loader: ({ context, params }) => {
+    const qc = context.queryClient;
+    void qc.prefetchQuery({ queryKey: ["nexus", "project", params.projectId], queryFn: () => nexusApi.project(params.projectId), staleTime: 30_000, retry: false });
+    void qc.prefetchQuery({ queryKey: ["nexus", "project-views", params.projectId], queryFn: () => nexusApi.projectViews(params.projectId), staleTime: 30_000, retry: false });
+    void qc.prefetchQuery({ queryKey: ["nexus", "project-members", params.projectId], queryFn: () => nexusApi.projectMembers(params.projectId), staleTime: 60_000, retry: false });
+    void qc.prefetchQuery({ queryKey: ["nexus", "project-custom-fields", params.projectId], queryFn: () => nexusApi.projectCustomFields(params.projectId), staleTime: 60_000, retry: false });
+    void qc.prefetchQuery({ queryKey: ["nexus", "project-calendar-tasks", params.projectId, "subtasks"], queryFn: () => nexusApi.tasks(`projectId=${params.projectId}&subtasksOnly=1`), staleTime: 30_000, retry: false });
+  },
   // `?settings=1` opens Project settings (the project tree's "Project settings" menu item, 10 Oct 2026).
   // An Outlet Sales Dashboard (10 Oct 2026): `?view=overview|calendar|board|form`, `&date=YYYY-MM-DD`,
   // `&event=<id>` — the shared form link opens the report form, on one event when it names one.
@@ -180,6 +221,19 @@ const MODULE_TABS: { id: ModuleKey; label: string; icon: typeof LayoutGrid; befo
 function fallbackViews(): NexusProjectView[] {
   const now = new Date().toISOString();
   return BUILTIN_KEYS.map((key, i) => ({ id: `fallback:${key}`, name: null, layout: key, builtin: key, position: i, shared: true, ownerId: null, createdById: null, config: {}, createdAt: now, updatedAt: now }));
+}
+
+/** A task with its section attached, memoised per task object (see allTasks). */
+function useWithList() {
+  const cache = useRef(new WeakMap<NexusTask, NexusTask>());
+  return useCallback((task: NexusTask, list: { id: string; name: string }, projectId: string | undefined): NexusTask => {
+    if (task.taskList) return task;
+    const hit = cache.current.get(task);
+    if (hit && hit.taskList?.id === list.id && hit.taskList?.name === list.name) return hit;
+    const next = { ...task, taskList: { id: list.id, name: list.name, projectId } };
+    cache.current.set(task, next);
+    return next;
+  }, []);
 }
 
 /** Collapsed groups are per person and per view (this browser), like Notion. */
@@ -276,16 +330,24 @@ function ProjectDetail() {
   }, [search.view, search.date, search.event, data]);
   const rootQc = useQueryClient();
   const taskLists = data?.taskLists ?? [];
-  const allTasks = useMemo(() => taskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } }))), [taskLists, data?.id]);
+  // React Query keeps unchanged tasks as the same objects across refetches (structural sharing); `withList`
+  // keeps that identity through this mapping too, so a refetch after one task changed re-renders one card.
+  const withList = useWithList();
+  const allTasks = useMemo(() => taskLists.flatMap((list) => (list.tasks ?? []).map((task) => withList(task, list, data?.id))), [taskLists, data?.id, withList]);
   // Board + List show subtasks as their own cards/rows (placed in their section, right under their parent).
   // The project payload is parentId-only, so pull the project's full task set and merge subtasks into each
   // lane. Same query key as before → React Query dedupes to one fetch.
-  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false, enabled: !!data && !isSpecial });
+  // Only the subtasks (perf pass, 12 Oct 2026): the project payload has every top-level task already, and
+  // fetching the whole set again doubled the page's data. Under the same key prefix, so every invalidation of
+  // ["nexus","project-calendar-tasks",id] still covers it. A server without `subtasksOnly` returns all tasks;
+  // the merge below only takes the ones with a parent either way.
+  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId, "subtasks"], queryFn: () => nexusApi.tasks(`projectId=${projectId}&subtasksOnly=1`), staleTime: 30_000, retry: false, enabled: !!data && !isSpecial });
   const withSubtasks = useMemo(() => {
     const subs = (allProjTasks.data ?? []).filter((t) => t.parentId && t.taskListId);
     if (subs.length === 0) return allTasks;
     const parentTitle = new Map<string, string>();
-    for (const t of allProjTasks.data ?? []) parentTitle.set(t.id, t.title); // all tasks → resolves any depth
+    for (const t of allTasks) parentTitle.set(t.id, t.title);
+    for (const t of allProjTasks.data ?? []) parentTitle.set(t.id, t.title); // subtasks too → resolves any depth
     const subsByList = new Map<string, NexusTask[]>();
     for (const s of subs) {
       const list = taskLists.find((l) => l.id === s.taskListId);
@@ -294,7 +356,7 @@ function ProjectDetail() {
     }
     const out: NexusTask[] = [];
     for (const list of taskLists) {
-      const parents = (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } }));
+      const parents = (list.tasks ?? []).map((task) => withList(task, list, data?.id));
       const here = subsByList.get(list.id) ?? [];
       const pidSet = new Set(parents.map((t) => t.id));
       for (const p of parents) { out.push(p); for (const s of here) if (s.parentId === p.id) out.push(s); }
@@ -302,7 +364,7 @@ function ProjectDetail() {
       for (const s of here) if (!s.parentId || !pidSet.has(s.parentId)) out.push(s);
     }
     return out;
-  }, [allTasks, allProjTasks.data, taskLists, data?.id]);
+  }, [allTasks, allProjTasks.data, taskLists, data?.id, withList]);
 
   // ── saved views (owner, 12 Oct 2026) ──
   const pv = useProjectViews(projectId, !!data && !isSpecial);
@@ -338,7 +400,12 @@ function ProjectDetail() {
   const draftFilter = decodeFilter(search.f);
   const fKey = search.f ? JSON.stringify(search.f) : "";
   const draftSort = decodeSort(search.s);
-  const cfg: ViewConfig | null = saved ? { ...saved, filter: draftFilter ?? saved.filter, sort: draftSort ?? saved.sort } : null;
+  // Memoised so the board's cards (memo) only re-render when the view really changed (perf pass, 12 Oct 2026).
+  const cfg: ViewConfig | null = useMemo(
+    () => (saved ? { ...saved, filter: draftFilter ?? saved.filter, sort: draftSort ?? saved.sort } : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [saved, fKey, search.s],
+  );
   const dirty = !!saved && ((!!draftFilter && !sameFilter(draftFilter, saved.filter)) || (!!draftSort && !sameSort(draftSort, saved.sort)));
   const query = search.q ?? "";
   // The router JSON-encodes search values itself: hand it the object so the address carries plain JSON.
@@ -372,12 +439,16 @@ function ProjectDetail() {
   }, [activeView?.id, canEdit]);
 
   const people = useMemo(() => (data?.members ?? []).map((m) => ({ id: (m.userId || m.user?.id) ?? "", name: m.user?.name ?? m.user?.email ?? "" })).filter((p) => p.id), [data?.members]);
+  // Only the sections' own fields count: a refetch that changed a task (and so the taskLists array) keeps ctx,
+  // and with it every memoised card.
+  const sectionsSig = taskLists.map((l) => `${l.id}|${l.name}|${l.position}|${l.taskStatus ?? ""}|${l.color ?? ""}`).join(";");
   const ctx: ViewCtx = useMemo(() => ({
     sections: taskLists.map((l) => ({ id: l.id, name: l.name, position: l.position, taskStatus: l.taskStatus ?? null, color: l.color ?? null })),
     fields: cfDefs.data?.fields ?? [],
     people,
     meId,
-  }), [taskLists, cfDefs.data, people, meId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [sectionsSig, cfDefs.data, people, meId]);
   const defs = useMemo(() => propDefs(ctx), [ctx]);
   const layout = activeView?.layout ?? "board";
   const base = cfg && (cfg.showSubtasks || layout === "calendar") ? withSubtasks : allTasks;
@@ -394,7 +465,11 @@ function ProjectDetail() {
     return gs;
   };
   const { collapsed, toggle: toggleGroup } = useCollapsedGroups(activeView?.id ?? null);
-  const keys = cfg ? visibleProps(cfg, layout, defs) : [];
+  const keys = useMemo(() => (cfg ? visibleProps(cfg, layout, defs) : []), [cfg, layout, defs]);
+  // Once the project is on screen, fetch the task popup's code in the background.
+  useEffect(() => { if (data) preloadProjectExtras(); }, [data]);
+  const [autofillEver, setAutofillEver] = useState(false);
+  useEffect(() => { if (autofillOpen) setAutofillEver(true); }, [autofillOpen]);
   const filterCount = cfg ? activeFilterCount(cfg.filter, defs) : 0;
   const hasRules = !!cfg && (cfg.filter.simple.length > 0 || !!cfg.filter.advanced);
   const showChips = !!cfg && ((hasRules && !chipsHidden) || dirty);
@@ -517,6 +592,9 @@ function ProjectDetail() {
     </div>
   ) : undefined;
 
+  // The view draws once its custom fields (the card's properties, the grouping) and, where shown, the subtasks
+  // are in — both start with the navigation (loader) — instead of drawing and then growing every card.
+  const viewDataPending = cfDefs.isLoading || (!!cfg && (cfg.showSubtasks || layout === "calendar") && allProjTasks.isLoading);
   const emptyHint = query || filterCount > 0;
   const noTasksAtAll = allTasks.length === 0;
   const emptyState = (
@@ -548,7 +626,7 @@ function ProjectDetail() {
             {/* Phone: icon-only, so title + actions fit one row (audit 12 Oct 2026). */}
             {data && <Button size="sm" variant="outline" aria-label={tr("Ask GIDEON")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0" onClick={() => openGideon({ projectId: data.id, projectName: data.name })}><GideonMark className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Ask GIDEON")}</span></Button>}
             <motion.div layoutId={TUNE_MORPH_ID} style={{ borderRadius: 24 }} className="inline-block">
-              <Button size="sm" variant="outline" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0" onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
+              <Button size="sm" variant="outline" aria-label={tr("Project settings")} className="max-sm:w-8 max-sm:min-w-8 max-sm:px-0" onPointerEnter={() => void import("@/components/projects/ProjectSettingsDrawer")} onClick={() => setSettingsOpen(true)}><Settings2 className="h-3.5 w-3.5" /><span className="max-sm:hidden">{tr("Project settings")}</span></Button>
             </motion.div>
           </>
         }
@@ -558,11 +636,11 @@ function ProjectDetail() {
       {project.isLoading && <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>}
       {project.isError && <div className="px-4 py-10 md:px-8"><EmptyState icon={Lock} tone="muted" title={tr("You can't open this project")} message={tr("You need to be signed in and be a member of this project. Ask its project lead to add you.")} /></div>}
       {!project.isLoading && !project.isError && data && isPipeline && (
-        specialView === "chat" ? <ProjectChat projectId={data.id} />
-          : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />
+        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
+          : <PipelineView projectId={data.id} workspaceId={data.workspaceId ?? ""} />}</Pending>
       )}
       {!project.isLoading && !project.isError && data && isOutlet && (
-        specialView === "chat" ? <ProjectChat projectId={data.id} />
+        <Pending>{specialView === "chat" ? <ProjectChat projectId={data.id} />
           : (
             <OutletSalesView
               key={outletLink.nonce}
@@ -571,11 +649,14 @@ function ProjectDetail() {
               onView={(v) => setSpecialView(`os-${v}` as ViewId)}
               initial={outletLink.nonce ? { date: outletLink.date, eventId: outletLink.eventId } : undefined}
             />
-          )
+          )}</Pending>
       )}
       {!project.isLoading && !project.isError && data && !isSpecial && (
         // Multi-select + duplicate is on in every project (owner, 11 Oct 2026 — it used to be a per-project switch).
         <TaskBulkProvider projectId={data.id}>
+          {/* A view or tab switch fades in over 150 ms (none with reduced motion); the key restarts it. */}
+          <div key={activeKey ?? "none"} className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
+          <Pending>
           {activeModule === "overview" && (
             <ProjectOverview
               project={data}
@@ -596,8 +677,8 @@ function ProjectDetail() {
             <ProjectSheetView
               projectId={data.id}
               onOpenTask={(taskId) => {
-                const found = allProjTasks.data?.find((t) => t.id === taskId);
-                if (found) setOpenTask(found);
+                const found = allProjTasks.data?.find((t) => t.id === taskId) ?? allTasks.find((t) => t.id === taskId);
+                setOpenTask(found ?? ({ id: taskId, title: "" } as NexusTask));
               }}
             />
           )}
@@ -608,7 +689,10 @@ function ProjectDetail() {
           {!activeModule && !activeView && (pv.query.isLoading
             ? <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
             : <div className="px-4 py-10 md:px-8"><EmptyState icon={LayoutGrid} tone="muted" title={tr("No views to show")} message={tr("Every view of this project is hidden. Turn Board or List back on in Project settings → Tabs, or add a view with +.")} /></div>)}
-          {!activeModule && activeView && cfg && (() => {
+          {!activeModule && activeView && cfg && viewDataPending && (
+            <div className="space-y-2 px-4 py-6 md:px-8" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded-md bg-muted/60" />)}</div>
+          )}
+          {!activeModule && activeView && cfg && !viewDataPending && (() => {
             const groupBy = layout === "board" ? cfg.groupBy ?? "section" : layout === "calendar" ? null : cfg.groupBy;
             const groups = buildGroups(shown, groupBy);
             // An empty Board still shows its lanes (to add the first task into one), unless a filter emptied it.
@@ -629,6 +713,8 @@ function ProjectDetail() {
                 return <TimelineView groups={groups} groupBy={groupBy} cfg={cfg} defs={defs} ctx={ctx} collapsed={collapsed} onToggleGroup={toggleGroup} onOpen={setOpenTask} />;
             }
           })()}
+          </Pending>
+          </div>
         </TaskBulkProvider>
       )}
 
@@ -653,10 +739,12 @@ function ProjectDetail() {
           onClose={() => setViewSettingsOpen(false)}
         />
       )}
+      <Suspense fallback={null}>
       {openTask && <TaskDetailPanel taskId={openTask.id} onClose={() => setOpenTask(null)} morphId={["board", "list", "calendar", "timeline", "gallery"].includes(layout) && !activeModule ? `${layout}-taskcard-${openTask.id}` : undefined} />}
-      {data && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
+      {data && autofillEver && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
+      </Suspense>
     </div>
   );
 }
@@ -713,6 +801,9 @@ async function createTaskInGroup({ project, defs, groupBy, groupKey, sub, subKey
   return task;
 }
 
+const noop = () => {};
+const noDrag: CardDrag = () => {};
+
 type GroupBuilder = (tasks: NexusTask[], by: string | null, opts?: { keepHidden?: boolean; keepEmpty?: boolean }) => TaskGroup[];
 
 function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups, collapsed, onToggleGroup, onOpen, onCreate }: {
@@ -730,19 +821,34 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   const multiValued = (key: string | null) => !!key && (key === "assignee" || key === "tags" || ["multi", "person"].includes(propDef(defs, key)?.kind ?? ""));
   const singleValued = !multiValued(groupBy) && !multiValued(sub);
   const canDropRow = !!sub && droppable(sub, defs);
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
-    qc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", project.id] });
-    qc.invalidateQueries({ queryKey: ["nexus", "tasks"] });
+  const refresh = () => settleTaskWrite(qc, project.id);
+  // A drop lands at once (perf pass, 12 Oct 2026): the card moves in the cache before the request, for the
+  // groupings whose value maps onto the task directly (section/status column, status, priority).
+  const optimisticMove = (task: NexusTask, by: string, to: string): (() => void) | null => {
+    if (to === EMPTY_GROUP) return null;
+    if (by === "section") {
+      const target = (project.taskLists ?? []).find((l) => l.id === to);
+      return patchTaskInCaches(qc, task.id, target?.taskStatus ? { status: target.taskStatus } : {}, { moveToListId: to });
+    }
+    if (by === "status") return patchTaskInCaches(qc, task.id, { status: to });
+    if (by === "priority") return patchTaskInCaches(qc, task.id, { priority: to });
+    return null;
   };
   const move = useMutation({
     mutationFn: async ({ task, to, toRow, from, fromRow }: { task: NexusTask; to: string; toRow: string | null; from: string; fromRow: string | null }) => {
       await moveToGroup(task, groupBy, from, to, defs, project.id);
       if (sub && toRow !== null && fromRow !== null) await moveToGroup(task, sub, fromRow, toRow, defs, project.id);
     },
-    onSuccess: refresh,
-    onError: (e) => toast.error(t("Couldn't move the task"), { description: e instanceof Error ? e.message : undefined }),
+    onMutate: async ({ task, to, toRow, from, fromRow }) => {
+      await holdProject(qc, project.id);
+      const undo = [from !== to ? optimisticMove(task, groupBy, to) : null, sub && toRow !== null && fromRow !== null && toRow !== fromRow ? optimisticMove(task, sub, toRow) : null];
+      return { rollback: () => undo.reverse().forEach((u) => u?.()) };
+    },
+    onError: (e, _v, c) => { c?.rollback(); toast.error(t("Couldn't move the task"), { description: e instanceof Error ? e.message : undefined }); },
+    onSettled: refresh,
   });
+  const onCardDrag = useCallback<CardDrag>((task, from, fromRow) => setDrag({ id: task.id, from, fromRow }), []);
+  const onCardDragEnd = useCallback(() => { setDrag(null); setOver(null); }, []);
 
   // Reorder sections (lanes) left/right — the ←/→ buttons or dragging the lane's handle. Optimistic.
   const reorderLane = useMutation({
@@ -800,8 +906,14 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
   const [draft, setDraft] = useState<string | null>(null);
   // Inline new card: into the column's section (status columns), else the default status, then the
   // column's (and row's) value is written like a drop.
+  // The new card shows the moment Enter is pressed (a placeholder in its column while the server saves it),
+  // when the column is a section/status column and so certainly where the task will land.
   const createInline = async (g: TaskGroup, rowKey: string | null, p: { title: string; dueDate: string | null }) => {
-    const task = await createTaskInGroup({ project, defs, groupBy, groupKey: g.key, sub, subKey: rowKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
+    const section = isSection && !sub && g.key !== EMPTY_GROUP ? (project.taskLists ?? []).find((l) => l.id === g.key) : undefined;
+    const undo = section
+      ? insertDraftTask(qc, project.id, section.id, { id: `draft-${Date.now()}`, title: p.title, dueDate: p.dueDate, status: section.taskStatus ?? "TODO", taskListId: section.id, taskList: { id: section.id, name: section.name, projectId: project.id }, assignees: [], tags: [] })
+      : null;
+    const task = await createTaskInGroup({ project, defs, groupBy, groupKey: g.key, sub, subKey: rowKey, ...p }).catch((e) => { undo?.(); toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
     refresh();
     return task;
   };
@@ -830,7 +942,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         aria-label={laneLabel(g)}
         style={{ backgroundColor: tone.lane, ...(over === id && dropOk ? { boxShadow: `inset 0 0 0 1.5px ${tone.dot}` } : {}) }}
         className={cn("group/lane flex shrink-0 flex-col rounded-lg p-1.5 transition-shadow", laneW, dragLaneId === g.key && "opacity-40")}
-        onDragOver={(e) => { if (dropOk) { e.preventDefault(); setOver(id); } }}
+        onDragOver={(e) => { if (dropOk) { e.preventDefault(); if (over !== id) setOver(id); } }}
         onDragLeave={() => setOver((o) => (o === id ? null : o))}
         onDrop={() => {
           setOver(null);
@@ -880,22 +992,27 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
               <Plus className="h-3.5 w-3.5" />{t("New task")}
             </button>
           )}
-          {items.map((task) => (
-            <TaskCard
-              key={`${task.id}-${g.key}`}
-              task={task}
-              currentProjectId={project.id}
-              keys={keys}
-              cfg={cfg}
-              defs={defs}
-              ctx={ctx}
-              onOpen={() => onOpen(task)}
-              onDrag={() => setDrag({ id: task.id, from: g.key, fromRow: rowKey })}
-              onDragEnd={() => { setDrag(null); setOver(null); }}
-              moving={move.isPending && drag?.id === task.id}
-              morph={singleValued}
-            />
-          ))}
+          <Incremental
+            items={items}
+            keyOf={(task) => `${task.id}-${g.key}`}
+            render={(task) => (
+              <TaskCard
+                task={task}
+                currentProjectId={project.id}
+                keys={keys}
+                cfg={cfg}
+                defs={defs}
+                ctx={ctx}
+                onOpen={onOpen}
+                onDrag={onCardDrag}
+                onDragEnd={onCardDragEnd}
+                lane={g.key}
+                row={rowKey}
+                moving={false}
+                morph={singleValued}
+              />
+            )}
+          />
         </div>
       </section>
     );
@@ -909,7 +1026,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{lane.tasks.length}</span>
       </div>
       <div className="flex flex-col gap-1.5">
-        {lane.tasks.map((task) => <TaskCard key={task.id} task={task} currentProjectId={project.id} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={() => onOpen(task)} onDrag={() => {}} onDragEnd={() => {}} moving={false} />)}
+        <Incremental items={lane.tasks} keyOf={(task) => task.id} render={(task) => <TaskCard task={task} currentProjectId={project.id} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} onDrag={noDrag} onDragEnd={noop} lane={`linked-${lane.id}`} row={null} moving={false} />} />
       </div>
     </section>
   ));
@@ -1026,39 +1143,56 @@ function QuestChip({ task, className }: { task: NexusTask; className?: string })
 
 const CARD_PAD: Record<ViewConfig["cardSize"], string> = { small: "gap-1 px-2 py-1.5", medium: "gap-1.5 px-2.5 py-2", large: "gap-2 px-3 py-2.5" };
 
-function TaskCard({ task, currentProjectId, keys, cfg, defs, ctx, onOpen, onDrag, onDragEnd, moving, morph = true }: {
+type CardDrag = (task: NexusTask, from: string, fromRow: string | null) => void;
+
+/**
+ * A board card. Memoised: a drag hover, a realtime refetch of one task or the draft opening in another
+ * column re-renders only the cards whose task changed (perf pass, 12 Oct 2026). Plain elements, no framer
+ * `layoutId`: the popup's morph measures the card itself (`data-morph-id`, TaskDetailPanel), and 350 shared-
+ * layout cards made every render measure the whole board.
+ */
+const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, defs, ctx, onOpen, onDrag, onDragEnd, lane, row, moving, morph = true }: {
   task: NexusTask; currentProjectId?: string; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx;
-  onOpen: () => void; onDrag: () => void; onDragEnd: () => void; moving: boolean;
-  /** False when the same task shows twice (grouped by people or tags): one shared-layout id per task. */
+  onOpen: (task: NexusTask) => void; onDrag: CardDrag; onDragEnd: () => void; lane: string; row: string | null; moving: boolean;
+  /** False when the same task shows twice (grouped by people or tags): one morph id per task. */
   morph?: boolean;
 }) {
   const qc = useQueryClient();
   const { t } = useLang();
   const bulk = useTaskBulk();
-  const cardProps = bulk.bindCard(task, onOpen);
+  const draft = task.id.startsWith("draft-");
+  const cardProps = bulk.bindCard(task, () => onOpen(task));
   const selected = bulk.isSelected(task.id);
   const done = isDone(task.status);
   const linkedFrom = task.taskList?.projectId && currentProjectId && task.taskList.projectId !== currentProjectId ? (task.taskList.project?.name ?? t("another project")) : null;
+  const projectId = task.taskList?.projectId ?? currentProjectId;
+  // Optimistic: the circle fills at once; the server's answer (and the move to the Done column) follows.
   const toggleDone = useMutation({
-    mutationFn: () => nexusApi.updateTask(task.id, { status: done ? "TODO" : "DONE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).some((k) => k.includes("project") || k.includes("task") || k.includes("dashboard")) });
-      if (!done) celebrate(t("Done: {title}", { title: task.title.length > 28 ? task.title.slice(0, 26) + "…" : task.title }));
+    mutationFn: (next: string) => nexusApi.updateTask(task.id, { status: next }),
+    onMutate: async (next) => {
+      await holdProject(qc, projectId);
+      const rollback = patchTaskInCaches(qc, task.id, { status: next });
+      if (next === "DONE") celebrate(t("Done: {title}", { title: task.title.length > 28 ? task.title.slice(0, 26) + "…" : task.title }));
+      return { rollback };
     },
+    onError: (e, _v, c) => { c?.rollback(); toast.error(e instanceof Error ? e.message : t("Couldn't update the task.")); },
+    onSettled: () => settleTaskWrite(qc, projectId, task.id),
   });
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <motion.div layoutId={morph ? `board-taskcard-${task.id}` : undefined} data-morph-id={morph ? `board-taskcard-${task.id}` : undefined} data-bulk-task={cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", done && "opacity-60", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
+    <div data-morph-id={morph && !draft ? `board-taskcard-${task.id}` : undefined} data-bulk-task={draft ? undefined : cardProps["data-bulk-task"]} style={{ borderRadius: 8 }} onContextMenu={draft ? undefined : cardProps.onContextMenu} onTouchStart={cardProps.onTouchStart} onTouchEnd={cardProps.onTouchEnd} onTouchMove={cardProps.onTouchMove} className={cn("w-full", done && "opacity-60", draft && "pointer-events-none opacity-70", selected && "ring-2 ring-[color:var(--accent-foreground)] ring-offset-1 ring-offset-background")}>
       <div
         role="button"
         tabIndex={0}
-        draggable={!linkedFrom}
-        onDragStart={onDrag}
+        draggable={!linkedFrom && !draft}
+        onDragStart={() => onDrag(task, lane, row)}
         onDragEnd={onDragEnd}
         onClick={cardProps.onClick}
-        onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
+        onPointerEnter={(e) => { if (e.pointerType === "mouse") prefetchTask(qc, task.id); }}
+        onPointerLeave={() => prefetchTask(qc, null)}
+        onKeyDown={(e) => { if (e.key === "Enter") onOpen(task); }}
         style={tint}
-        className={cn("flex w-full cursor-pointer flex-col rounded-lg border border-border bg-card text-left shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition-[box-shadow,border-color] hover:border-foreground/15 hover:shadow-[0_2px_8px_rgba(15,15,15,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", CARD_PAD[cfg.cardSize])}
+        className={cn("flex w-full cursor-pointer flex-col rounded-lg border border-border bg-card text-left shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition-[box-shadow,border-color] duration-150 hover:border-foreground/15 hover:shadow-[0_2px_8px_rgba(15,15,15,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-foreground)]/40", CARD_PAD[cfg.cardSize])}
       >
         {linkedFrom && <span className="truncate text-[11px] text-muted-foreground">{t("From {name}", { name: linkedFrom })}</span>}
         {task.parentId && (
@@ -1071,21 +1205,35 @@ function TaskCard({ task, currentProjectId, keys, cfg, defs, ctx, onOpen, onDrag
           <button
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); toggleDone.mutate(); }}
-            disabled={toggleDone.isPending}
-            className="mt-px shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
+            onClick={(e) => { e.stopPropagation(); toggleDone.mutate(done ? "TODO" : "DONE"); }}
+            disabled={draft}
+            className="mt-px shrink-0 rounded-full text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-90"
             aria-label={done ? t("Mark as not done") : t("Mark as done")}
             title={done ? t("Mark as not done") : t("Mark as done")}
           >
-            {toggleDone.isPending || moving ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 opacity-60" />}
+            {moving || draft ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 opacity-60" />}
           </button>
           <span className={cn("min-w-0 flex-1 text-sm font-medium leading-snug", cfg.cardSize === "small" && "text-[13px]", done && "text-muted-foreground line-through")}>{task.title}</span>
           <QuestChip task={task} />
         </div>
         <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="pl-[22px]" />
       </div>
-    </motion.div>
+    </div>
   );
+});
+
+/**
+ * Resting the pointer on a card for a moment fetches its popup's data, so a click opens a filled popup
+ * (desktop). Sweeping across the board fetches nothing: only a 120 ms rest counts.
+ */
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+function prefetchTask(qc: ReturnType<typeof useQueryClient>, taskId: string | null) {
+  if (hoverTimer) clearTimeout(hoverTimer);
+  hoverTimer = null;
+  if (!taskId || taskId.startsWith("draft-")) return;
+  hoverTimer = setTimeout(() => {
+    void qc.prefetchQuery({ queryKey: ["task", taskId], queryFn: () => nexusApi.taskDetail(taskId), staleTime: 30_000 });
+  }, 120);
 }
 
 function ProjectMembersAvatars({ project }: { project: NexusProject }) {
@@ -1141,7 +1289,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
           </div>
         </>
       )}
-      {picking && <AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setPicking(false)} onAdded={() => setPicking(false)} />}
+      {picking && <Suspense fallback={null}><AddProjectMembersDialog projectId={project.id} memberIds={memberIds} onClose={() => setPicking(false)} onAdded={() => setPicking(false)} /></Suspense>}
     </div>
   );
 }
@@ -1156,7 +1304,8 @@ function cfChoices(field: NexusCustomField): string[] {
   return [];
 }
 
-function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean }) {
+/** A List row. Memoised and plain (no framer layoutId), like the board's cards (perf pass, 12 Oct 2026). */
+const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean }) {
   const { t } = useLang();
   const bulk = useTaskBulk();
   const cardProps = bulk.bindCard(task, () => onOpen(task));
@@ -1164,13 +1313,12 @@ function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTas
   const done = isDone(task.status);
   const tint = cardTint(task, cfg, defs, ctx);
   return (
-    <motion.button
+    <button
       type="button"
-      layoutId={morph ? `list-taskcard-${task.id}` : undefined}
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
       style={{ borderRadius: 6, ...tint }}
       {...cardProps}
-      className={cn("group flex min-h-9 w-full items-center gap-2.5 border-b border-border/70 px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
+      className={cn("group flex min-h-9 w-full items-center gap-2.5 border-b border-border/70 px-2 py-1.5 text-left transition-colors [contain-intrinsic-size:auto_37px] [content-visibility:auto] hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-foreground)]/40", selected && "bg-accent", task.parentId && "pl-7")}
     >
       {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -1181,9 +1329,9 @@ function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTas
       </span>
       <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="hidden shrink-0 flex-nowrap justify-end sm:flex [&>*]:shrink-0" />
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground" />
-    </motion.button>
+    </button>
   );
-}
+});
 
 function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen }: {
   project: NexusProject; groups: TaskGroup[]; groupBy: string | null; subGroupBy: string | null; buildGroups: GroupBuilder; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; keys: string[];
@@ -1194,11 +1342,10 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const [draft, setDraft] = useState<string | null>(null);
   const multi = (k: string | null) => !!k && (k === "assignee" || k === "tags" || ["multi", "person"].includes(propDef(defs, k)?.kind ?? ""));
   const morph = !multi(groupBy) && !multi(subGroupBy);
-  const rows = (tasks: NexusTask[]) => tasks.map((task) => <ListRow key={task.id} task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />);
+  const rows = (tasks: NexusTask[]) => <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />} />;
   const create = async (gKey: string | null, subKey: string | null, p: { title: string; dueDate: string | null }) => {
     const task = await createTaskInGroup({ project, defs, groupBy, groupKey: gKey, sub: subGroupBy, subKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
-    qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
-    qc.invalidateQueries({ queryKey: ["nexus", "project-calendar-tasks", project.id] });
+    settleTaskWrite(qc, project.id);
     return task;
   };
   // "+ New task" at the TOP of each group (owner, 10 Oct 2026), opening an inline row (12 Oct 2026).
@@ -1330,13 +1477,13 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
                     const done = isDone(task.status);
                     const cs = chipStyle(task);
                     return (
-                      <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={{ borderRadius: 8, ...(cs && !done ? cs : {}) }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("flex w-full items-stretch gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}>
+                      <button key={task.id} data-morph-id={`calendar-taskcard-${task.id}`} style={{ borderRadius: 8, ...(cs && !done ? cs : {}) }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("flex w-full items-stretch gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-[color:var(--accent-foreground)]")}>
                         <span className={cn("w-1 shrink-0 rounded-full", done ? "bg-emerald-500" : CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE)} />
                         <div className="min-w-0 flex-1">
                           <div className={cn("truncate text-sm font-medium", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
                           <PropLine task={task} keys={keys} defs={defs} ctx={ctx} className="mt-1" />
                         </div>
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
@@ -1374,9 +1521,8 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
                       const done = isDone(task.status);
                       const cs = chipStyle(task);
                       return (
-                        <motion.button
+                        <button
                           key={task.id}
-                          layoutId={`calendar-taskcard-${task.id}`}
                           data-morph-id={`calendar-taskcard-${task.id}`}
                           style={{ borderRadius: 4, ...(cs && !done ? cs : {}) }}
                           {...bulk.bindCard(task, () => onOpen(task))}
@@ -1387,7 +1533,7 @@ function CalendarView({ tasks, cfg, defs, ctx, onOpen, onCreate, onSetDate, canD
                           className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[11px] font-medium leading-tight", canDrag && "cursor-grab active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-[color:var(--accent-foreground)]")}
                         >
                           {task.parentId ? `↳ ${task.title}` : task.title}
-                        </motion.button>
+                        </button>
                       );
                     })}
                     {dayTasks.length > 3 && (
@@ -1606,7 +1752,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                     </div>
                   </div>}
                   {/* TASK ROWS */}
-                  {!isCollapsed && g.tasks.map(({ task, win }) => {
+                  {!isCollapsed && <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.task.id} render={({ task, win }) => {
                     const pct = tlProgress(task.status);
                     const dur = daysBetween(win.start, win.end) + 1;
                     const left = xOf(win.start);
@@ -1631,13 +1777,11 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                           </div>}
                         </div>
                         <div className="relative py-2" style={{ width: timelineW }}>
-                          <motion.button
-                            layoutId={`timeline-taskcard-${task.id}`}
+                          <button
                             data-morph-id={`timeline-taskcard-${task.id}`}
-                            whileHover={{ scale: 1.015 }}
                             {...cp}
                             title={`${task.title} · ${fmtDate(win.start.toISOString())} → ${fmtDate(win.end.toISOString())}`}
-                            className={cn("group absolute top-1.5 flex h-8 items-center gap-1.5 overflow-hidden px-1.5 text-left shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", barColor)}
+                            className={cn("group absolute top-1.5 flex h-8 items-center gap-1.5 overflow-hidden px-1.5 text-left shadow-soft transition-transform duration-150 hover:scale-[1.015] motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", barColor)}
                             style={{ left, width, borderRadius: 8, ...(tint ? { backgroundColor: COLOR_PRESETS[tint].dot } : {}) }}
                           >
                             {people.length > 0 && (
@@ -1648,11 +1792,11 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
                               </div>
                             )}
                             <span className="truncate text-xs font-bold text-white drop-shadow-sm">{task.title}</span>
-                          </motion.button>
+                          </button>
                         </div>
                       </div>
                     );
-                  })}
+                  }} />}
                 </div>
               );
             })}
@@ -1705,7 +1849,7 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
                   <p className="mt-1 text-xs text-muted-foreground">{tr("Updated {date}", { date: fmtDate(doc.updatedAt) })}{(doc.owner?.name || doc.author?.name) ? ` · ${doc.owner?.name || doc.author?.name}` : ""}</p>
                 </div>
               </div>
-              <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{doc.contentText || tr("No content yet")}</p>
+              <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{plainPreview(doc.contentText) || tr("No content yet")}</p>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <Chip size="sm" variant="soft">{doc.project?.name || project.name}</Chip>
                 <span>{tr("Open")} →</span>

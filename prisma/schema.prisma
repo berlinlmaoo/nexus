@@ -441,6 +441,7 @@ model WorkspaceMember {
 
   @@unique([userId, workspaceId])
   @@index([approverId])
+  @@index([workspaceId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 /// Someone who left a workspace (owner, 8 Oct 2026: offboarding a resignation without losing their
@@ -558,6 +559,7 @@ model Project {
   outletSalesTargets OutletSalesTarget[]
 
   @@index([folderId, position])
+  @@index([workspaceId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 /// A saved view of a project's tasks (owner, 12 Oct 2026, Notion-style): a named tab with its own layout
@@ -634,6 +636,7 @@ model ProjectMember {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+  @@index([projectId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 model ProjectFolder {
@@ -689,6 +692,7 @@ model TaskList {
 
   tasks        Task[]
   taskProjects TaskProject[]
+  @@index([projectId, position]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 model Task {
@@ -1040,6 +1044,7 @@ model CustomField {
   values CustomFieldValue[]
 
   @@index([libraryId])
+  @@index([projectId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 model CustomFieldLibrary {
@@ -1073,6 +1078,7 @@ model CustomFieldValue {
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([customFieldId, taskId])
+  @@index([taskId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 model TaskDependency {
@@ -1699,6 +1705,7 @@ model Attachment {
   uploader   User   @relation(fields: [uploaderId], references: [id])
 
   annotations ProofAnnotation[]
+  @@index([taskId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 model ProofAnnotation {
@@ -1724,8 +1731,11 @@ model Form {
   slug        String?  @unique
   description String?
   fields      Json
-  branding    Json?    // { logoUrl, primaryColor, backgroundColor, headerImage }
-  accessSchedule Json?  // { enabled, daysOfWeek, startTime, endTime, timezone }
+  branding    Json?    // { logoUrl, primaryColor, backgroundColor, headerImage, icon, cover } — lib/form-settings.ts
+  accessSchedule Json?  // { enabled, daysOfWeek, startTime, endTime, timezone, override, opensAt, closesAt }
+  // Builder rebuild (12 Oct 2026): { confirmationTitle, confirmationMessage, submitLabel, responseLimit,
+  // notifyUserIds } — lib/form-settings.ts. prisma/sql/2026-10-12-forms-settings.sql
+  settings    Json?
   isPublic    Boolean  @default(false)
   // When true, submitting requires a logged-in NEXUS account (any user, not just project
   // members) — the form page is still reachable, but submission is gated + submitterId is
@@ -1738,6 +1748,7 @@ model Form {
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   submissions FormSubmission[]
+  @@index([projectId]) // perf pass 12 Oct 2026 (prisma/sql/2026-10-12-perf-indexes.sql)
 }
 
 model FormSubmission {

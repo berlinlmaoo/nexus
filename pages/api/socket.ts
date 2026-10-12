@@ -15,6 +15,7 @@ import { conversationMemberAccess } from "@/lib/chat-access"
 import { resolveAuditAccess } from "@/lib/audit-query"
 import { TypingGate, parseTypingEvent, type TypingRelay } from "@/lib/chat-typing"
 import { attachCollabSocket } from "@/lib/collab-rooms"
+import { onSlotDemoted } from "@/lib/bluegreen"
 
 const log = createLogger("socket")
 
@@ -65,6 +66,19 @@ export function initializeSocketServer(
     addTrailingSlash: false,
     cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"], credentials: true },
     transports: ["polling", "websocket"],
+  })
+
+  // Blue-green (lib/bluegreen.ts): events live in this process only, so when the deploy script switches
+  // nginx to the other slot, every socket still attached here would stop hearing about writes made on the
+  // new slot. On demotion, close the TRANSPORT of each one (not socket.disconnect(), which tells the client
+  // "server kicked you, do not reconnect"): clients see "transport close", reconnect through nginx to the
+  // live slot, re-run their join-room calls and catch up (web refetches on reconnect, apps the same).
+  onSlotDemoted(() => {
+    let n = 0
+    for (const socket of io.sockets.sockets.values()) {
+      try { socket.conn.close(); n++ } catch { /* already gone */ }
+    }
+    log.info("slot demoted: realtime connections handed over to the live slot", { closed: n })
   })
 
   // Redis adapter for horizontal scaling (optional)

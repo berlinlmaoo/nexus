@@ -85,7 +85,6 @@ function Reports() {
       <PageHeader
         title={t("Reports")}
         subtitle={tab === "team" ? (scope === "ALL" ? t("How everyone is doing this period.") : t("How your direct reports are doing this period.")) : t("Your work, attendance and XP for the period.")}
-        icon={<BarChart3 className="h-6 w-6 text-primary" />}
         actions={<PeriodSelect value={period} onChange={(p) => setSearch({ period: p })} />}
         tabs={canSeeTeam && !selfOnly ? (
           <div role="tablist" aria-label={t("Report view")} className="mb-3 inline-flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
@@ -103,7 +102,7 @@ function Reports() {
           </div>
         ) : undefined}
       />
-      <div className="mx-auto max-w-7xl p-4 md:p-8">
+      <div className="max-w-7xl p-4 md:p-8">
         {me.isLoading && search.tab === "team" ? <TeamRosterSkeleton /> : tab === "me" ? (
           me.isLoading ? <PersonReportSkeleton /> :
           me.isError ? <ReportError title={t("Couldn't load your report")} message={errorMessage(me.error)} onRetry={() => me.refetch()} retrying={me.isFetching} /> :

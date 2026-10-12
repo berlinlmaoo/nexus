@@ -5,6 +5,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import { AvatarFace } from "@/components/Avatar";
 import { overdueState, type CalIndex, type CalItem, type CalUnit } from "@/lib/calendar/core";
 import { priorityTone, SLATE, STATUS, useLogoTone } from "@/lib/calendar/tone";
+import { thumbUrl } from "@/lib/thumb";
 
 // Small building blocks shared by the Calendar's grid, day panel and People view.
 
@@ -74,7 +75,8 @@ export function DoneTick({ unit, size = 7, className, accent = false }: { unit?:
 
 /** Logo for an IP, a coloured initial tile for anything else. */
 export function UnitMark({ unit, size = 22, className }: { unit: CalUnit; size?: number; className?: string }) {
-  const logo = unit.kind === "IP" ? unit.logoUrl : null;
+  // A small thumbnail when the logo is an upload (perf pass, 12 Oct 2026); other URLs pass through.
+  const logo = unit.kind === "IP" ? thumbUrl(unit.logoUrl, Math.max(size, 32)) : null;
   // A light logo sits on navy in both themes, a dark one (or one not read yet) on white.
   const tone = useLogoTone(logo);
   const [broken, setBroken] = useState(false);
@@ -82,6 +84,7 @@ export function UnitMark({ unit, size = 22, className }: { unit: CalUnit; size?:
     return (
       <img
         src={logo}
+        crossOrigin={logo.startsWith("/") ? "anonymous" : undefined}
         alt=""
         onError={() => setBroken(true)}
         style={{ width: size, height: size }}

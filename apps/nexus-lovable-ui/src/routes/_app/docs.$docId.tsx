@@ -17,7 +17,14 @@ import { DocPageHeader } from "@/components/editor/PageHeader";
 import { useEditorCtx } from "@/components/editor/useEditorCtx";
 import type { CollabUser } from "@/lib/collab-provider";
 
-export const Route = createFileRoute("/_app/docs/$docId")({ component: DocPage });
+export const Route = createFileRoute("/_app/docs/$docId")({
+  component: DocPage,
+  // The page's data starts with the navigation (and on hover of a link to it), not after the editor's code
+  // has loaded — perf pass, 12 Oct 2026. Not awaited.
+  loader: ({ context, params }) => {
+    void context.queryClient.prefetchQuery({ queryKey: ["nexus", "doc", params.docId], queryFn: () => nexusApi.doc(params.docId), staleTime: 30_000, retry: false });
+  },
+});
 
 /**
  * A doc / project page (block editor, owner-approved item #5): Notion-style header (icon, cover, title),
@@ -192,7 +199,13 @@ function DocPage() {
         </div>
       </div>
 
-      {doc.isLoading && <div className="flex justify-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+      {/* A page-shaped placeholder (title + a few lines) in the editor's column, instead of a spinner. */}
+      {doc.isLoading && (
+        <div className="nx-page-col space-y-3 pb-24 pt-10" aria-busy>
+          <div className="h-10 w-3/5 animate-pulse rounded-md bg-muted" />
+          {[92, 100, 84, 96, 60].map((w, i) => <div key={i} className="h-4 animate-pulse rounded bg-muted/70" style={{ width: `${w}%` }} />)}
+        </div>
+      )}
       {doc.isError && (
         <div className="nx-page-col py-24 text-center">
           <p className="text-base font-semibold text-foreground">{t("This page can't be opened")}</p>

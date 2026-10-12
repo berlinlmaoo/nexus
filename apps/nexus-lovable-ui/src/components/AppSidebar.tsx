@@ -19,6 +19,7 @@ import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
+import { thumbUrl } from "@/lib/thumb";
 
 const groups = [
   {
@@ -165,7 +166,7 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="flex items-center gap-2 overflow-hidden px-1 py-1">
           {me?.avatar ? (
-            <img src={me.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
+            <img src={thumbUrl(me.avatar, 40)} loading="lazy" decoding="async" alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-sidebar-border" />
           ) : (
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary ring-1 ring-sidebar-border">
               {(me?.name ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}

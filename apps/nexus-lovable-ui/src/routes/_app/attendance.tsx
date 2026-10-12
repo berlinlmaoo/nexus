@@ -352,7 +352,6 @@ function Attendance() {
       <PageHeader
         title={tr("Attendance")}
         subtitle={tr("Who's in, on leave or working from home, and everyone's attendance history.")}
-        icon={<ClipboardCheck className="h-6 w-6 text-primary" />}
         // The outage-refund and no-show-sweep buttons were removed (owner, 28 Sep 2026): outage days are
         // not compensated, and the sweep is what the nightly cron already runs. Both APIs stay for the cron.
       />
@@ -2203,21 +2202,23 @@ function FunMetric({ icon, label, value, helper, tone, onClick }: { icon: React.
   }[tone];
   const inner = (
     <>
-      <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
-          <h3 className="text-2xl font-black tracking-tight text-foreground">{value}</h3>
+      {/* One line per value, icon pinned to the label row: the four cards share a baseline (audit 12 Oct 2026,
+          a long value wrapped and pushed its card's text off the others). */}
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 dark:bg-background/60">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-semibold uppercase leading-4 tracking-wide opacity-70">{label}</p>
+          <h3 title={value} className="truncate text-2xl font-black leading-7 tracking-tight text-foreground">{value}</h3>
         </div>
-        {onClick && <ChevronRight className="ml-auto h-4 w-4 shrink-0 opacity-40" />}
+        {onClick && <ChevronRight className="mt-3 h-4 w-4 shrink-0 opacity-40" />}
       </div>
       <p className="mt-3 text-sm text-muted-foreground">{helper}</p>
     </>
   );
   if (onClick) {
-    return <FunMetricButton onClick={onClick} className={`block w-full rounded-[28px] border p-5 text-left shadow-soft ${toneCls}`}>{inner}</FunMetricButton>;
+    return <FunMetricButton onClick={onClick} className={`flex h-full w-full flex-col rounded-[28px] border p-5 text-left shadow-soft ${toneCls}`}>{inner}</FunMetricButton>;
   }
-  return <article className={`rounded-[28px] border p-5 shadow-soft ${toneCls}`}>{inner}</article>;
+  return <article className={`flex h-full flex-col rounded-[28px] border p-5 shadow-soft ${toneCls}`}>{inner}</article>;
 }
 
 function FunMetricButton({ onClick, className, children }: { onClick: (origin?: MorphOrigin) => void; className: string; children: React.ReactNode }) {

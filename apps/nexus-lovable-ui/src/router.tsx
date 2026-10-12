@@ -14,6 +14,11 @@ export const getRouter = () => {
         // visitor got stuck on a blank app shell instead of /login. "always" = never pause; fetch, fail,
         // surface the 401, let the guard redirect.
         networkMode: "always",
+        // Stale-while-revalidate with a short fresh window (perf pass, 12 Oct 2026). Going back to a screen
+        // within 30 s shows its cache with no refetch; after that it shows the cache AND refetches in the
+        // background. Freshness doesn't hang on this: realtime events (lib/realtime.tsx) and every mutation
+        // invalidate what changed, which refetches on-screen queries regardless of staleTime.
+        staleTime: 30_000,
       },
       mutations: { networkMode: "always" },
     },

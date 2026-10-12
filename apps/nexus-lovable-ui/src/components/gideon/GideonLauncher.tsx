@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { GideonMark } from "./GideonMark";
-import { GideonPanel } from "./GideonPanel";
 import { clearGideonContext, closeGideon, openGideon, useGideonLauncher } from "@/lib/gideon";
 import { getGideonPrefs, setCachedGideonPrefs, useGideonLayout, useGideonName, useGideonPrefs } from "@/lib/gideon-ai";
 import { useLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
+
+// The panel (chat, Markdown, history) loads the first time GIDEON opens, not with every page (perf pass,
+// 12 Oct 2026). Hovering or focusing the button starts the download early.
+const loadPanel = () => import("./GideonPanel");
+const GideonPanel = lazy(() => loadPanel().then((m) => ({ default: m.GideonPanel })));
 
 /**
  * The GIDEON button and panel. Opened by the button, ⌘/Ctrl+O (a new chat, like Notion AI), or from anywhere
@@ -44,6 +48,7 @@ export function GideonLauncher() {
 
   if (onFullPage) return null;
   const panel = (
+    <Suspense fallback={<div className="h-full w-full rounded-2xl border border-border bg-card" aria-busy />}>
     <GideonPanel
       key={nonce}
       onClose={closeGideon}
@@ -55,6 +60,7 @@ export function GideonLauncher() {
       initialChatId={chatId ?? null}
       startNew={Boolean(newChat)}
     />
+    </Suspense>
   );
   return (
     <>
@@ -62,6 +68,8 @@ export function GideonLauncher() {
         <button
           type="button"
           onClick={() => openGideon(null)}
+          onPointerEnter={() => void loadPanel()}
+          onFocus={() => void loadPanel()}
           aria-label={t("Open {assistant}", { assistant: name })}
           title={t("Open {assistant} (⌘O for a new chat)", { assistant: name })}
           className="fixed bottom-6 right-6 z-50 hidden h-12 w-12 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:grid"

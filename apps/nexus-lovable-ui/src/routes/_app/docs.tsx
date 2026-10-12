@@ -1,3 +1,4 @@
+import { plainPreview } from "@/lib/plain-preview";
 import { createFileRoute, Link, Outlet, useChildMatches, useNavigate } from "@tanstack/react-router";
 import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
@@ -34,7 +35,7 @@ function DocsList() {
 
   return (
     <div>
-      <PageHeader title={t("Pages")} subtitle={t("SOPs, meeting notes, briefs and reference pages from every project you're in.")} icon={<BookOpen className="h-6 w-6 text-primary" />} actions={
+      <PageHeader title={t("Pages")} subtitle={t("SOPs, meeting notes, briefs and reference pages from every project you're in.")} actions={
         <>
           <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -146,7 +147,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
         <span className="text-2xl">{emojiForDoc(doc)}</span>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold tracking-tight truncate">{doc.title}</h3>
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{doc.contentText || (doc.project?.name ? t("In {project}", { project: doc.project.name }) : t("No content yet"))}</p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{plainPreview(doc.contentText) || (doc.project?.name ? t("In {project}", { project: doc.project.name }) : t("No content yet"))}</p>
         </div>
       </div>
       <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">

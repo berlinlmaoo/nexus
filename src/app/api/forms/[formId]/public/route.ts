@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getFormAccessStatus } from "@/lib/form-access-schedule"
 import { numberFieldFormat } from "@/lib/custom-field-number"
+import { auth } from "@/lib/auth"
+import { checkProjectAccess } from "@/lib/rbac"
+import { formResponseLimit, publicFormSettings, RESPONSE_LIMIT_MESSAGE } from "@/lib/form-settings"
 
 export async function GET(
   _request: NextRequest,
@@ -28,6 +31,8 @@ export async function GET(
         accessSchedule: true,
         isPublic: true,
         requireAuth: true,
+        settings: true,
+        projectId: true,
         project: {
           select: {
             taskLists: {
@@ -45,10 +50,21 @@ export async function GET(
     }
 
     if (!form.isPublic) {
-      return NextResponse.json({ error: "This form is not publicly accessible" }, { status: 403 })
+      // "Project members only" (builder rebuild, 12 Oct 2026): the link opens for a signed-in member of the
+      // form's project — submit/route.ts already let members send a private form. Everyone else: 403 as before.
+      const session = await auth().catch(() => null)
+      const userId = session?.user?.id
+      const member = userId ? (await checkProjectAccess(userId, form.projectId, ["MEMBER"]).catch(() => ({ allowed: false }))).allowed : false
+      if (!member) return NextResponse.json({ error: "This form is not publicly accessible" }, { status: 403 })
     }
 
     const accessStatus = getFormAccessStatus(form.accessSchedule)
+    // Response cap: shaped like a schedule refusal (`accessSchedule` present) so the web and the released
+    // apps show it as "not open" with this message instead of "private or gone".
+    const limit = formResponseLimit(form.settings)
+    if (accessStatus.allowed && limit !== null && (await prisma.formSubmission.count({ where: { formId: form.id } })) >= limit) {
+      return NextResponse.json({ error: RESPONSE_LIMIT_MESSAGE, accessSchedule: accessStatus.schedule, code: "RESPONSE_LIMIT" }, { status: 403 })
+    }
     if (!accessStatus.allowed) {
       return NextResponse.json(
         {
@@ -89,8 +105,11 @@ export async function GET(
     return NextResponse.json({
       ...form,
       fields,
+      // Only what a respondent may see (never the notify list). Released apps ignore it.
+      settings: publicFormSettings(form.settings),
       taskLists: form.project.taskLists,
       project: undefined,
+      projectId: undefined,
     })
   } catch (error) {
     console.error("Error fetching public form:", error)

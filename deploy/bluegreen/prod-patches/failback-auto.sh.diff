@@ -1,0 +1,20 @@
+--- a/failback-auto.sh
++++ b/failback-auto.sh
+@@ -73,7 +73,7 @@
+   docker exec nexus-postgres pg_isready -U nexus_user >/dev/null 2>&1 || die "database kantor tidak siap"
+   tg "🔄 NEXUS failback otomatis mulai: data VPS dipindahkan kembali ke kantor (titik cabang $BRANCH UTC). NEXUS tidak bisa diakses ±5–10 menit."
+   # ── 1. tutup VPS: tidak ada yang bisa menulis lagi ─────────────────────────
+-  vps 'sudo /srv/failover-watchdog.sh pause >/dev/null; sudo docker stop nexus-znet-cloudflared nexus-app-beta >/dev/null 2>&1; true'
++  vps 'sudo /srv/failover-watchdog.sh pause >/dev/null; sudo docker stop nexus-znet-cloudflared >/dev/null 2>&1; sudo /srv/nexus-app/bluegreen/bin/vps-bluegreen.sh stop-all >/dev/null 2>&1; sudo docker stop nexus-app-beta >/dev/null 2>&1; true'
+   log "VPS ditutup (watchdog dijeda, app + connector mati)"
+   # ── 2. dump VPS (checksum) + dump kantor ───────────────────────────────────
+   vps "sudo docker exec nexus-standby pg_dump -U nexus_user -d nexus_db -Fc -f /tmp/fb.dump && sudo docker cp nexus-standby:/tmp/fb.dump /srv/failback-$TS.dump && sudo docker exec nexus-standby rm -f /tmp/fb.dump" \
+@@ -131,7 +131,7 @@
+     sh -c "pg_basebackup -h 100.118.101.24 -p 5432 -U repl -D /var/lib/postgresql/data -R -C -S vps_standby -X stream >/dev/null 2>&1 && chown -R postgres:postgres /var/lib/postgresql/data && chmod 700 /var/lib/postgresql/data"
+   sudo docker compose up -d >/dev/null 2>&1
+   for i in $(seq 1 30); do [ "$(sudo docker exec nexus-standby psql -U nexus_user -d nexus_db -tAc "select pg_is_in_recovery()" 2>/dev/null)" = t ] && break; sleep 2; done
+-  cd /srv/nexus-app && sudo docker compose up -d --force-recreate nexus-app-beta nexus-web >/dev/null 2>&1' \
++  sudo /srv/nexus-app/bluegreen/bin/vps-bluegreen.sh start-live >/dev/null 2>&1' \
+   && rep=$(vps 'sudo docker exec nexus-standby psql -U nexus_user -d nexus_db -tAc "select pg_is_in_recovery()"' 2>/dev/null)
+ [ "${rep:-}" = t ] && log "VPS replika lagi" || log "!!! VPS belum jadi replika (rep='${rep:-}') — kantor tetap dibuka (datanya benar), perbaiki replika manual"
+ 

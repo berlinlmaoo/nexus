@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/lang";
 import { COLOR_PRESETS, normalizeColor } from "@/lib/project-views";
 import { fmtTime, nexusApi, type NexusMySubmission, type NexusSubmissionColumn } from "@/lib/nexus-api";
+import { thumbUrl } from "@/lib/thumb";
+import { Incremental } from "@/components/projects/views/incremental";
 
 export const Route = createFileRoute("/_app/submissions")({ component: MySubmissions });
 
@@ -45,7 +47,7 @@ function Avatars({ people }: { people: NonNullable<NexusMySubmission["handlers"]
     <span className="flex -space-x-1.5">
       {people.slice(0, 3).map((p) => (
         p.avatar
-          ? <img key={p.id} src={p.avatar} alt="" title={p.name ?? ""} className="h-5 w-5 rounded-full border border-card object-cover" />
+          ? <img key={p.id} src={thumbUrl(p.avatar, 40)} loading="lazy" decoding="async" alt="" title={p.name ?? ""} className="h-5 w-5 rounded-full border border-card object-cover" />
           : <span key={p.id} title={p.name ?? ""} className="grid h-5 w-5 place-items-center rounded-full border border-card bg-muted text-[9px] font-bold text-muted-foreground">{(p.name ?? "?").slice(0, 1).toUpperCase()}</span>
       ))}
     </span>
@@ -328,7 +330,8 @@ function MySubmissions() {
                           <span className="text-xs text-muted-foreground">{items.length}</span>
                         </div>
                         <div className="flex-1 space-y-2 px-2 pb-2">
-                          {items.map((s) => <Card key={s.id} s={s} onOpen={() => setOpenId(s.id)} />)}
+                          {/* Long columns render in slices as they scroll into view (perf pass, 12 Oct 2026). */}
+                          <Incremental items={items} first={25} step={30} keyOf={(s) => s.id} render={(s) => <Card s={s} onOpen={() => setOpenId(s.id)} />} />
                           {items.length === 0 && <div className="py-6 text-center text-[11px] text-muted-foreground">{t("Nothing here")}</div>}
                         </div>
                       </div>

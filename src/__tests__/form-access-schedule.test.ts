@@ -53,4 +53,14 @@ describe("form access schedule", () => {
       timezone: "Asia/Jakarta",
     })
   })
+
+  it("closes outside the one-off opensAt/closesAt window unless forced open", () => {
+    const window = { enabled: false, opensAt: "2026-10-14T02:00:00.000Z", closesAt: "2026-10-20T10:00:00.000Z" }
+    expect(getFormAccessStatus(window, new Date("2026-10-13T00:00:00.000Z")).allowed).toBe(false)
+    expect(getFormAccessStatus(window, new Date("2026-10-15T00:00:00.000Z")).allowed).toBe(true)
+    expect(getFormAccessStatus(window, new Date("2026-10-21T00:00:00.000Z")).allowed).toBe(false)
+    expect(getFormAccessStatus({ ...window, override: "open" }, new Date("2026-10-21T00:00:00.000Z")).allowed).toBe(true)
+    expect(normalizeFormAccessSchedule({ opensAt: "nope", closesAt: "2026-10-20T17:00:00+07:00" })).toMatchObject({ closesAt: "2026-10-20T10:00:00.000Z" })
+    expect(normalizeFormAccessSchedule({ opensAt: "nope" })?.opensAt).toBeUndefined()
+  })
 })

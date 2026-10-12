@@ -1370,10 +1370,26 @@ export type NexusFormField = {
   id: string;
   name?: string;
   label: string;
-  type: string; // text | textarea | email | number | date | select | checkbox
+  type: string; // text | textarea | email | phone | url | number | date | dropdown | multi_select | checkbox | file (legacy: select)
   required?: boolean;
   placeholder?: string;
   options?: string[] | { choices?: string[] } | null;
+  /** Helper text under the question (builder rebuild, 12 Oct 2026). Released apps ignore it. */
+  description?: string;
+  /** Single choice only: "list" = radio rows on the web form; absent = dropdown (what the apps show). */
+  display?: "list";
+};
+
+/** Form look (lib/form-settings.ts on the server). */
+export type NexusFormBranding = { icon?: string; cover?: string; logoUrl?: string; primaryColor?: string; backgroundColor?: string; headerImage?: string };
+/** Form response settings. The public route returns only the first three. */
+export type NexusFormSettings = { confirmationTitle?: string; confirmationMessage?: string; submitLabel?: string; responseLimit?: number; notifyUserIds?: string[] };
+export type NexusFormAccessSchedule = { enabled?: boolean; daysOfWeek?: number[]; startTime?: string; endTime?: string; timezone?: string; override?: "open" | "closed"; opensAt?: string; closesAt?: string };
+export type NexusFormResponse = {
+  id: string;
+  createdAt: string;
+  submitter: { id: string; name?: string | null; email?: string | null; avatar?: string | null } | null;
+  task: { id: string; title: string; status: string; section?: string | null } | null;
 };
 
 export type NexusWorkflowBundle = {
@@ -1437,6 +1453,10 @@ export type NexusForm = {
   slug?: string | null;
   projectId?: string;
   _count?: { submissions?: number };
+  accessSchedule?: NexusFormAccessSchedule | null;
+  branding?: NexusFormBranding | null;
+  settings?: NexusFormSettings | null;
+  updatedAt?: string;
 };
 
 export type NexusTeam = {
@@ -2971,9 +2991,13 @@ export const nexusApi = {
 
   // --- Forms ---
   forms: (projectId: string) => apiFetch<NexusForm[]>(`/api/forms?projectId=${encodeURIComponent(projectId)}`),
+  /** The forms of many projects in one request (server since 12 Oct 2026; up to 300 ids; projects the caller can't open are skipped). */
+  formsMany: (projectIds: string[]) => apiFetch<NexusForm[]>(`/api/forms?projectIds=${projectIds.map(encodeURIComponent).join(",")}`),
   form: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`),
-  createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
-  updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
+  updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown; branding?: NexusFormBranding | null; settings?: NexusFormSettings | null }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  /** The builder's Responses tab: submissions newest first with the task each one created (12 Oct 2026). */
+  formResponses: (formId: string) => apiFetch<{ total: number; projectId: string; responses: NexusFormResponse[] }>(`/api/forms/${formId}/responses`),
   deleteForm: (formId: string, force?: boolean) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}${force ? "?force=1" : ""}`, { method: "DELETE" }),
   publicForm: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}/public`),
   mySubmissions: () => apiFetch<{ submissions: NexusMySubmission[]; statusColumns?: string[]; columns?: NexusSubmissionColumn[] }>(`/api/forms/my-submissions`),
