@@ -46,7 +46,7 @@ function MyTasks() {
   const loading = !sessionLost && (profile.isLoading || !myId || tasks.isLoading);
   const groups = [
     { label: t("Due soon"), items: rows.filter((x) => !isDone(x.status) && isDueSoon(x.dueDate)).slice(0, 8) },
-    { label: t("Open"), items: rows.filter((x) => !isDone(x.status) && !isDueSoon(x.dueDate)).slice(0, 12) },
+    { label: t("Later"), items: rows.filter((x) => !isDone(x.status) && !isDueSoon(x.dueDate)).slice(0, 12) },
     { label: t("Done recently"), items: rows.filter((x) => isDone(x.status)).slice(0, 8) },
   ].filter((g) => g.items.length > 0);
 
