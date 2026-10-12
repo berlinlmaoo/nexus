@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -245,9 +246,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("Description…")} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             <label className="block space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Status")}</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-                {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-              </select>
+              <SelectPicker variant="field" value={status} onChange={setStatus} ariaLabel={t("Status")} options={STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))} className="w-full rounded-xl px-3 py-2 font-semibold" />
             </label>
             <button onClick={() => save.mutate()} disabled={save.isPending || !name.trim()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save changes")}
@@ -300,10 +299,16 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("Apply workflow bundle")}</span>
             <p className="text-xs text-muted-foreground">{t("Add saved lists and automations to this project.")}</p>
             <div className="flex gap-2">
-              <select value={bundleId} onChange={(e) => setBundleId(e.target.value)} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-                <option value="">{(bundles.data?.bundles?.length ?? 0) === 0 ? t("No bundles available") : t("Pick a bundle…")}</option>
-                {(bundles.data?.bundles ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              <SelectPicker
+                variant="field"
+                value={bundleId}
+                onChange={setBundleId}
+                placeholder={(bundles.data?.bundles?.length ?? 0) === 0 ? t("No bundles available") : t("Pick a bundle…")}
+                ariaLabel={t("Apply workflow bundle")}
+                disabled={(bundles.data?.bundles?.length ?? 0) === 0}
+                options={(bundles.data?.bundles ?? []).map((b) => ({ value: b.id, label: b.name }))}
+                className="flex-1 rounded-xl px-3 py-2"
+              />
               <button disabled={!bundleId || applyBundle.isPending} onClick={() => applyBundle.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">{applyBundle.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Apply")}</button>
             </div>
             {applyBundle.isSuccess && <p className="text-xs font-semibold text-success">{t("Bundle applied")}</p>}

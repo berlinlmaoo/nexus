@@ -16,6 +16,8 @@ import { RupiahInput } from "@/components/RupiahInput";
 import { cn } from "@/lib/utils";
 import { defaultOption, usesStatusOptions } from "@/lib/status-options";
 import { StatusPicker, StatusPill } from "./StatusPicker";
+import { SelectPicker } from "@/components/SelectPicker";
+import { choiceColor, optionColor } from "@/lib/project-views";
 
 const PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const;
 const PRIORITY_TEXT: Record<string, string> = { URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };
@@ -131,9 +133,7 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
               {statusOptions ? (
                 <StatusPicker projectId={project.id} sections={sections} value={sectionId} onPick={setSectionId} trigger={<button type="button" className={fieldBtn}><StatusPill option={current} /></button>} />
               ) : (
-                <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} className="h-8 rounded-md border border-border bg-card px-2 text-sm">
-                  {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SelectPicker value={sectionId} onChange={setSectionId} ariaLabel={t("Status")} options={sections.map((s) => ({ value: s.id, label: s.name }))} />
               )}
             </div>
             <div className={row}>
@@ -151,9 +151,7 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
             </div>
             <div className={row}>
               <span className={labelCls}><Flag className="h-4 w-4" />{t("Priority")}</span>
-              <select value={priority} onChange={(e) => setPriority(e.target.value as CreateTaskPayload["priority"])} aria-label={t("Priority")} className="h-8 appearance-none rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:bg-muted focus:border-border">
-                {PRIORITIES.map((p) => <option key={p} value={p}>{t(PRIORITY_TEXT[p])}</option>)}
-              </select>
+              <SelectPicker value={priority} onChange={(v) => setPriority(v as CreateTaskPayload["priority"])} ariaLabel={t("Priority")} options={PRIORITIES.map((p) => ({ value: p, label: t(PRIORITY_TEXT[p]), color: optionColor("priority", p, []) }))} />
             </div>
             <div className={row}>
               <span className={labelCls}><Calendar className="h-4 w-4" />{t("Due date")}</span>
@@ -170,10 +168,7 @@ export function TaskComposer({ project, selectedListId, initialDueDate, onClose 
               else if (type === "NUMBER") control = <input type="number" value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input} placeholder={t("Not set")} />;
               else if (type === "DATE") control = <span className="min-w-0 flex-1"><DateField value={typeof val === "string" && val ? val : null} onChange={(v) => set(v ?? "")} ariaLabel={f.name} placeholder={t("Not set")} className="w-auto" /></span>;
               else if ((type === "SELECT" || type === "STATUS" || type === "DROPDOWN") && opts.length) control = (
-                <select value={typeof val === "string" ? val : ""} onChange={(e) => set(e.target.value)} className={input}>
-                  <option value="">{t("Not set")}</option>
-                  {opts.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <SelectPicker value={typeof val === "string" ? val : ""} onChange={set} clearable placeholder={t("Not set")} ariaLabel={f.name} options={opts.map((c) => ({ value: c, label: c, color: choiceColor(f, c, opts) }))} />
               );
               else if (type === "MULTI_SELECT" && opts.length) control = (
                 <div className="flex flex-wrap gap-1">

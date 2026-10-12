@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Download, Filter, HeartPulse, KanbanSquare, Loader2, Plus, Search, Table2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -254,6 +255,7 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
       ))}
     </div>
   );
+  const pickerControl = "h-9 rounded-xl bg-card pointer-coarse:h-11";
   const control = "h-9 rounded-xl border border-border bg-card text-sm transition-colors hover:border-control-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 pointer-coarse:h-11";
 
   return (
@@ -281,19 +283,10 @@ export function PipelineView({ projectId }: { projectId: string; workspaceId: st
                   className={cn(control, "w-full pl-9 pr-3 placeholder:text-muted-foreground/80")}
                 />
               </label>
-              <select aria-label={t("Filter by PM")} value={pm} onChange={(e) => setPm(e.target.value)} className={cn(control, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-primary/60 text-foreground")}>
-                <option value={ALL}>{t("All PMs")}</option>
-                {pmNames.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <select aria-label={t("Filter by BD")} value={bd} onChange={(e) => setBd(e.target.value)} className={cn(control, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-primary/60 text-foreground")}>
-                <option value={ALL}>{t("All BDs")}</option>
-                {bdNames.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <SelectPicker variant="field" ariaLabel={t("Filter by PM")} value={pm} onChange={setPm} options={[{ value: ALL, label: t("All PMs") }, ...pmNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-3 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", pm && "border-primary/60 text-foreground")} />
+              <SelectPicker variant="field" ariaLabel={t("Filter by BD")} value={bd} onChange={setBd} options={[{ value: ALL, label: t("All BDs") }, ...bdNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-36 lg:flex-none", bd && "border-primary/60 text-foreground")} />
               {serviceNames.length > 1 && (
-                <select aria-label={t("Filter by service")} value={service} onChange={(e) => setService(e.target.value)} className={cn(control, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-primary/60 text-foreground")}>
-                  <option value={ALL}>{t("All services")}</option>
-                  {serviceNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
+                <SelectPicker variant="field" ariaLabel={t("Filter by service")} value={service} onChange={setService} options={[{ value: ALL, label: t("All services") }, ...serviceNames.map((n) => ({ value: n, label: n }))]} className={cn(pickerControl, "order-4 min-w-0 flex-1 px-3 lg:w-40 lg:flex-none", service && "border-primary/60 text-foreground")} />
               )}
               <button
                 type="button"

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AtSign, CalendarClock, History, Loader2, Pencil, Play, Plus, Trash2 } from "lucide-react";
@@ -201,16 +202,11 @@ function ScheduleEditor({ draft, onChange, onCancel, onSave, saving }: { draft: 
         </label>
         <label className="text-xs font-semibold text-muted-foreground">
           {t("Time zone")}
-          <select value={draft.timezone} onChange={(e) => onChange({ ...draft, timezone: e.target.value })} className="mt-1 block rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground outline-none focus:border-primary">
-            {zones.map((z) => <option key={z} value={z}>{z}</option>)}
-          </select>
+          <SelectPicker variant="field" value={draft.timezone} onChange={(v) => onChange({ ...draft, timezone: v })} ariaLabel={t("Time zone")} options={zones.map((z) => ({ value: z, label: z }))} className="mt-1 flex px-2 font-normal text-foreground" />
         </label>
         <label className="text-xs font-semibold text-muted-foreground">
           {t("Written in")}
-          <select value={draft.language} onChange={(e) => onChange({ ...draft, language: e.target.value })} className="mt-1 block rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground outline-none focus:border-primary">
-            <option value="id">Bahasa Indonesia</option>
-            <option value="en">English</option>
-          </select>
+          <SelectPicker variant="field" value={draft.language} onChange={(v) => onChange({ ...draft, language: v })} ariaLabel={t("Written in")} options={[{ value: "id", label: "Bahasa Indonesia" }, { value: "en", label: "English" }]} className="mt-1 flex px-2 font-normal text-foreground" />
         </label>
       </div>
       <label className="block text-xs font-semibold text-muted-foreground">

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, ChevronDown, MoreHorizontal, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -197,9 +198,7 @@ function OptionMenu({ option, open, onOpenChange, others, isDefault, onRename, o
         {deleting ? (
           <div className="space-y-2 p-2">
             <p className="text-sm">{t("Delete \"{name}\"? Its tasks move to:", { name: option.name })}</p>
-            <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className="h-8 w-full rounded-md border border-border bg-card px-2 text-sm">
-              {others.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
+            <SelectPicker variant="field" value={moveTo} onChange={setMoveTo} ariaLabel={t("Move tasks to")} options={others.map((o) => ({ value: o.id, label: o.name, color: optionColorKey(o) }))} className="h-8 w-full bg-card px-2" />
             <div className="flex justify-end gap-1">
               <button type="button" onClick={() => setDeleting(false)} className="h-7 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted">{t("Cancel")}</button>
               <button type="button" disabled={!moveTo} onClick={() => { onDelete(moveTo); onOpenChange(false); }} className="h-7 rounded-md bg-destructive px-2.5 text-xs font-medium text-destructive-foreground disabled:opacity-50">{t("Delete")}</button>
@@ -219,14 +218,23 @@ function OptionMenu({ option, open, onOpenChange, others, isDefault, onRename, o
             {onGroup && (
               <label className="flex items-center justify-between gap-2 px-2 py-1 text-sm">
                 <span className="text-muted-foreground">{t("Group")}</span>
-                <select value={option.taskStatus ?? ""} onChange={(e) => onGroup(e.target.value as NexusTaskStatus)} className="h-7 rounded-md border border-border bg-card px-1.5 text-sm">
-                  {!option.taskStatus && <option value="">{t("None")}</option>}
-                  <option value="TODO">{t("To-do")}</option>
-                  <option value="IN_PROGRESS">{t("In progress")}</option>
-                  <option value="IN_REVIEW">{t("In progress · review")}</option>
-                  <option value="DONE">{t("Complete")}</option>
-                  <option value="CANCELLED">{t("Complete · cancelled")}</option>
-                </select>
+                <SelectPicker
+                  variant="field"
+                  size="sm"
+                  align="end"
+                  value={option.taskStatus ?? ""}
+                  onChange={(v) => onGroup(v as NexusTaskStatus)}
+                  ariaLabel={t("Group")}
+                  options={[
+                    ...(!option.taskStatus ? [{ value: "", label: t("None") }] : []),
+                    { value: "TODO", label: t("To-do") },
+                    { value: "IN_PROGRESS", label: t("In progress") },
+                    { value: "IN_REVIEW", label: t("In progress · review") },
+                    { value: "DONE", label: t("Complete") },
+                    { value: "CANCELLED", label: t("Complete · cancelled") },
+                  ]}
+                  className="h-7 rounded-md bg-card px-1.5 text-sm"
+                />
               </label>
             )}
             <div className="my-1 border-t border-border" />

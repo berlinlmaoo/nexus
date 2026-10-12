@@ -1,4 +1,5 @@
 import { GideonInsights } from "@/components/gideon/GideonInsights";
+import { SelectPicker } from "@/components/SelectPicker";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
@@ -589,9 +590,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
               <div className="flex items-center gap-1.5">
                 <input value={localPart} onChange={(e) => setLocalPart(e.target.value.toLowerCase())} placeholder={t("first.last")} className={cn(inputCls, "font-mono")} />
                 <span className="text-muted-foreground">@</span>
-                <select value={domain} onChange={(e) => setDomain(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-2 text-sm font-semibold outline-none focus:border-primary">
-                  {domains.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
+                <SelectPicker variant="field" align="end" value={domain} onChange={setDomain} ariaLabel={t("Domain")} options={domains.map((d) => ({ value: d, label: d }))} className="shrink-0 px-2 py-2 font-semibold" />
               </div>
               {localPart && domain && <div className="mt-1 text-[11px] text-muted-foreground">{t("Will be created:")} <b className="font-mono text-foreground">{localPart}@{domain}</b></div>}
             </div>
@@ -837,9 +836,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
               {canDelete && <AccountCard user={user} memberId={orgInfo.memberId} Card={Card} />}
               <Card title={t("Role")}>
                 {canEdit ? (
-                  <select value={orgInfo.role} disabled={pending} onChange={(e) => onOrgRole(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary disabled:opacity-50">
-                    {[...assignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
-                  </select>
+                  <SelectPicker variant="field" value={orgInfo.role} disabled={pending} onChange={onOrgRole} ariaLabel={t("Role")} options={[...assignable].reverse().map((r) => ({ value: r, label: ORG_ROLE_LABEL[r] }))} className="w-full bg-card px-3 py-2 font-semibold" />
                 ) : (
                   <span className="text-sm text-muted-foreground">{t("This person's role is at or above yours, so you can't change it here.")}</span>
                 )}
@@ -1848,9 +1845,7 @@ function AdminQuests() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tq("Goal title (e.g. Finish 5 tasks this week)")} className={cn(inputCls, "sm:col-span-2")} />
               <label className="text-xs font-semibold text-muted-foreground">{tq("Type")}
-                <select value={requirementType} onChange={(e) => setRequirementType(e.target.value)} className={cn(inputCls, "mt-1 w-full font-normal")}>
-                  {REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => <option key={r.value} value={r.value}>{tq(r.label)}</option>)}
-                </select>
+                <SelectPicker variant="field" value={requirementType} onChange={setRequirementType} ariaLabel={tq("Type")} options={REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => ({ value: r.value, label: tq(r.label) }))} className={cn(inputCls, "mt-1 flex w-full font-normal text-foreground hover:border-primary/40")} />
               </label>
               {!isTasks && (
                 <label className="text-xs font-semibold text-muted-foreground">{tq("Target (number of tasks)")}
@@ -2102,11 +2097,17 @@ function AnnouncementsAdmin() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <select value={tone} onChange={(e) => setTone(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-                <option value="info">{t("Info (blue)")}</option>
-                <option value="success">{t("Success (green)")}</option>
-                <option value="warning">{t("Warning (yellow)")}</option>
-              </select>
+              <SelectPicker
+                variant="field"
+                value={tone}
+                onChange={setTone}
+                options={[
+                  { value: "info", label: t("Info (blue)"), color: "blue" },
+                  { value: "success", label: t("Success (green)"), color: "green" },
+                  { value: "warning", label: t("Warning (yellow)"), color: "yellow" },
+                ]}
+                className="rounded-xl px-3 py-2"
+              />
               <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending || (audience === "some" && targetIds.length === 0) || (spOn && !attachment)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
                 {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} {t("Post")}
               </button>

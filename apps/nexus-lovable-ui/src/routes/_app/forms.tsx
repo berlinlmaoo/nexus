@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SelectPicker } from "@/components/SelectPicker";
 import { EmptyState } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -58,10 +59,14 @@ function Forms() {
         subtitle={t("Forms that create a task each time someone submits them.")}
         actions={
           <>
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} className="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary sm:max-w-[16rem] sm:flex-none">
-              <option value="all">{t("All projects")}</option>
-              {projectList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <SelectPicker
+              variant="field"
+              value={filter}
+              onChange={setFilter}
+              ariaLabel={t("Project")}
+              options={[{ value: "all", label: t("All projects") }, ...projectList.map((p) => ({ value: p.id, label: p.name }))]}
+              className="min-w-0 flex-1 rounded-md px-3 font-semibold sm:max-w-[16rem] sm:flex-none"
+            />
             <button disabled={!builderProjectId} onClick={() => setBuilder({ projectId: builderProjectId })} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> {t("New form")}</button>
           </>
         }

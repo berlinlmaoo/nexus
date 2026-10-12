@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronRight, Flag, Search, Users } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
+import { SelectPicker } from "@/components/SelectPicker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { cn } from "@/lib/utils";
@@ -80,15 +81,14 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {teamOptions.length > 0 && (
-            <select
+            <SelectPicker
+              variant="field"
               value={teamId ?? ""}
-              onChange={(e) => onTeamChange(e.target.value || null)}
-              aria-label={tr("Filter by team")}
-              className="h-9 min-w-0 max-w-[12rem] flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary sm:flex-none"
-            >
-              <option value="">{tr("All teams")}</option>
-              {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+              onChange={(v) => onTeamChange(v || null)}
+              ariaLabel={tr("Filter by team")}
+              options={[{ value: "", label: tr("All teams") }, ...teamOptions.map((t) => ({ value: t.id, label: t.name }))]}
+              className="h-9 min-w-0 max-w-[12rem] flex-1 px-2 sm:flex-none"
+            />
           )}
           <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

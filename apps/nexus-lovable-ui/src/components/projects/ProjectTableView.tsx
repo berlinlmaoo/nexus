@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
 import { useLang } from "@/lib/lang";
-import { propDef, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
+import { optionColor, propDef, type PropDef, type TaskGroup, type ViewConfig } from "@/lib/project-views";
 import { PropIcon, usePropLabel } from "@/components/projects/views/view-controls";
 import { GroupHeader } from "@/components/projects/views/view-layouts";
 import { StatusPicker } from "@/components/tasks/StatusPicker";
+import { SelectPicker } from "@/components/SelectPicker";
 import { usesStatusOptions } from "@/lib/status-options";
 import {
   nexusApi,
@@ -241,7 +242,6 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
 }) {
   const { t, locale } = useLang();
   // Cells read as text until hovered (Notion): no select chevrons, no "mm/dd/yyyy" in empty dates.
-  const cls = "w-full min-w-0 appearance-none truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted focus:border-primary focus:bg-background";
 
   if (colKey.startsWith("cf:")) {
     const def = cfById.get(colKey.slice(3));
@@ -261,16 +261,12 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
 
   if (colKey === "status") {
     return (
-      <select value={task.status ?? "TODO"} onChange={(e) => patchTask(task.id, { status: e.target.value })} className={cls}>
-        {TASK_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-      </select>
+      <SelectPicker value={task.status ?? "TODO"} onChange={(v) => patchTask(task.id, { status: v })} ariaLabel={t("Status")} className="w-full" options={TASK_STATUSES.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))} />
     );
   }
   if (colKey === "priority") {
     return (
-      <select value={task.priority ?? "NONE"} onChange={(e) => patchTask(task.id, { priority: e.target.value })} className={cls}>
-        {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
-      </select>
+      <SelectPicker value={task.priority ?? "NONE"} onChange={(v) => patchTask(task.id, { priority: v })} ariaLabel={t("Priority")} className="w-full" options={TASK_PRIORITIES.map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))} />
     );
   }
   if (colKey === "dueDate" || colKey === "due") {
@@ -288,9 +284,7 @@ function Cell({ colKey, task, members, cfById, sections, projectId, patchTask, t
       return <StatusPicker projectId={projectId} sections={sections} value={current} onPick={(id) => patchTask(task.id, { taskListId: id, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1])} />;
     }
     return (
-      <select value={current} onChange={(e) => patchTask(task.id, { taskListId: e.target.value, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1])} className={cls}>
-        {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
+      <SelectPicker value={current} onChange={(v) => patchTask(task.id, { taskListId: v, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1])} ariaLabel={t("Section")} className="w-full" options={sections.map((s) => ({ value: s.id, label: s.name }))} />
     );
   }
   if (colKey === "created" || colKey === "updated") {

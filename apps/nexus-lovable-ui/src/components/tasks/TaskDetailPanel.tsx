@@ -59,6 +59,8 @@ import { pushGideonPage } from "@/lib/gideon-ai";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
 import { Avatar, AvatarFace } from "@/components/Avatar";
 import { StatusPicker, StatusPill } from "@/components/tasks/StatusPicker";
+import { SelectPicker } from "@/components/SelectPicker";
+import { choiceColor, optionColor } from "@/lib/project-views";
 import { usesStatusOptions } from "@/lib/status-options";
 import { useLang } from "@/lib/lang";
 import { displayName } from "@/lib/system-users";
@@ -628,26 +630,32 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   }
                 />
               ) : sections.length > 0 ? (
-                <div className="relative min-w-0">
-                  <select value={t.taskListId ?? ""} onChange={(e) => update.mutate({ taskListId: e.target.value } as never)} className="w-full appearance-none sm:w-auto sm:max-w-[200px] truncate rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
-                    {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                </div>
+                <SelectPicker
+                  variant="pill"
+                  ariaLabel={tr("Section")}
+                  value={t.taskListId ?? ""}
+                  onChange={(v) => update.mutate({ taskListId: v } as never)}
+                  options={sections.map((s) => ({ value: s.id, label: s.name }))}
+                  className="w-full justify-between py-1.5 text-xs font-bold uppercase tracking-wider sm:w-auto sm:max-w-[200px]"
+                />
               ) : (
-                <div className="relative min-w-0">
-                  <select value={t.status ?? "TODO"} onChange={(e) => update.mutate({ status: e.target.value as never })} className="w-full appearance-none sm:w-auto rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
-                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                </div>
+                <SelectPicker
+                  variant="pill"
+                  ariaLabel={tr("Status")}
+                  value={t.status ?? "TODO"}
+                  onChange={(v) => update.mutate({ status: v as never })}
+                  options={STATUS_OPTIONS.map((s) => ({ value: s, label: statusLabel(s), color: optionColor("status", s, []) }))}
+                  className="w-full justify-between py-1 pl-1 pr-2.5 sm:w-auto"
+                />
               )}
-              <div className="relative min-w-0">
-                <select value={t.priority ?? "NONE"} onChange={(e) => update.mutate({ priority: e.target.value as never })} className="w-full appearance-none sm:w-auto rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold outline-none transition focus:border-primary">
-                  {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              </div>
+              <SelectPicker
+                variant="pill"
+                ariaLabel={tr("Priority")}
+                value={t.priority ?? "NONE"}
+                onChange={(v) => update.mutate({ priority: v as never })}
+                options={PRIORITY_OPTIONS.map((p) => ({ value: p, label: statusLabel(p), color: optionColor("priority", p, []) }))}
+                className="w-full justify-between py-1 pl-1 pr-2.5 sm:w-auto"
+              />
             </div>
 
             {/* parent breadcrumb — this task is a SUBTASK; tap to open the parent */}
@@ -1218,10 +1226,17 @@ export function CustomFieldInput({ field, projectId, onSet, hideLabel, creatorLe
   let body: ReactNode;
   if (type === "SELECT" || type === "STATUS") {
     body = (
-      <select value={strVal} onChange={(e) => onSet(e.target.value)} className={cls}>
-        <option value="">—</option>
-        {choices.map((c) => <option key={c} value={c}>{c}</option>)}
-      </select>
+      <SelectPicker
+        value={strVal}
+        onChange={(v) => onSet(v)}
+        clearable
+        placeholder={hideLabel ? "" : tr("Not set")}
+        ariaLabel={field.name}
+        // A value no longer in the option list still shows (and stays pickable), as the <select> kept it.
+        options={(strVal && !choices.includes(strVal) ? [...choices, strVal] : choices).map((c) => ({ value: c, label: c, color: choiceColor(field, c, choices) }))}
+        variant={hideLabel ? "ghost" : "field"}
+        className={hideLabel ? "w-full" : "min-h-[34px] w-full"}
+      />
     );
   } else if (type === "MULTI_SELECT") {
     body = (
