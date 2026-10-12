@@ -641,8 +641,9 @@ function printFollowups(list) {
 //    In progress). A column with that name is reused; else an EMPTY default column of that group
 //    ("In Progress") is renamed to the option, with the option's colour; else a column is added;
 //  - every task with a value moves to its column and takes its status (THIS step changes Task.status,
-//    approved by the owner); a task with no value keeps its status; tasks shown here from another project
-//    only move their link;
+//    approved by the owner) — except a task that is DONE (or has a completion stamp): the Done checkbox
+//    wins and it stays where it is; a task with no value keeps its status; tasks shown here from another
+//    project only move their link;
 //  - the field is removed (row and values kept in the backup) and what referenced it is remapped: form
 //    answers → the section (status column), routing "set field" → move to the column, automations →
 //    status, saved views → Status, Project.tableColumns drops it.
@@ -709,7 +710,7 @@ async function planUnify(db) {
     const sorted = [...working].sort((a, b) => order.indexOf(GROUP[a.taskStatus] || "todo") - order.indexOf(GROUP[b.taskStatus] || "todo") || (a.created ? 1 : 0) - (b.created ? 1 : 0) || a.position - b.position)
     u.order = sorted.map((s, i) => ({ id: s.id, name: s.name, position: i, created: !!s.created }))
     // tasks
-    const vals = (await db.query(`SELECT x."taskId", x.value, t."taskListId", t.position, t.status::text AS status, t."parentId", tl."projectId" = $2 AS home, tl.position AS "secPos"
+    const vals = (await db.query(`SELECT x."taskId", x.value, t."taskListId", t.position, t.status::text AS status, t."completedAt", t."parentId", tl."projectId" = $2 AS home, tl.position AS "secPos"
       FROM "CustomFieldValue" x JOIN "Task" t ON t.id = x."taskId" JOIN "TaskList" tl ON tl.id = t."taskListId" WHERE x."customFieldId" = $1 ORDER BY tl.position, t.position`, [f.id, f.projectId])).rows
     const nextPos = new Map()
     const posFor = async (colId, table) => {
@@ -722,6 +723,9 @@ async function planUnify(db) {
       if (!val) continue
       const col = optionCol.get(val.toLowerCase())
       if (!col) { u.unmatched = (u.unmatched || 0) + 1; continue }
+      // The Done checkbox wins (owner, 12 Oct 2026: "prioritasin centang done"): a task that is done stays
+      // done in its column, whatever the custom value said; its value counts as Done.
+      if (v.status === "DONE" || v.completedAt) { if (GROUP[col.taskStatus] !== "complete") u.keptDone = (u.keptDone || 0) + 1; continue }
       if (v.home) {
         if (v.taskListId === col.id && v.status === col.taskStatus) continue
         u.moves.push({ taskId: v.taskId, from: v.taskListId, to: col.id, toName: col.name, position: v.taskListId === col.id ? v.position : await posFor(col.id, "Task"), fromStatus: v.status, toStatus: col.taskStatus, value: val })
@@ -786,8 +790,7 @@ function printUnify(list, selects) {
     const by = {}
     for (const m of u.moves) { const k = `${m.fromStatus} → ${m.toName}`; by[k] = (by[k] || 0) + 1 }
     if (u.moves.length) console.log(`  tasks   ${u.moves.length}: ` + Object.entries(by).map(([k, v]) => `${k} ×${v}`).join("; "))
-    const reopened = u.moves.filter((m) => (m.fromStatus === "DONE" || m.fromStatus === "CANCELLED") && GROUP[m.toStatus] !== "complete").length
-    if (reopened) console.log(`  note    ${reopened} task(s) were done but the field said otherwise: they reopen`)
+    if (u.keptDone) console.log(`  note    ${u.keptDone} task(s) are done but the field said otherwise: they stay Done (the checkbox wins)`)
     if (u.linkMoves.length) console.log(`  links   ${u.linkMoves.length} task(s) from other projects re-placed (their own status untouched)`)
     if (u.unmatched) console.log(`  note    ${u.unmatched} value(s) match no option: left`)
     for (const x of u.forms) console.log(`  form    ${x.name}: answer → status column`)
