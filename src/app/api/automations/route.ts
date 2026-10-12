@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
     if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
-    const { allowed } = await checkProjectAccess(session.user.id, projectId, ['MEMBER'])
+    const { allowed } = await checkProjectAccess(session.user.id, projectId, ['VIEWER'])
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const { allowed: canEdit } = await checkProjectAccess(session.user.id, projectId, ['LEAD'])
     const rows = (await prisma.automation.findMany({ where: { projectId }, orderBy: [{ createdAt: 'asc' }, { name: 'asc' }] })) as Row[]

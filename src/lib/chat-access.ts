@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { canManageGroupMembers, commonWorkspace, groupRoomAllows } from "@/lib/chat-rules"
 
 /**
@@ -99,7 +99,9 @@ export async function conversationAccess(userId: string, conversationId: string)
     select: { id: true, lastReadAt: true, mutedUntil: true },
   })
   if (convo.type === "PROJECT" && convo.projectId) {
-    const { allowed } = await checkProjectAccess(userId, convo.projectId, ["MEMBER"])
+    // The project's chat room: readable with any access (Notion levels, 13 Oct 2026); POST messages also
+    // asks for Can comment (canPostInConversation).
+    const allowed = await hasProjectLevel(userId, convo.projectId, "VIEW")
     return allowed ? { ok: true, status: 200, convo, member } : { ok: false, status: 403 }
   }
   if (!member) return { ok: false, status: 403 }
@@ -229,4 +231,10 @@ export async function visibleConversationIdsOf(userId: string): Promise<string[]
     memberIds: c.members.map((m) => m.userId),
   }))
   return Array.from(await visibleRoomIds(userId, rooms))
+}
+
+/** Posting in a room: a project room needs Can comment or more (Can view reads only). Other rooms: as access. */
+export async function canPostInConversation(userId: string, convo: { type: string; projectId: string | null }): Promise<boolean> {
+  if (convo.type === "PROJECT" && convo.projectId) return hasProjectLevel(userId, convo.projectId, "COMMENT")
+  return true
 }

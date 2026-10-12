@@ -34,7 +34,7 @@ export async function GET(
 
     if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 })
 
-    const { allowed } = await checkProjectAccess(session.user.id, form.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id, form.projectId, ["VIEWER"])
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     return NextResponse.json(form)

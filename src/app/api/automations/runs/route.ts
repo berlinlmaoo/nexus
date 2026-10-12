@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     if (!automationId) return NextResponse.json({ error: "automationId required" }, { status: 400 })
     const automation = await prisma.automation.findUnique({ where: { id: automationId }, select: { projectId: true } })
     if (!automation) return NextResponse.json({ error: "Automation not found" }, { status: 404 })
-    const { allowed } = await checkProjectAccess(session.user.id, automation.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id, automation.projectId, ["VIEWER"])
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const limit = Math.min(200, Math.max(1, Number(sp.get("limit")) || 50))

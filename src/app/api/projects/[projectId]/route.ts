@@ -97,7 +97,7 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["VIEWER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }

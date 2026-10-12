@@ -27,13 +27,13 @@ export async function GET(request: NextRequest) {
       projectIds = []
       for (let i = 0; i < ids.length; i += 10) {
         const chunk = ids.slice(i, i + 10)
-        const checks = await Promise.all(chunk.map((id) => checkProjectAccess(session.user!.id!, id, ["MEMBER"]).catch(() => ({ allowed: false }))))
+        const checks = await Promise.all(chunk.map((id) => checkProjectAccess(session.user!.id!, id, ["VIEWER"]).catch(() => ({ allowed: false }))))
         chunk.forEach((id, k) => { if (checks[k].allowed) projectIds.push(id) })
       }
       if (projectIds.length === 0) return NextResponse.json([])
     } else {
       if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 })
-      const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
+      const { allowed } = await checkProjectAccess(session.user.id, projectId, ["VIEWER"])
       if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       projectIds = [projectId]
     }

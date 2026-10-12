@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { CHAT_MESSAGE_INCLUDE, conversationAccess } from "@/lib/chat-access"
+import { CHAT_MESSAGE_INCLUDE, conversationAccess, canPostInConversation } from "@/lib/chat-access"
 import { emitConversationUpdated, emitMessageCreated } from "@/lib/socket-emitter"
 import { fanOutChatMessage, runAfterResponse } from "@/lib/chat-fanout"
 import { checkRateLimitByKey } from "@/lib/rate-limit"
@@ -145,6 +145,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
 
     const access = await conversationAccess(userId, conversationId)
     if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
+    if (access.convo && !(await canPostInConversation(userId, access.convo))) {
+      return NextResponse.json({ error: "You can view this project but not post in it.", code: "NEEDS_COMMENT_ACCESS" }, { status: 403 })
+    }
 
     const { content, mentionedUserIds, attachmentUrl, attachmentType, replyToId } = await req.json()
     const text = typeof content === "string" ? content.trim() : ""
