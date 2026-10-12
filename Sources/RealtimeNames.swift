@@ -75,4 +75,6 @@ enum RealtimeKind {
     static let audit = "audit"
     /// Z Vault: anything a colleague would see change in a folder listing. Ids only, like the rest.
     static let vault = "vault"
+    /// My Submissions: a submission of mine moved, was answered or got a proof (to my own room).
+    static let submissions = "submissions"
 }

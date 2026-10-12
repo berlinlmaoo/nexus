@@ -1,49 +1,119 @@
 import SwiftUI
 import UIKit
 
+// ─────────────────────────────────────────────────────────────────────────────
+// My Submissions (owner, 12 Oct 2026) — port of the web's routes/_app/submissions.tsx after the redesign.
+//
+// What I filed through a form, on a board whose columns are the target project's status options: the same
+// names and colours the finance / multimedia team sees on their board, grouped To-do / In progress /
+// Complete. Read-only: the team moves the cards; it follows live (workspace-changed { kind: "submissions" }
+// to my own room). A card opens my answers, the proof of payment, its status history and the comments,
+// where I can reply. Older servers send only `statusColumns` (names): those become columns after "New".
+// ─────────────────────────────────────────────────────────────────────────────
+
 // MARK: models
+
+/// A column of the board: one status option of the projects my submissions went to.
+struct SubmissionColumn: Decodable, Identifiable, Hashable, Sendable {
+    let key: String
+    let name: String
+    let color: String?
+    /// "todo" | "in_progress" | "complete".
+    let group: String?
+    let taskStatus: String?
+    /// The projects that have this option (nil = every one, e.g. a column made from an older server).
+    let projectIds: [String]?
+
+    var id: String { key }
+    var statusGroup: StatusGroup { StatusGroup(rawValue: group ?? "todo") ?? .todo }
+    var colorKey: String {
+        StatusColor.normalize(color) ?? {
+            switch statusGroup { case .todo: return "gray"; case .inProgress: return "blue"; case .complete: return "green" }
+        }()
+    }
+}
 
 struct MySubmissionsResponse: Decodable, Sendable {
     let submissions: [MySubmission]?
     let statusColumns: [String]?
+    let columns: [SubmissionColumn]?
 }
+
+struct SubmissionPerson: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String?
+    let avatar: String?
+}
+
 struct MySubmission: Decodable, Identifiable, Sendable {
     let id: String
     let createdAt: String?
     let formName: String?
+    let projectId: String?
     let projectName: String?
+    let taskId: String?
     let taskTitle: String?
     let status: String?
     let procStatus: String?
+    let column: SubmissionColumn?
+    /// "finance" | "multimedia" | "other".
+    let kind: String?
+    let amount: Double?
+    let category: String?
+    let date: String?
+    let handlers: [SubmissionPerson]?
+    let needsAction: Bool?
+    let commentCount: Int?
+    let proofs: [SubmissionProof]?
 
-    var column: String { (procStatus?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? "Baru masuk" }
-    var title: String { taskTitle ?? formName ?? "Pengajuan" }
+    var title: String { taskTitle ?? formName ?? T("Submission") }
+    /// The column this card sits in: the server's, else the old "Status" field, else New.
+    var columnKey: String { column?.key ?? ((procStatus?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? "new") }
 }
 
-/// A submission to open, by id.
-///
-/// `.sheet(item:)` needs something Identifiable and `String` is not. The row it came from rides
-/// along when the tap started on a card, so the sheet has a title to draw while the detail loads —
-/// a notification names an id and nothing else, and then there is none.
+/// A submission to open, by id. The row it came from rides along so the sheet has a title to draw while
+/// the detail loads — a notification names an id and nothing else.
 struct SubmissionRef: Identifiable {
     let id: String
-    /// Explicitly defaulted so `SubmissionRef(id:)` reads as the notification case it is.
     var preview: MySubmission? = nil
 }
 
-/// GET /api/forms/my-submissions/{submissionId} — the answers behind one card, plus the payout
-/// proof the finance team attaches to the task it created. The board list carries neither.
+/// GET /api/forms/my-submissions/{submissionId} — the answers, the proofs, the history and the comments.
 struct MySubmissionDetail: Decodable, Sendable {
     let id: String
     let createdAt: String?
     let formName: String?
     let projectName: String?
+    let taskId: String?
     let taskTitle: String?
-    let status: String?       // the task enum (TODO/DONE/...)
-    let stage: String?        // the board column the task sits in
-    let procStatus: String?   // the finance team's "Status" custom field
+    let status: String?
+    let stage: String?
+    let procStatus: String?
     let answers: [SubmissionAnswer]?
     let proofs: [SubmissionProof]?
+    let column: SubmissionColumn?
+    let amount: Double?
+    let category: String?
+    let date: String?
+    let handlers: [SubmissionPerson]?
+    let needsAction: Bool?
+    let history: [HistoryEntry]?
+    let comments: [Comment]?
+
+    struct HistoryEntry: Decodable, Identifiable, Sendable {
+        let id: String
+        let at: String?
+        let by: String?
+        let from: String?
+        let to: String?
+    }
+    struct Comment: Decodable, Identifiable, Sendable {
+        let id: String
+        let content: String?
+        let createdAt: String?
+        let mine: Bool?
+        let user: SubmissionPerson?
+    }
 }
 
 struct SubmissionAnswer: Decodable, Identifiable, Sendable {
@@ -53,17 +123,21 @@ struct SubmissionAnswer: Decodable, Identifiable, Sendable {
     let value: SubmissionAnswerValue?
 
     var display: String { value?.display ?? "" }
+
+    /// An amount-looking answer that is a bare number shows as Rupiah (web: harga / nominal / amount …).
+    var displayFormatted: String {
+        let text = display.trimmingCharacters(in: .whitespaces)
+        let lbl = (label ?? "").lowercased()
+        let money = ["harga", "nominal", "amount", "biaya", "total", "jumlah"].contains { lbl.contains($0) }
+        if money, !text.isEmpty, text.allSatisfy({ $0.isNumber || $0 == "-" }) { return CustomFieldNumber.formatIDR(text) }
+        return text
+    }
 }
 
-/// One answer, flattened to display text as it is decoded.
-///
-/// A form field stores whatever its type produced: a string, a number, a multi-select array, an
-/// uploaded file as `{name}`, a picked place as `{label}`. The web collapses all of it in `fmtVal`
-/// before drawing anything, and doing the same here keeps the JSON shape out of the view.
+/// One answer, flattened to display text as it is decoded (string, number, multi-select, file, place).
 struct SubmissionAnswerValue: Decodable, Sendable {
     let text: String
-    /// A checkbox stays a boolean rather than becoming "Yes" here: decoding runs off the main
-    /// actor, and the wording has to be picked where a language switch is actually observed.
+    /// A checkbox stays a boolean here: the wording is picked where a language switch is observed.
     let flag: Bool?
 
     var display: String { flag.map { $0 ? T("Yes") : T("No") } ?? text }
@@ -72,7 +146,7 @@ struct SubmissionAnswerValue: Decodable, Sendable {
         let c = try decoder.singleValueContainer()
         if let s = try? c.decode(String.self) { text = s; flag = nil }
         else if let b = try? c.decode(Bool.self) { text = ""; flag = b }
-        // Int before Double, or a whole number comes out as "1000.0" — not what anybody typed.
+        // Int before Double, or a whole number comes out as "1000.0".
         else if let i = try? c.decode(Int.self) { text = String(i); flag = nil }
         else if let d = try? c.decode(Double.self) { text = String(d); flag = nil }
         else if let list = try? c.decode([SubmissionAnswerValue].self) {
@@ -82,11 +156,10 @@ struct SubmissionAnswerValue: Decodable, Sendable {
         else { text = ""; flag = nil }
     }
 
-    /// The only two objects a field stores, both already carrying their own display string.
     private struct NamedValue: Decodable { let name: String?; let label: String? }
 }
 
-/// "Bukti Pencairan" — what the finance team attaches to the task once it pays out.
+/// Proof from the team: legacy PROOF files plus anything someone else attached (server lib/my-submissions.ts).
 struct SubmissionProof: Decodable, Identifiable, Sendable {
     let id: String
     let name: String?
@@ -96,46 +169,85 @@ struct SubmissionProof: Decodable, Identifiable, Sendable {
 
     var isImage: Bool { (mimeType ?? "").hasPrefix("image/") }
 
-    /// Same rule as a sick note's attachment: the server hands out an app-relative path, and the
-    /// route behind it refuses anyone without the session cookie — so only the app's own image
-    /// loader can fetch it, never Safari.
+    /// The server hands out an app-relative path behind the session cookie: only the app can fetch it.
     var absoluteURL: URL? {
         guard let path = url, !path.isEmpty else { return nil }
         return URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path)
     }
 }
 
-/// Column tinting, shared by the board and the detail sheet so a status is the same colour in both.
-private func subColTone(_ name: String) -> Color {
-    let n = name.lowercased()
-    if n.contains("done") || n.contains("selesai") || n.contains("approve") || n.contains("setuju") || n.contains("paid") { return NX.success }
-    if n.contains("progress") || n.contains("proses") { return NX.blue }
-    if n.contains("tolak") || n.contains("reject") || n.contains("batal") { return NX.danger }
-    return NX.mutedFg
-}
-
-private func subDateText(_ iso: String?) -> String {
+private func subDateText(_ iso: String?, time: Bool = false) -> String {
     guard let d = ProjDate.parse(iso) else { return "" }
-    let f = DateFormatter(); f.dateFormat = "d MMM, HH:mm"; f.locale = Locale(identifier: "id_ID"); f.timeZone = ProjDate.cal.timeZone
+    let f = DateFormatter()
+    f.dateFormat = time ? "d MMM yyyy, HH:mm" : "d MMM yyyy"
+    f.locale = Locale(identifier: AppLanguage.shared.lang == .id ? "id_ID" : "en_GB")
+    f.timeZone = ProjDate.cal.timeZone
     return f.string(from: d)
 }
 
-/// Port of submissions.tsx ("Pengajuan Saya"): read-only kanban of your form submissions,
-/// columns driven by the Finance team's status field.
+private func subMoney(_ amount: Double?) -> String? {
+    guard let amount else { return nil }
+    return CustomFieldNumber.formatIDR(String(Int64(amount.rounded())))
+}
+
+private func subStatusWord(_ s: String?) -> String { TaskStatusName.label((s ?? "").uppercased()) }
+
+// MARK: board
+
 struct SubmissionsView: View {
     @Environment(AppRouter.self) private var router
     @Environment(AuthStore.self) private var auth
     @State private var subs: [MySubmission] = []
+    @State private var serverColumns: [SubmissionColumn] = []
     @State private var statusColumns: [String] = []
     @State private var loading = true
     @State private var loadError = false
-    /// Set when the board was drawn from the last saved copy.
     @State private var cachedFrom: Date?
     @State private var opened: SubmissionRef?
+    /// "all" | "finance" | "multimedia".
+    @State private var kindFilter = "all"
+    @State private var needsMine = false
+    /// Per-project filter (owner, 12 Oct 2026), remembered on this device.
+    @AppStorage("nexus.submissions.project") private var projectFilter = ""
 
-    // The first column is ours; the rest are status names straight from the server (and follow
-    // the server's language, not the app's).
-    private var columns: [String] { [T("New")] + statusColumns }
+    private struct ProjectOption: Identifiable, Hashable { let id: String; let name: String; let count: Int }
+
+    private var projectOptions: [ProjectOption] {
+        var byId: [String: ProjectOption] = [:]
+        for s in subs {
+            guard let pid = s.projectId, !pid.isEmpty else { continue }
+            let cur = byId[pid]
+            byId[pid] = ProjectOption(id: pid, name: cur?.name ?? (s.projectName ?? T("Untitled project")), count: (cur?.count ?? 0) + 1)
+        }
+        return byId.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// The remembered project, while it still has a submission.
+    private var activeProject: String? {
+        projectFilter.isEmpty || !projectOptions.contains(where: { $0.id == projectFilter }) ? nil : projectFilter
+    }
+
+    private func inFilters(_ s: MySubmission) -> Bool {
+        (kindFilter == "all" || s.kind == kindFilter) && (activeProject == nil || s.projectId == activeProject)
+    }
+    private var shown: [MySubmission] { subs.filter { inFilters($0) && (!needsMine || $0.needsAction == true) } }
+    private var needCount: Int { subs.filter { inFilters($0) && $0.needsAction == true }.count }
+
+    /// The projects' status options; an older server's names become columns after "New".
+    private var columns: [SubmissionColumn] {
+        if !serverColumns.isEmpty { return serverColumns }
+        return [SubmissionColumn(key: "new", name: T("New"), color: nil, group: "todo", taskStatus: nil, projectIds: nil)]
+            + statusColumns.map { SubmissionColumn(key: $0, name: $0, color: nil, group: "in_progress", taskStatus: nil, projectIds: nil) }
+    }
+
+    /// The columns of the filtered requests' projects (empty ones too, as on their board).
+    private var visibleColumns: [SubmissionColumn] {
+        let projects = Set(subs.filter(inFilters).compactMap(\.projectId))
+        let cards = shown
+        return columns.filter { c in
+            (c.projectIds.map { $0.contains(where: projects.contains) } ?? true) || cards.contains { $0.columnKey == c.key }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -143,31 +255,27 @@ struct SubmissionsView: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loadError {
-                EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load"), subtitle: T("Try again later."))
+                EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load your submissions."),
+                           subtitle: T("Check your connection and try again."),
+                           actionTitle: T("Try again"), actionIcon: "arrow.clockwise") { Task { await load() } }
             } else if subs.isEmpty {
                 EmptyState(icon: "tray", title: T("No submissions yet"),
-                           subtitle: T("Everything you file through a form — a request, a reimbursement, a report — lands on this board with its status, so you never have to ask where it got to. Start with a form."),
+                           subtitle: T("Everything you send through a form (a payment request, a design request, a report) shows up here with where it stands, so you never have to ask."),
                            actionTitle: T("Open forms"), actionIcon: "doc.text") { router.go(.forms) }
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.fill").font(.system(size: 10))
-                        Text(T("Read-only — status is set by the Finance team")).font(NXFont.text(11, .semibold))
-                    }
-                    .foregroundStyle(NX.mutedFg).padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(NX.muted.opacity(0.5), in: Capsule()).padding(.horizontal, 16).padding(.top, 12)
-
-                    // Without snapping the horizontal scroll stops anywhere, so the next column is
-                    // always sliced in half at the screen edge - that is what made this board look
-                    // messy. viewAligned parks each column at a clean position.
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 12) {
-                            ForEach(columns, id: \.self) { col in column(col) }
+                VStack(alignment: .leading, spacing: 10) {
+                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.horizontal, 16).padding(.top, 8) }
+                    filterBar
+                    if shown.isEmpty {
+                        EmptyState(icon: "doc.text.magnifyingglass",
+                                   title: needsMine ? T("Nothing needs your action") : T("No submissions here"),
+                                   subtitle: needsMine ? T("When the team asks for a revision or replies to you, the request shows up here.") : T("Try another filter."),
+                                   actionTitle: T("Show all"), actionIcon: "line.3.horizontal.decrease.circle") {
+                            kindFilter = "all"; needsMine = false; projectFilter = ""
                         }
-                        .padding(16)
-                        .scrollTargetLayout()
+                    } else {
+                        board
                     }
-                    .scrollTargetBehavior(.viewAligned)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -175,97 +283,189 @@ struct SubmissionsView: View {
         .navigationTitle(T("My Submissions"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .sheet(item: $opened) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
+        // Live: the team moved, answered or attached something (workspace-changed { kind: "submissions" }
+        // to my own room); the timer covers the time the connection is down.
+        .liveRefresh(every: 60, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.submissions]) { await load(quiet: true) }
+        .sheet(item: $opened, onDismiss: { Task { await load(quiet: true) } }) {
+            SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview)
+        }
     }
 
-    private func column(_ col: String) -> some View {
-        let items = subs.filter { $0.column == col }
-        let tone = subColTone(col)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(col).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Spacer()
-                Text("\(items.count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                    .padding(.horizontal, 8).padding(.vertical, 2).background(NX.card, in: Capsule())
-            }
-            .padding(.horizontal, 10).padding(.top, 10)
+    // MARK: filters
 
-            // Each column scrolls on its own. Without this the tallest column set the height of
-            // the whole board, the board outgrew the screen, and the excess was split off the top
-            // and the bottom - which is why the column headings came out sliced in half and the
-            // last cards vanished under the tab bar. A horizontal board on a phone wants exactly
-            // this: swipe sideways between columns, scroll down inside one.
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 8) {
-                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
-                    ForEach(items) { s in
-                        Button { opened = SubmissionRef(id: s.id, preview: s) } label: { card(s) }
-                            .buttonStyle(.plain)
-                            .hoverEffect(.highlight)
+    private var filterBar: some View {
+        let kinds = Set(subs.compactMap(\.kind))
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(T("All"), on: kindFilter == "all") { kindFilter = "all" }
+                if kinds.contains("finance") { chip(T("Finance"), on: kindFilter == "finance") { kindFilter = "finance" } }
+                if kinds.contains("multimedia") { chip(T("Multimedia"), on: kindFilter == "multimedia") { kindFilter = "multimedia" } }
+                if !projectOptions.isEmpty {
+                    Menu {
+                        Button { projectFilter = "" } label: {
+                            if activeProject == nil { Label(T("All projects"), systemImage: "checkmark") } else { Text(T("All projects")) }
+                        }
+                        Divider()
+                        ForEach(projectOptions) { p in
+                            Button { projectFilter = p.id } label: {
+                                if activeProject == p.id { Label("\(p.name) · \(p.count)", systemImage: "checkmark") } else { Text("\(p.name) · \(p.count)") }
+                            }
+                        }
+                    } label: {
+                        chipLabel(HStack(spacing: 4) {
+                            Image(systemName: "folder").font(.system(size: 11, weight: .semibold))
+                            Text(projectOptions.first { $0.id == activeProject }?.name ?? T("All projects")).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                        }, on: activeProject != nil)
                     }
-                    if items.isEmpty {
-                        Text(T("Empty")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
-                            .frame(maxWidth: .infinity).padding(.vertical, 18)
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
-                    }
+                    .accessibilityLabel(T("Filter by project"))
                 }
-                .padding(.horizontal, 8).padding(.bottom, 8)
+                Divider().frame(height: 20)
+                chip(needCount > 0 ? "\(T("Needs my action")) · \(needCount)" : T("Needs my action"), on: needsMine, icon: "exclamationmark.circle") { needsMine.toggle() }
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.fill").font(.system(size: 9))
+                    Text(T("Read-only. The team moves the cards.")).font(NXFont.text(11))
+                }
+                .foregroundStyle(NX.mutedFg)
+                .padding(.leading, 4)
             }
+            .padding(.horizontal, 16).padding(.top, 10)
+        }
+    }
+
+    private func chip(_ text: String, on: Bool, icon: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            chipLabel(HStack(spacing: 4) {
+                if let icon { Image(systemName: icon).font(.system(size: 11, weight: .semibold)) }
+                Text(text).lineLimit(1)
+            }, on: on)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func chipLabel<V: View>(_ content: V, on: Bool) -> some View {
+        content
+            .font(NXFont.text(12, .semibold))
+            .foregroundStyle(on ? NX.foreground : NX.mutedFg)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(on ? NX.accentBg : NX.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(on ? NX.foreground.opacity(0.25) : NX.border))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+    }
+
+    // MARK: board
+
+    private var board: some View {
+        let cols = visibleColumns
+        // Each column scrolls on its own; swipe sideways between columns (non-lazy, the same structure
+        // as before — proven on device).
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(Array(cols.enumerated()), id: \.element.key) { i, col in
+                    column(col, groupLabel: i == 0 || cols[i - 1].statusGroup != col.statusGroup ? col.statusGroup.label : nil)
+                }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 16)
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.viewAligned)
+    }
+
+    private func column(_ col: SubmissionColumn, groupLabel: String?) -> some View {
+        let items = shown.filter { $0.columnKey == col.key }
+        let sw = StatusColor.swatch(col.colorKey)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(groupLabel ?? " ").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    StatusPill(name: col.name, colorKey: col.colorKey)
+                    Text("\(items.count)").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10).padding(.top, 10)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        ForEach(items) { s in
+                            Button { opened = SubmissionRef(id: s.id, preview: s) } label: { card(s) }
+                                .buttonStyle(.plain)
+                                .hoverEffect(.highlight)
+                        }
+                        if items.isEmpty {
+                            Text(T("Nothing here")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                .frame(maxWidth: .infinity).padding(.vertical, 22)
+                        }
+                    }
+                    .padding(.horizontal, 8).padding(.bottom, 8)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(sw.lane, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        // A fixed 270 looks arbitrary: on a small phone the next column is a sliver, on a large
-        // one it is half a column. Tying the width to the CONTAINER keeps the same "one column plus
-        // a hint of the next" everywhere, which is what makes a horizontal board readable.
-        //
-        // The container, not `UIScreen.main.bounds`. That call answers for the DEVICE's screen, not
-        // the window this view is actually in, and the two stop agreeing the moment the app is not
-        // fullscreen on one fixed display: iPad Split View, a resized Mac window, and — the reason
-        // this was changed — a folding iPhone, where the same running app moves between a 5.4"
-        // outer and a 7.6" inner display. `UIScreen.main` reports one number through all of that,
-        // so the board would keep sizing its columns for a screen it is no longer on. It has also
-        // been deprecated since iOS 16.
-        //
-        // `containerRelativeFrame` is iOS 17+, which this app already requires, and it re-reads on
-        // every layout pass — so unfolding resizes the columns without anything having to observe
-        // the fold or know a device exists.
-        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in
-            min(320, width * 0.82)
-        }
-        .background(tone.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(tone.opacity(0.3)))
+        // One column plus a hint of the next on a phone, at most 300 wide (sized to the container,
+        // not the device screen, so Split View / a resized Mac window / a folding phone all fit).
+        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in min(300, width * 0.82) }
     }
 
     private func card(_ s: MySubmission) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "doc.text.fill").font(.system(size: 13)).foregroundStyle(NX.violetText)
-                .frame(width: 28, height: 28).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(s.title).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
-                Text([s.formName, s.projectName].compactMap { $0 }.joined(separator: " · "))
-                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                Text("\(T("Submitted")) \(subDateText(s.createdAt))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.8))
+        VStack(alignment: .leading, spacing: 6) {
+            Text(s.title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(3)
+                .multilineTextAlignment(.leading)
+            if let money = subMoney(s.amount) {
+                Text(money).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).monospacedDigit()
             }
-            Spacer(minLength: 0)
-            // The card looked exactly like this while it did nothing, so it has to say it opens.
-            Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.mutedFg.opacity(0.6))
+            HStack(spacing: 8) {
+                if let cat = s.category, !cat.isEmpty {
+                    Label(cat, systemImage: "tag").lineLimit(1)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(NX.muted, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                }
+                if let d = s.date, !d.isEmpty { Label(subDateText(d), systemImage: "calendar").lineLimit(1) }
+                if (s.commentCount ?? 0) > 0 { Label("\(s.commentCount ?? 0)", systemImage: "bubble.left") }
+                if !(s.proofs ?? []).isEmpty { Label(T("Proof"), systemImage: "paperclip").foregroundStyle(NX.success) }
+            }
+            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            HStack(spacing: 6) {
+                Text(s.projectName ?? s.formName ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Spacer(minLength: 0)
+                HStack(spacing: -6) {
+                    ForEach((s.handlers ?? []).prefix(3)) { p in
+                        AvatarView(url: p.avatar, initial: String((p.name ?? "?").prefix(1)).uppercased(), size: 20)
+                            .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+                    }
+                }
+            }
+            if s.needsAction == true {
+                Label(T("Needs your reply"), systemImage: "exclamationmark.circle")
+                    .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(NX.warning.opacity(0.14), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+        .contentShape(Rectangle())
     }
 
-    private func load() async {
-        loadError = false
+    private func load(quiet: Bool = false) async {
+        if !quiet { loadError = false }
         do {
             let r = try await APIClient.shared.mySubmissions()
             subs = r.submissions ?? []
+            serverColumns = r.columns ?? []
             statusColumns = r.statusColumns ?? []
             cachedFrom = nil
+            loadError = false
         } catch APIError.unauthorized { auth.logout() }
         catch {
+            if quiet && !subs.isEmpty { return }
             if let hit = ResponseCache.decoded("my-submissions", as: MySubmissionsResponse.self) {
                 subs = hit.value.submissions ?? []
+                serverColumns = hit.value.columns ?? []
                 statusColumns = hit.value.statusColumns ?? []
                 cachedFrom = hit.savedAt
             } else {
@@ -276,23 +476,26 @@ struct SubmissionsView: View {
     }
 }
 
-/// What a card opens. The board was read-only AND inert: it showed a title and a column name, and
-/// the person who filed the thing had no way back to what they had actually written, or to the
-/// payout proof the finance team had already attached to it.
-///
-/// Read-only, like the board. The web drawer also deletes a submission (and the project task with
-/// it); that is a separate, destructive feature and is deliberately not here.
+// MARK: detail
+
+/// What a card (or a notification) opens: a centred sheet, as on the web.
 struct SubmissionDetailSheet: View {
     let submissionId: String
-    /// The board row this was opened from, when there was one. A notification carries an id alone,
-    /// so every read of it has to survive being nil.
     var preview: MySubmission? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthStore.self) private var auth
     @State private var detail: MySubmissionDetail?
     @State private var loading = true
-    @State private var failed = false
+    /// nil = fine; 404 = gone; else any other failure.
+    @State private var failure: Int?
     @State private var viewingPhoto: PhotoRef?
+    @State private var shareItem: ShareItem?
+    @State private var fetching: String?
+    @State private var reply = ""
+    @State private var sending = false
+    @State private var confirmDelete = false
+    @State private var deleting = false
+    @State private var problem: String?
 
     var body: some View {
         NavigationStack {
@@ -303,11 +506,26 @@ struct SubmissionDetailSheet: View {
                         header
                         if loading {
                             ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 24)
-                        } else if failed {
-                            Text(T("Couldn't load the details.")).font(NXFont.text(13)).foregroundStyle(NX.danger)
+                        } else if let failure {
+                            if failure == 404 {
+                                EmptyState(icon: "questionmark.folder",
+                                           title: T("This submission no longer exists, or the link is wrong."),
+                                           subtitle: T("It may have been deleted. Your other submissions are on My Submissions."),
+                                           compact: true)
+                            } else {
+                                EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load the details."),
+                                           subtitle: T("Check your connection and try again."),
+                                           actionTitle: T("Try again"), actionIcon: "arrow.clockwise",
+                                           action: { Task { await load() } }, compact: true)
+                            }
                         } else if let d = detail {
+                            facts(d)
                             answerList(d)
                             proofList(d)
+                            historyList(d)
+                            comments(d)
+                            // Only for a submission that loaded: an unknown id has nothing to delete (N-BUG-6).
+                            deleteRow
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -318,132 +536,264 @@ struct SubmissionDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
             .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+            .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+            .alert(T("Delete this submission?"), isPresented: $confirmDelete) {
+                Button(T("Delete"), role: .destructive) { Task { await deleteSubmission() } }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: { Text(T("Its task in the project is deleted too.")) }
+            .alert(T("Couldn't do that"), isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+                Button("OK") { problem = nil }
+            } message: { Text(problem ?? "") }
         }
         .task { await load() }
+        .liveRefresh(every: 60, on: [.nexusWorkspaceChanged], kinds: [RealtimeKind.submissions]) { await load(quiet: true) }
     }
 
-    /// Drawn from the row that was tapped, then refined once the detail lands — so the sheet is
-    /// never a blank page with a spinner on it. Opened from a notification there is no row, and
-    /// the generic title stands only until the fetch answers.
     private var header: some View {
         let subtitle = [detail?.formName ?? preview?.formName, detail?.projectName ?? preview?.projectName]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        return VStack(alignment: .leading, spacing: 6) {
+        let column = detail?.column ?? preview?.column
+        return VStack(alignment: .leading, spacing: 8) {
             Text(detail?.taskTitle ?? preview?.title ?? T("Submission"))
                 .font(NXFont.display(19, .bold)).foregroundStyle(NX.foreground)
                 .fixedSize(horizontal: false, vertical: true)
             if !subtitle.isEmpty {
                 Text(subtitle).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
-            if !statusChips.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(statusChips, id: \.self) { c in
-                        Text(c).font(NXFont.text(11, .bold)).foregroundStyle(subColTone(c))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(subColTone(c).opacity(0.15), in: Capsule())
+            HStack(spacing: 8) {
+                if let column {
+                    HStack(spacing: 4) {
+                        StatusPill(name: column.name, colorKey: column.colorKey)
+                        Text("· \(column.statusGroup.label)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
                 }
+                if (detail?.needsAction ?? preview?.needsAction) == true {
+                    Label(T("Needs your reply"), systemImage: "exclamationmark.circle")
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
+                }
             }
-            Text("\(T("Submitted")) \(subDateText(detail?.createdAt ?? preview?.createdAt))")
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.8))
+            Text(String(format: T("Submitted %@"), subDateText(detail?.createdAt ?? preview?.createdAt, time: true)))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Stage and processing status, in the finance team's own words. The task enum is deliberately
-    /// left out: "TODO" means nothing to the person who filed a reimbursement.
-    ///
-    /// De-duplicated because the two often agree ("Done" as both the board column and the status),
-    /// and ForEach keyed on the string itself would then be drawing two rows with one id.
-    private var statusChips: [String] {
-        var seen: [String] = []
-        for raw in [detail?.stage, detail?.procStatus ?? preview?.procStatus] {
-            let c = (raw ?? "").trimmingCharacters(in: .whitespaces)
-            if !c.isEmpty && !seen.contains(c) { seen.append(c) }
+    private func facts(_ d: MySubmissionDetail) -> some View {
+        let handlers = (d.handlers ?? []).compactMap(\.name).filter { !$0.isEmpty }.joined(separator: ", ")
+        return LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading), GridItem(.flexible(), alignment: .topLeading)], alignment: .leading, spacing: 12) {
+            fact(T("Amount"), subMoney(d.amount) ?? "—")
+            fact(T("Category"), (d.category ?? "").isEmpty ? "—" : d.category!)
+            fact(T("Date"), (d.date ?? "").isEmpty ? "—" : subDateText(d.date))
+            fact(T("Handled by"), handlers.isEmpty ? T("Not assigned yet") : handlers)
         }
-        return seen
+    }
+
+    private func fact(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+            Text(value).font(NXFont.text(14)).foregroundStyle(NX.foreground).monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
     }
 
     @ViewBuilder private func answerList(_ d: MySubmissionDetail) -> some View {
         let rows = d.answers ?? []
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(T("Submission details"))
+            sectionTitle(T("Your answers"))
             if rows.isEmpty {
                 Text(T("No answers were recorded.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
-                ForEach(rows) { a in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text((a.label ?? a.id).uppercased())
-                            .font(NXFont.text(10, .bold)).tracking(0.4).foregroundStyle(NX.mutedFg)
-                        Text(a.display.isEmpty ? "—" : a.display)
-                            .font(NXFont.text(14)).foregroundStyle(NX.foreground)
-                            .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, a in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(a.label ?? a.id).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            Text(a.displayFormatted.isEmpty ? "—" : a.displayFormatted)
+                                .font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if i < rows.count - 1 { Divider().overlay(NX.border) }
                     }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private func proofList(_ d: MySubmissionDetail) -> some View {
         let items = d.proofs ?? []
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                // Left in Indonesian: it is what the finance team calls the file on the web and in
-                // the office, and an English label here would only make it harder to recognise.
-                SectionLabel("Bukti Pencairan")
+                sectionTitle(T("Proof of payment"))
                 ForEach(items) { proofRow($0) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    /// The row says "Tap to enlarge", so the whole row is the target — not the 44pt thumbnail
-    /// sitting beside those words.
-    @ViewBuilder private func proofRow(_ p: SubmissionProof) -> some View {
-        if p.isImage, let url = p.absoluteURL {
-            Button { viewingPhoto = PhotoRef(url: url, name: p.name) } label: {
-                proofRowBody(p).contentShape(Rectangle())
+    private func proofRow(_ p: SubmissionProof) -> some View {
+        Button { Task { await open(p) } } label: {
+            HStack(spacing: 10) {
+                if p.isImage, let url = p.absoluteURL {
+                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    Image(systemName: "paperclip").font(.system(size: 13)).foregroundStyle(NX.success)
+                        .frame(width: 44, height: 44)
+                        .background(NX.success.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name ?? T("Proof")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text(p.isImage ? T("Tap to enlarge") : T("Tap to open or save")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+                Spacer(minLength: 0)
+                if fetching == p.id { ProgressView().scaleEffect(0.8) }
+                else { Image(systemName: p.isImage ? "arrow.up.left.and.arrow.down.right" : "square.and.arrow.down").font(.system(size: 13)).foregroundStyle(NX.success) }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.success.opacity(0.3)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A picture opens here; any other file is fetched with the session and handed to the share sheet.
+    private func open(_ p: SubmissionProof) async {
+        if p.isImage, let url = p.absoluteURL { viewingPhoto = PhotoRef(url: url, name: p.name); return }
+        guard let raw = p.url else { return }
+        fetching = p.id
+        defer { fetching = nil }
+        do {
+            let file = try await APIClient.shared.downloadAttachment(url: raw, fileName: p.name ?? "proof")
+            shareItem = ShareItem(url: file)
+        } catch {
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't open the file.")
+        }
+    }
+
+    @ViewBuilder private func historyList(_ d: MySubmissionDetail) -> some View {
+        let rows = d.history ?? []
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionTitle(T("Status history"))
+                ForEach(rows) { h in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(subDateText(h.at, time: true)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        Text(h.to.map { String(format: T("Moved to %@"), subStatusWord($0)) } ?? T("Status changed"))
+                            .font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                        if let by = h.by, !by.isEmpty { Text("· \(by)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func comments(_ d: MySubmissionDetail) -> some View {
+        let list = d.comments ?? []
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(T("Comments"))
+            if list.isEmpty {
+                Text(T("No comments yet. Ask the team here if something is unclear.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }
+            ForEach(list) { c in
+                let mine = c.mine == true
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(mine ? T("You") : (c.user?.name ?? T("Someone"))) · \(subDateText(c.createdAt, time: true))")
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(c.content ?? "").font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(mine ? NX.violet.opacity(0.10) : NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(mine ? .leading : .trailing, 32)
+            }
+            if d.taskId != nil {
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField(T("Reply to the team…"), text: $reply, axis: .vertical)
+                        .font(NXFont.text(14)).lineLimit(1...5)
+                        .padding(10)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+                    Button { Task { await sendReply() } } label: {
+                        Group {
+                            if sending { ProgressView().tint(.white).scaleEffect(0.7) }
+                            else { Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) }
+                        }
+                        .frame(width: 44, height: 44)
+                        .background(NX.violetFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(T("Send"))
+                    .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
+                }
+            }
+        }
+    }
+
+    private var deleteRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(T("Deleting this submission also deletes its task in the project.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            Spacer(minLength: 0)
+            Button(role: .destructive) { confirmDelete = true } label: {
+                HStack(spacing: 6) {
+                    if deleting { ProgressView().scaleEffect(0.7) } else { Image(systemName: "trash") }
+                    Text(T("Delete"))
+                }
+                .font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                .padding(.horizontal, 12).frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        } else {
-            proofRowBody(p)
+            .disabled(deleting)
         }
+        .padding(.top, 8)
     }
 
-    private func proofRowBody(_ p: SubmissionProof) -> some View {
-        HStack(spacing: 10) {
-            if p.isImage, let url = p.absoluteURL {
-                CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
-                    .frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else {
-                Image(systemName: "paperclip").font(.system(size: 13)).foregroundStyle(NX.success)
-                    .frame(width: 44, height: 44)
-                    .background(NX.success.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(p.name ?? "bukti").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                // No download link: the file route wants the session cookie and Safari has none, so
-                // anything the app cannot draw itself has to be opened on the web.
-                Text(p.isImage ? T("Tap to enlarge") : T("Open it on the web"))
-                    .font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
-            }
-            Spacer(minLength: 0)
+    private func load(quiet: Bool = false) async {
+        do {
+            detail = try await APIClient.shared.mySubmissionDetail(submissionId)
+            failure = nil
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private func load() async {
-        failed = false
-        do { detail = try await APIClient.shared.mySubmissionDetail(submissionId) }
         catch APIError.unauthorized { auth.logout() }
-        catch { failed = true }
+        catch APIError.http(let code, _) { if !quiet || detail == nil { failure = code } }
+        catch { if !quiet || detail == nil { failure = 0 } }
         loading = false
+    }
+
+    /// One reply in flight at a time (bughunt N-BUG-2: a double tap posted it twice). The box is cleared
+    /// only after the server has the reply.
+    private func sendReply() async {
+        let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !sending else { return }
+        sending = true
+        defer { sending = false }
+        do {
+            try await APIClient.shared.replyToSubmission(submissionId, content: text)
+            if reply.trimmingCharacters(in: .whitespacesAndNewlines) == text { reply = "" }
+            await load(quiet: true)
+        } catch {
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the reply.")
+        }
+    }
+
+    private func deleteSubmission() async {
+        guard !deleting else { return }
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await APIClient.shared.deleteSubmission(submissionId)
+            dismiss()
+        } catch {
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the submission.")
+        }
     }
 }

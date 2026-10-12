@@ -1261,7 +1261,7 @@ final class AppLanguage {
         "No replies yet. Answers land right here.": "Belum ada balasan. Jawabannya bakal muncul di sini.",
         "Couldn't load the conversation.": "Gagal muat percakapan.",
         "Write a reply…": "Tulis balasan…",
-        "Couldn't send the reply.": "Gagal ngirim balasan.",
+        "Couldn't send the reply.": "Balasan gagal dikirim.",
         "This ticket is closed. No more replies.": "Tiket ini udah ditutup. Nggak bisa balas lagi.",
         "Marked resolved": "Ditandai selesai",
         "Ticket closed": "Tiket ditutup",
@@ -1269,7 +1269,7 @@ final class AppLanguage {
         // ── notification tap-through · request attachment ─────────────────────
         // "Close" is already carried above, near the ticket strings.
         "tap to open": "ketuk buat buka",
-        "Tap to enlarge": "Ketuk buat perbesar",
+        "Tap to enlarge": "Ketuk untuk memperbesar",
         "View attachment": "Lihat lampiran",
         "PDF · open it on the web": "PDF · buka di web",
         // ── attendance request · the decision and its reason ────────────
@@ -1285,8 +1285,8 @@ final class AppLanguage {
         // ── my submissions · the detail behind a card ─────────────────
         "Submission": "Pengajuan",
         "Submission details": "Isi pengajuan",
-        "No answers were recorded.": "Nggak ada jawaban yang tercatat.",
-        "Couldn't load the details.": "Gagal muat detailnya.",
+        "No answers were recorded.": "Tidak ada jawaban yang tercatat.",
+        "Couldn't load the details.": "Detailnya gagal dimuat.",
         "Open it on the web": "Buka di web",
         "Yes": "Ya",
         "No": "Tidak",
@@ -2798,7 +2798,7 @@ final class AppLanguage {
         "Not invoiced": "Belum ditagih",
         "Invoiced": "Sudah ditagih",
         "Paid": "Lunas",
-        "Amount": "Jumlah",
+        "Amount": "Nominal",
         "Invoice number": "Nomor invoice",
         "Invoice date": "Tanggal invoice",
         "Amount paid": "Jumlah dibayar",
