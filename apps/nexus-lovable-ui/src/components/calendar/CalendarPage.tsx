@@ -568,17 +568,19 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   const header = (
     <header ref={headerRef} className={cn("z-30 border-b border-border", headerSticky ? "sticky top-0 bg-background/85 backdrop-blur" : "bg-background")}>
       <div data-cal-region="header" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-2.5 pt-3 md:px-8 md:pt-4">
-        <div className="flex items-center gap-2">
+        {/* On a phone with ‹ month › in the header the title is for screen readers only (the tab bar already
+            says Calendar): two rows instead of three (audit 12 Oct 2026). */}
+        <div className={cn("flex items-center gap-2", phone && !weekBar && "sr-only")}>
           <span className="grid size-8 place-items-center rounded-xl bg-cal-accent text-cal-accent-foreground"><CalendarDays className="h-4 w-4" /></span>
           <h1 className="font-display text-xl font-bold tracking-tight md:text-2xl">{t("Calendar")}</h1>
         </div>
-        {/* In reading order on every size: a phone has Filters beside the title, the two switches on a
-            line of their own, then ‹ month ›. */}
+        {/* In reading order on every size: a phone has ‹ month › and Filters on the first line, the two
+            switches on a line of their own. */}
         {phone ? (
           <>
+            {!weekBar && dateNav}
             <div className="ml-auto flex items-center gap-2">{filterTrigger}{reset}</div>
             <div className="flex basis-full flex-wrap items-center gap-2">{switches}</div>
-            {!weekBar && dateNav}
           </>
         ) : (
           <>

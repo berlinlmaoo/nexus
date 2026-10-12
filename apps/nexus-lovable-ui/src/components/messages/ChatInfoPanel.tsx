@@ -666,7 +666,7 @@ function MediaList({ conversationId, type, onJump }: { conversationId: string; t
       <>
         <div className="grid grid-cols-3 gap-1">
           {items.map((it) => (
-            <button key={it.messageId} onClick={() => onJump(it.messageId)} title={`${it.sender.name} · ${fmtDate(it.createdAt)}`} className="group/ph relative aspect-square overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+            <button key={it.messageId} onClick={() => onJump(it.messageId)} aria-label={`${it.sender.name} · ${fmtDate(it.createdAt)}`} title={`${it.sender.name} · ${fmtDate(it.createdAt)}`} className="group/ph relative aspect-square overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               <img src={it.url} alt="" loading="lazy" className="h-full w-full object-cover transition-transform group-hover/ph:scale-[1.03]" />
             </button>
           ))}

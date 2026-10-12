@@ -158,8 +158,8 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
                   {(() => { const opts = fieldOptionList(f); return opts.length ? ` · ${opts.slice(0, 4).join(", ")}${opts.length > 4 ? "…" : ""}` : fieldNumberFormat(f) === "currency-idr" ? " · Rp" : ""; })()}
                 </div>
               </div>
-              <button onClick={() => { setEditingId(f.id); setAdding(false); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" title={tr("Edit")}><Pencil className="h-3.5 w-3.5" /></button>
-              <button onClick={() => { if (confirm(tr("Delete the field “{name}”? Its value is removed from every task too.", { name: f.name ?? "" }))) del.mutate(f.id); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50" title={tr("Delete")}><Trash2 className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { setEditingId(f.id); setAdding(false); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={tr("Edit")} title={tr("Edit")}><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { if (confirm(tr("Delete the field “{name}”? Its value is removed from every task too.", { name: f.name ?? "" }))) del.mutate(f.id); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50" aria-label={tr("Delete")} title={tr("Delete")}><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           )
         ))}

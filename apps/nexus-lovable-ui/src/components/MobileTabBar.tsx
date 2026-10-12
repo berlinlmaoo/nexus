@@ -14,6 +14,7 @@ import { useTheme } from "@/lib/theme";
 import { useLang } from "@/lib/lang";
 import { useChatUnread } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
+import { GideonMark } from "@/components/gideon/GideonMark";
 
 /* Primary destinations live in the floating bar; everything else lives in the
    "More" glass sheet (replaces the old left slide-out sidebar on mobile). */
@@ -34,6 +35,8 @@ const moreGroups = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
+      // GIDEON's floating button is desktop-only (it covered phone content, audit 12 Oct 2026); here it is.
+      { title: "GIDEON", url: "/gideon", icon: GideonMark },
       { title: "Notifications", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "Z Vault", url: "/vault", icon: HardDrive },
@@ -73,6 +76,23 @@ export function MobileTabBar() {
   const [moreOpen, setMoreOpen] = useState(false);
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
 
+  // While someone is typing (a field or the page editor has focus) the bar steps aside: with the phone
+  // keyboard up it floated over the writing area (audit 12 Oct 2026).
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const isText = (el: Element | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+      return el.tagName === "INPUT" && !["checkbox", "radio", "range", "button", "submit", "file", "color"].includes((el as HTMLInputElement).type);
+    };
+    const read = () => setTyping(isText(document.activeElement));
+    // focusout fires before the next element has focus: read once it has.
+    const later = () => { window.setTimeout(read, 0); };
+    document.addEventListener("focusin", read);
+    document.addEventListener("focusout", later);
+    return () => { document.removeEventListener("focusin", read); document.removeEventListener("focusout", later); };
+  }, []);
+
   const notif = useQuery({ queryKey: ["notifications-unread"], queryFn: () => nexusApi.notifications(), retry: 1 });
   const unread = notif.data?.unreadCount ?? activeNotifications(notif.data?.notifications ?? []).filter((n) => !n.read).length;
   // Chat has its own tab and its own count; More carries the notifications'.
@@ -108,7 +128,7 @@ export function MobileTabBar() {
 
   return (
     <>
-      <nav data-mobile-tabbar="" className="md:hidden fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto w-[min(92%,26rem)] px-0">
+      <nav data-mobile-tabbar="" hidden={typing} className="md:hidden fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto w-[min(92%,26rem)] px-0">
         {/* liquid-glass pill */}
         <div
           ref={navRef}

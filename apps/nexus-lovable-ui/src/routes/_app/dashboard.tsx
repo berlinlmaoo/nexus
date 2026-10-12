@@ -982,7 +982,7 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
       >
         <motion.div variants={{ hide: { opacity: 0, y: -6 }, show: { opacity: 1, y: 0 } }} className="flex items-center gap-3 border-b border-border bg-muted/30 px-5 py-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Crown className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">{t("Leaderboard")}</div><div className="text-xs text-muted-foreground">{t("Tap someone to see their XP history")}</div></div>
+          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">{t("Leaderboard")}</div><div className="text-xs text-muted-foreground">{t("Select someone to see their XP history")}</div></div>
           <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </motion.div>
         <motion.div className="min-h-0 flex-1 overflow-y-auto p-2" variants={{ hide: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.022 } } }}>

@@ -106,7 +106,9 @@ function AppLayout() {
     <RealtimeProvider userId={profile.data?.user?.id} userName={profile.data?.user?.name ?? undefined}>
       <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <AppSidebar />
-        <SidebarInset className="min-w-0">
+        {/* overflow-x-clip: a guard so nothing in a page can widen the phone's layout viewport (it zoomed every
+            project page out to ~720px, audit 12 Oct 2026). `clip`, not `hidden`: no scroll box, so sticky headers keep working. */}
+        <SidebarInset className="min-w-0 overflow-x-clip">
           <div className="pb-28 md:pb-0">
             <Outlet />
           </div>

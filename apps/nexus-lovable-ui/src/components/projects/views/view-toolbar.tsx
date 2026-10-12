@@ -71,8 +71,10 @@ export function ViewTabsBar({ tabs, activeKey, onSelect, canEditView, onReorder,
     order.splice(order.indexOf(targetId), 0, dragId);
     onReorder(order);
   };
+  // `relative` makes this scroller the containing block of the compact tabs' sr-only labels (position:absolute);
+  // without it they escaped to the sticky header and stretched the phone page to ~720px (audit 12 Oct 2026).
   return (
-    <div ref={scroller} role="tablist" aria-label={t("Views")} className={cn("flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", fade)}>
+    <div ref={scroller} role="tablist" aria-label={t("Views")} className={cn("relative flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", fade)}>
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
         const v = tab.view;

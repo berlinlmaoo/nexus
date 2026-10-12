@@ -380,7 +380,7 @@ function ProjectsPage() {
         subtitle={tr("Every project you're part of.")}
         actions={
           <>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="pointer-events-none absolute left-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
@@ -577,11 +577,12 @@ function ProjectsPage() {
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                 <Sparkles className="h-3.5 w-3.5" /> {tn(computedProjects.length, "{shown} of {n} project", "{shown} of {n} projects", { shown: visibleProjects.length })}
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
+              {/* Phone: the summary stays one compact block so the list starts above the fold (audit 12 Oct 2026). */}
+              <p className="mt-2 hidden text-sm text-muted-foreground sm:block">
                 {tr("Open a project to see its board, pages, calendar and timeline.")}
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 min-w-[280px]">
+            <div className="hidden grid-cols-3 gap-2 sm:grid sm:min-w-[280px]">
               <MiniStat
                 icon={<Target className="h-4 w-4" />}
                 label={tr("Average progress")}
@@ -637,7 +638,7 @@ function ProjectsPage() {
                 </button>
               )}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="hidden text-xs text-muted-foreground md:block">
               {tr("Select a project to open it.")}
             </div>
           </div>

@@ -19,6 +19,9 @@ export function GideonLauncher() {
   const { t } = useLang();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const onFullPage = pathname === "/gideon" || pathname.startsWith("/gideon/");
+  // Pages where the floating button would sit on the content people are working in: chat (the composer's send
+  // button) and a public form. On phones the button is hidden everywhere; GIDEON is in the More sheet there.
+  const hideButton = pathname === "/messages" || pathname.startsWith("/messages/") || pathname.startsWith("/f/");
   const prefs = useGideonPrefs();
   // What this person calls GIDEON, for the button's label before the panel was ever opened.
   useEffect(() => { if (!prefs) getGideonPrefs().then(setCachedGideonPrefs).catch(() => undefined); }, [prefs]);
@@ -55,13 +58,13 @@ export function GideonLauncher() {
   );
   return (
     <>
-      {!open && (
+      {!open && !hideButton && (
         <button
           type="button"
           onClick={() => openGideon(null)}
           aria-label={t("Open {assistant}", { assistant: name })}
           title={t("Open {assistant} (⌘O for a new chat)", { assistant: name })}
-          className="fixed bottom-32 right-4 z-50 grid h-12 w-12 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
+          className="fixed bottom-6 right-6 z-50 hidden h-12 w-12 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:grid"
         >
           <GideonMark className="h-5 w-5" />
         </button>

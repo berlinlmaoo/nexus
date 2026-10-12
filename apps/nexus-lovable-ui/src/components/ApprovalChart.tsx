@@ -253,7 +253,7 @@ export function ApprovalChart() {
         <Stat n={chart.data.stats.withApprover} of={chart.data.stats.total} label={t("have an approver")} />
         <Stat n={trees.length} label={tn(trees.length, "tree", "trees")} />
         <Stat n={unplacedCount} label={t("not placed yet")} tone={unplacedCount > 0 ? "warn" : "ok"} />
-        <span className="ml-auto text-muted-foreground">{t("Drag a card onto their approver's card, or click it.")}</span>
+        <span className="ml-auto text-muted-foreground">{t("Drag a card onto their approver's card, or select it.")}</span>
       </div>
 
       <div className="rounded-2xl border border-border bg-card shadow-soft" style={{ ["--oc-line" as string]: "#c7cfdb" }}>

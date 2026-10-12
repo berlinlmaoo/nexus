@@ -93,7 +93,7 @@ export function AttendanceReminderModal() {
             role="dialog" aria-modal="true"
             initial={{ opacity: 0, scale: 0.96, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 14 }}
             transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop"
+            className="relative z-10 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-border bg-card shadow-pop"
           >
             <div className="flex items-start justify-between gap-3 border-b border-border bg-gradient-to-br from-accent via-card to-secondary px-5 py-4">
               <div>
@@ -101,7 +101,7 @@ export function AttendanceReminderModal() {
                 <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">{isCheckout ? t("Finish your previous attendance") : t("You haven't checked in today")}</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">{isCheckout ? t("You forgot to check out on {date}.", { date: pending?.attendanceDate ? fmtDate(pending.attendanceDate) : t("the previous day") }) : t("Time to check in. Open the attendance page for the selfie and location.")}</p>
               </div>
-              <button onClick={() => setDismissed(true)} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={() => setDismissed(true)} aria-label={t("Close")} className="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3 p-5">
@@ -118,8 +118,8 @@ export function AttendanceReminderModal() {
               >
                 {isCheckout ? t("Check out the previous day") : t("Check in now")} <ArrowRight className="h-4 w-4" />
               </button>
-              <p className="text-center text-[11px] text-muted-foreground">{t("This opens the attendance page. If you're outside the office radius, you can use the offsite option there.")}</p>
-              <button onClick={() => setDismissed(true)} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">{t("Later")}</button>
+              <p className="text-center text-xs text-muted-foreground">{t("This opens the attendance page. If you're outside the office radius, you can use the offsite option there.")}</p>
+              <button onClick={() => setDismissed(true)} className="block min-h-11 w-full rounded-xl text-center text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground">{t("Later")}</button>
 
               {data?.today?.checkOutAt && <p className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" /> {t("Out {time}", { time: fmtTime(data.today.checkOutAt) })}</p>}
             </div>

@@ -79,12 +79,12 @@ const LeaderboardCard = React.forwardRef<HTMLDivElement, LeaderboardCardProps>(
     return (
       <div
         ref={ref}
-        className={cn("bg-card rounded-2xl border p-6 shadow-sm", className)}
+        className={cn("bg-card rounded-2xl border p-4 shadow-sm sm:p-6", className)}
         {...props}
       >
         <div className="mb-6 flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h3 className="text-xl font-semibold">{title}</h3>
+            {title ? <h3 className="text-xl font-semibold">{title}</h3> : null}
             {rangeLabel ? <p className="text-muted-foreground text-sm">{rangeLabel}</p> : null}
           </div>
 

@@ -85,7 +85,7 @@ export function OfficeMapPicker({ lat, lng, radiusMeters, onChange }: {
         <div ref={divRef} className="h-64 w-full overflow-hidden rounded-xl border border-border" />
         <button type="button" onClick={locate} title={t("Use my location")} aria-label={t("Use my location")} className="absolute right-2 top-2 z-[400] grid h-9 w-9 place-items-center rounded-full bg-white text-primary shadow-md hover:bg-accent"><LocateFixed className="h-4 w-4" /></button>
       </div>
-      <p className="text-[11px] text-muted-foreground">{t("Drag the pin (or tap the map) onto the office entrance. The circle is where people can check in.")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("Drag the pin onto the office entrance, or pick the spot on the map. The circle is where people can check in.")}</p>
     </div>
   );
 }

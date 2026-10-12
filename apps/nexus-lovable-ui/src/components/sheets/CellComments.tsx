@@ -117,12 +117,12 @@ export function CellCommentThread({
                     <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition group-hover:opacity-100">
                       <button
                         onClick={() => onResolve(c.id, !c.resolvedAt)}
-                        title={c.resolvedAt ? t("Reopen") : t("Mark resolved")}
+                        aria-label={c.resolvedAt ? t("Reopen") : t("Mark resolved")} title={c.resolvedAt ? t("Reopen") : t("Mark resolved")}
                         className="rounded p-0.5 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
                       ><Check className="h-3 w-3" /></button>
                       {/* Delete is the author's (the server also lets a lead clean up). */}
                       {c.authorId === meId && (
-                        <button onClick={() => onDelete(c.id)} title={t("Delete")}
+                        <button onClick={() => onDelete(c.id)} aria-label={t("Delete")} title={t("Delete")}
                           className="rounded p-0.5 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="h-3 w-3" /></button>
                       )}
                     </div>

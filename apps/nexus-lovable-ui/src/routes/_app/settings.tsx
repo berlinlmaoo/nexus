@@ -5,6 +5,7 @@ import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, 
 import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign, Sun, Moon, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useEdgeFade } from "@/hooks/use-edge-fade";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLang, type Lang } from "@/lib/lang";
@@ -33,15 +34,18 @@ const sections = [
 function Settings() {
   const { t } = useLang();
   const [active, setActive] = useState("profile");
+  const strip = useRef<HTMLElement>(null);
+  const stripFade = useEdgeFade(strip);
   return (
     <div>
       <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} icon={<SettingsIcon className="h-6 w-6 text-primary" />} />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <aside className="lg:col-span-1 space-y-1">
+        {/* Below lg the sections are a sideways-scrolling strip (stacked, the list pushed the section below the fold). */}
+        <aside ref={strip} className={cn("relative -mx-4 flex gap-1 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:-mx-8 md:px-8 lg:col-span-1 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0", stripFade)}>
           {sections.map((s) => (
-            <button key={s.id} onClick={() => setActive(s.id)}
-              className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${active === s.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-muted-foreground"}`}>
-              <s.icon className="h-4 w-4" /> {t(s.label)}
+            <button key={s.id} onClick={() => setActive(s.id)} aria-current={active === s.id ? "page" : undefined}
+              className={`shrink-0 whitespace-nowrap min-h-11 lg:min-h-0 lg:w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${active === s.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-muted-foreground"}`}>
+              <s.icon className="h-4 w-4 shrink-0" /> {t(s.label)}
             </button>
           ))}
         </aside>
@@ -374,10 +378,10 @@ function ProfileSection() {
             )}
             {busy && <div className="absolute inset-0 grid place-items-center rounded-full bg-background/60"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>}
           </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <button onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-4 w-4" />{t("Change photo")}</button>
-              {u?.avatar && <button onClick={() => removeAvatar.mutate()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" />{t("Remove")}</button>}
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 py-1.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-4 w-4" />{t("Change photo")}</button>
+              {u?.avatar && <button onClick={() => removeAvatar.mutate()} disabled={busy} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" />{t("Remove")}</button>}
             </div>
             <p className="text-xs text-muted-foreground">{t("PNG, JPG or WEBP. Max 5 MB.")}</p>
             {uploadAvatar.isError && <p className="text-xs font-semibold text-destructive">{(uploadAvatar.error as Error)?.message ?? t("Upload failed.")}</p>}

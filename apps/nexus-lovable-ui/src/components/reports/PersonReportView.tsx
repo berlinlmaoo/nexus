@@ -75,7 +75,7 @@ function IdentityCard({ person }: { person: PersonReportResponse["person"] }) {
 
 // ---------------------------------------------------------------------------------------------------
 // KPI tiles — the same six as iOS, with the same delta rule: whole percents compared in points,
-// counts compared at one decimal, "—" when either side is missing.
+// counts compared at one decimal, no delta line when either side is missing.
 
 type Delta = { text: string; mood: "better" | "worse" | "flat" | "unknown"; up: boolean };
 
@@ -85,7 +85,7 @@ function between(now: number | null | undefined, before: number | null | undefin
   let b = before;
   if (percentPoints) { n = Math.round(n); b = Math.round(b); }
   const diff = n - b;
-  if (Math.abs(diff) < 0.05) return { text: "0", mood: "flat", up: false };
+  if (Math.abs(diff) < 0.05) return { text: t("No change"), mood: "flat", up: false };
   const amount = fmtNum(Math.abs(diff));
   return { text: percentPoints ? t("{n} pt", { n: amount }) : amount, mood: (diff > 0) === higherIsBetter ? "better" : "worse", up: diff > 0 };
 }
@@ -110,7 +110,7 @@ function Kpis({ data }: { data: PersonReportResponse }) {
         <Kpi icon={Clock} label={t("Late")} value={fmtNum(now.late)} sub={t("{n} min in total", { n: fmtNum(now.lateMinutes) })} delta={between(now.late, before.late, false)} />
         <Kpi icon={Sparkles} label={t("XP this period")} value={fmtNum(now.xpScore)} sub={now.xpPenalty ? t("{n} XP in penalties", { n: fmtNum(-Math.abs(now.xpPenalty)) }) : undefined} delta={between(now.xpScore, before.xpScore, true)} />
       </div>
-      {prior && <p className="text-[11px] text-muted-foreground">{t("Arrows compare with {range}.", { range: prior })}</p>}
+      {prior && <p className="text-[11px] text-muted-foreground">{t("Changes are compared with {range}.", { range: prior })}</p>}
     </div>
   );
 }
@@ -127,10 +127,13 @@ function Kpi({ icon: Icon, label, value, sub, delta, tone }: {
     <div className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-pop">
       <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span></div>
       <div className={cn("mt-1 truncate font-display text-2xl font-bold tracking-tight tabular-nums md:text-3xl", tone === "danger" && "text-destructive")}>{value}</div>
+      {/* No line at all when there is nothing to compare ("—" read as a broken value, audit 12 Oct 2026). */}
+      {delta.mood !== "unknown" && (
       <div className={cn("mt-1 flex items-center gap-0.5 text-[11px] font-bold tabular-nums", delta.mood === "better" ? "text-success" : delta.mood === "worse" ? "text-destructive" : "text-muted-foreground")}>
         {(delta.mood === "better" || delta.mood === "worse") && (delta.up ? <ArrowUpRight className="h-3 w-3 shrink-0" /> : <ArrowDownRight className="h-3 w-3 shrink-0" />)}
         <span className="truncate">{delta.text}</span>
       </div>
+      )}
       {sub && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{sub}</div>}
     </div>
   );

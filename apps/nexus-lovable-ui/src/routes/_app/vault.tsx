@@ -669,7 +669,8 @@ function VaultPage() {
         className={cn(
           "grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:opacity-100",
           on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/50 bg-card",
-          !selecting && "opacity-0 group-hover:opacity-100",
+          // Touch has no hover: there the box only exists in Select mode (an invisible box left a gap).
+          !selecting && "opacity-0 group-hover:opacity-100 pointer-coarse:hidden",
           overlay && "absolute left-2 top-2 z-10 shadow-sm",
         )}
       >
@@ -960,13 +961,13 @@ function VaultPage() {
         {/* quota */}
         {data && (
           <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-1.5 w-40 rounded-full bg-muted overflow-hidden">
+            <div className="h-1.5 w-40 min-w-0 shrink rounded-full bg-muted overflow-hidden">
               <div
                 className={cn("h-full rounded-full", quotaPct > 90 ? "bg-destructive" : "bg-primary")}
                 style={{ width: `${quotaPct}%` }}
               />
             </div>
-            <span>
+            <span className="shrink-0">
               {t("{used} of {total} used", { used: humanSize(data.quota.usedBytes), total: humanSize(data.quota.totalBytes) })}
             </span>
           </div>

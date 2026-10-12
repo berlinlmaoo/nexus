@@ -373,7 +373,7 @@ function Phaethon() {
                       <span className="font-mono text-xs uppercase tracking-widest">{t("Decrypt message")}</span>
                       <span className="ee-cursor" />
                     </button>
-                    <p className="animate-pulse text-[10px] text-white/20">{t("(or just click anywhere)")}</p>
+                    <p className="animate-pulse text-[10px] text-white/20"><span className="pointer-coarse:hidden">{t("(or just click anywhere)")}</span><span className="hidden pointer-coarse:inline">{t("(or just tap anywhere)")}</span></p>
                   </motion.div>
                 )}
               </div>
