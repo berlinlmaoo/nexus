@@ -33,5 +33,11 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // Evidence photos from the retired Integrity feature (removed 12 Oct 2026) stay on disk but are no
+  // longer served: nothing in NEXUS links to them and they name the person who was reported.
+  if (filePath === join(base, 'peer-reports') || filePath.startsWith(join(base, 'peer-reports') + sep)) {
+    return NextResponse.json({ error: 'Gone', message: 'This feature was removed.' }, { status: 410 })
+  }
+
   return serveFile(req, filePath)
 }

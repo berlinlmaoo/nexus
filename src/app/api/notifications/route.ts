@@ -5,6 +5,19 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 
+// Integrity (peer reports) and Social Approvals were removed on 12 Oct 2026. Their old notifications stay
+// in people's inboxes as plain, read-only items: the link is dropped so no client (web, iOS, Android)
+// opens a page that no longer exists.
+function isRetiredNotification(n: { type: string | null; link: string | null }): boolean {
+  const type = (n.type ?? '').toLowerCase()
+  if (type.startsWith('peer_report') || type === 'violation_announcement') return true
+  return /^\/(peer-reports|social)(?:[/?#]|$)/.test(n.link ?? '')
+}
+
+function withoutRetiredLink<T extends { type: string | null; link: string | null }>(n: T): T {
+  return isRetiredNotification(n) ? { ...n, link: null } : n
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
@@ -17,7 +30,7 @@ export async function GET(req: NextRequest) {
       take: 50,
     })
     const unreadCount = await prisma.notification.count({ where: { userId: session.user.id, read: false } })
-    return NextResponse.json({ notifications, unreadCount })
+    return NextResponse.json({ notifications: notifications.map(withoutRetiredLink), unreadCount })
   } catch (error) {
     console.error('Error fetching notifications:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

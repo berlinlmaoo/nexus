@@ -1,6 +1,6 @@
 // Complaint & Escalation channel — shared constants + serializers.
 // Private, categorized chat between a staff member and the BoD. Confidential (BoD-only review) with an
-// optional ANONYMOUS mode (reporter hidden even from BoD). Distinct from PeerReport (public + punitive).
+// optional ANONYMOUS mode (reporter hidden even from BoD). (The public, punitive Integrity peer reports were retired 12 Oct 2026.)
 export { getUserOrgRole, isBodPlus } from "@/lib/feed" // reuse the org-role gate helpers
 import { GIDEON_EMAIL } from "@/lib/gideon-identity"
 import {

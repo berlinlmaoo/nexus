@@ -25,11 +25,9 @@ import { Route as AppVaultRouteImport } from './routes/_app/vault'
 import { Route as AppThreadsRouteImport } from './routes/_app/threads'
 import { Route as AppTeamsRouteImport } from './routes/_app/teams'
 import { Route as AppSubmissionsRouteImport } from './routes/_app/submissions'
-import { Route as AppSocialRouteImport } from './routes/_app/social'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomBookingRouteImport } from './routes/_app/room-booking'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
-import { Route as AppPeerReportsRouteImport } from './routes/_app/peer-reports'
 import { Route as AppMyTasksRouteImport } from './routes/_app/my-tasks'
 import { Route as AppMessagesRouteImport } from './routes/_app/messages'
 import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-calendar'
@@ -132,11 +130,6 @@ const AppSubmissionsRoute = AppSubmissionsRouteImport.update({
   path: '/submissions',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSocialRoute = AppSocialRouteImport.update({
-  id: '/social',
-  path: '/social',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -150,11 +143,6 @@ const AppRoomBookingRoute = AppRoomBookingRouteImport.update({
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPeerReportsRoute = AppPeerReportsRouteImport.update({
-  id: '/peer-reports',
-  path: '/peer-reports',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyTasksRoute = AppMyTasksRouteImport.update({
@@ -288,11 +276,9 @@ export interface FileRoutesByFullPath {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
-  '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
-  '/social': typeof AppSocialRoute
   '/submissions': typeof AppSubmissionsRoute
   '/teams': typeof AppTeamsRoute
   '/threads': typeof AppThreadsRoute
@@ -331,11 +317,9 @@ export interface FileRoutesByTo {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
-  '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
-  '/social': typeof AppSocialRoute
   '/submissions': typeof AppSubmissionsRoute
   '/teams': typeof AppTeamsRoute
   '/threads': typeof AppThreadsRoute
@@ -377,11 +361,9 @@ export interface FileRoutesById {
   '/_app/master-calendar': typeof AppMasterCalendarRoute
   '/_app/messages': typeof AppMessagesRouteWithChildren
   '/_app/my-tasks': typeof AppMyTasksRoute
-  '/_app/peer-reports': typeof AppPeerReportsRoute
   '/_app/reports': typeof AppReportsRouteWithChildren
   '/_app/room-booking': typeof AppRoomBookingRoute
   '/_app/settings': typeof AppSettingsRoute
-  '/_app/social': typeof AppSocialRoute
   '/_app/submissions': typeof AppSubmissionsRoute
   '/_app/teams': typeof AppTeamsRoute
   '/_app/threads': typeof AppThreadsRoute
@@ -424,11 +406,9 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
-    | '/peer-reports'
     | '/reports'
     | '/room-booking'
     | '/settings'
-    | '/social'
     | '/submissions'
     | '/teams'
     | '/threads'
@@ -467,11 +447,9 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
-    | '/peer-reports'
     | '/reports'
     | '/room-booking'
     | '/settings'
-    | '/social'
     | '/submissions'
     | '/teams'
     | '/threads'
@@ -512,11 +490,9 @@ export interface FileRouteTypes {
     | '/_app/master-calendar'
     | '/_app/messages'
     | '/_app/my-tasks'
-    | '/_app/peer-reports'
     | '/_app/reports'
     | '/_app/room-booking'
     | '/_app/settings'
-    | '/_app/social'
     | '/_app/submissions'
     | '/_app/teams'
     | '/_app/threads'
@@ -668,13 +644,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSubmissionsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/social': {
-      id: '/_app/social'
-      path: '/social'
-      fullPath: '/social'
-      preLoaderRoute: typeof AppSocialRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
@@ -694,13 +663,6 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AppReportsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/peer-reports': {
-      id: '/_app/peer-reports'
-      path: '/peer-reports'
-      fullPath: '/peer-reports'
-      preLoaderRoute: typeof AppPeerReportsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-tasks': {
@@ -909,11 +871,9 @@ interface AppRouteChildren {
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
   AppMessagesRoute: typeof AppMessagesRouteWithChildren
   AppMyTasksRoute: typeof AppMyTasksRoute
-  AppPeerReportsRoute: typeof AppPeerReportsRoute
   AppReportsRoute: typeof AppReportsRouteWithChildren
   AppRoomBookingRoute: typeof AppRoomBookingRoute
   AppSettingsRoute: typeof AppSettingsRoute
-  AppSocialRoute: typeof AppSocialRoute
   AppSubmissionsRoute: typeof AppSubmissionsRoute
   AppTeamsRoute: typeof AppTeamsRoute
   AppThreadsRoute: typeof AppThreadsRoute
@@ -940,11 +900,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppMasterCalendarRoute: AppMasterCalendarRoute,
   AppMessagesRoute: AppMessagesRouteWithChildren,
   AppMyTasksRoute: AppMyTasksRoute,
-  AppPeerReportsRoute: AppPeerReportsRoute,
   AppReportsRoute: AppReportsRouteWithChildren,
   AppRoomBookingRoute: AppRoomBookingRoute,
   AppSettingsRoute: AppSettingsRoute,
-  AppSocialRoute: AppSocialRoute,
   AppSubmissionsRoute: AppSubmissionsRoute,
   AppTeamsRoute: AppTeamsRoute,
   AppThreadsRoute: AppThreadsRoute,

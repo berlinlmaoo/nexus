@@ -44,7 +44,7 @@ const R1 = {
   approvals: ["attendance_request_pending", "attendance_request_reviewed", "attendance_request_escalated", "offsite_checkout_pending", "offsite_checkout_reviewed"],
   messages: ["MESSAGE", "MESSAGE_MENTION", "feed_mention", "feed_comment", "feed_post", "feed_like"],
   tasks: ["task_assigned", "task_completed", "task_due_now", "task_status_changed", "comment_added", "comment_mention", "project_invite", "status_update", "automation", "submission_status", "streak_at_risk", "quest_claimable", "booking_soon", "booking_changed", "booking_confirmed"],
-  tickets: ["complaint_filed", "complaint_reply", "complaint_status", "system_gideon", "peer_report_filed", "peer_report_decided", "peer_report_rebuttal", "violation_announcement"],
+  tickets: ["complaint_filed", "complaint_reply", "complaint_status", "system_gideon"],
   announcements: ["announcement"],
   system: ["app_update", "system_disk", "google_workspace_created", "google_workspace_linked", "test_notification"],
 }

@@ -182,53 +182,6 @@ export async function refundXpByReason(userId: string, reason: string): Promise<
   return await prisma.$transaction((tx) => refundXpByReasonTx(tx, userId, reason))
 }
 
-/**
- * Integrity (peer report) verdict with XP transfer — ONE transaction:
- * reporter +bounty, reported −penalty, AND flip the report PENDING→VERIFIED with an XP snapshot.
- * Atomic + idempotent (keyed on the per-report bounty reason) + race-safe (advisory locks both keys in
- * fixed order; updateMany WHERE status=PENDING is the second optimistic lock). Reversible via
- * `reversePeerReportXp` (shared `peer:report:<id>:*` reasons). Only called when XP is enabled by the route.
- */
-export async function verifyPeerReportWithXp(opts: { reportId: string; reviewerId: string; reviewNote?: string | null; bounty: number; penalty: number }): Promise<{ ok: boolean; reason?: string }> {
-  const reporterKey = `peer:report:${opts.reportId}:bounty`
-  const reportedKey = `peer:report:${opts.reportId}:penalty`
-  const [k1, k2] = [reporterKey, reportedKey].sort() // fixed lock order → no deadlock
-  return await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${k1})::int8)`
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${k2})::int8)`
-    // Idempotency anchored on the PENALTY key (always written) — the bounty may be 0/skipped.
-    const already = await tx.xpTransaction.findFirst({ where: { reason: reportedKey }, select: { id: true } })
-    if (already) return { ok: false, reason: "already_applied" }
-    const report = await tx.peerReport.findUnique({ where: { id: opts.reportId }, select: { reporterId: true, reportedUserId: true, status: true } })
-    if (!report) return { ok: false, reason: "not_found" }
-    if (report.status !== "PENDING") return { ok: false, reason: "already_decided" }
-    // Reporter bounty only if > 0 (penalty-only model when reporting is open to all staff → no farming).
-    if (opts.bounty > 0) {
-      await applyXpDelta(tx, report.reporterId, opts.bounty)
-      await tx.xpTransaction.create({ data: { userId: report.reporterId, amount: opts.bounty, reason: reporterKey } })
-    }
-    await applyXpDelta(tx, report.reportedUserId, -opts.penalty)
-    await tx.xpTransaction.create({ data: { userId: report.reportedUserId, amount: -opts.penalty, reason: reportedKey } })
-    const upd = await tx.peerReport.updateMany({
-      where: { id: opts.reportId, status: "PENDING" },
-      data: { status: "VERIFIED", reviewerId: opts.reviewerId, reviewedAt: new Date(), reviewNote: opts.reviewNote ?? null, reporterBountyXp: opts.bounty, reportedPenaltyXp: opts.penalty, xpAppliedAt: new Date() },
-    })
-    if (upd.count === 0) throw new Error("ALREADY_DECIDED")
-    await tx.peerReportEvent.create({ data: { reportId: opts.reportId, action: "verified", fromStatus: "PENDING", toStatus: "VERIFIED", note: opts.reviewNote ?? null, actorId: opts.reviewerId } })
-    return { ok: true }
-  })
-}
-
-/** Reverse a verified report's XP (appeal/overturn) — refunds both the bounty and penalty ledger rows. */
-export async function reversePeerReportXp(reportId: string): Promise<void> {
-  const report = await prisma.peerReport.findUnique({ where: { id: reportId }, select: { reporterId: true, reportedUserId: true } })
-  if (!report) return
-  await prisma.$transaction(async (tx) => {
-    await refundXpByReasonTx(tx, report.reporterId, `peer:report:${reportId}:bounty`)
-    await refundXpByReasonTx(tx, report.reportedUserId, `peer:report:${reportId}:penalty`)
-  })
-}
-
 /** Clear a day's running late penalty (e.g. when a day-off is filed retroactively). */
 export async function clearLatePenalty(userId: string, dateKey: string) {
   await refundXpByReason(userId, `attendance:late:${dateKey}`)

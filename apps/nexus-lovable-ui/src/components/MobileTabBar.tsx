@@ -210,9 +210,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
   const isCompany = membersInfo?.isCompany === true;
   // The pipeline board has no entry in More (owner, 9 Oct 2026): it opens from Projects like any project.
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
-  // Threads / Integrity show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
-  // page there. Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
-  // page (gated inside each route component) — no ETA yet, so we tease, not hide.
+  // Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
   const visibleGroups = moreGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => canManageOrg || i.url !== "/admin") }))
     .filter((g) => g.items.length > 0);
