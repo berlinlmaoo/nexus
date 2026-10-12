@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { USER_CARD_SELECT } from "@/lib/user-card-select"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
@@ -148,8 +149,8 @@ export async function GET(request: NextRequest) {
     const tasks = await prisma.task.findMany({
       where,
       include: {
-        assignees: { include: { user: true } },
-        creator: true,
+        assignees: { include: { user: { select: USER_CARD_SELECT } } },
+        creator: { select: USER_CARD_SELECT },
         taskList: true,
         _count: {
           select: {
