@@ -26,6 +26,7 @@ import { plainPreview } from "@/lib/plain-preview";
 import { AddTaskSplit, ToolbarSearch, ViewTabsBar, type ToolbarTab } from "@/components/projects/views/view-toolbar";
 import { cardTint, GalleryView, GroupHeader, PropLine } from "@/components/projects/views/view-layouts";
 import { InlineTaskDraft } from "@/components/projects/views/inline-draft";
+import { canDragTask, DragHandle, droppable, moveToGroup, useGroupMove } from "@/components/projects/views/group-move";
 import { optionColorKey, StatusOptionMenu, StatusPicker } from "@/components/tasks/StatusPicker";
 import { defaultOption, orderedOptions, statusForNewOption, statusGroupOf, STATUS_GROUPS, usesStatusOptions, type StatusGroupKey } from "@/lib/status-options";
 import {
@@ -751,38 +752,6 @@ function ProjectDetail() {
 
 const LANE_W: Record<ViewConfig["cardSize"], string> = { small: "w-64", medium: "w-72", large: "w-96" };
 
-/** Which group properties a card can be dragged between (the drop writes the new value). */
-function droppable(by: string, defs: PropDef[]): boolean {
-  if (by === "section" || by === "status" || by === "priority" || by === "assignee" || by === "tags") return true;
-  const d = propDef(defs, by);
-  return !!d && !d.builtin && (d.kind === "select" || d.kind === "multi" || d.kind === "person");
-}
-
-/** Move a task from one group to another of property `by`: the write that makes it belong there. */
-async function moveToGroup(task: NexusTask, by: string, from: string, to: string, defs: PropDef[], projectId: string) {
-  if (from === to) return;
-  const none = to === EMPTY_GROUP;
-  if (by === "section") return nexusApi.updateTask(task.id, { taskListId: to, projectContextId: projectId } as Parameters<typeof nexusApi.updateTask>[1]);
-  if (by === "status") return nexusApi.updateTask(task.id, { status: to });
-  if (by === "priority") return nexusApi.updateTask(task.id, { priority: to });
-  if (by === "assignee") {
-    if (from !== EMPTY_GROUP) await nexusApi.removeAssignee(task.id, from);
-    if (!none) await nexusApi.addAssignee(task.id, to);
-    return;
-  }
-  if (by === "tags") {
-    const tags = (task.tags ?? []).filter((x) => x !== from);
-    return nexusApi.updateTask(task.id, { tags: none ? tags : Array.from(new Set([...tags, to])) });
-  }
-  const def = propDef(defs, by);
-  if (!def || !by.startsWith("cf:")) return;
-  const fieldId = by.slice(3);
-  if (def.kind === "select") return nexusApi.setCustomFieldValue(fieldId, task.id, none ? "" : to);
-  const list = taskValues(task, by).filter((x) => x !== from);
-  const next = none ? list : Array.from(new Set([...list, to]));
-  return nexusApi.setCustomFieldValue(fieldId, task.id, def.kind === "person" || def.kind === "multi" ? JSON.stringify(next) : next[0] ?? "");
-}
-
 /**
  * A task made inline in a group (board column, list group): in the group's section when the view groups
  * by status/section, else in the default status; then the group's (and sub-group's) value is written as
@@ -812,43 +781,20 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
 }) {
   const qc = useQueryClient();
   const { t } = useLang();
-  const [drag, setDrag] = useState<{ id: string; from: string; fromRow: string | null } | null>(null);
   const [dragLaneId, setDragLaneId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const isSection = groupBy === "section";
   const sub = cfg.subGroupBy && cfg.subGroupBy !== groupBy ? cfg.subGroupBy : null;
-  const canDrop = droppable(groupBy, defs);
   const multiValued = (key: string | null) => !!key && (key === "assignee" || key === "tags" || ["multi", "person"].includes(propDef(defs, key)?.kind ?? ""));
   const singleValued = !multiValued(groupBy) && !multiValued(sub);
-  const canDropRow = !!sub && droppable(sub, defs);
   const refresh = () => settleTaskWrite(qc, project.id);
-  // A drop lands at once (perf pass, 12 Oct 2026): the card moves in the cache before the request, for the
-  // groupings whose value maps onto the task directly (section/status column, status, priority).
-  const optimisticMove = (task: NexusTask, by: string, to: string): (() => void) | null => {
-    if (to === EMPTY_GROUP) return null;
-    if (by === "section") {
-      const target = (project.taskLists ?? []).find((l) => l.id === to);
-      return patchTaskInCaches(qc, task.id, target?.taskStatus ? { status: target.taskStatus } : {}, { moveToListId: to });
-    }
-    if (by === "status") return patchTaskInCaches(qc, task.id, { status: to });
-    if (by === "priority") return patchTaskInCaches(qc, task.id, { priority: to });
-    return null;
-  };
-  const move = useMutation({
-    mutationFn: async ({ task, to, toRow, from, fromRow }: { task: NexusTask; to: string; toRow: string | null; from: string; fromRow: string | null }) => {
-      await moveToGroup(task, groupBy, from, to, defs, project.id);
-      if (sub && toRow !== null && fromRow !== null) await moveToGroup(task, sub, fromRow, toRow, defs, project.id);
-    },
-    onMutate: async ({ task, to, toRow, from, fromRow }) => {
-      await holdProject(qc, project.id);
-      const undo = [from !== to ? optimisticMove(task, groupBy, to) : null, sub && toRow !== null && fromRow !== null && toRow !== fromRow ? optimisticMove(task, sub, toRow) : null];
-      return { rollback: () => undo.reverse().forEach((u) => u?.()) };
-    },
-    onError: (e, _v, c) => { c?.rollback(); toast.error(t("Couldn't move the task"), { description: e instanceof Error ? e.message : undefined }); },
-    onSettled: refresh,
-  });
-  const onCardDrag = useCallback<CardDrag>((task, from, fromRow) => setDrag({ id: task.id, from, fromRow }), []);
-  const onCardDragEnd = useCallback(() => { setDrag(null); setOver(null); }, []);
+  // A drop lands at once (perf pass, 12 Oct 2026) and moves the whole selection when the dragged card is
+  // part of it (multi-drag, 12 Oct 2026): components/projects/views/group-move.tsx.
+  const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks: tasks });
+  const drag = mover.drag;
+  const { startDrag, endDrag } = mover;
+  const onCardDrag = useCallback<CardDrag>((task, from, fromRow, e) => startDrag(e ?? null, task, from, fromRow), [startDrag]);
+  const onCardDragEnd = useCallback(() => { endDrag(); setOver(null); }, [endDrag]);
 
   // Reorder sections (lanes) left/right — the ←/→ buttons or dragging the lane's handle. Optimistic.
   const reorderLane = useMutation({
@@ -925,7 +871,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
     const tone = COLOR_PRESETS[laneColor(g)];
     // Manual order inside a column (owner, 12 Oct 2026): done tasks no longer sink; Done is its own column.
     const items = laneTasks;
-    const dropOk = (drag && (canDrop || g.key === drag.from) && (rowKey === null || canDropRow || rowKey === drag.fromRow)) || dragLaneId;
+    const dropOk = (drag && mover.canDropAt(g.key, rowKey)) || dragLaneId;
     if (isCollapsed) {
       return (
         <button key={id} type="button" onClick={() => onToggleGroup(g.key)} title={laneLabel(g)} style={{ backgroundColor: tone.lane, color: tone.text }} className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg py-3 transition-[filter] hover:brightness-95">
@@ -952,10 +898,9 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
             if (from && statusOptions && statusGroupOf(from.taskStatus) !== statusGroupOf(section.taskStatus)) toast(t("A column moves within its group. Change its group from its ••• menu."));
             else reorderLane.mutate({ id: dragLaneId, position: section.position ?? 0 });
           } else if (drag) {
-            const task = tasks.find((x) => x.id === drag.id);
-            if (task && (g.key !== drag.from || (rowKey !== null && rowKey !== drag.fromRow))) move.mutate({ task, to: g.key, from: drag.from, toRow: rowKey, fromRow: drag.fromRow });
+            mover.drop(g.key, rowKey);
           }
-          setDrag(null); setDragLaneId(null);
+          setDragLaneId(null);
         }}
       >
         {showHeader && (
@@ -1039,7 +984,6 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
           {isSection && <AddListColumn projectId={project.id} statusOptions={statusOptions} />}
         </div>
-        {move.isError && <p className="mt-2 text-sm text-destructive">{t("The task couldn't be moved. Check your access to this project and try again.")}</p>}
       </div>
     );
   }
@@ -1143,7 +1087,7 @@ function QuestChip({ task, className }: { task: NexusTask; className?: string })
 
 const CARD_PAD: Record<ViewConfig["cardSize"], string> = { small: "gap-1 px-2 py-1.5", medium: "gap-1.5 px-2.5 py-2", large: "gap-2 px-3 py-2.5" };
 
-type CardDrag = (task: NexusTask, from: string, fromRow: string | null) => void;
+type CardDrag = (task: NexusTask, from: string, fromRow: string | null, e?: React.DragEvent) => void;
 
 /**
  * A board card. Memoised: a drag hover, a realtime refetch of one task or the draft opening in another
@@ -1185,7 +1129,7 @@ const TaskCard = memo(function TaskCard({ task, currentProjectId, keys, cfg, def
         role="button"
         tabIndex={0}
         draggable={!linkedFrom && !draft}
-        onDragStart={() => onDrag(task, lane, row)}
+        onDragStart={(e) => onDrag(task, lane, row, e)}
         onDragEnd={onDragEnd}
         onClick={cardProps.onClick}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") prefetchTask(qc, task.id); }}
@@ -1305,14 +1249,27 @@ function cfChoices(field: NexusCustomField): string[] {
 }
 
 /** A List row. Memoised and plain (no framer layoutId), like the board's cards (perf pass, 12 Oct 2026). */
-const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph }: { task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean }) {
+type RowDrag = (e: React.DragEvent | null, task: NexusTask, from: string, fromRow: string | null) => void;
+
+const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morph, dragGroup = null, dragRow = null, onDragTask, onDragEnd }: {
+  task: NexusTask; keys: string[]; cfg: ViewConfig; defs: PropDef[]; ctx: ViewCtx; onOpen: (task: NexusTask) => void; morph: boolean;
+  /** The group (and sub-group) the row sits in, when the view's grouping can be changed by dragging. */
+  dragGroup?: string | null; dragRow?: string | null; onDragTask?: RowDrag; onDragEnd?: () => void;
+}) {
   const { t } = useLang();
   const bulk = useTaskBulk();
   const cardProps = bulk.bindCard(task, () => onOpen(task));
   const selected = bulk.isSelected(task.id);
   const done = isDone(task.status);
   const tint = cardTint(task, cfg, defs, ctx);
-  return (
+  const handle = dragGroup !== null && onDragTask ? (
+    <DragHandle
+      onDragStart={(e) => onDragTask(e, task, dragGroup, dragRow)}
+      onDragEnd={() => onDragEnd?.()}
+      className="absolute -left-4 top-1/2 -translate-y-1/2 group-hover/row:opacity-100"
+    />
+  ) : null;
+  const row = (
     <button
       type="button"
       data-morph-id={morph ? `list-taskcard-${task.id}` : undefined}
@@ -1331,6 +1288,7 @@ const ListRow = memo(function ListRow({ task, keys, cfg, defs, ctx, onOpen, morp
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground" />
     </button>
   );
+  return handle ? <div className="group/row relative">{handle}{row}</div> : row;
 });
 
 function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs, ctx, keys, collapsed, onToggleGroup, onOpen }: {
@@ -1342,7 +1300,17 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
   const [draft, setDraft] = useState<string | null>(null);
   const multi = (k: string | null) => !!k && (k === "assignee" || k === "tags" || ["multi", "person"].includes(propDef(defs, k)?.kind ?? ""));
   const morph = !multi(groupBy) && !multi(subGroupBy);
-  const rows = (tasks: NexusTask[]) => <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph} />} />;
+  // Rows drag between groups (multi-drag, 12 Oct 2026) when the view is grouped by something a drop can write.
+  const sub = groupBy && subGroupBy && subGroupBy !== groupBy ? subGroupBy : null;
+  const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
+  const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
+  const rows = (tasks: NexusTask[], gKey: string | null = null, subKey: string | null = null) => (
+    <Incremental items={tasks} first={50} step={30} keyOf={(task) => task.id} render={(task) => (
+      <ListRow task={task} keys={keys} cfg={cfg} defs={defs} ctx={ctx} onOpen={onOpen} morph={morph}
+        dragGroup={mover.enabled && gKey !== null && canDragTask(task, project.id) ? gKey : null} dragRow={subKey} onDragTask={mover.startDrag} onDragEnd={mover.endDrag} />
+    )} />
+  );
+  const dropRing = "rounded-md bg-[color:var(--accent-foreground)]/[0.04] ring-2 ring-[color:var(--accent-foreground)]/40";
   const create = async (gKey: string | null, subKey: string | null, p: { title: string; dueDate: string | null }) => {
     const task = await createTaskInGroup({ project, defs, groupBy, groupKey: gKey, sub: subGroupBy, subKey, ...p }).catch((e) => { toast.error(t("Couldn't add the task"), { description: e instanceof Error ? e.message : undefined }); return null; });
     settleTaskWrite(qc, project.id);
@@ -1364,24 +1332,26 @@ function ListView({ project, groups, groupBy, subGroupBy, buildGroups, cfg, defs
       {groups.map((g) => {
         const isCollapsed = collapsed.has(g.key);
         const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
+        const zone = mover.dropZone(g.key, null);
         return (
-          <section key={g.key} aria-label={g.label}>
+          <section key={g.key} aria-label={g.label} {...zone.props} className={cn("transition-shadow", zone.isOver && dropRing)}>
             <GroupHeader group={g} groupBy={groupBy} defs={defs} cfg={cfg} collapsed={isCollapsed} onToggle={() => onToggleGroup(g.key)} className="mb-0.5 border-b border-border pb-1" />
             {!isCollapsed && (subs ? (
               <div className="space-y-2 pl-5 pt-1.5">
                 {newRow(g.key, g.key, null)}
                 {subs.map((s) => {
                   const k = `${g.key}/${s.key}`;
+                  const subZone = mover.dropZone(g.key, s.key);
                   return (
-                    <div key={k}>
+                    <div key={k} {...subZone.props} className={cn("transition-shadow", subZone.isOver && dropRing)}>
                       <GroupHeader group={s} groupBy={subGroupBy} defs={defs} cfg={cfg} collapsed={collapsed.has(k)} onToggle={() => onToggleGroup(k)} />
-                      {!collapsed.has(k) && rows(s.tasks)}
+                      {!collapsed.has(k) && rows(s.tasks, g.key, s.key)}
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div>{newRow(g.key, g.key, null)}{rows(g.tasks)}</div>
+              <div>{newRow(g.key, g.key, null)}{rows(g.tasks, g.key, null)}</div>
             ))}
           </section>
         );

@@ -296,4 +296,9 @@ export const ID_I18N_WORK: Record<string, string> = {
   "Added an assignee": "Menambahkan assignee",
   "Removed an assignee": "Menghapus assignee",
   "Reading {name}": "Membaca {name}",
+  "Task moved": "Task dipindah",
+  "Moved {n} tasks": "{n} task dipindah",
+  "Couldn't move {n} tasks": "{n} task gagal dipindah",
+  "Couldn't undo the move": "Gagal membatalkan pemindahan",
+  "Drag to move": "Seret untuk memindah",
 }

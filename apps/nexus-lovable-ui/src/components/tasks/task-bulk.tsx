@@ -43,6 +43,9 @@ type BulkCtx = {
   enabled: boolean;
   selecting: boolean;
   isSelected: (id: string) => boolean;
+  /** The selected task ids (a multi-drag moves them all), and a way to drop the selection. */
+  selectedIds: string[];
+  clear: () => void;
   bindCard: (task: NexusTask, onOpen: () => void) => CardProps;
   bindRow: (task: NexusTask) => RowProps;
 };
@@ -50,6 +53,8 @@ const DEFAULT: BulkCtx = {
   enabled: false,
   selecting: false,
   isSelected: () => false,
+  selectedIds: [],
+  clear: () => {},
   bindCard: (task, onOpen) => ({ "data-bulk-task": task.id, onClick: () => onOpen() }),
   bindRow: (task) => ({ "data-bulk-task": task.id, onClickCapture: () => {}, onContextMenu: () => {} }),
 };
@@ -159,8 +164,8 @@ export function TaskBulkProvider({ projectId, children }: { projectId: string; c
     },
   }), [modifierClick, openMenu]);
 
-  const value = useMemo<BulkCtx>(() => ({ enabled: true, selecting, isSelected: (id) => selected.has(id), bindCard, bindRow }), [selecting, selected, bindCard, bindRow]);
-  const selectedIds = [...selected];
+  const selectedIds = useMemo(() => [...selected], [selected]);
+  const value = useMemo<BulkCtx>(() => ({ enabled: true, selecting, isSelected: (id) => selected.has(id), selectedIds, clear, bindCard, bindRow }), [selecting, selected, selectedIds, clear, bindCard, bindRow]);
   // The context menu acts on the whole selection when it was opened on a selected task.
   const menuIds = menu && selected.has(menu.task.id) ? selectedIds : menu ? [menu.task.id] : [];
 

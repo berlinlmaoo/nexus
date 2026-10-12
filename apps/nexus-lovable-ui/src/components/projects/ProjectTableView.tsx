@@ -1,5 +1,5 @@
 import { DateField } from "@/components/DateField";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import { useAutofillMarks } from "@/components/gideon/AutofillPanel";
@@ -28,6 +28,7 @@ import { useTaskBulk } from "@/components/tasks/task-bulk";
 import { toast } from "sonner";
 import { Incremental } from "@/components/projects/views/incremental";
 import { holdProject, patchTaskInCaches } from "@/lib/task-cache";
+import { canDragTask, DragHandle, useGroupMove } from "@/components/projects/views/group-move";
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"];
 const TASK_PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"];
@@ -126,10 +127,19 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
   const bulk = useTaskBulk();
   const sections = useMemo(() => [...(project.taskLists ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), [project.taskLists]);
 
+  // Rows drag between groups by their grip (multi-drag, 12 Oct 2026), when the grouping can be written by a drop.
+  const sub = groupBy && subGroupBy && subGroupBy !== groupBy ? subGroupBy : null;
+  const viewTasks = useMemo(() => groups.flatMap((g) => g.tasks), [groups]);
+  const mover = useGroupMove({ project, defs, groupBy, sub, viewTasks });
+  const dropRing = "ring-2 ring-inset ring-[color:var(--accent-foreground)]/40";
+
   const gridTemplate = `minmax(240px,2fr) ${columns.map(() => "minmax(140px,1fr)").join(" ")} 40px`;
-  const row = (task: NexusTask) => (
+  const rowIn = (gKey: string | null, subKey: string | null) => (task: NexusTask) => row(task, mover.enabled && gKey !== null && canDragTask(task, projectId)
+    ? <DragHandle onDragStart={(e) => mover.startDrag(e, task, gKey, subKey)} onDragEnd={mover.endDrag} className="group-hover:opacity-100" />
+    : null);
+  const row = (task: NexusTask, handle: ReactNode = null) => (
     <div key={task.id} {...bulk.bindRow(task)} className={cn("group grid items-stretch border-b border-border text-sm hover:bg-muted/40 [contain-intrinsic-size:auto_37px] [content-visibility:auto]", bulk.isSelected(task.id) && "bg-accent")} style={{ gridTemplateColumns: gridTemplate }}>
-      <NameCell key={task.title} task={task} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
+      <NameCell key={task.title} task={task} handle={handle} onRename={(title) => patchTask(task.id, { title })} onOpen={() => onOpen(task)} />
       {columns.map((key) => (
         <div key={key} className="relative flex min-w-0 items-center border-l border-border px-1.5 py-1 [&>*]:min-w-0 [&>*]:flex-1">
           {key.startsWith("cf:") && ai.isMarked(key.slice(3), task.id) && <Sparkles aria-label={t("Filled by GIDEON")} className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-primary/70" />}
@@ -186,17 +196,19 @@ export function ProjectTableView({ project, groups, groupBy, subGroupBy, buildGr
           </div>
 
           {groups.map((g) => {
-            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} /></div>;
+            if (!groupBy) return <div key={g.key}><Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={(task) => row(task)} /></div>;
             const subs = subGroupBy && subGroupBy !== groupBy ? buildGroups(g.tasks, subGroupBy, { keepHidden: true }).filter((x) => x.tasks.length > 0) : null;
+            const zone = mover.dropZone(g.key, null);
             return (
-              <div key={g.key}>
+              <div key={g.key} {...zone.props} className={cn(zone.isOver && dropRing)}>
                 {groupRow(g, groupBy, g.key, 0)}
                 {!collapsed.has(g.key) && (subs
                   ? subs.map((s) => {
                     const k = `${g.key}/${s.key}`;
-                    return <div key={k}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} />}</div>;
+                    const subZone = mover.dropZone(g.key, s.key);
+                    return <div key={k} {...subZone.props} className={cn(subZone.isOver && dropRing)}>{groupRow(s, subGroupBy, k, 1)}{!collapsed.has(k) && <Incremental items={s.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, s.key)} />}</div>;
                   })
-                  : g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={row} /> : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
+                  : g.tasks.length ? <Incremental items={g.tasks} first={40} step={25} keyOf={(x) => x.id} render={rowIn(g.key, null)} /> : <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t("No tasks in this group.")}</div>)}
               </div>
             );
           })}
@@ -218,13 +230,14 @@ function questXp(task: NexusTask): number {
   return (task.quests ?? []).reduce((s, q) => s + (q.xpReward ?? 0), 0);
 }
 
-function NameCell({ task, onRename, onOpen }: { task: NexusTask; onRename: (title: string) => void; onOpen: () => void }) {
+function NameCell({ task, handle, onRename, onOpen }: { task: NexusTask; handle?: ReactNode; onRename: (title: string) => void; onOpen: () => void }) {
   const { t } = useLang();
   const [title, setTitle] = useState(task.title);
   const done = task.status === "DONE";
   const xp = questXp(task);
   return (
-    <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+    <div className={cn("flex min-w-0 items-center gap-1.5 px-2 py-1.5", handle && "gap-1 pl-0.5")}>
+      {handle}
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}

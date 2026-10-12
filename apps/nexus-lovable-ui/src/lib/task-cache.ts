@@ -105,3 +105,33 @@ export function settleTaskWrite(qc: QueryClient, projectId: string | null | unde
     refetchType: "none",
   });
 }
+
+/**
+ * Task writes this tab is making right now (a multi-drag's batch move). While one runs, the realtime
+ * burst of `task-updated` events it causes does not refetch the project (lib/realtime.tsx): a refetch
+ * mid-batch would show half the tasks back in their old column for a moment. The write's own settle
+ * refetches once at the end. Returns the "done" call (safe to call twice).
+ */
+let writesInFlight = 0;
+export function beginTaskWrite(): () => void {
+  writesInFlight++;
+  let ended = false;
+  return () => { if (!ended) { ended = true; writesInFlight--; } };
+}
+export function taskWriteInFlight(): boolean { return writesInFlight > 0; }
+
+/** True when every cached copy of the task in a project payload already has these values (nothing to patch). */
+export function taskCachesMatch(qc: QueryClient, taskId: string, patch: TaskPatch): boolean {
+  const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  let seen = false;
+  for (const [key, data] of qc.getQueriesData<NexusProject>({ queryKey: ["nexus", "project"] })) {
+    if (key.length !== 3 || !data?.taskLists) continue;
+    for (const l of data.taskLists) {
+      const t = l.tasks?.find((x) => x.id === taskId);
+      if (!t) continue;
+      seen = true;
+      for (const [k, v] of Object.entries(patch)) if (!same((t as Record<string, unknown>)[k], v)) return false;
+    }
+  }
+  return seen;
+}

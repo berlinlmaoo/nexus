@@ -4,7 +4,7 @@ import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 import { invalidateAuditViews, invalidateProjectViews } from "./invalidate";
 import { bindTypingSocket } from "./chat-typing";
-import { patchTaskInCaches } from "./task-cache";
+import { patchTaskInCaches, taskCachesMatch, taskWriteInFlight } from "./task-cache";
 
 // SOCKET event names → query invalidation.
 //
@@ -277,9 +277,18 @@ export function RealtimeProvider({
         cleanups.push(() => { socket.off("doc-changed", onDocChanged); if (docBurst.timer) clearTimeout(docBurst.timer); });
         if (socket.connected) onConnect();
 
-        const taskBurst = { terms: new Set<string>(), timer: null as ReturnType<typeof setTimeout> | null, startedAt: 0 };
+        const taskBurst = { terms: new Set<string>(), timer: null as ReturnType<typeof setTimeout> | null, startedAt: 0, heldSince: 0 };
         const flushTasks = () => {
           if (taskBurst.timer) clearTimeout(taskBurst.timer);
+          // A batch move of this tab is still running (multi-drag): its events are its own echo, and a
+          // refetch now would show the half-done state. Wait for it (its settle refetches), at most 15 s.
+          const now = Date.now();
+          if (taskWriteInFlight() && (!taskBurst.heldSince || now - taskBurst.heldSince < 15_000)) {
+            if (!taskBurst.heldSince) taskBurst.heldSince = now;
+            taskBurst.timer = setTimeout(flushTasks, TASK_DEBOUNCE_MS);
+            return;
+          }
+          taskBurst.heldSince = 0;
           taskBurst.timer = null;
           taskBurst.startedAt = 0;
           const terms = [...taskBurst.terms];
@@ -296,7 +305,8 @@ export function RealtimeProvider({
               if (evt === "task-updated" && payload && typeof payload === "object" && typeof (payload as { id?: unknown }).id === "string") {
                 const task = payload as Record<string, unknown>;
                 const patch = Object.fromEntries(LIVE_TASK_FIELDS.filter((k) => k in task).map((k) => [k, task[k]]));
-                if (Object.keys(patch).length) patchTaskInCaches(queryClient, task.id as string, patch);
+                // Skipped when the card already shows it (the echo of an optimistic edit, e.g. a multi-drag).
+                if (Object.keys(patch).length && !taskCachesMatch(queryClient, task.id as string, patch)) patchTaskInCaches(queryClient, task.id as string, patch);
               }
               terms.forEach((x) => taskBurst.terms.add(x));
               const now = Date.now();

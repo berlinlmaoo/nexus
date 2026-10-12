@@ -2375,6 +2375,9 @@ export const nexusApi = {
   updateOffice: (officeId: string, payload: Partial<OfficePayload>) => apiFetch<{ office?: NexusOffice }>(`/api/attendance/offices/${officeId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   tasks: (query = "") => apiFetch<NexusTask[]>(`/api/tasks${query ? `?${query}` : ""}`),
   createTask: (payload: CreateTaskPayload) => apiFetch<NexusTask>("/api/tasks", { method: "POST", body: JSON.stringify(payload) }),
+  /** Many tasks to one column in one request (multi-drag): the same edit as updateTask, per task. */
+  batchMoveTasks: (payload: { taskIds: string[]; taskListId?: string; status?: string; priority?: string; projectContextId?: string }) =>
+    apiFetch<{ moved: string[]; failed: Array<{ id: string; error: string }> }>("/api/tasks/batch-move", { method: "POST", body: JSON.stringify(payload) }),
   updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate" | "tags">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   goals: () => apiFetch<{ goals: NexusGoal[] }>("/api/goals"),
   createGoal: (payload: { title: string; description?: string | null; workspaceId: string; dueDate?: string | null; parentId?: string | null }) => apiFetch<{ goal: NexusGoal }>("/api/goals", { method: "POST", body: JSON.stringify(payload) }),
