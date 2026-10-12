@@ -1002,7 +1002,8 @@ extension GideonPanel {
     /// Written off the main actor. `async` on a type that is not itself isolated runs on the
     /// cooperative pool, which is what keeps a ten-megabyte document off the frame that tapped it —
     /// the same reason `APIClient.bytes(of:)` is shaped this way.
-    static func spill(_ data: Data, key: String, named: String) async -> URL? {
+    /// Off the main actor: a 10 MB document is written to disk without holding up the panel.
+    nonisolated static func spill(_ data: Data, key: String, named: String) async -> URL? {
         let file = AttachmentCache.destination(remote: "gideon-outgoing/" + key, fileName: named)
         // Already written by an earlier tap. One key is one attachment — a turn's id is a UUID that
         // is never reused — so what is there is these bytes and not somebody else's.

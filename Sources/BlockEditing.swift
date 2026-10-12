@@ -153,6 +153,166 @@ enum BlockConvert {
         return ""
     }
 
+    // MARK: editing inline content without losing marks
+
+    /// One piece of a line: a run of text with its marks, or an inline node shown as text (a mention as
+    /// "@Name", a date chip as its date, a hard break as a newline) that is kept whole or not at all.
+    private enum Piece {
+        case text(String, marks: [Any]?)
+        case atom(RawJSON, shown: String)
+
+        var shown: String {
+            switch self {
+            case .text(let t, _): return t
+            case .atom(_, let s): return s
+            }
+        }
+    }
+
+    private static func pieces(_ inline: [Any]) -> [Piece] {
+        inline.compactMap { n -> Piece? in
+            guard let o = n as? RawJSON else { return nil }
+            let type = o["type"] as? String ?? ""
+            let attrs = o["attrs"] as? RawJSON
+            switch type {
+            case "text": return .text(o["text"] as? String ?? "", marks: o["marks"] as? [Any])
+            case "hardBreak": return .atom(o, shown: "\n")
+            case "mention": return .atom(o, shown: "@" + ((attrs?["label"] as? String) ?? ""))
+            case "dateChip": return .atom(o, shown: (attrs?["date"] as? String) ?? "")
+            default: return .atom(o, shown: inlineText(o["content"] as? [Any]))
+            }
+        }
+    }
+
+    private static func node(_ p: Piece) -> [Any] {
+        switch p {
+        case .text(let t, let marks):
+            // Newlines typed into a run become hard breaks, as the editor writes them.
+            var out: [Any] = []
+            for (i, line) in t.components(separatedBy: "\n").enumerated() {
+                if i > 0 { out.append(["type": "hardBreak"]) }
+                guard !line.isEmpty else { continue }
+                var n: RawJSON = ["type": "text", "text": line]
+                if let marks, !marks.isEmpty { n["marks"] = marks }
+                out.append(n)
+            }
+            return out
+        case .atom(let o, _):
+            return [o]
+        }
+    }
+
+    private static func sameMarks(_ a: [Any]?, _ b: [Any]?) -> Bool {
+        let ea = a ?? [], eb = b ?? []
+        guard let da = try? JSONSerialization.data(withJSONObject: ea, options: [.sortedKeys]),
+              let db = try? JSONSerialization.data(withJSONObject: eb, options: [.sortedKeys]) else { return false }
+        return da == db
+    }
+
+    /// The line's inline content after its text went from `old` to `new`, keeping every mark and inline
+    /// node outside the edited stretch. The edit is the one changed range between the common start and the
+    /// common end of the two texts; typed text takes the marks of the character before it (else the one
+    /// after), as an editor does. A mention or date the edit cuts into becomes plain text.
+    static func editInline(_ original: [Any], old: String, new: String) -> [Any] {
+        if old == new { return original }
+        let o = Array(old), n = Array(new)
+        var pre = 0
+        while pre < o.count && pre < n.count && o[pre] == n[pre] { pre += 1 }
+        var suf = 0
+        while suf < o.count - pre && suf < n.count - pre && o[o.count - 1 - suf] == n[n.count - 1 - suf] { suf += 1 }
+        let cutStart = pre, cutEnd = o.count - suf          // [cutStart, cutEnd) of the old text goes
+        let inserted = String(n[pre..<(n.count - suf)])
+
+        var out: [Piece] = []
+        var at = 0
+        var marksForInsert: [Any]? = nil                   // the marks typed text takes
+        var marksChosen = false
+        var insertedDone = false
+        func insertNow() {
+            guard !insertedDone else { return }
+            insertedDone = true
+            if !inserted.isEmpty { out.append(.text(inserted, marks: marksForInsert)) }
+        }
+        for p in pieces(original) {
+            let len = p.shown.count
+            let start = at, end = at + len
+            at = end
+            switch p {
+            case .atom:
+                if end <= cutStart {
+                    out.append(p)
+                } else if start >= cutEnd {
+                    insertNow()
+                    out.append(p)
+                } else {
+                    // Cut into: its text survives outside the cut as plain text.
+                    let chars = Array(p.shown)
+                    let keepBefore = String(chars[0..<max(0, cutStart - start)])
+                    let keepAfter = String(chars[min(len, max(0, cutEnd - start))..<len])
+                    if !keepBefore.isEmpty { out.append(.text(keepBefore, marks: nil)) }
+                    insertNow()
+                    if !keepAfter.isEmpty { out.append(.text(keepAfter, marks: nil)) }
+                }
+            case .text(let t, let marks):
+                let chars = Array(t)
+                if end <= cutStart {
+                    out.append(p)
+                    if end == cutStart { marksForInsert = marks; marksChosen = true }
+                } else if start >= cutEnd {
+                    if !marksChosen { marksForInsert = marks; marksChosen = true }
+                    insertNow()
+                    out.append(p)
+                } else {
+                    let before = String(chars[0..<max(0, cutStart - start)])
+                    let after = String(chars[min(len, max(0, cutEnd - start))..<len])
+                    if !marksChosen { marksForInsert = marks; marksChosen = true }
+                    if !before.isEmpty { out.append(.text(before, marks: marks)) }
+                    insertNow()
+                    if !after.isEmpty { out.append(.text(after, marks: marks)) }
+                }
+            }
+        }
+        insertNow()
+        // Neighbouring runs with the same marks become one run again.
+        var merged: [Piece] = []
+        for p in out {
+            if case .text(let t, let m) = p, let last = merged.last, case .text(let lt, let lm) = last, sameMarks(m, lm) {
+                merged[merged.count - 1] = .text(lt + t, marks: lm)
+            } else {
+                merged.append(p)
+            }
+        }
+        return merged.flatMap(node)
+    }
+
+    /// The inline content a row's text came from, when it has one (paragraph, heading, list item's first
+    /// line, toggle title). nil = rebuild from plain text.
+    static func originalInline(_ r: BlockRow) -> [Any]? {
+        guard let raw = r.raw else { return nil }
+        switch r.originalKind {
+        case .paragraph, .h1, .h2, .h3:
+            return raw["content"] as? [Any] ?? []
+        case .bullet, .numbered, .todo:
+            let kids = (raw["content"] as? [Any] ?? []).compactMap { $0 as? RawJSON }
+            return kids.first(where: { ($0["type"] as? String) == "paragraph" })?["content"] as? [Any] ?? []
+        case .toggle:
+            let kids = (raw["content"] as? [Any] ?? []).compactMap { $0 as? RawJSON }
+            return kids.first(where: { ($0["type"] as? String) == "detailsSummary" })?["content"] as? [Any] ?? []
+        case .quote, .other:
+            return nil
+        }
+    }
+
+    /// The row's text as inline content: its own marks kept where the text did not change.
+    static func inlineFor(_ r: BlockRow) -> [Any] {
+        if let orig = originalInline(r) { return editInline(orig, old: r.originalText, new: r.text) }
+        return inline(r.text)
+    }
+
+    static func paragraph(content: [Any]) -> RawJSON {
+        content.isEmpty ? ["type": "paragraph"] : ["type": "paragraph", "content": content]
+    }
+
     // MARK: writing
 
     /// Plain text → inline nodes (lines joined by hard breaks).
@@ -183,7 +343,7 @@ enum BlockConvert {
                 rest.append(k)
             }
         }
-        var item: RawJSON = ["type": row.kind == .todo ? "taskItem" : "listItem", "content": [paragraph(row.text)] + rest]
+        var item: RawJSON = ["type": row.kind == .todo ? "taskItem" : "listItem", "content": [paragraph(content: inlineFor(row))] + rest]
         if row.kind == .todo { item["attrs"] = ["checked": row.checked] }
         return item
     }
@@ -225,11 +385,11 @@ enum BlockConvert {
     private static func block(_ r: BlockRow) -> RawJSON {
         if r.isUnchanged, let raw = r.raw { return raw }
         switch r.kind {
-        case .paragraph: return paragraph(r.text)
+        case .paragraph: return paragraph(content: inlineFor(r))
         case .h1, .h2, .h3:
             let level = r.kind == .h1 ? 1 : (r.kind == .h2 ? 2 : 3)
             var h: RawJSON = ["type": "heading", "attrs": ["level": level]]
-            let c = inline(r.text)
+            let c = inlineFor(r)
             if !c.isEmpty { h["content"] = c }
             return h
         case .quote:
@@ -241,7 +401,7 @@ enum BlockConvert {
                 body = (raw["content"] as? [Any] ?? []).filter { (($0 as? RawJSON)?["type"] as? String) != "detailsSummary" }
             }
             var summary: RawJSON = ["type": "detailsSummary"]
-            let c = inline(r.text)
+            let c = inlineFor(r)
             if !c.isEmpty { summary["content"] = c }
             return ["type": "details", "content": [summary] + body]
         case .other:

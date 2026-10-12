@@ -54,7 +54,7 @@ Server work done for the app (dev only, branch feat/ios-edit merged into dev, de
 
 | What | Where |
 |---|---|
-| **Page editing** (paragraph, H1–3, bullet/numbered/to-do, toggle, quote; other blocks kept, movable, deletable), save on Done / close, offline outbox, conflict alert (Keep both / Use theirs / Cancel) | BlockEditing.swift, BlockEditorView, DocsView |
+| **Page editing** (paragraph, H1–3, bullet/numbered/to-do, toggle, quote; other blocks kept, movable, deletable), inline marks kept outside the edited stretch, save on Done / close, offline outbox, conflict alert (Keep both / Use theirs / Cancel) | BlockEditing.swift (+ Tests/BlockEditing), BlockEditorView, DocsView |
 | **Task description** uses the same editor | TaskBodyCard |
 | Page reader draws the block doc; live re-read on doc-changed | BlockDocView, DocsView |
 | **GIDEON**: project/task context, chats, steps/sources/cards, Review approvals; **@ context picker, Personalize, Save as doc**; **AI actions in the editor** (improve … translate, action items → tasks, free prompt) | Gideon.swift, GideonPanel(+Extras), GideonWrite |
@@ -97,22 +97,34 @@ full-width pages on iPad/Mac.
 | What's New | copy swept |
 | Watch / widgets | "Team", "No division" |
 
+## Server pieces that must ship to production WITH the app
+
+All of these exist on the dev server only (branch `dev` of the NEXUS repo). The app calls them; on today's
+production they answer 404 or behave the old way, so they go out in the same release as the app:
+
+| Piece | Used by the app for |
+|---|---|
+| `POST /api/collab/edit` (lib/block-merge.ts, collab-rooms applyBlockEdit / requestBlockEdit) **plus the room-save fix** in lib/collab-rooms.ts persist() | editing pages and task descriptions |
+| `POST /api/tasks/reorder` | manual order inside a column |
+| `POST /api/tasks/undo-delete` + `auditLogId` in DELETE /api/tasks/:id | Undo after deleting a task |
+| `POST /api/tasks/batch-move` | multi-select drag, bulk Move to / Priority, Undo |
+| `POST /api/tasks` `placement: "top"`; status from the column when none is sent | inline new card |
+| Sections accept the palette colour names (blue, green, yellow, red, purple, brown, orange, pink, gray) | status colours |
+| `/api/projects/:id/views` (saved views) and status-option sections (TaskList.taskStatus, color) | board, views, status picker |
+| GIDEON: `stream` events, `approvalMode`, `context` (+ `refs`), chats, proposals, `/api/gideon/prefs`, `/api/gideon/save-doc`, `/api/gideon/write` | GIDEON panel, Personalize, Save as doc, editor AI |
+| Form submit `Idempotency-Key` + INVALID_EMAIL / INVALID_URL; form DELETE `expect` | forms |
+| `/api/forms/my-submissions` `columns` + replies / delete | My Submissions |
+| Calendar: no-PIC tasks excluded, "No division" placement | calendar |
+
 ## Residual risks
 
-1. **Not compiled.** The likeliest build errors: long SwiftUI expressions (split where found), argument
-   labels against types not re-read, Swift concurrency checks. The first ⌘B will tell.
-2. Page/description editing changes a block's inline formatting only when that line is edited (an edited
-   line becomes plain text); untouched blocks keep everything.
-3. In-column reorder needs a drop exactly on a card; between cards there is no indicator (no custom geometry).
-4. The block-merge endpoint and the room save fix are on dev only; production needs them before the app ships.
-5. Needs Xcode 16 or later (iOS 18+ SDK, where `View` is main-actor): the editor model is created in view
-   initialisers. On Xcode 15 that would not compile.
-6. Known edge cases not fixed: GIDEON's queue can start a second sender if the session is reset mid-answer and
-   a new question is asked at once; saving a large GIDEON attachment to disk runs on the main thread.
-7. Release checklist for prod: deploy `/api/collab/edit` + the room save fix, `/api/tasks/reorder`,
-   `/api/tasks/undo-delete`, batch-move, palette section colours, GIDEON prefs/save-doc/write, idempotent
-   form submit — all exist on dev only.
-8. Admin (Control Room) user screens now have English source text; What's New entries stay English by design.
+1. **Not compiled.** The first ⌘B will tell; the likeliest trouble is long SwiftUI expressions (split where
+   found) and argument labels. Needs Xcode 16 or later (the editor model is created in view initialisers,
+   fine because `View` is main-actor on the iOS 18+ SDK).
+2. In-column reorder needs a drop exactly on a card; between cards there is no insertion line.
+3. Editing a line keeps every mark and mention outside the edited stretch (Linux test on 6 real dev pages,
+   257 checks); a mention or date the edit cuts into becomes plain text, as in an editor.
+4. What's New entries stay English by design.
 
 ## Verify on device first
 

@@ -710,9 +710,14 @@ final class GideonChat {
         return turn
     }
 
+    /// Which drain is the current one. reset() starts a new generation, so a drain that was cancelled
+    /// mid-answer can never clear `sending` for (or race) the drain a new question started after it.
+    private var generation = 0
+
     private func drain() async {
-        defer { sending = false }
-        while !outbox.isEmpty, !Task.isCancelled {
+        let mine = generation
+        defer { if generation == mine { sending = false } }
+        while generation == mine, !outbox.isEmpty, !Task.isCancelled {
             await send(outbox.removeFirst())
         }
     }
@@ -810,6 +815,7 @@ final class GideonChat {
     /// that reason. Cancelling the drain is part of it: an answer still arriving would otherwise
     /// write itself into the transcript the next person sees.
     func reset() {
+        generation += 1
         drainTask?.cancel()
         drainTask = nil
         outbox.removeAll()
