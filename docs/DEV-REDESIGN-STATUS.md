@@ -33,9 +33,24 @@ Checks that run without Xcode:
 Not done in phase 1: the ~80 older slangy Indonesian strings that no screen above touched (e.g. "Nggak …")
 were left as they are.
 
-## Phase 2 — board like web / Notion
+## Phase 2 — board like web / Notion (done)
 
-_Not started._
+| What | Where | Verify on device |
+|---|---|---|
+| Coloured status columns (wash + pill + group label), plain sections unchanged | ProjectBoardView (LaneColumn), StatusOptions | Finance Suwara: To Do grey, On Progress yellow, Done green; dark mode |
+| Custom statuses: rename / colour / move / delete-with-move / + Status | LaneColumn ••• menu, BoardAlert | Add "Review" to In progress → becomes In review status |
+| Inline new card at the top (queue, Esc/tap-away saves, ⤢ open, × discard), filter prefill | BoardRedesign InlineDraftCard | Type A ⏎ B ⏎ C quickly: three tasks, top of column |
+| Multi-select + drag = whole selection, one batch-move, Undo 10 s (⌘Z); List groups take drops | ProjectBoardView.dropped/moveTasks | Select 3 → drag one → all move; Undo |
+| Saved views: chips (built-in + "Per kategori" + custom), filter/sort/group sheet, new/rename/delete | ProjectViews.swift, BoardRedesign | Finance Management → Per kategori |
+| Task opens as a centred sheet on iPad/Mac, push on iPhone; ⌘N | ProjectBoardView.open | iPad landscape |
+| Select-field chips in option colours | CustomFieldChips | — |
+| Timeline skips undated tasks | TimelineTab | — |
+
+Pickers: the app keeps native Menu / graphical DatePicker sheets (with Clear) — the iOS equivalents of the
+web's SelectPicker / DateField; there are no browser-style native selects to replace.
+Not done: in-column manual reorder (web C-BUG-6) — SwiftUI's drop on a column has no index without
+custom geometry, which the house rules forbid without a device.
+Check-in reminder "Later" (web): the app has no in-app reminder modal (push only), so nothing to change.
 
 ## Phase 3 — block editor, GIDEON, templates, iPad/Mac
 
