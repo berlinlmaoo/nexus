@@ -2161,8 +2161,14 @@ struct APIClient {
 
     /// POST /api/tasks — create a task (or a subtask when parentId is set).
     @discardableResult
-    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String = "TODO", priority: String? = nil, dueDate: String? = nil) async throws -> String {
-        var body: [String: Any] = ["projectId": projectId, "taskListId": taskListId, "title": title, "status": status]
+    /// `status` is sent only when the caller names one: since status options (12 Oct 2026) the server
+    /// gives a new task the status of the column it lands in, and a fixed "TODO" put a card made in the
+    /// Done column into Done as an open task. `placement` "top" puts it first in its column (dev server;
+    /// older servers ignore it and append).
+    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String? = nil, priority: String? = nil, dueDate: String? = nil, placement: String? = nil) async throws -> String {
+        var body: [String: Any] = ["projectId": projectId, "taskListId": taskListId, "title": title]
+        if let status { body["status"] = status }
+        if let placement { body["placement"] = placement }
         if let parentId { body["parentId"] = parentId }
         if let priority, priority.uppercased() != "NONE" { body["priority"] = priority }
         if let dueDate { body["dueDate"] = dueDate }
