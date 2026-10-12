@@ -1,3 +1,4 @@
+-- bluegreen: contract   (drops tables: apply only after every running/rollback version stopped using them; deploy/bluegreen/README.md)
 -- =====================================================================================================
 -- DO NOT RUN WITHOUT OWNER APPROVAL.
 --

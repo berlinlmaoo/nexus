@@ -7,6 +7,7 @@ import { approvalPromptLine } from "@/lib/gideon-runs"
 import { emitCommentAdded } from "@/lib/socket-emitter"
 import { createInAppNotification, notifyCommentAdded, notifyStatusUpdate } from "@/lib/notification-service"
 import type { ProjectHealth } from "@/generated/prisma/client"
+import { isSingletonLeader } from "@/lib/bluegreen"
 
 /**
  * GIDEON triggers beyond the chat box (owner, 12 Oct 2026 — Notion's "On a schedule" and "When
@@ -218,7 +219,8 @@ export function startGideonTicker() {
   g.__nexusGideonTicker = true
   let busy = false
   const tick = async () => {
-    if (busy || !process.env.GIDEON_CHAT_URL) return
+    // Blue-green: only the singleton leader (live slot) delivers schedules (lib/bluegreen.ts).
+    if (busy || !process.env.GIDEON_CHAT_URL || !isSingletonLeader()) return
     busy = true
     try {
       const rows = await prisma.$queryRaw<Array<{ ro: boolean }>>`select pg_is_in_recovery() as ro`

@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
 import { pruneAutomationRuns, runTimeBasedAutomations } from "@/lib/automation-engine"
+import { isSingletonLeader } from "@/lib/bluegreen"
 
 /**
  * The clock of project automations (12 Oct 2026): every minute, due-date and scheduled rules
@@ -10,6 +11,8 @@ import { pruneAutomationRuns, runTimeBasedAutomations } from "@/lib/automation-e
  * also stands down by itself on a read-only replica (the VPS standby: pg_is_in_recovery()), so a warm
  * standby never fires rules on stale data. Each firing carries a dedup key (AutomationRun unique
  * automationId+dedupKey), so a second process or the /api/cron/automations route cannot double-fire.
+ * With blue-green slots only the singleton leader ticks (lib/bluegreen.ts: Postgres advisory lock, held
+ * by the live slot), so the idle slot never runs rules with older/newer code at the same time.
  */
 const log = createLogger("automation-ticker")
 const g = globalThis as unknown as { __nexusAutomationTicker?: boolean }
@@ -23,7 +26,7 @@ export function startAutomationTicker() {
   let ticks = 0
   let busy = false
   const tick = async () => {
-    if (busy) return
+    if (busy || !isSingletonLeader()) return
     busy = true
     try {
       const rows = await prisma.$queryRaw<Array<{ ro: boolean }>>`select pg_is_in_recovery() as ro`

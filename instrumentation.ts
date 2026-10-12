@@ -5,6 +5,9 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return
+  // Blue-green (lib/bluegreen.ts): both slots boot this file; only the singleton leader runs the clocks below.
+  const { startSingletonLeader } = await import("@/lib/bluegreen")
+  startSingletonLeader()
   // GIDEON schedules (lib/gideon-triggers.ts, 12 Oct 2026): weekly project digests. Idle unless GIDEON is
   // configured (GIDEON_CHAT_URL) and a project has a schedule. Off with NEXUS_GIDEON_TICKER=0.
   if (process.env.NEXUS_GIDEON_TICKER !== "0") {

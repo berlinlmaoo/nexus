@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Tracked copy. The installed one is ~/nexus-dev-refresh-db.sh on nexus-prod — keep both in sync.
 # Copy the PRODUCTION database into the DEV database (nexus_dev in nexus-dev-postgres).
 #
 #   ~/nexus-dev-refresh-db.sh          -> asks for confirmation
@@ -9,6 +8,7 @@
 # lives in the nexus-dev-postgres container: the nexus_dev database there is wiped and replaced.
 # The latest dump is kept as ~/nexus-dev-data/prod-latest.dump (mode 600); older ones are not kept.
 set -euo pipefail
+# Tracked copy: deploy/dev/nexus-dev-refresh-db.sh (installed as ~/nexus-dev-refresh-db.sh).
 
 PROD_PG=nexus-postgres
 PROD_DB=nexus_db
@@ -16,7 +16,8 @@ PROD_USER=nexus_user
 DEV_PG=nexus-dev-postgres
 DEV_DB=nexus_dev
 DEV_USER=nexus_dev
-DEV_APP=nexus-dev-app
+# Blue-green slots (deploy/bluegreen) + the pre-blue-green single container, whichever exist.
+DEV_APPS="nexus-dev-app-blue nexus-dev-app-green nexus-dev-app"
 DATA="$HOME/nexus-dev-data"
 DUMP="$DATA/prod-latest.dump"
 
@@ -50,10 +51,12 @@ mv -f "$TMP" "$DUMP"
 echo "   $(du -h "$DUMP" | cut -f1) -> $DUMP"
 
 echo "== 2/4 stop dev app (frees DB connections) =="
-was_running=0
-if [ "$(docker inspect -f '{{.State.Running}}' "$DEV_APP" 2>/dev/null)" = "true" ]; then
-  was_running=1; docker stop "$DEV_APP" >/dev/null; echo "   $DEV_APP stopped"
-fi
+was_running=""
+for a in $DEV_APPS; do
+  if [ "$(docker inspect -f '{{.State.Running}}' "$a" 2>/dev/null)" = "true" ]; then
+    was_running="$was_running $a"; docker stop "$a" >/dev/null; echo "   $a stopped"
+  fi
+done
 
 echo "== 3/4 recreate $DEV_DB and restore =="
 docker exec "$DEV_PG" psql -U "$DEV_USER" -d postgres -v ON_ERROR_STOP=1 -q \
@@ -69,7 +72,15 @@ for t in User Project Task Message AttendanceRequest Notification AuditLog; do
   printf '   %-20s prod=%-8s dev=%-8s %s\n' "$t" "$p" "$d" "$([ "$p" = "$d" ] && echo ok || echo 'DIFF (prod moves on; small diffs are normal)')"
 done
 
-if [ "$was_running" = 1 ]; then
-  docker start "$DEV_APP" >/dev/null && echo "   $DEV_APP started again"
+# SQL ledger (deploy/bluegreen/nexus-sql.sh): the copy carries PROD's ledger if prod has one; otherwise the
+# files of the prod checkout are recorded as baseline. Dev-only SQL files then show as PENDING, which is
+# true — the copy does not have them — and the dev deploy refuses to switch until they are applied.
+if [ -x "$DATA/bluegreen/bin/nexus-sql.sh" ]; then
+  "$DATA/bluegreen/bin/nexus-sql.sh" dev baseline --from "$HOME/nexus/prisma/sql" --yes
+  "$DATA/bluegreen/bin/nexus-sql.sh" dev status | grep -E 'PENDING' || true
 fi
+
+for a in $was_running; do
+  docker start "$a" >/dev/null && echo "   $a started again"
+done
 green "dev database refreshed from production"

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { leaderInfo } from "@/lib/bluegreen"
 
 /**
  * Where this instance is running. The office VM and the VPS warm standby run the same image; the
@@ -25,6 +26,9 @@ export async function GET() {
         app: "Nexus",
         status: "healthy",
         site: site(),
+        // Blue-green (lib/bluegreen.ts): which slot answered, whether nginx points at it, and whether
+        // it runs the once-per-system clocks. Read by the deploy script and its zero-downtime test.
+        ...leaderInfo(),
         checks: {
           database: "up",
         },
