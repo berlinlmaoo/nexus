@@ -8,7 +8,7 @@ import prisma from '@/lib/prisma'
 import { deleteGideonAttachmentFiles, storeGideonAttachments } from '@/lib/gideon-attachments'
 import { checkProjectAccess } from '@/lib/rbac'
 import {
-  approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
+  approvalPromptLine, finishRun, parseApprovalMode, publishRunEvent, recordStep, runMeta, citedRefs, startRun, subscribeRun, type ApprovalMode, type GideonRef, type RunEvent,
 } from '@/lib/gideon-runs'
 import { resolveGideonChat, gatherContext, personalPromptLines, touchGideonChat, type GideonContextRef } from '@/lib/gideon-assistant'
 import { searchWorkspace } from '@/lib/workspace-search'
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { messages, model, image, file, stream: wantsStream, approvalMode: rawMode, context, chatId: rawChatId, newChat, search: wantsSearch } = (await req.json()) as {
+  const { messages, model, image, file, stream: wantsStream, approvalMode: rawMode, context, chatId: rawChatId, newChat, search: wantsSearch, uiLang: rawUiLang } = (await req.json()) as {
     messages: { role: string; content: string }[]
     /**
      * The conversation (GideonChat, 12 Oct 2026). Absent = the person's most recent chat (what released
@@ -124,6 +124,8 @@ export async function POST(req: NextRequest) {
     newChat?: boolean
     /** Workspace Q&A: search what the person can see before answering, and cite it. Default on for `stream` clients. */
     search?: boolean
+    /** The interface language of the client, "en" | "id" (12 Oct 2026, web). Absent = answer in the question's language. */
+    uiLang?: string
     model?: string
     /**
      * true = this client draws the new events (12 Oct 2026, web): `delta` text pieces, `reset`, `step`,
@@ -324,8 +326,13 @@ export async function POST(req: NextRequest) {
             : `[KONTEKS HALAMAN] ${session.user?.name || 'Dia'} membuka GIDEON dari project "${ctx.projectName}" (projectId: ${ctx.projectId}). Kalau pertanyaannya tidak menyebut project lain, anggap tentang project ini.`)
           : '',
         approvalPromptLine(approvalMode),
+        rawUiLang === 'en'
+          ? '[BAHASA ANTARMUKA] English. Answer in English, even when the question or the records are in Indonesian (titles stay as they are).'
+          : rawUiLang === 'id'
+            ? '[BAHASA ANTARMUKA] Bahasa Indonesia. Jawab dalam bahasa Indonesia, walaupun pertanyaan atau datanya berbahasa Inggris (judul tetap apa adanya).'
+            : '',
         // Only for a client that renders Markdown; the released apps show the text as is.
-        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar.' : '',
+        streamClient ? '[FORMAT] Jawab dalam Markdown yang ringkas: paragraf pendek, daftar berpoin bila perlu, **tebal** seperlunya. Sebut task, project dan dokumen dengan nama persisnya. Tanpa tabel lebar. JANGAN tampilkan id apa pun (taskId, projectId, cuid/uuid, juga tidak dalam `code` atau kurung) dan JANGAN tampilkan nilai enum (TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED, URGENT, HIGH, MEDIUM, LOW, NONE): pakai nama kolom/status yang wajar (To do / In progress / In review / Done / Cancelled; prioritas Urgent / High / Medium / Low) dalam bahasa jawabanmu. Judul yang kamu sebut otomatis jadi tautan dan masuk Sources — sebut hanya yang benar-benar kamu pakai.' : '',
       ].filter(Boolean).join('\n\n')
       const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' }, extra)
       if (!prompt) { failure = 'empty'; await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
@@ -405,13 +412,17 @@ export async function POST(req: NextRequest) {
       }
       if (!reply) failure = failure || 'empty reply'
       if (reply && preSearch && runId) {
-        const said = reply.toLowerCase()
-        const used = preSearch.refs.filter((r) => r.title && r.title.length >= 3 && said.includes(r.title.toLowerCase().slice(0, 60)))
+        const used = citedRefs(reply, preSearch.refs)
         if (used.length) {
           await sendEvent({ type: 'sources', sources: used })
           if (preSearch.stepId) await prisma.gideonRunStep.update({ where: { id: preSearch.stepId }, data: { refs: used as unknown as InputJsonValue } }).catch(() => {})
         }
       }
+      // What the run showed, with Sources cut down to what the reply cites (stored on the turn below too).
+      const meta = reply && runId ? await runMeta(runId, { citedBy: reply }).catch(() => null) : null
+      // Additive event (12 Oct 2026): the final Sources list, replacing the `sources` streamed while tools ran.
+      // Clients that do not know it ignore it (released apps never get any of these).
+      if (meta && streamClient) await sendEvent({ type: 'cited', sources: meta.sources })
       const finalText = reply || '(Gideon balas kosong — coba ulang.)'
       await sendEvent(streamClient ? { type: 'final', content: finalText } : { type: 'text', content: finalText })
 
@@ -439,7 +450,6 @@ export async function POST(req: NextRequest) {
           : []
         // What the run showed (steps, sources, cards, proposals) and the tools it used — the latter is
         // what Control Room › GIDEON counts; it was always 0 because nothing ever wrote it.
-        const meta = runId ? await runMeta(runId).catch(() => null) : null
         const toolsUsed = meta ? [...new Set(meta.steps.map((st) => st.tool))] : []
         try {
           await prisma.gideonMessage.createMany({

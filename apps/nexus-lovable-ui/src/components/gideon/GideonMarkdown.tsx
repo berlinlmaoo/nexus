@@ -1,6 +1,8 @@
 import { Fragment, type ReactNode } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/lang";
+import { tidyGideonText, type CiteRef, type GideonEnum } from "@/lib/gideon-cite";
 
 /**
  * The Markdown GIDEON writes, drawn as React elements (12 Oct 2026). Deliberately a small subset and no
@@ -8,6 +10,10 @@ import { cn } from "@/lib/utils";
  * *italic*, `code` and [links](…). Nothing the model writes is ever handed to innerHTML, so a reply cannot
  * inject markup. Links: http(s) open in a new tab; a NEXUS path (/tasks/…, or this site's own absolute
  * URL) navigates inside the app.
+ *
+ * Safety net (audit 12 Oct 2026): ids the model should not have shown become links to the matching source
+ * (or vanish), and bare enums (IN_PROGRESS, URGENT …) become the translated label — see lib/gideon-cite.ts.
+ * Fenced code is left exactly as written.
  */
 
 type Block =
@@ -104,8 +110,8 @@ function Inline({ text, onNavigate }: { text: string; onNavigate: (path: string)
     if (m.index > last) nodes.push(text.slice(last, m.index));
     if (m[1]) nodes.push(<code key={k++} className="rounded bg-foreground/10 px-1 py-0.5 font-mono text-[0.85em]">{m[1].slice(1, -1)}</code>);
     else if (m[2] && m[3]) nodes.push(<Link key={k++} href={m[3]} onNavigate={onNavigate}>{m[2]}</Link>);
-    else if (m[4]) nodes.push(<strong key={k++} className="font-semibold">{m[4].slice(2, -2)}</strong>);
-    else if (m[5]) nodes.push(<em key={k++}>{m[5].slice(1, -1)}</em>);
+    else if (m[4]) nodes.push(<strong key={k++} className="font-semibold"><Inline text={m[4].slice(2, -2)} onNavigate={onNavigate} /></strong>);
+    else if (m[5]) nodes.push(<em key={k++}><Inline text={m[5].slice(1, -1)} onNavigate={onNavigate} /></em>);
     else if (m[6]) nodes.push(<Link key={k++} href={m[6]} onNavigate={onNavigate}>{m[6].replace(/^https?:\/\//, "").slice(0, 48)}</Link>);
     last = m.index + m[0].length;
   }
@@ -126,10 +132,27 @@ function Link({ href, children, onNavigate }: { href: string; children: ReactNod
   return <a href={href} target="_blank" rel="noreferrer noopener" className="font-medium text-primary underline-offset-2 hover:underline">{children}</a>;
 }
 
-export function GideonMarkdown({ text, className }: { text: string; className?: string }) {
+/** Each non-code block with ids and enums made human (code blocks stay literal). */
+function tidyBlocks(blocks: Block[], fix: (s: string) => string): Block[] {
+  return blocks.map((b) => {
+    switch (b.kind) {
+      case "h": case "p": case "quote": return { ...b, text: fix(b.text) };
+      case "ul": case "ol": return { ...b, items: b.items.map(fix) };
+      case "table": return { ...b, head: b.head.map(fix), rows: b.rows.map((r) => r.map(fix)) };
+      default: return b;
+    }
+  });
+}
+
+export function GideonMarkdown({ text, className, sources }: { text: string; className?: string; sources?: readonly CiteRef[] }) {
   const router = useRouter();
+  const { t } = useLang();
   const go = (path: string) => { router.history.push(path); };
-  const blocks = parseBlocks(text);
+  const labels: Record<GideonEnum, string> = {
+    TODO: t("To do"), IN_PROGRESS: t("In progress"), IN_REVIEW: t("In review"), DONE: t("Done"), CANCELLED: t("Cancelled"),
+    URGENT: t("Urgent"), HIGH: t("High"), MEDIUM: t("Medium"), LOW: t("Low"), NONE: t("None"),
+  };
+  const blocks = tidyBlocks(parseBlocks(text), (s) => tidyGideonText(s, sources ?? [], labels));
   return (
     <div className={cn("space-y-2 break-words", className)}>
       {blocks.map((b, i) => {

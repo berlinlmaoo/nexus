@@ -375,8 +375,30 @@ export function proposalView(p: { id: string; action: string; summary: string; d
   }
 }
 
-/** Everything a run showed, rebuilt from the tables — stored on the assistant turn for the history. */
-export async function runMeta(runId: string): Promise<GideonRunMeta> {
+const normText = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim()
+
+/**
+ * The sources an answer actually cites (audit 12 Oct 2026): named in the reply by its title (first 60
+ * characters, at least 3) or by its id. Everything else a tool merely read is left off the Sources row.
+ * The web has the same rule (apps/nexus-lovable-ui/src/lib/gideon-cite.ts citedSources).
+ */
+export function citedRefs(reply: string, refs: GideonRef[]): GideonRef[] {
+  const said = normText(reply || "")
+  if (!said) return []
+  const out: GideonRef[] = []
+  for (const r of refs) {
+    if (!r || out.some((x) => x.kind === r.kind && x.id === r.id)) continue
+    const title = normText(r.title || "").slice(0, 60)
+    if ((r.id && reply.includes(r.id)) || (title.length >= 3 && said.includes(title))) out.push(r)
+  }
+  return out
+}
+
+/**
+ * Everything a run showed, rebuilt from the tables — stored on the assistant turn for the history.
+ * `citedBy` (the reply): keep only the sources it cites (citedRefs), before the cap of 20.
+ */
+export async function runMeta(runId: string, opts: { citedBy?: string } = {}): Promise<GideonRunMeta> {
   const [steps, proposals] = await Promise.all([
     prisma.gideonRunStep.findMany({ where: { runId }, orderBy: { createdAt: "asc" } }),
     prisma.gideonProposal.findMany({ where: { runId }, orderBy: { createdAt: "asc" } }),
@@ -391,7 +413,7 @@ export async function runMeta(runId: string): Promise<GideonRunMeta> {
   }
   return {
     steps: steps.map((s) => ({ id: s.id, tool: s.tool, arg: s.arg, label: s.label, status: s.ok === false ? "error" : "done", error: s.error })),
-    sources: sources.slice(0, 20),
+    sources: (opts.citedBy !== undefined ? citedRefs(opts.citedBy, sources) : sources).slice(0, 20),
     cards,
     proposals: proposals.map(proposalView),
   }

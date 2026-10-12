@@ -23,6 +23,7 @@ import {
 } from "@/lib/gideon-ai";
 import { nexusApi } from "@/lib/nexus-api";
 import { useLang, type LangApi } from "@/lib/lang";
+import { citedSources } from "@/lib/gideon-cite";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -332,6 +333,10 @@ export function GideonPanel({ onClose, context, onClearContext, wide, onToggleWi
             for (const r of ev.sources) if (!sources.some((s) => s.kind === r.kind && s.id === r.id)) sources.push(r);
             return { ...x, sources };
           });
+          break;
+        case "cited":
+          // The server's final word on what the answer used: replaces everything the tools read.
+          patchLast((x) => ({ ...x, sources: ev.sources }));
           break;
         case "card":
           wroteSomething = true;
@@ -953,7 +958,8 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
   const steps = turn.steps ?? [];
   const running = steps.filter((s) => s.status === "running");
   const failed = steps.filter((s) => s.status === "error").length;
-  const sources = turn.sources ?? [];
+  // Only what the answer names (the server already filters new turns; older saved turns are filtered here).
+  const sources = useMemo(() => citedSources(turn.content, turn.sources ?? []), [turn.content, turn.sources]);
   const cards = turn.cards ?? [];
   const proposals = turn.proposals ?? [];
   const showSteps = turn.streaming || open;
@@ -982,7 +988,7 @@ function AssistantTurn({ turn, onDecided, question, projectId, editorTarget }: {
 
       {(turn.content || (turn.streaming && !steps.length)) && (
         <div className={cn("max-w-full rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed", turn.failed ? "border border-destructive/30 bg-destructive/5" : "bg-muted")}>
-          {turn.content ? <GideonMarkdown text={turn.content} /> : <Loader2 className="h-4 w-4 animate-spin" />}
+          {turn.content ? <GideonMarkdown text={turn.content} sources={turn.sources} /> : <Loader2 className="h-4 w-4 animate-spin" />}
         </div>
       )}
 
