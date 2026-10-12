@@ -70,7 +70,7 @@ export function VaultSharePage() {
   const { slug } = useParams({ strict: false }) as { slug: string };
   const search = useSearch({ strict: false }) as ShareSearch;
   const navigate = useNavigate();
-  const { t, lang } = useLang();
+  const { t, lang, locale } = useLang();
   useDocumentLang(lang);
 
   const q = useQuery({
@@ -126,7 +126,7 @@ export function VaultSharePage() {
             {meta && <p className="mt-0.5 text-sm text-muted-foreground">{meta}</p>}
             {data.expiresAt && (
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {t("Available until {date}", { date: new Date(data.expiresAt).toLocaleDateString(lang === "id" ? "id-ID" : "en-GB", { day: "numeric", month: "long", year: "numeric" }) })}
+                {t("Available until {date}", { date: new Date(data.expiresAt).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }) })}
               </p>
             )}
           </div>

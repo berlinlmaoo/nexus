@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, Loader2, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { nexusApi } from "@/lib/nexus-api";
+import { useLang } from "@/lib/lang";
 
 /**
  * One-time nudge to add a WhatsApp number (ported from the old NEXUS app-layout). Auto-opens a short
@@ -15,6 +16,7 @@ const DISMISS_PREFIX = "nexus-phone-prompt-dismissed:";
 const looksLikePhone = (v: string) => /^\+?\d{8,15}$/.test(v.replace(/[\s-]/g, ""));
 
 export function PhoneNumberPrompt() {
+  const { t } = useLang();
   const qc = useQueryClient();
   const profileQ = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
   const user = profileQ.data?.user;
@@ -28,8 +30,8 @@ export function PhoneNumberPrompt() {
   useEffect(() => {
     if (!userId || hasPhone || !storageKey || typeof window === "undefined") return;
     if (window.sessionStorage.getItem(storageKey)) return;
-    const t = window.setTimeout(() => setOpen(true), 700);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setOpen(true), 700);
+    return () => window.clearTimeout(timer);
   }, [userId, hasPhone, storageKey]);
 
   useEffect(() => {
@@ -48,10 +50,10 @@ export function PhoneNumberPrompt() {
     mutationFn: () => nexusApi.updateProfile({ phoneNumber: phone.trim() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["nexus", "profile"] });
-      toast.success("WhatsApp number saved ✅");
+      toast.success(t("WhatsApp number saved"));
       setOpen(false);
     },
-    onError: (e) => toast.error("Couldn't save", { description: e instanceof Error ? e.message : "Double-check the number and try again." }),
+    onError: (e) => toast.error(t("Couldn't save"), { description: e instanceof Error ? e.message : t("Double-check the number and try again.") }),
   });
 
   const valid = looksLikePhone(phone);
@@ -72,24 +74,24 @@ export function PhoneNumberPrompt() {
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><MessageCircle className="h-5 w-5" /></span>
                 <div>
-                  <h2 className="font-display text-xl font-bold tracking-tight">Add your WhatsApp number</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">So assignment notifs, mentions &amp; check-in reminders land straight on your WhatsApp.</p>
+                  <h2 className="font-display text-xl font-bold tracking-tight">{t("Add your WhatsApp number")}</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t("So task assignments, mentions and check-in reminders reach you on WhatsApp.")}</p>
                 </div>
               </div>
-              <button onClick={dismiss} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={dismiss} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }} className="space-y-3 p-5">
               <input
                 value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoFocus
-                placeholder="08xxxxxxxxxx · outside Indonesia use + country code"
+                placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + and the country code")}
                 className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
-              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5 shrink-0" /> Only used for work notifications. Change it anytime in Settings.</p>
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5 shrink-0" /> {t("Only used for work notifications. Change it anytime in Settings.")}</p>
               <button type="submit" disabled={!valid || save.isPending}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50">
-                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} Save number
+                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} {t("Save number")}
               </button>
-              <button type="button" onClick={dismiss} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">Maybe later</button>
+              <button type="button" onClick={dismiss} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">{t("Maybe later")}</button>
             </form>
           </motion.div>
         </div>

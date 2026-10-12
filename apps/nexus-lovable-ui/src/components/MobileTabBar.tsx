@@ -161,7 +161,7 @@ export function MobileTabBar() {
             type="button"
             ref={(el) => { slotRefs.current[4] = el; }}
             onClick={() => setMoreOpen(true)}
-            aria-label="More"
+            aria-label={tr("More")}
             className={cn(
               "relative z-10 flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-semibold transition-colors",
               activeIndex === 4 ? "text-primary" : "text-muted-foreground hover:text-foreground",
@@ -239,7 +239,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="More navigation"
+            aria-label={t("More navigation")}
             initial={reduce ? { opacity: 0 } : { y: "100%" }}
             animate={reduce ? { opacity: 1 } : { y: 0 }}
             exit={reduce ? { opacity: 0 } : { y: "100%" }}
@@ -249,7 +249,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
             {/* grab handle */}
             <div className="relative flex items-center justify-between px-5 pt-3">
               <div className="mx-auto h-1.5 w-10 rounded-full bg-foreground/15" />
-              <button onClick={onClose} aria-label="Close" className="absolute right-3 top-2.5 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
+              <button onClick={onClose} aria-label={t("Close")} className="absolute right-3 top-2.5 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
             </div>
             <div className="relative max-h-[calc(82vh-3.5rem)] overflow-y-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
               {visibleGroups.map((g) => (
@@ -316,7 +316,7 @@ function MoreSheet({ open, onClose, isActive, unread, chatUnread }: { open: bool
                 disabled={loggingOut}
                 className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-60"
               >
-                {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Log out
+                {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} {t("Log out")}
               </button>
             </div>
           </motion.div>

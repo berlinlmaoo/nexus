@@ -3,17 +3,19 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, FileText, FolderKanban, Loader2, Search, Target, Users, X } from "lucide-react";
 import { nexusApi } from "@/lib/nexus-api";
+import { useLang } from "@/lib/lang";
 
 type ResultItem = { id: string; label: string; sub?: string; to: () => void; icon: typeof Search };
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
+  const { t } = useLang();
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(q.trim()), 250);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebounced(q.trim()), 250);
+    return () => clearTimeout(timer);
   }, [q]);
 
   useEffect(() => {
@@ -27,10 +29,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   const go = (fn: () => void) => { fn(); onClose(); };
   const groups: Array<{ label: string; items: ResultItem[] }> = r ? [
-    { label: "Tasks", items: (r.tasks ?? []).map((t) => ({ id: t.id, label: t.title, to: () => navigate({ to: "/tasks/$taskId", params: { taskId: t.id } }), icon: CheckSquare })) },
-    { label: "Projects", items: (r.projects ?? []).map((p) => ({ id: p.id, label: p.name, to: () => navigate({ to: "/projects/$projectId", params: { projectId: p.id } }), icon: FolderKanban })) },
-    { label: "Docs", items: (r.docs ?? []).map((d) => ({ id: d.id, label: d.title, to: () => navigate({ to: "/docs/$docId", params: { docId: d.id } }), icon: FileText })) },
-    { label: "People", items: (r.members ?? []).map((m) => ({ id: m.id, label: m.name ?? m.email ?? "Member", sub: m.email ?? undefined, to: () => navigate({ to: "/teams" }), icon: Users })) },
+    { label: t("Tasks"), items: (r.tasks ?? []).map((task) => ({ id: task.id, label: task.title, to: () => navigate({ to: "/tasks/$taskId", params: { taskId: task.id } }), icon: CheckSquare })) },
+    { label: t("Projects"), items: (r.projects ?? []).map((p) => ({ id: p.id, label: p.name, to: () => navigate({ to: "/projects/$projectId", params: { projectId: p.id } }), icon: FolderKanban })) },
+    { label: t("Docs"), items: (r.docs ?? []).map((d) => ({ id: d.id, label: d.title, to: () => navigate({ to: "/docs/$docId", params: { docId: d.id } }), icon: FileText })) },
+    { label: t("People"), items: (r.members ?? []).map((m) => ({ id: m.id, label: m.name ?? m.email ?? t("Member"), sub: m.email ?? undefined, to: () => navigate({ to: "/teams" }), icon: Users })) },
   ].filter((grp) => grp.items.length > 0) : [];
 
   const total = groups.reduce((n, g) => n + g.items.length, 0);
@@ -41,13 +43,13 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-2 border-b border-border px-4">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks, projects, docs, goals, people…" className="flex-1 bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search tasks, projects, docs, goals, people…")} className="flex-1 bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground" />
           {search.isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-2">
-          {debounced.length < 2 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">Type at least 2 characters to search.</p>}
-          {debounced.length >= 2 && !search.isFetching && total === 0 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">No results for “{debounced}”.</p>}
+          {debounced.length < 2 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t("Type at least 2 characters to search.")}</p>}
+          {debounced.length >= 2 && !search.isFetching && total === 0 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t("No results for “{query}”.", { query: debounced })}</p>}
           {groups.map((g) => (
             <div key={g.label} className="mb-1">
               <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{g.label}</div>

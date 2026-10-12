@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
-import { fmtDate, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
+import { nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
 import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign, Sun, Moon, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,13 @@ import { useTheme, type Theme } from "@/lib/theme";
 import { useLang, type Lang } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
+
+/** "12 Oct" in the interface language (lib/nexus-api fmtDate is English-only and says "No due date" for empty). */
+function fmtDay(value: string | null | undefined, locale: string) {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(locale, { month: "short", day: "numeric" });
+}
 
 const sections = [
   { id: "profile", label: "Profile", icon: User },
@@ -24,16 +31,17 @@ const sections = [
 ];
 
 function Settings() {
+  const { t } = useLang();
   const [active, setActive] = useState("profile");
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Workspace preferences, personal setup, and tiny switches that make NEXUS feel yours." icon={<SettingsIcon className="h-6 w-6 text-primary" />} />
+      <PageHeader title={t("Settings")} subtitle={t("Your profile, security, notifications and workspace preferences.")} icon={<SettingsIcon className="h-6 w-6 text-primary" />} />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
         <aside className="lg:col-span-1 space-y-1">
           {sections.map((s) => (
             <button key={s.id} onClick={() => setActive(s.id)}
               className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${active === s.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-muted-foreground"}`}>
-              <s.icon className="h-4 w-4" /> {s.label}
+              <s.icon className="h-4 w-4" /> {t(s.label)}
             </button>
           ))}
         </aside>
@@ -49,7 +57,7 @@ function Settings() {
           {active === "whatsapp" && <WhatsAppLinkCard />}
           {!["profile","members","notifications","security","appearance","automation","webhooks","mcp","whatsapp"].includes(active) && (
             <div className="rounded-xl border border-border bg-card p-8 shadow-soft text-center text-muted-foreground text-sm">
-              {sections.find((s) => s.id === active)?.label} settings — coming soon.
+              {t("Coming soon.")}
             </div>
           )}
         </div>
@@ -63,6 +71,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 function WorkspaceMembersSection() {
+  const { t, tn } = useLang();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false });
   const me = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false }).data?.user;
@@ -88,8 +97,8 @@ function WorkspaceMembersSection() {
     return (
       <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
         <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-        <div className="text-lg font-bold">Workspace not found</div>
-        <p className="mt-2 text-sm text-muted-foreground">You need to be logged in to manage members.</p>
+        <div className="text-lg font-bold">{t("Workspace not found")}</div>
+        <p className="mt-2 text-sm text-muted-foreground">{t("You need to be signed in to manage members.")}</p>
       </div>
     );
   }
@@ -102,38 +111,38 @@ function WorkspaceMembersSection() {
       {canManage && (
         <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
           <div>
-            <h2 className="font-semibold">Invite member</h2>
-            <p className="text-xs text-muted-foreground">Add someone to the workspace and set their role (within your level).</p>
+            <h2 className="font-semibold">{t("Invite member")}</h2>
+            <p className="text-xs text-muted-foreground">{t("Add someone to the workspace and set their role (up to your own level).")}</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex-1 min-w-[200px]"><span className="text-xs font-medium text-muted-foreground">Email</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="someone@patsgroup.id" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <label className="flex-1 min-w-[200px]"><span className="text-xs font-medium text-muted-foreground">{t("Email")}</span>
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("someone@patsgroup.id")} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             </label>
-            <label><span className="text-xs font-medium text-muted-foreground">Role</span>
+            <label><span className="text-xs font-medium text-muted-foreground">{t("Role")}</span>
               <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as OrgRole)} className="mt-1 block rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60">
                 {[...myAssignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
               </select>
             </label>
-            <button disabled={!email.trim() || invite.isPending} onClick={() => invite.mutate()} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Invite</button>
+            <button disabled={!email.trim() || invite.isPending} onClick={() => invite.mutate()} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} {t("Invite")}</button>
           </div>
-          {invite.isError && <p className="text-xs font-semibold text-destructive">{(invite.error as Error)?.message ?? "Couldn't send invite."}</p>}
+          {invite.isError && <p className="text-xs font-semibold text-destructive">{(invite.error as Error)?.message ?? t("Couldn't send the invite.")}</p>}
           {invite.isSuccess && invite.data && (() => {
             const r = invite.data;
-            const to = r.member?.email ?? "them";
-            if (r.emailSent === true) return <p className="text-xs font-semibold text-emerald-600">Invite email sent to {to}.</p>;
-            if (r.emailSent !== false) return <p className="text-xs font-semibold text-emerald-600">Added {to}.</p>;
+            const to = r.member?.email ?? t("them");
+            if (r.emailSent === true) return <p className="text-xs font-semibold text-emerald-600">{t("Invite email sent to {email}.", { email: to })}</p>;
+            if (r.emailSent !== false) return <p className="text-xs font-semibold text-emerald-600">{t("Added {email}.", { email: to })}</p>;
             // Same link the email would have carried: a new account sets its password first.
             const origin = typeof window !== "undefined" ? window.location.origin : "";
             const signIn = r.accountCreated ? `${origin}/forgot-password?email=${encodeURIComponent(r.member?.email ?? "")}&invited=1` : `${origin}/login`;
-            return <p className="text-xs font-semibold text-amber-600">Added {to}, but the email could not be sent — share the sign-in link yourself: <span className="select-all break-all font-mono font-normal">{signIn}</span></p>;
+            return <p className="text-xs font-semibold text-amber-600">{t("Added {email}, but the email couldn't be sent. Share the sign-in link yourself:", { email: to })} <span className="select-all break-all font-mono font-normal">{signIn}</span></p>;
           })()}
         </div>
       )}
 
       <div className="rounded-xl border border-border bg-card shadow-soft">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-          <div><h2 className="font-semibold">Workspace members</h2><p className="text-xs text-muted-foreground">{data?.members.length ?? 0} people · your role: <RoleBadge role={myRole} /></p></div>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name/email…" className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary" />
+          <div><h2 className="font-semibold">{t("Workspace members")}</h2><p className="text-xs text-muted-foreground">{tn(data?.members.length ?? 0, "{n} person", "{n} people")} · {t("your role:")} <RoleBadge role={myRole} /></p></div>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search name or email…")} className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary" />
         </div>
         {q.isLoading ? (
           <div className="grid place-items-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -145,7 +154,7 @@ function WorkspaceMembersSection() {
                 <div key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   {m.avatar ? <img src={m.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{(m.name ?? m.email ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">(you)</span>}</div>
+                    <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">{t("(you)")}</span>}</div>
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                   </div>
                   <MemberPhoneEditor member={m} workspaceId={wsId} canEdit={canManage} />
@@ -154,15 +163,15 @@ function WorkspaceMembersSection() {
                       {[...myAssignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
                     </select>
                   ) : <RoleBadge role={m.role} />}
-                  {isBodPlus && !isSelf && canEditTier(myRole, m.role) && <button onClick={() => setPwTarget({ memberId: m.id, name: m.name })} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground" aria-label="Reset password" title="Reset password"><KeyRound className="h-4 w-4" /></button>}
-                  {canManage && !isSelf && <button onClick={() => { if (confirm(`Remove ${m.name} from the workspace?`)) remove.mutate(m.id); }} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-4 w-4" /></button>}
+                  {isBodPlus && !isSelf && canEditTier(myRole, m.role) && <button onClick={() => setPwTarget({ memberId: m.id, name: m.name })} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground" aria-label={t("Reset password")} title={t("Reset password")}><KeyRound className="h-4 w-4" /></button>}
+                  {canManage && !isSelf && <button onClick={() => { if (confirm(t("Remove {name} from the workspace?", { name: m.name }))) remove.mutate(m.id); }} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive" aria-label={t("Remove")}><Trash2 className="h-4 w-4" /></button>}
                 </div>
               );
             })}
-            {members.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">No members match.</div>}
+            {members.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">{t("No members match.")}</div>}
           </div>
         )}
-        {changeRole.isError && <p className="border-t border-border px-4 py-2 text-xs font-semibold text-destructive">{(changeRole.error as Error)?.message ?? "Couldn't change role."}</p>}
+        {changeRole.isError && <p className="border-t border-border px-4 py-2 text-xs font-semibold text-destructive">{(changeRole.error as Error)?.message ?? t("Couldn't change the role.")}</p>}
       </div>
       {pwTarget && <PasswordResetModal target={pwTarget} onClose={() => setPwTarget(null)} />}
     </div>
@@ -171,6 +180,7 @@ function WorkspaceMembersSection() {
 
 // BoD+ inline editor for a member's WhatsApp/phone number (notif target + WA-bot fallback).
 function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWorkspaceMember; workspaceId?: string; canEdit: boolean }) {
+  const { t } = useLang();
   const qc = useQueryClient();
   const [val, setVal] = useState(member.phoneNumber ?? "");
   const dirty = val.trim() !== (member.phoneNumber ?? "");
@@ -181,8 +191,8 @@ function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWork
   if (!canEdit) return member.phoneNumber ? <span className="hidden text-xs text-muted-foreground sm:inline">{member.phoneNumber}</span> : null;
   return (
     <div className="flex items-center gap-1">
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="08xx / +65…" inputMode="tel" title="Phone / WhatsApp number — for non-local numbers use + and the country code" className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
-      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label="Save number" title="Save">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
+      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("08xx / +65…")} inputMode="tel" title={t("Phone / WhatsApp number. For numbers outside Indonesia, use + and the country code.")} className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
+      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label={t("Save number")} title={t("Save")}>{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
     </div>
   );
 }
@@ -195,6 +205,7 @@ function randomPassword(len = 12) {
 }
 
 function PasswordResetModal({ target, onClose }: { target: { memberId: string; name: string }; onClose: () => void }) {
+  const { t } = useLang();
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -205,32 +216,32 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-primary" /><h3 className="font-bold">Reset password</h3></div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <div className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-primary" /><h3 className="font-bold">{t("Reset password")}</h3></div>
+          <button onClick={onClose} aria-label={t("Close")} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-4 p-5">
           {reset.isSuccess ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><b>{target.name}</b>'s password was changed ✅</div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{t("{name}'s password was changed.", { name: target.name })}</div>
               <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
                 <code className="flex-1 truncate text-sm font-semibold">{pw}</code>
-                <button onClick={copy} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-accent">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy"}</button>
+                <button onClick={copy} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-accent">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? t("Copied") : t("Copy")}</button>
               </div>
-              <p className="text-xs text-muted-foreground">Send this password to {target.name} through a secure channel. Suggest they change it themselves in Security.</p>
-              <button onClick={onClose} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Done</button>
+              <p className="text-xs text-muted-foreground">{t("Send this password to {name} through a secure channel, and ask them to change it themselves in Security.", { name: target.name })}</p>
+              <button onClick={onClose} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">{t("Done")}</button>
             </div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Set a new password for <b className="text-foreground">{target.name}</b>. At least 8 characters.</p>
+              <p className="text-sm text-muted-foreground">{t("Set a new password for {name}. At least 8 characters.", { name: target.name })}</p>
               <div className="flex items-center gap-2">
-                <input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password" autoFocus className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-                <button onClick={() => setShow((v) => !v)} className="rounded-lg border border-border px-2.5 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent">{show ? "Hide" : "Show"}</button>
+                <input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={t("New password")} autoFocus className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                <button onClick={() => setShow((v) => !v)} className="rounded-lg border border-border px-2.5 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent">{show ? t("Hide") : t("Show")}</button>
               </div>
-              <button onClick={() => { setPw(randomPassword()); setShow(true); }} className="text-xs font-semibold text-primary hover:underline">Generate a random password</button>
-              {reset.isError && <p className="text-xs font-semibold text-destructive">{(reset.error as Error)?.message ?? "Couldn't reset password."}</p>}
+              <button onClick={() => { setPw(randomPassword()); setShow(true); }} className="text-xs font-semibold text-primary hover:underline">{t("Generate a random password")}</button>
+              {reset.isError && <p className="text-xs font-semibold text-destructive">{(reset.error as Error)?.message ?? t("Couldn't reset the password.")}</p>}
               <div className="flex justify-end gap-2 pt-1">
-                <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
-                <button disabled={pw.length < 8 || reset.isPending} onClick={() => reset.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{reset.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Set password</button>
+                <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">{t("Cancel")}</button>
+                <button disabled={pw.length < 8 || reset.isPending} onClick={() => reset.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{reset.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {t("Set password")}</button>
               </div>
             </>
           )}
@@ -242,6 +253,7 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
 
 // Self-service email change with OTP-to-the-new-address (backend: /api/user/email/request + /verify).
 function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; onChanged: () => void }) {
+  const { t } = useLang();
   const [mode, setMode] = useState<"idle" | "editing" | "sent">("idle");
   const [newEmail, setNewEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -251,29 +263,29 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
 
   useEffect(() => {
     if (cooldown <= 0) return;
-    const t = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
   }, [cooldown]);
 
   const reset = () => { setMode("idle"); setNewEmail(""); setPassword(""); setCode(""); setMsg(null); };
   const request = useMutation({
     mutationFn: () => nexusApi.requestEmailChange(newEmail.trim(), password),
     onSuccess: (r) => { setMode("sent"); setCode(""); setMsg(null); setCooldown(r.resendInSeconds ?? 60); },
-    onError: (e) => setMsg(e instanceof Error ? e.message : "Gagal ngirim kode."),
+    onError: (e) => setMsg(e instanceof Error ? e.message : t("Couldn't send the code.")),
   });
   const verify = useMutation({
     mutationFn: () => nexusApi.verifyEmailChange(newEmail.trim(), code.trim()),
     onSuccess: () => { onChanged(); reset(); },
-    onError: (e) => setMsg(e instanceof Error ? e.message : "Kode salah."),
+    onError: (e) => setMsg(e instanceof Error ? e.message : t("Wrong code.")),
   });
 
   return (
     <div className="block">
-      <span className="text-xs font-medium text-muted-foreground">Email</span>
+      <span className="text-xs font-medium text-muted-foreground">{t("Email")}</span>
       {mode === "idle" ? (
         <div className="mt-1 flex items-center gap-2">
           <input value={currentEmail} disabled className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" />
-          <button type="button" onClick={() => { setMode("editing"); setMsg(null); }} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-accent">Ubah</button>
+          <button type="button" onClick={() => { setMode("editing"); setMsg(null); }} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-accent">{t("Change")}</button>
         </div>
       ) : (
         <div className="mt-1 space-y-2 rounded-lg border border-border bg-muted/20 p-3">
@@ -282,7 +294,7 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
             onChange={(e) => setNewEmail(e.target.value)}
             disabled={mode === "sent" || request.isPending}
             type="email"
-            placeholder="email baru kamu"
+            placeholder={t("Your new email")}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
           />
           {mode === "editing" && (
@@ -293,19 +305,19 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
               disabled={request.isPending}
               type="password"
               autoComplete="current-password"
-              placeholder="password kamu sekarang"
+              placeholder={t("Your current password")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
             />
-            <p className="text-[11px] text-muted-foreground">Untuk memastikan ini kamu. Email lamamu akan diberi tahu soal perubahan ini.</p>
+            <p className="text-[11px] text-muted-foreground">{t("To make sure it's you. Your old email will be told about this change.")}</p>
             <div className="flex items-center gap-2">
-              <button type="button" disabled={!newEmail.trim() || !password || request.isPending} onClick={() => request.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{request.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Kirim kode</button>
-              <button type="button" onClick={reset} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+              <button type="button" disabled={!newEmail.trim() || !password || request.isPending} onClick={() => request.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{request.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {t("Send code")}</button>
+              <button type="button" onClick={reset} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">{t("Cancel")}</button>
             </div>
             </>
           )}
           {mode === "sent" && (
             <>
-              <p className="text-[11px] text-muted-foreground">Kode 6 digit dikirim ke <b>{newEmail.trim()}</b>. Cek inbox (& spam).</p>
+              <p className="text-[11px] text-muted-foreground">{t("A 6-digit code was sent to {email}. Check your inbox (and spam).", { email: newEmail.trim() })}</p>
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -314,9 +326,9 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center text-sm font-bold tracking-[0.4em] outline-none focus:border-primary"
               />
               <div className="flex items-center gap-2">
-                <button type="button" disabled={code.length !== 6 || verify.isPending} onClick={() => verify.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{verify.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Verifikasi & ganti</button>
-                <button type="button" disabled={cooldown > 0 || request.isPending} onClick={() => request.mutate()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{cooldown > 0 ? `Kirim ulang (${cooldown}s)` : "Kirim ulang kode"}</button>
-                <button type="button" onClick={reset} className="ml-auto rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+                <button type="button" disabled={code.length !== 6 || verify.isPending} onClick={() => verify.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{verify.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Verify & change")}</button>
+                <button type="button" disabled={cooldown > 0 || request.isPending} onClick={() => request.mutate()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{cooldown > 0 ? t("Resend ({n}s)", { n: cooldown }) : t("Resend code")}</button>
+                <button type="button" onClick={reset} className="ml-auto rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">{t("Cancel")}</button>
               </div>
             </>
           )}
@@ -328,6 +340,7 @@ function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; o
 }
 
 function ProfileSection() {
+  const { t } = useLang();
   const qc = useQueryClient();
   const profile = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false });
   const u = profile.data?.user;
@@ -349,8 +362,8 @@ function ProfileSection() {
     <div className="space-y-6">
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-6">
         <div>
-          <h2 className="font-semibold">Profile</h2>
-          <p className="text-xs text-muted-foreground">Visible to your teammates</p>
+          <h2 className="font-semibold">{t("Profile")}</h2>
+          <p className="text-xs text-muted-foreground">{t("Visible to your teammates")}</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -363,35 +376,35 @@ function ProfileSection() {
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <button onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-4 w-4" />Change photo</button>
-              {u?.avatar && <button onClick={() => removeAvatar.mutate()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" />Remove</button>}
+              <button onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-4 w-4" />{t("Change photo")}</button>
+              {u?.avatar && <button onClick={() => removeAvatar.mutate()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" />{t("Remove")}</button>}
             </div>
-            <p className="text-xs text-muted-foreground">PNG, JPG, or WEBP. Max 5MB.</p>
-            {uploadAvatar.isError && <p className="text-xs font-semibold text-destructive">{(uploadAvatar.error as Error)?.message ?? "Upload failed."}</p>}
+            <p className="text-xs text-muted-foreground">{t("PNG, JPG or WEBP. Max 5 MB.")}</p>
+            {uploadAvatar.isError && <p className="text-xs font-semibold text-destructive">{(uploadAvatar.error as Error)?.message ?? t("Upload failed.")}</p>}
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onPick} />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block"><span className="text-xs font-medium text-muted-foreground">Full name</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
+          <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("Full name")}</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
           <EmailChangeField currentEmail={u?.email ?? ""} onChanged={refreshProfile} />
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">Google Workspace</span>
             <div className="mt-1 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
               {u?.googleWorkspaceEmail
                 ? <><AtSign className="h-4 w-4 shrink-0 text-primary" /><span className="truncate font-medium">{u.googleWorkspaceEmail}</span></>
-                : <span className="text-muted-foreground">No company Google account linked yet. A BoD links it from Control Room.</span>}
+                : <span className="text-muted-foreground">{t("No company Google account linked yet. A BoD links it from Control Room.")}</span>}
             </div>
           </label>
           <label className="block sm:col-span-2">
-            <span className="text-xs font-medium text-muted-foreground">Phone number (WhatsApp)</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08xxxxxxxxxx · for non-local numbers use + (e.g. +65…)" inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-            <span className="mt-1 block text-[11px] text-muted-foreground">Used for WhatsApp notifications (assigns &amp; mentions) and as a fallback if you haven't linked your WA account yet. For international numbers, type <code>+</code> and the country code.</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("Phone number (WhatsApp)")}</span>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("08xxxxxxxxxx · outside Indonesia, start with + (e.g. +65…)")} inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <span className="mt-1 block text-[11px] text-muted-foreground">{t("Used for WhatsApp notifications (assignments and mentions) and as a fallback if you haven't linked WhatsApp yet. For numbers outside Indonesia, type + and the country code.")}</span>
           </label>
         </div>
         <div className="pt-4 border-t border-border flex justify-end gap-2">
-          <button disabled={!name.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save</button>
+          <button disabled={!name.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Save")}</button>
         </div>
-        {save.isSuccess && <p className="text-right text-xs font-semibold text-success">Profile saved.</p>}
+        {save.isSuccess && <p className="text-right text-xs font-semibold text-success">{t("Profile saved.")}</p>}
       </div>
       <PasswordSection />
       <DeleteAccountSection />
@@ -400,15 +413,16 @@ function ProfileSection() {
 }
 
 function DeleteAccountSection() {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-xl border border-destructive/40 bg-card p-6 shadow-soft space-y-3">
       <div>
-        <h2 className="font-semibold text-destructive">Delete account</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Permanently delete your NEXUS account. You won't be able to sign in again, and this cannot be undone.</p>
+        <h2 className="font-semibold text-destructive">{t("Delete account")}</h2>
+        <p className="mt-1 text-xs text-muted-foreground">{t("Permanently delete your NEXUS account. You won't be able to sign in again, and this can't be undone.")}</p>
       </div>
       <div className="flex justify-end">
-        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-1.5 text-sm font-semibold text-destructive-foreground shadow-soft transition-all duration-150 hover:bg-destructive/90 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> Delete account</button>
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-1.5 text-sm font-semibold text-destructive-foreground shadow-soft transition-all duration-150 hover:bg-destructive/90 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> {t("Delete account")}</button>
       </div>
       {open && <DeleteAccountDialog onClose={() => setOpen(false)} />}
     </div>
@@ -416,6 +430,7 @@ function DeleteAccountSection() {
 }
 
 function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useLang();
   const [typed, setTyped] = useState("");
   const del = useMutation({
     mutationFn: () => nexusApi.deleteMyAccount(),
@@ -432,25 +447,25 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /><h3 id="delete-account-title" className="font-bold">Delete your account?</h3></div>
-          <button onClick={onClose} disabled={busy} aria-label="Close" className="rounded-full p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"><X className="h-4 w-4" /></button>
+          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /><h3 id="delete-account-title" className="font-bold">{t("Delete your account?")}</h3></div>
+          <button onClick={onClose} disabled={busy} aria-label={t("Close")} className="rounded-full p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-4 p-5">
-          <p className="text-sm text-muted-foreground">Here's exactly what happens:</p>
+          <p className="text-sm text-muted-foreground">{t("Here's exactly what happens:")}</p>
           <ul className="list-disc space-y-1.5 pl-5 text-sm">
-            <li>You're signed out everywhere and can no longer sign in — on the web or in the app.</li>
-            <li>Your name, email, photo and phone number are removed from NEXUS.</li>
-            <li>Your company keeps your attendance, task and XP history. It will show as <b>"Deleted account"</b>.</li>
-            <li>This cannot be undone. Your email becomes free, so you could sign up again later as a new account.</li>
+            <li>{t("You're signed out everywhere and can no longer sign in, on the web or in the app.")}</li>
+            <li>{t("Your name, email, photo and phone number are removed from NEXUS.")}</li>
+            <li>{t("Your company keeps your attendance, task and XP history. It will show as “Deleted account”.")}</li>
+            <li>{t("This can't be undone. Your email becomes free, so you could sign up again later as a new account.")}</li>
           </ul>
           <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Type <b className="font-mono text-foreground">DELETE</b> to confirm</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("Type {word} to confirm", { word: "DELETE" })}</span>
             <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" autoCapitalize="characters" spellCheck={false} disabled={busy} placeholder="DELETE" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none focus:border-destructive" />
           </label>
-          {del.isError && <p className="text-xs font-semibold text-destructive">{(del.error as Error)?.message ?? "Couldn't delete your account. Please try again."}</p>}
+          {del.isError && <p className="text-xs font-semibold text-destructive">{(del.error as Error)?.message ?? t("Couldn't delete your account. Try again.")}</p>}
           <div className="flex justify-end gap-2">
-            <button onClick={onClose} disabled={busy} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">Cancel</button>
-            <button disabled={!confirmed || busy} onClick={() => del.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete my account</button>
+            <button onClick={onClose} disabled={busy} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">{t("Cancel")}</button>
+            <button disabled={!confirmed || busy} onClick={() => del.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} {t("Delete my account")}</button>
           </div>
         </div>
       </div>
@@ -459,26 +474,28 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
 }
 
 function PasswordSection() {
+  const { t } = useLang();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const change = useMutation({ mutationFn: () => nexusApi.changePassword(current, next), onSuccess: () => { setCurrent(""); setNext(""); } });
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-      <h2 className="font-semibold">Password</h2>
+      <h2 className="font-semibold">{t("Password")}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="block"><span className="text-xs font-medium text-muted-foreground">Current password</span><input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
-        <label className="block"><span className="text-xs font-medium text-muted-foreground">New password</span><input type="password" value={next} onChange={(e) => setNext(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
+        <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("Current password")}</span><input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
+        <label className="block"><span className="text-xs font-medium text-muted-foreground">{t("New password")}</span><input type="password" value={next} onChange={(e) => setNext(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
       </div>
       <div className="flex items-center justify-end gap-2">
-        {change.isSuccess && <span className="text-xs font-semibold text-success">Password updated.</span>}
-        {change.isError && <span className="text-xs font-semibold text-destructive">Failed — check your current password.</span>}
-        <button disabled={!current || next.length < 6 || change.isPending} onClick={() => change.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{change.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Change password</button>
+        {change.isSuccess && <span className="text-xs font-semibold text-success">{t("Password updated.")}</span>}
+        {change.isError && <span className="text-xs font-semibold text-destructive">{t("Couldn't change it. Check your current password.")}</span>}
+        <button disabled={!current || next.length < 6 || change.isPending} onClick={() => change.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{change.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Change password")}</button>
       </div>
     </div>
   );
 }
 
 function PasskeysSection() {
+  const { t, locale } = useLang();
   const qc = useQueryClient();
   // WebAuthn is a browser API, so this can only be answered after mount — never during SSR.
   const [supported, setSupported] = useState(false);
@@ -493,46 +510,46 @@ function PasskeysSection() {
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
       <div>
-        <h2 className="font-semibold">Passkeys</h2>
-        <p className="text-xs text-muted-foreground">Sign in with Face ID, Touch ID, Windows Hello, or your phone &mdash; no password to type. The key stays on your device; NEXUS only keeps the public half.</p>
+        <h2 className="font-semibold">{t("Passkeys")}</h2>
+        <p className="text-xs text-muted-foreground">{t("Sign in with Face ID, Touch ID, Windows Hello or your phone, without typing a password. The key stays on your device; NEXUS only keeps the public half.")}</p>
       </div>
       {!supported ? (
-        <p className="text-sm text-muted-foreground">This browser doesn&apos;t support passkeys. Try a recent Chrome, Safari, or Edge — you can still remove the ones below.</p>
+        <p className="text-sm text-muted-foreground">{t("This browser doesn't support passkeys. Try a recent Chrome, Safari or Edge. You can still remove the ones below.")}</p>
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Device name (e.g. MacBook Pro)" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("Device name (e.g. MacBook Pro)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             <button disabled={add.isPending} onClick={() => add.mutate()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
-              {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Add passkey
+              {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {t("Add passkey")}
             </button>
           </div>
-          {add.isSuccess && add.data && <p className="text-xs font-semibold text-success">Passkey added. Use it to sign in next time.</p>}
-          {add.isError && <p className="text-xs font-semibold text-destructive">{(add.error as Error)?.message ?? "Couldn't add that passkey."}</p>}
+          {add.isSuccess && add.data && <p className="text-xs font-semibold text-success">{t("Passkey added. Use it to sign in next time.")}</p>}
+          {add.isError && <p className="text-xs font-semibold text-destructive">{(add.error as Error)?.message ?? t("Couldn't add that passkey.")}</p>}
         </>
       )}
 
       <div className="space-y-2 border-t border-border pt-4">
-        <h3 className="text-sm font-semibold">Your passkeys {rows.length > 0 && <span className="text-xs font-normal text-muted-foreground">({rows.length})</span>}</h3>
-        {list.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-        {list.isError && <p className="text-sm text-muted-foreground">{(list.error as Error)?.message ?? "Couldn't load your passkeys."}</p>}
-        {!list.isLoading && !list.isError && rows.length === 0 && <p className="text-sm text-muted-foreground">No passkeys yet. Add one above and you can skip the password next time.</p>}
+        <h3 className="text-sm font-semibold">{t("Your passkeys")} {rows.length > 0 && <span className="text-xs font-normal text-muted-foreground">({rows.length})</span>}</h3>
+        {list.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
+        {list.isError && <p className="text-sm text-muted-foreground">{(list.error as Error)?.message ?? t("Couldn't load your passkeys.")}</p>}
+        {!list.isLoading && !list.isError && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No passkeys yet. Add one above and you can skip the password next time.")}</p>}
         {rows.map((k) => {
-          const name = k.label?.trim() || "Unnamed device";
+          const name = k.label?.trim() || t("Unnamed device");
           const pending = revoke.isPending && revoke.variables === k.id;
           return (
             <div key={k.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{name}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">added {fmtDate(k.createdAt)} · {k.lastUsedAt ? `last used ${fmtDate(k.lastUsedAt)}` : "Never used"}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{t("Added {date}", { date: fmtDay(k.createdAt, locale) })} · {k.lastUsedAt ? t("last used {date}", { date: fmtDay(k.lastUsedAt, locale) }) : t("never used")}</div>
               </div>
               {/* Revoking is permanent — that device has to enrol all over again — so confirm first. */}
-              <button disabled={pending} onClick={() => { if (confirm(`Remove "${name}"? This can't be undone — that device will have to enrol a new passkey.`)) revoke.mutate(k.id); }} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] disabled:opacity-50">
-                {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Remove
+              <button disabled={pending} onClick={() => { if (confirm(t("Remove “{name}”? This can't be undone. That device will have to add a new passkey.", { name }))) revoke.mutate(k.id); }} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] disabled:opacity-50">
+                {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} {t("Remove")}
               </button>
             </div>
           );
         })}
-        {revoke.isError && <p className="text-xs font-semibold text-destructive">{(revoke.error as Error)?.message ?? "Couldn't remove that passkey."}</p>}
+        {revoke.isError && <p className="text-xs font-semibold text-destructive">{(revoke.error as Error)?.message ?? t("Couldn't remove that passkey.")}</p>}
       </div>
     </div>
   );
@@ -545,16 +562,16 @@ function NotificationsSection() {
   const update = useMutation({ mutationFn: (patch: Record<string, boolean>) => nexusApi.updateNotificationPreferences(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "notif-prefs"] }) });
   const { t } = useLang();
   const toggles: Array<{ key: "emailEnabled" | "slackEnabled" | "desktopEnabled" | "desktopSoundEnabled" | "automation"; label: string; desc: string; defaultOn?: boolean }> = [
-    { key: "emailEnabled", label: "Email notifications", desc: "Mentions, assignments, and updates via email" },
-    { key: "slackEnabled", label: "Slack notifications", desc: "Push key events to your Slack" },
-    { key: "desktopEnabled", label: "Desktop notifications", desc: "Browser/desktop push" },
-    { key: "desktopSoundEnabled", label: "Desktop sound", desc: "Play a sound on desktop alerts" },
+    { key: "emailEnabled", label: t("Email notifications"), desc: t("Mentions, assignments and updates by email") },
+    { key: "slackEnabled", label: t("Slack notifications"), desc: t("Send important events to your Slack") },
+    { key: "desktopEnabled", label: t("Desktop notifications"), desc: t("Browser and desktop notifications") },
+    { key: "desktopSoundEnabled", label: t("Desktop sound"), desc: t("Play a sound with desktop notifications") },
     { key: "automation", label: t("Automation notifications"), desc: t("Push when a project automation notifies you. Off: they still land in your inbox, silently."), defaultOn: true },
   ];
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-      <h2 className="font-semibold">Notifications</h2>
-      {prefs.isLoading && <p className="text-sm text-muted-foreground">Loading preferences…</p>}
+      <h2 className="font-semibold">{t("Notifications")}</h2>
+      {prefs.isLoading && <p className="text-sm text-muted-foreground">{t("Loading preferences…")}</p>}
       <div className="space-y-2">
         {toggles.map((o) => {
           const on = p?.[o.key] === undefined ? !!o.defaultOn : Boolean(p?.[o.key]);
@@ -574,6 +591,7 @@ function NotificationsSection() {
 }
 
 function WhatsAppLinkCard() {
+  const { t } = useLang();
   const qc = useQueryClient();
   // Poll while unlinked so the card auto-flips to "Terhubung" the moment the user sends /link in WhatsApp.
   const status = useQuery({ queryKey: ["wa-link"], queryFn: nexusApi.waLinkStatus, retry: false, refetchInterval: 5000 });
@@ -587,28 +605,28 @@ function WhatsAppLinkCard() {
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
       <div className="flex items-center gap-2">
         <MessageCircle className="h-4 w-4 text-primary" />
-        <h2 className="font-semibold">WhatsApp (Gideon)</h2>
-        {linked && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">Connected</span>}
+        <h2 className="font-semibold">WhatsApp (GIDEON)</h2>
+        {linked && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">{t("Connected")}</span>}
       </div>
-      <p className="text-xs text-muted-foreground">Link your WhatsApp so you can use quick commands (<code>/today</code>, <code>/done</code>, …) right from chat, and assign/mention notifications reach you directly.</p>
+      <p className="text-xs text-muted-foreground">{t("Link your WhatsApp to use quick commands ({examples}) from the chat, and to get assignment and mention notifications there.", { examples: "/today, /done, …" })}</p>
 
       {linked ? (
         <div className="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-3">
-          <span className="text-sm font-medium text-success">✅ WhatsApp connected</span>
-          <button onClick={() => unlink.mutate()} disabled={unlink.isPending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">{unlink.isPending ? "…" : "Disconnect"}</button>
+          <span className="text-sm font-medium text-success">{t("WhatsApp connected")}</span>
+          <button onClick={() => unlink.mutate()} disabled={unlink.isPending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">{unlink.isPending ? "…" : t("Disconnect")}</button>
         </div>
       ) : gen ? (
         <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">Send this message to the NEXUS WhatsApp bot (the number that usually sends your notifications):</div>
+          <div className="text-xs text-muted-foreground">{t("Send this message to the NEXUS WhatsApp bot (the number that usually sends your notifications):")}</div>
           <div className="flex items-center gap-2">
             <code className="flex-1 rounded-md bg-background px-3 py-2 text-sm font-bold tracking-wider">/link {gen.code}</code>
-            <button onClick={() => { navigator.clipboard?.writeText(`/link ${gen.code}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent" aria-label="Copy">{copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}</button>
+            <button onClick={() => { navigator.clipboard?.writeText(`/link ${gen.code}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent" aria-label={t("Copy")}>{copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}</button>
           </div>
-          {gen.deepLink && <a href={gen.deepLink} target="_blank" rel="noreferrer" className="block rounded-lg bg-primary py-2 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">Open WhatsApp →</a>}
-          <p className="text-[11px] text-muted-foreground">Code is valid for 10 minutes. This page updates automatically once you send it.</p>
+          {gen.deepLink && <a href={gen.deepLink} target="_blank" rel="noreferrer" className="block rounded-lg bg-primary py-2 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">{t("Open WhatsApp →")}</a>}
+          <p className="text-[11px] text-muted-foreground">{t("The code is valid for 10 minutes. This page updates by itself once you send it.")}</p>
         </div>
       ) : (
-        <button onClick={() => generate.mutate()} disabled={generate.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60">{generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} Link WhatsApp</button>
+        <button onClick={() => generate.mutate()} disabled={generate.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60">{generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} {t("Link WhatsApp")}</button>
       )}
     </div>
   );
@@ -629,6 +647,7 @@ function AutomationSection() {
 const WEBHOOK_EVENTS = ["task.created", "task.updated", "task.completed", "comment.created", "project.updated"];
 
 function WebhooksSection() {
+  const { t } = useLang();
   const qc = useQueryClient();
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState<string[]>(["task.created"]);
@@ -641,29 +660,29 @@ function WebhooksSection() {
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-      <h2 className="font-semibold">Webhooks</h2>
+      <h2 className="font-semibold">{t("Webhooks")}</h2>
       <div className="space-y-2">
-        {list.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-        {!list.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">No webhooks yet.</p>}
+        {list.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
+        {!list.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No webhooks yet.")}</p>}
         {rows.map((w) => (
           <div key={w.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
             <div className="min-w-0">
               <div className="truncate font-mono text-sm">{w.url}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{(w.events ?? []).join(", ")}{w.project?.name ? ` · ${w.project.name}` : ""}</div>
             </div>
-            <button onClick={() => { if (confirm("Delete webhook?")) del.mutate(w.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+            <button onClick={() => { if (confirm(t("Delete this webhook?"))) del.mutate(w.id); }} aria-label={t("Delete")} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
       </div>
       <div className="space-y-2 border-t border-border pt-4">
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-endpoint.com/hook" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("https://your-endpoint.com/hook")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         <div className="flex flex-wrap gap-1.5">
           {WEBHOOK_EVENTS.map((e) => (
             <button key={e} onClick={() => toggle(e)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${events.includes(e) ? "border-primary/40 bg-primary/10 text-primary" : "border-border hover:bg-accent"}`}>{e}</button>
           ))}
         </div>
-        <button disabled={!url.includes("http") || events.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Add webhook</button>
-        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Failed — check the URL/access.</span>}
+        <button disabled={!url.includes("http") || events.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Add webhook")}</button>
+        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{t("Couldn't add it. Check the URL and access.")}</span>}
       </div>
     </div>
   );
@@ -672,6 +691,7 @@ function WebhooksSection() {
 const MCP_URL = "https://nexus.patsgroup.id/api/mcp";
 
 function CopyBox({ label, value, mono = true }: { label?: string; value: string; mono?: boolean }) {
+  const { t } = useLang();
   const [copied, setCopied] = useState(false);
   const copy = () => { navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
   return (
@@ -680,11 +700,23 @@ function CopyBox({ label, value, mono = true }: { label?: string; value: string;
       <div className="flex items-stretch gap-2">
         <div className={cn("min-w-0 flex-1 overflow-x-auto rounded-lg border border-border bg-background px-3 py-2 text-xs", mono && "font-mono")}>{value}</div>
         <button onClick={copy} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-semibold transition hover:bg-accent active:scale-[0.97]">
-          {copied ? <><Check className="h-3.5 w-3.5 text-emerald-500" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+          {copied ? <><Check className="h-3.5 w-3.5 text-emerald-500" /> {t("Copied")}</> : <><Copy className="h-3.5 w-3.5" /> {t("Copy")}</>}
         </button>
       </div>
     </div>
   );
+}
+
+/**
+ * A translated sentence that keeps its emphasis inside the string, so each language puts it where its
+ * grammar wants: `**Settings → Connectors**` is bold, a `backtick` part is code.
+ */
+function rich(s: string): React.ReactNode[] {
+  return s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <span key={i} className="font-semibold">{part.slice(2, -2)}</span>;
+    if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) return <span key={i} className="font-mono text-xs">{part.slice(1, -1)}</span>;
+    return part;
+  });
 }
 
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
@@ -697,6 +729,7 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
 }
 
 function McpTutorial() {
+  const { t } = useLang();
   const [tab, setTab] = useState<"app" | "cli" | "desktop">("app");
   const tabs = [
     { id: "app" as const, label: "Claude app", icon: Globe },
@@ -714,59 +747,59 @@ function McpTutorial() {
 }`;
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-      <h2 className="font-semibold">How to set it up</h2>
+      <h2 className="font-semibold">{t("How to set it up")}</h2>
       <div className="flex flex-wrap gap-1.5">
-        {tabs.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === t.id ? "bg-primary text-primary-foreground" : "border border-border hover:bg-accent"}`}>
-            <t.icon className="h-3.5 w-3.5" /> {t.label}
+        {tabs.map((o) => (
+          <button key={o.id} onClick={() => setTab(o.id)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === o.id ? "bg-primary text-primary-foreground" : "border border-border hover:bg-accent"}`}>
+            <o.icon className="h-3.5 w-3.5" /> {t(o.label)}
           </button>
         ))}
       </div>
 
       {tab === "app" && (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">For Claude on <span className="font-semibold">web (claude.ai), desktop, or mobile</span>. Easiest option — no token needed, just log in.</p>
+          <p className="text-xs text-muted-foreground">{rich(t("For Claude on **web (claude.ai), desktop or mobile**. The easiest option: no token needed, just sign in."))}</p>
           <ol className="space-y-3">
-            <Step n={1}>Open Claude → <span className="font-semibold">Settings → Connectors</span> (on mobile: Settings → Connectors).</Step>
-            <Step n={2}>Tap <span className="font-semibold">“Add custom connector”</span>.</Step>
-            <Step n={3}>Paste this URL as the server URL:</Step>
+            <Step n={1}>{rich(t("Open Claude → **Settings → Connectors** (on mobile: Settings → Connectors)."))}</Step>
+            <Step n={2}>{rich(t("Tap **“Add custom connector”**."))}</Step>
+            <Step n={3}>{t("Paste this URL as the server URL:")}</Step>
           </ol>
           <CopyBox value={MCP_URL} />
           <ol className="space-y-3" start={4}>
-            <Step n={4}>Claude will open a <span className="font-semibold">NEXUS</span> page — log in (if you haven't) and tap <span className="font-semibold">“Allow”</span>.</Step>
-            <Step n={5}>Done! The NEXUS tools show up in Claude right away. 🎉</Step>
+            <Step n={4}>{rich(t("Claude opens a **NEXUS** page. Sign in (if you haven't) and tap **“Allow”**."))}</Step>
+            <Step n={5}>{t("Done. The NEXUS tools show up in Claude right away.")}</Step>
           </ol>
         </div>
       )}
 
       {tab === "cli" && (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">For <span className="font-semibold">Claude Code</span> (CLI in your terminal). Uses a token.</p>
+          <p className="text-xs text-muted-foreground">{rich(t("For **Claude Code** (the CLI in your terminal). Uses a token."))}</p>
           <ol className="space-y-3">
-            <Step n={1}>Generate a token below (the “Generate a token” section), then copy it.</Step>
-            <Step n={2}>Run this command in your terminal (replace <span className="font-mono text-xs">nxs_…</span> with your token):</Step>
+            <Step n={1}>{t("Generate a token below (the “Generate a token” section), then copy it.")}</Step>
+            <Step n={2}>{rich(t("Run this command in your terminal (replace `nxs_…` with your token):"))}</Step>
           </ol>
           <CopyBox value={`claude mcp add --transport http nexus ${MCP_URL} --header "Authorization: Bearer nxs_YOUR_TOKEN"`} />
           <ol className="space-y-3" start={3}>
-            <Step n={3}>Check with <span className="font-mono text-xs">/mcp</span> inside Claude Code — the “nexus” server should be connected.</Step>
+            <Step n={3}>{rich(t("Check with `/mcp` inside Claude Code. The “nexus” server should be connected."))}</Step>
           </ol>
         </div>
       )}
 
       {tab === "desktop" && (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">For <span className="font-semibold">Claude Desktop</span> via a config file (an alternative if you'd rather not use the Connectors UI). Requires <span className="font-semibold">Node.js</span> installed.</p>
+          <p className="text-xs text-muted-foreground">{rich(t("For **Claude Desktop** through a config file (if you'd rather not use Connectors). Needs **Node.js** installed."))}</p>
           <ol className="space-y-3">
-            <Step n={1}>Generate a token below, then copy it.</Step>
-            <Step n={2}>Open <span className="font-semibold">Claude Desktop → Settings → Developer → Edit Config</span>.</Step>
-            <Step n={3}>Fill in (or merge) it like this — swap in your token:</Step>
+            <Step n={1}>{t("Generate a token below, then copy it.")}</Step>
+            <Step n={2}>{rich(t("Open **Claude Desktop → Settings → Developer → Edit Config**."))}</Step>
+            <Step n={3}>{t("Fill it in (or merge it) like this, with your token:")}</Step>
           </ol>
           <CopyBox value={desktopConfig} />
           <ol className="space-y-3" start={4}>
-            <Step n={4}><span className="font-semibold">Restart</span> Claude Desktop. The NEXUS tools show up under the connector icon.</Step>
+            <Step n={4}>{rich(t("**Restart** Claude Desktop. The NEXUS tools show up under the connector icon."))}</Step>
           </ol>
-          <p className="text-xs text-muted-foreground">If it fails to connect, add <span className="font-mono">"--transport", "http-only"</span> to <span className="font-mono">args</span>.</p>
+          <p className="text-xs text-muted-foreground">{rich(t("If it doesn't connect, add `\"--transport\", \"http-only\"` to `args`."))}</p>
         </div>
       )}
     </div>
@@ -774,6 +807,7 @@ function McpTutorial() {
 }
 
 function McpTokensSection() {
+  const { t, locale } = useLang();
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(90);
@@ -782,7 +816,7 @@ function McpTokensSection() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "mcp-tokens"] });
   const create = useMutation({
     mutationFn: () => nexusApi.createMcpToken({ name: name.trim() || undefined, expiresInDays }),
-    onSuccess: (t) => { setFresh(t.token); setName(""); invalidate(); },
+    onSuccess: (r) => { setFresh(r.token); setName(""); invalidate(); },
   });
   const revoke = useMutation({ mutationFn: (id: string) => nexusApi.revokeMcpToken(id), onSuccess: invalidate });
   const rows = list.data?.tokens ?? [];
@@ -794,8 +828,8 @@ function McpTokensSection() {
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10"><Sparkles className="h-5 w-5 text-primary" /></div>
           <div>
-            <h2 className="font-semibold">Connect Claude to NEXUS</h2>
-            <p className="text-xs text-muted-foreground">Generate a personal token so Claude (Claude Code / API) can read &amp; manage <span className="font-semibold">tasks</span> on your behalf. The token acts as you — same access you already have. It <span className="font-semibold">cannot</span> touch XP, day-off, attendance, or any admin-only setting.</p>
+            <h2 className="font-semibold">{t("Connect Claude to NEXUS")}</h2>
+            <p className="text-xs text-muted-foreground">{rich(t("Generate a personal token so Claude (Claude Code or the API) can read and manage **tasks** for you. The token acts as you, with the same access you already have. It **can't** touch XP, day off, attendance or any admin-only setting."))}</p>
           </div>
         </div>
       </div>
@@ -804,52 +838,49 @@ function McpTokensSection() {
 
       {fresh && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 shadow-soft space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400"><Check className="h-4 w-4" /> Token created</div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400"><Check className="h-4 w-4" /> {t("Token created")}</div>
           <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Copy it now — for security it&apos;s shown only once and can&apos;t be retrieved again.
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {t("Copy it now. For security it's shown only once and can't be shown again.")}
           </div>
-          <CopyBox label="Your token" value={fresh} />
-          <CopyBox label="Run this in your terminal (Claude Code)" value={connectCmd} />
-          <button onClick={() => setFresh(null)} className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline">I&apos;ve copied it — hide</button>
+          <CopyBox label={t("Your token")} value={fresh} />
+          <CopyBox label={t("Run this in your terminal (Claude Code)")} value={connectCmd} />
+          <button onClick={() => setFresh(null)} className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline">{t("I've copied it, hide it")}</button>
         </div>
       )}
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-        <h2 className="font-semibold">Generate a token</h2>
+        <h2 className="font-semibold">{t("Generate a token")}</h2>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Label (e.g. My laptop)" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Label (e.g. My laptop)")} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           <select value={expiresInDays} onChange={(e) => setExpiresInDays(Number(e.target.value))} className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-            <option value={30}>Expires in 30 days</option>
-            <option value={90}>Expires in 90 days</option>
-            <option value={180}>Expires in 180 days</option>
-            <option value={365}>Expires in 365 days</option>
+            {[30, 90, 180, 365].map((d) => <option key={d} value={d}>{t("Expires in {n} days", { n: d })}</option>)}
           </select>
         </div>
         <button disabled={create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} Generate token
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} {t("Generate token")}
         </button>
-        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn't create token."}</span>}
+        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? t("Couldn't create the token.")}</span>}
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
-        <h2 className="font-semibold">Your tokens {rows.length > 0 && <span className="text-xs font-normal text-muted-foreground">({rows.length}/10)</span>}</h2>
-        {list.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-        {!list.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">No tokens yet. Generate one above to connect Claude.</p>}
+        <h2 className="font-semibold">{t("Your tokens")} {rows.length > 0 && <span className="text-xs font-normal text-muted-foreground">({rows.length}/10)</span>}</h2>
+        {list.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
+        {!list.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No tokens yet. Generate one above to connect Claude.")}</p>}
         <div className="space-y-2">
-          {rows.map((t) => {
-            const expired = t.expiresAt ? new Date(t.expiresAt).getTime() < Date.now() : false;
+          {rows.map((tok) => {
+            const expired = tok.expiresAt ? new Date(tok.expiresAt).getTime() < Date.now() : false;
             return (
-              <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div key={tok.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 truncate text-sm font-medium">
-                    {t.name}
-                    {expired && <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">EXPIRED</span>}
+                    {tok.name}
+                    {expired && <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive">{t("Expired")}</span>}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    created {fmtDate(t.createdAt)} · {t.lastUsedAt ? `last used ${fmtDate(t.lastUsedAt)}` : "never used"}{t.expiresAt ? ` · expires ${fmtDate(t.expiresAt)}` : ""}
+                    {t("Created {date}", { date: fmtDay(tok.createdAt, locale) })} · {tok.lastUsedAt ? t("last used {date}", { date: fmtDay(tok.lastUsedAt, locale) }) : t("never used")}{tok.expiresAt ? ` · ${t("expires {date}", { date: fmtDay(tok.expiresAt, locale) })}` : ""}
                   </div>
                 </div>
-                <button onClick={() => { if (confirm(`Revoke "${t.name}"? Claude will lose access immediately.`)) revoke.mutate(t.id); }} className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97]">Revoke</button>
+                <button onClick={() => { if (confirm(t("Revoke “{name}”? Claude loses access right away.", { name: tok.name }))) revoke.mutate(tok.id); }} className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97]">{t("Revoke")}</button>
               </div>
             );
           })}
@@ -908,6 +939,7 @@ function AppearanceSection() {
 }
 
 function SecuritySection() {
+  const { t, locale } = useLang();
   const qc = useQueryClient();
   const sessions = useQuery({ queryKey: ["nexus", "sessions"], queryFn: nexusApi.userSessions, retry: false });
   const revoke = useMutation({ mutationFn: (id: string) => nexusApi.revokeSession(id), onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "sessions"] }) });
@@ -917,17 +949,17 @@ function SecuritySection() {
       <PasswordSection />
       <PasskeysSection />
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
-        <h2 className="font-semibold">Active sessions</h2>
-        {sessions.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-        {!sessions.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">No active sessions.</p>}
+        <h2 className="font-semibold">{t("Active sessions")}</h2>
+        {sessions.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
+        {!sessions.isLoading && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("No active sessions.")}</p>}
         <div className="space-y-2">
           {rows.map((s) => (
             <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{s.userAgent || "Unknown device"}</div>
-                <div className="text-xs text-muted-foreground">{s.ipAddress || "—"} · started {fmtDate(s.createdAt)}</div>
+                <div className="truncate text-sm font-medium">{s.userAgent || t("Unknown device")}</div>
+                <div className="text-xs text-muted-foreground">{s.ipAddress || "—"} · {t("started {date}", { date: fmtDay(s.createdAt, locale) })}</div>
               </div>
-              <button onClick={() => revoke.mutate(s.id)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-[0.97]">Revoke</button>
+              <button onClick={() => revoke.mutate(s.id)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-[0.97]">{t("Revoke")}</button>
             </div>
           ))}
         </div>

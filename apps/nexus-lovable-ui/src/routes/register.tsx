@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Loader2, MailCheck } from "lucide-react";
 import nexusLogo from "@/assets/nexus-logo.png";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
+import { useLang } from "@/lib/lang";
 
 // `?code=` prefills the workspace code, so a company can hand out one link instead of a code
 // people have to retype: /register?code=A1B2C3D4E5F6.
@@ -23,6 +24,7 @@ function errMsg(err: unknown, fallback: string) {
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const { t } = useLang();
   const search = Route.useSearch();
   const [step, setStep] = useState<"form" | "otp">("form");
   // Sent at both steps. The server only acts on it at /verify, but checks it at /register so a
@@ -45,16 +47,16 @@ function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (!name.trim() || !email.trim() || password.length < 8) {
-      setError("Fill in your name, email, and a password of at least 8 characters.");
+      setError(t("Fill in your name, email, and a password of at least 8 characters."));
       return;
     }
     setLoading(true);
     try {
       await nexusApi.register({ name: name.trim(), email: email.trim(), password, workspaceCode: workspaceCode.trim() || undefined });
-      setInfo(`Verification code sent to ${email.trim()}. Check your inbox (or spam folder).`);
+      setInfo(t("Verification code sent to {email}. Check your inbox (or spam folder).", { email: email.trim() }));
       setStep("otp");
     } catch (err) {
-      setError(errMsg(err, "Couldn't sign you up. Try again."));
+      setError(errMsg(err, t("Couldn't sign you up. Try again.")));
     } finally {
       setLoading(false);
     }
@@ -64,17 +66,17 @@ function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (!code.trim()) {
-      setError("Enter the verification code from your email.");
+      setError(t("Enter the verification code from your email."));
       return;
     }
     setLoading(true);
     try {
       await nexusApi.verifyRegister({ email: email.trim(), code: code.trim(), workspaceCode: workspaceCode.trim() || undefined });
       const res = await nexusApi.login(email.trim(), password, "/dashboard").catch(() => ({ ok: false } as { ok: boolean }));
-      celebrate("Account created. Welcome to NEXUS!");
+      celebrate(t("Account created. Welcome to NEXUS!"));
       setTimeout(() => navigate({ to: res.ok ? "/dashboard" : "/login" }), 300);
     } catch (err) {
-      setError(errMsg(err, "Wrong or expired code."));
+      setError(errMsg(err, t("Wrong or expired code.")));
     } finally {
       setLoading(false);
     }
@@ -85,9 +87,9 @@ function RegisterPage() {
     setInfo(null);
     try {
       await nexusApi.resendRegisterOtp(email.trim());
-      setInfo("A new code is on its way to your email.");
+      setInfo(t("A new code is on its way to your email."));
     } catch (err) {
-      setError(errMsg(err, "Couldn't resend the code."));
+      setError(errMsg(err, t("Couldn't resend the code.")));
     }
   };
 
@@ -98,31 +100,31 @@ function RegisterPage() {
 
       <div className="relative w-full max-w-md rounded-[2.5rem] border border-white/60 bg-white/40 p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] backdrop-blur-2xl md:p-12">
         <div className="mb-6 flex justify-center">
-          <img src={nexusLogo} alt="Nexus" className="block h-20 w-20 object-contain drop-shadow-[0_12px_24px_rgba(79,70,229,0.35)]" />
+          <img src={nexusLogo} alt="NEXUS" className="block h-20 w-20 object-contain drop-shadow-[0_12px_24px_rgba(79,70,229,0.35)]" />
         </div>
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold uppercase tracking-[0.2em] text-foreground">Request Access</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{step === "form" ? "Create a new NEXUS account." : "Enter the verification code from your email."}</p>
+          <h1 className="text-2xl font-bold uppercase tracking-[0.2em] text-foreground">{t("Request access")}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{step === "form" ? t("Create a new NEXUS account.") : t("Enter the verification code from your email.")}</p>
         </div>
 
         {step === "form" ? (
           <form className="space-y-5" onSubmit={submitForm}>
             <div className="space-y-1.5">
-              <label className={labelCls}>Full Name</label>
-              <input type="text" required disabled={loading} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className={input} />
+              <label className={labelCls}>{t("Full name")}</label>
+              <input type="text" required disabled={loading} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Your name")} className={input} />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Email</label>
-              <input type="email" required disabled={loading} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="username" className={input} />
+              <label className={labelCls}>{t("Email")}</label>
+              <input type="email" required disabled={loading} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("you@email.com")} autoComplete="username" className={input} />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Password</label>
-              <input type="password" required disabled={loading} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" autoComplete="new-password" className={input} />
+              <label className={labelCls}>{t("Password")}</label>
+              <input type="password" required disabled={loading} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("At least 8 characters")} autoComplete="new-password" className={input} />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Workspace Code</label>
-              <input type="text" disabled={loading} value={workspaceCode} onChange={(e) => setWorkspaceCode(e.target.value.toUpperCase())} placeholder="e.g. A1B2C3D4E5F6" autoCapitalize="characters" autoCorrect="off" spellCheck={false} className={`${input} font-mono tracking-wider`} />
-              <p className="ml-1 text-xs text-muted-foreground">From your company, to join its workspace. Leave empty to start your own.</p>
+              <label className={labelCls}>{t("Workspace code")}</label>
+              <input type="text" disabled={loading} value={workspaceCode} onChange={(e) => setWorkspaceCode(e.target.value.toUpperCase())} placeholder={t("e.g. A1B2C3D4E5F6")} autoCapitalize="characters" autoCorrect="off" spellCheck={false} className={`${input} font-mono tracking-wider`} />
+              <p className="ml-1 text-xs text-muted-foreground">{t("From your company, to join its workspace. Leave empty to start your own.")}</p>
             </div>
 
             {error && (
@@ -131,37 +133,37 @@ function RegisterPage() {
                 {/* The "already has an account" answer usually means an invite: the account exists
                     and only needs a password, so the way out is one tap away rather than a sentence. */}
                 {error.includes("Forgot password") && (
-                  <a href={`/forgot-password?email=${encodeURIComponent(email.trim())}&invited=1`} className="mt-2 block font-bold text-primary underline-offset-4 hover:underline">Set your password →</a>
+                  <a href={`/forgot-password?email=${encodeURIComponent(email.trim())}&invited=1`} className="mt-2 block font-bold text-primary underline-offset-4 hover:underline">{t("Set your password →")}</a>
                 )}
               </div>
             )}
 
             <button type="submit" disabled={loading} className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending code…</> : <>Continue <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("Sending code…")}</> : <>{t("Continue")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
             </button>
           </form>
         ) : (
           <form className="space-y-5" onSubmit={submitOtp}>
             {info && <div className="flex items-start gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><MailCheck className="mt-0.5 h-4 w-4 shrink-0" /> {info}</div>}
             <div className="space-y-1.5">
-              <label className={labelCls}>Verification Code</label>
-              <input type="text" inputMode="numeric" required disabled={loading} value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 digit" className={`${input} text-center text-lg tracking-[0.5em]`} />
+              <label className={labelCls}>{t("Verification code")}</label>
+              <input type="text" inputMode="numeric" required disabled={loading} value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("6 digits")} className={`${input} text-center text-lg tracking-[0.5em]`} />
             </div>
 
             {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
 
             <button type="submit" disabled={loading} className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Verifying…</> : <>Verify & Sign In <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("Verifying…")}</> : <>{t("Verify & sign in")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
             </button>
             <div className="flex items-center justify-between text-xs">
-              <button type="button" onClick={() => { setStep("form"); setError(null); }} className="inline-flex items-center gap-1 font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" /> Edit details</button>
-              <button type="button" onClick={resend} className="font-semibold text-primary hover:underline">Resend code</button>
+              <button type="button" onClick={() => { setStep("form"); setError(null); }} className="inline-flex items-center gap-1 font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" /> {t("Edit details")}</button>
+              <button type="button" onClick={resend} className="font-semibold text-primary hover:underline">{t("Resend code")}</button>
             </div>
           </form>
         )}
 
         <div className="mt-8 text-center">
-          <p className="text-sm text-muted-foreground">Already have an account? <a href="/login" className="ml-1 font-bold text-primary underline-offset-4 hover:underline">Login</a></p>
+          <p className="text-sm text-muted-foreground">{t("Already have an account?")} <a href="/login" className="ml-1 font-bold text-primary underline-offset-4 hover:underline">{t("Sign in")}</a></p>
         </div>
       </div>
     </div>

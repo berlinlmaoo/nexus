@@ -1,5 +1,6 @@
 import { Rocket } from "lucide-react";
 import { Reveal } from "@/components/motion";
+import { useLang } from "@/lib/lang";
 
 /**
  * Full-page "Coming Soon" gate. Rendered in place of a feature whose access is
@@ -9,6 +10,7 @@ import { Reveal } from "@/components/motion";
  * motion through <Reveal>.
  */
 export function ComingSoon({ feature, note }: { feature: string; note?: string }) {
+  const { t } = useLang();
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-2xl flex-col items-center justify-center px-4 py-16 text-center">
       <Reveal>
@@ -16,12 +18,12 @@ export function ComingSoon({ feature, note }: { feature: string; note?: string }
           <Rocket className="h-8 w-8" />
         </div>
         <span className="mb-3 inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary">
-          Coming Soon
+          {t("Coming soon")}
         </span>
-        <h1 className="text-2xl font-black text-foreground md:text-3xl">{feature} is in the works</h1>
+        <h1 className="text-2xl font-black text-foreground md:text-3xl">{t("{feature} is in the works", { feature })}</h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
           {note ??
-            `${feature} isn't available for your role yet. It opens to everyone once it's ready.`}
+            t("{feature} isn't available for your role yet. It opens to everyone once it's ready.", { feature })}
         </p>
       </Reveal>
     </div>

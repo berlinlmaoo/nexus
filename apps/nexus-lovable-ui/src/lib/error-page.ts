@@ -18,13 +18,24 @@ export function renderErrorPage(): string {
   </head>
   <body>
     <div class="card">
-      <h1>This page didn't load</h1>
-      <p>Something went wrong on our end. You can try refreshing or head back home.</p>
+      <h1 data-id="Halaman ini gagal dimuat">This page didn't load</h1>
+      <p data-id="Ada masalah di sisi kami. Coba muat ulang atau kembali ke beranda.">Something went wrong on our end. You can try refreshing or head back home.</p>
       <div class="actions">
-        <button class="primary" onclick="location.reload()">Try again</button>
-        <a class="secondary" href="/">Go home</a>
+        <button class="primary" onclick="location.reload()" data-id="Coba lagi">Try again</button>
+        <a class="secondary" href="/" data-id="Ke beranda">Go home</a>
       </div>
     </div>
+    <script>
+      // This page is plain HTML (no app bundle), so it reads the interface language itself:
+      // localStorage "nexus-lang", Indonesian unless set to "en" (same default as lib/lang.ts).
+      try {
+        if (localStorage.getItem("nexus-lang") !== "en") {
+          document.documentElement.lang = "id";
+          document.title = "Halaman ini gagal dimuat";
+          document.querySelectorAll("[data-id]").forEach(function (el) { el.textContent = el.getAttribute("data-id"); });
+        }
+      } catch (e) { /* storage blocked: stay in English */ }
+    </script>
   </body>
 </html>`;
 }

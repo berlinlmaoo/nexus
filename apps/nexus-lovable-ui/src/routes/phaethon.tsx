@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Lock, ArrowLeft, Music } from "lucide-react";
+import { useLang } from "@/lib/lang";
 
 // Hidden easter egg reached by clicking "PHAËTHON" on the login splash.
 // Homage to github.com/danilamisocenko-hue/heart — terminal boot → decrypt →
@@ -225,6 +226,7 @@ function MSplash() {
 }
 
 function Phaethon() {
+  const { t } = useLang();
   const [stage, setStage] = useState<"console" | "reveal">("console");
   const [ready, setReady] = useState(false);
   const [fading, setFading] = useState(false);
@@ -337,7 +339,7 @@ function Phaethon() {
         onClick={(e) => { e.stopPropagation(); stopMusic(); }}
         className="fixed left-6 top-6 z-40 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
       >
-        <ArrowLeft className="h-3 w-3" /> exit
+        <ArrowLeft className="h-3 w-3" /> {t("exit")}
       </Link>
 
       <div className="relative z-40 flex min-h-screen w-full items-center justify-center">
@@ -357,21 +359,21 @@ function Phaethon() {
                 </div>
                 <div className="flex min-h-6 gap-2">
                   <span>[status]</span>
-                  {ready && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-green-400">ok, you found the easter egg</motion.span>}
+                  {ready && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-green-400">{t("ok, you found the easter egg")}</motion.span>}
                 </div>
 
                 {ready && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-start gap-6 pt-8">
-                    <p className="italic text-white/40">{">"} One encrypted package found for you.</p>
+                    <p className="italic text-white/40">{">"} {t("One encrypted package found for you.")}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); goReveal(); }}
                       className="group flex items-center gap-3 border border-[#ff4d6d]/30 bg-[#ff4d6d]/5 px-6 py-3 text-[#ff8fa3] transition-all duration-300 hover:bg-[#ff4d6d]/10"
                     >
                       <Lock size={16} className="transition-transform group-hover:rotate-12" />
-                      <span className="font-mono text-xs uppercase tracking-widest">Decrypt Message</span>
+                      <span className="font-mono text-xs uppercase tracking-widest">{t("Decrypt message")}</span>
                       <span className="ee-cursor" />
                     </button>
-                    <p className="animate-pulse text-[10px] text-white/20">(or just click anywhere)</p>
+                    <p className="animate-pulse text-[10px] text-white/20">{t("(or just click anywhere)")}</p>
                   </motion.div>
                 )}
               </div>
@@ -380,22 +382,22 @@ function Phaethon() {
             <motion.div key="reveal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative flex h-screen w-full items-center justify-center">
               <button
                 onClick={(e) => { e.stopPropagation(); startMusic(); }}
-                aria-label="Play music"
-                title="Play music"
+                aria-label={t("Play music")}
+                title={t("Play music")}
                 className="fixed right-6 top-6 z-40 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
               >
-                <Music className="h-3 w-3" /> sound
+                <Music className="h-3 w-3" /> {t("sound")}
               </button>
               <MSplash />
               <TextHeart />
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 3, duration: 1.5 }} className="z-20 text-center">
-                <h2 className="ee-glow mb-2 font-mono text-xl uppercase tracking-[0.3em] text-[#ff4d6d]">Decrypted</h2>
+                <h2 className="ee-glow mb-2 font-mono text-xl uppercase tracking-[0.3em] text-[#ff4d6d]">{t("Decrypted")}</h2>
                 <div className="mx-auto mb-8 h-px w-12 bg-[#ff4d6d]/30" />
                 <button
                   onClick={(e) => { e.stopPropagation(); goConsole(); }}
                   className="font-mono text-[10px] uppercase tracking-widest text-white/20 transition-colors hover:text-white/60"
                 >
-                  Re-encrypt
+                  {t("Re-encrypt")}
                 </button>
               </motion.div>
 

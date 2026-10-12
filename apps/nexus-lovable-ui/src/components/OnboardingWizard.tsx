@@ -3,16 +3,16 @@ import { useRef, useState } from "react";
 import { Loader2, ImagePlus, ArrowRight, ArrowLeft, Check, Sparkles, PartyPopper } from "lucide-react";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
-import { t as tr } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 
 type Slide = { key: string; title: string; img: string; imgMobile: string; points: string[] };
 
 // Screenshots live in /public/onboarding/. Missing images degrade gracefully.
 const SLIDES: Slide[] = [
-  { key: "dashboard", title: "Dashboard & navigation", img: "/onboarding/dashboard.png", imgMobile: "/onboarding/dashboard-mobile.png", points: ["The dashboard is your day at a glance: tasks, quests and notifications.", "Switch pages from the sidebar on the web, or the tabs at the bottom on your phone.", "Your photo and level are in the bottom corner."] },
+  { key: "dashboard", title: "Dashboard & navigation", img: "/onboarding/dashboard.png", imgMobile: "/onboarding/dashboard-mobile.png", points: ["The dashboard is your day at a glance: tasks and notifications.", "Switch pages from the sidebar on the web, or the tabs at the bottom on your phone.", "Your photo and level are in the bottom corner."] },
   { key: "board", title: "Projects, boards and adding a task", img: "/onboarding/board.png", imgMobile: "/onboarding/board-mobile.png", points: ["Open a project, then the Board tab.", "Select “Add task” to make one: title, section, priority and due date.", "Fill in custom fields (Price, Status and so on) right in the form."] },
   { key: "attendance", title: "Attendance", img: "/onboarding/attendance.png", imgMobile: "/onboarding/attendance-mobile.png", points: ["Check in and check out every workday, with a selfie and your location.", "Request a day off or sick leave yourself (leave and permits come from the BoD).", "4 days off a month — a missed attendance takes one automatically."] },
-  { key: "leaderboard", title: "Leaderboard & XP", img: "/onboarding/leaderboard.png", imgMobile: "/onboarding/leaderboard-mobile.png", points: ["Earn XP from quests; attendance penalties take it away.", "Your level grows with your XP, which resets on the 1st.", "See where you stand on the Leaderboard."] },
+  { key: "leaderboard", title: "Leaderboard & XP", img: "/onboarding/leaderboard.png", imgMobile: "/onboarding/leaderboard-mobile.png", points: ["Earn XP from your work; attendance penalties take it away.", "Your level grows with your XP, which resets on the 1st.", "See where you stand on the Leaderboard."] },
 ];
 
 function Shot({ src, alt, mobile }: { src: string; alt: string; mobile?: boolean }) {
@@ -38,16 +38,17 @@ function Shot({ src, alt, mobile }: { src: string; alt: string; mobile?: boolean
 const IMG_V = "?v=3";
 
 function SlideShots({ slide }: { slide: Slide }) {
+  const { t } = useLang();
   return (
     <div className="flex items-start gap-3">
       <div className="min-w-0 flex-1">
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Web</div>
-        <Shot src={slide.img + IMG_V} alt={`${slide.title} (web)`} />
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Web")}</div>
+        <Shot src={slide.img + IMG_V} alt={t("{title} (web)", { title: t(slide.title) })} />
       </div>
       <div className="w-[92px] shrink-0">
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Mobile</div>
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Mobile")}</div>
         <div className="overflow-hidden rounded-2xl border-2 border-border bg-card shadow-soft">
-          <Shot src={slide.imgMobile + IMG_V} alt={`${slide.title} (mobile)`} mobile />
+          <Shot src={slide.imgMobile + IMG_V} alt={t("{title} (mobile)", { title: t(slide.title) })} mobile />
         </div>
       </div>
     </div>
@@ -55,6 +56,7 @@ function SlideShots({ slide }: { slide: Slide }) {
 }
 
 export function OnboardingWizard() {
+  const { t } = useLang();
   const qc = useQueryClient();
   const profileQ = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 30_000 });
   const me = profileQ.data?.user;
@@ -97,17 +99,17 @@ export function OnboardingWizard() {
           {/* STEP 0 — photo */}
           {step === 0 && (
             <div className="space-y-4 text-center">
-              <h2 className="text-xl font-black tracking-tight">Welcome to NEXUS 👋</h2>
-              <p className="text-sm text-muted-foreground">Let's get your profile set up. First, your <b>profile photo</b>.</p>
+              <h2 className="text-xl font-black tracking-tight">{t("Set up your profile")}</h2>
+              <p className="text-sm text-muted-foreground">{t("First, add a profile photo.")}</p>
               <div className="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-full bg-primary/10 ring-2 ring-border">
                 {me.avatar ? <img src={me.avatar} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="h-8 w-8 text-muted-foreground" />}
               </div>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); }} />
               <button onClick={() => fileRef.current?.click()} disabled={upload.isPending} className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">
-                {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />} {hasAvatar ? "Change photo" : "Upload photo"}
+                {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />} {hasAvatar ? t("Change photo") : t("Upload photo")}
               </button>
-              {upload.isError && <p className="text-xs font-semibold text-destructive">Upload failed — try again.</p>}
-              {!hasAvatar && <p className="text-[11px] text-muted-foreground">A photo is required to continue.</p>}
+              {upload.isError && <p className="text-xs font-semibold text-destructive">{t("Upload failed. Try again.")}</p>}
+              {!hasAvatar && <p className="text-[11px] text-muted-foreground">{t("A photo is required to continue.")}</p>}
             </div>
           )}
 
@@ -115,23 +117,23 @@ export function OnboardingWizard() {
           {step === 1 && (
             <div className="space-y-4">
               <div className="text-center">
-                <h2 className="text-xl font-black tracking-tight">Your full name</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Use your <b>full name</b> (not a nickname) so the team can spot you easily.</p>
+                <h2 className="text-xl font-black tracking-tight">{t("Your full name")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{t("Use your full name, not a nickname, so your team can find you.")}</p>
               </div>
-              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || "Full name…"} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-primary" />
-              {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600">Enter your full name (min. 2 words).</p>}
-              {saveName.isError && <p className="text-xs font-semibold text-destructive">Couldn't save your name.</p>}
+              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || t("Full name…")} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-primary" />
+              {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600">{t("Enter your full name (at least 2 words).")}</p>}
+              {saveName.isError && <p className="text-xs font-semibold text-destructive">{t("Couldn't save your name.")}</p>}
             </div>
           )}
 
           {/* STEP 2.. — tutorial slides */}
           {slide && (
             <div className="space-y-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-primary">Tutorial · {step - 1}/{SLIDES.length}</div>
-              <h2 className="text-xl font-black tracking-tight">{tr(slide.title)}</h2>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-primary">{t("Tutorial · {n}/{total}", { n: step - 1, total: SLIDES.length })}</div>
+              <h2 className="text-xl font-black tracking-tight">{t(slide.title)}</h2>
               <SlideShots slide={slide} />
               <ul className="space-y-1.5">
-                {slide.points.map((p, i) => <li key={i} className="flex gap-2 text-sm text-muted-foreground"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {tr(p)}</li>)}
+                {slide.points.map((p, i) => <li key={i} className="flex gap-2 text-sm text-muted-foreground"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {t(p)}</li>)}
               </ul>
             </div>
           )}
@@ -140,21 +142,21 @@ export function OnboardingWizard() {
           {isDone && (
             <div className="space-y-4 py-6 text-center">
               <PartyPopper className="mx-auto h-12 w-12 text-primary" />
-              <h2 className="text-2xl font-black tracking-tight">{tr("You're all set")}</h2>
-              <p className="text-sm text-muted-foreground">{tr("Your profile is done and you know your way around NEXUS.")}</p>
+              <h2 className="text-2xl font-black tracking-tight">{t("You're all set")}</h2>
+              <p className="text-sm text-muted-foreground">{t("Your profile is done and you know your way around NEXUS.")}</p>
             </div>
           )}
         </div>
 
         {/* footer nav */}
         <div className="flex items-center justify-between gap-2 border-t border-border px-6 py-4">
-          <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-0"><ArrowLeft className="h-4 w-4" /> Back</button>
+          <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-0"><ArrowLeft className="h-4 w-4" /> {t("Back")}</button>
           <div className="flex items-center gap-2">
-            {isSlide && <button onClick={() => setStep(TOTAL)} className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Skip tutorial</button>}
-            {step === 0 && <button onClick={next} disabled={!hasAvatar} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">Next <ArrowRight className="h-4 w-4" /></button>}
-            {step === 1 && <button onClick={() => saveName.mutate(name, { onSuccess: next })} disabled={!nameValid || saveName.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{saveName.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Save & continue</button>}
-            {isSlide && <button onClick={next} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90">{step === TOTAL - 1 ? "Done" : "Next"} <ArrowRight className="h-4 w-4" /></button>}
-            {isDone && <button onClick={() => finish.mutate()} disabled={finish.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{finish.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Start using NEXUS</button>}
+            {isSlide && <button onClick={() => setStep(TOTAL)} className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">{t("Skip tutorial")}</button>}
+            {step === 0 && <button onClick={next} disabled={!hasAvatar} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{t("Next")} <ArrowRight className="h-4 w-4" /></button>}
+            {step === 1 && <button onClick={() => saveName.mutate(name, { onSuccess: next })} disabled={!nameValid || saveName.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{saveName.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {t("Save & continue")}</button>}
+            {isSlide && <button onClick={next} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90">{step === TOTAL - 1 ? t("Done") : t("Next")} <ArrowRight className="h-4 w-4" /></button>}
+            {isDone && <button onClick={() => finish.mutate()} disabled={finish.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{finish.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {t("Start using NEXUS")}</button>}
           </div>
         </div>
       </div>
