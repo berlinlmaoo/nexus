@@ -32,7 +32,7 @@ export const ID_CATEGORIES: Record<string, string> = {
   "Nothing needs your action": "Tidak ada yang perlu kamu tindak",
   "Open forms": "Buka form",
   "Proof": "Bukti",
-  "Proof of payment (Bukti Pencairan)": "Bukti Pencairan",
+  "Proof of payment": "Bukti Pencairan",
   "Read-only. The team moves the cards.": "Hanya baca. Tim yang memindahkan kartunya.",
   "Reply to the team…": "Balas ke tim…",
   "Requests you sent through a form. The team that handles them moves them along; this board follows.": "Pengajuan yang kamu kirim lewat form. Tim yang menangani memindahkannya; papan ini ikut berubah.",

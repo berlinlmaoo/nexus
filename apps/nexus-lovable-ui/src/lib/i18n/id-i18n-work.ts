@@ -289,4 +289,10 @@ export const ID_I18N_WORK: Record<string, string> = {
   "{n}m": "{n} mnt",
   "{n}h": "{n} j",
   "proof": "bukti",
+  "Changed the status from {from} to {to}": "Mengubah status dari {from} ke {to}",
+  "Created this task from the form “{form}”": "Membuat task ini dari form “{form}”",
+  "Created this task": "Membuat task ini",
+  "Added a comment": "Menambahkan komentar",
+  "Added an assignee": "Menambahkan assignee",
+  "Removed an assignee": "Menghapus assignee",
 }

@@ -35,7 +35,7 @@ export function RupiahInput({
   };
   return (
     <div className={cn("relative", wrapperClassName)}>
-      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">Rp</span>
+      <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-sm font-semibold text-muted-foreground">Rp</span>
       <input
         inputMode="numeric"
         autoComplete="off"

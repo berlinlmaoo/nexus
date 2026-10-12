@@ -197,3 +197,29 @@ export function notificationTitle(n: { type?: string | null; title?: string | nu
 export function notificationMessage(n: { message?: string | null }) {
   return n.message ? applyRules(n.message, MESSAGE_RULES) : "";
 }
+
+const ENUM_LABEL: Record<string, string> = { TODO: "To do", IN_PROGRESS: "In progress", IN_REVIEW: "In review", DONE: "Done", CANCELLED: "Cancelled", URGENT: "Urgent", HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "No priority" };
+
+/** A status/priority enum value as words in the UI language; anything else unchanged. */
+export function enumWord(v: string): string {
+  return ENUM_LABEL[v] ? t(ENUM_LABEL[v]) : v;
+}
+
+/**
+ * A task activity line in the UI language (audit, 12 Oct 2026: "Changed status — Changed status from
+ * TODO to IN_PROGRESS" in English, enums raw, the action repeated). The server stores English details;
+ * known shapes are rewritten here, anything else is shown as stored with enum words replaced.
+ */
+export function activityText(details: string | null | undefined, fallback: string): string {
+  const d = (details ?? "").trim();
+  if (!d) return fallback;
+  let m = /^Changed status from (\w+) to (\w+)$/.exec(d);
+  if (m) return t("Changed the status from {from} to {to}", { from: enumWord(m[1]), to: enumWord(m[2]) });
+  m = /^Created "(.+)" from form "(.+)"$/.exec(d);
+  if (m) return t("Created this task from the form “{form}”", { form: m[2] });
+  if (/^Created task "/.test(d)) return t("Created this task");
+  if (/^Added a comment on "/.test(d)) return t("Added a comment");
+  if (/^Added assignee to "/.test(d)) return t("Added an assignee");
+  if (/^Removed assignee from "/.test(d)) return t("Removed an assignee");
+  return d.replace(/\b(TODO|IN_PROGRESS|IN_REVIEW|DONE|CANCELLED|URGENT|HIGH|MEDIUM|LOW)\b/g, (x) => enumWord(x));
+}

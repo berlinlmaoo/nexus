@@ -174,7 +174,7 @@ function SubmissionDetail({ id, onClose }: { id: string; onClose: () => void }) 
               {/* Proof from the team: legacy PROOF files plus anything someone else attached (lib/my-submissions.ts). */}
               {(sub.proofs?.length ?? 0) > 0 && (
                 <section>
-                  <h3 className={cn(label, "mb-2")}>{t("Proof of payment (Bukti Pencairan)")}</h3>
+                  <h3 className={cn(label, "mb-2")}>{t("Proof of payment")}</h3>
                   <div className="space-y-2">
                     {sub.proofs!.map((p) => (
                       <div key={p.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/50 p-2.5 dark:bg-emerald-500/10 dark:border-emerald-500/30">

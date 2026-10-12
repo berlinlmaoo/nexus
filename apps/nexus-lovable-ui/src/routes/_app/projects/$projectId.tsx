@@ -1556,7 +1556,7 @@ function TimelineView({ groups: taskGroups, groupBy, cfg, defs, ctx, collapsed, 
             <div className="relative" style={{ width: timelineW }}>
               <div className="flex h-8 border-b border-border/50">
                 {months.map((m, i) => (
-                  <div key={i} className="flex items-center border-l border-border/40 px-2 text-xs font-bold text-foreground/70" style={{ width: m.days * GANTT_DAY_W }}>{m.label}</div>
+                  <div key={i} className="flex items-center border-l border-border/40 px-2 text-xs font-bold text-foreground/70" style={{ width: m.days * GANTT_DAY_W }}><span className="sticky whitespace-nowrap" style={{ left: leftW + 8 }}>{m.label}</span></div>
                 ))}
               </div>
               <div className="flex h-9">

@@ -1,3 +1,4 @@
+import { activityText } from "@/lib/server-text";
 import { DateField } from "@/components/DateField";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -711,9 +712,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   </div>
                 )}
                 {(customFields.data?.fields?.length ?? 0) > 0 ? (
-                  <div className="[column-gap:0.75rem] sm:columns-2">
+                  <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
                     {customFields.data!.fields.map((f) => (
-                      <div key={f.id} className="relative mb-3 break-inside-avoid">
+                      <div key={f.id} className="relative mb-3 min-w-0">
                         {ai.aiFields.has(f.id) && (
                           <span className="absolute right-0 top-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary/80" title={ai.isMarked(f.id, taskId) ? "GIDEON" : undefined}>
                             <Sparkles className="h-3 w-3" />{ai.isMarked(f.id, taskId) ? "AI" : null}
@@ -848,7 +849,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <button aria-label={tr("Add subtask")}
                       onClick={() => { if (newSubTitle.trim()) addSubtask.mutate(newSubTitle.trim()); }}
                       disabled={addSubtask.isPending || !newSubTitle.trim()}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.97] disabled:opacity-40"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.97] dark:disabled:bg-muted dark:disabled:text-muted-foreground disabled:opacity-40"
                     >
                       {addSubtask.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                     </button>
@@ -987,7 +988,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   {t.activityLogs!.slice(0, 12).map((a) => (
                     <div key={a.id} className="flex gap-2">
                       <span className="font-semibold text-foreground/80">{displayName(a.user, tr("Someone"))}</span>
-                      <span className="flex-1">{statusLabel(a.action)}{a.details ? ` — ${a.details}` : ""}</span>
+                      <span className="flex-1">{activityText(a.details, statusLabel(a.action))}</span>
                       <span className="shrink-0 text-muted-foreground/70">{fmtDate(a.createdAt)}</span>
                     </div>
                   ))}
@@ -1322,7 +1323,7 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
           </div>
         )}
       </div>
-      <button aria-label={tr("Send comment")} disabled={!text.trim() || pending} onClick={submit} className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
+      <button aria-label={tr("Send comment")} disabled={!text.trim() || pending} onClick={submit} className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary dark:disabled:bg-muted dark:disabled:text-muted-foreground text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
       </button>
     </div>
