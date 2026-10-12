@@ -87,7 +87,7 @@ export async function applyTaskUpdate({
 
   const { allowed } = await checkProjectAccess(session.user.id!, effectiveProjectId, ["MEMBER"])
   if (!allowed) {
-    return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
+    return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
   }
 
   const primaryProjectId = existing.taskList.projectId

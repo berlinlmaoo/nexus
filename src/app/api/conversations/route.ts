@@ -6,6 +6,7 @@ import { CHAT_MEMBER_SELECT, canManageMembersIn, memberManagerContext, visibleRo
 import { chatUnreadForUser } from "@/lib/chat-unread"
 import { announceSystemMessage, systemPeople, writeSystemMessage } from "@/lib/chat-system"
 import { emitConversationUpdated } from "@/lib/socket-emitter"
+import { hasProjectWideAccess, memberAccessLevel } from "@/lib/rbac"
 
 const memberInclude = { members: { select: CHAT_MEMBER_SELECT } }
 
@@ -80,6 +81,19 @@ export async function GET() {
     // One lookup for the whole list, and none when there is no group in it.
     const managerCtx = shown.some((c) => c.type === "GROUP") ? await memberManagerContext(userId) : null
 
+    // Project rooms the viewer may only READ (Can view, Notion levels 13 Oct 2026): the composer says
+    // "View only" instead of failing on send. One query for the whole list.
+    const projectRoomIds = shown.filter((c) => c.type === "PROJECT" && c.projectId).map((c) => c.projectId as string)
+    const viewOnly = new Set<string>()
+    if (projectRoomIds.length) {
+      const [mine, me] = await Promise.all([
+        prisma.projectMember.findMany({ where: { userId, projectId: { in: projectRoomIds } }, select: { projectId: true, role: true, accessLevel: true } }),
+        prisma.workspaceMember.findMany({ where: { userId }, select: { role: true } }),
+      ])
+      const wide = me.some((m) => hasProjectWideAccess(m.role))
+      if (!wide) for (const m of mine) if (memberAccessLevel(m) === "VIEW") viewOnly.add(m.projectId)
+    }
+
     const conversations = shown.map((c) => {
       const mutedUntil = muteOf.get(c.id) ?? null
       return {
@@ -95,6 +109,8 @@ export async function GET() {
         unreadCount: unread.perConversation.get(c.id)?.unread ?? 0,
         mutedUntil: mutedUntil && mutedUntil.getTime() > Date.now() ? mutedUntil.toISOString() : null,
         canManageMembers: managerCtx ? canManageMembersIn(managerCtx, c) : false,
+        // false = a project room this person can read but not post in (Can view).
+        canPost: !(c.projectId && viewOnly.has(c.projectId)),
       }
     })
 

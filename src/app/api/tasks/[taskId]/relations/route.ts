@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { taskWriteRefusal } from "@/lib/write-access"
+import { taskEditRefusal } from "@/lib/write-access"
 import { isUniqueViolation } from "@/lib/prisma-errors"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from "@/lib/prisma"
@@ -98,8 +98,8 @@ export async function POST(
     // Signed in is not enough (writes batch): whoever may open the task — and the other task (its
     // title comes back in the relation list).
     const refusal =
-      (await taskWriteRefusal(session.user.id, (await params).taskId)) ??
-      (await taskWriteRefusal(session.user.id, String(targetTaskId)))
+      (await taskEditRefusal(session.user.id, (await params).taskId)) ??
+      (await taskEditRefusal(session.user.id, String(targetTaskId)))
     if (refusal) return refusal
 
     const relation = await prisma.taskRelation

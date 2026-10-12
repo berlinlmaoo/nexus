@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { projectWriteRefusal, taskWriteRefusal } from '@/lib/write-access'
+import { projectWriteRefusal, taskEditRefusal } from '@/lib/write-access'
 import { checkProjectAccess } from "@/lib/rbac"
 import prisma from '@/lib/prisma'
 import { executeAutomations } from '@/lib/automation-engine'
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest) {
     const refusal = await projectWriteRefusal(session.user.id, sprintRef.projectId)
     if (refusal) return refusal
     if (addTaskId) {
-      const taskRefusal = await taskWriteRefusal(session.user.id, String(addTaskId))
+      const taskRefusal = await taskEditRefusal(session.user.id, String(addTaskId))
       if (taskRefusal) return taskRefusal
     }
     if (addTaskId) await prisma.sprintTask.create({ data: { sprintId: id, taskId: addTaskId } }).catch(() => {})

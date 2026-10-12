@@ -134,4 +134,11 @@ export const ID_QAFIX_PERM: Record<string, string> = {
   "You need to be signed in and be a member of this project. Ask its Project Owner to add you.": "Kamu harus masuk dan menjadi anggota project ini. Minta Pemilik Project menambahkanmu.",
   "You're the Project Owner of \"{project}\".": "Kamu Pemilik Project \"{project}\".",
   "Ask the Project Owner if you need more access.": "Minta Pemilik Project kalau kamu butuh akses lebih.",
+  "Check in and out, your requests, and your own attendance history.": "Check-in dan check-out, pengajuanmu, dan riwayat absensimu sendiri.",
+  "View only: you can read this project's chat but not post in it. Ask its Project Owner for Can comment access.": "Hanya lihat: kamu bisa membaca chat project ini tapi tidak bisa mengirim pesan. Minta Pemilik Project akses Bisa komentar.",
+  "You can comment on this task, but not change it.": "Kamu bisa berkomentar di task ini, tapi tidak bisa mengubahnya.",
+  "View only: you can read this task, but not change it.": "Hanya lihat: kamu bisa membaca task ini, tapi tidak bisa mengubahnya.",
+  "You can view this project but not change it. Ask its Project Owner for Can edit access.": "Kamu bisa melihat project ini tapi tidak bisa mengubahnya. Minta Pemilik Project akses Bisa edit.",
+  "You can view this project but not comment. Ask its Project Owner for Can comment access.": "Kamu bisa melihat project ini tapi tidak bisa berkomentar. Minta Pemilik Project akses Bisa komentar.",
+  "Only people with Full access to the project can do this.": "Hanya yang punya Akses penuh ke project yang bisa melakukan ini.",
 };

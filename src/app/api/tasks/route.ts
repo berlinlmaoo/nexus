@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
 
     const { allowed } = await checkProjectAccess(session.user.id, taskList.projectId, ["MEMBER"])
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to create tasks" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" }, { status: 403 })
     }
 
     // Subtask parent must be a task in the SAME project (an unvalidated parentId could attach a

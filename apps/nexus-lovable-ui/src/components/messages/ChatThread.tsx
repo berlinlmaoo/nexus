@@ -225,8 +225,11 @@ export function ChatThread({
   kind,
   jump = null,
   composerClassName,
+  readOnly = false,
 }: {
   conversationId: string;
+  /** A project room this person can only read (conversation.canPost === false): a notice instead of the composer. */
+  readOnly?: boolean;
   meId?: string;
   members?: NexusUser[];
   /** "DM" | "GROUP" | "PROJECT": who is typing is named under the dots everywhere but in a DM. */
@@ -875,6 +878,10 @@ export function ChatThread({
       )}
       </div>
 
+      {readOnly ? (
+        // Can view in a project room: read, no composer (QA round 2, N-03).
+        <div className={cn("border-t border-border px-4 py-3 text-center text-xs text-muted-foreground", composerClassName)}>{t("View only: you can read this project's chat but not post in it. Ask its Project Owner for Can comment access.")}</div>
+      ) : (
       <div className={cn("relative border-t border-border p-3", composerClassName)}>
         {mentionMatches.length > 0 && (
           <div className="absolute bottom-full left-3 right-3 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-pop">
@@ -958,6 +965,7 @@ export function ChatThread({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -365,7 +365,8 @@ function Attendance() {
     <div>
       <PageHeader
         title={tr("Attendance")}
-        subtitle={tr("Who's in, on leave or working from home, and everyone's attendance history.")}
+        // Staff see only their own history (privacy decision 13 Oct 2026), so the subtitle says so (QA S-25).
+        subtitle={canSeeBoard ? tr("Who's in, on leave or working from home, and everyone's attendance history.") : tr("Check in and out, your requests, and your own attendance history.")}
         // The outage-refund and no-show-sweep buttons were removed (owner, 28 Sep 2026): outage days are
         // not compensated, and the sweep is what the nightly cron already runs. Both APIs stay for the cron.
       />

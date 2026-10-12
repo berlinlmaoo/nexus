@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { taskWriteRefusal } from "@/lib/write-access"
+import { taskEditRefusal } from "@/lib/write-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 
@@ -22,7 +22,7 @@ export async function DELETE(
     if (!relationRef || (relationRef.sourceTaskId !== taskId && relationRef.targetTaskId !== taskId)) {
       return NextResponse.json({ error: "Relation not found" }, { status: 404 })
     }
-    const refusal = await taskWriteRefusal(session.user.id, taskId)
+    const refusal = await taskEditRefusal(session.user.id, taskId)
     if (refusal) return refusal
 
     await prisma.taskRelation.delete({

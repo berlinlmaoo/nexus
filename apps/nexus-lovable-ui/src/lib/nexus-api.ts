@@ -680,6 +680,8 @@ export type NexusConversation = {
    * 2026). Anyone may still leave. Missing = a server from before the rule; keep showing the controls.
    */
   canManageMembers?: boolean;
+  /** false = a project room you can read but not post in (Can view). Missing = allowed. */
+  canPost?: boolean;
   /** Group description (≤ 500 characters); only on GET /api/conversations/:id and PATCH. */
   description?: string | null;
 };

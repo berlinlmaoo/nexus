@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, hasProjectLevel } from "@/lib/rbac"
 import { canReadProjectContent, canReadTask } from "@/lib/read-access"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 import { emitTaskUpdated } from "@/lib/socket-emitter"
@@ -73,7 +73,9 @@ export async function bodyAccess(userId: string, kind: BodyKind, id: string): Pr
     const doc = await prisma.doc.findUnique({ where: { id }, select: { projectId: true } })
     if (!doc) return { exists: false, read: false, write: false, projectId: null }
     const ok = await canReadProjectContent(userId, doc.projectId)
-    return { exists: true, read: ok, write: ok, projectId: doc.projectId }
+    // Editing a page needs Can edit (Notion levels, QA round 2 N-01); reading stays the read rule.
+    const write = ok && (await hasProjectLevel(userId, doc.projectId, "EDIT"))
+    return { exists: true, read: ok, write, projectId: doc.projectId }
   }
   const verdict = await canReadTask(userId, id)
   if (verdict === "not_found") return { exists: false, read: false, write: false, projectId: null }

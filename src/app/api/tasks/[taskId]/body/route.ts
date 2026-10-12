@@ -41,7 +41,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
   const { taskId } = await params
   const access = await bodyAccess(session.user.id, "taskbody", taskId)
   if (!access.exists) return NextResponse.json({ error: "Task not found" }, { status: 404 })
-  if (!access.write) return NextResponse.json({ error: access.read ? "Forbidden: MEMBER role or higher required to update tasks" : "Forbidden" }, { status: 403 })
+  if (!access.write) return NextResponse.json(access.read ? { error: "Forbidden: you need Can edit access in this project", code: "NEEDS_EDIT_ACCESS" } : { error: "Forbidden" }, { status: 403 })
 
   let payload: { doc?: unknown; baseText?: unknown }
   try { payload = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }

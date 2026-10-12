@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { NexusProjectView } from "@/lib/nexus-api";
 import { menuItemCls } from "./view-controls";
 import { ViewTabMenu } from "./view-settings";
+import { useProjectCanEdit } from "@/components/projects/project-access";
 
 export type ToolbarTab = {
   key: string;
@@ -190,6 +191,8 @@ export function ToolbarSearch({ value, onChange }: { value: string; onChange: (v
 export function AddTaskSplit({ sections, onAdd, extra }: { sections: Array<{ id: string; name: string }>; onAdd: (sectionId?: string) => void; extra?: ReactNode }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
+  // Can view / Can comment: no Add task (QA round 2, N-02).
+  if (!useProjectCanEdit()) return null;
   return (
     <div className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md bg-primary text-primary-foreground">
       <button type="button" onClick={() => onAdd()} className="inline-flex items-center gap-1.5 pl-2.5 pr-2 text-sm font-medium transition-colors hover:bg-white/10">
