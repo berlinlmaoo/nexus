@@ -43,14 +43,17 @@ function InboxPage() {
   return (
     <div>
       <PageHeader title={t("Notifications")} subtitle={t("Mentions, assignments, approvals and replies that need you.")} actions={
-        <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] active:scale-95 transition disabled:opacity-60">
+        <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-60">
           {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {t("Mark all as read")}
         </button>
       } />
       <div className="p-4 md:p-8 max-w-3xl mx-auto">
-        <div className="mb-3 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
-          {tn(inbox.data?.unreadCount ?? 0, "{n} unread notification", "{n} unread notifications", { n: inbox.data?.unreadCount ?? 0 })}
-        </div>
+        {/* Only when there is something unread (an empty inbox had a grey "0 unread" bar over the empty state). */}
+        {(inbox.data?.unreadCount ?? 0) > 0 && (
+          <div className="mb-3 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
+            {tn(inbox.data?.unreadCount ?? 0, "{n} unread notification", "{n} unread notifications", { n: inbox.data?.unreadCount ?? 0 })}
+          </div>
+        )}
         {!inbox.isLoading && !inbox.isError && notifications.length > 0 && (
           <div className="mb-3">
             <NotificationFilterTabs list={notifications} group={group} onChange={setGroup} layoutId="inbox-filter-tab" />
