@@ -33,7 +33,7 @@ export const ID_FOLDERS: Record<string, string> = {
   // Folder form and delete
   "Edit folder": "Ubah folder",
   "Inside “{name}”.": "Di dalam “{name}”.",
-  "Group your projects to keep Mission Control tidy.": "Kelompokkan proyekmu supaya Mission Control tetap rapi.",
+  "Group your projects to keep the Projects page tidy.": "Kelompokkan proyekmu supaya halaman Proyek tetap rapi.",
   "Emoji": "Emoji",
   "Change photo": "Ganti foto",
   "Upload photo": "Unggah foto",

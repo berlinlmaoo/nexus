@@ -422,7 +422,7 @@ export function FolderFormModal({ form, saving, canSave, onChange, onCancel, onS
       <div className="w-full max-w-sm rounded-[28px] border border-border bg-card p-5 shadow-pop">
         <h2 className="text-lg font-black tracking-tight">{title}</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          {form.parentName ? t("Inside “{name}”.", { name: form.parentName }) + " " : ""}{t("Group your projects to keep Mission Control tidy.")}
+          {form.parentName ? t("Inside “{name}”.", { name: form.parentName }) + " " : ""}{t("Group your projects to keep the Projects page tidy.")}
         </p>
         <div className="mt-4 space-y-3">
           <div className="flex items-center gap-2">

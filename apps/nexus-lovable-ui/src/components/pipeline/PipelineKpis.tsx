@@ -19,7 +19,7 @@ export function PipelineKpis({ s }: { s: PipelineSummary }) {
   const { t, lang } = useLang();
   const money = (n: number) => ({ value: fmtIdr(n, lang), full: fmtIdrFull(n, lang), zero: !n });
   const tiles: Tile[] = [
-    { kind: "money", label: t("Open pipeline"), ...money(s.openValue), sub: t("{n} deals in play", { n: s.openCount }) },
+    { kind: "money", label: t("Open pipeline"), ...money(s.openValue), sub: t("{n} open deals", { n: s.openCount }) },
     { kind: "money", label: t("Weighted forecast"), ...money(s.weightedValue), sub: t("Value × probability") },
     { kind: "money", label: t("Won"), ...money(s.wonValue), sub: t("{n} active · {lost} lost", { n: s.activeCount, lost: s.lostCount }) },
     {

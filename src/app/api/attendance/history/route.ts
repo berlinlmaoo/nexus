@@ -93,8 +93,8 @@ async function buildAttendanceWorkbook({
   workbook.created = new Date()
 
   const byId = new Map<string, { id: string; name: string }>()
-  for (const row of rows) byId.set(row.user.id, { id: row.user.id, name: row.user.name || row.user.email || "Crew" })
-  for (const u of extraUsers) if (!byId.has(u.id)) byId.set(u.id, { id: u.id, name: u.name || u.email || "Crew" })
+  for (const row of rows) byId.set(row.user.id, { id: row.user.id, name: row.user.name || row.user.email || "Staff" })
+  for (const u of extraUsers) if (!byId.has(u.id)) byId.set(u.id, { id: u.id, name: u.name || u.email || "Staff" })
   const users = Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name))
 
   const sheetName = start.toISOString().slice(0, 7).replace("-", "-")
@@ -883,11 +883,11 @@ export async function GET(request: NextRequest) {
       const fromRows = rows[0]?.user
       const personLeftAt = leftAtByUser.get(parsed.data.userId) ?? null
       const person = fromRows
-        ? { name: fromRows.name || fromRows.email || "Crew", email: fromRows.email, leftAt: personLeftAt }
-        : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Crew", email: u?.email ?? null, leftAt: personLeftAt }))
+        ? { name: fromRows.name || fromRows.email || "Staff", email: fromRows.email, leftAt: personLeftAt }
+        : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Staff", email: u?.email ?? null, leftAt: personLeftAt }))
       const personQuota = (await dayOffQuotaByUser(context.workspace.id, [parsed.data.userId], quotaPeriodKey)).get(parsed.data.userId)
       const personBuffer = await buildPersonWorkbook({ rows, start: range.start, end: range.end, workspaceName: context.workspace.name, person, dayOffQuota: personQuota })
-      const slug = person.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "crew"
+      const slug = person.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "staff"
       return new NextResponse(personBuffer, {
         status: 200,
         headers: {

@@ -3,15 +3,16 @@ import { useRef, useState } from "react";
 import { Loader2, ImagePlus, ArrowRight, ArrowLeft, Check, Sparkles, PartyPopper } from "lucide-react";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { t as tr } from "@/lib/lang";
 
 type Slide = { key: string; title: string; img: string; imgMobile: string; points: string[] };
 
 // Screenshots live in /public/onboarding/. Missing images degrade gracefully.
 const SLIDES: Slide[] = [
-  { key: "dashboard", title: "Dashboard & navigation", img: "/onboarding/dashboard.png", imgMobile: "/onboarding/dashboard-mobile.png", points: ["Dashboard = your daily snapshot: tasks, quests, inbox.", "Left sidebar (web) / bottom tabs (mobile) to switch pages.", "Your avatar + level live in the bottom corner."] },
-  { key: "board", title: "Projects & Board + Add task", img: "/onboarding/board.png", imgMobile: "/onboarding/board-mobile.png", points: ["Open a project → Board tab.", "Hit “Add task” to make one: title, lane, priority, deadline.", "Fill in custom fields (Price, Status, etc.) right in the form."] },
-  { key: "attendance", title: "Attendance", img: "/onboarding/attendance.png", imgMobile: "/onboarding/attendance-mobile.png", points: ["Check in & check out every workday (selfie + GPS).", "Request Day Off & Sick yourself (Leave/Permit come from BoD).", "4 day-offs/month — miss attendance and it gets docked automatically."] },
-  { key: "leaderboard", title: "Leaderboard & XP", img: "/onboarding/leaderboard.png", imgMobile: "/onboarding/leaderboard-mobile.png", points: ["Finish tasks to earn XP, dodge attendance penalties.", "Climb tiers each period (resets on the 1st).", "Check where you stand on the Leaderboard."] },
+  { key: "dashboard", title: "Dashboard & navigation", img: "/onboarding/dashboard.png", imgMobile: "/onboarding/dashboard-mobile.png", points: ["The dashboard is your day at a glance: tasks, quests and notifications.", "Switch pages from the sidebar on the web, or the tabs at the bottom on your phone.", "Your photo and level are in the bottom corner."] },
+  { key: "board", title: "Projects, boards and adding a task", img: "/onboarding/board.png", imgMobile: "/onboarding/board-mobile.png", points: ["Open a project, then the Board tab.", "Select “Add task” to make one: title, section, priority and due date.", "Fill in custom fields (Price, Status and so on) right in the form."] },
+  { key: "attendance", title: "Attendance", img: "/onboarding/attendance.png", imgMobile: "/onboarding/attendance-mobile.png", points: ["Check in and check out every workday, with a selfie and your location.", "Request a day off or sick leave yourself (leave and permits come from the BoD).", "4 days off a month — a missed attendance takes one automatically."] },
+  { key: "leaderboard", title: "Leaderboard & XP", img: "/onboarding/leaderboard.png", imgMobile: "/onboarding/leaderboard-mobile.png", points: ["Earn XP from quests; attendance penalties take it away.", "Your level grows with your XP, which resets on the 1st.", "See where you stand on the Leaderboard."] },
 ];
 
 function Shot({ src, alt, mobile }: { src: string; alt: string; mobile?: boolean }) {
@@ -127,10 +128,10 @@ export function OnboardingWizard() {
           {slide && (
             <div className="space-y-4">
               <div className="text-[11px] font-bold uppercase tracking-wider text-primary">Tutorial · {step - 1}/{SLIDES.length}</div>
-              <h2 className="text-xl font-black tracking-tight">{slide.title}</h2>
+              <h2 className="text-xl font-black tracking-tight">{tr(slide.title)}</h2>
               <SlideShots slide={slide} />
               <ul className="space-y-1.5">
-                {slide.points.map((p, i) => <li key={i} className="flex gap-2 text-sm text-muted-foreground"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {p}</li>)}
+                {slide.points.map((p, i) => <li key={i} className="flex gap-2 text-sm text-muted-foreground"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> {tr(p)}</li>)}
               </ul>
             </div>
           )}
@@ -139,8 +140,8 @@ export function OnboardingWizard() {
           {isDone && (
             <div className="space-y-4 py-6 text-center">
               <PartyPopper className="mx-auto h-12 w-12 text-primary" />
-              <h2 className="text-2xl font-black tracking-tight">You're all set! 🚀</h2>
-              <p className="text-sm text-muted-foreground">Profile done & you know your way around NEXUS. Go make magic, {me.name?.split(" ")[0] || "team"}!</p>
+              <h2 className="text-2xl font-black tracking-tight">{tr("You're all set")}</h2>
+              <p className="text-sm text-muted-foreground">{tr("Your profile is done and you know your way around NEXUS.")}</p>
             </div>
           )}
         </div>

@@ -207,7 +207,7 @@ function Messages() {
     // thread past its end scrolled the whole page and pushed the list out of view.
     <div lang={lang} className="flex h-[calc(100dvh-7rem)] flex-col overflow-hidden md:h-[100dvh]">
       <div className={cn("shrink-0", phoneThread && "hidden md:block")}>
-        <PageHeader title={t("Messages")} subtitle={t("Chat with your crew + per-project rooms.")} actions={
+        <PageHeader title={t("Messages")} subtitle={t("Chat with your team and in project rooms.")} actions={
           <>
             <LiveDot connected={connected} />
             <button onClick={() => setComposer(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New chat")}</button>

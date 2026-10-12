@@ -47,7 +47,7 @@ function LoginPage() {
   // the next screen refetch clean.
   const enterMissionControl = (target: string) => {
     queryClient.clear();
-    celebrate("Welcome back, Commander! 🚀");
+    celebrate(lang.t("Welcome back!"));
     setTimeout(() => navigate({ to: target }), 250);
   };
 
@@ -62,7 +62,7 @@ function LoginPage() {
       enterMissionControl(callbackUrl);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError("This device's passkey isn't registered. Sign in with your password, then add it in Settings.");
+        setError(lang.t("This device's passkey isn't registered. Sign in with your password, then add it in Settings."));
       } else {
         setError(lang.t("Passkey sign-in failed. Use your email and password instead."));
       }
@@ -77,7 +77,7 @@ function LoginPage() {
 
     const emailValue = email.trim();
     if (!emailValue || !password) {
-      setError("Fill in your Access ID and Encryption Key first.");
+      setError(lang.t("Enter your email and password first."));
       return;
     }
 
@@ -92,9 +92,9 @@ function LoginPage() {
         // Offboarded (left the company): the right password, refused on purpose. Say so, not "wrong password".
         setError(lang.t("This account has been deactivated. Ask your BoD if you think this is a mistake."));
       } else if (err instanceof ApiError && err.status === 401) {
-        setError("That access code doesn't match. Give your email/password another look.");
+        setError(lang.t("Wrong email or password. Check them and try again."));
       } else if (err instanceof ApiError && err.status === 403) {
-        setError("The NEXUS core doesn't trust this login origin yet. Check the proxy/config.");
+        setError(lang.t("Sign-in from this address isn't allowed. Contact your IT admin."));
       } else {
         setError(lang.t("Couldn't sign in. Check your connection and try again."));
       }
@@ -151,14 +151,14 @@ function LoginPage() {
 
         <form className="space-y-6" onSubmit={onSubmit}>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1 block">Access ID (Email)</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1 block">{lang.t("Email")}</label>
             <input
               type="email"
               required
               disabled={loading}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="commander@nexus.app"
+              placeholder={lang.t("name@company.com")}
               autoComplete="username"
               className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all shadow-sm disabled:opacity-50"
             />
@@ -166,8 +166,8 @@ function LoginPage() {
 
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Encryption Key</label>
-              <a href="/forgot-password" className="text-[11px] font-bold uppercase tracking-wider text-primary hover:text-primary/80 transition-colors">Forgot?</a>
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">{lang.t("Password")}</label>
+              <a href="/forgot-password" className="text-[11px] font-bold uppercase tracking-wider text-primary hover:text-primary/80 transition-colors">{lang.t("Forgot password?")}</a>
             </div>
             <input
               type="password"
@@ -216,7 +216,7 @@ function LoginPage() {
           <>
             <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-foreground/10" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">or</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{lang.t("or")}</span>
               <div className="h-px flex-1 bg-foreground/10" />
             </div>
 
@@ -229,12 +229,12 @@ function LoginPage() {
               {passkeyLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Waiting for your device...</span>
+                  <span>{lang.t("Waiting for your device…")}</span>
                 </>
               ) : (
                 <>
                   <KeyRound className="w-4 h-4" />
-                  <span>Sign in with passkey</span>
+                  <span>{lang.t("Sign in with a passkey")}</span>
                 </>
               )}
             </button>

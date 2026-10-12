@@ -1123,7 +1123,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
             {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create quest
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">The quest completes once every task is DONE. XP goes to whoever did them; visible to the tasks' project members.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">The quest completes once every task is done. XP goes to whoever did them; visible to the tasks' project members.</p>
       </div>
     </div>,
     document.body,

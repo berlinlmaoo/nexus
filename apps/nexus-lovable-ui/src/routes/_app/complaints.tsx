@@ -110,8 +110,8 @@ function ComplaintsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl">
       <PageHeader
-        title="Ticket"
-        subtitle="A direct line to the BoD for ops/HR issues. Only the BoD can read it."
+        title="Tickets"
+        subtitle="A direct line to the BoD for work or HR issues. Only the BoD can read it."
         icon={<Ticket className="h-6 w-6 text-primary" />}
         actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> Submit a complaint</button>}
       />

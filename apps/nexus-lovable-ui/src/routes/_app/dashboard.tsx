@@ -168,8 +168,8 @@ function NotificationsBell({ unread }: { unread: number }) {
 }
 
 function notifTitle(n: NexusNotification) {
-  const t = (n.type || "signal").toLowerCase().replace(/_/g, " ");
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  const s = (n.type || "notification").toLowerCase().replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function NotificationsModal({ open, onClose, list, unread, loading, error }: { open: boolean; onClose: () => void; list: NexusNotification[]; unread: number; loading: boolean; error: boolean }) {
@@ -246,7 +246,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
                   <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Bell className="h-4 w-4" /></span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{n.title || notifTitle(n)}</div>
-                    <div className="line-clamp-2 text-xs text-muted-foreground">{n.message || "New NEXUS signal."}</div>
+                    <div className="line-clamp-2 text-xs text-muted-foreground">{n.message || t("New notification")}</div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">{fmtDate(n.createdAt)}</div>
                   </div>
                   {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />}
@@ -256,7 +256,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
             {/* footer */}
             <div className="border-t border-border p-3">
               <Link to="/inbox" onClick={onClose} className="flex h-10 items-center justify-center gap-1 rounded-xl bg-primary text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                {t("Open Inbox")} <ChevronRight className="h-4 w-4" />
+                {t("See all notifications")} <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
           </motion.div>

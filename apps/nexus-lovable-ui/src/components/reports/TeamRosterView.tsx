@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
 import { cn } from "@/lib/utils";
+import { t as tr } from "@/lib/lang";
 import type { ReportRosterResponse, ReportRosterRow } from "@/lib/nexus-api";
 import { fmtNum, fmtPct, ratioPct, ROLE_LABEL } from "./report-format";
 
@@ -93,8 +94,8 @@ export function TeamRosterView({ data, onOpen, teamId, onTeamChange, teamOptions
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search crew"
-              aria-label="Search crew"
+              placeholder={tr("Search people")}
+              aria-label={tr("Search people")}
               className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-sm outline-none focus:border-primary"
             />
           </div>

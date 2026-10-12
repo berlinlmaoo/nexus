@@ -71,7 +71,7 @@ function RegisterPage() {
     try {
       await nexusApi.verifyRegister({ email: email.trim(), code: code.trim(), workspaceCode: workspaceCode.trim() || undefined });
       const res = await nexusApi.login(email.trim(), password, "/dashboard").catch(() => ({ ok: false } as { ok: boolean }));
-      celebrate("Account created — welcome aboard! 🚀");
+      celebrate("Account created. Welcome to NEXUS!");
       setTimeout(() => navigate({ to: res.ok ? "/dashboard" : "/login" }), 300);
     } catch (err) {
       setError(errMsg(err, "Wrong or expired code."));

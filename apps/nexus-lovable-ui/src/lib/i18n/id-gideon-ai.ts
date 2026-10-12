@@ -98,7 +98,7 @@ export const ID_GIDEON_AI: Record<string, string> = {
   "Filled by GIDEON": "Diisi oleh GIDEON",
   // Ask AI in the editor
   "GIDEON couldn't write that. Try again.": "GIDEON gagal menuliskannya. Coba lagi.",
-  "This project has no section to put tasks in.": "Project ini belum punya section untuk menaruh task.",
+  "This project has no section to put tasks in.": "Project ini belum punya bagian untuk menaruh task.",
   "Owner (from the page): {name}": "PIC (dari halaman): {name}",
   "{n} tasks created in {name}": "{n} task dibuat di {name}",
   "Couldn't create the tasks.": "Task gagal dibuat.",

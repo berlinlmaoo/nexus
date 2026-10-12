@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { nexusApi, statusLabel, type NexusTeam, type NexusDivision } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
+import { t as tr } from "@/lib/lang";
 import { Avatar } from "@/components/Avatar";
 
 // Halaman ini sudah tidak ada. Isinya dipecah ke tempat yang memang memilikinya:
@@ -236,7 +237,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
 
       <div className="mt-4">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Crew</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Members")}</span>
           {canManageAtt && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Star className="h-3 w-3 text-amber-500" /> = primary attendance team</span>}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1.5">

@@ -653,9 +653,9 @@ export function CalendarPage({ search, setSearch }: { search: CalSearch; setSear
   if (failed) {
     body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={AlertTriangle} tone="muted" title={t("The calendar could not be loaded")} message={t("Check the connection and try again.")} action={<EmptyAction onClick={() => { void structureQ.refetch(); void itemsQ.refetch(); }}>{t("Try again")}</EmptyAction>} /></div>;
   } else if (access === "none") {
-    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={Lock} title={t("This calendar is for members of the company")} message={t("You are in a personal workspace. Ask a BoD or Manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.")} action={<EmptyAction to="/my-tasks">{t("Open My Mission")}</EmptyAction>} /></div>;
+    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={Lock} title={t("This calendar is for members of the company")} message={t("You are in a personal workspace. Ask a BoD or Manager to add you to the company's workspace; the Calendar then shows the tasks of everyone there.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
   } else if (access === "off") {
-    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={CalendarDays} title={t("The Calendar is on its way")} message={t("It opens for BoD and Managers first, then for everyone. Your own tasks are still in My Mission.")} action={<EmptyAction to="/my-tasks">{t("Open My Mission")}</EmptyAction>} /></div>;
+    body = <div className="p-4 md:px-8 md:py-6"><EmptyState icon={CalendarDays} title={t("The Calendar is on its way")} message={t("It opens for BoD and Managers first, then for everyone. Your own tasks are still in My Tasks.")} action={<EmptyAction to="/my-tasks">{t("Open My Tasks")}</EmptyAction>} /></div>;
   } else if (firstLoad) {
     body = <SkeletonCalendar compact={lay.gridCompact} />;
   } else {

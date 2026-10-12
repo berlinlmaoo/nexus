@@ -53,7 +53,7 @@ const groups = [
   {
     label: "System",
     items: [
-      { title: "Ticket", url: "/complaints", icon: Ticket },
+      { title: "Tickets", url: "/complaints", icon: Ticket },
       { title: "Settings", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],

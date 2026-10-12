@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { t } from "@/lib/lang";
 
 const EMOJIS = ["🎉", "✨", "⭐", "💥", "🚀", "🏆", "⚡", "🔥", "💫", "🎊"];
-const PHRASES = [
-  "Quest Complete! 🎯",
-  "Boom! Nailed it 💥",
-  "+1 XP gained ⚡",
-  "Slayed! 🗡️",
-  "Streak +1 🔥",
-  "GG! 🏆",
-];
+// The words under the burst when the caller gives none: plain, not game talk (owner, 12 Oct 2026).
+const PHRASES = ["Done", "Nice work"];
 
 type Particle = {
   id: number;
@@ -50,7 +45,7 @@ export function celebrate(message?: string) {
     id: counter++,
     message,
     particles,
-    phrase: message ?? PHRASES[Math.floor(Math.random() * PHRASES.length)],
+    phrase: message ?? t(PHRASES[Math.floor(Math.random() * PHRASES.length)]),
   };
   listeners.forEach((cb) => cb(burst));
 }

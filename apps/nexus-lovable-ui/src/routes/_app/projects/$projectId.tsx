@@ -230,8 +230,6 @@ function ProjectDetail() {
   const [openTask, setOpenTask] = useState<NexusTask | null>(null);
   const [composerListId, setComposerListId] = useState<string | null>(null);
   const [composerDueDate, setComposerDueDate] = useState<string>("");
-  const [pageComposerOpen, setPageComposerOpen] = useState(false);
-  const [openDoc, setOpenDoc] = useState<NexusDoc | null>(null);
   const [chipsHidden, setChipsHidden] = useState(false);
   const project = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId), retry: false });
   const data = project.data;
@@ -651,8 +649,6 @@ function ProjectDetail() {
       {data && <AutofillPanel projectId={data.id} open={autofillOpen} onOpenChange={setAutofillOpen} />}
       {settingsOpen && data && <ProjectSettingsDrawer project={data} onClose={() => setSettingsOpen(false)} onDeleted={() => { setSettingsOpen(false); navigate({ to: "/projects" }); }} />}
       {composerListId && data && <TaskComposer project={data} selectedListId={composerListId} initialDueDate={composerDueDate} onClose={() => { setComposerListId(null); setComposerDueDate(""); }} />}
-      {pageComposerOpen && data && <PageComposer project={data} onClose={() => setPageComposerOpen(false)} />}
-      {openDoc && data && <DocDrawer doc={openDoc} projectId={data.id} onClose={() => setOpenDoc(null)} />}
     </div>
   );
 }
@@ -737,7 +733,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
       if (sub && toRow !== null && fromRow !== null) await moveToGroup(task, sub, fromRow, toRow, defs, project.id);
     },
     onSuccess: refresh,
-    onError: (e) => toast.error(t("Couldn't move the card"), { description: e instanceof Error ? e.message : undefined }),
+    onError: (e) => toast.error(t("Couldn't move the task"), { description: e instanceof Error ? e.message : undefined }),
   });
 
   // Reorder sections (lanes) left/right — the ←/→ buttons or dragging the lane's handle. Optimistic.
@@ -918,7 +914,7 @@ function BoardView({ project, tasks, groupBy, cfg, defs, ctx, keys, buildGroups,
           {lanes.map((g) => renderLane(g, null, g.tasks, true))}
           {isSection && <AddListColumn projectId={project.id} statusOptions={statusOptions} />}
         </div>
-        {move.isError && <p className="mt-2 text-sm text-destructive">{t("The card couldn't move. Check your access to this project and try again.")}</p>}
+        {move.isError && <p className="mt-2 text-sm text-destructive">{t("The task couldn't be moved. Check your access to this project and try again.")}</p>}
       </div>
     );
   }
@@ -1675,14 +1671,14 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
     <div className="p-4 md:p-8 space-y-5 bg-[radial-gradient(circle_at_top_left,rgba(78,179,1,0.08),transparent_30%)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black tracking-tight">Project Lore</h2>
-          <p className="text-sm text-muted-foreground">Live docs scoped to this mission. SOP spells, meeting notes, briefs, and reference pages live here.</p>
+          <h2 className="text-xl font-black tracking-tight">{tr("Pages")}</h2>
+          <p className="text-sm text-muted-foreground">{tr("SOPs, meeting notes, briefs and reference pages for this project.")}</p>
         </div>
         <Button variant="primary" isDisabled={create.isPending} onClick={onCreate}><Plus className="h-4 w-4" />{tr("Add page")}</Button>
       </div>
-      {docs.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">Loading project lore...</CardBody></Card>}
-      {docs.isError && <Empty title="Pages locked" message="You need a login/session or project access to load this project's docs." />}
-      {!docs.isLoading && !docs.isError && items.length === 0 && <Empty title="No project pages yet" message="Spawn the first page for briefs, SOP, meeting notes, or project lore." />}
+      {docs.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">{tr("Loading pages…")}</CardBody></Card>}
+      {docs.isError && <Empty title={tr("Couldn't load pages")} message={tr("Check that you're a member of this project, then try again.")} />}
+      {!docs.isLoading && !docs.isError && items.length === 0 && <Empty title={tr("No pages yet")} message={tr("Add the first page for a brief, an SOP or meeting notes.")} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((doc) => (
           <Card key={doc.id} onClick={() => onOpen(doc)} className="border border-border bg-card text-left shadow-soft hover:border-primary/40">
@@ -1691,13 +1687,13 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg">{doc.icon || "📄"}</span>
                 <div className="min-w-0">
                   <h3 className="truncate text-base font-black tracking-tight">{doc.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">Updated {fmtDate(doc.updatedAt)} · {doc.owner?.name || doc.author?.name || "NEXUS keeper"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{tr("Updated {date}", { date: fmtDate(doc.updatedAt) })}{(doc.owner?.name || doc.author?.name) ? ` · ${doc.owner?.name || doc.author?.name}` : ""}</p>
                 </div>
               </div>
-              <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{doc.contentText || "No visible text yet. Open to edit the page shell."}</p>
+              <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{doc.contentText || tr("No content yet")}</p>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <Chip size="sm" variant="soft">{doc.project?.name || project.name}</Chip>
-                <span>Open lore →</span>
+                <span>{tr("Open")} →</span>
               </div>
             </CardBody>
           </Card>
@@ -1706,90 +1702,6 @@ function PagesView({ project, onOpen }: { project: NexusProject; onOpen: (doc: N
     </div>
   );
 }
-
-function PageComposer({ project, onClose }: { project: NexusProject; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const create = useMutation({
-    mutationFn: () => nexusApi.createDoc({ title: title.trim(), projectId: project.id, content: plainTextToTipTap(content) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["nexus", "project-docs", project.id] });
-      qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
-      celebrate("Project lore page created 📜✨");
-      onClose();
-    },
-  });
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm">
-      <Card className="w-full max-w-2xl border border-border bg-card shadow-pop">
-        <CardBody className="gap-4 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div><h2 className="text-xl font-black tracking-tight">Add project lore</h2><p className="mt-1 text-sm text-muted-foreground">Creates a real project-scoped doc in NEXUS.</p></div>
-            <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={onClose}><X className="h-4 w-4" /></Button>
-          </div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Page title — e.g. Client Brief / MOM / SOP" className="rounded-xl border border-border bg-background px-3 py-2 text-sm" />
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Drop notes here. We'll convert them to TipTap doc JSON before sending." className="min-h-52 rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed" />
-          {create.isError && <p className="text-sm font-semibold text-red-600">Create page failed. Check permission/session.</p>}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" isDisabled={create.isPending || !title.trim()} onClick={() => create.mutate()}>Create real page</Button>
-          </div>
-        </CardBody>
-      </Card>
-    </div>
-  );
-}
-
-function DocDrawer({ doc, projectId, onClose }: { doc: NexusDoc; projectId: string; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [title, setTitle] = useState(doc.title);
-  const [content, setContent] = useState(doc.contentText || "");
-  const update = useMutation({
-    mutationFn: () => nexusApi.updateDoc(doc.id, { title: title.trim(), content: plainTextToTipTap(content) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["nexus", "project-docs", projectId] });
-      qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
-      celebrate("Project page saved 📝✨");
-      onClose();
-    },
-  });
-  const remove = useMutation({
-    mutationFn: () => nexusApi.deleteDoc(doc.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["nexus", "project-docs", projectId] });
-      qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
-      celebrate("Project page archived 🗂️");
-      onClose();
-    },
-  });
-  const dirty = title.trim() !== doc.title || content !== (doc.contentText || "");
-  return (
-    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
-      <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <aside className="w-full max-w-full border-l border-border bg-background shadow-pop sm:w-[620px] flex flex-col">
-        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
-          <Chip size="sm" color="accent" variant="soft">Project page</Chip>
-          {dirty && <Chip size="sm" color="warning" variant="soft">Unsaved lore</Chip>}
-          <button onClick={onClose} className="ml-auto rounded-full p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary"><FileText className="h-3 w-3" /> Project lore editor</div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-2xl font-black leading-snug tracking-tight outline-none focus:border-primary" />
-          <div className="mt-3 text-xs text-muted-foreground">Updated {fmtDate(doc.updatedAt)} · Owner {doc.owner?.name || doc.author?.name || "NEXUS keeper"}</div>
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Write project context here..." className="mt-5 min-h-[360px] w-full rounded-2xl border border-border bg-muted/20 p-4 text-sm leading-relaxed outline-none focus:border-primary" />
-          {(update.isError || remove.isError) && <p className="mt-4 text-sm font-semibold text-red-600">Page action failed. Check permission/session.</p>}
-        </div>
-        <div className="border-t border-border p-4 flex flex-wrap items-center gap-2">
-          <Button variant="primary" isDisabled={update.isPending || !title.trim() || !dirty || remove.isPending} onClick={() => update.mutate()}>{!update.isPending && <Pencil className="h-4 w-4" />}Save page</Button>
-          <Button variant="danger-soft" isDisabled={remove.isPending || update.isPending} onClick={() => remove.mutate()}>{!remove.isPending && <Trash2 className="h-4 w-4" />}Delete</Button>
-          <Button variant="ghost" onClick={onClose}>Close</Button>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
 
 function ProjectChat({ projectId }: { projectId: string }) {
   const me = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });

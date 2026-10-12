@@ -10,10 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LeaderboardCard } from "@/components/ui/leaderboard-card";
 import { XpAuditLog } from "@/components/XpAuditLog";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app/leaderboard")({ component: Leaderboard });
 
 function Leaderboard() {
+  const { t } = useLang();
   const [xpUser, setXpUser] = useState<{ id: string; name?: string | null; avatar?: string | null } | null>(null);
   const board = useQuery({ queryKey: ["leaderboard"], queryFn: () => nexusApi.leaderboard(), retry: 1 });
   const profile = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, staleTime: 300_000 });
@@ -39,7 +41,7 @@ function Leaderboard() {
     userId: r.userId,
     rank: r.rank,
     userName: r.name ?? "—",
-    byline: `Level ${r.level}${r.levelName ? ` – ${r.levelName}` : ""}`,
+    byline: `${t("Level {n}", { n: r.level })}${r.levelName ? ` – ${r.levelName}` : ""}`,
     value: r.totalXp,
     avatarUrl: r.avatar,
     displayed: true,
@@ -47,15 +49,15 @@ function Leaderboard() {
 
   return (
     <div>
-      <PageHeader title="Leaderboard" subtitle="The crew's XP rankings this month — resets on the 1st." />
+      <PageHeader title={t("Leaderboard")} subtitle={t("Everyone's XP this month. It resets on the 1st.")} />
       <div className="p-4 md:p-8">
         <div className="mx-auto max-w-3xl">
           {board.data?.period && (
             <div className="mb-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-center text-xs text-muted-foreground shadow-soft">
-              <span className="font-bold text-foreground">Current period</span>
+              <span className="font-bold text-foreground">{t("Current period")}</span>
               <span>{fmtDate(board.data.period.start)} → {fmtDate(board.data.period.end)}</span>
               <span className="hidden sm:inline">·</span>
-              <span>points reset automatically on the <span className="font-bold text-foreground">1st</span> at 00:00 WIB</span>
+              <span>{t("XP resets on the 1st at 00:00 WIB")}</span>
             </div>
           )}
           {board.isLoading && (
@@ -71,20 +73,20 @@ function Leaderboard() {
 
           {board.isError && (
             <div className="rounded-2xl border border-dashed bg-card p-8 text-center shadow-sm">
-              <div className="text-lg font-black">Leaderboard locked</div>
-              <p className="mt-2 text-sm text-muted-foreground">You need to be logged in to pull the point rankings from NEXUS core.</p>
+              <div className="text-lg font-black">{t("Couldn't load the leaderboard")}</div>
+              <p className="mt-2 text-sm text-muted-foreground">{t("Your session may have ended. Sign in again, then reload this page.")}</p>
             </div>
           )}
 
           {!board.isLoading && !board.isError && ranked.length === 0 && (
-            <EmptyState icon={Trophy} title="No points yet this month"
-              message="XP comes from quests BoD assigns and is kept by showing up on time; this period's ranking appears as soon as the first points move." />
+            <EmptyState icon={Trophy} title={t("No XP yet this month")}
+              message={t("XP comes from quests the BoD assigns and is kept by showing up on time. The ranking appears as soon as someone earns or loses XP.")} />
           )}
 
           {!board.isLoading && !board.isError && ranked.length > 0 && (
             <LeaderboardCard
-              title="Leaderboard"
-              subtitle="XP rankings for the whole crew"
+              title={t("Leaderboard")}
+              subtitle={t("XP ranking for everyone")}
               podiumRankings={podiumRankings}
               rankings={rankings}
               currentUserId={meId}

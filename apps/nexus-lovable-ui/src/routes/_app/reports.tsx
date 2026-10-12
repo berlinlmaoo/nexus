@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { PersonReportSkeleton, PersonReportView, ReportError } from "@/components/reports/PersonReportView";
 import { TeamRosterSkeleton, TeamRosterView } from "@/components/reports/TeamRosterView";
 import { PeriodSelect } from "@/components/reports/PeriodSelect";
+import { t } from "@/lib/lang";
 import { errorMessage, isPeriodKey, reportErrorCode, reportRetry, type ReportsSearch } from "@/components/reports/report-format";
 
 export const Route = createFileRoute("/_app/reports")({
@@ -82,7 +83,7 @@ function Reports() {
     <div>
       <PageHeader
         title="Reports"
-        subtitle={tab === "team" ? `How your ${scope === "ALL" ? "crew" : "direct reports"} are doing this period.` : "Your work, attendance and XP for the period."}
+        subtitle={tab === "team" ? (scope === "ALL" ? t("How everyone is doing this period.") : t("How your direct reports are doing this period.")) : t("Your work, attendance and XP for the period.")}
         icon={<BarChart3 className="h-6 w-6 text-primary" />}
         actions={<PeriodSelect value={period} onChange={(p) => setSearch({ period: p })} />}
         tabs={canSeeTeam && !selfOnly ? (

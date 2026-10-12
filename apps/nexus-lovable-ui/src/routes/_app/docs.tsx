@@ -8,6 +8,7 @@ import { BookOpen, Plus, Search, Loader2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
+import { useLang } from "@/lib/lang";
 
 export const Route = createFileRoute("/_app/docs")({ component: Docs });
 
@@ -19,6 +20,7 @@ function Docs() {
 }
 
 function DocsList() {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const docs = useQuery({ queryKey: ["nexus", "docs"], queryFn: () => nexusApi.docs(), retry: false });
@@ -31,25 +33,25 @@ function DocsList() {
 
   return (
     <div>
-      <PageHeader title="Knowledge Library" subtitle="Live wiki, SOP spells, and project lore in one cozy shelf." icon={<BookOpen className="h-6 w-6 text-primary" />} actions={
+      <PageHeader title={t("Pages")} subtitle={t("SOPs, meeting notes, briefs and reference pages from every project you're in.")} icon={<BookOpen className="h-6 w-6 text-primary" />} actions={
         <>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search docs…" className="pl-7 pr-3 py-1.5 text-sm rounded-md border border-border bg-background w-56 outline-none focus:border-primary" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search pages…")} className="pl-7 pr-3 py-1.5 text-sm rounded-md border border-border bg-background w-56 outline-none focus:border-primary" />
           </div>
-          <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> New doc</button>
+          <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> {t("New page")}</button>
         </>
       } />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
         <aside className="lg:col-span-1 space-y-0.5">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-1 px-2">Tree</div>
-          {roots.length === 0 && <p className="px-2 text-xs text-muted-foreground">No docs.</p>}
+          <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-1 px-2">{t("All pages")}</div>
+          {roots.length === 0 && <p className="px-2 text-xs text-muted-foreground">{t("No pages yet.")}</p>}
           {roots.map((d) => <DocTreeNode key={d.id} doc={d} allDocs={rows} depth={0} />)}
         </aside>
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {docs.isLoading && <Empty title="Opening library..." message="Pulling live docs from NEXUS." />}
-          {docs.isError && <Empty title="Library locked" message="Login/session needed to read live docs." />}
-          {!docs.isLoading && !docs.isError && filtered.length === 0 && <Empty title={query ? "No matches" : "Shelf's still empty"} message={query ? `No docs match "${query}".` : "No docs visible in this workspace yet."} />}
+          {docs.isLoading && <Empty title={t("Loading pages…")} message="" />}
+          {docs.isError && <Empty title={t("Couldn't load pages")} message={t("Your session may have ended. Sign in again to see your pages.")} />}
+          {!docs.isLoading && !docs.isError && filtered.length === 0 && <Empty title={query ? t("No matches") : t("No pages yet")} message={query ? t("No page matches “{query}”.", { query }) : t("Pages you can see in this workspace show up here. Create one with New page.")} />}
           {filtered.map((d) => <DocCard key={d.id} doc={d} />)}
         </div>
       </div>
@@ -72,6 +74,7 @@ function DocTreeNode({ doc, allDocs, depth }: { doc: NexusDoc; allDocs: NexusDoc
 }
 
 function DocComposer({ onClose }: { onClose: () => void }) {
+  const { t } = useLang();
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -79,7 +82,7 @@ function DocComposer({ onClose }: { onClose: () => void }) {
   const projects = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
   const templates = useQuery({ queryKey: ["nexus", "doc-templates"], queryFn: () => nexusApi.docTemplates(), retry: false });
   const applyTemplate = (id: string) => {
-    const tpl = (templates.data?.templates ?? []).find((t) => t.id === id);
+    const tpl = (templates.data?.templates ?? []).find((x) => x.id === id);
     if (tpl) { const text = tiptapToText(tpl.content); setContent(text); setTemplate({ text, content: tpl.content }); if (!title.trim()) setTitle(tpl.name); }
   };
   // A template keeps its formatting (headings, lists, to-dos…) unless the text was edited here.
@@ -89,7 +92,7 @@ function DocComposer({ onClose }: { onClose: () => void }) {
     mutationFn: () => nexusApi.createDoc({ title, projectId, content: template && template.text === content ? template.content : contentToTipTap(content) }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["nexus", "docs"] });
-      celebrate("New lore added 📚✨");
+      celebrate(t("Page created"));
       onClose();
       // Straight into the block editor, like Notion.
       if (res.doc?.id) navigate({ to: "/docs/$docId", params: { docId: res.doc.id } });
@@ -110,27 +113,27 @@ function DocComposer({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-xl font-bold tracking-tight">Add a knowledge gem</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Creates a real NEXUS doc under selected project.</p>
+            <h2 className="font-display text-xl font-bold tracking-tight">{t("New page")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("The page belongs to the project you pick.")}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={t("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-5 space-y-3">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Doc title" className={field} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Page title")} className={field} />
           <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={field}>
-            <option value="">Pick project shelf</option>
+            <option value="">{t("Pick a project")}</option>
             {(projects.data ?? []).map((p: NexusProject) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           {(templates.data?.templates?.length ?? 0) > 0 && (
             <select defaultValue="" onChange={(e) => { if (e.target.value) applyTemplate(e.target.value); }} className={field}>
-              <option value="">Start from template (optional)</option>
-              {(templates.data?.templates ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value="">{t("Start from a template (optional)")}</option>
+              {(templates.data?.templates ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
           )}
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Quick note / SOP / project lore..." className={cn(field, "min-h-32")} />
-          {create.isError && <p className="text-sm text-destructive">Create doc failed. Check project permission/session.</p>}
+          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t("Write a note, an SOP or meeting notes…")} className={cn(field, "min-h-32")} />
+          {create.isError && <p className="text-sm text-destructive">{t("Couldn't create the page. Check that you're a member of the project, then try again.")}</p>}
           <button disabled={!title.trim() || !projectId || create.isPending} onClick={() => create.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">
-            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Create real doc
+            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {t("Create page")}
           </button>
         </div>
       </div>
@@ -139,6 +142,7 @@ function DocComposer({ onClose }: { onClose: () => void }) {
 }
 
 function DocCard({ doc }: { doc: NexusDoc }) {
+  const { t } = useLang();
   const author = doc.author || doc.owner;
   return (
     <Link to="/docs/$docId" params={{ docId: doc.id }} className="block cursor-pointer rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
@@ -146,7 +150,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
         <span className="text-2xl">{emojiForDoc(doc)}</span>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold tracking-tight truncate">{doc.title}</h3>
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{doc.contentText || `Filed under ${doc.project?.name || "NEXUS lore"}.`}</p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{doc.contentText || (doc.project?.name ? t("In {project}", { project: doc.project.name }) : t("No content yet"))}</p>
         </div>
       </div>
       <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
@@ -154,7 +158,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
           {author?.id ? <Avatar userId={author.id} name={author.name} avatar={author.avatar} size={20} className="ring-0" /> : <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/10 text-[9px] font-black text-primary">?</span>}
           <span>{author?.name || "NEXUS"}</span>
         </div>
-        <span>Updated {fmtDate(doc.updatedAt)}</span>
+        <span>{t("Updated {date}", { date: fmtDate(doc.updatedAt) })}</span>
       </div>
     </Link>
   );

@@ -25,6 +25,7 @@ import { recTone, sCls, toneLabel } from "@/lib/attendance-tone";
 import { recordPlace } from "@/lib/attendance-place";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
 import { LeftTag, leftAtOf } from "@/components/LeftTag";
+import { t as tr } from "@/lib/lang";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -131,7 +132,7 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-warning/20 text-warning-foreground"><Coffee className="h-4 w-4" /></span>
             <div>
               <div className="font-display text-base font-bold tracking-tight">{typeLabel}</div>
-              <div className="text-xs text-muted-foreground">{record.user?.name || "Crew"}</div>
+              <div className="text-xs text-muted-foreground">{record.user?.name || tr("Unnamed")}</div>
             </div>
           </div>
           <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
@@ -168,7 +169,7 @@ function DeleteRecordPanel({ recordId, hasCheckOut, name, dateKey, onDone }: { r
     onSuccess: (_r, vars) => {
       qc.invalidateQueries({ queryKey: ["attendance-history"] });
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
-      celebrate(vars.part === "checkout" ? `Check-out for ${dateKey} deleted — attendance reopened 🔓` : `Attendance for ${dateKey} deleted 🗑️`);
+      celebrate(vars.part === "checkout" ? tr("Check-out for {date} deleted — attendance reopened", { date: dateKey }) : tr("Attendance for {date} deleted", { date: dateKey }));
       onDone();
     },
     onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t delete."),
@@ -347,8 +348,8 @@ function Attendance() {
   return (
     <div>
       <PageHeader
-        title="Attendance"
-        subtitle="Team presence, leave, WFH, and check-in streaks — less spreadsheet, more vibe check."
+        title={tr("Attendance")}
+        subtitle={tr("Who's in, on leave or working from home, and everyone's attendance history.")}
         icon={<ClipboardCheck className="h-6 w-6 text-primary" />}
         // The outage-refund and no-show-sweep buttons were removed (owner, 28 Sep 2026): outage days are
         // not compensated, and the sweep is what the nightly cron already runs. Both APIs stay for the cron.
@@ -420,7 +421,7 @@ function Attendance() {
         <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? "Crew streak board" : "Your attendance history") : (canSeeBoard ? "Attendance log" : "Your attendance history")}</h2>
+              <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? tr("Attendance board") : tr("Your attendance history")) : (canSeeBoard ? tr("Attendance log") : tr("Your attendance history"))}</h2>
               <p className="text-sm text-muted-foreground">{viewMode === "grid" ? "Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave. Tap a cell for details." : (canSeeBoard ? "Everyone’s attendance history — check-in/out selfie & location. Tap a row for details." : "Your check-in/out history — selfie & location. Tap a row for details.")}</p>
             </div>
             <div className="flex items-center gap-3">
@@ -483,7 +484,7 @@ function Attendance() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", sCls[tone])} />
-                        <span className="truncate font-medium">{r.user?.name || "PATS Crew"}</span>
+                        <span className="truncate font-medium">{r.user?.name || tr("Unnamed")}</span>
                         <LeftTag leftAt={leftAtOf(r.user)} />
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
                         {r.checkInAway === true && <span title="Checked in away from the office" className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">Away</span>}
@@ -546,12 +547,12 @@ function Attendance() {
                         {canManage ? (
                           <button
                             onClick={() => setDeductionsFor({ id: u.id, name: u.name ?? null })}
-                            title={`Lihat log potongan XP & day-off ${u.name ?? "orang ini"}`}
+                            title={tr("See {name}'s XP and day-off deductions", { name: u.name ?? tr("this person") })}
                             className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-primary/10"
                           >
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || "PATS Crew"}</span><LeftTag leftAt={leftAtOf(u)} /></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || tr("Unnamed")}</span><LeftTag leftAt={leftAtOf(u)} /></div>
                               <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
                             </div>
                           </button>
@@ -559,7 +560,7 @@ function Attendance() {
                           <>
                             <MemberAvatar user={u} />
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || "PATS Crew"}</span><LeftTag leftAt={leftAtOf(u)} /></div>
+                              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{u.name || tr("Unnamed")}</span><LeftTag leftAt={leftAtOf(u)} /></div>
                               <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
                             </div>
                           </>
@@ -567,7 +568,7 @@ function Attendance() {
                         <div className="flex min-w-0 flex-wrap items-center gap-1 pl-1">
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
-                        <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={`${u.name ?? "Crew"} — record for this period`}
+                        <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={`${u.name ?? tr("Unnamed")} — record for this period`}
                           className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground">Record</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
@@ -595,7 +596,7 @@ function Attendance() {
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
                                 {d.redDate.remaining}/{d.redDate.quota} TM
                               </span>
-                              <span title={`${d.xp.score} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — periode XP itu bulan kalender, beda sama periode absensi 28→27`}
+                              <span title={`${d.xp.score} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — ${tr("the XP period is the calendar month, not the 28→27 attendance period")}`}
                                 className={cn(pill, xpTone)}>
                                 {d.xp.score} XP
                               </span>
@@ -604,7 +605,7 @@ function Attendance() {
                                 title="Export absensi orang ini (xlsx): satu baris per hari, jam masuk/pulang, telat, keterangan"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const slug = (u.name || "crew").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                                  const slug = (u.name || "staff").toLowerCase().replace(/[^a-z0-9]+/g, "-");
                                   void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
                                     .catch((err) => alert(err instanceof ApiError ? err.message : "Export failed — give it another go."));
                                 }}
@@ -750,9 +751,9 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
       qc.invalidateQueries({ queryKey: ["attendance-deductions", userId, monthKey] });
       qc.invalidateQueries({ queryKey: ["attendance-dayoff-summary"] });
       qc.invalidateQueries({ predicate: (x) => x.queryKey.map(String).includes("attendance-history") });
-      celebrate(r.refunded ? `Potongan ${r.date} dibatalin — XP & day-off balik 🛡️` : `Nggak ada potongan di ${r.date}.`);
+      celebrate(r.refunded ? tr("Deduction for {date} removed — XP and day off restored", { date: r.date }) : tr("No deduction on {date}.", { date: r.date }));
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal batalin potongan."),
+    onError: (e) => alert(e instanceof Error ? e.message : tr("Couldn't remove the deduction.")),
   });
 
   const entries = q.data?.entries ?? [];
@@ -764,25 +765,25 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold">{e.label}</span>
-          {e.cleared && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">udah dibatalin</span>}
+          {e.cleared && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">{tr("removed")}</span>}
         </div>
         <div className="text-[11px] text-muted-foreground">{fmtDate(e.dateKey)}{e.detail ? ` · ${e.detail}` : ""}</div>
       </div>
       <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600")}>
-        {e.unit === "XP" ? `${e.amount} XP` : `${e.amount} day off`}
+        {e.unit === "XP" ? `${e.amount} XP` : tr("{n} day off", { n: e.amount })}
       </span>
       {!e.cleared && (
         <button
           disabled={clear.isPending}
           onClick={() => {
             const same = active.filter((x) => x.dateKey === e.dateKey);
-            const extra = same.length > 1 ? `\n\nTanggal ini punya ${same.length} potongan — semuanya kebatalin sekaligus.` : "";
-            if (window.confirm(`Batalin potongan ${fmtDate(e.dateKey)} buat ${name ?? "orang ini"}?${extra}\n\nXP dibalikin dan day-off yang kepotong otomatis dikembaliin. Status absennya nggak diubah.`)) {
+            const extra = same.length > 1 ? "\n\n" + tr("This date has {n} deductions — they are all removed together.", { n: same.length }) : "";
+            if (window.confirm(tr("Remove the deduction on {date} for {name}?", { date: fmtDate(e.dateKey), name: name ?? tr("this person") }) + extra + "\n\n" + tr("The XP comes back and any day off taken automatically is restored. The attendance status doesn't change."))) {
               clear.mutate(e.dateKey);
             }
           }}
           className="shrink-0 rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-          title="Batalin potongan hari ini"
+          title={tr("Remove this day's deduction")}
         >
           {clear.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
         </button>
@@ -799,22 +800,22 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
         <div className="flex items-start justify-between gap-2 border-b border-border px-5 py-4">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
-              <h2 className="truncate text-base font-black">{name ?? "Crew"}</h2>
+              <h2 className="truncate text-base font-black">{name ?? tr("Unnamed")}</h2>
               <LeftTag leftAt={leftAtOf(q.data)} />
             </div>
-            <p className="text-xs text-muted-foreground">Potongan XP &amp; day-off · periode {monthKey}</p>
+            <p className="text-xs text-muted-foreground">{tr("XP and day-off deductions · period {period}", { period: monthKey })}</p>
           </div>
-          <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label={tr("Close")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         {q.data && (
           <div className="grid grid-cols-2 gap-2 border-b border-border px-5 py-3">
             <div className="rounded-xl bg-muted/40 px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sisa day off</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Days off left")}</div>
               <div className="text-lg font-black tabular-nums">{q.data.dayOff.remaining}<span className="text-sm font-bold text-muted-foreground">/{q.data.dayOff.quota}</span></div>
             </div>
             <div className="rounded-xl bg-muted/40 px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">XP kepotong</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr("XP deducted")}</div>
               <div className="text-lg font-black tabular-nums text-rose-600">{q.data.totalXpLost}</div>
             </div>
           </div>
@@ -822,14 +823,14 @@ function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string
 
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
           {q.isLoading && <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />)}</div>}
-          {q.isError && <p className="py-8 text-center text-sm font-semibold text-rose-600">Gagal ngambil datanya.</p>}
+          {q.isError && <p className="py-8 text-center text-sm font-semibold text-rose-600">{tr("Couldn't load the deductions.")}</p>}
           {q.data && entries.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted-foreground">Nggak ada potongan periode ini. Bersih 🎉</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{tr("No deductions this period.")}</p>
           )}
           {active.map(row)}
           {cleared.length > 0 && (
             <>
-              <div className="pt-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Udah dibatalin</div>
+              <div className="pt-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr("Removed")}</div>
               {cleared.map(row)}
             </>
           )}
@@ -981,7 +982,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
       if (!uid) throw new Error("Unknown user.");
       return nexusApi.attendanceOverride({ userId: uid, date: (record.attendanceDate || "").slice(0, 10), action: "PRESENT", checkInAt: checkInISO, checkOutAt: checkOutISO, note: reason.trim() });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate("Attendance saved ✅"); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate(tr("Attendance saved")); onClose(); },
   });
 
   const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
@@ -992,7 +993,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-xl font-bold tracking-tight">Attendance detail</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{record.user?.name ?? "Crew"} · {fmtDate(record.attendanceDate)} · {statusLabel(record.status || "")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{record.user?.name ?? tr("Unnamed")} · {fmtDate(record.attendanceDate)} · {statusLabel(record.status || "")}</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
         </div>

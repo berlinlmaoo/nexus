@@ -128,7 +128,7 @@ export const ID_AUDIT: Record<string, string> = {
   "Restore placement": "Pulihkan penempatan",
   "Restore folder": "Pulihkan folder",
   "Restore trash": "Pulihkan isi sampah",
-  "Restore section": "Pulihkan section",
+  "Restore section": "Pulihkan bagian",
   "Restore unit": "Pulihkan unit",
   "Restore rows": "Pulihkan baris",
   "Restore submission": "Pulihkan pengajuan",
@@ -178,7 +178,7 @@ export const ID_AUDIT: Record<string, string> = {
     "Tempatnya sudah diisi yang lain, jadi tidak bisa kembali seperti semula.",
   "Its project was deleted too. Restore the project first, then this.": "Proyeknya juga terhapus. Pulihkan proyeknya dulu, baru ini.",
   "Its task was deleted too. Restore the task first, then this.": "Tugasnya juga terhapus. Pulihkan tugasnya dulu, baru ini.",
-  "Its section was deleted too. Restore the section first, then this.": "Section-nya juga terhapus. Pulihkan section-nya dulu, baru ini.",
+  "Its section was deleted too. Restore the section first, then this.": "Bagiannya juga terhapus. Pulihkan bagiannya dulu, baru ini.",
   "The comment it replied to was deleted too. Restore that comment first, then this.":
     "Komentar yang dibalasnya juga terhapus. Pulihkan komentar itu dulu, baru ini.",
   "Its file was deleted too. Restore the file first, then this.": "File-nya juga terhapus. Pulihkan file-nya dulu, baru ini.",
